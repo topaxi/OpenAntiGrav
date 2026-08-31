@@ -563,8 +563,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut archives,
         &track,
         ps3_geometry.is_some(),
-        title.race.zone_palette,
-        title.race.zone_stages,
+        title.race,
         options.mode,
         &mut report,
     );

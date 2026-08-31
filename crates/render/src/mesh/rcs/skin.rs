@@ -6,9 +6,9 @@
 
 use std::sync::Arc;
 
-use oag_formats::{gtf, rcsmaterial, rcsmodel};
+use oag_formats::{rcsmaterial, rcsmodel};
 
-use super::super::{BlockFormat, ModelTexture, Texels, TextureSlots};
+use super::super::{ModelTexture, TextureSlots};
 use super::{Report, Textures};
 
 /// Decodes one material's texture, or says which way it could not be.
@@ -24,47 +24,7 @@ use super::{Report, Textures};
 /// the file authors, and [`blocks`] says exactly when. Decoding those to RGBA8
 /// was costing 4.5x the memory for the same picture.
 pub(super) fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    let parsed = gtf::Gtf::parse(blob).ok()?;
-    let texture = parsed.only()?;
-    let (width, height) = texture.level_size(0);
-    let texels = match blocks(texture, blob) {
-        Some(texels) => texels,
-        None => Texels::Rgba8(texture.to_rgba(blob).ok()?.into_iter().flatten().collect()),
-    };
-    Some(ModelTexture {
-        label: label.to_string(),
-        width,
-        height,
-        texels,
-    })
-}
-
-/// The disc's own blocks and mip chain, for a texture this can bind untouched.
-///
-/// Four conditions, each of which the RGBA path handles instead:
-///
-/// - a block-compressed format, which is 7,131 of the disc's 7,333 files;
-/// - a chain the file authors (`mip_levels > 1`), because a single-level
-///   upload would leave the surface with no minification filter at all and
-///   these are seen at every distance a chase camera produces - 649 files;
-/// - a tight pitch, since a declared one is a *base*-level row repeated down
-///   the chain (see `oag_formats::gtf`) and only 5 files on the disc declare
-///   one;
-/// - base dimensions on the block grid, which WebGPU requires of a compressed
-///   texture and 15 files miss.
-fn blocks(texture: &gtf::Texture, blob: &[u8]) -> Option<Texels> {
-    let format = BlockFormat::of_gtf(texture.format)?;
-    if texture.cubemap || texture.mip_levels < 2 || texture.pitch != 0 {
-        return None;
-    }
-    let (width, height) = texture.level_size(0);
-    if width % 4 != 0 || height % 4 != 0 {
-        return None;
-    }
-    let levels = (0..texture.mip_levels)
-        .map(|level| blob.get(texture.level_range(level)).map(<[u8]>::to_vec))
-        .collect::<Option<Vec<_>>>()?;
-    Some(Texels::Blocks { format, levels })
+    ModelTexture::from_gtf(label, blob)
 }
 
 /// One texture slot per material, in material-table order.
@@ -657,6 +617,9 @@ pub(super) fn variants(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Only the tests still name these: the block/RGBA choice they assert moved
+    // to `ModelTexture::from_gtf`, which this module now delegates to.
+    use super::super::super::{BlockFormat, Texels};
 
     fn declared(samplers: &[(u32, u32)]) -> rcsmaterial::Declared {
         rcsmaterial::Declared {

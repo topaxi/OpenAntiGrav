@@ -54,6 +54,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The only recovered zone-number-to-stage ladder on any title. See
     // `ZONE_STAGES`.
     zone_stages: Some(ZONE_STAGES),
+    zone_stage_textures: None,
 };
 
 /// Wipeout 2048's zone-number to speed-class ladder, read out of the

@@ -54,6 +54,27 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // fifteen. Detonator's ladder on this title *is* recovered (one stage per
     // step, `RaceManager->+0x2e10`), and is not this field.
     zone_stages: None,
+    zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
+};
+
+/// The two fifteen-entry per-stage texture sets a Zone race indexes.
+///
+/// **Located from the executable's own control flow, not by a name sweep.**
+/// `Environment_LoadStageTextures` (`0x003d6dc8`) loads all thirty from a
+/// fully-unrolled filename table and stores the handles into two adjacent
+/// fifteen-entry arrays; `Scene_PrepareFrame` indexes the first of them for
+/// the `zoneTexInner`/`zoneTexOuter` shader parameters, and seven other
+/// publishers index the second for the same two. Confidence 82 on the join -
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+///
+/// Fifteen of each, matching [`ZONE_PALETTE`]'s own fifteen stages. The
+/// entries are lower-case on this disc, which is what
+/// `oag_assets::Archives::read_name` folds anyway.
+pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneStageTextures {
+    general: "/data/tex/zonemode",
+    track: "/data/tex/zonemodetrack",
+    extension: ".gtf",
+    stages: 15,
 };
 
 /// Wipeout HD/Fury's Zone milestone announcer.

@@ -157,6 +157,85 @@ pub struct RaceDefaults {
     /// HD/Fury included: its stage index is read from a per-craft field whose
     /// writer has not been found. See [`ZoneStages`]' own docs.
     pub zone_stages: Option<&'static ZoneStages>,
+    /// Where this title keeps the per-stage textures a Zone race swaps as it
+    /// escalates. See [`ZoneStageTextures`].
+    ///
+    /// `None` for a title whose set has not been located, which is every title
+    /// but HD/Fury.
+    pub zone_stage_textures: Option<&'static ZoneStageTextures>,
+}
+
+/// Where a title keeps the two per-stage texture sets a Zone race indexes by
+/// stage number, and which of the two carries the art.
+///
+/// # Two sets, and only one of them is a picture
+///
+/// HD/Fury ships **two** fifteen-entry sets, and they are not
+/// interchangeable. Decoded through `oag_formats::gtf`, all fifteen of the
+/// "general" set are byte-identical to each other and hold a flat, uniform
+/// white with nothing in it; all fifteen of the "track" set are mutually
+/// distinct and hold a greyscale image whose alpha pattern visibly changes
+/// along the ladder. So [`Self::track_entry`] is the one worth drawing, and
+/// [`Self::general_entry`] is kept only because the original binds it too.
+///
+/// # The trap this type exists to stop a port walking into
+///
+/// The obvious function to copy binds the *blank* set. `Scene_PrepareFrame`
+/// (`ps3-hdfury-eu`) publishes only the general set to the `zoneTexInner` and
+/// `zoneTexOuter` shader parameters; seven other publishers bind the track set
+/// to those same parameters in a second block. A reimplementation that follows
+/// the first function it finds loads fifteen white squares and draws nothing,
+/// which reads as a wiring bug and is not one. Confidence 80 on the
+/// two-publisher-families reading, 82 on the sampler-to-array join - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+/// twenty-third pass.
+///
+/// # What is deliberately not here
+///
+/// The original aliases the **Detonator** set into the same fifteen slots when
+/// Detonator mode loaded last, so the parameter named for Zone can carry
+/// Detonator's art. That sharing is a property of the original's storage, not
+/// of the files, and nothing in this port needs it yet - a Detonator entry set
+/// belongs here when Detonator does.
+///
+/// `zoneTexVis`, the third texture the same shader takes, is **not a file at
+/// all**: the original builds a 256x1 colour ramp at runtime. It is not
+/// nameable here and must be generated when something draws it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneStageTextures {
+    /// The entry name each "general" texture is numbered under, without the
+    /// stage number or the extension.
+    pub general: &'static str,
+    /// The same for the "track" set - the one that carries the art.
+    pub track: &'static str,
+    /// The extension both sets use, leading dot included.
+    pub extension: &'static str,
+    /// How many stages the sets are numbered for. Fifteen on HD/Fury, matching
+    /// its [`ZonePalette`] table's own fifteen stages exactly.
+    pub stages: u32,
+}
+
+impl ZoneStageTextures {
+    /// The entry name of the "general" set's texture for `stage`.
+    ///
+    /// A flat white on every stage HD/Fury ships - see the type's own docs
+    /// before drawing it.
+    #[must_use]
+    pub fn general_entry(&self, stage: u32) -> String {
+        format!("{}{stage}{}", self.general, self.extension)
+    }
+
+    /// The entry name of the "track" set's texture for `stage` - the set with
+    /// the art in it.
+    #[must_use]
+    pub fn track_entry(&self, stage: u32) -> String {
+        format!("{}{stage}{}", self.track, self.extension)
+    }
+
+    /// Every stage this title numbers its sets for.
+    pub fn stages(&self) -> impl Iterator<Item = u32> + use<> {
+        0..self.stages
+    }
 }
 
 /// A title's ladder from the zone number a Zone race has reached to the stage

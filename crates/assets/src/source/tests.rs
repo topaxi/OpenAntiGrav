@@ -73,6 +73,7 @@ const TITLE: &Title = &Title {
         // the colour grade a Zone race climbs.
         zone_palette: None,
         zone_stages: None,
+        zone_stage_textures: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this

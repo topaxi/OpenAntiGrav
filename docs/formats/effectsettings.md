@@ -393,6 +393,58 @@ this one attempted. **Nothing here reaches a stage-selection field the way
 2048 does - the two mechanisms have not been compared, only both partially
 traced.
 
+## The `EQ` keys are an audio spectrum, observed in play
+
+2026-08-31. **From the maintainer playing the original, on HD/Fury**: during a
+Zone race the floor textures and the billboards carry an audio-spectrum
+animation that tracks the music playing. Reported for HD/Fury specifically;
+2048 not checked.
+
+This is the semantic that makes an otherwise opaque cluster of names legible
+all at once, so it is recorded as a finding rather than as a note. `EQ` is an
+**equaliser** - a spectrum analyser display - not an abbreviation of anything
+in the rendering vocabulary:
+
+| what the corpus already had | what the observation makes of it |
+| --- | --- |
+| `Scene.EQ brightness`, `Track.EQ brightness` - one scalar per stage, `0.0` on `Start` and `20.0` from `Sub Venom` on | how hard the spectrum drives at that stage. Zero before the race starts, and it stays authored per stage all the way up the ladder. |
+| `EQ colour tint`, `EQ analogue colour tint` - two byte-written colours per stage | the spectrum's own two colours, per stage. "Analogue" reads as the smoothed or needle-style variant beside the banded one. |
+| 2048's `EQ.{Colour A/B/C, BG Colour A/B/C}` plus `EQ.Mid-Band Position` and `EQ.BG Mid-Band Position` | the same mechanism with a richer vocabulary. **`Mid-Band Position` is a spectrum-analyser term** and has no reading in any other subsystem, which is independent corroboration from a title the observation did not cover. |
+| `zoneTexVis` - a **256x1** texture the executable builds at runtime rather than loading, packed three bytes at a time | the spectrum data itself, or its palette: a 1D lookup of exactly the width a per-band or per-bin table wants. "Vis" reads as *visualiser*. See `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s twenty-third pass for how it is built. |
+| `zoneTexInner`/`zoneTexOuter` and their `...Nearest` clones - the same texels bound twice under different sampler state | a spectrum read wants **point** sampling, not bilinear: interpolating between two bands smears them together. The existence of a nearest-filtered clone of the same picture is what a band lookup needs and what an ordinary decal does not. |
+
+**Confidence 90 that the effect exists** - it is a direct observation of the
+original by someone who has played it, which is the strongest evidence class
+this project has for behaviour, and it is not the sort of thing that is
+misremembered. **Confidence 70 on the mapping onto specific keys above**: the
+naming, the `Mid-Band Position` corroboration and the 256x1 shape all converge,
+but no shader has been read and no runtime trace taken.
+
+### What it changes
+
+- **The stage ladder is not only a colour grade.** Everything this page had
+  read pointed at per-stage *palettes*; the observation says a per-stage
+  animated element is driven from the audio and parameterised by these same
+  keys. A port that reproduces only the palettes reproduces the quieter half.
+- **It puts an architectural question on the table that nothing else here
+  does**: an audio spectrum reaching a shader means the renderer needs
+  frequency-domain data from the audio path per frame.
+  [ADR-0018](../architecture/adr/0018-audio-mixer-architecture.md) makes audio
+  cues a per-tick *output* of the simulation and keeps the mixer hardware-free;
+  a visualiser wants the opposite direction, and which side owns the analysis
+  is a decision for the maintainer, not something to settle in passing. It is
+  also a determinism constraint: nothing the simulation can see may depend on
+  an audio device, so any analysis has to stay render-side or be derived from
+  the sample stream deterministically
+  ([determinism.md](../architecture/determinism.md)).
+- **It does not license drawing anything yet.** Knowing the effect is a
+  spectrum analyser says nothing about how HD's fragment program combines
+  `zoneTexInner`, `zoneTexVis` and the `zoneBase*`/`zoneEffect*` parameters.
+  Inventing a plausible bar display from the names is exactly the stand-in
+  `CLAUDE.md` forbids - and a legible-looking one would be the hardest kind to
+  spot as wrong.
+
+
 ## Open
 
 - **The stage-index to zone-number correspondence is inferred from the names

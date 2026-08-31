@@ -125,6 +125,65 @@ impl BlockFormat {
 }
 
 impl ModelTexture {
+    /// Decodes one `.gtf` blob, or says `None` for one this build cannot.
+    ///
+    /// **A `.gtf` that will not decode draws nothing rather than something.**
+    /// `Texture::to_rgba` refuses the RSX's Morton-swizzled layouts and
+    /// cubemaps - 53 of the disc's 7,333 files - and a refusal here is an
+    /// answer, not a fallback to a stand-in picture.
+    ///
+    /// **A blob already in DXT blocks keeps them**, with the mip chain the
+    /// file authors; see [`Self::gtf_blocks`] for exactly when. Decoding those
+    /// to RGBA8 was costing 4.5x the memory for the same picture.
+    ///
+    /// Lives here rather than beside its first caller because the block/RGBA
+    /// choice is a property of [`Texels`], and a second caller now wants it.
+    #[must_use]
+    pub fn from_gtf(label: &str, blob: &[u8]) -> Option<Self> {
+        let parsed = oag_formats::gtf::Gtf::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let (width, height) = texture.level_size(0);
+        let texels = match Self::gtf_blocks(texture, blob) {
+            Some(texels) => texels,
+            None => Texels::Rgba8(texture.to_rgba(blob).ok()?.into_iter().flatten().collect()),
+        };
+        Some(Self {
+            label: label.to_string(),
+            width,
+            height,
+            texels,
+        })
+    }
+
+    /// The disc's own blocks and mip chain, for a texture this can bind
+    /// untouched.
+    ///
+    /// Four conditions, each of which the RGBA path handles instead:
+    ///
+    /// - a block-compressed format, which is 7,131 of the disc's 7,333 files;
+    /// - a chain the file authors (`mip_levels > 1`), because a single-level
+    ///   upload would leave the surface with no minification filter at all;
+    /// - a tight pitch, since a declared one is a *base*-level row repeated
+    ///   down the chain (see `oag_formats::gtf`) and only 5 files on the disc
+    ///   declare one;
+    /// - base dimensions on the block grid, which WebGPU requires of a
+    ///   compressed texture and 15 files miss.
+    #[must_use]
+    pub fn gtf_blocks(texture: &oag_formats::gtf::Texture, blob: &[u8]) -> Option<Texels> {
+        let format = BlockFormat::of_gtf(texture.format)?;
+        if texture.cubemap || texture.mip_levels < 2 || texture.pitch != 0 {
+            return None;
+        }
+        let (width, height) = texture.level_size(0);
+        if width % 4 != 0 || height % 4 != 0 {
+            return None;
+        }
+        let levels = (0..texture.mip_levels)
+            .map(|level| blob.get(texture.level_range(level)).map(<[u8]>::to_vec))
+            .collect::<Option<Vec<_>>>()?;
+        Some(Texels::Blocks { format, levels })
+    }
+
     /// One already-decoded RGBA8 texture.
     #[must_use]
     pub fn rgba8(label: String, width: u32, height: u32, rgba: Vec<u8>) -> Self {

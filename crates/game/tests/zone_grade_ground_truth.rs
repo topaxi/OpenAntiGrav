@@ -97,6 +97,48 @@ fn an_hd_zone_race_loads_the_titles_own_stage_table() {
     );
 }
 
+/// **All fifteen per-stage Zone textures decode off the disc, and they are
+/// fifteen different pictures.**
+///
+/// The distinctness is the point: HD ships *two* fifteen-entry sets, and the
+/// one the obvious publisher binds is fifteen byte-identical flat whites. This
+/// asserts the port loaded the other one - `zonemodetrack{0..14}.gtf` - by
+/// checking that no two stages carry the same texels. A regression that
+/// re-pointed the loader at the general set would pass every other test in
+/// this file and fail this one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn all_fifteen_per_stage_zone_textures_decode_and_differ() {
+    let Some(loaded) = load(oag_race::Mode::Zone) else {
+        return;
+    };
+    let mut grade = loaded.zone_grade.expect("the table loads");
+    let (decoded, numbered) = grade.stage_art_counts();
+    assert_eq!(numbered, 15, "HD numbers fifteen stages of texture");
+    assert_eq!(decoded, 15, "every one of them decodes");
+
+    let mut seen: Vec<Vec<u8>> = Vec::new();
+    for stage in 0..=grade.last_stage() {
+        grade.request_stage(stage);
+        grade.commit();
+        let art = grade
+            .stage_art()
+            .unwrap_or_else(|| panic!("stage {stage} has a texture"));
+        // 256x256 on every stage, per the set's own header.
+        assert_eq!((art.width, art.height), (256, 256), "stage {stage} size");
+        let texels = art
+            .to_rgba()
+            .unwrap_or_else(|| panic!("stage {stage} decodes to pixels"))
+            .into_owned();
+        assert!(
+            !seen.contains(&texels),
+            "stage {stage} repeats an earlier stage's texture - the flat-white \
+             'general' set was loaded instead of the 'track' set"
+        );
+        seen.push(texels);
+    }
+}
+
 /// **Two adjacent stages grade the circuit differently, off the file's own
 /// numbers.** `Start` authors no fog of its own and leaves the circuit's
 /// standing; `Sub Venom` authors the cyan the file states, at the density the
@@ -233,9 +275,13 @@ fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
         .expect("the circuit's own directory");
     let text = String::from_utf8(archives.read_name(&name).expect("the table")).expect("UTF-8");
     let table = oag_formats::effectsettings::EffectSettings::parse(&text).expect("it parses");
-    let mut grade =
-        race::zone_grade::ZoneGrade::new(name, table, oag_2048::race::DEFAULTS.zone_stages)
-            .expect("it names stages");
+    let mut grade = race::zone_grade::ZoneGrade::new(
+        name,
+        table,
+        oag_2048::race::DEFAULTS.zone_stages,
+        Vec::new(),
+    )
+    .expect("it names stages");
 
     // A race *opens* on stage 1, not on `Start`: zone 0 matches the table's
     // last record (threshold `0`), which is class 1.

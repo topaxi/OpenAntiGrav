@@ -307,8 +307,10 @@ pub(super) fn staging(
     archives: &mut oag_assets::Archives,
     track: &str,
     ps3_geometry: bool,
-    palette: Option<oag_title::ZonePalette>,
-    stages: Option<&'static oag_title::ZoneStages>,
+    // The three Zone axes travel together and all come off the same title
+    // record, so this takes the record rather than three loose fields - which
+    // is also what keeps the argument count under `clippy::too_many_arguments`.
+    race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
     report: &mut Vec<String>,
 ) -> Staging {
@@ -343,7 +345,7 @@ pub(super) fn staging(
         light,
         authored_fog,
         hd_bloom,
-        zone_grade: zone_grade(archives, palette, stages, mode, track, report),
+        zone_grade: zone_grade(archives, race, mode, track, report),
     }
 }
 
@@ -361,10 +363,50 @@ pub(super) fn staging(
 /// `0`, which is where HD's own loader leaves it, and what would move it is
 /// unrecovered on both titles - see `crate::race::zone_grade`'s module docs
 /// and `docs/formats/effectsettings.md`'s `## Open`.
+/// The "track" set's per-stage textures, decoded, one slot per stage.
+///
+/// **The track set, never the general one.** The original binds both to the
+/// same two shader parameters from different publishers, and only this one is
+/// a picture - see [`oag_title::ZoneStageTextures`] for the trap. A stage
+/// whose entry is missing or will not decode leaves its slot `None` and says
+/// so in the report rather than substituting a neighbour's.
+fn zone_stage_art(
+    archives: &mut oag_assets::Archives,
+    textures: &'static oag_title::ZoneStageTextures,
+    report: &mut Vec<String>,
+) -> Vec<Option<std::sync::Arc<oag_render::mesh::ModelTexture>>> {
+    let mut decoded = 0_u32;
+    let mut art = Vec::with_capacity(textures.stages as usize);
+    for stage in textures.stages() {
+        let name = textures.track_entry(stage);
+        let slot = archives
+            .read_name(&name)
+            .ok()
+            .and_then(|blob| oag_render::mesh::ModelTexture::from_gtf(&name, &blob))
+            .map(std::sync::Arc::new);
+        if slot.is_some() {
+            decoded += 1;
+        } else {
+            report.push(format!(
+                "{name}: no per-stage Zone texture for stage {stage}"
+            ));
+        }
+        art.push(slot);
+    }
+    report.push(format!(
+        "{}0{}..{}: {decoded}/{} per-stage Zone textures decoded; nothing draws them yet, \
+         because HD's own Zone fragment program is unread",
+        textures.track,
+        textures.extension,
+        textures.stages - 1,
+        textures.stages,
+    ));
+    art
+}
+
 pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
-    palette: Option<oag_title::ZonePalette>,
-    stages: Option<&'static oag_title::ZoneStages>,
+    race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
     track: &str,
     report: &mut Vec<String>,
@@ -374,7 +416,7 @@ pub(super) fn zone_grade(
     if mode != oag_race::Mode::Zone {
         return None;
     }
-    let name = palette?.entry_for(track)?;
+    let name = race.zone_palette?.entry_for(track)?;
     let Ok(blob) = archives.read_name(&name) else {
         report.push(format!(
             "{name}: not in the archive set - the Zone race keeps the circuit's own colours"
@@ -395,7 +437,12 @@ pub(super) fn zone_grade(
             return None;
         }
     };
-    let mut grade = crate::race::zone_grade::ZoneGrade::new(name.clone(), table, stages);
+    let art = match race.zone_stage_textures {
+        Some(textures) => zone_stage_art(archives, textures, report),
+        None => Vec::new(),
+    };
+    let mut grade =
+        crate::race::zone_grade::ZoneGrade::new(name.clone(), table, race.zone_stages, art);
     // The stage a race *starts* on, which is not stage `0` on a title with a
     // recovered ladder: 2048's own threshold table matches zone `0` against its
     // last record and shows stage `1` from the first frame, and HD's Detonator

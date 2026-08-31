@@ -56,8 +56,10 @@
 //! the weight at rest and the stage changes cleanly rather than easing. That is
 //! an absence, not a snap chosen for looks.
 
+use std::sync::Arc;
+
 use oag_formats::effectsettings::{EffectSettings, StagePalette};
-use oag_render::mesh_render;
+use oag_render::{mesh::ModelTexture, mesh_render};
 
 /// The three fields HD/Fury's own runtime keeps per entity, and no others.
 ///
@@ -117,6 +119,15 @@ pub struct ZoneGrade {
     /// How this title turns a zone number into a stage, where that is
     /// recovered. `None` on every title but 2048 - see the module docs.
     stages: Option<&'static oag_title::ZoneStages>,
+    /// The "track" set's per-stage texture, one slot per stage, in stage
+    /// order. Empty on a title with no located set, and `None` in any slot
+    /// whose entry did not decode. See [`Self::stage_art`].
+    ///
+    /// Positional and never compacted, for the same reason
+    /// [`oag_render::mesh::TextureSlots`] is: the index *is* the stage number,
+    /// so dropping a slot that failed to decode would silently re-map every
+    /// stage above it.
+    art: oag_render::mesh::TextureSlots,
 }
 
 impl ZoneGrade {
@@ -127,6 +138,7 @@ impl ZoneGrade {
         entry: String,
         table: EffectSettings,
         stages: Option<&'static oag_title::ZoneStages>,
+        art: oag_render::mesh::TextureSlots,
     ) -> Option<Self> {
         let last_stage = *table.stages.keys().next_back()?;
         Some(Self {
@@ -135,7 +147,33 @@ impl ZoneGrade {
             last_stage,
             blend: StageBlend::default(),
             stages,
+            art,
         })
+    }
+
+    /// The per-stage texture the showing stage indexes, where the title ships
+    /// one and it decoded.
+    ///
+    /// **This is the "track" set, and nothing draws it yet.** The original
+    /// samples it through the `zoneTexInner`/`zoneTexOuter` shader parameters,
+    /// alongside a runtime-built 256x1 texture (`zoneTexVis`) this build does
+    /// not generate; what its fragment program does with any of them is
+    /// unread, so the art is decoded and held rather than drawn. Held rather
+    /// than dropped because the decode is the half that is recovered, and
+    /// proving it against the disc is worth more than an empty seam.
+    ///
+    /// `None` for a stage past the set, or one whose entry did not decode -
+    /// the slots are positional, so a hole stays a hole.
+    #[must_use]
+    pub fn stage_art(&self) -> Option<&Arc<ModelTexture>> {
+        self.art.get(self.blend.current as usize)?.as_ref()
+    }
+
+    /// How many of this title's per-stage textures decoded, and how many it
+    /// numbers.
+    #[must_use]
+    pub fn stage_art_counts(&self) -> (usize, usize) {
+        (self.art.iter().flatten().count(), self.art.len())
     }
 
     /// The stage this title's ladder puts zone number `zone` on, clamped to the
@@ -281,6 +319,36 @@ impl ZoneGrade {
         )
     }
 
+    /// The `float4` HD/Fury hands its shaders as `fogColour`, assembled the
+    /// way its own renderer assembles it.
+    ///
+    /// **This is the one value in this whole table with a traced consumer.**
+    /// `Environment_UpdateStageBlend` cross-fades `Scene.Texture Colour` and
+    /// `Scene.EQ brightness` and stores them to two separate addresses;
+    /// `Scene_PrepareFrame` splats the scalar into the colour's `.w` and
+    /// publishes the result as engine shader parameter 7. Confidence 90 on
+    /// the binding, 80 on the key attribution - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+    ///
+    /// **Nothing draws it yet, deliberately.** What HD's fragment program
+    /// does with `fogColour` is unread, and the authored values are not
+    /// fog-shaped - `Scene.Texture Colour` runs to `0.96` here and its
+    /// `Track` sibling to `9.0`, which is a multiplier's range. Reported
+    /// rather than applied, so the recovered number is visible without a
+    /// guess about its meaning standing in for the shader.
+    ///
+    /// `None` on a file that authors no `Scene.Texture Colour` at all, which
+    /// is every 2048 table - that title reauthored the vocabulary.
+    #[must_use]
+    pub fn scene_tint(&self) -> Option<[f32; 4]> {
+        let palette = self.palette();
+        let [r, g, b] = palette.scene_texture_colour?;
+        // The `.w` is a separate key in the file and the same 16 bytes at
+        // runtime; a stage that authors the colour but not the scalar leaves
+        // the lane at the zero the struct was reset to.
+        Some([r, g, b, palette.scene_eq_brightness.unwrap_or(0.0)])
+    }
+
     /// What the load report says about this table.
     #[must_use]
     pub fn describe(&self) -> String {
@@ -311,8 +379,16 @@ impl ZoneGrade {
                 self.blend.current,
             ),
         };
+        // The one recovered binding, reported so a load says what the
+        // original's shader would receive even though nothing draws it.
+        let tint = match self.scene_tint() {
+            Some([r, g, b, w]) => {
+                format!("; fogColour would read [{r}, {g}, {b}, {w}] from Scene.Texture Colour")
+            }
+            None => String::new(),
+        };
         format!(
-            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; {ladder}",
+            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; {ladder}{tint}",
             self.entry
         )
     }

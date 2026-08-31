@@ -64,6 +64,52 @@ carries an **explicit** stage index and weight with no caller
 (`request_stage`/`set_weight`), and the textures can ride that same seam
 until HD's real trigger is recovered.
 
+## 2026-08-31, later: the asset half is wired, and the maintainer's own play named the effect
+
+**Wired.** `oag_title::ZoneStageTextures` carries both entry-name sets and the
+stage count (`oag_hd::race::ZONE_STAGE_TEXTURES`, `None` on every other title);
+`oag_game::race::load::environment::zone_stage_art` loads the **track** set
+through `oag_render::mesh::ModelTexture::from_gtf` (promoted out of
+`mesh::rcs::skin` so a second caller can reach it); and
+`ZoneGrade::stage_art()` hands back the showing stage's texture. Checked
+against `hdfury-ps3-eu-dec.iso` in
+`crates/game/tests/zone_grade_ground_truth.rs`: all fifteen decode at 256x256
+and **no two are the same picture**, which is the assertion that catches a
+regression re-pointing the loader at the blank general set. Nothing draws them
+- the load report says so in as many words.
+
+**Also wired, on the palette side**: the three `Scene.*` keys HD's own
+cross-fade actually reads were not being parsed at all. They are now
+(`Scene.Texture Colour`, `Scene.Base Colour`, `Scene.Base Colour Highlight`,
+plus `Scene.EQ brightness`), and `ZoneGrade::scene_tint()` assembles the exact
+`float4` the original publishes as the shader parameter `fogColour`. Reported,
+not drawn.
+
+**And the effect has a name now.** From the maintainer playing HD/Fury: in a
+Zone race the floor textures and billboards carry an **audio-spectrum
+animation driven by the music**. That reads the whole `EQ` cluster at once -
+`EQ` is an equaliser, `Scene/Track.EQ brightness` is how hard it drives (`0.0`
+on `Start`, `20.0` from `Sub Venom`), `EQ colour tint`/`analogue colour tint`
+are its colours, 2048's `EQ.Mid-Band Position` is a spectrum-analyser term with
+no other reading, and `zoneTexVis` being a **256x1 runtime-built** texture is
+exactly the shape a per-band lookup wants. The `...Nearest` clones fall out
+too: a band lookup wants point sampling, which is what a nearest-filtered clone
+of the same texels is for. Confidence 90 that the effect exists, 70 on the
+key-by-key mapping. Full table in
+[effectsettings.md](../docs/formats/effectsettings.md)'s `## The EQ keys are an
+audio spectrum, observed in play`.
+
+**This raises a maintainer decision rather than a task.** A shader reading an
+audio spectrum needs frequency-domain data per frame, and
+[ADR-0018](../docs/architecture/adr/0018-audio-mixer-architecture.md) points
+the audio path the other way - cues are a per-tick *output* of the simulation
+and the mixer is hardware-free by design. Who runs the analysis, and whether it
+may sit on the render side reading the mixer's output buffer, is a call for the
+maintainer; a new ADR is the likely shape. **It is also a determinism
+question**: anything the simulation can see must not depend on the audio
+device, so the spectrum has to stay render-side or be derived from the sample
+stream deterministically.
+
 ## Open
 
 - What the Zone shader does with the six-plus Zone parameters. Unread. This is
@@ -83,20 +129,27 @@ until HD's real trigger is recovered.
 
 ## Next Steps
 
-- Load the fifteen `zoneModeTrack{0..14}.gtf` through `oag_formats::gtf` and
-  hold them per stage beside `ZoneGrade`, selected by the same explicit stage
-  index the grade already uses. Bounded, testable against
-  `hdfury-ps3-eu-dec.iso` the way
-  `crates/game/tests/zone_grade_ground_truth.rs` already tests the palette
-  half, and it draws nothing it cannot justify. **Bind the Track set, not the
-  general set** - the general set is fifteen copies of a flat white texture.
-- Generate `zoneTexVis` (256x1, RGB ramp) rather than looking for a file.
-  Read the packing loop at `0x003d8b40` first; do not guess the ramp.
-- Read HD's Zone fragment program. That is the step that turns loaded
-  textures into a drawn effect, and until it lands, anything drawn is
-  invention. Start from the shader registry (`ShaderRegistry_Find`,
-  `0x005cd728`, and `renderer.md`'s own reading of the program blocks) rather
-  than from the parameter names.
+- ~~Load the fifteen `zoneModeTrack{0..14}.gtf` and hold them per stage~~
+  **Done, 2026-08-31** - see the section above. Fifteen decode, all distinct,
+  ground-truth tested.
+- **Read HD's Zone fragment program.** This is now the single gate on
+  everything visible: the textures are loaded, the parameters are mapped, the
+  effect has a name, and what combines them is the only unread piece. Start
+  from the shader registry (`ShaderRegistry_Find`, `0x005cd728`, and
+  `renderer.md`'s own reading of the program blocks) rather than from the
+  parameter names - the naming has already proved misleading once, since the
+  parameter the stage tint lands in is called `fogColour` and the key that
+  feeds it is called `Texture Colour`.
+- Generate `zoneTexVis` (256x1) rather than looking for a file. **Read the
+  packing loop at `0x003d8b40` first** - and read it with the spectrum
+  observation in hand, because "an RGB ramp" was the reading *before* anyone
+  knew the effect was an equaliser, and a per-band palette and a gradient are
+  easy to confuse from the packing alone.
+- Put the audio-spectrum architecture question to the maintainer before
+  building anything that consumes it - see the section above. The answer
+  decides whether an FFT belongs in `oag-audio`, in `oag-render`, or in
+  neither.
 - Only once the shader is read: decide whether the `...Nearest` clones need a
   second sampler in the port at all, or whether one texture with two sampler
-  states covers it.
+  states covers it. The spectrum reading says point sampling is load-bearing
+  rather than cosmetic, so this is likely a real difference.

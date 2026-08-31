@@ -81,6 +81,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_palette: None,
     // No stage table to index into, so nothing to map a zone number onto.
     zone_stages: None,
+    zone_stage_textures: None,
 };
 
 /// Pure's Zone milestone announcer.
