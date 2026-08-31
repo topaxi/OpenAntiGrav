@@ -400,6 +400,80 @@ twice judged not worth it given known tooling blind spots on that specific
 function. Recorded as a genuine, converged negative result, not an
 abandoned search.
 
+### A fourth pass: `World_LoadTrack`'s own body is now disassembly-verified to hold no consumer, and its name is doubtful
+
+2026-08-31. Took the "trace `World_LoadTrack`'s own 1,228 instructions" lead
+the two prior passes judged not worth it, and closed it - but at the same
+time found the function's own name is likely wrong, so the result is a
+converged negative on a differently-shaped question than the one asked.
+
+**`World_LoadTrack_q` (`0x088835f0`, confidence 55 per its `_q` suffix) is
+called from `FUN_08886950` as a generic `0x3c`-byte (60-byte) object
+constructor, not as a function handed "the world."** Disassembling
+`FUN_08886950` in full shows it building a run of sibling scene objects, each
+via the identical alloc/zero/tag/construct idiom already documented above for
+`DirectionalLight_Construct`/`AmbientLight_Construct`
+(`func_0x0014291c(size, ...)` to allocate, zero it, tag `+8` with the parent,
+then call the class's own construct function on the fresh object). The very
+last one in that run allocates exactly `0x3c` bytes and calls
+`func_0x0007f5f0` on it (`0x08886d0c`: `jal 0x0007f5f0`, `a0` set to the fresh
+allocation two instructions earlier at `0x08886d00`) - and `0x0007f5f0 +
+0x08804000 = 0x088835f0`, `World_LoadTrack_q`'s own address. `World_LoadTrack_q`'s
+own body never writes past `param_1+0x38`, which fits inside 60 bytes -
+consistent with it being this constructor's target, not a function operating
+on the world object (`DirectionalLight`'s own collected list capacity lives
+at `world+0x40`/`+0x7c`, both past a 60-byte object's end - the same
+over-read shape as the `node_base+0x90` false lead retired above, this time
+caught before it produced one). Recorded as a hypothesis worth a future
+pass's attention, not a rename: no replacement name is anywhere near the
+50-confidence floor this project requires before touching a name at all.
+
+**With that reframing, the call this page has tracked throughout
+(`0x088848e4`, into `World_CollectMarkerLists`) is `World_LoadTrack_q` calling
+out to go find the world object, not being handed it** - its own decompiled
+body resolves the callee's `$a0` by walking a sibling list rooted at its own
+`param_1+8` for a node matching a tag (`func_0x002675bc()`), the same
+tag-lookup idiom used elsewhere in this codebase for resource lookup by type,
+matching the live capture's confirmation that `$a0` at
+`World_CollectMarkerLists`'s entry is genuinely the world pointer at
+runtime even though `World_LoadTrack_q` itself is never handed it as an
+argument.
+
+**The disassembly-verified part, independent of decompiler trust**: the
+instructions immediately after the `jal` at `0x088848e4` (`0x088848e8` through
+the function's end at `0x0888491f`) are register restores (`lw s0..s7,fp,ra`)
+and `jr ra` - pure epilogue, no memory read of any kind. This was checked in
+raw disassembly, not the decompiler's text, specifically because the
+decompiler is demonstrably unreliable on this exact call (see below) and its
+prose summary should not be trusted for a tail this load-bearing. **This
+closes the "trace `World_LoadTrack`'s own instructions" lead with a genuine
+negative**: whatever function's name turns out to be right for `0x088835f0`,
+nothing in its body reads `world+0x40`/`+0x7c` after the collection call - the
+consumer, if one exists, is not here and cannot be, structurally.
+
+**Why the decompiler couldn't be trusted for this call, and why `get_xrefs_to`
+returned nothing for it**: `World_CollectMarkerLists`'s own address
+(`0887a1c4`) has zero recorded references in the database
+(`get_xrefs_to`/`get_function_callers` both return empty), even though the
+call at `0x088848e4` demonstrably targets it - the decompiler prints the call
+as `func_0x000761c4(...)`, an unresolved low pseudo-address, and
+`0x000761c4 + 0x08804000 = 0x0887a1c4` exactly. This is not a new defect:
+it is the same `jal` relocation wart `docs/ghidra/workflow.md`'s "Known-imperfect,
+and why it does not block" section already documents from
+`docs/ghidra/functions/psp-pulse-usa/billboards.md`'s
+`Billboard_ConstructResource` finding (`real = pseudo + 0x08804000`, `R_MIPS_26`
+not applied even where the `lui`/`addiu` pair is fixed) - this page's own
+find is a second binary (`psp-pulse-eu`, not `psp-pulse-usa`) and a second,
+unrelated function showing the identical shape, which corroborates that
+finding rather than adding a new one. Worth recording here specifically
+because it explains why `get_xrefs_to`/`get_function_callers` came back empty
+for `World_CollectMarkerLists` despite the decompiled body and the live
+capture agreeing it is genuinely called: **the reference database itself is
+silent on this class of call, not just the printed constant** - a future pass
+chasing "no callers found" on an EU function should check for this pattern
+(a `func_0x0000XXXX`/`func_0x000XXXXX` call target under `0x00800000`) before
+concluding the function is actually uncalled.
+
 ## Open
 
 - **The global ambient RGB triple's writer is unfound, and the live capture
@@ -416,24 +490,38 @@ abandoned search.
   gates *whether* the ambient branch runs at all, not what colour it uses -
   but the colour question, the one this pass opened to answer, is closed.
 - **`DirectionalLight`'s collection is live-confirmed real; its final
-  consumer is still unfound after three independent passes.** `World_CollectMarkerLists`
-  (confidence 85) builds a 4-entry `DirectionalLight` list at track load from
-  genuine authored data - live-verified against `oag-view --nodes` ground
-  truth on three independent class counts at once. This is a materially
-  different status than `AmbientLight`/`PointLight`, both confirmed inert:
-  `DirectionalLight`'s *data pipeline*, to the point of sitting in memory
-  correctly populated, is real. What's still missing is anything reading
-  `world+0x40`/`+0x7c` afterward. One live capture and two Ghidra passes
-  (see "The object itself" above) have now exhausted every lead that
-  doesn't require tracing `World_LoadTrack`'s own 1,228 instructions
-  directly - the class-based lookup path is exhaustively closed (exactly 5
-  references to the class stub, all read), the per-frame draw dispatcher's
-  one ambiguous touch turned out to be an out-of-bounds artifact, and every
-  sibling display-list function was checked. **Converged, not abandoned**:
-  either the reader is inside `World_LoadTrack` itself (the trace this
-  thread has twice judged not worth the known tooling blind spots), or it
-  doesn't render-consume the list at all and the collection exists for some
-  other purpose this project hasn't identified.
+  consumer is still unfound after four independent passes, and the fourth
+  closed off `World_LoadTrack_q`'s own body specifically.**
+  `World_CollectMarkerLists` (confidence 85) builds a 4-entry
+  `DirectionalLight` list at track load from genuine authored data -
+  live-verified against `oag-view --nodes` ground truth on three independent
+  class counts at once. This is a materially different status than
+  `AmbientLight`/`PointLight`, both confirmed inert: `DirectionalLight`'s
+  *data pipeline*, to the point of sitting in memory correctly populated, is
+  real. What's still missing is anything reading `world+0x40`/`+0x7c`
+  afterward. One live capture and three Ghidra passes (see "The object
+  itself" and "A fourth pass" above) have now exhausted every lead that
+  doesn't require a per-frame function elsewhere - the class-based lookup
+  path is exhaustively closed (exactly 5 references to the class stub, all
+  read), the per-frame draw dispatcher's one ambiguous touch turned out to
+  be an out-of-bounds artifact, every sibling display-list function was
+  checked, and `World_LoadTrack_q`'s own body is now disassembly-verified
+  (not just decompiler-read) to end in pure epilogue right after the
+  collection call - no read of any kind follows it. **Converged, not
+  abandoned, and narrower than before**: the reader cannot be inside
+  `World_LoadTrack_q` itself (ruled out, not just unchecked), so either it is
+  in `World_LoadTrack_q`'s own caller (`FUN_08886950`, itself unread past the
+  constructor-boilerplate call site - see "A fourth pass" above) or some
+  later per-frame function, or the collection doesn't render-consume the
+  list at all and exists for some other purpose this project hasn't
+  identified. `FUN_08886950`'s full body was read in this pass (it is what
+  calls `World_LoadTrack_q`) and reads no `+0x40`/`+0x7c` off its own
+  `param_1` either - but that check doesn't fully retire this lead, since
+  `FUN_08886950`'s `param_1` is not established to be the same object the
+  tag-lookup inside `World_LoadTrack_q` resolves to before calling
+  `World_CollectMarkerLists`; they could be, or could be two different
+  objects in the same scene-construction tree. Confirming which is the
+  concrete next step, not a fresh trace of `World_LoadTrack_q` itself.
 - **`world+0x44`/`world+0x48` read as `0` on the one track checked live**,
   but that doesn't settle what they're *for* - a zero on `16_Track` is
   consistent with either "these two classes are never authored on this

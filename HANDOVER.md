@@ -1022,6 +1022,19 @@ candidate, not just call targets. `get_xrefs_to`/`get_xrefs_from` on the
 naively-read address will report nothing either way, which reads exactly
 like "no reference" and is not.
 
+**`psp-pulse-eu` has the same `jal` wart, not just `psp-pulse-usa`.** Found
+2026-08-31 tracing `World_LoadTrack_q` (`0x088835f0`, EU) for
+[the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md):
+its call into `World_CollectMarkerLists` (`0x0887a1c4`) decompiles as
+`func_0x000761c4(...)`, and `get_xrefs_to`/`get_function_callers` on
+`0x0887a1c4` both return empty despite a live PPSSPP capture already having
+confirmed the call executes. `0x000761c4 + 0x08804000 = 0x0887a1c4` exactly -
+same fix, second binary. This nudges the still-open "general PSP-ELF trait
+vs. this project's importer" question above toward the importer, since both
+binaries went through the same procedure; not settled by one data point, but
+worth weighing next time it comes up. Full account:
+[`lighting.md`](docs/ghidra/functions/psp-pulse-eu/lighting.md#a-fourth-pass-world_loadtracks-own-body-is-now-disassembly-verified-to-hold-no-consumer-and-its-name-is-doubtful).
+
 ## Verification status: what to lean on
 
 **The disc chooser was driven end to end on this machine** (2026-08-18), which
