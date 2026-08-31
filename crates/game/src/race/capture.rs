@@ -276,10 +276,9 @@ pub fn capture(
 
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("oag-game race offscreen"),
-        ..Default::default()
-    }))
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &oag_render::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
+    ))
     .context("requesting the device")?;
 
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline

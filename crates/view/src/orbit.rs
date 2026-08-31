@@ -253,10 +253,9 @@ impl Session {
             ..Default::default()
         }))
         .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("oag-view orbit"),
-            ..Default::default()
-        }))
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &oag_render::mesh_render::device_descriptor("oag-view orbit", &adapter),
+        ))
         .context("requesting the device")?;
 
         let size = window.inner_size();

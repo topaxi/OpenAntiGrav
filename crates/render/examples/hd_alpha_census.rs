@@ -10,11 +10,31 @@
 
 use oag_render::mesh::{self, ModelTexture, slots};
 
-fn texel(texture: &ModelTexture, [u, v]: [f32; 2]) -> [f32; 4] {
+fn texel(texture: &ModelTexture, rgba: &[u8], [u, v]: [f32; 2]) -> [f32; 4] {
     let x = ((u.rem_euclid(1.0) * texture.width as f32) as u32).min(texture.width - 1) as usize;
     let y = ((v.rem_euclid(1.0) * texture.height as f32) as u32).min(texture.height - 1) as usize;
     let at = (y * texture.width as usize + x) * 4;
-    std::array::from_fn(|c| f32::from(texture.rgba[at + c]) / 255.0)
+    std::array::from_fn(|c| rgba.get(at + c).map_or(0.0, |&b| f32::from(b) / 255.0))
+}
+
+/// One decode per texture, keyed on the shared texture's own address.
+///
+/// Wipeout HD's `.gtf` textures stay in their DXT blocks in memory now (see
+/// `oag_render::mesh::Texels`), so decoding at the call site would decode a
+/// 2048x2048 atlas once per vertex. This is what the probes got for free back
+/// when every texture was expanded to RGBA8 at load.
+fn rgba_of<'a>(
+    cache: &'a mut std::collections::HashMap<usize, Vec<u8>>,
+    texture: &std::sync::Arc<ModelTexture>,
+) -> &'a [u8] {
+    cache
+        .entry(std::sync::Arc::as_ptr(texture) as usize)
+        .or_insert_with(|| {
+            texture
+                .to_rgba()
+                .map(std::borrow::Cow::into_owned)
+                .unwrap_or_default()
+        })
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,6 +53,7 @@ fn main() -> anyhow::Result<()> {
     let (model, _) = mesh::rcs::scene_from(&spec, &name, &data)?
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
+    let mut decoded: std::collections::HashMap<usize, Vec<u8>> = Default::default();
     let mut rows: std::collections::BTreeMap<usize, (f64, f64, usize)> =
         std::collections::BTreeMap::new();
     for draws in [&model.alpha_tested_draws, &model.transparent_draws] {
@@ -71,7 +92,8 @@ fn main() -> anyhow::Result<()> {
                 );
                 for v in vs {
                     row.0 += area / 3.0;
-                    row.1 += (area / 3.0) * f64::from(texel(coverage, v.texcoord)[channel]);
+                    let texels = rgba_of(&mut decoded, coverage);
+                    row.1 += (area / 3.0) * f64::from(texel(coverage, texels, v.texcoord)[channel]);
                 }
             }
         }

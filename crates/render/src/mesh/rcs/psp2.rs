@@ -119,12 +119,12 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
     let parsed = gxt::Gxt::parse(blob).ok()?;
     let texture = parsed.only()?;
     let rgba = texture.to_rgba(blob).ok()?;
-    Some(ModelTexture {
-        label: label.to_string(),
-        width: u32::from(texture.width),
-        height: u32::from(texture.height),
-        rgba: rgba.into_iter().flatten().collect(),
-    })
+    Some(ModelTexture::rgba8(
+        label.to_string(),
+        u32::from(texture.width),
+        u32::from(texture.height),
+        rgba.into_iter().flatten().collect(),
+    ))
 }
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
@@ -255,7 +255,7 @@ fn bind_textures(
             let blob = textures(path)?;
             let texture = decode_gxt_texture(path, &blob)?;
             let at = model.textures.len();
-            model.textures.push(Some(texture));
+            model.textures.push(Some(std::sync::Arc::new(texture)));
             if report.diffuse_texture.is_none() {
                 report.diffuse_texture = Some(path.to_string());
             }

@@ -477,7 +477,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // see `mesh::build_sky`'s doc comment. Resolved once here, against the track
     // model's own embedded textures, and reused rather than re-read from the
     // archive and re-decoded per model.
-    let mut ps2_track_textures: Option<Vec<Option<mesh::ModelTexture>>> = None;
+    let mut ps2_track_textures: Option<mesh::TextureSlots> = None;
 
     // **A PS3 circuit's geometry is in the `.rcsmodel` beside it.** Both the
     // meshes its `.vex` places - which on HD are all props - and the far larger

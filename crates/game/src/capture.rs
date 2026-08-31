@@ -648,10 +648,9 @@ pub fn run(
     let instance = crate::adapter::instance();
     let adapter =
         crate::adapter::choose(&instance, None, &options.settings.graphics.renderer)?.adapter;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("oag-game offscreen"),
-        ..Default::default()
-    }))
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &oag_render::mesh_render::device_descriptor("oag-game offscreen", &adapter),
+    ))
     .context("requesting the device")?;
 
     // Rgba8Unorm rather than the surface's sRGB format: the readback is written
@@ -881,10 +880,9 @@ pub fn loading(
     let (width, height) = options.size;
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("oag-game loading screen"),
-        ..Default::default()
-    }))
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &oag_render::mesh_render::device_descriptor("oag-game loading screen", &adapter),
+    ))
     .context("requesting the device")?;
 
     let format = wgpu::TextureFormat::Rgba8Unorm;

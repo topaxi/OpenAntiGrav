@@ -536,7 +536,7 @@ pub fn shield_entry_names(ship_dir: &str, team: &str) -> [String; 2] {
 pub(crate) fn ps2_texture_set(
     archives: &mut oag_assets::Archives,
     entry_name: &str,
-) -> Option<Vec<Option<mesh::ModelTexture>>> {
+) -> Option<mesh::TextureSlots> {
     let blob = archives.read_preceding(entry_name).ok()?;
     mesh::ps2_texture_set(&blob).ok()
 }

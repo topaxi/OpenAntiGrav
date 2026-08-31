@@ -19,7 +19,7 @@ use super::ModelTexture;
 /// Slots are positional for the same reason [`build`] keeps them positional: a
 /// material names a texture by its ordinal, so an entry this build cannot decode
 /// stays `None` in place rather than shifting every later one.
-pub fn ps2_texture_set(blob: &[u8]) -> Result<Vec<Option<ModelTexture>>> {
+pub fn ps2_texture_set(blob: &[u8]) -> Result<super::TextureSlots> {
     let count = wad::Directory::peek_entry_count(blob).context("not a nested WAD")?;
     let directory = wad::Directory::parse(blob, Some(blob.len() as u64))
         .map_err(|e| anyhow::anyhow!("{e}"))
@@ -49,16 +49,14 @@ pub fn ps2_texture_set(blob: &[u8]) -> Result<Vec<Option<ModelTexture>>> {
                 continue;
             }
         };
-        out.push(
-            ps2_texture::parse(&decompressed)
-                .ok()
-                .map(|texture| ModelTexture {
-                    label: format!("#{index} {:08x}", entry.name_hash),
-                    width: u32::from(texture.width),
-                    height: u32::from(texture.height),
-                    rgba: texture.to_rgba(),
-                }),
-        );
+        out.push(ps2_texture::parse(&decompressed).ok().map(|texture| {
+            std::sync::Arc::new(ModelTexture::rgba8(
+                format!("#{index} {:08x}", entry.name_hash),
+                u32::from(texture.width),
+                u32::from(texture.height),
+                texture.to_rgba(),
+            ))
+        }));
     }
     Ok(out)
 }

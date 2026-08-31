@@ -153,15 +153,6 @@ mod blink_texture_tests {
     }
 }
 
-/// A texture decoded from the model.
-#[derive(Debug, Clone)]
-pub struct ModelTexture {
-    pub label: String,
-    pub width: u32,
-    pub height: u32,
-    pub rgba: Vec<u8>,
-}
-
 /// Whether [`build_with_textures`] draws every child of an authored
 /// `LodGroup` (class `0x2ee`), or only the first.
 ///
@@ -261,7 +252,7 @@ pub struct Model {
     /// `None` where the node exists but this build cannot decode it. The slots
     /// are positional because materials name a texture by its ordinal, so
     /// compacting them would re-skin the model.
-    pub textures: Vec<Option<ModelTexture>>,
+    pub textures: TextureSlots,
     /// Each material's **second** texture, positionally beside
     /// [`Self::textures`], under whatever role it plays there.
     ///
@@ -275,7 +266,7 @@ pub struct Model {
     /// draw names its material by ordinal, so a missing entry has to stay a
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials.
-    pub lightmaps: Vec<Option<ModelTexture>>,
+    pub lightmaps: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -431,7 +422,7 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
 pub fn build_with_textures(
     label: &str,
     data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
+    external: Option<TextureSlots>,
     lod: Lod,
 ) -> Result<Model> {
     build_class(label, data, external, lod, |c| c.mesh)
@@ -455,11 +446,7 @@ pub fn build_with_textures(
 /// Returns a model with no meshes when the file authors no sky. That is not an
 /// error: 4 of the 40 PSP track files have no `fogCube` and a `.vex` that is not
 /// a track has neither.
-pub fn build_sky(
-    label: &str,
-    data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
-) -> Result<Model> {
+pub fn build_sky(label: &str, data: &[u8], external: Option<TextureSlots>) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.skycube)
 }
 
@@ -483,11 +470,7 @@ pub fn build_sky(
 ///
 /// Returns a model with no meshes when the file authors no pads, which is
 /// ordinary: every Pure track and every `.vex` that is not a track.
-pub fn build_pads(
-    label: &str,
-    data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
-) -> Result<Model> {
+pub fn build_pads(label: &str, data: &[u8], external: Option<TextureSlots>) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.speedup_pad)
 }
 
@@ -505,7 +488,7 @@ pub fn build_pads(
 pub fn build_weapon_pads(
     label: &str,
     data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
+    external: Option<TextureSlots>,
 ) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.weapon_pad)
 }
@@ -526,7 +509,7 @@ pub fn build_weapon_pads(
 fn build_optional_class(
     label: &str,
     data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
+    external: Option<TextureSlots>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
     let Ok(classes) = vex::classes_of(data) else {
@@ -567,7 +550,7 @@ fn build_optional_class(
 fn build_class(
     label: &str,
     data: &[u8],
-    external: Option<Vec<Option<ModelTexture>>>,
+    external: Option<TextureSlots>,
     lod: Lod,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
@@ -647,24 +630,26 @@ fn build_class(
     // Positional: materials name a texture by its ordinal among the `Texture`
     // nodes, so an entry this build cannot decode has to stay in place as `None`
     // rather than shift every later index.
-    let embedded: Vec<Option<ModelTexture>> = vex::textures(data)
+    let embedded: TextureSlots = vex::textures(data)
         .context("extracting textures")?
         .into_iter()
         .map(|slot| {
-            slot.map(|t| ModelTexture {
-                // The runtime path first: it is present on tracks *and* ships,
-                // where the node-header name is the artists' `Z:/...` authoring
-                // path and is absent altogether on every track texture.
-                label: t
-                    .asset_path
-                    .as_deref()
-                    .or(t.name.as_deref())
-                    .and_then(|n| n.rsplit(['/', '\\']).next())
-                    .unwrap_or("?")
-                    .to_string(),
-                width: u32::from(t.width),
-                height: u32::from(t.height),
-                rgba: t.to_rgba(),
+            slot.map(|t| {
+                std::sync::Arc::new(ModelTexture::rgba8(
+                    // The runtime path first: it is present on tracks *and*
+                    // ships, where the node-header name is the artists'
+                    // `Z:/...` authoring path and is absent altogether on every
+                    // track texture.
+                    t.asset_path
+                        .as_deref()
+                        .or(t.name.as_deref())
+                        .and_then(|n| n.rsplit(['/', '\\']).next())
+                        .unwrap_or("?")
+                        .to_string(),
+                    u32::from(t.width),
+                    u32::from(t.height),
+                    t.to_rgba(),
+                ))
             })
         })
         .collect();
@@ -976,6 +961,9 @@ pub use ps2_textures::ps2_texture_set;
 
 mod draw_call;
 pub use draw_call::{Bounds, DrawCall};
+
+mod model_texture;
+pub use model_texture::{BlockFormat, ModelTexture, Texels, TextureSlots};
 
 mod flame;
 pub mod groups;

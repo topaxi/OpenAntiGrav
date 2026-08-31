@@ -880,6 +880,18 @@ task.
   See [psarc](psarc.md#the-check-the-confidence-rests-on).
 - **A `.psarc` inside an encrypted image reads as noise.** Decrypt first;
   `scripts/psarc.py` reports the bad magic rather than guessing.
+- **A material slot is not a texture, and treating it as one costs gigabytes.**
+  Talon's Junction has **442 material slots over 175 distinct textures**, one
+  lightmap atlas among them named by 275 slots at once. The slots are positional
+  - a chunk names its material by ordinal - so filling them by value retained
+  **1,858 MiB where 277 MiB of texels had been decoded**, and handed the GPU 884
+  uploads of those 175 pictures. An HD race peaked at **2,577 MiB** on that
+  alone, against 233 MiB for the same race on the PSP disc. Sharing one `Arc`
+  per texture and keying the upload on its identity took it to 773 MiB with a
+  **bit-identical capture**, and binding the disc's own DXT blocks (see
+  [gtf](gtf.md#the-mip-chain-is-the-discs-and-a-box-filter-is-not-it)) to 530.
+  The shape is general: any per-slot table over an HD circuit wants the same
+  treatment.
 
 ## Reproducing this
 

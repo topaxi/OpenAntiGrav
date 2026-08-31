@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
                 "  texture[0]: {}x{}, {} byte(s) of rgba",
                 texture.width,
                 texture.height,
-                texture.rgba.len()
+                texture.rgba().map_or(0, <[u8]>::len)
             );
         }
         println!(

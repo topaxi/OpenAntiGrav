@@ -341,9 +341,12 @@ fn the_magstrip_texture_paints_its_features_across_v_not_along_u() {
         .find(|t| t.label.eq_ignore_ascii_case(MAGSTRIP))
         .expect("magstrip texture");
     let (w, h) = (texture.width as usize, texture.height as usize);
+    // A PSP `.vex` texture is always decoded RGBA8; only Wipeout HD's `.gtf`
+    // keeps its blocks. See `oag_render::mesh::Texels`.
+    let rgba = texture.rgba().expect("a .vex texture is decoded RGBA8");
     let luma = |x: usize, y: usize| {
         let o = (y * w + x) * 4;
-        let p = &texture.rgba[o..o + 3];
+        let p = &rgba[o..o + 3];
         (u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2])) / 3
     };
     let mut along_u = 0u64;

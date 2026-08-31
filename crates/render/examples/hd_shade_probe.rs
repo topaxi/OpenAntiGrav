@@ -47,6 +47,12 @@ fn main() -> anyhow::Result<()> {
             if !texture.label.contains(&want) {
                 continue;
             }
+            // Decoded once per draw call rather than per texel: Wipeout HD's
+            // textures stay in their DXT blocks in memory now. See
+            // `oag_render::mesh::Texels`.
+            let Some(rgba) = texture.to_rgba() else {
+                continue;
+            };
             let _ = list;
             for &i in &model.indices[d.range.start as usize..d.range.end as usize] {
                 let v = &model.vertices[i as usize];
@@ -74,14 +80,14 @@ fn main() -> anyhow::Result<()> {
                     as usize;
                 let at = (y * texture.width as usize + x) * 4;
                 for c in 0..3 {
-                    let b = texture.rgba[at + c];
+                    let b = rgba[at + c];
                     albedo[c] += f64::from(b);
                     albedo_max[c] = albedo_max[c].max(b);
                 }
                 let band = ((w.rem_euclid(1.0) * 10.0) as usize).min(9);
-                band_lum[band] += 0.299 * f64::from(texture.rgba[at])
-                    + 0.587 * f64::from(texture.rgba[at + 1])
-                    + 0.114 * f64::from(texture.rgba[at + 2]);
+                band_lum[band] += 0.299 * f64::from(rgba[at])
+                    + 0.587 * f64::from(rgba[at + 1])
+                    + 0.114 * f64::from(rgba[at + 2]);
             }
         }
     }

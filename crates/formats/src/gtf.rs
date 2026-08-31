@@ -546,6 +546,27 @@ impl Texture {
     }
 }
 
+/// Decodes one mip level to straight RGBA8, given that level's own texels.
+///
+/// The free-function half of [`Texture::to_rgba`], for a caller holding a
+/// level's bytes without the descriptor they came out of: `oag_render`'s
+/// fallback for an adapter with no block-compression support, which uploads
+/// the disc's own DXT blocks where it can and decodes them here where it
+/// cannot. `pitch` is the descriptor's, in bytes, and 0 means tightly packed.
+///
+/// Returns `None` for a layout this does not read - a swizzled or `B8` one, or
+/// texels that stop short of the dimensions given.
+#[must_use]
+pub fn decode_level(
+    format: Format,
+    texels: &[u8],
+    width: u32,
+    height: u32,
+    pitch: usize,
+) -> Option<Vec<[u8; 4]>> {
+    decode::level(format, texels, width, height, pitch)
+}
+
 /// The unexplained tail on a cubemap that carries a mip chain.
 ///
 /// The same 360 bytes on all 20 of them, whatever the face size or format. See

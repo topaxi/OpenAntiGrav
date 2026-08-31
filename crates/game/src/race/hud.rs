@@ -272,6 +272,17 @@ fn sight_art(
             report.push(format!("sight model {src} embeds no texture"));
             continue;
         };
+        // The sheet is composed on the CPU, so this needs texels rather than a
+        // binding. Every sight model is a PSP `.vex`, whose textures are always
+        // decoded RGBA8; only Wipeout HD's `.gtf` keeps its blocks, and HD
+        // draws no sight. Reported rather than unwrapped, so the day that
+        // stops being true it says so instead of panicking.
+        let Some(rgba) = texture.rgba() else {
+            report.push(format!(
+                "sight model {src}: its texture is block-compressed, which this sheet cannot compose"
+            ));
+            continue;
+        };
         report.push(format!(
             "sight model {src}: {}x{}",
             texture.width, texture.height
@@ -280,7 +291,7 @@ fn sight_art(
             src.to_string(),
             texture.width,
             texture.height,
-            texture.rgba.clone(),
+            rgba.to_vec(),
         ));
     }
     out

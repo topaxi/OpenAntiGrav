@@ -23,10 +23,9 @@ pub fn capture(asset: &Asset, path: &Path) -> Result<()> {
     }))
     .context("no GPU adapter available")?;
 
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("oag-view offscreen"),
-        ..Default::default()
-    }))
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &oag_render::mesh_render::device_descriptor("oag-view offscreen", &adapter),
+    ))
     .context("requesting the device")?;
 
     let size = wgpu::Extent3d {

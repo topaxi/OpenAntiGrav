@@ -420,7 +420,7 @@ fn declares_no_texcoord(mesh: &rcsmodel::Mesh) -> bool {
 fn surface(
     model: &rcsmodel::Model,
     mesh: &rcsmodel::Mesh,
-    skin: &[Option<ModelTexture>],
+    skin: &[Option<std::sync::Arc<ModelTexture>>],
     material_slots: &[u32],
 ) -> Surface {
     let slot = mesh.material as usize;

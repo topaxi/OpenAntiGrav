@@ -135,7 +135,41 @@ mod anisotropy;
 pub use anisotropy::Anisotropy;
 
 mod texture;
-use texture::mip_chain;
+
+/// The optional device features this renderer uses when the adapter has them.
+///
+/// **Intersected with the adapter's own, never demanded.** Wipeout HD's
+/// textures are DXT blocks on the disc and binding them as such is worth ~250
+/// MiB in a race, but `TEXTURE_COMPRESSION_BC` is not universal - the GL
+/// backend and WebGL do not have it - and asking a device for a feature it
+/// lacks fails the request outright rather than degrading. So this is what
+/// every `request_device` in the workspace asks for, and [`texture::upload`]
+/// decodes back to RGBA8 for whatever comes back without it.
+#[must_use]
+pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC
+}
+
+/// The device descriptor every `request_device` in this workspace uses.
+///
+/// One place that knows what this renderer wants of a device, rather than
+/// eight that have to be kept agreeing - which they were not: the block-texture
+/// feature had to reach the window, both offscreen captures, the loading
+/// screen and all three of the viewer's paths, and a site that missed it would
+/// have quietly decoded every HD texture back to RGBA8 with nothing to say so.
+/// A caller with a further requirement of its own spreads this and overrides
+/// that one field, as `oag_game::main::gpu` does with `memory_hints`.
+#[must_use]
+pub fn device_descriptor<'a>(
+    label: &'a str,
+    adapter: &wgpu::Adapter,
+) -> wgpu::DeviceDescriptor<'a> {
+    wgpu::DeviceDescriptor {
+        label: Some(label),
+        required_features: optional_features(adapter),
+        ..Default::default()
+    }
+}
 
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
@@ -760,57 +794,7 @@ pub fn build(
     });
 
     let make = |width: u32, height: u32, rgba: &[u8], label: &str| {
-        let mips = mip_chain(width, height, rgba);
-        let size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size,
-            mip_level_count: mips.len() as u32,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            // **Raw, so the sampler hands the shader the disc's own bytes.**
-            // The GE blends stored bytes, so every stage of this pipeline works
-            // in gamma space and nothing linearises - see
-            // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
-            //
-            // This was `Rgba8UnormSrgb`. Vertex colour was never sRGB-decoded
-            // (`mesh.rs` builds it as `byte / 255.0`), so under that format the
-            // shader multiplied a *linear* texel by a *gamma* vertex colour -
-            // two spaces in one expression - and `race.rs` carried a load-time
-            // re-encode of the boost plume's texels purely to cancel it. That
-            // re-encode is gone with this; putting the sRGB format back without
-            // restoring it would darken the plume by the same ~30% the
-            // re-encode was compensating for.
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        for (level, (mip_width, mip_height, mip_rgba)) in mips.iter().enumerate() {
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &texture,
-                    mip_level: level as u32,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                mip_rgba,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(mip_width * 4),
-                    rows_per_image: Some(*mip_height),
-                },
-                wgpu::Extent3d {
-                    width: *mip_width,
-                    height: *mip_height,
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
+        texture::upload_rgba(device, queue, width, height, rgba, label)
     };
 
     // One bind group per material slot: its albedo and its lightmap, which the
@@ -853,14 +837,34 @@ pub fn build(
     // surface with no lightmap has no mask to apply.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
     let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
+
+    // **One upload per distinct texture, not one per slot naming it.** The
+    // slots are positional (a chunk names its material by ordinal) and a
+    // circuit's lightmap atlas is named by 275 of Talon's Junction's 442, so
+    // uploading per slot sent the same 175 pictures to the GPU 884 times -
+    // 1,858 MiB in place of 277 MiB. The key is the shared texture's own
+    // address, not its label: `mesh::rcs::skin::skin`'s decode cache is what
+    // makes two slots hold one `Arc`, and that is exactly the relation worth
+    // preserving here.
+    let blocks = device
+        .features()
+        .contains(wgpu::Features::TEXTURE_COMPRESSION_BC);
+    let mut views: std::collections::HashMap<usize, wgpu::TextureView> = Default::default();
+    let mut view_of = |texture: &std::sync::Arc<crate::mesh::ModelTexture>| -> wgpu::TextureView {
+        views
+            .entry(std::sync::Arc::as_ptr(texture) as usize)
+            .or_insert_with(|| texture::upload(device, queue, texture, blocks))
+            .clone()
+    };
+
     let mut texture_binds = vec![bind(&white, &no_lightmap, "white")];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = match slot {
-            Some(t) => make(t.width, t.height, &t.rgba, &t.label),
+            Some(t) => view_of(t),
             None => make(1, 1, &[255, 255, 255, 255], "undecoded"),
         };
         let lightmap = match model.lightmaps.get(index).and_then(Option::as_ref) {
-            Some(t) => make(t.width, t.height, &t.rgba, &t.label),
+            Some(t) => view_of(t),
             None => make(1, 1, &[0, 0, 0, 255], "no lightmap"),
         };
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());

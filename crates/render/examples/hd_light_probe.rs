@@ -15,11 +15,31 @@ use oag_formats::envsettings::{self, EnvSettings};
 use oag_render::mesh::{self, ModelTexture, slots};
 
 /// Bilinear-free point sample, the way `hd_shade_probe` reads a texel.
-fn sample(texture: &ModelTexture, [u, v]: [f32; 2]) -> [f32; 4] {
+fn sample(texture: &ModelTexture, rgba: &[u8], [u, v]: [f32; 2]) -> [f32; 4] {
     let x = ((u.rem_euclid(1.0) * texture.width as f32) as u32).min(texture.width - 1) as usize;
     let y = ((v.rem_euclid(1.0) * texture.height as f32) as u32).min(texture.height - 1) as usize;
     let at = (y * texture.width as usize + x) * 4;
-    std::array::from_fn(|c| f32::from(texture.rgba[at + c]) / 255.0)
+    std::array::from_fn(|c| rgba.get(at + c).map_or(0.0, |&b| f32::from(b) / 255.0))
+}
+
+/// One decode per texture, keyed on the shared texture's own address.
+///
+/// Wipeout HD's `.gtf` textures stay in their DXT blocks in memory now (see
+/// `oag_render::mesh::Texels`), so decoding at the call site would decode a
+/// 2048x2048 atlas once per vertex. This is what the probes got for free back
+/// when every texture was expanded to RGBA8 at load.
+fn rgba_of<'a>(
+    cache: &'a mut std::collections::HashMap<usize, Vec<u8>>,
+    texture: &std::sync::Arc<ModelTexture>,
+) -> &'a [u8] {
+    cache
+        .entry(std::sync::Arc::as_ptr(texture) as usize)
+        .or_insert_with(|| {
+            texture
+                .to_rgba()
+                .map(std::borrow::Cow::into_owned)
+                .unwrap_or_default()
+        })
 }
 
 fn luma([r, g, b]: [f32; 3]) -> f32 {
@@ -59,6 +79,7 @@ fn main() -> anyhow::Result<()> {
     println!("rig: direction {direction:.3?} sun {sun:.3?} ambient {ambient:.3?}");
     println!("     prelit scale {prelit_scale:.3?} power {prelit_power:.3?}");
 
+    let mut decoded: std::collections::HashMap<usize, Vec<u8>> = Default::default();
     let mut area_total = 0.0f64;
     let mut sums = [0.0f64; 5];
     let mut albedo_sum = [0.0f64; 3];
@@ -151,7 +172,7 @@ fn main() -> anyhow::Result<()> {
                 for v in vs {
                     let w = area / 3.0;
                     let baked = match (lightmapped, second) {
-                        (true, Some(t)) => sample(t, v.lightmap_texcoord),
+                        (true, Some(t)) => sample(t, rgba_of(&mut decoded, t), v.lightmap_texcoord),
                         _ => [0.0, 0.0, 0.0, 1.0],
                     };
                     let baked_linear: [f32; 3] = std::array::from_fn(|c| baked[c].powf(2.2));
@@ -170,9 +191,12 @@ fn main() -> anyhow::Result<()> {
                         ambient[c] + prelit[c] + vertex_light[c] + sun_diffuse[c]
                     });
                     let picture = if bits & slots::ALBEDO_FROM_SECOND != 0 {
-                        second.map_or([0.0; 4], |t| sample(t, v.texcoord))
+                        match second {
+                            Some(t) => sample(t, rgba_of(&mut decoded, t), v.texcoord),
+                            None => [0.0; 4],
+                        }
                     } else {
-                        sample(texture, v.texcoord)
+                        sample(texture, rgba_of(&mut decoded, texture), v.texcoord)
                     };
                     let lit: [f32; 3] = std::array::from_fn(|c| picture[c].powf(2.2) * authored[c]);
                     let encoded: [f32; 3] =

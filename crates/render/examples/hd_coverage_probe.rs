@@ -37,6 +37,12 @@ fn main() -> anyhow::Result<()> {
             if !texture.label.contains(&want) {
                 continue;
             }
+            // Decoded once per draw call rather than per texel: Wipeout HD's
+            // textures stay in their DXT blocks in memory now. See
+            // `oag_render::mesh::Texels`.
+            let Some(rgba) = texture.to_rgba() else {
+                continue;
+            };
             // The alpha lane the roles reading chose, per vertex - every vertex
             // of one draw call shares a material, so the first one answers.
             let first = model.indices[d.range.start as usize] as usize;
@@ -57,7 +63,7 @@ fn main() -> anyhow::Result<()> {
                 let y = ((w.rem_euclid(1.0) * texture.height as f32) as u32).min(texture.height - 1)
                     as usize;
                 let at = (y * texture.width as usize + x) * 4 + channel;
-                let a = u32::from(texture.rgba[at]);
+                let a = u32::from(rgba[at]);
                 lo = lo.min(a);
                 hi = hi.max(a);
                 sum += u64::from(a);

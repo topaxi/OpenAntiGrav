@@ -4,9 +4,11 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+use std::sync::Arc;
+
 use oag_formats::{gtf, rcsmaterial, rcsmodel};
 
-use super::super::ModelTexture;
+use super::super::{BlockFormat, ModelTexture, Texels, TextureSlots};
 use super::{Report, Textures};
 
 /// Decodes one material's texture, or says which way it could not be.
@@ -17,17 +19,52 @@ use super::{Report, Textures};
 /// which `mesh_render::build` binds its white 1x1 for. That is the same white
 /// sheet this module has been removing, so it is counted in
 /// [`Report::untextured`] rather than left to be discovered in a screenshot.
+///
+/// **A `.gtf` that is already in DXT blocks keeps them**, with the mip chain
+/// the file authors, and [`blocks`] says exactly when. Decoding those to RGBA8
+/// was costing 4.5x the memory for the same picture.
 pub(super) fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
     let parsed = gtf::Gtf::parse(blob).ok()?;
     let texture = parsed.only()?;
-    let rgba = texture.to_rgba(blob).ok()?;
     let (width, height) = texture.level_size(0);
+    let texels = match blocks(texture, blob) {
+        Some(texels) => texels,
+        None => Texels::Rgba8(texture.to_rgba(blob).ok()?.into_iter().flatten().collect()),
+    };
     Some(ModelTexture {
         label: label.to_string(),
         width,
         height,
-        rgba: rgba.into_iter().flatten().collect(),
+        texels,
     })
+}
+
+/// The disc's own blocks and mip chain, for a texture this can bind untouched.
+///
+/// Four conditions, each of which the RGBA path handles instead:
+///
+/// - a block-compressed format, which is 7,131 of the disc's 7,333 files;
+/// - a chain the file authors (`mip_levels > 1`), because a single-level
+///   upload would leave the surface with no minification filter at all and
+///   these are seen at every distance a chase camera produces - 649 files;
+/// - a tight pitch, since a declared one is a *base*-level row repeated down
+///   the chain (see `oag_formats::gtf`) and only 5 files on the disc declare
+///   one;
+/// - base dimensions on the block grid, which WebGPU requires of a compressed
+///   texture and 15 files miss.
+fn blocks(texture: &gtf::Texture, blob: &[u8]) -> Option<Texels> {
+    let format = BlockFormat::of_gtf(texture.format)?;
+    if texture.cubemap || texture.mip_levels < 2 || texture.pitch != 0 {
+        return None;
+    }
+    let (width, height) = texture.level_size(0);
+    if width % 4 != 0 || height % 4 != 0 {
+        return None;
+    }
+    let levels = (0..texture.mip_levels)
+        .map(|level| blob.get(texture.level_range(level)).map(<[u8]>::to_vec))
+        .collect::<Option<Vec<_>>>()?;
+    Some(Texels::Blocks { format, levels })
 }
 
 /// One texture slot per material, in material-table order.
@@ -44,19 +81,27 @@ pub(super) fn skin(
     picks: &[Pick],
     textures: Textures<'_>,
     report: &mut Report,
-) -> (Vec<Option<ModelTexture>>, Vec<Option<ModelTexture>>) {
-    let mut cache: std::collections::HashMap<String, Option<ModelTexture>> = Default::default();
+) -> (TextureSlots, TextureSlots) {
+    let mut cache: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
+        Default::default();
     let mut load = |path: &str, textures: Textures<'_>| {
         // A circuit's 442 materials name far fewer distinct textures, and
         // decoding a 2048x2048 DXT5 twice is the cost this avoids. The two
         // slots share the cache because a lightmap atlas is named by dozens of
         // materials at once.
+        //
+        // **What comes back is the same texture, not a copy of it.** Cloning
+        // the decoded texels per slot is what made one circuit retain 1,858 MiB
+        // of the 277 MiB it had actually decoded; `mesh_render::build` then
+        // dedupes its uploads on this very `Arc`'s identity, so the sharing has
+        // to start here for it to mean anything there.
         cache
             .entry(path.to_string())
             .or_insert_with(|| {
                 textures(path)
                     .as_deref()
                     .and_then(|blob| decode_texture(path, blob))
+                    .map(Arc::new)
             })
             .clone()
     };
@@ -67,12 +112,12 @@ pub(super) fn skin(
         let entry =
             |index: Option<usize>| -> Option<&str> { material.samplers.get(index?)?.1.as_deref() };
         if super::isolate::tinting() {
-            skins.push(Some(ModelTexture {
-                label: format!("tint:{slot}"),
-                width: 1,
-                height: 1,
-                rgba: super::isolate::tint(slot).to_vec(),
-            }));
+            skins.push(Some(Arc::new(ModelTexture::rgba8(
+                format!("tint:{slot}"),
+                1,
+                1,
+                super::isolate::tint(slot).to_vec(),
+            ))));
             seconds.push(None);
             continue;
         }
@@ -370,7 +415,7 @@ pub(super) fn roles(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     picks: &[Pick],
-    seconds: &[Option<ModelTexture>],
+    seconds: &[Option<Arc<ModelTexture>>],
     textures: Textures<'_>,
 ) -> Vec<u32> {
     use crate::mesh::slots;
@@ -636,6 +681,102 @@ mod tests {
             samplers,
             parameters: Vec::new(),
         }
+    }
+
+    /// A minimal `.gtf`: one `DXT1` texture, `width` x `height`, with a chain
+    /// of `mip_levels` if the caller asks for one.
+    ///
+    /// Twelve-byte header, one 36-byte descriptor, then the blocks. Every field
+    /// the parser checks is filled from the arguments, so a wrong one fails
+    /// `Gtf::parse` here rather than being silently ignored.
+    fn dxt1(width: u16, height: u16, mip_levels: u8) -> Vec<u8> {
+        let mut blob = vec![0u8; 48];
+        blob[0..4].copy_from_slice(&0x0105_0000u32.to_be_bytes());
+        blob[8..12].copy_from_slice(&1u32.to_be_bytes());
+        let length: usize = (0..mip_levels)
+            .map(|level| {
+                let w = (u32::from(width) >> level).max(1).div_ceil(4) as usize;
+                let h = (u32::from(height) >> level).max(1).div_ceil(4) as usize;
+                w * h * 8
+            })
+            .sum();
+        blob[16..20].copy_from_slice(&48u32.to_be_bytes());
+        blob[20..24].copy_from_slice(&(length as u32).to_be_bytes());
+        blob[24] = 0x06;
+        blob[25] = mip_levels;
+        blob[26] = 2;
+        blob[32..34].copy_from_slice(&width.to_be_bytes());
+        blob[34..36].copy_from_slice(&height.to_be_bytes());
+        blob[36..38].copy_from_slice(&1u16.to_be_bytes());
+        blob.resize(48 + length, 0);
+        blob
+    }
+
+    /// A texture with a chain keeps the disc's blocks and the disc's levels.
+    ///
+    /// The 4.5x that makes an HD race fit in half a gigabyte, and the levels
+    /// are the ones the original minified with rather than a box filter of the
+    /// base - see `docs/formats/gtf.md`.
+    #[test]
+    fn a_chained_dxt1_keeps_its_blocks_and_its_own_mip_levels() {
+        let decoded = decode_texture("a.gtf", &dxt1(8, 8, 4)).expect("decodes");
+        let Texels::Blocks { format, levels } = &decoded.texels else {
+            panic!("a chained DXT1 should keep its blocks");
+        };
+        assert_eq!(*format, BlockFormat::Bc1);
+        assert_eq!(
+            levels.iter().map(Vec::len).collect::<Vec<_>>(),
+            [32, 8, 8, 8],
+            "8x8, 4x4, 2x2 and 1x1, each a whole number of 8-byte blocks"
+        );
+    }
+
+    /// With no chain in the file there is nothing to bind, so it decodes and
+    /// the renderer box-filters its own - 649 of the disc's 7,131.
+    #[test]
+    fn a_single_level_dxt1_decodes_instead() {
+        let decoded = decode_texture("a.gtf", &dxt1(8, 8, 1)).expect("decodes");
+        assert!(
+            matches!(decoded.texels, Texels::Rgba8(ref rgba) if rgba.len() == 8 * 8 * 4),
+            "a single-level file takes the RGBA path"
+        );
+    }
+
+    /// **One decoded texture, however many slots name it.**
+    ///
+    /// The slots are positional and a circuit's lightmap atlas is named by 275
+    /// of Talon's Junction's 442 at once, so a copy per slot retained 1,858 MiB
+    /// where 277 MiB had been decoded - and `mesh_render::build` keys its
+    /// uploads on this very identity, so losing the sharing here costs it there
+    /// too. Nothing about the pictures would look wrong, which is why it needs
+    /// a test.
+    #[test]
+    fn every_slot_naming_one_texture_shares_it_rather_than_copying() {
+        let blob = dxt1(8, 8, 4);
+        let model = rcsmodel::Model {
+            meshes: Vec::new(),
+            materials: (0..8).map(|_| material(0, None)).collect(),
+        };
+        let picks = vec![Pick::default(); model.materials.len()];
+        let mut loads = 0;
+        let mut load = |path: &str| {
+            loads += 1;
+            (path == "a.gtf").then(|| blob.clone())
+        };
+        let mut report = Report::default();
+        let (skins, _) = skin(&model, &picks, &mut load, &mut report);
+
+        assert_eq!(loads, 1, "one read of the archive, not one per slot");
+        let first = skins[0].as_ref().expect("slot 0 is textured");
+        assert_eq!(skins.len(), 8);
+        for (slot, texture) in skins.iter().enumerate() {
+            let texture = texture.as_ref().expect("every slot names a.gtf");
+            assert!(
+                Arc::ptr_eq(first, texture),
+                "slot {slot} holds a copy rather than the shared texture"
+            );
+        }
+        assert_eq!(Arc::strong_count(first), 8, "eight slots, one allocation");
     }
 
     /// The declared binding wins over the ordinal, which is the whole point:

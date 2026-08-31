@@ -209,12 +209,12 @@ fn a_transparent_draw_moves_too() {
 #[test]
 fn the_texture_table_scrolls_a_surface() {
     // Two texels side by side: black at u < 0.5, white at u >= 0.5.
-    let texture = oag_render::mesh::ModelTexture {
-        label: "half and half".to_string(),
-        width: 2,
-        height: 1,
-        rgba: vec![0, 0, 0, 255, 255, 255, 255, 255],
-    };
+    let texture = oag_render::mesh::ModelTexture::rgba8(
+        "half and half".to_string(),
+        2,
+        1,
+        vec![0, 0, 0, 255, 255, 255, 255, 255],
+    );
     // A quad that samples only the black texel, until a `u` offset slides it.
     let corner = |y: f32, z: f32, u: f32| GpuVertex {
         position: [0.0, y, z],
@@ -235,7 +235,7 @@ fn the_texture_table_scrolls_a_surface() {
         corner(1.0, 1.0, 0.24),
         corner(-1.0, 1.0, 0.24),
     ];
-    model.textures = vec![Some(texture)];
+    model.textures = vec![Some(std::sync::Arc::new(texture))];
     model.draws[0].texture = Some(0);
     model.anim_nodes = Vec::new();
     // `u` runs 0 to 0.5 over one second, which walks the quad off the black

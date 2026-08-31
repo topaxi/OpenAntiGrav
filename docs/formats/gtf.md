@@ -206,6 +206,51 @@ against 16,777,296). Sixty bytes a face, and sixty is not a multiple of any bloc
 size here. The three single-level cubemaps carry no slack at all - Talon's
 Junction's sky is one of them, which is why it is the one that was decoded first.
 
+## The mip chain is the disc's, and a box filter is not it
+
+**The renderer binds the file's own DXT blocks and the file's own mip chain**,
+rather than decoding the base level to RGBA8 and box-filtering a chain from it.
+Two reasons, and the second is the one that matters for the picture.
+
+The first is size. Of the 7,131 flat block-compressed textures on the disc,
+**6,482 carry a chain** and only 649 are single-level. Across the textures one
+race touches, the base levels are **78 MiB as blocks and 348 MiB decoded** -
+113 `DXT45`, 72 `DXT1`, 44 `DXT23`, 4.5x either way. The whole authored chain
+across the disc is 2,204 MiB of blocks against 7,690 MiB for base levels alone
+as RGBA8.
+
+The second is that **the chains are not the ones a box filter produces.**
+Decoding both readings of every mipped `.gtf` on Talon's Junction - 245
+textures - and comparing the authored level 1 against a 2x2 box filter of level
+0 gives a mean absolute difference of **2.41 of 255**, and the worst are not
+close at all:
+
+| Mean | Max | Texture |
+| ---: | ---: | --- |
+| 20.18 | 255 | `textures/dds/dc_scanlines.gtf` |
+| 20.18 | 89 | `textures/dds/billboard3.gtf` |
+| 12.16 | 165 | `textures/dds/colours_flashing_glow.gtf` |
+| 12.05 | 42 | `textures/adverts/hologramscanlines.gtf` |
+| 12.02 | 81 | `hd_textures/crowd/crowdnoise.gtf` |
+
+A scanline pattern is exactly where the two diverge hardest: a box filter of
+alternating rows averages to flat grey, and whatever the artist did instead is
+what the RSX minified with. So the disc's chain is not merely cheaper, it is the
+correct one - the same rule that governs every other authored table here.
+
+**Four conditions gate it**, each falling back to decode-and-box-filter, and
+each is a small minority of the disc: a non-block format (202 files), a
+single-level file (649), a declared pitch (5 - because a pitch is a *base*-level
+row repeated down the chain, see above), and base dimensions off the 4x4 block
+grid (15), which WebGPU refuses for a compressed texture. Cubemaps take the
+`face_to_rgba` path and are untouched by this. An adapter with no
+`TEXTURE_COMPRESSION_BC` - the GL backend - decodes the base level back through
+`gtf::decode_level` rather than drawing nothing.
+
+Implemented as `oag_render::mesh::Texels`, chosen in
+`oag_render::mesh::rcs::skin::blocks` and uploaded by
+`oag_render::mesh_render::texture::upload`.
+
 ## What this was read for
 
 [The HUD](hd-hud.md). Its twelve textures are nine `DXT45`/`DXT23` atlases, and
@@ -239,12 +284,11 @@ diverges. It is pinned in the test rather than tolerated.
   bit packing, which is a published-header reading rather than something
   measured against behaviour; the *distribution* is measured and is what says
   the gap costs nothing.
-- **Mip levels past the base.** They are measured, because the length check
-  needs them, and `Texture::level_range` will address one; nothing decodes one.
-  **This is a picture gap and not only a completeness one**: the corpus runs to
-  twelve levels, and `oag_render::mesh_render::mip_chain` throws the file's own
-  chain away and box-filters its own from the base level. The disc's are the
-  ones the original minifies with.
+- **Mip levels of a cubemap, and of a texture that declares a pitch.**
+  `face_range` addresses the first and nothing decodes one; the second is 5
+  files on the disc and takes the decode-and-box-filter path. Flat, tightly
+  packed chains are bound as the disc stores them - see [the section
+  above](#the-mip-chain-is-the-discs-and-a-box-filter-is-not-it).
 - **The front end's `<Image>` widgets.** `oag_render` uploads a `.gtf` now -
   HD's HUD samples ten of them, and an HD craft and circuit are painted from
   their materials' own textures through

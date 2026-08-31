@@ -93,12 +93,12 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         let rgba = texture
             .face_to_rgba(blob, face)
             .with_context(|| format!("{label}: decoding face {face}"))?;
-        textures.push(Some(ModelTexture {
-            label: format!("{label}[{face}]"),
+        textures.push(Some(std::sync::Arc::new(ModelTexture::rgba8(
+            format!("{label}[{face}]"),
             width,
             height,
-            rgba: rgba.into_iter().flatten().collect(),
-        }));
+            rgba.into_iter().flatten().collect(),
+        ))));
 
         let base = vertices.len() as u32;
         for &(sc, tc) in &CORNERS {

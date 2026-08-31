@@ -43,11 +43,13 @@ fn model(slots: usize, decoded: usize) -> Model {
         transparent_draws: Vec::new(),
         textures: (0..slots)
             .map(|index| {
-                (index < decoded).then(|| mesh::ModelTexture {
-                    label: format!("#{index}"),
-                    width: 1,
-                    height: 1,
-                    rgba: vec![255; 4],
+                (index < decoded).then(|| {
+                    std::sync::Arc::new(mesh::ModelTexture::rgba8(
+                        format!("#{index}"),
+                        1,
+                        1,
+                        vec![255; 4],
+                    ))
                 })
             })
             .collect(),

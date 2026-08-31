@@ -394,11 +394,19 @@ fn the_road_texture_is_one_shared_asset_not_a_per_circuit_variant() {
                     circuit.clone(),
                     texture.width,
                     texture.height,
-                    texture.rgba.clone(),
+                    texture
+                        .rgba()
+                        .expect("a .vex texture is decoded RGBA8")
+                        .to_vec(),
                 ));
             }
             Some((first, width, height, rgba)) => assert!(
-                (*width, *height, rgba) == (texture.width, texture.height, &texture.rgba),
+                (*width, *height, rgba.as_slice())
+                    == (
+                        texture.width,
+                        texture.height,
+                        texture.rgba().expect("a .vex texture is decoded RGBA8")
+                    ),
                 "{circuit}_Track's {ROAD} differs from {first}_Track's, so the circuits do not \
                  share one road texture after all"
             ),

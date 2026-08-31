@@ -410,7 +410,7 @@ fn inspect(model: mesh::Model, data: &[u8], cli: &Cli) -> mesh::Model {
 }
 
 /// Reads and decodes an external texture set out of the same archive.
-fn load_texture_set(spec: &str, entry: &str) -> Result<Vec<Option<mesh::ModelTexture>>> {
+fn load_texture_set(spec: &str, entry: &str) -> Result<mesh::TextureSlots> {
     let mut archive = Archive::open(spec)?;
     let index = if let Some(hex) = entry.strip_prefix("0x") {
         let hash = u32::from_str_radix(hex, 16).context("parsing the entry hash")?;
@@ -888,10 +888,9 @@ impl Renderer {
         }))
         .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
 
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("oag-view"),
-            ..Default::default()
-        }))
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &oag_render::mesh_render::device_descriptor("oag-view", &adapter),
+        ))
         .context("requesting the device")?;
 
         let size = window.inner_size();

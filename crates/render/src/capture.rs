@@ -84,10 +84,9 @@ pub fn capture_pixels_from(
         ..Default::default()
     }))
     .context("no GPU adapter available")?;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("oag-view mesh"),
-        ..Default::default()
-    }))
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &crate::mesh_render::device_descriptor("oag-view mesh", &adapter),
+    ))
     .context("requesting the device")?;
 
     // **Raw, because the shader now writes gamma-space values and nothing may
