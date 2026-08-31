@@ -36,16 +36,55 @@ It now asks for `2.5 x` the configured frame period, floored at
 was made). Unlimited and every cap above 60 Hz take the floor unchanged; a
 30 Hz cap asks for 83 ms.
 
+## And then the measurement that undercut it
+
+**On the PipeWire host the request is ignored entirely.** cpal's PipeWire
+backend turns `BufferSize::Fixed(n)` into a `node.latency = n/rate` property
+(`cpal-0.18.1/src/host/pipewire/device.rs:182`), and `node.latency` asks
+PipeWire for a *ceiling* on latency, not a floor - a client cannot make the
+graph run a bigger quantum by asking for one. Measured on this machine with
+`--example device-report`:
+
+| asked for | got |
+| --- | --- |
+| 40 ms | 256 frames (5.3 ms) |
+| 85 ms | 256 frames (5.3 ms) |
+| 200 ms | 256 frames (5.3 ms) |
+
+...and 1,024 frames (21.3 ms) in an earlier run, because the number is the
+**graph's** quantum and it moves with whatever else is on the graph. Under the
+ALSA host the same request produced exactly 1,920 frames, because the plugin
+buffers on the client's behalf.
+
+So `requested_buffer_size` and the frame-cap sizing above are a no-op on the
+host this project now uses by default. They are correct and they are also
+inert; nothing about them is worth removing, and nothing about them helps.
+
+**Against frame stalls of 40 to 80 ms**, measured in an HD race on the same
+machine with the `frame:` logging that landed beside them, a graph quantum of
+5.3 to 21.3 ms has no chance. This is the confirmation the previous section
+asked for and did not have: `frame: 49.5 ms` and `frame: 48.4 ms` beside
+`1 late callback(s) (worst 25.1 ms over)`, with the mix itself clean - 0
+dropped, 0 jumps, worst step 0.064.
+
 ## Open
 
-**The cap is not the achieved rate.** A cpal stream's buffer is fixed when the
-stream is built, so a machine that asks for 240 and delivers 30 gets the floor
-and the tolerance the question was about. Covering that means rebuilding the
-stream when the measured frame time persistently exceeds the queue - `Meter`
-already measures it, and `Session` already holds the `Output` - which is a
-disruptive thing to do mid-race and has not been attempted. **Nothing measures
-whether it would help**: no run has yet produced a `frame: N ms` line beside an
-underrun, which is the evidence that would say the two are the same event.
+**The queue depth is not ours to choose, and on PipeWire it never will be.**
+Asking the device is the only lever `Output` has, and the measurement above
+says the device declines. The only way to hold more audio than the graph's
+quantum is to hold it **ourselves**: a ring buffer that a dedicated thread
+renders into ahead of time, with the `cpal` callback doing nothing but copying
+out of it. That would put the tolerance under this project's control rather
+than PipeWire's, and it would take the mixer lock off the audio thread
+entirely - which is the other half of
+[ADR-0031](../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)'s
+unfinished business. It is a change to the shape ADR-0018 sets out and wants an
+ADR of its own.
+
+**The other reading of the same log is that the frame stalls are the bug.**
+40 to 80 ms frames in an HD race is 12 to 24 fps in the spikes, and audio
+lateness is a symptom of it rather than a fault of its own. Fixing the stall
+fixes both, and improves the thing the player is actually looking at.
 
 **The mutex is the remaining coupling, and it is not a frame one.** The frame
 thread and the audio thread share `Mutex<Mixer>`; the callback waits out a
@@ -60,12 +99,13 @@ going one.
 
 ## Next Steps
 
-1. If a player on a slow machine still hears drops, read the `audio:` line
-   first - `late callback(s)` with a `frame: N ms` line beside it is the
-   process stalling and the queue being too small for it; `late` on its own is
-   the audio path.
-2. Only then consider rebuilding the stream against `Meter`'s measured frame
-   time. It is the one change that would close the achieved-rate gap, and it
-   should be evidence-led rather than added on the argument alone.
+1. Decide which of the two the next piece of work is: a render-ahead ring under
+   our own control, or the frame stalls that make the queue's size matter. They
+   are not alternatives in the long run, only in the order.
+2. `frame: 183.3 ms` fires on the frame that loads a race, which `Session`'s
+   own `stalled` flag is supposed to exclude from the meter and evidently does
+   not exclude from this log. Cosmetic, and it makes the log harder to read
+   than it needs to be.
 3. An audio-latency row in the settings would let a player make the trade
-   themselves and is cheaper than either. Not done.
+   themselves, and on PipeWire it would have nothing to set. Worth it only
+   after item 1.

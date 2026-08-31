@@ -9,7 +9,11 @@
 //! ```sh
 //! cargo run -p oag-audio --example device-report --release -- 20
 //! cargo run -p oag-audio --example device-report --release -- 20 /tmp/tone.wav
+//! cargo run -p oag-audio --example device-report --release -- 20 - 85
 //! ```
+//!
+//! The third argument is the buffer to ask the device for, in milliseconds -
+//! which is worth asking for explicitly, because a host is free to ignore it.
 //!
 //! With a path, it also records what the device was handed and writes it
 //! there. That is the same `--tap-audio` the game has, on a tone this file
@@ -27,14 +31,22 @@ fn main() {
         .and_then(|a| a.parse().ok())
         .unwrap_or(10.0);
 
-    let path = std::env::args().nth(2).map(std::path::PathBuf::from);
+    let path = std::env::args()
+        .nth(2)
+        .filter(|a| a != "-")
+        .map(std::path::PathBuf::from);
+    let buffer = std::env::args()
+        .nth(3)
+        .and_then(|a| a.parse().ok())
+        .map_or(oag_audio::MIN_BUFFER, Duration::from_millis);
     let tap = path.map(|path| oag_audio::TapSpec { seconds, path });
-    let output = Output::open_or_null(tap.as_ref(), oag_audio::MIN_BUFFER);
+    let output = Output::open_or_null(tap.as_ref(), buffer);
     println!(
-        "device: {:?}  rate: {} Hz  streaming: {}",
+        "device: {:?}  rate: {} Hz  streaming: {}  asked for {:.1} ms",
         output.device_name(),
         output.sample_rate(),
-        output.is_streaming()
+        output.is_streaming(),
+        buffer.as_secs_f32() * 1000.0
     );
     if !output.is_streaming() {
         println!("no device: nothing to measure");
