@@ -485,10 +485,13 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
         );
 
         for sprite in &layout.sprites {
-            let Some(oag_game::frontend::Draw::Sprite { uv, .. }) =
-                hud::sprite_draw(sprite, &sheet)
-            else {
-                panic!("{root}: {} draws nothing", sprite.name);
+            // Either variant: a widget carrying a `RotationTheta` comes back as
+            // `RotatedSprite`, and Zone's thirteen do. The uv is the same
+            // composition either way, which is what this checks.
+            let uv = match hud::sprite_draw(sprite, &sheet) {
+                Some(oag_game::frontend::Draw::Sprite { uv, .. })
+                | Some(oag_game::frontend::Draw::RotatedSprite { uv, .. }) => uv,
+                _ => panic!("{root}: {} draws nothing", sprite.name),
             };
             let placed = sheet.get(&sprite.src).expect("just built");
             // A negative width or height is a mirror - 26 of HD's sprites author
@@ -640,4 +643,337 @@ fn count_widgets(archives: &mut oag_assets::Archives, root: &str) -> usize {
     }
 
     walk(archives, root)
+}
+
+/// **Zone's ladder is authored by the Zone layouts and by nothing else.**
+///
+/// `oag_hd::hud::ALWAYS_ON` is title-wide rather than per-mode, so a name added
+/// to it for one layout draws in every layout that happens to author it too.
+/// The thirteen Zone widgets added on 2026-08-31 are safe on those terms only
+/// because no other mode carries them - and this is the assertion that keeps
+/// that true, in the direction that matters: a future name that *is* shared
+/// fails here rather than appearing quietly in an arcade race.
+///
+/// **The two retro skins carry fewer, and that is a finding rather than a gap.**
+/// Both write `<Image name="CurrentZonePanel">` with no `<Values>` at all - a
+/// bare grouping element holding the eleven rows and carrying no art of its
+/// own, where the default skin authors it as a 476x54 patch of
+/// `HUD_Components_01.gtf`; `2097_hud` does the same to `ZoneBG`. So the retro
+/// ladders are eleven ticks and eleven numbers with no column behind them and no
+/// highlighted current row, which is what a Wipeout 3 or 2097 HUD looks like.
+/// This build draws the default skin only (see `oag_hd::hud::skins`), so nothing
+/// turns on it; it is asserted because a silent rise in either count would mean
+/// the parser had started reading a bare group as a sprite.
+///
+/// `/data/xml/splitscreenzone_hud/` authors the same names and is deliberately
+/// not among the eighteen roots - see `oag_hd::hud::ROOTS`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let ladder: Vec<&str> = oag_hd::hud::ALWAYS_ON
+        .iter()
+        .filter(|name| name.starts_with("Zone") || **name == "CurrentZonePanel")
+        .copied()
+        .collect();
+    assert_eq!(ladder.len(), 13, "{ladder:?}");
+
+    let mut counts: Vec<(&str, usize)> = Vec::new();
+    for &(root, ..) in EXPECTED {
+        let names: BTreeSet<String> = composed(&mut archives, root)
+            .layout
+            .sprites
+            .into_iter()
+            .map(|sprite| sprite.name)
+            .collect();
+        let found = ladder.iter().filter(|n| names.contains(**n)).count();
+        if found > 0 {
+            counts.push((root, found));
+        }
+    }
+    assert_eq!(
+        counts,
+        vec![
+            ("/data/xml/zone_hud.xml", 13),
+            ("/data/xml/wo3_hud/zone_hud.xml", 12),
+            ("/data/xml/2097_hud/zone_hud.xml", 11),
+        ],
+        "Zone ladder widgets, by layout"
+    );
+}
+
+/// **The Zone HUD's left-hand ladder, as a frame rather than as a layout.**
+///
+/// The gap this closes was two-sided and either half alone draws nothing
+/// visible: the sprites were missing from `ALWAYS_ON`, and the eleven
+/// `ZonePlus<N>` labels carry no `idstring`, so `oag_game::hud::draw_list`'s
+/// text allow-list dropped every one of them. Checked against the reference
+/// frame `data/shots/hd_zone_hud_original.png` (gitignored), which is a Zone
+/// race on zone 1: `SUB-VENOM` on the current row, `1` beside it, and the ten
+/// rows below it numbered `2` to `11`.
+///
+/// The class name is asked for by **rung**, not by zone - `zone_stage` here
+/// stands in for what `crate::race::Scene::zone_stage` supplies in a real race,
+/// and what puts a zone on a rung is unrecovered on this title. See
+/// `oag_hd::hud::ZONE_SPEED_CLASSES`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_hd::hud::layouts::ZONE).layout;
+
+    // The strings the ladder's class names resolve through: HD's own English
+    // plugin, read the same way a race reads it.
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings = oag_game::language::StringTable::from_xml(
+        &fexml::text(&blob).expect("entries.xml is text"),
+    );
+
+    let blobs: Vec<(String, Vec<u8>)> = layout
+        .textures()
+        .iter()
+        .map(|reference| {
+            let entry = oag_hd::hud::texture_entry(reference);
+            (
+                (*reference).to_string(),
+                archives.read_name(&entry).expect("a HUD texture"),
+            )
+        })
+        .collect();
+    let mut notes = Vec::new();
+    let sheet = oag_game::sprite::Sheet::build(&blobs, &mut notes);
+
+    let cx = hud::Context {
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_hd::hud::ART,
+        hud_line_height: 92.0,
+        small_line_height: 34.0,
+        default_border: layout.default_border(),
+    };
+
+    // Zone 1 on rung 1, which is the state the reference frame is in.
+    let readout = oag_game::hud::Readout {
+        zone: 1,
+        zone_stage: 1,
+        score: 1452,
+        ..Default::default()
+    };
+    let frame = hud::draw_list(&cx, &readout);
+    let text: Vec<String> = frame
+        .hud_text
+        .iter()
+        .chain(&frame.small_text)
+        .filter_map(|draw| match draw {
+            oag_game::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+
+    // The current zone and the ten coming up, and what the frame reads beside
+    // them.
+    for expected in ["ZONE", "SUB-VENOM", "1452"] {
+        assert!(text.contains(&expected.to_string()), "{expected}: {text:?}");
+    }
+    for zone in 1..=11u32 {
+        assert!(
+            text.contains(&zone.to_string()),
+            "row {zone} missing from {text:?}"
+        );
+    }
+
+    // Rung 0 is the one with no name, so the class row is blank there while the
+    // ladder still counts - the state an HD Zone race actually rests in, its
+    // own trigger being unrecovered.
+    let unnamed = hud::draw_list(
+        &cx,
+        &oag_game::hud::Readout {
+            zone: 1,
+            ..Default::default()
+        },
+    );
+    let named = unnamed.hud_text.iter().chain(&unnamed.small_text).any(
+        |draw| matches!(draw, oag_game::frontend::Draw::Text { text, .. } if text == "SUB-VENOM"),
+    );
+    assert!(!named, "rung 0 named a speed class");
+
+    // The column, the current row's panel and the eleven ticks: thirteen quads
+    // that were absent before 2026-08-31.
+    let rotated = frame
+        .sprites
+        .iter()
+        .filter(|d| matches!(d, oag_game::frontend::Draw::RotatedSprite { .. }))
+        .count();
+    // `ZoneBG`'s quarter turn plus ten tilted ticks; `ZonePlusLight5` authors no
+    // `RotationTheta` at all, being the row on the arc's own axis.
+    assert_eq!(rotated, 11, "rotated Zone widgets");
+}
+
+/// **The zone-8 reference frame, row for row.**
+///
+/// `data/shots/hd_zone_hud_original_zone8.png` (gitignored) is the capture that
+/// settled two things at once: the recovered threshold table's widest band so
+/// far, and where the next class's name goes. It reads
+///
+/// ```text
+///  8  SUB-RAPIER
+///  9
+/// 10
+/// 11
+/// 12  RAPIER
+/// 13
+/// ```
+///
+/// so zones `7`-`11` are Sub Rapier and the bump is at `12` - `oag_hd::race::ZONE_STAGES`'
+/// own band, which no one-rung-per-zone reading could produce - and `RAPIER`
+/// sits **level with its own `12`**, which is what `hud::draw::zone_next_row`
+/// implements.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_zone_eight_frame_is_reproduced_row_for_row() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_hd::hud::layouts::ZONE).layout;
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings = oag_game::language::StringTable::from_xml(
+        &fexml::text(&blob).expect("entries.xml is text"),
+    );
+    let mut notes = Vec::new();
+    let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
+    let cx = hud::Context {
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_hd::hud::ART,
+        hud_line_height: 92.0,
+        small_line_height: 34.0,
+        default_border: layout.default_border(),
+    };
+
+    // Zone 8: rung 5 (`5 Sub Rapier`), next bump four rows down at zone 12.
+    let zone = 8u16;
+    let stages = oag_hd::race::ZONE_STAGES;
+    let readout = oag_game::hud::Readout {
+        zone: u32::from(zone),
+        zone_stage: stages.stage_for(zone).expect("a band"),
+        zone_next_in: stages.next_zone(zone).map(|next| u32::from(next - zone)),
+        ..Default::default()
+    };
+    assert_eq!(readout.zone_stage, 5);
+    assert_eq!(readout.zone_next_in, Some(4));
+
+    let frame = hud::draw_list(&cx, &readout);
+    let text: Vec<(String, f32, f32)> = frame
+        .hud_text
+        .iter()
+        .chain(&frame.small_text)
+        .filter_map(|draw| match draw {
+            oag_game::frontend::Draw::Text { text, x, y, .. } => Some((text.clone(), *x, *y)),
+            _ => None,
+        })
+        .collect();
+    let at = |want: &str| -> (f32, f32) {
+        text.iter()
+            .find(|(t, ..)| t == want)
+            .map(|&(_, x, y)| (x, y))
+            .unwrap_or_else(|| panic!("{want} missing from {text:?}"))
+    };
+
+    // The two class names the frame shows, and the ladder around them.
+    at("SUB-RAPIER");
+    let rapier = at("RAPIER");
+    for n in 8..=18u32 {
+        at(&n.to_string());
+    }
+
+    // `RAPIER` is on `12`'s own line and to its right - the frame's arrangement,
+    // and the reason this test exists rather than a comment.
+    let twelve = at("12");
+    assert!(
+        (rapier.1 - twelve.1).abs() < 1.0,
+        "RAPIER at y={} is not on row 12's line (y={})",
+        rapier.1,
+        twelve.1
+    );
+    assert!(
+        rapier.0 > twelve.0,
+        "RAPIER at x={} is not right of its own number (x={})",
+        rapier.0,
+        twelve.0
+    );
+}
+
+/// **Zone 0 numbers the rows ahead and leaves the current one blank**, which is
+/// the state the layout's own placeholder strings spell out.
+///
+/// `ZonePlus0` is authored with no `string` and `ZonePlus1`-`ZonePlus10` with
+/// `1` through `10` - `zone + N` at `zone = 0`. An earlier revision gated the
+/// whole ladder on `zone > 0` the way `Zone` and `Score` are gated, which left
+/// the column empty for the first ten seconds of every run; the disc says
+/// otherwise, and this is that reading checked against the real layout.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_hd::hud::layouts::ZONE).layout;
+    let strings = oag_game::language::StringTable::default();
+    let mut notes = Vec::new();
+    let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
+    let cx = hud::Context {
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_hd::hud::ART,
+        hud_line_height: 92.0,
+        small_line_height: 34.0,
+        default_border: layout.default_border(),
+    };
+    let frame = hud::draw_list(&cx, &oag_game::hud::Readout::default());
+    let numbers: Vec<String> = frame
+        .hud_text
+        .iter()
+        .chain(&frame.small_text)
+        .filter_map(|draw| match draw {
+            oag_game::frontend::Draw::Text { text, .. }
+                if text.chars().all(|c| c.is_ascii_digit()) =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    // The ten rows ahead, and no eleventh: the current row carries no number
+    // before the first zone.
+    let authored: Vec<String> = (1..=10u32).map(|n| n.to_string()).collect();
+    assert_eq!(numbers, authored, "the zone-0 ladder");
+
+    // And they are the strings the disc itself authors on those widgets, which
+    // is what makes this a check rather than a restatement.
+    for (n, want) in (1..=10u32).zip(&authored) {
+        assert_eq!(
+            layout
+                .label(&format!("ZonePlus{n}"))
+                .and_then(|l| l.string.as_deref()),
+            Some(want.as_str()),
+            "ZonePlus{n}'s placeholder"
+        );
+    }
+    assert_eq!(
+        layout.label("ZonePlus0").and_then(|l| l.string.as_deref()),
+        None,
+        "ZonePlus0 authors no placeholder"
+    );
 }

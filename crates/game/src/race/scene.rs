@@ -803,6 +803,28 @@ impl Scene {
         })
     }
 
+    /// How many rows down the ladder the next speed class begins, or `None`
+    /// with no grade, no recovered ladder, or on the top rung.
+    ///
+    /// See [`crate::race::zone_grade::ZoneGrade::zones_to_next_stage`].
+    #[must_use]
+    pub fn zones_to_next_stage(&self, zone: u16) -> Option<u32> {
+        self.zone_grade.as_ref()?.zones_to_next_stage(zone)
+    }
+
+    /// Which rung of the Zone ladder this scene's grade is showing, or `None`
+    /// outside Zone mode and on a title shipping no stage table.
+    ///
+    /// The HUD's speed-class name reads this rather than the zone counter, so
+    /// the two halves of the escalation - the colour grade and the word on
+    /// screen - move together and are wrong together. See
+    /// `oag_hd::hud::ZONE_SPEED_CLASSES` for why the zone counter is not the
+    /// right question to ask.
+    #[must_use]
+    pub fn zone_stage(&self) -> Option<u32> {
+        Some(self.zone_grade.as_ref()?.blend().current)
+    }
+
     /// Points the Zone colour grade at the zone the race has reached, and
     /// answers whether that moved it.
     ///

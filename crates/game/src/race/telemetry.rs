@@ -146,6 +146,12 @@ impl Race {
             wrong_way: self.wrong_way(),
             zone: race.zone.into(),
             score: race.score,
+            // The colour grade lives on `crate::race::Scene`, not on the
+            // simulation, so the two draw sites that have both fill this in -
+            // see `Scene::zone_stage`. Zero here means "no grade", which is what
+            // rung zero already reads as: unnamed.
+            zone_stage: 0,
+            zone_next_in: None,
             pickup: ship.pickup.weapon,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed

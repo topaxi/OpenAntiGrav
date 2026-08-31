@@ -45,7 +45,7 @@ pub mod race;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
-pub use hud::{HudArt, HudLayouts};
+pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;

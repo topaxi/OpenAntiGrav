@@ -72,6 +72,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // recorded as Pulse's answer rather than as `None`, because `None` here
     // would read as the measured "drawn as authored" that HD carries.
     pickup_backdrop_colour: Some("HudBGColour"),
+    // `None`: no Zone speed-class ladder has been read on this title.
+    zone_speed_classes: None,
 };
 
 /// The sprite widgets Pure draws whenever its HUD is up: **none**.

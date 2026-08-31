@@ -216,6 +216,7 @@ fn the_total_time_yields_its_anchor_to_the_place() {
                     &strings,
                     place_owns_the_anchor(&layout, readout),
                     true,
+                    None,
                 )
                 .is_some()
             })
@@ -533,6 +534,7 @@ fn a_sprite_is_offset_by_its_own_texture() {
         uv: [10.0, 20.0, 30.0, 40.0],
         color: [1.0; 4],
         src: src.to_string(),
+        rotation: 0.0,
     };
 
     let Some(Draw::Sprite { rect, uv, .. }) = sprite_draw(&sprite("second.mip"), &sheet) else {
@@ -674,6 +676,7 @@ fn a_bar_is_cropped_horizontally_and_keeps_its_height() {
         uv: [6.0, 0.0, 168.0, 26.0],
         color: [1.0; 4],
         src: oag_pulse::hud::ATLAS.to_string(),
+        rotation: 0.0,
     };
     let half = crop_horizontally(&sprite, 0.5);
     assert_eq!(half.rect, [306.0, 220.0, 84.0, 26.0]);

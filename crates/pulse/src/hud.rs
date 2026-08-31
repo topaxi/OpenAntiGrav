@@ -63,6 +63,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         inner: "missile_sight_inner",
     },
     pickup_backdrop_colour: Some(PICKUP_BACKDROP_COLOUR),
+    // `None`: no Zone speed-class ladder has been read on this title.
+    zone_speed_classes: None,
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

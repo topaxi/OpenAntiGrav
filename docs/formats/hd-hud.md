@@ -550,6 +550,128 @@ Two smaller ones, both the same shape of mistake:
   crops the speed readout off its right edge, so the recovered text has not been
   read back off the original.
 
+## Zone's ladder draws, and the widget it is missing is missing for a reason
+
+**2026-08-31.** The column down the left of a Zone race - the current zone, the
+ten coming up, and the class the current one runs at - draws now. It was not a
+rendering bug but three separate gaps, none of which is visible without the
+other two:
+
+1. **The sprites were not in the always-on set.** `ZoneBG`, `CurrentZonePanel`
+   and `ZonePlusLight0`-`ZonePlusLight10` were named in
+   [`oag_hd::hud::ALWAYS_ON`](../../crates/hd/src/hud.rs)'s "deliberately left
+   out" list, because the frame that set was read off is a **speed lap** and
+   authors none of them. The maintainer supplied a Zone frame
+   (`data/shots/hd_zone_hud_original.png`, gitignored) and all thirteen are up
+   in it. They cost the other seventeen layouts nothing: only the three Zone
+   roots author any of them, asserted by
+   `every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone`.
+2. **The labels were not in the text allow-list.** `ZonePlus0`-`ZonePlus10`
+   carry no `idstring`, so `oag_game::hud::draw_list` dropped every one. They
+   are `zone + N`: the widget name says it, both reference frames read the
+   current zone and the ten above it, and **the authored placeholders are the
+   zone-`0` frame spelled out** - `ZonePlus0` carries no `string` at all and
+   `ZonePlus1`-`ZonePlus10` carry `1` through `10`, which is `zone + N` at
+   `zone = 0` with the current row blank. Confidence 88.
+
+   That last point is also what bounds the gate. `Zone` and `Score` are off
+   until the first ten-second step, and extending that to the whole ladder left
+   the column empty for the first ten seconds of every run; the disc's own
+   placeholders say the rows ahead are numbered there and only the current one
+   is not.
+3. **`RotationTheta` was not modelled at all, and the shader sheared it when it
+   was.** `ZoneBG` is a 676x153 bar authored at a quarter turn, which is what
+   stands it up as the 153x676 column; the eleven ticks carry small per-row
+   tilts. `oag_game::frontend::Draw::RotatedSprite` already existed for the
+   lock-on reticle, and `ui.wgsl` turned the **unit square** before scaling by
+   the rectangle - `scale . rotate`, a shear on anything that is not square.
+   Every previous caller was 8 pixels square, so this had never shown. Now in
+   pixels, which is `rotate . scale`.
+
+`Layout::sprites` gained a `rotation` field for it and `sprite_draw` returns the
+rotated variant when it is non-zero.
+
+### The two retro skins carry fewer widgets, and that is the disc's
+
+`wo3_hud` and `2097_hud` write `<Image name="CurrentZonePanel">` with **no
+`<Values>` at all** - a bare grouping element holding the eleven rows - where the
+default skin authors it as a 476x54 patch of `HUD_Components_01.gtf`; `2097_hud`
+does the same to `ZoneBG`. So the retro ladders are ticks and numbers with no
+column behind them and no highlighted current row. Nothing turns on it, since
+this build draws the default skin only, and the counts (13 / 12 / 11) are
+asserted so a silent rise would flag the parser reading a bare group as a sprite.
+
+### The speed class, and the table that says which one
+
+The disc names fifteen rungs three times over and they agree one for one:
+`zonemode.effectsettings` keys its palettes `0 Start`, `1 Sub Venom` ..
+`14 Supersonic`; the language plugin carries each as a HUD string
+(`MSC_SVENOM` = `SUB-VENOM` .. `IG_HUD_SUPSON` = `SUPERSONIC`, with
+`IG_HUD_MACH1` = `MACH 1` filling `13 Mach 1`); and the reference frame reads
+`SUB-VENOM` with the string table's hyphen rather than the palette key's space,
+so the HUD is drawing those strings. That table is
+[`oag_hd::hud::ZONE_SPEED_CLASSES`](../../crates/hd/src/hud.rs), indexed by rung.
+
+**Which zone is on which rung is now recovered too**, out of the executable:
+`g_ZoneSpeedClassTable` at `0x00860d44`, fourteen records of
+`{ u32 zoneThreshold, u32 stringIdPointer }` descending to zero, walked by
+`Hud_UpdateZoneSpeedClass` (`0x00049718`). It is
+[`oag_hd::race::ZONE_STAGES`](../../crates/hd/src/race.rs) and the evidence is
+[zone-speed-class-table](../ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md).
+Bands `0`-`1`, `2`, `3`-`4`, `5`-`6`, `7`-`11`, widening to fifteen at the top -
+which is what the maintainer's play describes ("not every zone is a bump",
+"zone 2 should already be Venom, kind of the exception") and what got a first
+reading of one-rung-per-zone corrected.
+
+**And the same function closed a different question.** Its last act is
+`stw r3, 0x640(r29)` with `r3 = 14 - i`, which is the writer of the per-craft
+Zone stage index that
+[zone-effectsettings-loader](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
+recorded as unfound - so **HD's colour grade escalates now**, on the same table,
+and the HUD's class name and the circuit's palette move together because they
+are the same index. That is 2048's architecture: the HUD widget drives the grade.
+
+### The next class rides the row its zone starts at
+
+`NextSpeedClassBG` and its label are authored at `x="0" y="0"` inside
+`CurrentZonePanel`'s group - on top of the current row, name to the left of that
+row's own number - which is this dialect's runtime placeholder, the same idiom
+the lock-on reticle uses at `(-960, 540)`. The reference frame shows the bar a
+row lower and its name clear to the right of that row's digit.
+
+**The rule is the maintainer's**: an upcoming class is named beside the zone
+number it starts at. So the bar sits on that zone's ladder row and slides down
+as the bands widen.
+
+**A second capture, at zone 8, says exactly where.** It reads
+
+```text
+ 8  SUB-RAPIER
+ 9
+10
+11
+12  RAPIER
+13
+```
+
+- `RAPIER` is **level with its own `12`** - one line, the same font and size as
+  the digit beside it, not offset the way `SpeedClass` is offset from the much
+  larger `ZonePlus0`. So the vertical answer is the row's own `y`.
+- Its horizontal inset is the one `SpeedClass` already has from `ZonePlus0`, 66
+  layout units, which measures at ~39 screen pixels on that capture against 42
+  predicted.
+
+`oag_game::hud::draw::zone_next_row` is those two sentences; the bar takes the
+same row and the panel's own horizontal inset, keeping its authored size.
+Everything in it is read out of the layout, and no constant here was chosen to
+match a picture. **Confidence 80**, up from 72: the zone-1 frame put two
+competing readings within six screen pixels of each other and could not separate
+them, and a four-row gap does.
+
+**And the same frame is a third confirmation of the threshold table** - zones
+`7`-`11` on Sub Rapier with the bump at `12` - on a band five zones wide, which
+is the case no one-rung-per-zone reading could ever produce.
+
 ## What is not done
 
 - **Two runtime tints are unrecovered**, and both are visible in the frame:
@@ -577,10 +699,14 @@ Two smaller ones, both the same shape of mistake:
 - **`SDOffsetX`/`SDOffsetY`**, and what the SD presentation is.
 - **Label outlines.** 54 widgets carry a `BorderColor` and the renderer has no
   outline pass.
-- **The emulator check is one frame of one mode.** `just rpcs3-race` on speed
-  lap, Talon's Junction, craft stationary on the grid, no pickup held, no assist
-  and no warning up. Everything above rests on that single state, which is why
-  the always-on set is deliberately short.
+- **The rotation's sign is passed through, not verified.** Nothing recovered
+  says which way the original turns a widget; `ZoneBG`'s quarter turn covers the
+  same pixels either way and the ticks are too small to read off the frame.
+- **The emulator check is one frame of one mode**, plus the Zone frame this
+  page's Zone section is written from. `just rpcs3-race` on speed lap, Talon's
+  Junction, craft stationary on the grid, no pickup held, no assist and no
+  warning up. The always-on set outside Zone still rests on that single state,
+  which is why it is deliberately short.
 
 ## See also
 

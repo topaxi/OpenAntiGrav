@@ -308,6 +308,20 @@ impl ZoneStages {
         u32::try_from(self.records.len() - index).ok()
     }
 
+    /// The lowest zone number strictly above `zone` that changes the class, or
+    /// `None` when `zone` is already on the top rung.
+    ///
+    /// The threshold of the record **above** the one [`Self::stage_for`] picks,
+    /// which is where the next speed class begins. HD's Zone HUD needs it
+    /// directly: its "next speed class" bar is drawn beside the zone number the
+    /// upcoming class starts at, so the row it sits on is this number minus the
+    /// current zone.
+    #[must_use]
+    pub fn next_zone(&self, zone: u16) -> Option<u16> {
+        let index = self.records.iter().position(|&(at, _)| zone >= at)?;
+        Some(self.records[index.checked_sub(1)?].0)
+    }
+
     /// The speed-class name the original would show at zone number `zone`.
     ///
     /// Read off the same record [`Self::stage_for`] picks, so the two cannot

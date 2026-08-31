@@ -219,4 +219,93 @@ pub struct HudArt {
     /// substitution, and applying Pulse's turned its backdrop into the
     /// quarter-alpha smudge an HD race drew until 2026-08-25.
     pub pickup_backdrop_colour: Option<&'static str>,
+    /// What this title calls each rung of its Zone escalation ladder, or `None`
+    /// for a title whose ladder has not been read.
+    ///
+    /// See [`ZoneSpeedClasses`]. The *names* only: which rung a given zone is
+    /// on is [`crate::RaceDefaults::zone_stages`], and the two are separate
+    /// because the one title that has both recovered them from different
+    /// places.
+    pub zone_speed_classes: Option<&'static ZoneSpeedClasses>,
+}
+
+/// The name of each rung of a title's Zone escalation ladder, as string-table
+/// ids.
+///
+/// # A rung, not a zone
+///
+/// **`ids[n]` is the name of stage `n`**, the same index
+/// `oag_game::race::zone_grade::ZoneGrade` shows and `--zone-stage` selects -
+/// not a zone number. `None` in a slot is a rung with no name of its own, which
+/// is what the bottom of HD's ladder is.
+///
+/// That distinction is the correction this type was rewritten for. A first pass
+/// read HD's fifteen rungs as one per zone, off a reference frame showing
+/// `SUB-VENOM` at zone 1 and `VENOM` at zone 2; **the maintainer's own play says
+/// otherwise - not every zone is a class bump** - and the frame is equally
+/// consistent with a ladder whose first band happens to be one zone wide, which
+/// is exactly the shape `oag_2048::race::ZONE_STAGES` has (`0`-`1`, then
+/// `2`-`8`). So what turns a zone counter into a rung stays where it was:
+/// recovered on 2048, unrecovered on HD, and asked for through
+/// [`crate::RaceDefaults::zone_stages`] rather than guessed at here.
+///
+/// This carries only the **names**, which are recoverable from the disc alone
+/// and are the same list whatever drives the index.
+///
+/// # Ids rather than text
+///
+/// The strings are localised, so the caller resolves each against the language
+/// plugin's own table - the same way an `idstring` caption is resolved.
+///
+/// A stage past the end takes the last rung, the clamp every ladder in this
+/// lineage ends with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneSpeedClasses {
+    /// One entry per rung, in stage order from zero. See the type's docs.
+    pub ids: &'static [Option<&'static str>],
+}
+
+impl ZoneSpeedClasses {
+    /// The id for `stage`, clamped to the last rung. `None` for a rung with no
+    /// name and for an empty ladder.
+    #[must_use]
+    pub fn id_for(&self, stage: u32) -> Option<&'static str> {
+        let last = self.ids.len().checked_sub(1)?;
+        let rung = usize::try_from(stage).unwrap_or(last);
+        self.ids.get(rung.min(last)).copied().flatten()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LADDER: ZoneSpeedClasses = ZoneSpeedClasses {
+        ids: &[None, Some("A"), Some("B")],
+    };
+
+    /// The bottom rung has no name, and saying so is the point of the `Option`:
+    /// HD's `0 Start` is a palette with no speed class beside it.
+    #[test]
+    fn an_unnamed_rung_reads_as_nothing_rather_than_as_the_next_one() {
+        assert_eq!(LADDER.id_for(0), None);
+        assert_eq!(LADDER.id_for(1), Some("A"));
+    }
+
+    /// Past the top, the top holds - the clamp every ladder in this lineage
+    /// ends with.
+    #[test]
+    fn a_stage_past_the_end_takes_the_last_rung() {
+        assert_eq!(LADDER.id_for(2), Some("B"));
+        assert_eq!(LADDER.id_for(99), Some("B"));
+    }
+
+    /// A ladder with nothing in it names nothing, rather than indexing out of
+    /// bounds.
+    #[test]
+    fn an_empty_ladder_names_nothing() {
+        let empty = ZoneSpeedClasses { ids: &[] };
+        assert_eq!(empty.id_for(0), None);
+        assert_eq!(empty.id_for(7), None);
+    }
 }

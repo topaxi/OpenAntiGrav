@@ -125,6 +125,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
     },
     pickup_backdrop_colour: None,
+    zone_speed_classes: None,
 };
 
 fn hd_sheet() -> crate::sprite::Sheet {
@@ -518,6 +519,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         always_on: &[],
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
+        zone_speed_classes: None,
     };
 
     let layout = Layout::from_xml(SIGHTS);

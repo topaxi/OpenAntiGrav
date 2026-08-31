@@ -190,6 +190,18 @@ impl ZoneGrade {
         Some(self.stages?.stage_for(zone)?.min(self.last_stage))
     }
 
+    /// How many zones away the next speed class is, or `None` on the top rung
+    /// or a title with no recovered ladder.
+    ///
+    /// The HUD's "next speed class" bar is drawn beside **the zone number that
+    /// class starts at** - the maintainer's own observation of the original -
+    /// so this is the row of the ladder it belongs on, counted from the current
+    /// one.
+    #[must_use]
+    pub fn zones_to_next_stage(&self, zone: u16) -> Option<u32> {
+        Some(u32::from(self.stages?.next_zone(zone)?.checked_sub(zone)?))
+    }
+
     /// Shows the stage zone number `zone` sits on, and answers whether that
     /// changed the picture.
     ///

@@ -74,13 +74,17 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
 /// `place_shown` is the one decision this function cannot make from its own
 /// arguments: whether *this layout* is drawing a place at all, which decides who
 /// owns the top-right anchor. See [`place_owns_the_anchor`]. `speed_unit` is the
-/// second, and [`SPEED_UNIT_WIDGET`] is why.
+/// second, and [`SPEED_UNIT_WIDGET`] is why. `classes` is the third: what this
+/// title calls each rung of its Zone ladder, which is
+/// [`oag_title::HudArt::zone_speed_classes`] and `None` on a title whose ladder
+/// has not been read.
 pub(super) fn text_for(
     label: &Label,
     readout: &Readout,
     strings: &crate::language::StringTable,
     place_shown: bool,
     speed_unit: bool,
+    classes: Option<&oag_title::ZoneSpeedClasses>,
 ) -> Option<String> {
     // A literal in the XML wins for the widgets that have one: `LapOf`'s "/" is
     // the separator between lap and total, and it is authored rather than
@@ -141,6 +145,28 @@ pub(super) fn text_for(
         "Zone" => (readout.zone > 0).then(|| readout.zone.to_string()),
         "Score" => (readout.zone > 0).then(|| readout.score.to_string()),
 
+        // HD/Fury's zone ladder: the name of the rung the race is on, beside the
+        // current row of [`zone_plus`]'s list.
+        //
+        // **Off the grade's stage, not off the zone number.** Which zone sits on
+        // which rung is a per-title table that is unrecovered on HD, and the
+        // maintainer's play rules out the obvious guess of one rung per zone -
+        // see `oag_hd::hud::ZONE_SPEED_CLASSES`. So this reads the same index
+        // the colour grade shows, which leaves the HUD's class name and the
+        // circuit's grade wrong together or right together. Nothing on a title
+        // with no ladder, and nothing on rung zero, which has no name.
+        "SpeedClass" => classes
+            .and_then(|classes| classes.id_for(readout.zone_stage))
+            .map(|id| strings.get_or_id(id).to_string()),
+        // The rung above it, on the row [`zone_next_row`] puts the bar. Both
+        // gates matter: with no next rung there is no name, and with no row
+        // there is nowhere honest to put it.
+        "NextSpeedClass" => readout
+            .zone_next_in
+            .and(classes)
+            .and_then(|classes| classes.id_for(readout.zone_stage + 1))
+            .map(|id| strings.get_or_id(id).to_string()),
+
         // Separators, authored as literals. Drawn only when both sides have a
         // value: a lone `/` between two blanks reads as a rendering fault, and
         // with lap counting unrecovered that is the common case rather than a
@@ -158,8 +184,138 @@ pub(super) fn text_for(
 
         // Static labels: anything with an `idstring` that this function has not
         // already claimed. These are the `IG_HUD_*` captions beside the values.
-        _ => caption(label, strings),
+        //
+        // `ZonePlusN` is checked here rather than as eleven arms: the widget is
+        // a numbered family and the number is the whole rule.
+        name => zone_plus(name)
+            .map(|ahead| {
+                // The gate is on the **current** row alone, not on the ladder.
+                // See [`zone_plus`].
+                (ahead > 0 || readout.zone > 0).then(|| (readout.zone + ahead).to_string())
+            })
+            .unwrap_or_else(|| caption(label, strings)),
     }
+}
+
+/// The bar behind the **next** speed class's name, and the label on it.
+///
+/// Not part of [`oag_title::HudArt::always_on`], because unlike every widget on
+/// that list these two are only up when there *is* a next class and a row to put
+/// it on. See [`zone_next_row`].
+pub(super) const NEXT_CLASS_WIDGETS: [&str; 2] = ["NextSpeedClassBG", "NextSpeedClass"];
+
+/// Where the **next** speed class's bar and name go, as `[x, y]` for each.
+///
+/// # The authored position is a placeholder, so this reconstructs one
+///
+/// `zone_hud.xml` writes `<Image name="NextSpeedClassBG">` and its `<Text>` both
+/// at `x="0" y="0"` inside `CurrentZonePanel`'s group - which is the *current*
+/// row, underneath the bar already there, with the name to the left of that
+/// row's own number. `x=0 y=0` is this dialect's "the runtime writes this"
+/// idiom, the same one the lock-on reticle uses at `(-960, 540)`
+/// ([`oag_title::hud::Sights`]), so the numbers carry no geometry and something
+/// has to supply one.
+///
+/// **What the original does, from the maintainer's play**: an upcoming speed
+/// class is named beside **the zone number it starts at**. So the bar sits on
+/// that zone's ladder row and slides down as the bands widen - at zone 1 the
+/// next bump is zone 2, one row down, which is what the reference frame
+/// (`data/shots/hd_zone_hud_original.png`) shows.
+///
+/// # The rule: the name sits on its row's own line, inset like the current one
+///
+/// Two frames of the original, at zone 1 and zone 8, and the second is the one
+/// that says it plainly. At zone 8 the ladder reads
+///
+/// ```text
+///  8  SUB-RAPIER
+///  9
+/// 10
+/// 11
+/// 12  RAPIER
+/// 13
+/// ```
+///
+/// `RAPIER` is **level with its own `12`**, one line, the same font and size as
+/// the digit beside it - not offset the way `SpeedClass` is offset from the big
+/// `ZonePlus0`. So the vertical answer is the row's own `y`, and the horizontal
+/// one is the inset `SpeedClass` already has from `ZonePlus0` (66 layout units,
+/// which measures at ~39 screen pixels between the digit and the name on that
+/// capture, against 42 predicted).
+///
+/// The bar behind it takes the same row and the panel's own horizontal inset,
+/// keeping its authored size - the art is its own, only the anchor is
+/// reconstructed.
+///
+/// **Confidence 80**, up from 72 when only the zone-1 frame existed: that frame
+/// put the row-`n` line within six screen pixels of two competing readings and
+/// could not separate them, and this one puts a *four-row* gap between the two,
+/// where they differ by enough to see. Everything in the rule is read out of the
+/// layout; no constant here was chosen to match a picture.
+///
+/// `None` when there is no next class, or when its row is past `ZonePlus10` -
+/// the bottom of the ladder, where the original has nowhere to draw it either.
+pub(super) fn zone_next_row(layout: &Layout, readout: &Readout) -> Option<([f32; 2], [f32; 2])> {
+    let rows = readout.zone_next_in?;
+    let row = layout.label(&format!("ZonePlus{rows}"))?;
+    let head = layout.label(CURRENT_ROW_NUMBER)?;
+    let panel = layout.sprite(CURRENT_ROW_PANEL)?;
+    let class = layout.label(CURRENT_ROW_CLASS)?;
+    // Horizontal only: `y` is the row's own line for both, which is what the
+    // zone-8 frame shows. `ZonePlus0` and `ZonePlus<n>` are anchored
+    // differently - one `middle`, the others `top` - so their raw `y` values are
+    // not the same quantity and subtracting them would be a category error as
+    // well as the wrong answer.
+    Some((
+        [panel.rect[0] + row.x - head.x, row.y],
+        [class.x + row.x - head.x, row.y],
+    ))
+}
+
+/// The current row's own number, which the two widgets above are placed
+/// against. See [`zone_next_row`].
+pub(super) const CURRENT_ROW_NUMBER: &str = "ZonePlus0";
+/// The panel behind the current row.
+pub(super) const CURRENT_ROW_PANEL: &str = "CurrentZonePanel";
+/// The current row's class name.
+pub(super) const CURRENT_ROW_CLASS: &str = "SpeedClass";
+
+/// How far ahead of the current zone a `ZonePlus<N>` widget's row is, or `None`
+/// for a widget that is not one./// How far ahead of the current zone a `ZonePlus<N>` widget's row is, or `None`
+/// for a widget that is not one.
+///
+/// # The rule is in the name, and the frame reads it back
+///
+/// HD's Zone layout authors eleven of these down the left-hand column -
+/// `ZonePlus0` at the current row and `ZonePlus1`-`ZonePlus10` below it - and
+/// nothing but their placeholder strings says what they hold. Those
+/// placeholders are `1` through `10`, one per widget, with `ZonePlus0`'s left
+/// empty: `N` at rung `N`, which is `zone + N` for a zone counter still at
+/// zero.
+///
+/// **A Zone frame of the running original reads `1` through `11`**
+/// (`data/shots/hd_zone_hud_original.png`), with the current row's `1` beside
+/// `SUB-VENOM` - zone 1; a second at zone 8 reads `8` through `18`. Confidence
+/// **88**: the name, the placeholders and two frames all say `zone + N`, against
+/// no disassembly of what writes them.
+///
+/// # Only the current row is gated on the zone, and the layout is what says so
+///
+/// The counter is zero from the grid until the first ten-second step, and
+/// `Zone`/`Score` are both off for it - a HUD reading `ZONE 0` would be
+/// reporting a zone the player is not in yet. An earlier revision extended that
+/// to the whole ladder, which left the column blank for the first ten seconds of
+/// every run.
+///
+/// **The authored placeholders are the zone-0 frame, spelled out.** `ZonePlus0`
+/// carries no `string` at all and `ZonePlus1`-`ZonePlus10` carry `1` through
+/// `10` - which is `zone + N` evaluated at `zone = 0`, with the current row
+/// blank. So the disc itself says the rows ahead are numbered before the first
+/// zone and the current one is not, and that is the rule rather than a choice
+/// made here. It is also a third, independent confirmation of `zone + N`: the
+/// shipped strings only line up that way if the arithmetic is right.
+fn zone_plus(name: &str) -> Option<u32> {
+    name.strip_prefix("ZonePlus")?.parse().ok()
 }
 
 /// A widget's `idstring` resolved through the language's table, or `None` when it
@@ -459,6 +615,20 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         }
     }
 
+    // Zone's next-class bar, which is conditional twice over and so cannot be
+    // allow-listed: there has to *be* a next class, and it has to have a row on
+    // screen. See `zone_next_row`, which is also what moves it.
+    let next_row = zone_next_row(cx.layout, readout);
+    if let Some((bar, _)) = next_row
+        && let Some(sprite) = cx.layout.sprite(NEXT_CLASS_WIDGETS[0])
+    {
+        // Its own art and its own size; only the anchor is reconstructed.
+        let mut moved = sprite.clone();
+        moved.rect[0] = bar[0];
+        moved.rect[1] = bar[1];
+        frame.sprites.extend(sprite_draw(&moved, cx.sheet));
+    }
+
     // Decided once for the frame rather than per widget: it is a fact about the
     // layout and the readout together, and two widgets have to agree on it.
     let place_shown = place_owns_the_anchor(cx.layout, readout);
@@ -469,7 +639,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         if !is_screen_positioned(&label.name) {
             continue;
         }
-        let Some(text) = text_for(label, readout, cx.strings, place_shown, speed_unit) else {
+        let Some(text) = text_for(
+            label,
+            readout,
+            cx.strings,
+            place_shown,
+            speed_unit,
+            cx.art.zone_speed_classes,
+        ) else {
             continue;
         };
         if text.is_empty() {
@@ -481,9 +658,16 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         } else {
             cx.hud_line_height
         };
+        // The next class's name is the one widget in any layout whose authored
+        // position this build overrides, because the layout authors it as a
+        // placeholder - `zone_next_row` carries the whole reasoning.
+        let placed = next_row.filter(|_| label.name == NEXT_CLASS_WIDGETS[1]);
         let draw = Draw::Text {
-            x: label.x,
-            y: top_edge(label, line_height),
+            x: placed.map_or(label.x, |(_, text)| text[0]),
+            // The row's `y` is a **top** edge - every `ZonePlus1`-`ZonePlus10`
+            // is `vertalign="top"` - and this label rides that line directly,
+            // so it takes it unconverted rather than through `top_edge`.
+            y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
             color: label.color,
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
@@ -674,22 +858,39 @@ fn model_art(cx: &Context<'_>, name: &str) -> Option<crate::sprite::Placed> {
 /// a screen rectangle.
 const SIGHT_SIZE: f32 = 8.0;
 
+/// One layout sprite as a draw, or `None` for a sprite whose texture the sheet
+/// does not hold.
+///
+/// A widget carrying a `RotationTheta` comes back as
+/// [`Draw::RotatedSprite`] rather than [`Draw::Sprite`]. Both spin about the
+/// same point - the rectangle's centre - so a `Centred="true"` widget, which
+/// [`super::Layout`] has already converted to a top-left corner, still turns
+/// about the position the layout authored. See [`Sprite::rotation`].
 pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw> {
     let placed = sheet.get(&sprite.src)?;
-    Some(Draw::Sprite {
+    // The texture is packed into a shared sheet, so its own pixel coordinates
+    // are offset by wherever the packer put it. The width and height are *not*
+    // offset, and may be negative: 26 of HD's sprites author a negative
+    // `TxtrWidth` to mirror a patch, and `ui.wgsl` walks the corner from
+    // `uv.xy` by `uv.zw`, so a negative one runs backwards and mirrors. See
+    // `crate::sprite::Sheet`.
+    let uv = [
+        placed.x as f32 + sprite.uv[0],
+        placed.y as f32 + sprite.uv[1],
+        sprite.uv[2],
+        sprite.uv[3],
+    ];
+    if sprite.rotation == 0.0 {
+        return Some(Draw::Sprite {
+            rect: sprite.rect,
+            uv,
+            color: sprite.color,
+        });
+    }
+    Some(Draw::RotatedSprite {
         rect: sprite.rect,
-        // The texture is packed into a shared sheet, so its own pixel
-        // coordinates are offset by wherever the packer put it. The width and
-        // height are *not* offset, and may be negative: 26 of HD's sprites
-        // author a negative `TxtrWidth` to mirror a patch, and `ui.wgsl` walks
-        // the corner from `uv.xy` by `uv.zw`, so a negative one runs backwards
-        // and mirrors. See `crate::sprite::Sheet`.
-        uv: [
-            placed.x as f32 + sprite.uv[0],
-            placed.y as f32 + sprite.uv[1],
-            sprite.uv[2],
-            sprite.uv[3],
-        ],
+        uv,
         color: sprite.color,
+        rotation: sprite.rotation,
     })
 }

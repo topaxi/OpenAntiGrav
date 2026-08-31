@@ -235,6 +235,56 @@ on a **racing circuit**, with open sky and one measurable feature. A Zone frame
 can never serve now that the Zone sky is measured at 64x64. Written up in
 `crates/render/src/mesh/sky_cube.rs` so it is not re-attempted.
 
+## 2026-08-31, later: the HUD names the same fifteen rungs, and two of them are pinned to zone numbers
+
+Split off into
+[hds-zone-ladder-draws-and-the-zone-to.md](hds-zone-ladder-draws-and-the-zone-to.md),
+which is about the widget; what belongs here is the evidence it produced about
+**this** thread's open question, the stage index nothing writes.
+
+- **The fifteen `zonemode.effectsettings` rungs are speed classes with names in
+  the language plugin**, one for one: `MSC_SVENOM` = `SUB-VENOM` against
+  `1 Sub Venom`, through `IG_HUD_MACH1` = `MACH 1` against `13 Mach 1`, to
+  `IG_HUD_SUPSON` = `SUPERSONIC` against `14 Supersonic`. So the palette ladder
+  and the HUD's speed-class ladder are the same fifteen rungs, which is what
+  makes the HUD a second window onto this index.
+- **Two zone-to-rung anchors, from the maintainer.** A Zone frame of the running
+  original reads `SUB-VENOM` at zone 1, and their play names zone 2 as
+  `Venom` - explicitly as *the exception* to "not every zone is a class bump".
+  So the ladder steps at zone 2 and does not step at every zone after it.
+- **That is the shape 2048's recovered table has** (`0`-`1`, then `2`-`8`, then
+  `9`-`16`), which strengthens the case that HD's unfound writer walks a
+  threshold table of the same kind rather than assigning `stage = zone`.
+
+**This does not close the question and was not used to.** `ZoneGrade` still
+rests where HD's loader leaves it, and the HUD's class name is read off
+`ZoneGrade`'s own stage rather than off the zone counter, so nothing here has
+been wired on a guess. What it does is give the watchpoint hunt two frames whose
+answers are known in advance.
+
+## 2026-08-31, later still: **the writer of `+0x640` is found**, and this thread's central question is closed
+
+`Hud_UpdateZoneSpeedClass` (`0x00049718`) ends with `stw r3, 0x640(r29)` where
+`r3` is `14 - i` off a fourteen-record threshold table at `0x00860d44`. Full
+evidence in
+[zone-speed-class-table.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md);
+wired as `oag_hd::race::ZONE_STAGES`, so `oag_title::RaceDefaults::zone_stages`
+is no longer `None` on this title and **an HD Zone race escalates its colour
+grade**.
+
+**It was found from the HUD, not from the field.** Three passes here searched for
+the writer by offset and by dataflow and came back empty - the folded-index-bias
+trap this thread already records. What worked was going in through the *string
+ids* the Zone HUD displays, which the language plugin already named: one `grep`
+of the ELF for `MSC_SVENOM` landed in a contiguous fourteen-string blob, and the
+only references to it were the table. **On this binary a known string is a better
+handle than a known field**, and that is the transferable part.
+
+`14 - i` lands on the fifteen `.effectSettings` rungs one for one, so the
+palette ladder this thread reads and the speed-class ladder the HUD shows are the
+same index - which is also why the HUD's class name and the circuit's grade can
+no longer disagree.
+
 ## Open
 
 - What the Zone shader does with the six-plus Zone parameters. Unread. This is
