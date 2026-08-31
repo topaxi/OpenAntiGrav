@@ -236,6 +236,9 @@ impl EffectSettings {
             scene_base_colour_highlight: self.stage_rgb(stage, key::SCENE_BASE_COLOUR_HIGHLIGHT),
             scene_aniso_power: self.stage_scalar(stage, key::SCENE_ANISO_POWER),
             track_texture_colour: self.stage_rgb(stage, key::TRACK_TEXTURE_COLOUR),
+            track_eq_brightness: self.stage_scalar(stage, key::TRACK_EQ_BRIGHTNESS),
+            track_base_colour_highlight: self.stage_rgb(stage, key::TRACK_BASE_COLOUR_HIGHLIGHT),
+            track_base_colour: self.stage_rgb(stage, key::TRACK_BASE_COLOUR),
             // HD's spelling first, then 2048's. A file carries one vocabulary
             // or the other, never both, so the order only decides which miss
             // costs a second lookup.
@@ -385,6 +388,27 @@ pub mod key {
     /// publishes. The two are not interchangeable in magnitude either: this
     /// one reaches `9.0` where its `Scene` sibling runs to `3.0`.
     pub const TRACK_TEXTURE_COLOUR: &str = "Track.Texture Colour";
+    /// The `.w` of [`TRACK_TEXTURE_COLOUR`], on the same terms
+    /// [`SCENE_EQ_BRIGHTNESS`] is the `.w` of its own sibling: a separate key
+    /// in the file, the fourth lane of the same 16 bytes at runtime. One of
+    /// only two such overlaps in the measured key-to-offset table.
+    pub const TRACK_EQ_BRIGHTNESS: &str = "Track.EQ brightness";
+    /// `zoneBase<Inner|Outer>` for the track material group - the colour of the
+    /// `rim^10` summand, one of the two rim-lit terms that make up the Zone
+    /// variant's whole surface colour: `zoneTex * zoneEffect + zoneBase.rgb *
+    /// rim^10 + zoneBaseAlt.rgb * rim^5`, with both exponents inline literals
+    /// in the microcode.
+    ///
+    /// **Not confined to an untextured family**, which an earlier reading of
+    /// `cf_constantcolourglow` and its kin suggested: 19,958 of the 20,092
+    /// Zone-bearing fragment blocks on the disc consume it, 17,906 of them
+    /// alongside a sampled `zoneTex*`. See
+    /// `oag_render::mesh_render::Zone` for the census.
+    pub const TRACK_BASE_COLOUR_HIGHLIGHT: &str = "Track.Base Colour Highlight";
+    /// `zoneBaseAlt<Inner|Outer>` for the track group - the `rim^5` summand's
+    /// colour, on the same terms as [`TRACK_BASE_COLOUR_HIGHLIGHT`].
+    pub const TRACK_BASE_COLOUR: &str = "Track.Base Colour";
+
     /// One float, the exponent of the rim term the Zone shader raises
     /// `1 - dot(N, -V)` to.
     ///
@@ -494,6 +518,15 @@ pub struct StagePalette {
     /// [`key::TRACK_TEXTURE_COLOUR`] - `zoneEffect<Inner|Outer>` for the track
     /// material group, the one whose texture set carries Zone's real art.
     pub track_texture_colour: Option<[f32; 3]>,
+    /// [`key::TRACK_EQ_BRIGHTNESS`], which rides in the track group's own
+    /// `zoneEffect.w`.
+    pub track_eq_brightness: Option<f32>,
+    /// [`key::TRACK_BASE_COLOUR_HIGHLIGHT`] - `zoneBase<Inner|Outer>` for the
+    /// track group.
+    pub track_base_colour_highlight: Option<[f32; 3]>,
+    /// [`key::TRACK_BASE_COLOUR`] - `zoneBaseAlt<Inner|Outer>` for the track
+    /// group.
+    pub track_base_colour: Option<[f32; 3]>,
     /// [`key::SCENE_ANISO_POWER`] - `zoneAnisoPower.x`, the exponent of the
     /// Zone shader's rim term. Read and reported; the term it indexes
     /// (`zoneAnisoPalette`) has no located filler, so nothing draws it.
@@ -611,6 +644,21 @@ impl StagePalette {
             track_texture_colour: fade_field(
                 self.track_texture_colour,
                 previous.track_texture_colour,
+                fade3,
+            ),
+            track_eq_brightness: fade_field(
+                self.track_eq_brightness,
+                previous.track_eq_brightness,
+                |c, p| fade_scalar(c, p, weight),
+            ),
+            track_base_colour_highlight: fade_field(
+                self.track_base_colour_highlight,
+                previous.track_base_colour_highlight,
+                fade3,
+            ),
+            track_base_colour: fade_field(
+                self.track_base_colour,
+                previous.track_base_colour,
                 fade3,
             ),
             // Not faded by the original at all: the blend hands the two

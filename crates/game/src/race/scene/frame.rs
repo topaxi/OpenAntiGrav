@@ -167,9 +167,27 @@ impl Scene {
         ]
         .into_iter()
         .flatten()
-        .chain(self.ships.iter())
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
+        }
+        // **The craft get the same scene with the Zone half switched off**,
+        // because the disc says they are not in it. The twelve
+        // `data/materials/ships/*.rcsmaterial` in `DATA03.PSARC` carry no Zone
+        // variant at all, and neither do the 39 under
+        // `data/weapons/materials/` - so the original leaves hulls and rockets
+        // ordinarily shaded while the circuit around them goes monochrome.
+        //
+        // This matters now in a way it did not before: the Zone term used to
+        // *add* to the albedo and was a no-op on any surface with no pure-black
+        // texels, so binding it to a ship cost nothing. It now **replaces** the
+        // albedo, so binding it to a ship would blank the ship. Fog and the
+        // light rig still reach them unchanged - only `zone` is dropped.
+        let ship_scene = mesh_render::Scene {
+            zone: mesh_render::Zone::default(),
+            ..scene
+        };
+        for drawable in self.ships.iter() {
+            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&ship_scene));
         }
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [

@@ -234,6 +234,9 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         // has to be read rather than assumed - they disagree about whether an
         // HD Zone race at rest shows anything at all.
         track_texture_colour: Some([9.0, 9.0, 9.0]),
+        track_eq_brightness: Some(0.0),
+        track_base_colour_highlight: Some([0.0, 0.0, 0.0]),
+        track_base_colour: Some([0.0, 0.0, 0.0]),
         // **The file authors no `Scene.Aniso Power` on any of its fifteen
         // stages**, though HD's own schema registers the key. So the Zone
         // shader's `zoneAnisoPower` keeps the `(6, 6)` its constructor sets
@@ -260,6 +263,9 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         scene_base_colour_highlight: Some([0.0, 1.694_118, 2.0]),
         scene_aniso_power: None,
         track_texture_colour: Some([4.584_567, 6.537_755, 6.917_541]),
+        track_eq_brightness: Some(20.0),
+        track_base_colour_highlight: Some([0.349_020, 0.501_961, 1.0]),
+        track_base_colour: Some([0.003_922, 0.847_059, 1.0]),
         fog_colour: Some([0.0, 1.305_882, 1.8]),
         fog_density: Some(0.002_1),
         sun_colour: Some([0.0, 0.0, 0.0]),

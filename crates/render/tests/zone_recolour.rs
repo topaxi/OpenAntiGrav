@@ -132,10 +132,10 @@ fn expected(effect: f32) -> u8 {
     (linear.powf(1.0 / 2.2) * 255.0).round() as u8
 }
 
-/// **The Zone recolour reaches the frame, in the right colour space, and only
-/// where the albedo is black.**
+/// **The Zone recolour reaches the frame, in the right colour space, and
+/// replaces the albedo whatever the albedo held.**
 #[test]
-fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
+fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -154,6 +154,16 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
     // The authored rig, switched on so the `lit` vertices take it. `Emissive`
     // above makes its own terms the identity.
     scene.light.enabled = 1.0;
+    // **The eye, dead in front and far away, so `rim` is zero here.** The
+    // shader reads it out of the fog block, and `Fog::off` leaves it at the
+    // origin - which for this quad (at `z = 0.5`, normal `+Z`) is *behind* the
+    // surface, giving `rim = 2` and a `rim^10` of 1024 that would swamp every
+    // assertion below. A hundred units along the normal makes
+    // `dot(N, toEye) = 1` to four decimals, so the two rim summands vanish and
+    // this test measures the texture term and the colour space alone.
+    // `the_two_rim_summands_carry_their_own_literal_exponents` is where they
+    // are measured instead.
+    scene.fog.camera = [0.0, 0.0, 100.5];
     scene.zone = Zone {
         // `zoneColourTint.xy`. `1.0` on both lanes is what
         // `zonemode.effectsettings` authors.
@@ -161,6 +171,8 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
         enabled: 1.0,
         _pad: 0.0,
         effect: ZONE_EFFECT,
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
     };
 
     // Black albedo: the recolour lands.
@@ -178,14 +190,19 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
         "red saturated - the sum is in the wrong space"
     );
 
-    // A white albedo: `blackMask` is 1, so the recolour adds nothing and the
-    // surface draws exactly as it would outside Zone mode.
+    // **A white albedo draws the same pixel, and that is the finding.** The
+    // Zone variant *replaces* a circuit material's shading rather than tinting
+    // it: 19,958 of the disc's 20,092 Zone-bearing fragment blocks carry this
+    // shape and not one of them contains the `100000` black-mask literal. This
+    // assertion is the inverse of the one it replaces, which asserted the
+    // `zoneAniso` shape that lives only in HD's four Zone arenas.
     let white = model(texture("white albedo", [255, 255, 255, 255]), 1.0);
-    let untouched = draw(&device, &queue, &white, Some(&stage), scene);
+    let replaced = draw(&device, &queue, &white, Some(&stage), scene);
     assert_eq!(
-        (untouched[0], untouched[1], untouched[2]),
-        (255, 255, 255),
-        "the recolour must land only where the albedo is black"
+        (replaced[0], replaced[1], replaced[2]),
+        (r, g, b),
+        "the Zone surface must replace the albedo, not add to it - a white \
+         albedo and a black one draw the same pixel"
     );
 
     // **The stand-in path, which is gamma throughout.** Prelit geometry
@@ -212,6 +229,73 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
         (0, 0, 0),
         "no Zone stage must add nothing at all"
     );
+}
+
+/// **The two rim summands reach the frame, each with its own literal
+/// exponent.**
+///
+/// `colour = zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, where
+/// `rim = 1 - dot(N, toEye)`. The exponents are inline constants in every one
+/// of the 19,958 blocks that carry this shape, so nothing per-stage drives
+/// them and a swap would be invisible to any test that only checks the
+/// colours arrive.
+///
+/// **This makes a swap loud.** The eye is placed 60 degrees off the surface
+/// normal, so `rim` is exactly `0.5`, and the two colours are scaled to
+/// cancel their own exponent: `512 * 0.5^10` and `16 * 0.5^5` are both `0.5`.
+/// Swap the two exponents and red becomes `512 * 0.5^5 = 16` (clipped white)
+/// while green becomes `16 * 0.5^10 = 0.016` (black) - the exact opposite
+/// corner of the cube from the `(186, 186, 0)` asserted here.
+///
+/// The stage colour is bound to zero throughout, so the texture term drops out
+/// and the pixel is the rim terms alone.
+#[test]
+fn the_two_rim_summands_carry_their_own_literal_exponents() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let surface = model(texture("albedo", [255, 255, 255, 255]), 1.0);
+    let stage = texture("zone stage", [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255]);
+
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    // `toEye = (sin 60, 0, cos 60)` from the quad's own plane, a hundred units
+    // out so the centre fragment's own offset within the triangle does not
+    // move the angle. The quad's normal is `+Z`, so `dot(N, toEye) = 0.5` and
+    // `rim = 0.5`.
+    scene.fog.camera = [86.6025, 0.0, 50.5];
+    scene.zone = Zone {
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        _pad: 0.0,
+        // Zero, so the texture term contributes nothing and the pixel is the
+        // two rim summands alone.
+        effect: [0.0; 4],
+        // `512 * 0.5^10 == 0.5`, on red.
+        base: [512.0, 0.0, 0.0, 0.0],
+        // `16 * 0.5^5 == 0.5`, on green.
+        base_alt: [0.0, 16.0, 0.0, 0.0],
+    };
+
+    let painted = draw(&device, &queue, &surface, Some(&stage), scene);
+    // Both summands are shader *parameters*, not textures, so they enter the
+    // linear path undecoded exactly as `zoneEffect` does; only the encode back
+    // out applies.
+    let half = (0.5f32.powf(1.0 / 2.2) * 255.0).round() as u8;
+    for (channel, got, want) in [("red", painted[0], half), ("green", painted[1], half)] {
+        assert!(
+            got.abs_diff(want) <= 2,
+            "{channel} came out {got}, want about {want}: the two rim summands \
+             must use 10 and 5 in that order"
+        );
+    }
+    assert_eq!(painted[2], 0, "nothing was bound on blue");
 }
 
 /// Draws `model` once into a `SIZE`x`SIZE` target and answers the centre texel.

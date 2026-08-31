@@ -104,8 +104,24 @@ struct Zone {
     // 1.0 only when every input this path reads resolved off the disc.
     enabled: f32,
     _pad: f32,
-    // `zoneEffect<Inner|Outer>`: the showing stage's `Scene.Texture Colour`.
+    // `zoneEffect<Inner|Outer>`: the showing stage's `Track.Texture Colour` -
+    // `Track` because the texture set this binds decides it; see
+    // `mesh_render::Zone`.
     effect: vec4<f32>,
+    // `zoneBase<Inner|Outer>`: `Track.Base Colour Highlight`, the `rim^10`
+    // summand. `.w` unused - the exponent is a microcode literal.
+    //
+    // **Declared and read nowhere below, on purpose.** These two drive the
+    // Zone variant's *untextured* material family, whose whole surface is
+    // `base.rgb * rim^10 + base_alt.rgb * rim^5`; this program is the textured
+    // one, and adding them here would light every surface the original leaves
+    // alone. They stay declared so this layout matches `mesh_render::Zone`
+    // byte for byte - dropping them would move every later field in one
+    // language and not the other, and `min_binding_size: None` would not
+    // catch it.
+    base: vec4<f32>,
+    // `zoneBaseAlt<Inner|Outer>`: `Track.Base Colour`, the `rim^5` summand.
+    base_alt: vec4<f32>,
 };
 
 struct Scene {
@@ -336,45 +352,69 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // own materials rather than out of any engine program - see
 // `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`:
 //
-//     zoneUV    = zoneColourTint.xy * (1 - meshUV)
-//     zoneCol   = zoneTex(zoneUV).rgb * zoneEffect.rgb
-//     blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
-//     surface   = albedo + zoneCol * (1 - blackMask)
+//     zoneUV  = zoneColourTint.xy * (1 - meshUV)
+//     rim     = 1 - dot(N, toEye)
+//     surface = zoneTex(zoneUV).rgb * zoneEffect.rgb
+//             + zoneBase.rgb    * rim^10
+//             + zoneBaseAlt.rgb * rim^5
 //
-// `blackMask` is a hand-rolled `step(0, x)` - the `100000` is the literal in
-// the microcode - so the recolour lands **only where the material's own
-// diffuse is pure black**. That is how the artists chose what lights up in
-// Zone mode, and nothing in the palette table or the parameter list says it;
-// it is authored in the albedo.
+// **The albedo is not in that sum.** On a circuit the Zone variant replaces
+// the material's shading rather than tinting it, which is why the original's
+// Zone frame reads near-monochrome: crowds, banners and concrete all go, and
+// what is left is the stage's own two colours over the stage's own texture.
+//
+// A census of all 20,092 Zone-bearing fragment blocks in `DATA00.PSARC` finds
+// two shapes and no block in both: this one, 19,958 blocks, which never
+// carries the `blackMask` literal at all; and a `zoneAnisoPalette` shape of
+// 134 blocks which always does. All twelve racing circuits are 100% this
+// shape; the other lives only in `zone_1`..`zone_4`, HD's Zone arenas. The
+// `albedo + zoneCol * (1 - blackMask)` rule this file used to carry was the
+// arena shape, read correctly from an arena material and generalised.
 //
 // The zone texture is sampled at the *mesh's own* UV, not in screen space and
 // not projected through `zoneOrigin` - which is the counter-intuitive half of
 // the reading, and is confirmed from the file side by the engine's own schema
 // naming the two lanes "Texture U scale" and "Texture V scale".
 //
-// **This returns the sample and its mask, not the finished term**, because the
-// two shading paths below sum in different colour spaces and `pow(a * b, g)`
-// is not `pow(a, g) * b`. `zoneTex` is a texture and wants the same decode
-// every other sample here gets; `zoneEffect` is a shader parameter and wants
-// none - it is authored well past 1.0 (to 3.0 on stage 12), which is a
-// multiplier's range and not a colour's.
+// **This returns the bare sample, not the finished term**, because the two
+// shading paths below sum in different colour spaces and `pow(a * b, g)` is
+// not `pow(a, g) * b`. `zoneTex` is a texture and wants the same decode every
+// other sample here gets; `zoneEffect` is a shader parameter and wants none -
+// it is authored well past 1.0 (to 3.0 on stage 12), which is a multiplier's
+// range and not a colour's. `zoneBase*` are parameters on the same terms.
 //
 // **Scope, stated because it is an approximation.** This applies to every
-// surface `mesh.wgsl` draws, and the original applies it per material: 1,467
-// of the disc's 1,590 `.rcsmaterial` files carry a Zone variant, so 123 do
-// not. Craft hulls, the sky cube, pads and the collision wireframe all reach
-// this path here and would pick up stage colour wherever they happen to carry
-// pure-black texels, which the original would leave alone. It is the same
-// shape as the shared specular exponent and the blanket sun term above - the
-// per-material branch that would tell the families apart does not exist yet -
-// and the minority it is wrong for is 123 materials of 1,590.
-fn zone_sample(albedo: vec3<f32>, uv: vec2<f32>) -> vec4<f32> {
+// surface `mesh.wgsl` draws for a Zone race, and the original applies it per
+// material. Craft are the exclusion that mattered and they are handled at the
+// call site rather than here: `data/materials/ships/*` carries no Zone block
+// at all, so `race::scene::frame` binds a default (disabled) Zone to the
+// ships. The sky cube, the pads and the collision wireframe do still reach
+// this path, which is the same shape of blanket approximation as the shared
+// specular exponent and the blanket sun term above.
+fn zone_sample(uv: vec2<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    let sample = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
-    let black_mask = saturate((albedo.r + albedo.g + albedo.b) * 100000.0);
-    // `.a` carries the mask *and* the on/off switch, so a draw outside a Zone
-    // race multiplies to nothing whatever the sample held.
-    return vec4<f32>(sample, (1.0 - black_mask) * scene.zone.enabled);
+    return textureSample(zone_tex, zone_sampler, zone_uv).rgb;
+}
+
+// The two rim-lit summands, `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`.
+//
+// Both exponents are **inline literals** in every one of the 19,958 blocks
+// that carry this shape, not parameters, so nothing per-stage drives them and
+// there is no uniform for them to come from.
+//
+// **`max(rim, 0)` is load-bearing.** The microcode's own `ADD R3.w, -R0,
+// {1, 0, 0, 0}` is *unsaturated*, so `rim` runs negative on a back-facing or
+// badly-normalled fragment; the hardware's `LG2` -> `MUL` -> `EX2` chain floors
+// there at zero, while WGSL's `pow` with a negative base is undefined and hands
+// back NaN. A NaN here survives every arithmetic below and paints a hole no
+// unit test on the formula would catch.
+//
+// Undecoded on both shading paths, like `scene.zone.effect`: these are shader
+// *parameters*, authored in the `.effectSettings` file's own float domain, not
+// texture samples that owe an sRGB decode.
+fn zone_base_term(rim: f32) -> vec3<f32> {
+    let r = max(rim, 0.0);
+    return scene.zone.base.rgb * pow(r, 10.0) + scene.zone.base_alt.rgb * pow(r, 5.0);
 }
 
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
@@ -524,10 +564,18 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
-    // The Zone term, in both domains, from one sample. See `zone_sample`.
-    let zone = zone_sample(texel.rgb, in.texcoord);
-    let zone_linear = pow(zone.rgb, vec3<f32>(2.2)) * scene.zone.effect.rgb * zone.a;
-    let zone_gamma = zone.rgb * scene.zone.effect.rgb * zone.a;
+    // The Zone surface, in both domains, from one sample. See `zone_sample`.
+    //
+    // `rim` is the microcode's own `1 - dot(N, -V)`, where its `-V` points
+    // from the surface back at the eye - so this is 0 dead-on and 1 at the
+    // silhouette, and the two summands are silhouette-weighted. The eye comes
+    // out of the fog block, the one slot in bind group 2 that carries a
+    // position; the specular term below reads it from there too.
+    let zone_to_eye = normalize(scene.fog.camera - in.world);
+    let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye));
+    let zone = zone_sample(in.texcoord);
+    let zone_linear = pow(zone, vec3<f32>(2.2)) * scene.zone.effect.rgb + zone_base;
+    let zone_gamma = zone * scene.zone.effect.rgb + zone_base;
 
     // The read specular term: half-vector against the sun, and the exponent
     // is a **stand-in**. It is an inline constant of each fragment program,
@@ -564,9 +612,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // stand-in path below, where it is a tint and every other title authors
     // it as one.
     let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
-    // `surface = albedo + zoneCol`, then `colour = light * surface` - the
-    // microcode's own order, and on this path both terms are linear.
-    let lit_linear = (texel_linear + zone_linear) * authored + specular;
+    // `surface = zoneCol`, then `colour = light * surface` - the microcode's
+    // own order, and on this path both terms are linear. The Zone surface
+    // **replaces** the albedo rather than adding to it, so `enabled` is the
+    // mix weight: it is 0.0 for every draw that is not a Zone race with all
+    // its inputs resolved, and there this is `texel_linear` unchanged.
+    let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
+    let lit_linear = surface_linear * authored + specular;
     let encoded = pow(
         clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
         vec3<f32>(1.0 / 2.2),
@@ -598,7 +650,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The gamma-domain sum, for the same reason this whole path is gamma: a
     // prelit surface's light is baked into its vertex colours in the space the
     // asset authors, so a linear summand would be the one term shaded twice.
-    let plain = (texel.rgb + zone_gamma) * tint * light;
+    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

@@ -395,6 +395,12 @@ impl ZoneGrade {
     /// *and* the stage's texture decoded. A missing input draws nothing.
     #[must_use]
     pub fn zone_uniform(&self) -> mesh_render::Zone {
+        /// An authored rgb as a `float4` with an unused `.w`, or all-zero
+        /// where the stage authors none.
+        fn rgb0(colour: Option<[f32; 3]>) -> [f32; 4] {
+            let [r, g, b] = colour.unwrap_or([0.0; 3]);
+            [r, g, b, 0.0]
+        }
         let off = mesh_render::Zone::default();
         let (Some(uv_scale), Some(palette)) = (
             self.table.zone_uv_scale(),
@@ -411,8 +417,31 @@ impl ZoneGrade {
             enabled: 1.0,
             _pad: 0.0,
             // The `.w` scales the visualiser glow, which this build does not
-            // draw for want of `zoneTexVis`. Left at zero rather than filled.
+            // draw for want of `zoneTexVis`. Left at zero rather than filled,
+            // even though `Track.EQ brightness` is parsed and is what the
+            // original puts there: carrying a number nothing reads would make
+            // the glow look fed when it is not.
             effect: [r, g, b, 0.0],
+            // `zoneBase*`/`zoneBaseAlt*`, the two rim-lit summands of the
+            // surface: `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, both
+            // exponents inline literals in the microcode.
+            //
+            // **Not a separate family.** These are consumed by 19,958 of the
+            // 20,092 Zone-bearing fragment blocks in `DATA00.PSARC` - more
+            // than `zoneTexInner` is - and co-occur with a sampled `zoneTex*`
+            // in 17,906 of them. Every one of the twelve racing circuits
+            // carries this shape and nothing else. See
+            // `oag_render::mesh_render::Zone` for the census and the second,
+            // arena-only shape it is not.
+            //
+            // The `Track` siblings rather than the `Scene` ones, for the same
+            // reason `effect` above takes `Track.Texture Colour`: HD publishes
+            // these parameters in two paired blocks, and this build binds the
+            // `zoneModeTrack*` texture set, so the track colours are its half
+            // of that pair. Zero where the stage authors nothing, which is the
+            // identity on a summand.
+            base: rgb0(palette.track_base_colour_highlight),
+            base_alt: rgb0(palette.track_base_colour),
         }
     }
 

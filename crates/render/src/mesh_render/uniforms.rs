@@ -443,15 +443,36 @@ impl Light {
 /// here is:
 ///
 /// ```text
-/// zoneUV    = zoneColourTint.xy * (1 - meshUV)
-/// zoneCol   = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
-/// blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
-/// surface   = albedo + zoneCol * (1 - blackMask)
+/// zoneUV  = zoneColourTint.xy * (1 - meshUV)
+/// rim     = 1 - dot(N, toEye)
+/// surface = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
+///         + zoneBase<I|O>.rgb    * rim^10
+///         + zoneBaseAlt<I|O>.rgb * rim^5
 /// ```
 ///
-/// So the Zone recolour lands **only where the material's own diffuse texture
-/// is pure black**: the artists chose what lights up in Zone mode by painting
-/// it black in the ordinary albedo. Confidence 78-82 across those four lines.
+/// **That is the whole surface colour: the material's own albedo does not
+/// enter it.** Which is the finding that carries the look - the original's
+/// Zone frame is near-monochrome because the circuit's diffuse is *gone*, not
+/// because a tint was added over it. The `10` and `5` are inline literals in
+/// the microcode, not parameters, so only the two colours are per-stage.
+///
+/// # Which of the disc's two Zone shapes this is
+///
+/// A census of every `.rcsmaterial` in `DATA00.PSARC` - 20,092 fragment
+/// blocks that name a Zone parameter or sampler - finds exactly two shapes,
+/// with no block in both:
+///
+/// | shape | blocks | `rim^10`/`rim^5` | `blackMask` | albedo RGB |
+/// | --- | ---: | ---: | ---: | ---: |
+/// | `zoneBase` (this one) | 19,958 | all | **none** | 1,832 |
+/// | `zoneAniso` | 134 | none | all | 90 |
+///
+/// And the split is by *environment*: all twelve racing circuits are 100%
+/// `zoneBase` and contain not one `zoneAniso` block, while the `zoneAniso`
+/// shape lives only in `zone_1`..`zone_4`, HD's dedicated Zone arenas.
+/// `zone-shader.md`'s `albedo + zoneCol * (1 - blackMask)` rule is the arena
+/// shape, correct where it was read and generalised from three materials, two
+/// of them arena ones. Confidence 86 on the split, 82 on the missing albedo.
 ///
 /// # Where each field comes from, and what is left out
 ///
@@ -488,12 +509,18 @@ impl Light {
 /// reconstruction rather than peephole reading.
 ///
 /// On top of that, the original applies the variant per material at all:
-/// 1,467 of the disc's 1,590 `.rcsmaterial` files carry one, so 123 do not -
-/// and craft hulls, the sky cube, pads, rockets and the collision wireframe
-/// all reach `mesh.wgsl` here. Wherever one of those carries pure-black texels
-/// it picks up stage colour the original would leave alone. Same shape as the
-/// shared specular exponent and the blanket sun term `mesh.wgsl` already
-/// carries.
+/// 1,467 of the disc's 1,590 `.rcsmaterial` files carry one, so 123 do not.
+/// **Craft are the case that mattered and they are now excluded from the
+/// data rather than by taste**: the twelve `data/materials/ships/*` materials
+/// in `DATA03.PSARC` carry *zero* Zone blocks, as do the 39 under
+/// `data/weapons/materials/`, so the original leaves hulls and rockets
+/// ordinarily shaded through a Zone race. `race::scene::frame` writes
+/// [`Zone::default`] to the ships' own scene buffer for exactly that reason -
+/// a build that dropped the albedo everywhere would blank them.
+///
+/// The sky cube, the pads and the collision wireframe do still reach this
+/// path, and there the recolour is a blanket one - same shape as the shared
+/// specular exponent and the blanket sun term `mesh.wgsl` already carries.
 ///
 /// **The sum happens in each shading path's own colour space.** `zoneTex` is a
 /// texture and takes the same `pow(x, 2.2)` decode every other sample here
@@ -506,21 +533,16 @@ impl Light {
 /// **Three terms of the recovered rule are deliberately absent**, because
 /// nothing on the disc feeds them and this project does not invent:
 ///
-/// 1. `2 * zoneAnisoPalette[pow(rim, zoneAnisoPower)]`, the rim-lit summand:
-///    the palette textures (`0x00c81330`-`0x00c81350`) have no located filling
-///    write, and `zonemode.effectsettings` authors no `Scene.Aniso Power` on
-///    any of its fifteen stages either.
+/// 1. The whole `zoneAniso` shape - `2 * zoneAnisoPalette[pow(rim,
+///    zoneAnisoPower)]` and the `blackMask` gate that comes with it. Its
+///    palette textures (`0x00c81330`-`0x00c81350`) have no located filling
+///    write, and it applies to the four Zone arenas rather than to a circuit,
+///    so it is absent by scope as much as for want of a source.
 /// 2. The visualiser glow, `saturate(N.y - 0.5) * ... * zoneTexVis[band]`: the
 ///    256-entry lookup is built at runtime from a static table inside the
 ///    executable, which is game content this project may not carry, and the
 ///    build loop's own arithmetic does not yet close.
-/// 3. `zoneBaseInner`/`zoneBaseOuter` and their `Alt` siblings, which are the
-///    *untextured* material family - `colour = zoneBase.rgb * rim^10 +
-///    zoneBaseAlt.rgb * rim^5`, with both exponents inline literals in the
-///    microcode. Their inputs *are* located (`Scene.Base Colour Highlight` and
-///    `Scene.Base Colour`); what is missing is the per-material branch that
-///    would tell that family from this one.
-/// 4. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
+/// 3. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
 ///    and the radius is a field of a per-environment struct whose own writer is
 ///    unfound. It does not matter here: the split is a *stage-transition
 ///    wavefront* between stage `n` and stage `n - 1`, and this build never has
@@ -547,10 +569,28 @@ pub struct Zone {
     /// missing input draws nothing rather than something approximate.
     pub enabled: f32,
     pub _pad: f32,
-    /// `zoneEffect<Inner|Outer>` - the showing stage's `Scene.Texture Colour`
-    /// in `.rgb`. The `.w` scales the glow this build does not draw and is
-    /// left at zero rather than filled with a stand-in.
+    /// `zoneEffect<Inner|Outer>` - the showing stage's `Track.Texture Colour`
+    /// in `.rgb`. `Track`, not `Scene`, because the texture set decides it -
+    /// see the paired publication above. The `.w` scales the glow this build
+    /// does not draw and is left at zero rather than filled with a stand-in.
     pub effect: [f32; 4],
+    /// `zoneBase<Inner|Outer>` in `.rgb` - the showing stage's
+    /// `Track.Base Colour Highlight`, the `rim^10` summand's colour. `.w`
+    /// unused; the exponent is an inline literal in the microcode, not a
+    /// parameter, so there is nothing per-stage to carry for it.
+    ///
+    /// **Carried, not drawn.** `zoneBase*` belongs to the Zone variant's
+    /// *untextured* material family (`cf_constantcolourglow` and its kin),
+    /// where the whole surface is the two rim terms and there is no albedo to
+    /// add them to. Adding them on this path - the textured one - would light
+    /// every surface the original leaves alone. The field exists so the value
+    /// reaches the GPU in one piece the day a per-material branch can select
+    /// that family; `mesh.wgsl` declares it and reads it nowhere.
+    pub base: [f32; 4],
+    /// `zoneBaseAlt<Inner|Outer>` in `.rgb` - the showing stage's
+    /// `Track.Base Colour`, the `rim^5` summand's colour. `.w` unused, and
+    /// carried rather than drawn, as [`Self::base`].
+    pub base_alt: [f32; 4],
 }
 
 /// Everything bind group 2 carries: the fog volume and the light rig.
@@ -596,8 +636,8 @@ impl Scene {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Zone>() == 32,
-    "mesh.wgsl's Zone is two vec4s"
+    std::mem::size_of::<Zone>() == 64,
+    "mesh.wgsl's Zone is four vec4s"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),
