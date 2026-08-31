@@ -355,11 +355,19 @@ first. The microcode, the parameter-name preimages and the disc-wide reach are
 on [`rcsmaterial.md`](../formats/rcsmaterial.md), "A surface scrolls off an
 engine `time`".
 
-**It is measured and not wired, and wiring the scroll by itself would change no
-pixel.** The family this reads adds its scrolled second texture to the diffuse;
-`mesh.wgsl` *selects* between the two textures instead, so there is nothing for
-a scroll to move until the additive emissive layer exists - so the additive
-layer is what to land, and the clock rides in with it.
+**Wired 2026-08-31, layer and clock together.** The family adds its scrolled
+second texture to the diffuse where `mesh.wgsl` *selects* between the two, so
+the layer had to land first and there was nothing for a scroll to move until it
+did. `mesh::slots::ADD_SECOND` is the role bit - the same shape as the
+`ALBEDO_FROM_SECOND` and `ALPHA_FROM_SECOND` beside it, not the per-material
+*lighting* branch that has been refuted twice - and the tint and the two
+coordinate constants ride in a per-material table `mesh_render::Emissives`
+uploads once at build, because all three are authored and only the clock moves.
+
+**119 material slots across the 16 circuits** draw it, which on the built model
+is 62,904 of Modesto Heights' 1,151,776 vertices. The shape census that cleared
+it and the reach that sized it are on
+[`rcsmaterial.md`](../formats/rcsmaterial.md).
 
 **`uvScale`/`uvOffset` are not the cheaper first step they looked like.** They
 are the disc's two commonest parameters and this section used to name them as

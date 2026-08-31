@@ -112,7 +112,9 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("{records} material records, {carries} carry the pair, {identity} of those are the identity");
+    println!(
+        "{records} material records, {carries} carry the pair, {identity} of those are the identity"
+    );
     println!("\ndistinct values, commonest first:");
     let mut rows: Vec<_> = values.into_iter().collect();
     rows.sort_by_key(|(_, n)| std::cmp::Reverse(*n));

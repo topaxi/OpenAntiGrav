@@ -137,6 +137,9 @@ pub mod psp2;
 mod skin;
 use skin::{flips, picks, roles, skin, variants};
 
+mod emissive;
+pub use emissive::EMISSIVE_LIMIT;
+
 mod place;
 use place::{is_world_baked, node_geometry, referenced};
 
@@ -680,6 +683,16 @@ fn build_with_options(
             *packed |= slots::FLIP_V;
         }
     }
+    // The additive glow, read off the same resolved variant the roles are -
+    // and after the flip, because it writes into the same word. See
+    // `mesh::slots::ADD_SECOND`.
+    out.emissive = emissive::emissive(
+        &model,
+        &material_variants,
+        &seconds,
+        &mut material_slots,
+        textures,
+    );
     out.textures = skins;
     out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in

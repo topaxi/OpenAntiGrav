@@ -34,46 +34,6 @@ const ARCHIVES: &[&str] = &[
 /// `~crc32("time")`.
 const TIME: u32 = 0x906b_67ba;
 
-/// Whether `program` **adds** a sample from `unit` into its output rather than
-/// replacing or modulating with it.
-///
-/// The Rust counterpart of `scripts/hd_time_shapes.py`'s `accumulate` test,
-/// and deliberately the same shape: taint the registers a sample from `unit`
-/// reaches, then look for a `MAD`/`ADD` whose destination is also one of its
-/// sources. A register is `(ordinal, half)` because `R0` and `H0` are
-/// different registers with the same ordinal.
-fn accumulates(program: &fragment::Program, unit: u8) -> bool {
-    let reg = |source: fragment::Source| match source {
-        fragment::Source::Register { index, half } => Some((index, half)),
-        _ => None,
-    };
-    let mut sampled: std::collections::HashSet<(u8, bool)> = Default::default();
-    let mut accumulated = false;
-    for instruction in &program.instructions {
-        let dst = (instruction.dst, instruction.dst_half);
-        let sources: Vec<(u8, bool)> = instruction.operands().filter_map(reg).collect();
-        if instruction.is_texture() {
-            if instruction.unit == unit {
-                sampled.insert(dst);
-            }
-            continue;
-        }
-        let touches = sources.iter().any(|s| sampled.contains(s));
-        if !touches {
-            continue;
-        }
-        // `MAD` and `ADD` by name rather than by opcode number: the first
-        // draft of the Python sweep read `TEX` as `0x11`, which is `FLR`, and
-        // failed silently.
-        if matches!(instruction.name(), Some("MAD" | "ADD")) && sources.contains(&dst) {
-            accumulated = true;
-        }
-        // The taint travels, so a sample folded through a tint still counts.
-        sampled.insert(dst);
-    }
-    accumulated
-}
-
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()
         .nth(1)
@@ -140,7 +100,7 @@ fn main() -> anyhow::Result<()> {
                 // Unit 1 is the second texture on every material this reading
                 // has met; `skin::units` is what says so per material and is
                 // what a real implementation would ask.
-                let accumulating = accumulates(&program, 1);
+                let accumulating = program.accumulates(1);
                 adds += usize::from(accumulating);
 
                 let second = model.lightmaps.get(slot).is_some_and(Option::is_some);
@@ -156,13 +116,11 @@ fn main() -> anyhow::Result<()> {
                  {has_second} have a decoded second texture, {not_lightmap} are not \
                  lightmapped -> {reachable} would draw the layer"
             );
-            for (n, v) in totals.iter_mut().zip([
-                declares_time,
-                adds,
-                has_second,
-                not_lightmap,
-                reachable,
-            ]) {
+            for (n, v) in
+                totals
+                    .iter_mut()
+                    .zip([declares_time, adds, has_second, not_lightmap, reachable])
+            {
                 *n += v;
             }
         }

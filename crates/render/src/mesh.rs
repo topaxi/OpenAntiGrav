@@ -335,6 +335,15 @@ pub struct Model {
     /// same channels still sit at different places in the tree, so they are
     /// different matrices and cannot share a slot.
     pub anim_nodes: Vec<AnimNode>,
+    /// The scrolling glow each material adds to its albedo, indexed by
+    /// [`slots::material_index`] minus one.
+    ///
+    /// Empty on every title but Wipeout HD, whose materials are the only ones
+    /// that **add** their second texture rather than selecting it. Deduplicated
+    /// by value, like [`Self::anim_tracks`] and for the same reason: a
+    /// circuit's animated materials collapse to a handful of distinct
+    /// `(tint, rate)` pairs and the shader's table stays small.
+    pub emissive: Vec<Emissive>,
 }
 
 impl Model {
@@ -369,6 +378,7 @@ impl Model {
             anim_tracks: Vec::new(),
             node_vertex_ranges: Vec::new(),
             anim_nodes: Vec::new(),
+            emissive: Vec::new(),
         }
     }
 }
@@ -378,6 +388,9 @@ pub use vertex::{GpuVertex, slots};
 
 mod anim_node;
 pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
+
+mod emissive;
+pub use emissive::Emissive;
 
 mod external;
 pub use external::geometry_is_external;
@@ -928,6 +941,9 @@ fn build_class(
 
     let mut model = Model {
         anim_nodes,
+        // A PSP or PS2 material selects its textures and never adds one; the
+        // additive glow is Wipeout HD's, and `mesh::rcs` fills this in.
+        emissive: Vec::new(),
         label: label.to_string(),
         vertices,
         indices,

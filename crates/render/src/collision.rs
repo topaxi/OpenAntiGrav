@@ -293,6 +293,7 @@ pub fn build_model(
         mesh_count,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
     }
 }
 

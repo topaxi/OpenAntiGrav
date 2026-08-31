@@ -87,6 +87,7 @@ fn moving_quad(xform: u32) -> Model {
 
         flame: None,
         node_vertex_ranges: Vec::new(),
+        emissive: Vec::new(),
         anim_nodes: vec![AnimNode {
             transform: vex::AnimTransform {
                 translation,

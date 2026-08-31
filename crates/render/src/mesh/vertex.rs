@@ -188,6 +188,48 @@ pub mod slots {
     /// albedo is the picture and the rig must not touch it.
     pub const EMISSIVE: u32 = NO_AMBIENT | NO_SUN;
 
+    /// The second texture is a glow this material **adds** to its albedo,
+    /// rather than one of the two it selects between.
+    ///
+    /// Wipeout HD's emissive family, and the one shape that separates it from
+    /// every other two-texture material: `MAD H0.xyz, H0.wwww, H1, H0` -
+    /// albedo plus diffuse-alpha times the tinted, scrolling sample from
+    /// unit 1. Both [`ALBEDO_FROM_SECOND`] and [`ALPHA_FROM_SECOND`] above
+    /// *replace*, so without this bit those surfaces draw their diffuse and
+    /// their glow is simply absent.
+    ///
+    /// Read per material by `oag_formats::rcsmaterial::fragment::Program::accumulates`,
+    /// whose own doc carries the disc-wide evidence. **Never set together with
+    /// [`SECOND_IS_LIGHTMAP`]**: adding the circuit's baked atlas paints a
+    /// shadow map as a glow, the same refusal `skin::roles` already makes for
+    /// albedo and coverage.
+    ///
+    /// The tint and the scroll this layer needs are floats rather than bits,
+    /// and travel in [`super::Emissive`] through the index bits below.
+    pub const ADD_SECOND: u32 = 1 << 8;
+
+    /// Where a material's index into [`Model::emissive`](super::Model::emissive)
+    /// sits in this word, plus one; `0` is "this material has none".
+    ///
+    /// **The high half, because the roles are bit flags and the index is a
+    /// number.** Putting it here rather than in a tenth vertex attribute costs
+    /// nothing: the word is already `u32`, already per material, and already
+    /// `@interpolate(flat)`, and every shader read of the low half is a masked
+    /// bit test that an index above bit 15 cannot disturb. A circuit's
+    /// materials number in the hundreds against the 65,535 this allows.
+    pub const MATERIAL_SHIFT: u32 = 16;
+
+    /// The mask covering every role bit - the low half of the word, with
+    /// [`MATERIAL_SHIFT`]'s index excluded.
+    pub const ROLE_MASK: u32 = (1 << MATERIAL_SHIFT) - 1;
+
+    /// This material's [`Model::emissive`](super::Model::emissive) index plus
+    /// one, or `0` where it has no entry.
+    #[must_use]
+    pub const fn material_index(packed: u32) -> u32 {
+        packed >> MATERIAL_SHIFT
+    }
+
     /// Which channel of that texture the alpha is, in bits 3 and 4.
     #[must_use]
     pub const fn alpha_channel(channel: u32) -> u32 {

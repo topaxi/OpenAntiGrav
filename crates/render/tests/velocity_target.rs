@@ -66,6 +66,7 @@ fn triangle_model() -> Model {
         mesh_count: 1,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
         vertices: vec![
             vertex([-0.8, -0.8, 0.5]),
             vertex([0.8, -0.8, 0.5]),

@@ -1429,13 +1429,44 @@ Modesto Heights' 859. `and_arrowmaterial`, `animating_traffic`,
 among them - the same content classes Pulse animates through its keyframe
 blocks.
 
-**None of it is wired, and wiring the scroll alone would change no pixel.**
-`mesh.wgsl` samples the second texture at the diffuse coordinate and *selects*
-between the two, where this family **adds** one to the other. So the scroll
-has nothing to scroll until the additive emissive layer exists, and that is
-the per-material shader path this page's own "What is acted on, and what is
-not" defers. `scene.time` is already bound and already reaches the shader; the
-flame path is the only thing reading it.
+**Wired 2026-08-31**, as `mesh::slots::ADD_SECOND` plus a per-material table.
+This section previously ended "none of it is wired, and wiring the scroll
+alone would change no pixel", which was right about the ordering: `mesh.wgsl`
+*selects* between its two textures where this family **adds** one to the
+other, so the layer had to come first and the clock rides in with it.
+
+What decided it was a shape census rather than a name
+(`scripts/hd_time_shapes.py`): **290 of 291** materials take `time` into a
+texture coordinate and **2,230 of 2,305 blocks** combine the sample by
+accumulate. The 35 materials that are not *purely* accumulate all mix
+accumulating blocks with multiply-only ones - the pass dimension, which
+`skin::variants` already resolves - and exactly one material on the disc,
+`hd_waketrail`, is multiply-only throughout. That is one coherent change, not
+the classifier problem that killed `output_lit_by`.
+
+**What it reaches**, from `crates/render/examples/hd_emissive_reach.rs`, which
+joins the three conditions the layer needs all of - the lit variant's program
+accumulates, the second `.gtf` decoded, and it is not the baked atlas:
+
+| | Count |
+| --- | ---: |
+| Slots declaring `time` across 16 circuits | 236 |
+| Accumulating | 189 |
+| With a decoded second texture | 222 |
+| Not lightmapped | 169 |
+| **Drawing the layer** | **119** |
+
+On the built model that is **62,904 of Modesto Heights' 1,151,776 vertices**,
+24,296 of Talon's Junction's and 17,448 of Anulpha Pass's -
+`crates/render/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
+glow's own pixel contribution by rendering the same model with the bit cleared.
+
+**One approximation is stated rather than hidden**: the program addresses unit
+1 from `f[TC3]`, and whether the UV set feeding that interpolator is the one
+this renderer carries as `texcoord` is unestablished - the same open question
+`skin::roles` already has for the second texture's own sampling. Only `v`
+moves, so a mismatch shows as a glow tiled wrongly rather than as a missing
+one.
 
 ### The parameter names, by preimage
 

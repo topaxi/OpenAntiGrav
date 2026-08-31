@@ -565,6 +565,87 @@ impl Program {
         }
         file[output.0][output.1]
     }
+
+    /// Whether a sample from `unit` is **added into** the program's result
+    /// rather than replacing or modulating it.
+    ///
+    /// This is the one question that separates Wipeout HD's emissive family
+    /// from every other two-texture material, and the renderer needs it
+    /// because `mesh.wgsl` *selects* between its two textures where these
+    /// *add* one to the other: `MAD H0.xyz, H0.wwww, H1, H0` is albedo plus
+    /// diffuse-alpha times the tinted emissive sample. Without it those
+    /// surfaces draw their diffuse alone and their glow is simply absent.
+    ///
+    /// **The test is an accumulate**: a `MAD` or `ADD` whose destination is
+    /// also one of its sources, reached by a value the unit's sample flows
+    /// into. The taint travels, so a sample folded through a tint still
+    /// counts, and a register is `(ordinal, half)` for the same reason
+    /// [`output_texels`](Self::output_texels) keeps the two files apart -
+    /// `H2` and `R2` were never the same storage.
+    ///
+    /// **Confidence 88, from a disc-wide sweep rather than from the one block
+    /// it was read on.** `scripts/hd_time_shapes.py` runs the same predicate
+    /// over every fragment block of every material declaring the engine's
+    /// `time`: 2,230 of 2,305 blocks accumulate, 290 of 291 materials take
+    /// `time` into a texture coordinate, and the 35 materials that are not
+    /// *purely* accumulate all mix accumulating blocks with multiply-only
+    /// ones - the pass dimension, not a second combining rule. Exactly one
+    /// material on the disc is multiply-only throughout.
+    ///
+    /// Straight-line code is assumed, as everywhere else in this module: no
+    /// shipped fragment program here was found with a branch.
+    #[must_use]
+    pub fn accumulates(&self, unit: u8) -> bool {
+        let mut sampled: std::collections::BTreeSet<(u8, bool)> = Default::default();
+        for insn in &self.instructions {
+            let dst = (insn.dst, insn.dst_half);
+            if insn.is_texture() {
+                if insn.unit == unit {
+                    sampled.insert(dst);
+                } else {
+                    // A fetch overwrites, so a register reused by another
+                    // unit's sample stops carrying this one's.
+                    sampled.remove(&dst);
+                }
+                continue;
+            }
+            let sources: Vec<(u8, bool)> = insn
+                .operands()
+                .filter_map(|source| match source {
+                    Source::Register { index, half } => Some((index, half)),
+                    _ => None,
+                })
+                .collect();
+            if !sources.iter().any(|s| sampled.contains(s)) {
+                // Not fed by the sample, but it may still clobber the register
+                // that was holding it.
+                sampled.remove(&dst);
+                continue;
+            }
+            // **The destination has to be the *addend*, not just present.**
+            // `MAD H0, H0, H1, H3` names `H0` on both sides and is a multiply
+            // of `H0` by the sample, not an accumulate of the sample into it;
+            // the real shape is `MAD H0.xyz, H0.wwww, H1, H0`, where the third
+            // operand is what is added to. `ADD` is commutative, so either
+            // operand counts there.
+            let addend = match insn.name() {
+                Some("MAD") => {
+                    insn.operands().nth(2)
+                        == Some(Source::Register {
+                            index: dst.0,
+                            half: dst.1,
+                        })
+                }
+                Some("ADD") => sources.contains(&dst),
+                _ => false,
+            };
+            if addend {
+                return true;
+            }
+            sampled.insert(dst);
+        }
+        false
+    }
 }
 
 #[cfg(test)]
