@@ -437,12 +437,18 @@ but no shader has been read and no runtime trace taken.
   an audio device, so any analysis has to stay render-side or be derived from
   the sample stream deterministically
   ([determinism.md](../architecture/determinism.md)).
-- **It does not license drawing anything yet.** Knowing the effect is a
-  spectrum analyser says nothing about how HD's fragment program combines
-  `zoneTexInner`, `zoneTexVis` and the `zoneBase*`/`zoneEffect*` parameters.
-  Inventing a plausible bar display from the names is exactly the stand-in
-  `CLAUDE.md` forbids - and a legible-looking one would be the hardest kind to
-  spot as wrong.
+- ~~It does not license drawing anything yet.~~ **Superseded the same day: the
+  shader is read.** The combination rule is recovered from the material
+  microcode in
+  [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md), and it
+  corroborates the observation from two directions the observation did not
+  reach: `zoneTexVis` is a **256-entry lookup keyed on the zone texture's
+  alpha**, the shipped textures really do carry discrete per-texel band indices
+  (`zonemodetrack10`'s alpha takes exactly the ten consecutive values 31..40),
+  and the glow term is gated to **up-facing surfaces** (`saturate(N.y - 0.5)`)
+  - i.e. the microcode itself says *the floor* displays it. What remains open
+  is only whether the 256 palette entries are rewritten per frame with live
+  audio levels, which is a memory question and needs a watchpoint.
 
 
 ## Open

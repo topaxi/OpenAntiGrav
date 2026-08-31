@@ -3612,6 +3612,9 @@ python3 scripts/ps3-toc.py resolve 0x003d6dc8 -0x5A84    # -> 0x00c7dfb0
 
 ## See also
 
+- [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
+  read out of the material microcode: the Zone effect is a variant compiled
+  into 1,467 of the disc's `.rcsmaterial` files, not an engine program
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
 - `docs/formats/envsettings.md` - `FUN_003f3fb0`'s prior identification (sky/skycube loading)
 - `docs/ghidra/functions/ps3-hdfury-eu/memory.md` - the TOC defect this whole page works around
