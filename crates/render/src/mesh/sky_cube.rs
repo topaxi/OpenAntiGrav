@@ -64,6 +64,33 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// choice (mathematically positive about `+Y`); the caller's report should say
 /// the rotation was applied on those terms.
 ///
+/// **2026-08-31: an attempt to settle the sign against a reference capture,
+/// and why it did not.** The experiment is sound and worth repeating with a
+/// better frame rather than re-derived from scratch:
+///
+/// - `data/reference/hd-capture/racebox/00.png` is Vineta K from the authored
+///   `Start Position` node, and this engine's *full-grid* path still starts
+///   there, so a `--mode single_race` render is a genuinely matched pair -
+///   same arch, same `harimau` sign, same crowd line, no camera fitting
+///   needed. That is the cheap way to compare against these captures, and it
+///   is worth knowing before anyone builds pose-matching tooling for it.
+/// - The test **is** sensitive: negating `rotation_degrees` and re-rendering
+///   visibly moves the sky, so a wrong sign would not hide.
+/// - It still did not settle it. Vineta K's sky is largely a gradient with a
+///   warm glow rather than a localisable feature, and **the original's
+///   exposure blows its sky far brighter than ours**, which shifts apparent
+///   hue everywhere the comparison depends on. The reading leaned toward the
+///   negated sign and was nowhere near strong enough to act on, so nothing
+///   was changed.
+///
+/// What would settle it: a reference frame on a circuit whose sky carries a
+/// *localisable* feature - a sun disc or a distinct cloud mass - with open sky
+/// in view, rather than one seen through an arch. The tone difference above is
+/// the separate exposure/bloom gap, not this.
+///
+/// **Do not "fix" the sign to make a screenshot match** without that: under an
+/// exposure mismatch a hue can be moved either way by eye.
+///
 /// # Errors
 ///
 /// A `.gtf` that does not parse, is not a cubemap, or whose faces do not
