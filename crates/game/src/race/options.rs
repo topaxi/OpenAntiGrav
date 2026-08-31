@@ -366,6 +366,17 @@ pub struct Setup {
     /// [`Self::sounds`]'s rule applies unchanged: a milestone that will not
     /// resolve plays nothing rather than a substitute.
     pub announcer: crate::audio::sfx::Announcer,
+    /// Zone mode's speed-class announcer, [`Self::announcer`]'s sibling,
+    /// decoded from this title's own `oag_title::ZoneClassAnnouncer` when it
+    /// has one.
+    pub class_announcer: crate::audio::sfx::ClassAnnouncer,
+    /// This title's own zone-number-to-speed-class ladder, when it is
+    /// recovered - the same [`oag_title::ZoneStages`]
+    /// [`crate::race::zone_grade::ZoneGrade`] carries, copied here so
+    /// [`Self::class_announcer`] can be triggered off the same edge without
+    /// reaching into the render-facing scene state to get it. `None` on every
+    /// title but HD/Fury, which is `oag_title::ZoneStages`' own standing today.
+    pub zone_stages: Option<&'static oag_title::ZoneStages>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

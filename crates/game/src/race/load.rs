@@ -7,6 +7,7 @@
 
 use super::*;
 
+mod audio;
 mod cameras;
 mod environment;
 mod geometry;
@@ -830,21 +831,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    // The same shape for sound, and for the same reason: adding a cue is adding
-    // its name and its trigger, never a loader. Zone races read `ship_zone.bnk`
-    // instead of `ship.bnk` - a different bank with the same cue names.
-    let sounds = crate::audio::sfx::Banks::load(
-        &mut archives,
-        title.race.sounds,
-        options.mode == Mode::Zone,
-    );
-    report.extend(sounds.report.iter().cloned());
-
-    // Loaded regardless of mode, on the same terms `sounds` is: an announcer
-    // with nothing to say (not Zone, or a title with no recovered ladder) is
-    // an empty map and costs nothing to carry.
-    let announcer = crate::audio::sfx::Announcer::load(&mut archives, title.race.zone_announcer);
-    report.extend(announcer.report.iter().cloned());
+    let (sounds, announcer, class_announcer) =
+        audio::banks_and_announcers(&mut archives, title.race, options.mode, &mut report);
 
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own. See
@@ -968,6 +956,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             effects,
             sounds,
             announcer,
+            class_announcer,
+            zone_stages: title.race.zone_stages,
             speedup_pads,
             weapon_pads,
             weapons,

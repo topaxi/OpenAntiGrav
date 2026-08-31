@@ -50,8 +50,8 @@ pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
 pub use race::{
-    RaceDefaults, SoundBanks, ZoneAnnouncer, ZoneCircuit, ZoneCraft, ZonePalette,
-    ZoneStageTextures, ZoneStages,
+    RaceDefaults, SoundBanks, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft,
+    ZonePalette, ZoneStageTextures, ZoneStages,
 };
 
 /// One title's release-level facts.

@@ -230,6 +230,62 @@ fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
     );
 }
 
+/// Structural checks - the bank names these cues, in this order, at these
+/// indices - are `hd_title_ground_truth.rs`'s job. This is the layer above,
+/// on the same terms as [`wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not`]:
+/// that a cue reported as loaded actually decodes to a waveform, not a report
+/// line that reads well and a silent voice.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let opened =
+        oag_game::title::open_source(&path.display().to_string(), Vec::new()).expect("opening HD");
+    let mut archives = opened.archives;
+    let announcer = oag_game::audio::sfx::ClassAnnouncer::load(
+        &mut archives,
+        opened.title.race.zone_class_announcer,
+    );
+    for line in &announcer.report {
+        println!("{line}");
+    }
+    assert!(!announcer.is_empty(), "the class announcer loaded nothing");
+
+    let mut rng = oag_core::Rng::new(3);
+    let decoded: Vec<u32> = (1..=14)
+        .filter(|&stage| announcer.pick(stage, &mut rng).is_some())
+        .collect();
+    // **Thirteen of fourteen, not all fourteen.** Stage 11 (`MR_SUZ`, "Super
+    // Zen") is the one miss: both of its waveforms are in the second,
+    // unidentified codec `docs/formats/psp-audio.md`'s "A third of HD's
+    // waveforms are not PS-ADPCM" section already names as a disc-wide gap,
+    // and unlike stages 12-14 it has no PS-ADPCM alternate to fall back to.
+    // So this class is silent in this port today - not a wiring bug, and not
+    // invented around; the report line says so and this pins that it keeps
+    // saying so.
+    assert_eq!(
+        decoded,
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14],
+        "HD's speed-class announcer's decodable set changed"
+    );
+    let says = |needle: &str| announcer.report.iter().any(|l| l.contains(needle));
+    assert!(
+        says("MR_SUZ"),
+        "the one silent class stopped being reported at all"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_collision_cue_decodes_to_fifteen_different_impacts() {

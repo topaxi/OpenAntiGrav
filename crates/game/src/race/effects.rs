@@ -815,6 +815,27 @@ impl Race {
         std::mem::take(&mut self.announcements)
     }
 
+    /// The decoded Zone speed-class announcer this race loaded.
+    #[must_use]
+    pub fn class_announcer(&self) -> &crate::audio::sfx::ClassAnnouncer {
+        &self.class_announcer
+    }
+
+    /// Raises a Zone speed-class announcement, to be drained the same tick.
+    ///
+    /// Whether `stage` actually names a loaded cue is
+    /// [`Self::class_announcer`]'s question, not this call's - same split as
+    /// [`Self::push_announcement`].
+    pub(super) fn push_class_announcement(&mut self, stage: u32) {
+        self.class_announcements.push(stage);
+    }
+
+    /// Takes the speed-class stages this tick raised, leaving the queue
+    /// empty. Same per-tick-output shape as [`Self::drain_announcements`].
+    pub fn drain_class_announcements(&mut self) -> Vec<u32> {
+        std::mem::take(&mut self.class_announcements)
+    }
+
     /// Whether the player's craft is mid-explosion.
     ///
     /// A *level*, like [`Self::shield_is_up`] and for the same reason:

@@ -173,7 +173,7 @@ than one shared table:
 | --- | --- | --- |
 | Pulse (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `60`, `70`, `80`, `90`, `100` | - |
 | Pure (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `75`, `100` | `zone_bronze`/`silver`/`gold`, `bronze_med`/`silver_med`/`gold_med`, `ship_destroyed`, `ready`, `go` |
-| Wipeout HD/Fury (`DATA01.PSARC`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`, `60`, `70`, `80`, `90`, `100` | `ready`, `321_GO`, `go`, `RS_1_READY`, `RS_2_GO`, eleven `MR_*` speed-class names (`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, plus `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`), `HBEAT`/`HBEAT_GO`/`HBEAT_ZCHANGE` |
+| Wipeout HD/Fury (`DATA01.PSARC`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`, `60`, `70`, `80`, `90`, `100` | `ready`, `321_GO`, `go`, `RS_1_READY`, `RS_2_GO`, `energycritical`, `c_CLEAR`, `PERFECT_LAP`, `NEW_LAP_REC`, `ZONEMALE`, fourteen `MR_*` speed-class names (`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, `MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP`), `HBEAT`/`HBEAT_GO` |
 
 Every numbered cue reads as two waveforms on Pulse and HD (an alternate take,
 the same shape [`Bank::pick`](../../crates/game/src/audio/sfx.rs) already draws
@@ -198,12 +198,69 @@ this, so their ladders are attributed by the same "ascending thresholds, one
 title fact" pattern [`oag_title::ZoneCraft`] and [`oag_title::ZoneCircuit`]
 already carry, not by a second Zone_Update.
 
-**HD's speed-class cues are a different layer this does not wire.** `MR_VEN`,
+**HD's speed-class cues are a second, independent ladder, now wired.** `MR_VEN`,
 `MR_FLA`, `MR_RAP`, `MR_PHA` and friends read as Venom/Flash/Rapier/Phantom-
-shaped speed-class names, which is what HD's Zone HUD's `SpeedClass` and
-`NextSpeedClass` text widgets (`docs/ui/hud.md`) suggest they announce. Nothing
-here plays them - which class a zone number maps to, and whether the mapping is
-even in this bank rather than a table elsewhere, is unread.
+shaped speed-class names, matching HD's Zone HUD's `SpeedClass` and
+`NextSpeedClass` text widgets (`docs/ui/hud.md`). **2026-08-31: HD ships them
+twice.** Extracted and parsed directly (`oag_formats::sblk`, not assumed): a
+**dedicated** bank, `Data\Sound\speech_class.bnk`, names `ZONEMALE` at cue `0`
+plus fourteen consecutive cues at `1`-`14` - `MR_SVE`, `MR_VEN`, `MR_SFL`,
+`MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
+`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - nothing else. The same fourteen, in the
+same order, are also folded into the general `speech_zone.bnk` at cue indices
+`26`-`39`. That is a 14/14 order match against [`oag_title::ZoneStages`]'
+(`crates/title/src/race.rs`) own fourteen non-`Start` HD stage names, and it is
+what `oag_title::ZoneClassAnnouncer` and
+[`crate::audio::sfx::ClassAnnouncer`](../../crates/game/src/audio/sfx/announcer.rs)
+now play - fired on the same `ZoneStages::stage_for` edge the HUD text and the
+colour grade already key off, since no call site in HD's own executable has
+been read for this ladder either. See `crates/hd/tests/hd_title_ground_truth.rs`'s
+`the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index` for
+the ground truth.
+
+**Thirteen of the fourteen actually decode; `MR_SUZ` ("Super Zen") does not.**
+Checked by playing the bank, not just parsing its directory: both of `MR_SUZ`'s
+own waveforms land in the second, unidentified codec [below](#a-third-of-hds-waveforms-are-not-ps-adpcm)
+already names as a disc-wide gap, with no PS-ADPCM alternate to fall back to -
+unlike `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`, which each carry one PS-ADPCM take
+alongside two in the other codec and so still play. So a Zone race reaching
+Super Zen plays no class line today; the load report says so
+(`class announcer: MR_SUZ not loaded: ...`) rather than staying silent about
+it, and `crates/game/tests/sfx_ground_truth.rs`'s
+`wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues` pins the
+exact set so a codec fix - or a regression - shows up as a changed list rather
+than an unnoticed drift.
+
+**The two ladders can overlap, and nothing arbitrates it.** `ZONE_STAGES`
+steps at zones 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75;
+`ZONE_ANNOUNCER.milestones` are 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70,
+80, 90, 100. Five zone numbers - 5, 20, 35, 50, 60 - are on both lists, so at
+each one this port raises a milestone announcement and a class announcement on
+the same tick, both `Bus::Speech`, both `gain: 1.0`, both mixed in the same
+`Audio::race_tick` call - "Zone 5" and "Flash" (or whichever class lands
+there) playing over each other. Whether the original does the same, ducks one
+under the other, or the two ladders' triggers never coincide there for a
+reason unrecovered on this axis, is unread; ruled out is that the tables
+themselves disagree - they were both read straight off the disc. A maintainer
+who plays past one of the five zones above can settle which case this is.
+
+**A candidate for the non-verbal half of a class change, found the same day
+and deliberately left unwired - and the maintainer's own play now
+corroborates that it exists.** `env0_zone.bnk` (HD's Zone environment sound
+bank, not `speech_zone.bnk`) names a cue `ZONEBAR_TRANS` - plausibly "Zone bar
+transition," the HUD ladder widget's own animation - but nothing traces a call
+site for it, and a single unread label is not the fourteen-way order match the
+`MR_*` ladder has. **Asked directly, the maintainer describes the class-change
+sound as a spoken class name and a non-verbal tone together, not one or the
+other** - independent evidence that a second, non-verbal cue really is there
+to find, strengthening the case for chasing `ZONEBAR_TRANS`'s trigger next
+rather than treating it as a name-only guess. **This entry previously also
+listed `HBEAT_ZCHANGE` as a
+third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly this session
+and is wrong - `speech_zone.bnk` names exactly 42 cues (`cue_count`, read off
+the bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears
+anywhere in the file.** Corrected here rather than left to be re-discovered
+wrong a second time.
 
 Ported as [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs):
 one bank loaded per race, the numbered cues decoded by name, and a cue fires

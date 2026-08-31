@@ -77,7 +77,7 @@ use super::{Audio, TICK_HZ};
 mod announcer;
 mod banks;
 mod engine;
-pub use announcer::Announcer;
+pub use announcer::{Announcer, ClassAnnouncer};
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
 pub use engine::Engine;
@@ -149,7 +149,11 @@ impl Audio {
     pub fn race_tick(&mut self, race: &mut crate::race::Race) {
         let cues = race.drain_cues();
         let announcements = race.drain_announcements();
-        if race.sounds().is_empty() && race.announcer().is_empty() {
+        let class_announcements = race.drain_class_announcements();
+        if race.sounds().is_empty()
+            && race.announcer().is_empty()
+            && race.class_announcer().is_empty()
+        {
             return;
         }
         let voices = self.sfx.get_or_insert_with(|| {
@@ -166,6 +170,7 @@ impl Audio {
         });
         let banks = race.sounds();
         let announcer = race.announcer();
+        let class_announcer = race.class_announcer();
         let listener = listener_of(race);
         let craft = craft_positions(race);
         let running = !race.finished();
@@ -214,6 +219,28 @@ impl Audio {
             // degrade `Banks::pick` already gives an unresolved cue.
             for milestone in announcements {
                 let Some((sound, looping)) = announcer.pick(milestone, &mut voices.rng) else {
+                    continue;
+                };
+                let play = if looping {
+                    Play::looping(sound, Bus::Speech)
+                } else {
+                    Play::once(sound, Bus::Speech)
+                };
+                let _ = mixer.play(Play {
+                    gain: 1.0,
+                    pan: None,
+                    ..play
+                });
+            }
+
+            // The Zone speed-class announcer: same shape as the milestone
+            // announcer just above, one voice line per stage this tick
+            // raised. See `race::tick`'s own comment for the edge this queue
+            // is raised on and `oag_title::ZoneClassAnnouncer` for why this
+            // trigger, unlike the milestone one, is not yet read from HD's
+            // own executable.
+            for stage in class_announcements {
+                let Some((sound, looping)) = class_announcer.pick(stage, &mut voices.rng) else {
                     continue;
                 };
                 let play = if looping {

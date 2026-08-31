@@ -46,6 +46,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::PlayerShip,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    // Unread on this title: `data.psarc` is not extracted in this tree, so
+    // its own speed-class bank (if it has one) has not been listed.
+    zone_class_announcer: None,
     // One copy per circuit, which is the arrangement that makes
     // `ZoneCircuit::SameCircuit` above work: the table sits beside the very
     // circuit a Zone race runs on. All ten base circuits ship a byte-identical

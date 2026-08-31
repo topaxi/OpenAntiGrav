@@ -106,6 +106,133 @@ reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
   - they are six screen pixels apart at `n=1` - and a four-row gap can.
   `the_zone_eight_frame_is_reproduced_row_for_row` pins it.
 
+## 2026-08-31, later still: the class-change sound is wired, the class-change blend is not - and why
+
+The maintainer asked whether a class change's blend effect and sound could be
+reproduced. Investigated both; one is, one is written up instead.
+
+**The sound is wired.** `Data\Sound\speech_class.bnk` (`DATA01.PSARC`) is a
+**dedicated** fifteen-cue bank - extracted and parsed directly with
+`oag_formats::sblk`, not assumed from a name list - naming `ZONEMALE` at cue
+`0` and fourteen consecutive cues at `1`-`14`: `MR_SVE`, `MR_VEN`, `MR_SFL`,
+`MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
+`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - a 14/14 order match against this thread's
+own `ZONE_STAGES` non-`Start` names. The same fourteen also live inside the
+general `speech_zone.bnk` at cue indices `26`-`39`, which is where an earlier
+pass of this thread's sibling had already spotted them and left them unwired.
+Now `oag_title::ZoneClassAnnouncer` /
+[`crate::audio::sfx::ClassAnnouncer`](../crates/game/src/audio/sfx/announcer.rs),
+fired on the same `ZoneStages::stage_for` edge the HUD text and the colour
+grade already key off - see `crates/game/src/race/tick.rs`. Ground-truthed
+against the real disc in `crates/hd/tests/hd_title_ground_truth.rs`'s
+`the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index`,
+checking both copies by cue index rather than by trusting either one's own
+print order. **On the same confidence footing this thread's own milestone
+announcer already stands on for HD** - no call site read in the executable for
+either ladder - so this is not a new class of inference, just a second axis of
+the same one.
+
+**Checked that decoded actually means audible, not just that the report reads
+well.** `just play hd --race --mode zone --ticks 1` and
+`crates/game/tests/sfx_ground_truth.rs`'s
+`wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues` both
+confirm thirteen of the fourteen cues decode to real waveforms. **`MR_SUZ`
+("Super Zen") does not** - both its waveforms sit in the second, unidentified
+codec `docs/formats/psp-audio.md`'s "A third of HD's waveforms are not
+PS-ADPCM" section already names as a disc-wide gap, with no PS-ADPCM
+alternate the way `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP` each have. So a Zone race
+reaching Super Zen is silent today, honestly - the load report names the
+miss - rather than quietly. Full detail and the pinned decode set in
+`docs/formats/psp-audio.md`.
+
+**And the two ladders can collide.** `ZONE_STAGES` steps at zones 2, 3, 5, 7,
+12, 16, 20, 27, 35, 42, 50, 60, 75; `ZONE_ANNOUNCER`'s milestones are every
+five to 50 then every ten to 100. Five zone numbers - 5, 20, 35, 50, 60 - are
+on both lists, so this port raises a milestone cue and a class cue on the same
+tick there, both dry speech-bus voice lines mixed together with no
+arbitration. Whether the original does the same is unread; recorded as an open
+question with the exact numbers named, in `docs/formats/psp-audio.md`, rather
+than guessed at either way.
+
+**A candidate for the non-verbal half, found and deliberately left unwired.**
+`env0_zone.bnk` (HD's Zone environment bank, not `speech_zone.bnk`) names a
+cue `ZONEBAR_TRANS` - plausibly the HUD ladder widget's own transition - but
+nothing traces a call site for it, and a single unread label is not the
+fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
+`docs/formats/psp-audio.md` previously listed a third cue, `HBEAT_ZCHANGE`,
+beside `HBEAT`/`HBEAT_GO`. Checked directly this session -
+`speech_zone.bnk`'s own header gives `cue_count = 42`, cues `0`-`41`, and no
+`HBEAT_ZCHANGE` string is anywhere in the file. The claim was wrong and is
+fixed in that doc rather than carried forward.
+
+**The blend is not wired, and the reason is now a complete list rather than a
+single open bullet.** Reread
+[zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+twenty-fourth/twenty-fifth passes with this question in mind. The mechanism
+*is* understood at 78: a Zone stage change is a sphere - centred on
+`zoneOrigin`, radius `zoneColourTint.w` - expanding through the world; inside
+it the new stage's colours apply, outside the old stage's. Three of its inputs
+are specifically unrecovered, not just "the rate":
+
+1. **`zoneOrigin` (`0x00c81550`) has no writer at all**, confidence 82 -
+   zero-initialised once and never touched again in
+   `Environment_UpdateStageBlend`, the one gap in an otherwise unbroken run of
+   vec4s that function writes.
+2. **The radius itself, `H[e].f32@0x08`, has an unchased writer.** Nothing
+   traced what advances it.
+3. **The two schema keys that read as the obvious candidates for the radius'
+   rate - `Transition start speed` and `Transition acceleration` - are flag-2,
+   developer-only fields.** Confirmed from both directions: the schema marks
+   them flag 2, and cross-checked against `effectsettings.md`'s own count of
+   what the four *shipped* files actually author, they are among the eight
+   schema entries no shipped file ever sets. So even the rate's own named
+   handle carries no authored value to read.
+
+Three unknowns, not one: where the wavefront starts, how fast it grows, and
+whether the growth-rate keys the schema declares are ever set to anything at
+all. Wiring a value for any of them would be exactly the "plausible-looking
+stand-in" `CLAUDE.md` rules out - a chosen origin, a chosen speed, on a page
+that already has one recorded instance of that going wrong and surviving
+review. So this stays drawn as it is today: the showing stage's own unblended
+palette, [`ZoneGrade::commit`](../crates/game/src/race/zone_grade.rs)'s own doc
+comment already saying plainly that the transition effect is not drawn because
+its call site is unidentified.
+
+## 2026-08-31, later still: the maintainer's own play answers both discriminators
+
+Asked directly, from the maintainer's memory of playing HD/Fury rather than
+from anything on disc - so this is play-based evidence, the same kind of
+source this thread's own zone-1 and zone-8 HUD frames rest on, not a reading
+with a confidence score.
+
+- **The sound is both together**: a spoken class name and a non-verbal tone at
+  once, not one or the other. That is independent corroboration for wiring the
+  `MR_*` voice line the way this session did, and it strengthens the case for
+  chasing `ZONEBAR_TRANS` next rather than treating it as a name-only guess -
+  the maintainer's own ear says there really is a second, non-verbal cue to
+  find, not just a plausible label sitting in a bank.
+- **The visual is a wavefront**, the maintainer's own word, and they place its
+  direction as travelling from behind the ship toward ahead of it, along the
+  driving direction - stated with a hedge ("I think") on which end leads.
+
+**That second answer corroborates the sphere reading and complicates it in the
+same breath.** A wavefront that tracks the driving direction rather than
+appearing the same everywhere on the circuit is not what a single **static**
+`zoneOrigin` fixed once per race would produce - a sphere centred on one
+motionless world-space point looks the same from any approach angle, and
+nothing about "behind you, catching up" reads off a point that never moves. Two
+readings fit what was said instead: `zoneOrigin` is not static at all but
+re-centred on the ship (or the track position under it) every frame, or the
+sphere's growth is fast enough from a fixed point that what looks like
+"catching up from behind" is really "the near edge of an expanding sphere
+sweeping past" - which would look directionless from the driver's seat rather
+than tracking behind-to-ahead specifically. The maintainer's own hedge on
+which end leads is the detail that would settle between these, and neither
+was distinguishable from the static reading alone. **Still not enough to wire
+anything**: this sharpens what a watchpoint on `zoneOrigin` should look for
+(a value that moves frame to frame versus one written once) rather than
+supplying the value itself.
+
 ## Next Steps
 
 - **Check the grade actually escalates in a long race now**, which nothing has
@@ -114,3 +241,18 @@ reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
 - Look for the same `{threshold, stringId}` shape on **Detonator**, whose own
   ladder is recovered by a different mechanism (`RaceManager->+0x2e10`) and may
   or may not share this table's walker.
+- **An RPCS3 write watchpoint on `zoneOrigin` (`0x00c81550`) and the radius
+  field is the one instrument that could close the blend**, the same way
+  `docs/reverse-engineering/rpcs3-debugger.md` is already the recommended next
+  move for `zoneColourTint`'s own writer. A static fourth sweep is not the
+  move - three have already come back the same way. **Sharpened by the
+  maintainer's own play (see the dated section above)**: watch for whether the
+  value moves frame to frame at all, before reading anything into where it
+  moves to - a wavefront that tracks the driving direction is not what a
+  motionless point produces, so a hit that never changes after the first write
+  would itself be a finding, not just a location.
+- ~~If the maintainer plays past a class change and can say whether the world
+  visibly repaints outward from a point versus changing everywhere at once~~
+  **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,
+  which corroborates the reading; what it corroborates *against* (a fixed
+  world-space `zoneOrigin`) is the open question that answer raises.
