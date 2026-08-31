@@ -47,6 +47,27 @@ writes values straight into the code. The patch chain is
 (count, [16-byte code slots])`, and following it for `clouds.rcsmaterial`
 block 3 is what tied one patched float4 to both the fog coefficient and the
 fog colour; `~crc32("fogColour")` is that parameter's name hash, a preimage.
+**That chain is followed now** ([`fp_patch_slots`]): each patched constant
+prints the parameter hash that fills it instead of the `{0, 0, 0, 0}` the
+unpatched code carries, which is what a reader needs to tell one anonymous
+zero float4 from another.
+
+**Two defects this tool shipped with, both fixed here rather than worked
+around, and both of the kind that mislead silently rather than crash.** The
+patch chain above was described in this docstring but never implemented. And
+fragment instructions are individually **predicated**, which was dropped
+entirely - so both arms of a predicated selection printed as straight-line
+code, and the natural reading of that output is that one arm is dead. Wipeout
+HD's Zone materials express their whole inner/outer selection this way, so
+the second defect hid a mechanism rather than a detail. Anything read with
+this tool before 2026-08-31 and not hand-checked against the raw words should
+be treated as provisional.
+
+Both fixes were swept over 400 materials / 656,219 fragment instructions:
+**no crashes**, 60% of inline constants resolve to the parameter that patches
+them (the rest are genuine literals, which a shader also has), and 3% of
+instructions carry a non-default condition - a rate consistent with real
+predication rather than with a field that is being misread as one.
 """
 
 from __future__ import annotations
@@ -292,8 +313,18 @@ def fp_cond(d1: int) -> str:
     confidence 80: the split was found by diffing instruction pairs that were
     provably dead in linear order, and these field boundaries are the unique
     ones that make the observed default decode as `TR`/identity.
-    `[NE(wwww)]` and `[EQ(wwww)]` are `0x7fd`/`0x7fa`, checked against
-    `cf_constantcolourglow` block `0x3a40`.
+    `[NE(wwww)]` and `[EQ(wwww)]` are `0x7fd`/`0x7fa`. Corroborated on a
+    second copy of `cf_constantcolourglow`, whose blocks carry 20 `EQ(wwww)`
+    against 18 `GE(wwww)` - near-equal counts of complementary predicates on
+    one lane, which is the shape of two arms of a selection and not the shape
+    of noise.
+
+    **One caveat, deliberately not smoothed over**: the field is verified on
+    ALU instructions. Texture ops (`TEX`/`TXP`) also decode to non-default
+    values here, and mixed opcodes carrying conditions is what argues the
+    decode is real rather than an artefact of one encoding - but whether
+    those upper bits mean the same thing for a texture fetch is unchecked.
+    Treat a condition printed on a texture op as unconfirmed.
     """
     cond = (d1 >> 18) & 0x7FF
     if cond == FP_COND_ALWAYS:
