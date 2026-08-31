@@ -137,6 +137,7 @@ mod anisotropy;
 pub use anisotropy::Anisotropy;
 
 mod texture;
+mod zone;
 
 /// The optional device features this renderer uses when the adapter has them.
 ///
@@ -437,26 +438,13 @@ pub fn build(
                 },
                 count: None,
             },
-            // The Zone stage's own texture, in the *scene* group rather than
-            // the per-material one: it is a property of the race, not of a
-            // material slot, so binding it here uploads it once per model
-            // instead of once per slot naming a material.
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
+            // The Zone stage's own texture and sampler, in the *scene* group
+            // rather than the per-material one: it is a property of the race,
+            // not of a material slot, so binding it here uploads it once per
+            // model instead of once per slot naming a material. See
+            // [`zone::layout_entries`].
+            zone::layout_entries()[0],
+            zone::layout_entries()[1],
         ],
     });
 
@@ -471,32 +459,7 @@ pub fn build(
         mapped_at_creation: false,
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
-    // **Black, not white, where there is no Zone texture.** `Scene::off`
-    // leaves `zone.enabled` at zero so the sample is multiplied out anyway,
-    // and a black placeholder means that even a caller that writes a Zone
-    // uniform without a texture adds nothing rather than adding a white sheet
-    // - the failure this project wants from a missing asset is an absence.
-    let zone_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("zone"),
-        address_mode_u: wgpu::AddressMode::Repeat,
-        address_mode_v: wgpu::AddressMode::Repeat,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::MipmapFilterMode::Linear,
-        anisotropy_clamp: anisotropy.clamp(),
-        ..Default::default()
-    });
-    let zone_view = match zone {
-        Some(texture) => texture::upload(
-            device,
-            queue,
-            texture,
-            device
-                .features()
-                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
-        ),
-        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], "no zone stage"),
-    };
+    let (zone_sampler, zone_view) = zone::resources(device, queue, anisotropy, zone);
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &fog_layout,

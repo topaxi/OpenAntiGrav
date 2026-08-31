@@ -450,9 +450,18 @@ impl ZoneGrade {
             if uniform.enabled > 0.0 {
                 let [r, g, b, _] = uniform.effect;
                 let [u, v] = uniform.uv_scale;
+                // A stage whose `Scene.Texture Colour` is black multiplies the
+                // whole term out. Said plainly rather than reported as a draw,
+                // because it is the file's own statement and not a failure:
+                // `Start` is authored that way.
+                let effect = if [r, g, b] == [0.0; 3] {
+                    "adds nothing here, this stage authoring Scene.Texture Colour black".to_string()
+                } else {
+                    format!("draws where the albedo is black, zoneEffect [{r}, {g}, {b}]")
+                };
                 format!(
-                    "; the Zone recolour draws where the albedo is black: stage {} art of \
-                     {decoded}/{named}, zoneEffect [{r}, {g}, {b}], zone UV scale [{u}, {v}]",
+                    "; the Zone recolour {effect}: stage {} art of {decoded}/{named}, \
+                     zone UV scale [{u}, {v}]",
                     self.blend.current,
                 )
             } else {

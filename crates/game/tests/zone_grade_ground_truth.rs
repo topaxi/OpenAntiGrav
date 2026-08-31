@@ -352,3 +352,109 @@ fn open_2048() -> Option<oag_assets::Archives> {
     }
     Some(oag_2048::open(&path.display().to_string()).expect("opening 2048"))
 }
+
+/// **The Zone shader's own parameters assemble off the disc, and the recolour
+/// switches itself off where the file says nothing.**
+///
+/// Both halves matter. `Texture U/V scale` are the two title-wide,
+/// prefix-free keys `Environment_RegisterStageSchema` (`0x003d0b98`) registers
+/// straight into shader parameter 52 - `zoneColourTint.xy` - and
+/// `Scene.Texture Colour` is what `Environment_UpdateStageBlend`
+/// (`0x003da540`) copies into `zoneEffectInner`/`zoneEffectOuter`. Both are
+/// read here off the real file, not from a constant this test carries.
+///
+/// **`Start` authors `Scene.Texture Colour` as pure black**, so a Zone race
+/// resting on stage 0 - which is where HD's own loader leaves it, its trigger
+/// being unrecovered - adds nothing at all. That is the file's statement, and
+/// asserting it is what stops a later "make Zone visible" change from
+/// inventing a value for the stage the disc paints black.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_zone_shader_parameters_come_off_the_disc_and_stage_zero_adds_nothing() {
+    let Some(loaded) = load(oag_race::Mode::Zone) else {
+        return;
+    };
+    let mut grade = loaded.zone_grade.expect("the table loads");
+
+    // Stage 0, `Start`, is where an HD Zone race rests.
+    assert_eq!(grade.blend().current, 0);
+    let start = grade.zone_uniform();
+    // `"Texture U scale"=1.000000` / `"Texture V scale"=1.000000`, the only
+    // two keys in the file with no stage prefix at all.
+    assert_eq!(start.uv_scale, [1.0, 1.0], "zoneColourTint.xy off the file");
+    assert_eq!(
+        start.enabled, 1.0,
+        "every input resolved, so the term is switched on"
+    );
+    // `"0 Start.Scene.Texture Colour"=0.000000 0.000000 0.000000` - so the
+    // multiply is zero and the recolour adds nothing, by the file's own hand.
+    assert_eq!(start.effect, [0.0, 0.0, 0.0, 0.0]);
+
+    // `"1 Sub Venom.Scene.Texture Colour"=0.721569 0.909804 0.964706`.
+    grade.request_stage(1);
+    assert!(grade.commit());
+    let sub_venom = grade.zone_uniform();
+    assert_eq!(sub_venom.uv_scale, [1.0, 1.0]);
+    assert_eq!(sub_venom.enabled, 1.0);
+    assert_eq!(
+        sub_venom.effect,
+        [0.721_569, 0.909_804, 0.964_706, 0.0],
+        "the stage's own Scene.Texture Colour, and a zero glow scale because \
+         zoneTexVis is not fed"
+    );
+
+    // **The unblended stage, not the cross-fade.** `commit` zeroes the weight,
+    // so `palette()` here reads stage 0's black - and the Zone parameters must
+    // not, because the original hands the shader both stages separately and
+    // picks between them with a sphere test rather than mixing them.
+    assert_eq!(grade.blend().weight, 0.0);
+    assert_eq!(
+        grade.palette().scene_texture_colour,
+        Some([0.0, 0.0, 0.0]),
+        "the colour-space cross-fade is at stage 0's end"
+    );
+    assert_ne!(
+        sub_venom.effect[0], 0.0,
+        "zoneEffect must read the showing stage itself, not the cross-fade"
+    );
+
+    // Every one of the fifteen stages carries a texture, so `enabled` never
+    // drops for want of art - the one input that is a decode rather than a
+    // parse.
+    for stage in 0..=grade.last_stage() {
+        grade.request_stage(stage);
+        grade.commit();
+        assert_eq!(
+            grade.zone_uniform().enabled,
+            1.0,
+            "stage {stage} has all three inputs"
+        );
+    }
+}
+
+/// **A title with no `.effectSettings` Zone table draws no Zone recolour**,
+/// and says so rather than reaching for HD's numbers.
+///
+/// Wipeout Pulse ships no such table, so its Zone race has no grade at all and
+/// the scene's Zone uniform stays at its all-zero default - which is the
+/// identity on every albedo.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_title_with_no_zone_table_leaves_every_albedo_alone() {
+    let Some(path) = image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::Zone,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    assert!(
+        loaded.zone_grade.is_none(),
+        "Pulse ships no .effectSettings table"
+    );
+    let zone = oag_render::mesh_render::Zone::default();
+    assert_eq!(zone.enabled, 0.0, "so nothing is added to any albedo");
+}
