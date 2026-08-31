@@ -98,6 +98,10 @@ impl Bus {
 /// is deliberately too short to be mistaken for one.
 const RELEASE_FRAMES: u32 = 64;
 
+/// Below this, a voice's last sample is close enough to zero that cutting it
+/// is not a click and no fade is worth the slot.
+const SILENT: f32 = 0.001;
+
 /// Decoded audio, ready to play.
 ///
 /// Interleaved 16-bit signed, the form both PS-ADPCM decode
@@ -207,11 +211,45 @@ struct Voice {
     /// Output frames left of the fade a stopped voice goes out on, or `None`
     /// while it is sounding normally. See [`RELEASE_FRAMES`].
     release: Option<u32>,
+    /// The voice's own contribution to the previous output frame, kept so that
+    /// a voice which runs off the end of its source can decay from where it
+    /// actually was rather than cutting to zero. See [`Voice::end`].
+    last: [f32; CHANNELS],
+    /// A voice that has no source left, decaying from [`Self::last`]: the
+    /// value it holds and the frames of fade remaining.
+    tail: Option<([f32; CHANNELS], u32)>,
 }
 
 impl Voice {
     fn is_free(&self) -> bool {
-        self.sound.is_none()
+        self.sound.is_none() && self.tail.is_none()
+    }
+
+    /// Retires a voice that has run off the end of its own source.
+    ///
+    /// **Not `Voice::default()`, which is what this was.** Clearing the slot
+    /// outright cuts the waveform at whatever value it last emitted, and on
+    /// Wipeout HD that is routinely most of full scale: 102 of its 112
+    /// `.COLLISIONS` waveforms end above 0.1, the worst at **0.766**, and all
+    /// seven of its `SPEEDUPPAD` alternates do, the worst at **0.804**. Every
+    /// Pulse cue ends under 0.02, which is why the same code sounded clean
+    /// there for a year. A step from four fifths of full scale to zero is a
+    /// click, and a click through a speaker is a thump - heard, correctly, as
+    /// happening *just after* the effect rather than during it.
+    ///
+    /// **This is not the hardware's envelope.** `__sceSasSetADSR`'s release is
+    /// real and unrecovered ([ADR-0018](../../../docs/architecture/adr/0018-audio-mixer-architecture.md)
+    /// defers it), and it is very likely what the original relies on to land
+    /// these cues softly. This is the shortest fade that removes a
+    /// discontinuity and is deliberately too short to be mistaken for one.
+    fn end(&mut self) {
+        let last = self.last;
+        *self = Self::default();
+        // A cue that already ended near zero - which every Pulse cue does -
+        // gets no tail at all, so this costs nothing where nothing is wrong.
+        if last[0].abs().max(last[1].abs()) > SILENT {
+            self.tail = Some((last, RELEASE_FRAMES));
+        }
     }
 
     /// Takes the handle away and starts the fade out.
@@ -356,7 +394,7 @@ impl Mixer {
     pub fn active_voices(&self) -> usize {
         self.voices
             .iter()
-            .filter(|v| !v.is_free() && v.release.is_none())
+            .filter(|v| !v.is_free() && v.release.is_none() && v.tail.is_none())
             .count()
     }
 
@@ -410,6 +448,8 @@ impl Mixer {
             looping: play.looping,
             generation,
             release: None,
+            last: [0.0; CHANNELS],
+            tail: None,
         };
         Some(VoiceId {
             slot: slot as u16,
@@ -585,7 +625,32 @@ impl Mixer {
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
 
+        let buffer_frames = out.len() / CHANNELS;
         for voice in &mut self.voices {
+            // A voice with no source left, decaying to zero from where its
+            // waveform stopped. See `Voice::end`.
+            if let Some((tail, left)) = voice.tail {
+                for (frame, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
+                    let Some(remaining) = left.checked_sub(frame as u32) else {
+                        break;
+                    };
+                    if remaining == 0 {
+                        break;
+                    }
+                    let fade = remaining as f32 / RELEASE_FRAMES as f32;
+                    for (c, sample) in chunk.iter_mut().enumerate() {
+                        *sample += tail[c] * fade;
+                    }
+                }
+                voice.tail = left
+                    .checked_sub(buffer_frames as u32)
+                    .filter(|left| *left > 0)
+                    .map(|left| (tail, left));
+                if voice.tail.is_none() {
+                    *voice = Voice::default();
+                }
+                continue;
+            }
             let Some(sound) = voice.sound.clone() else {
                 continue;
             };
@@ -602,11 +667,21 @@ impl Mixer {
             let frames = sound.frames();
 
             let mut finished = false;
+            // Whether `finished` came from the release fade running out rather
+            // than from the source. A released voice has already been faded to
+            // silence and must not be given a second tail on top of it.
+            let mut released = false;
             // Counted down inside the loop so the fade is per output frame
             // rather than per buffer: a 512-frame buffer would otherwise take
             // the whole release in one step, which is the click this removes.
             let mut release = voice.release;
-            for chunk in out.as_chunks_mut::<CHANNELS>().0 {
+            // Where in this buffer the voice stopped, so the fade below starts
+            // there rather than at the top of the *next* buffer - which would
+            // put a whole buffer of silence between the cut and the fade meant
+            // to cover it.
+            let mut ended_at = 0;
+            for (frame, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
+                ended_at = frame;
                 if frames == 0 {
                     finished = true;
                     break;
@@ -615,6 +690,7 @@ impl Mixer {
                     None => 1.0,
                     Some(0) => {
                         finished = true;
+                        released = true;
                         break;
                     }
                     Some(left) => {
@@ -643,13 +719,42 @@ impl Mixer {
                     sound.frame(index + 1)
                 };
                 for (c, sample) in chunk.iter_mut().enumerate() {
-                    *sample += (a[c] + (b[c] - a[c]) * frac) * gain * channel_gain[c] * fade;
+                    let contribution =
+                        (a[c] + (b[c] - a[c]) * frac) * gain * channel_gain[c] * fade;
+                    *sample += contribution;
+                    // Kept so that running off the end of the source decays
+                    // from here rather than cutting to zero.
+                    voice.last[c] = contribution;
                 }
                 voice.position += step;
+                ended_at = frame + 1;
             }
 
             if finished {
-                *voice = Voice::default();
+                if released {
+                    *voice = Voice::default();
+                } else {
+                    voice.end();
+                    // Play as much of the fade as fits in this buffer, from
+                    // where the source ran out.
+                    if let Some((tail, left)) = voice.tail {
+                        let mut remaining = left;
+                        for chunk in out.as_chunks_mut::<CHANNELS>().0[ended_at..].iter_mut() {
+                            if remaining == 0 {
+                                break;
+                            }
+                            let fade = remaining as f32 / RELEASE_FRAMES as f32;
+                            for (c, sample) in chunk.iter_mut().enumerate() {
+                                *sample += tail[c] * fade;
+                            }
+                            remaining -= 1;
+                        }
+                        voice.tail = (remaining > 0).then_some((tail, remaining));
+                        if voice.tail.is_none() {
+                            *voice = Voice::default();
+                        }
+                    }
+                }
             } else {
                 voice.release = release;
             }

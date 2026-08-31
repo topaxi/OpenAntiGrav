@@ -1,12 +1,41 @@
-# HD's `.COLLISIONS` is a severity tree played as a flat bag, and HD has no engine
+# HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree
 
 Reported from play on 2026-08-31: a thump *"a bit like a bad bass drum"*,
-**only on Wipeout HD** - not reproducible on Pulse. Every few seconds, much
-more often around collisions, and **not visible in a `--tap-audio` recording of
-the callback's own output**, because it is not an artefact. It is a sound the
-engine chose to play.
+**only on Wipeout HD** - not reproducible on Pulse. Every few seconds, more
+often around collisions, **not on contact but right after the contact effect
+finished**, and **not visible in a `--tap-audio` recording** or in any of the
+five `Health` counters.
 
-## The finding
+## What it was
+
+**`Mixer::render` cleared a finished voice's slot outright, and HD's cues do
+not end near zero.** Measured off `hdfury-ps3-eu-dec.iso` and
+`pulse-psp-eu.chd` through a real `Mixer` - the amplitude of the last sample a
+voice emits before its slot is cleared, which is the size of the step the mix
+takes when the cue ends:
+
+| | waveforms | worst step into silence | over 0.1 |
+| --- | --- | --- | --- |
+| Pulse, every cue | 23 | **0.019** | 0 |
+| HD `.COLLISIONS` | 112 | **0.766** | **102** |
+| HD `SPEEDUPPAD` | 7 | **0.804** | 7 |
+| HD `ABSORB` | 6 | 0.459 | 4 |
+| HD `~BLOWUP` | 3 | 0.383 | 3 |
+
+Every Pulse cue decays to silence on its own, which is why the same code
+sounded clean on Pulse for as long as it has existed. HD's do not: they stop
+mid-signal, at up to four fifths of full scale, and the mixer cut them there.
+That step is a broadband click, and a click through a speaker is heard as a
+thump - *after* the effect, exactly as reported. It is very likely what
+`__sceSasSetADSR`'s release envelope covers on the real hardware, which
+[ADR-0018](../docs/architecture/adr/0018-audio-mixer-architecture.md) defers.
+
+`Voice::end` now fades from where the waveform stopped, over the same 64
+frames (~1.5 ms) `Mixer::stop` uses, starting **in the buffer the cue ended in**
+rather than at the top of the next one. The same measurement after: HD's worst
+step into silence is **0.013**, and no cue on either title is over 0.02.
+
+## The other HD finding, unfixed
 
 **`Banks::pick` chooses uniformly among whatever a cue resolves to, and HD's
 `.COLLISIONS` does not resolve to alternates.** It binds nothing itself and
@@ -78,10 +107,9 @@ point at. Nothing here looked.
 
 ## Next Steps
 
-1. Confirm by ear that the thump is the collision cue: race HD, listen for it
-   on contact, and note that `just play hd` now prints
-   `.COLLISIONS's 112 waveform(s) span 0.410s to 3.266s ...` at load.
-2. Recover the parent selection first - it is the half with named evidence, and
+1. **Confirm the thump is gone by ear**: `just play hd`. That is the only test
+   this session could not run, and the fade is measured but unheard.
+2. Recover the parent selection - it is the half with named evidence, and
    halving the tree removes ship-to-ship impacts from wall scrapes, which is
    where the worst of the 112 live.
 3. Then the severity rule, from `ShipCollisionFx_Trigger` and whatever it reads
@@ -110,8 +138,12 @@ point at. Nothing here looked.
   `0, 6, 2 x 1903, 3, 255`. Honouring them - loop 28..53,368 rather than
   0..53,396 - was implemented, measured at **sixty times worse** (0.176 against
   0.002), and reverted. The marks do not point at the seam the waveform has.
-- **A step in the mix.** `Health::scan` walks every frame of every buffer now
-  and the worst step never approached a quarter of full scale. It was never
-  going to find this one anyway: a full-scale 50 Hz sine moves 0.0065 between
-  samples at 48 kHz, so a bass thump is invisible to a step detector. That is
-  what `--tap-audio` and `--dump-audio` are for.
+- **A step in the mix, as the counter measured it.** `Health::scan` walks every
+  frame of every buffer and its worst step never approached a quarter of full
+  scale in a race - and the fault *was* a step, of up to 0.8. The counter
+  missed it because a cue ending is one step in one buffer against a race
+  running at millions of samples a second, and `QUIET_STEP` only reports a
+  window's worst; a single 0.8 step in a window whose other content already
+  moves 0.287 does show up, but only if the window happens to be reported.
+  **The measurement that found it was offline**, comparing every cue's last
+  sample across two titles - not a counter in a running game.
