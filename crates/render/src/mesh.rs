@@ -153,73 +153,6 @@ mod blink_texture_tests {
     }
 }
 
-/// Whether [`build_with_textures`] draws every child of an authored
-/// `LodGroup` (class `0x2ee`), or only the first.
-///
-/// **This is not a quality tier and it does not switch by distance.** The
-/// original PSP binary never does either: it registers the class but never
-/// reads its `child_count` or switch-distance fields, and its generic tree
-/// walker draws every child of every node unconditionally, always, with no
-/// live re-evaluation against the camera - see `docs/formats/vex.md`,
-/// "`LodGroup`: authored, but never switched at runtime". Ten of the eleven
-/// `LodGroup` instances on `16_Track` carry two children with real,
-/// differently-detailed mesh geometry in both, so [`Self::Both`] (matching
-/// the original) means genuinely overlapping duplicate geometry, not a
-/// "higher quality" picture. [`Self::Single`] is a one-time choice made when
-/// the model is built, not a live switch: it keeps the higher-detail tier and
-/// permanently discards the other, removing that duplication at the cost of
-/// no longer matching the original.
-///
-/// A real distance-based switch (the original's authored switch-distance
-/// value, re-checked against the camera every frame) would need `Model` to
-/// carry per-node bounds and the render loop to re-evaluate them each frame -
-/// the same live-camera mechanism the roadmap's unimplemented frustum-culling
-/// entry needs, and not yet built.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Lod {
-    /// Draw every child of every `LodGroup`, exactly as the original does -
-    /// including the duplicate geometry that results.
-    #[default]
-    Both,
-    /// Draw only the first child of a two-child `LodGroup` - the
-    /// higher-triangle-count tier in all ten measured cases - and skip the
-    /// rest. A permanent, load-time choice, not a live switch. Removes real
-    /// duplicate geometry the original always draws twice, at the cost of no
-    /// longer matching it.
-    Single,
-}
-
-impl Lod {
-    /// The spelling used in a settings file and on a menu row.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Both => "both",
-            Self::Single => "single",
-        }
-    }
-
-    /// Every mode, for the menus and for error messages.
-    pub const ALL: [Self; 2] = [Self::Both, Self::Single];
-}
-
-impl std::str::FromStr for Lod {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::ALL
-            .into_iter()
-            .find(|lod| lod.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not a level-of-detail mode; try both or single"))
-    }
-}
-
-impl std::fmt::Display for Lod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
 /// A model flattened into one vertex and one index buffer.
 ///
 /// `Clone` so that one mesh can back several [`crate::mesh_render::Drawable`]s -
@@ -236,12 +169,18 @@ pub struct Model {
     /// One per material run, in draw order. Opaque; drawn with depth write on
     /// and no blending. Neither `is_transparent()` nor `is_alpha_tested()`.
     pub draws: Vec<DrawCall>,
-    /// Batches tagged `is_alpha_tested()` (see [`build_with_textures`]),
-    /// indexing the same `vertices`/`indices` as [`Self::draws`]. Meant to be
-    /// drawn with a cutout (`discard` below a threshold) rather than a
+    /// Cutout batches, indexing the same `vertices`/`indices` as
+    /// [`Self::draws`]. Drawn with a `discard` below a threshold rather than a
     /// hardcoded alpha of 1.0, but otherwise opaque - depth write stays on, so
     /// overlapping cutout surfaces still occlude each other and the geometry
     /// behind them correctly.
+    ///
+    /// **Two titles' batches, reaching it two different ways.** A Pulse or
+    /// Pure batch is tagged `is_alpha_tested()` in its own `pass_mask` (see
+    /// [`build_with_textures`]) and carries no reference of its own; a Wipeout
+    /// HD chunk is here because its material is
+    /// `oag_formats::rcsmodel::Transparency::Mode2`, and *does* carry one -
+    /// see [`Self::alpha_test_ref`] and `mesh::rcs::cutout`.
     pub alpha_tested_draws: Vec<DrawCall>,
     /// Batches tagged `is_transparent()` (see [`build_with_textures`]),
     /// indexing the same `vertices`/`indices` as [`Self::draws`]. Meant to be
@@ -302,6 +241,22 @@ pub struct Model {
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
+    /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
+    /// against, when the model's own materials author one.
+    ///
+    /// **The disc's number, not this renderer's.** A Wipeout HD material in
+    /// `oag_formats::rcsmodel::Transparency::Mode2` carries an
+    /// `alpha_func`/`alpha_ref` pair the RSX programs into
+    /// `NV4097_SET_ALPHA_FUNC`/`SET_ALPHA_REF`, and every one of the disc's is
+    /// `GL_GREATER`/`0.5` - see `mesh::rcs::cutout`, which reads it and
+    /// reports anything else. `mesh.wgsl` takes it as the `alpha_test_ref`
+    /// pipeline override, the same way [`Self::flame`]'s numbers reach it.
+    ///
+    /// `None` for every PSP and PS2 model, whose alpha-tested batches carry no
+    /// reference of their own that this project has recovered - the shader's
+    /// own default stands there, and `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD`
+    /// carries the evidence for it.
+    pub alpha_test_ref: Option<f32>,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -377,6 +332,7 @@ impl Model {
             vertex_colour_is_light: false,
 
             flame: None,
+            alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 0.0,
             mesh_count: 0,
@@ -388,6 +344,9 @@ impl Model {
         }
     }
 }
+
+mod lod;
+pub use lod::Lod;
 
 mod vertex;
 pub use vertex::{GpuVertex, slots};
@@ -964,6 +923,7 @@ fn build_class(
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         centre,
         radius,
         mesh_count,

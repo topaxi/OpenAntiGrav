@@ -333,6 +333,25 @@ pub enum Transparency {
 pub enum Blend {
     /// [`Transparency::Opaque`]: the factor pair is not consumed.
     Opaque,
+    /// [`Transparency::Mode2`]: an alpha **test**, and no blend at all.
+    ///
+    /// **A different fixed-function feature, not a different equation.** The
+    /// transparency field's two low bits drive two separate RSX registers -
+    /// bit 0 `NV4097_SET_BLEND_ENABLE`, bit 1
+    /// `NV4097_SET_ALPHA_TEST_ENABLE` - and mode 2 is bit 1 alone, so a
+    /// mode-2 surface has blending *off* and a per-pixel keep-or-discard on.
+    /// This used to answer [`Self::Factors`] here, identically to
+    /// [`Transparency::Blended`], and 211 of the disc's 212 mode-2 materials
+    /// carry the same `0302`/`0303` pair as a blended one, so the picture
+    /// looked close on the textures that are pure cutouts and the depth
+    /// buffer was wrong on all of them.
+    ///
+    /// **Carries nothing**, because [`Material::alpha_func`] and
+    /// [`Material::alpha_ref`] are the comparison and the reference and a
+    /// caller that has this value has the material. Making it a payload
+    /// variant would also cost [`Blend`]'s `Eq`, since the reference is an
+    /// `f32`.
+    AlphaTest,
     /// See-through, with **the pair the file authors**, both sides carried.
     ///
     /// This used to be a `Class(vex::BlendClass)` keyed on the destination
@@ -485,11 +504,22 @@ impl Material {
     /// redrew every surface that does not author `GL_SRC_ALPHA`. Carrying the
     /// pair costs the caller one translation and invents nothing.
     ///
+    /// **[`Transparency::Mode2`] answers [`Blend::AlphaTest`], not a pair.**
+    /// That mode enables the RSX's alpha *test* and leaves blending off, so
+    /// its factor pair is not consumed at all - the same reason
+    /// [`Transparency::Opaque`] answers [`Blend::Opaque`] while still
+    /// carrying one. See [`Blend::AlphaTest`] for what answering
+    /// [`Blend::Factors`] here cost.
+    ///
     /// `oag_render::mesh::rcs` draws through this; see [`Blend`].
     #[must_use]
     pub fn blend(&self) -> Blend {
-        if !self.is_see_through() {
-            return Blend::Opaque;
+        match self.transparency() {
+            Some(Transparency::Mode2) => return Blend::AlphaTest,
+            Some(Transparency::Blended) => {}
+            // The unrecognised fourth encoding reads as opaque, as
+            // [`Self::is_see_through`] documents.
+            Some(Transparency::Opaque) | None => return Blend::Opaque,
         }
         match (
             Factor::from_rsx(self.src_factor),

@@ -86,6 +86,7 @@ fn moving_quad(xform: u32) -> Model {
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         node_vertex_ranges: Vec::new(),
         emissive: Vec::new(),
         anim_nodes: vec![AnimNode {

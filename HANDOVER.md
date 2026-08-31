@@ -306,7 +306,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
 - [`Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded](handover/material-states-upper-bits-bit-7-is-measured-mode.md)
-- [Mode 2's alpha test is decoded end to end; `oag_render` still alpha-blends it](handover/mode-2s-alpha-test-is-decoded-not-wired.md)
 - [Wipeout HD's front end boots, off a chain that says it is only declared](handover/wipeout-hds-front-end-boots-off-a-chain.md)
 - [HD's main menu is horizontal, and it is drawn that way](handover/hds-main-menu-is-horizontal-and-it-is.md)
 - [HD's menus are drawn inside its own frame, and the `HD_*` palette turned out to be the FE style](handover/hds-menus-are-drawn-inside-its-own-frame.md)

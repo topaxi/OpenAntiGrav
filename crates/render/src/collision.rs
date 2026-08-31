@@ -288,6 +288,7 @@ pub fn build_model(
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         centre,
         radius,
         mesh_count,

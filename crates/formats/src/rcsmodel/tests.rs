@@ -177,6 +177,37 @@ fn the_state_word_and_not_the_factor_pair_is_what_says_see_through() {
     );
 }
 
+/// Mode 2 answers an alpha **test**, and it does so while carrying the very
+/// factor pair a blended material carries.
+///
+/// That coincidence is the whole reason the two were drawn identically: 211 of
+/// the disc's 212 mode-2 materials author `0302`/`0303`, so keying on the
+/// equation can never separate them and only the state word can.
+#[test]
+fn mode_two_is_an_alpha_test_and_not_the_pair_it_still_carries() {
+    let cutout = Material {
+        name: String::new(),
+        state: 2,
+        src_factor: material::FACTOR_SRC_ALPHA,
+        dst_factor: material::FACTOR_ONE_MINUS_SRC_ALPHA,
+        alpha_func: 0x0204,
+        alpha_ref: 0.5,
+        texture: String::new(),
+        second_texture: None,
+        texture_sampler: 0,
+        second_texture_sampler: None,
+        samplers: Vec::new(),
+        parameters: Vec::new(),
+    };
+    assert_eq!(cutout.transparency(), Some(Transparency::Mode2));
+    assert!(cutout.is_see_through());
+    assert_eq!(
+        cutout.blend(),
+        Blend::AlphaTest,
+        "bit 1 enables the alpha test and leaves blending off"
+    );
+}
+
 /// **Both** factors come through, and a value outside the four the disc uses is
 /// reported rather than folded onto the nearest one.
 ///

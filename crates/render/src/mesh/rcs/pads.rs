@@ -69,6 +69,11 @@ pub(super) fn skeleton(label: &str, out: &Model) -> Model {
         // failing. See `mesh::slots::MATERIAL_SHIFT`.
         emissive: out.emissive.clone(),
         vertex_colour_is_light: out.vertex_colour_is_light,
+        // Carried for the same reason: a pad chunk resolves to the circuit's
+        // own material table, so a cutout among them must be tested against
+        // the reference that table authors and not against the shader's
+        // PSP default. See `super::cutout`.
+        alpha_test_ref: out.alpha_test_ref,
         ..Model::none(label)
     }
 }

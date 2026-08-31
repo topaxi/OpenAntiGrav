@@ -56,7 +56,27 @@ pub struct Report {
     pub authored_normals: usize,
     /// Chunks whose material says the surface is not drawn solid, and which are
     /// therefore drawn blended rather than in the opaque pass. See [`surface`].
+    ///
+    /// **Blended only**, since the mode-2 cutouts split off into
+    /// [`Self::cutout`]: they are see-through too, and they are not blended.
     pub see_through: usize,
+    /// Chunks drawn as an alpha-test **cutout** rather than blended - Wipeout
+    /// HD's `Transparency::Mode2`. See `super::cutout`.
+    ///
+    /// Counted beside [`Self::see_through`] rather than inside it because the
+    /// two are different GPU features and this crate drew all of them as the
+    /// other one until the state word was read: a circuit reporting zero here
+    /// and a full count there is the old, wrong picture.
+    pub cutout: usize,
+    /// Mode-2 materials whose alpha test this build will not reproduce, and
+    /// which are therefore drawn **opaque**: a comparison other than
+    /// `cutout::GL_GREATER`, or a reference disagreeing with the one the model
+    /// already settled on.
+    ///
+    /// Zero on every circuit measured. Non-zero is a fact about a disc this
+    /// reading has not seen, and is reported rather than guessed at - drawing
+    /// a `GL_LESS` cutout through a `GL_GREATER` shader inverts it.
+    pub cutout_unread: usize,
     /// Materials whose `.gtf` this build could not paint with - no path in the
     /// record, no such entry in the archive, or a container
     /// `oag_formats::gtf::Texture::to_rgba` refuses.
@@ -161,6 +181,12 @@ impl Report {
         } + &match self.see_through {
             0 => String::new(),
             n => format!(", {n} chunk(s) drawn see-through"),
+        } + &match self.cutout {
+            0 => String::new(),
+            n => format!(", {n} chunk(s) drawn as an alpha-test cutout"),
+        } + &match self.cutout_unread {
+            0 => String::new(),
+            n => format!(", {n} cutout material(s) whose alpha test is unread, drawn opaque"),
         } + &match self.untextured {
             0 => String::new(),
             n => format!(", {n} material(s) whose .gtf did not paint"),

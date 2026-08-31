@@ -42,6 +42,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
         mesh_count: 0,
@@ -126,6 +127,12 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         out.transparent_draws
             .extend(model.transparent_draws.into_iter().map(rebase));
         out.textures.extend(model.textures);
+        // **The first source that authors one wins**, and a second, differing
+        // one is dropped rather than averaged: the reference is a pipeline
+        // override, so one merged model can only have one, and no source on
+        // any disc disagrees - every `Transparency::Mode2` material measured
+        // authors `0.5`. See `Model::alpha_test_ref`.
+        out.alpha_test_ref = out.alpha_test_ref.or(model.alpha_test_ref);
         out.mesh_count += model.mesh_count;
     }
 
@@ -204,6 +211,7 @@ mod merge_tests {
             vertex_colour_is_light: false,
 
             flame: None,
+            alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 1.0,
             anim_tracks: Vec::new(),
