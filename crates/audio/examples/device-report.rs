@@ -29,7 +29,7 @@ fn main() {
 
     let path = std::env::args().nth(2).map(std::path::PathBuf::from);
     let tap = path.map(|path| oag_audio::TapSpec { seconds, path });
-    let output = Output::open_or_null(tap.as_ref());
+    let output = Output::open_or_null(tap.as_ref(), oag_audio::MIN_BUFFER);
     println!(
         "device: {:?}  rate: {} Hz  streaming: {}",
         output.device_name(),

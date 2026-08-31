@@ -663,10 +663,11 @@ impl Audio {
         settings: &crate::settings::Audio,
         dump: Option<PathBuf>,
         tap: Option<&oag_audio::TapSpec>,
+        buffer: std::time::Duration,
     ) -> Self {
         let output = match &dump {
             Some(_) => Output::null(DUMP_SAMPLE_RATE),
-            None => Output::open_or_null(tap),
+            None => Output::open_or_null(tap, buffer),
         };
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());

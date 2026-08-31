@@ -330,16 +330,16 @@ fn a_late_callback_is_counted_with_its_worst_overshoot() {
     assert_eq!(health.late_callbacks(), 3);
 }
 
-/// The buffer this asks a device for: 40 ms, clamped into what it offers.
+/// The buffer this asks a device for: the target, clamped into what it offers.
 #[test]
 fn the_requested_buffer_is_forty_milliseconds_of_the_devices_own_rate() {
     let range = cpal::SupportedBufferSize::Range { min: 32, max: 8192 };
     assert_eq!(
-        requested_buffer_size(&range, 48_000),
+        requested_buffer_size(&range, 48_000, MIN_BUFFER),
         cpal::BufferSize::Fixed(1920)
     );
     assert_eq!(
-        requested_buffer_size(&range, 44_100),
+        requested_buffer_size(&range, 44_100, MIN_BUFFER),
         cpal::BufferSize::Fixed(1764)
     );
 }
@@ -350,7 +350,7 @@ fn the_requested_buffer_is_forty_milliseconds_of_the_devices_own_rate() {
 fn a_narrow_range_is_clamped_rather_than_overrun() {
     let small = cpal::SupportedBufferSize::Range { min: 64, max: 256 };
     assert_eq!(
-        requested_buffer_size(&small, 48_000),
+        requested_buffer_size(&small, 48_000, MIN_BUFFER),
         cpal::BufferSize::Fixed(256)
     );
     let large = cpal::SupportedBufferSize::Range {
@@ -358,17 +358,34 @@ fn a_narrow_range_is_clamped_rather_than_overrun() {
         max: 8192,
     };
     assert_eq!(
-        requested_buffer_size(&large, 48_000),
+        requested_buffer_size(&large, 48_000, MIN_BUFFER),
         cpal::BufferSize::Fixed(4096)
     );
 }
 
 /// And a device that will not say keeps its own default: a fixed size guessed
 /// against an unknown range is how a stream fails to build at all.
+/// A caller with a slower loop asks for more, which is the whole point of the
+/// target being a parameter: 40 ms is two and a half frames at 60 Hz and one
+/// and a fifth at 30.
+#[test]
+fn a_slower_loop_asks_for_a_bigger_buffer() {
+    let range = cpal::SupportedBufferSize::Range { min: 32, max: 8192 };
+    let thirty_hz = Duration::from_millis(83);
+    let cpal::BufferSize::Fixed(frames) = requested_buffer_size(&range, 48_000, thirty_hz) else {
+        panic!("a stated range gets a fixed size");
+    };
+    // 83 ms of 48 kHz, give or take what a single-precision second costs.
+    assert!(
+        (3_980..=3_990).contains(&frames),
+        "{frames} frames is not 83 ms"
+    );
+}
+
 #[test]
 fn an_unknown_range_is_left_alone() {
     assert_eq!(
-        requested_buffer_size(&cpal::SupportedBufferSize::Unknown, 48_000),
+        requested_buffer_size(&cpal::SupportedBufferSize::Unknown, 48_000, MIN_BUFFER),
         cpal::BufferSize::Default
     );
 }

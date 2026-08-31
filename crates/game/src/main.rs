@@ -250,7 +250,30 @@ fn main() -> Result<()> {
         seconds: cli.tap_seconds,
         path,
     });
-    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone(), tap.as_ref());
+    // **Two and a half frames of whatever the loop is capped at, floored at
+    // `oag_audio::MIN_BUFFER`.** The device queue exists to cover a stall and a
+    // stall is a frame, so a fixed 40 ms is two and a half frames at 60 Hz and
+    // one and a fifth at the 30 the menus also offer - where one missed frame
+    // outruns it. Unlimited and anything above 60 Hz take the floor, which is
+    // where the measurement that chose it was made.
+    //
+    // Read off the *configured* cap rather than the achieved rate, because the
+    // stream's buffer is fixed when it is built and cannot follow a frame rate
+    // that turns out slower than the player asked for. That case is named in
+    // `handover/` rather than papered over here.
+    let buffer = settings
+        .display
+        .frame_limit
+        .period()
+        .map_or(oag_audio::MIN_BUFFER, |frame| {
+            frame.mul_f32(2.5).max(oag_audio::MIN_BUFFER)
+        });
+    let audio = audio::Audio::open(
+        &settings.audio,
+        cli.dump_audio.clone(),
+        tap.as_ref(),
+        buffer,
+    );
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {

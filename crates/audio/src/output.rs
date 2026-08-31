@@ -64,13 +64,15 @@ const SPIN_CAP: Duration = Duration::from_micros(500);
 /// case and yielding is right for the preempted one, so this does both.
 const SPINS_PER_YIELD: u32 = 64;
 
-/// How much audio to keep queued at the device, in seconds.
+/// The least audio to keep queued at the device, whatever a caller asks for.
 ///
 /// 40 ms - two and a half frames at 60 Hz. See where it is used in
-/// [`Output::open`] for the measurement that chose it. Clamped into whatever
-/// range the device actually offers, so a device that cannot go this high gets
-/// its own maximum and one that will not say gets its own default.
-const TARGET_BUFFER_SECONDS: f32 = 0.040;
+/// [`Output::open`] for the measurement that chose it. **A caller that knows
+/// its loop is slower than 60 Hz should ask for more**, because the number that
+/// matters is how long a stall the queue can cover and a stall is measured in
+/// frames: at a 30 Hz cap this floor is one and a fifth frames rather than two
+/// and a half, and a single missed frame outruns it.
+pub const MIN_BUFFER: Duration = Duration::from_millis(40);
 
 /// Frames a dropped buffer ramps over, either side of the gap.
 ///
@@ -144,7 +146,7 @@ impl Output {
     /// If there is no default device, its configuration cannot be read, or the
     /// stream cannot be built or started. Callers that would rather be silent
     /// than fail should use [`Output::open_or_null`].
-    pub fn open(tap: Option<&TapSpec>) -> Result<Self> {
+    pub fn open(tap: Option<&TapSpec>, buffer: Duration) -> Result<Self> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -176,7 +178,14 @@ impl Output {
         // frame and a half later than it was. That is the right side of the
         // trade for a racing game, where a thump in the music is louder than
         // 40 ms of lateness is late.
-        config.buffer_size = requested_buffer_size(supported.buffer_size(), sample_rate);
+        //
+        // `buffer` rather than a constant because the queue's job is to cover a
+        // stall, and a stall is a frame: what is two and a half frames at 60 Hz
+        // is one and a fifth at 30, so a caller that has capped its loop low
+        // asks for more. See [`MIN_BUFFER`], which is the floor it cannot go
+        // under.
+        config.buffer_size =
+            requested_buffer_size(supported.buffer_size(), sample_rate, buffer.max(MIN_BUFFER));
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
@@ -303,8 +312,8 @@ impl Output {
     /// The same degradation the video path already takes when its decoder is
     /// missing: say what is absent, by name, and carry on.
     #[must_use]
-    pub fn open_or_null(tap: Option<&TapSpec>) -> Self {
-        match Self::open(tap) {
+    pub fn open_or_null(tap: Option<&TapSpec>, buffer: Duration) -> Self {
+        match Self::open(tap, buffer) {
             Ok(output) => output,
             Err(error) => {
                 warn!("audio: no output device ({error:#}); running silent");
@@ -416,7 +425,7 @@ impl Output {
 
 /// The buffer size to ask a device for, given what it says it supports.
 ///
-/// [`TARGET_BUFFER_SECONDS`] clamped into the device's own range, or
+/// `target` clamped into the device's own range, or
 /// [`cpal::BufferSize::Default`] when it will not say what its range is -
 /// guessing a fixed size against an unknown range is how a stream fails to
 /// build at all, and a device whose default is already generous is not one this
@@ -424,6 +433,7 @@ impl Output {
 fn requested_buffer_size(
     supported: &cpal::SupportedBufferSize,
     sample_rate: u32,
+    target: Duration,
 ) -> cpal::BufferSize {
     let cpal::SupportedBufferSize::Range { min, max } = supported else {
         return cpal::BufferSize::Default;
@@ -433,7 +443,7 @@ fn requested_buffer_size(
         clippy::cast_sign_loss,
         reason = "a frame count, bounded by the device's own range below"
     )]
-    let want = (sample_rate as f32 * TARGET_BUFFER_SECONDS) as u32;
+    let want = (sample_rate as f32 * target.as_secs_f32()) as u32;
     cpal::BufferSize::Fixed(want.clamp(*min, *max))
 }
 
