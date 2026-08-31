@@ -290,6 +290,25 @@ committed and had to be corrected.
 > exactly what the whole-image scans above require you to do. A slot that reads
 > as `0` is the classic tell, because a genuinely-used TOC slot rarely is.
 
+**The whole-image scan above is mechanical enough to script, and doing so
+turns a nineteen-pass manual search into seconds.** Confirmed 2026-08-31
+(`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`): via
+`run_script_inline` (gated `GHIDRA_MCP_ALLOW_SCRIPTS=1`, same as
+`run_ghidra_script`), read every function's `r2` value from the program's
+own context register (`ProgramContext.getRegisterValue`) - reliable because
+`AssignPs3R2FromOpd.java` already populated it at import, not something the
+script has to recompute - then for a target address, keep only functions
+whose own displacement (`target - r2`) fits a signed 16-bit range *and*
+whose disassembly actually contains a `d(r2)` instruction at that exact
+displacement (the first filter alone over-matches: many functions share a
+TOC, only one of them typically executes the load). Validated before being
+trusted on an unknown target by reproducing
+`zone-effectsettings-loader.md`'s already-known answer
+(`Scene_PrepareFrame @ 0x003aaf8c: lwz r9,-0x61f8(r2)`) from a blind script
+run with zero other hits. Reach for this before assuming a string or global
+with no `get_xrefs_to` hits has no consumer - it very likely still does, one
+TOC hop away.
+
 The Ghidra project (`OpenAntiGrav.gpr` / `OpenAntiGrav.rep/`) lives at the
 repository root, not under `data/`, and is gitignored by name rather than by
 directory - see the comment above `*.gpr` in `.gitignore`: a project opened at
