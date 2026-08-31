@@ -346,3 +346,20 @@ to** before concluding anything: displacement versus indexed, source-side versus
 destination-side, literal versus computed, direct versus spilled-and-reselected.
 A negative with that sentence attached is publishable. Without it, it is a
 report about the tool.
+
+**A corollary learned the same day, and it cost a published number: two
+parties agreeing is only corroboration when their inputs are independent.**
+Two censuses of the disc's materials returned `17,906` co-occurring blocks -
+the same figure to the digit, arrived at by different code, and that agreement
+was written up as validation. Both had counted the same `/tmp` extraction
+directory, which a third process had extracted *other archives* into: 1,592
+files believed to be one archive's 693. The ratio survived and every absolute
+number moved. The agreement was real and meant nothing, because the corpus was
+one corpus.
+
+So before citing a second party's matching result: **ask what the two runs
+share.** If it is the extraction, the intermediate file, the parsed table or
+the scratch directory, they are one measurement wearing two coats. The cheap
+fix is the one the corrected census took - read the archive directly and have
+no extraction step at all, so the corpus is named by the code rather than
+inherited from whatever was lying in `/tmp`.
