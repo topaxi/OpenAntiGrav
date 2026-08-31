@@ -3392,6 +3392,164 @@ this pass's completion of the opcode table corroborates all three without
 moving them.
 
 
+## 2026-08-31, a twenty-third pass: the Zone shader parameters 52-67 are mapped, and the stage textures join the chain
+
+Run as a parallel investigation off the twenty-second pass's mechanism, on the
+question "which sampler does each per-stage Zone texture actually feed". The
+publication idiom decoded above turned out to answer all twenty of parameters
+52-71 in one sweep. Static reading only, so every score here is capped at 84
+per the [confidence rubric](../../../reverse-engineering/confidence-rubric.md).
+
+### A sampler publishes at `+0x1c`, where a float parameter keeps its vec4 count
+
+The single most useful correction this pass produced, and the reason an
+earlier sweep of the same ground came back with a wrong answer. Float
+parameters use the two-store idiom the twenty-second pass documented (value
+pointer to `+0x18`, count to `+0x1c`). **A texture parameter has only one
+store and it lands on `+0x1c`; `+0x18` is never written.** The two uses look
+like a union.
+
+```text
+3ab96c  lwz  r11, 0xd8(r10)      ; float param: table reloaded per store
+3ab974  stw  r8,  0x698(r11)     ; 52*0x20 + 0x18 -> zoneColourTint value
+3ab97c  stw  r6,  0x69c(r9)      ; 52*0x20 + 0x1c -> count, r6 = 1
+
+3ab84c  lwz  r9,  0xd8(r10)      ; sampler: one store only
+3ab850  stw  r5,  0x79c(r9)      ; 60*0x20 + 0x1c -> zoneTexInner handle
+```
+
+A sweep that looks only at the `+0x18` family is structurally blind to every
+sampler, and worse, yields *fractional* parameter indices for the stores it
+does find - which reads as "these offsets are not parameters" rather than as
+"you are 4 bytes out". Confidence 80. **This is the third time on this page
+that a sweep keyed on one addressing form has missed its target** (after the
+TOC-slot loads of the nineteenth pass and the OPD indirection of the
+twenty-first); the transferable rule is to enumerate a structure's *families*
+of access before sweeping for one.
+
+### The samplers reach `Environment_LoadStageTextures`'s own arrays
+
+`zoneTexInner` resolves to `*(A + 4 * H[e].u32@28) + 32`, where `A =
+0x00c81368` and `H = 0x008c2cb8` is an array of two 56-byte per-environment
+structs. `Environment_LoadStageTextures` opens with `r14 = 0x00c7dfb0` (TOC
+slot `0x008b7940`) and stores its fifteen `Data/Tex/zoneMode{0..14}.gtf`
+handles at `r14 + 13240` onward. `0x00c7dfb0 + 0x33b8 = 0x00c81368` - the
+same address, byte for byte. That is the join between the loader this page
+recovered in August and the sampler that consumes it. Confidence 82.
+
+Four parallel fifteen-entry arrays, pinned by a destructor
+(`FUN_003d69e0`) that releases all four in one `i = 0..14` loop:
+
+| address | `r14 +` | contents |
+| --- | --- | --- |
+| `0x00c81368` | 13240 | `zoneMode{0..14}.gtf` |
+| `0x00c813a4` | 13300 | clones of the above, with patched sampler state |
+| `0x00c813e0` | 13360 | `zoneModeTrack{0..14}.gtf` |
+| `0x00c8141c` | 13420 | clones of the Track set |
+
+Three consequences, each worth more than the mapping itself:
+
+1. **The Detonator set aliases the Zone set.** A later branch of the same
+   loader writes `Data/Tex/DetonatorMode{0..14}.gtf` into *the same fifteen
+   slots* at `0x003d8d44` onward. So `zoneTexInner` binds a
+   `DetonatorMode*.gtf` whenever Detonator mode loaded last - the parameter is
+   named for Zone, the storage is shared between the two modes. This is the
+   executable-side counterpart of the file-side finding this thread already
+   had (`detonatormode.effectsettings` carrying Zone's own 15-stage name list
+   verbatim): the two modes are one mechanism throughout, not two.
+2. **Which of the two texture sets a sampler gets depends on which publisher
+   runs.** `Scene_PrepareFrame` binds only the `zoneMode*` set. The seven
+   other publishers each carry **two** Zone blocks - a first binding
+   `zoneMode*`, a second binding `zoneModeTrack*` to the *same* parameters
+   60-63 (worked example: `FUN_003ff860` stores `zoneTexInner` at
+   `0x004003c0` from `0x00c81368` and again at `0x00400850` from
+   `0x00c813e0`). Confidence 80. **This matters for any port**: the
+   `zoneMode*` set is the one this thread already decoded as fifteen
+   byte-identical flat-white placeholders, so a reimplementation that follows
+   `Scene_PrepareFrame` alone binds the blank set and draws nothing, while
+   the real art lives in the Track set the other publishers bind.
+3. **The `...Nearest` parameters are the same texels under different sampler
+   state**, not different art: `0x003d7edc`-`0x003d8040` clones each handle and
+   patches three bitfields of the clone's texture-control words with `rlwimi`.
+   That the patched fields are specifically *filter* fields is read off the
+   parameter's name rather than off a checked RSX register map - **confidence
+   45, below the naming threshold**, and deliberately left unnamed. Closing it
+   needs the NV40 texture-control field map checked against the three insert
+   masks.
+
+`zoneTexVis` is not a file at all: `0x00c81260` holds a **256x1 texture built
+at runtime** (`width=256, height=1, format=8`, packed three bytes at a time by
+the loop at `0x003d8b40`) - an RGB ramp uploaded as a 1D LUT. Confidence 74.
+A port has to generate it, not look for it on the disc.
+
+### The float parameters, and where the tint sits
+
+| # | name | entry off | published pointer |
+| ---: | --- | --- | --- |
+| 52 | `zoneColourTint` | `0x698` | `0x00c81470` |
+| 53-58 | `zoneEffectInner`..`zoneBaseAltOuter` | `0x6b8`-`0x758` | `0x00c81480`-`0x00c814d0`, stride `0x10` |
+| 59 | `zoneOrigin` | `0x778` | `0x00c81550` |
+| 67 | `zoneAnisoPower` | `0x878` | `0x00c81460` |
+
+All are 16-byte-aligned `.bss` vec4s with a count of 1. **`zoneColourTint` has
+exactly one publisher in the whole image** - `Scene_PrepareFrame` at
+`0x003ab974` - where the other seven publishers bind 53-58 and 67 but skip the
+tint entirely (confidence 78). Worth recording next to the twenty-second
+pass's own result: the effectSettings stage tint reaches a shader as
+`fogColour`, and `zoneColourTint` is a *separate* parameter fed from
+`0x00c81470`, which is **not** written by any displacement store off the
+loader's own base.
+
+The whole Zone block is gated: `0x003ab65c` tests the byte at `0x00d45f84`
+and skips parameters 52-67 entirely when it is zero (confidence 80) - the same
+gate byte the seventeenth pass named as the thing a watchpoint run would need
+to see open.
+
+### What this pass could not determine
+
+- **What writes `H[e].u32@28`/`@32`, the stage index itself.** The loader only
+  zeroes them (confidence 78 that it never sets them), and a displacement grep
+  near any `0x008c2cb8` reference finds nothing, so the writer reaches the
+  struct through a pointer parameter or `stwx`. **This is the same open end as
+  HD's Zone trigger** - the texture side and the palette side both terminate
+  at an unrecovered stage-number source. Candidates holding `0x008c2cb8`:
+  `FUN_003ce2c0`, `FUN_003da540`, `FUN_003d0b98`.
+- **What writes the eight colour vec4s** (`0x00c81460`, `0x00c81470`-`0x00c814d0`),
+  including `zoneColourTint`'s own value. Nothing stores into that range by
+  displacement off `r14`, so the writer is almost certainly indexed VMX
+  (`stvx rV,rA,rB`), which carries no displacement to grep. An RPCS3 write
+  watchpoint on `0x00c81470` settles it; static analysis does not.
+- **What fills the two-entry palette arrays** at `0x00c81330`-`0x00c81350`
+  (parameters 65, 66 and 68-71). Same limitation. Confidence only 60 that they
+  hold texture pointers at all - inferred from the `+32` header skip and the
+  release path, not from a filling write.
+- **What `0x008c1430` (the environment index `e`) means semantically.** Two
+  entries in `H` makes `0..1` the plausible range, and the loader's own two
+  files are `ZoneMode.effectSettings` and `ZoneModeDLC3.effectSettings`, which
+  would fit - **hypothesis, not finding, confidence 35**, and nothing is named
+  on it.
+
+Reproduce with (note that `scripts/ps3-toc.py resolve` parses its displacement
+as **hex**, so a decimal argument resolves somewhere else entirely and reads
+cleanly - a fresh instance of this page's own sign-error trap):
+
+```sh
+ELF=data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf
+llvm-objdump -d --mcpu=pwr6 --start-address=0x3ab600 --stop-address=0x3abb00 $ELF
+llvm-objdump -d --mcpu=pwr6 --start-address=0x3d7ec0 --stop-address=0x3d8060 $ELF
+python3 scripts/ps3-toc.py resolve 0x003aa888 -0x61A8    # -> 0x00c81368
+python3 scripts/ps3-toc.py resolve 0x003d6dc8 -0x5A84    # -> 0x00c7dfb0
+```
+
+### Names applied
+
+- `g_ZoneStageTextures` (`0x00c81368`, data, 82) - the fifteen per-stage
+  texture handles `zoneTexInner`/`zoneTexOuter` index, written by
+  `Environment_LoadStageTextures` and aliased by the Detonator set.
+- `g_ZoneStageTrackTextures` (`0x00c813e0`, data, 80) - the same for
+  `zoneModeTrack{0..14}.gtf`, the set that carries the real art.
+
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

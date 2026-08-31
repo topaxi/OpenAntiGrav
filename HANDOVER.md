@@ -351,6 +351,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone flies its own environment now; the menu is the part still not mode-aware](handover/zone-flies-its-own-environment-now-the-menu.md)
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/zone-races-run-on-all-three-titles-now.md)
 - [2048's Zone grade escalates on the disc's own ladder now; HD's own trigger is what remains](handover/2048-and-hd-ship-an-unread-effectsettings-table.md)
+- [HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not](handover/hd-zone-stage-textures-are-grounded.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the shield bar's colour is the new open half](handover/the-hud-shows-a-place-measured-against-the.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)

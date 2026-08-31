@@ -177,3 +177,5 @@
 0x005d4a08	function	Render_RunCompiledOps	58	zone-effectsettings-loader.md
 0x003aa618	function	Scene_InitRenderBlock	75	zone-effectsettings-loader.md
 0x008b7f04	data	g_ShaderEngineParamBase	88	zone-effectsettings-loader.md
+0x00c81368	data	g_ZoneStageTextures	82	zone-effectsettings-loader.md
+0x00c813e0	data	g_ZoneStageTrackTextures	80	zone-effectsettings-loader.md
