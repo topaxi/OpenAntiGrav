@@ -21,6 +21,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use log::{error, warn};
 
 use crate::mixer::{CHANNELS, Mixer};
+use crate::spectrum::Spectrum;
 
 mod health;
 mod render;
@@ -104,6 +105,11 @@ pub struct Output {
     health: Arc<Health>,
     /// The recording `--tap-audio` asked for, and where it goes.
     tap: Option<(Arc<Tap>, std::path::PathBuf)>,
+    /// The Zone visualiser's own input: a live spectrum of what
+    /// [`Self::ahead`] is actually rendering. `Arc`'d rather than owned
+    /// outright because [`render::Ahead`]'s thread writes it directly - see
+    /// [`Self::spectrum`].
+    spectrum: Arc<Spectrum>,
 }
 
 // `cpal::Stream` is deliberately not `Debug`, and the workspace warns on a
@@ -140,6 +146,10 @@ impl Output {
             health: Arc::new(Health::default()),
             ahead: None,
             tap: None,
+            // No render-ahead thread ever runs on the null backend, so this
+            // never publishes - which is the honest reading for a machine
+            // with nothing playing, not an invented level.
+            spectrum: Arc::new(Spectrum::new()),
         }
     }
 
@@ -287,12 +297,15 @@ impl Output {
         }
         .with_context(|| format!("building a {format} output stream on {name}"))?;
 
+        let spectrum = Arc::new(Spectrum::new());
         // After the stream, so a device that refuses to open does not leave a
         // thread rendering into a ring nothing will ever read.
         let ahead = render::Ahead::spawn(
             Arc::clone(&mixer),
             producer,
             render::target_samples(sample_rate, buffer.max(MIN_BUFFER)),
+            sample_rate,
+            Arc::clone(&spectrum),
         );
 
         Ok(Self {
@@ -303,6 +316,7 @@ impl Output {
             device: Some(name),
             health,
             tap: recording,
+            spectrum,
         })
     }
 
@@ -370,6 +384,17 @@ impl Output {
     #[must_use]
     pub fn health(&self) -> &Health {
         &self.health
+    }
+
+    /// A live spectrum of what this output is actually playing, for the Zone
+    /// visualiser.
+    ///
+    /// Silence on [`Output::null`] and until the render-ahead thread's first
+    /// chunk - see [`Spectrum`]'s own docs for why that is the honest default
+    /// rather than a gap to fill in.
+    #[must_use]
+    pub fn spectrum(&self) -> &Spectrum {
+        &self.spectrum
     }
 
     /// Logs what the callback saw since the last report, if anything changed.

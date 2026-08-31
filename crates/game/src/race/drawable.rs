@@ -51,6 +51,10 @@ pub(super) struct Drawable {
     /// `Anim Transform` at all - which is every ship, every sky and every
     /// synthetic overlay.
     node_anims: wgpu::Buffer,
+    /// The Zone visualiser's own lookup texture - bind group 2's binding 4.
+    /// All-black until [`Self::write_zone_vis`] is called, which
+    /// `race::Scene::render` does once a frame alongside [`Self::fog`].
+    zone_vis: wgpu::Texture,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -89,6 +93,7 @@ impl Drawable {
             texture_binds: textures,
             fog_bind,
             fog_buffer,
+            zone_vis_texture,
             anim_bind,
             anim_buffer,
             node_anim_buffer,
@@ -144,7 +149,16 @@ impl Drawable {
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
+            zone_vis: zone_vis_texture,
         })
+    }
+
+    /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
+    /// `tint` - or blanks it when `tint` is `None`, which is what a stage
+    /// with no authored `EQ colour tint` gets. See
+    /// `oag_render::mesh_render::zone::write_vis`, which this forwards to.
+    pub(super) fn write_zone_vis(&self, queue: &wgpu::Queue, bands: &[f32], tint: Option<[u8; 3]>) {
+        mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
     }
 
     /// `prev_mvp` is the previous simulation tick's `view_projection * model`,

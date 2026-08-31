@@ -16,6 +16,9 @@
 //!   cue's level and its place between the speakers, recovered from the
 //!   original's own emitter records. Pure arithmetic, no voice and no device.
 //! - [`output`] is the device: a `cpal` stream, or none at all.
+//! - [`spectrum`] is a coarse, render-facing frequency analysis of what the
+//!   mixer is actually producing - the input Wipeout HD/Fury's Zone
+//!   visualiser needs, computed here rather than invented at the shader.
 //! - [`wav`] writes rendered samples out, which is how a headless run is
 //!   checked at all.
 //!
@@ -36,8 +39,10 @@
 pub mod mixer;
 pub mod output;
 pub mod spatial;
+pub mod spectrum;
 pub mod wav;
 
 pub use mixer::{Bus, Mixer, Play, Sound, VoiceId};
 pub use output::{MIN_BUFFER, Output, Tap, TapSpec};
 pub use spatial::{Emitter, Listener, Placed};
+pub use spectrum::{BANDS, Spectrum};

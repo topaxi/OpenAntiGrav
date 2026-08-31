@@ -177,7 +177,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     };
 
     // Black albedo: the recolour lands.
-    let painted = draw(&device, &queue, &black, Some(&stage), scene);
+    let painted = draw(&device, &queue, &black, Some(&stage), scene, None);
     let (r, g, b) = (expected(ZONE_EFFECT[0]), expected(ZONE_EFFECT[1]), 0u8);
     assert_eq!(
         (painted[0], painted[1], painted[2]),
@@ -198,7 +198,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     // assertion is the inverse of the one it replaces, which asserted the
     // `zoneAniso` shape that lives only in HD's four Zone arenas.
     let white = model(texture("white albedo", [255, 255, 255, 255]), 1.0);
-    let replaced = draw(&device, &queue, &white, Some(&stage), scene);
+    let replaced = draw(&device, &queue, &white, Some(&stage), scene, None);
     assert_eq!(
         (replaced[0], replaced[1], replaced[2]),
         (r, g, b),
@@ -213,7 +213,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     // channel: `128` is the raw sample, and `56` is what a linear summand
     // would have left.
     let prelit = model(texture("black albedo", [0, 0, 0, 255]), 0.0);
-    let gamma = draw(&device, &queue, &prelit, Some(&stage), scene);
+    let gamma = draw(&device, &queue, &prelit, Some(&stage), scene, None);
     let raw =
         |effect: f32| ((f32::from(ZONE_TEXEL) / 255.0 * effect).min(1.0) * 255.0).round() as u8;
     assert_eq!(
@@ -224,7 +224,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
 
     // The same black surface with the Zone term switched off draws black,
     // which is what every draw outside a Zone race gets.
-    let off = draw(&device, &queue, &black, None, Scene::off());
+    let off = draw(&device, &queue, &black, None, Scene::off(), None);
     assert_eq!(
         (off[0], off[1], off[2]),
         (0, 0, 0),
@@ -284,7 +284,7 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
         base_alt: [0.0, 16.0, 0.0, 0.0],
     };
 
-    let painted = draw(&device, &queue, &surface, Some(&stage), scene);
+    let painted = draw(&device, &queue, &surface, Some(&stage), scene, None);
     // Both summands are shader *parameters*, not textures, so they enter the
     // linear path undecoded exactly as `zoneEffect` does; only the encode back
     // out applies.
@@ -299,13 +299,133 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
     assert_eq!(painted[2], 0, "nothing was bound on blue");
 }
 
+/// A quad with a normal facing straight up (`+Y`), the shape [`zone_glow`]'s
+/// own `saturate(N.y - 0.5)` gate wants a nonzero reading from - see
+/// `oag_render::mesh_render::Zone`'s doc comment: the visualiser is a floor
+/// display, and every other quad in this file faces the camera along `+Z`.
+fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
+    let vertex = |position: [f32; 3]| GpuVertex {
+        position,
+        normal: [0.0, 1.0, 0.0],
+        colour: [1.0, 1.0, 1.0, 1.0],
+        texcoord: [0.0, 0.0],
+        lightmap_texcoord: [0.0, 0.0],
+        lit: 0.0,
+        anim: 0,
+        xform: 0,
+        sun_mask: 1.0,
+        slots: slots::DEFAULT,
+    };
+    Model {
+        vertices: vec![
+            vertex([-0.9, -0.9, 0.5]),
+            vertex([0.9, -0.9, 0.5]),
+            vertex([0.0, 0.9, 0.5]),
+        ],
+        ..model(albedo, 0.0)
+    }
+}
+
+/// **The visualiser glow reaches the frame**, indexed by the stage texture's
+/// own alpha and driven by a spectrum this test writes directly - the same
+/// seam `race::Scene::render` calls once a frame in the real game, via
+/// `oag_render::mesh_render::zone::write_vis`.
+///
+/// Isolated from every other term: `effect.rgb`, `base` and `base_alt` are
+/// all zero (no surface colour), the albedo is irrelevant (the Zone term
+/// replaces it), and `scene.light.enabled = 0.0` selects the gamma/stand-in
+/// path unconditionally, so the pixel is `zone_glow` alone - see
+/// `mesh.wgsl`'s own function for the formula this measures.
+#[test]
+fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let surface = up_facing_model(texture("albedo", [255, 255, 255, 255]));
+    // Alpha 128 of 255 is the band index `zone_glow` reads through the
+    // nearest-filtered clone of this same texture - `128 / 255 ≈ 0.50196`,
+    // the midpoint of a 256-wide lookup's 128th texel, chosen so the exact
+    // nearest-sampling convention cannot land it in a neighbour.
+    let stage = texture("zone stage", [200, 200, 200, 128]);
+
+    let mut bands = [0.0f32; 256];
+    bands[128] = 1.0;
+
+    let mut scene = Scene::off();
+    // Off, so `shaded.rgb` unconditionally takes the gamma/stand-in path -
+    // see `mesh.wgsl`'s `mix(plain_rgb, authored_rgb, scene.light.enabled *
+    // in.lit)`.
+    scene.light.enabled = 0.0;
+    scene.zone = Zone {
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        _pad: 0.0,
+        // `.rgb` zero so the texture term of the *surface* contributes
+        // nothing; `.w` is `E.w`, the glow's own drive scalar.
+        effect: [0.0, 0.0, 0.0, 1.6],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+
+    let lit = draw(
+        &device,
+        &queue,
+        &surface,
+        Some(&stage),
+        scene,
+        Some((&bands, [255, 255, 255])),
+    );
+    // `up = saturate(1.0 - 0.5) = 0.5`; `window_depth` is `0.5` (identity
+    // matrices put clip space and model space at the same numbers, and this
+    // quad sits at `z = 0.5`), so `(1 - window_depth) = 0.5`; `vis = (1, 1,
+    // 1)` at the written band. `0.5 * 0.5 * 1.6 * 1.0 = 0.4`, `0.4 * 255 =
+    // 102`.
+    let want = 102u8;
+    for (channel, got) in [("red", lit[0]), ("green", lit[1]), ("blue", lit[2])] {
+        assert!(
+            got.abs_diff(want) <= 2,
+            "{channel} came out {got}, want about {want}: the visualiser \
+             glow did not reach the frame as the formula predicts"
+        );
+    }
+
+    // **The gate, the other half of the finding.** The same draw with the
+    // written band left at zero shows no glow - a lookup this test never
+    // touched must not light anything, the same "a missing input draws
+    // nothing" rule the rest of this file's Zone terms already keep.
+    let dark = draw(
+        &device,
+        &queue,
+        &surface,
+        Some(&stage),
+        scene,
+        Some((&[0.0f32; 256], [255, 255, 255])),
+    );
+    assert_eq!(
+        (dark[0], dark[1], dark[2]),
+        (0, 0, 0),
+        "an all-zero spectrum must draw no glow at all"
+    );
+}
+
 /// Draws `model` once into a `SIZE`x`SIZE` target and answers the centre texel.
+///
+/// `zone_vis` is the visualiser lookup to write before drawing - `(bands,
+/// tint)`, forwarded to `mesh_render::zone::write_vis` - or `None` to leave
+/// it at the all-black default [`mesh_render::build`] starts it at.
 fn draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,
     stage: Option<&Arc<ModelTexture>>,
     scene: Scene,
+    zone_vis: Option<(&[f32], [u8; 3])>,
 ) -> [u8; 4] {
     let built = mesh_render::build(
         device,
@@ -322,6 +442,9 @@ fn draw(
     )
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
+    if let Some((bands, tint)) = zone_vis {
+        mesh_render::zone::write_vis(queue, &built.zone_vis_texture, bands, Some(tint));
+    }
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("zone uniforms"),

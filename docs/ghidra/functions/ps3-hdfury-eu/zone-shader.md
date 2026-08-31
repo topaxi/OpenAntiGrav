@@ -289,15 +289,41 @@ pass from "confidence only 60 that they hold texture pointers at all" to about
 
 ## What this does not settle
 
-**Whether the 256 LUT entries hold live audio levels.** The LUT's *contents*
-are a memory question, not a shader question. The build at `0x003d8b40` is a
-load-time RGB-to-RGBA expansion of a static table (nine passes of 64 texels;
-the source base resolves through the TOC to `0x008c2d78` -
-`python3 scripts/ps3-toc.py resolve 0x003d6dc8 -0x57D0`). **So if nothing
-rewrites the texture's pixel buffer per frame, it is a static ramp and the
-animation comes from somewhere else** - the eight vec4s at
-`0x00c81460`-`0x00c814d0`, whose writer is still unfound, are the only other
-per-frame handle in this shader.
+**Corrected 2026-08-31: `0x003d8b40` is not `zoneTexVis`'s build loop.** It
+was read as one - "a load-time RGB-to-RGBA expansion of a static table, nine
+passes of 64 texels" - and that reading was wrong on both the object and the
+pass count. Traced independently: it is ten passes (the loop's own
+`bne`/`cmpwi` tests the *pre-decrement* offset, which includes zero, so the
+prior count missed the last pass), 640 texels, and it builds a **different**
+object entirely - a 64x10 three-colour sparse glyph at `iVar8+0x335c`
+(`0x00c8130c`), not the 256x1 strip at `iVar8+0x32b0` (`0x00c81260`) that
+`zoneTexVis` actually is. The two addresses are 172 bytes apart in the same
+struct, which is almost certainly how the first read conflated them.
+
+**`zoneTexVis`'s own load-time fill is a plain zero-fill**, 256 texels of
+`0x00000000`, a few dozen instructions after the `0x335c` loop in the same
+function (`Environment_LoadStageTextures`).
+
+**And it *is* rewritten every frame, found this pass**:
+`Environment_UpdateStageBlend` (`0x003da540`), called every frame from
+`Scene_PrepareFrame` (its only caller, and the same function that publishes
+every other Zone shader parameter), writes computed packed-RGBA colour words
+into at least eleven of `zoneTexVis`'s 256 texel slots (indices `1`-`10` and
+`161`, traced explicitly; the surrounding threshold dispatch was not fully
+unwound and may touch more). So "static ramp vs. rewritten per frame"
+resolves to **rewritten per frame**, confidence 74 - the writer and its
+per-frame call path are both found statically, capped below the loop-mechanics
+score because *what* is written is not: the value stored is a float `f1`
+compared against per-stage thresholds, and whether that float is itself
+audio-reactive or purely a stage-progress fraction is untraced. The eight
+vec4s at `0x00c81460`-`0x00c814d0` remain a separate, still-unfound per-frame
+handle in this shader - this finding does not settle those.
+
+Full evidence, the corrected disassembly and the trace that re-derives
+`zoneTexVis`'s own address independently (rather than trusting this page's
+prior citation) are in
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md)'s own pass on
+this - see that page for the instruction-level detail this summary omits.
 
 Settling it needs an RPCS3 **write watchpoint on the pixel buffer**
 (`*(texture object at 0x00c81260 + 16)`) during a Zone race, not more static

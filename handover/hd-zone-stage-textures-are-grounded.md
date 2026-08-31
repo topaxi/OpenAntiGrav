@@ -30,9 +30,13 @@ twenty-second and twenty-third passes. In short:
   `Scene_PrepareFrame` alone will bind fifteen blank textures and see
   nothing**, which is exactly the failure that looks like a wiring bug and
   is not one.
-- **`zoneTexVis` is generated, not loaded**: a 256x1, `format=8` RGB ramp
-  built at runtime (`0x003d8b40`). A port has to build it; there is no disc
-  file to look for. Confidence 74.
+- **`zoneTexVis` is generated, not loaded**: a 256x1, `format=8` texture,
+  zero-filled at load time and **rewritten every frame** by
+  `Environment_UpdateStageBlend` - corrected 2026-08-31 from an earlier
+  reading that named `0x003d8b40` as its build loop; that address is a
+  different, unrelated object. A port has to build it; there is no disc file
+  to look for. Confidence 74 on the per-frame rewrite; see this file's own
+  2026-08-31 section below for the full correction.
 - **The `...Nearest` parameters are the same texels with patched sampler
   state**, not separate art (confidence 80 on the clone relation; the claim
   that the patched bitfields are specifically *filter* fields is confidence 45
@@ -287,8 +291,21 @@ no longer disagree.
 
 ## Open
 
-- What the Zone shader does with the six-plus Zone parameters. Unread. This is
-  the gate on anything that *draws*, as opposed to loads.
+- ~~What the Zone shader does with the six-plus Zone parameters.~~ **Read**,
+  see [zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)
+  and the visualiser glow section above.
+- **Whether `Environment_UpdateStageBlend`'s per-frame `zoneTexVis` write is
+  itself audio-reactive**, or a plain stage-progress fraction - the open half
+  of the "static vs per-frame" question this thread used to carry whole. The
+  writer and its call path are both found statically
+  ([zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-sixth pass); closing this needs an RPCS3 watchpoint on the float `f1`
+  the threshold comparisons there read from, which nothing in this session
+  attempted (see `CLAUDE.md` on why: interpreter-only patched build, no
+  working GUI in this sandbox, and it needs a Zone race driven to a real
+  stage). This project's own visualiser does not need the answer - it draws a
+  genuine spectrum regardless - but the answer would settle whether the two
+  pictures are meant to look the same.
 - What writes the eight colour vec4s at `0x00c81460`/`0x00c81470`-`0x00c814d0`,
   `zoneColourTint`'s own value among them. Nothing stores there by
   displacement off the loader's base, so the writer is almost certainly
@@ -301,6 +318,36 @@ no longer disagree.
   limitation; confidence only 60 that they hold texture pointers at all.
 - Whether `zoneMode*.gtf` being fifteen identical blanks is what shipped or an
   authoring leftover. The bytes say identical; nothing says intended.
+- **The recovered glow gate produces the floor half of the maintainer's own
+  observation and cannot produce the billboard half.** The play report
+  (`docs/formats/effectsettings.md`, confidence 90) is explicit: "the floor
+  textures **and the billboards**" carry the animation. The rule this
+  session drew from the microcode gates the glow on `saturate(N.y - 0.5)` -
+  a vertical billboard's normal has `N.y ~ 0`, which zeroes the term outright.
+  So either the billboard half is a second mechanism this session's reading
+  of the shader did not reach (a different fragment block, a different
+  gate), or `N.y` is being read off the wrong space for a billboard's own
+  geometry (world vs. some local frame the microcode might normalise
+  differently there) - both open, neither chased. Recorded rather than
+  quietly absorbed into "the visualiser is done": what ships today is the
+  floor only, checked against real disc data with `--zone-spectrum-test`
+  (`crates/game/src/race/capture.rs`'s own doc comment on the flag).
+- **The index-to-frequency correspondence inside `zoneTexVis` is
+  unrecovered, so this build's 256-texel strip is a uniform spread of
+  `oag_audio::spectrum::BANDS` (32) bands, not a verified reproduction of
+  whatever the original's per-frame write actually encodes there.** The
+  disc's own live writer (`Environment_UpdateStageBlend`, see above) only
+  ever touches texels 1-10 and 161 - a narrow, specific set the original
+  chose deliberately. If that choice means "these ten indices are ten
+  consecutive band ids" rather than "a window into a much wider strip," a
+  faithful port would want a handful of bands spread across exactly those
+  texels, not 32 bands spread across all 256 with texels 1-10 landing on
+  the lowest two bins (~80-93 Hz) by construction. Nobody has recovered
+  which it is. `write_vis`'s linear interpolation
+  (`crates/render/src/mesh_render/zone.rs`) was built to stop a narrow
+  window reading as one flat block (see its regression test), not as a
+  claim about the true mapping - flag this before treating any window's
+  shape as meaningful evidence of the original's spectrum layout.
 
 ## Next Steps
 
@@ -329,14 +376,15 @@ no longer disagree.
   `zoneTexVis` is declared in **all 16** Zone blocks of the two circuit
   materials read directly (`02_track/materials/diffuse`,
   `05_ubermall/materials/billboarddiffuse`), so the twelve circuits genuinely
-  sample it and `mesh.wgsl` leaves it out. **Blocked material-side by nothing**
-  - the block is on the build loop at `0x003d8b40` not reconciling: nine passes
-  of 64 texels, source running `+1728` down to `+192`, destination advancing
-  256 bytes a pass, against a 256-entry table. Read that arithmetic before
-  generating anything, and read it with the equaliser observation in hand -
-  "an RGB ramp" was the reading from before anyone knew the effect was a
-  spectrum, and a per-band palette and a gradient are easy to confuse from a
-  packing loop alone.
+  sample it and `mesh.wgsl` leaves it out. **Corrected 2026-08-31: `0x003d8b40`
+  was never `zoneTexVis`'s build loop.** It reads ten passes, not nine, and
+  builds a different, 640-texel object 172 bytes away in the same struct - a
+  sparse three-colour glyph, not a ramp. `zoneTexVis` itself is zero-filled at
+  load and **is** rewritten every frame, by `Environment_UpdateStageBlend` -
+  see [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-sixth pass. Whether the value it writes is itself audio-reactive is
+  still open; the "not reconciling" arithmetic this bullet used to point at
+  was never going to reconcile, because it was the wrong function.
 - **A third shape exists inside the circuit bucket**, and it is where the
   `zoneColourTint.w` radius correlation was measured:
   `01_vineta_k/materials/cf_constantcolourglow` is a *circuit* material whose
@@ -360,16 +408,37 @@ no longer disagree.
   files, which is why every search of the executable came back empty. Full
   rule in
   [zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md).
-- Generate `zoneTexVis` (256x1) rather than looking for a file. **Read the
-  packing loop at `0x003d8b40` first** - and read it with the spectrum
-  observation in hand, because "an RGB ramp" was the reading *before* anyone
-  knew the effect was an equaliser, and a per-band palette and a gradient are
-  easy to confuse from the packing alone.
-- Put the audio-spectrum architecture question to the maintainer before
-  building anything that consumes it - see the section above. The answer
-  decides whether an FFT belongs in `oag-audio`, in `oag-render`, or in
-  neither.
-- Only once the shader is read: decide whether the `...Nearest` clones need a
-  second sampler in the port at all, or whether one texture with two sampler
-  states covers it. The spectrum reading says point sampling is load-bearing
-  rather than cosmetic, so this is likely a real difference.
+- ~~Generate `zoneTexVis` (256x1) rather than looking for a file.~~ **Done,
+  2026-08-31.** The `0x003d8b40` loop this bullet pointed at turned out to be
+  a different object entirely (corrected the same day, see this file's own
+  2026-08-31 section and
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-sixth pass) - `zoneTexVis` itself is confirmed rewritten every frame,
+  which settled the architecture question below in favour of a genuine
+  render-side spectrum: `oag_audio::spectrum::Analyzer` runs a 32-band
+  Goertzel transform on the render-ahead thread, `Output::spectrum()` hands
+  the levels to `oag-game` once a frame, and
+  `oag_render::mesh_render::zone::write_vis` builds the 256-wide lookup from
+  them, tinted by the showing stage's own `EQ colour tint`. `mesh.wgsl`'s
+  `zone_glow` draws the term end to end - pixel-tested in
+  `crates/render/tests/zone_recolour.rs`, and checked against real HD disc
+  data with `--zone-spectrum-test` (`--screenshot`'s own audio device is
+  null, so this is the only way a capture shows the glow at all): 476,000 of
+  1,175,040 pixels move by more than a nudge against the same frame without
+  it. Wired into `ZoneGrade::zone_uniform` (`effect.w` now carries
+  `Track.EQ brightness` instead of a placeholder zero) and
+  `race::Scene::render`. `write_vis` interpolates its input across the whole
+  256-wide strip rather than block-repeating it - a shipped stage texture
+  samples only a narrow, arbitrary window of indices (`zone-shader.md`'s own
+  histogram, and the twenty-sixth pass's texels `1`-`10`/`161`), and a block
+  mapping would put that whole window inside one repeated value. Missing an
+  authored `EQ colour tint` blanks the lookup rather than substituting white.
+  See the `## Open` bullet below on what this gate still cannot produce.
+- ~~Put the audio-spectrum architecture question to the maintainer before
+  building anything that consumes it~~ **Answered by building it**, per the
+  above: render-side, in `oag-audio`'s own `spectrum` module, never reaching
+  `oag-gameplay`.
+- The `...Nearest` clones needed a second sampler, not a shared one - `mesh.wgsl`
+  reads `zone_tex` through both `zone_sampler` (linear, the surface term) and
+  `zone_nearest_sampler` (nearest, the glow's own band index), the same
+  texture bound twice under different sampler state in bind group 2.

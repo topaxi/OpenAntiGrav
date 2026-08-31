@@ -428,12 +428,12 @@ impl ZoneGrade {
             uv_scale,
             enabled: 1.0,
             _pad: 0.0,
-            // The `.w` scales the visualiser glow, which this build does not
-            // draw for want of `zoneTexVis`. Left at zero rather than filled,
-            // even though `Track.EQ brightness` is parsed and is what the
-            // original puts there: carrying a number nothing reads would make
-            // the glow look fed when it is not.
-            effect: [r, g, b, 0.0],
+            // The `.w` scales the visualiser glow: `Track.EQ brightness`,
+            // `0.0` on `Start` and `20.0` from `Sub Venom` on. Filled now that
+            // `mesh.wgsl`'s `zone_glow` draws it - see
+            // `oag_render::mesh_render::zone` for what feeds the lookup it
+            // indexes.
+            effect: [r, g, b, palette.track_eq_brightness.unwrap_or(0.0)],
             // `zoneBase*`/`zoneBaseAlt*`, the two rim-lit summands of the
             // surface: `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, both
             // exponents inline literals in the microcode.
@@ -455,6 +455,26 @@ impl ZoneGrade {
             base: rgb0(palette.track_base_colour_highlight),
             base_alt: rgb0(palette.track_base_colour),
         }
+    }
+
+    /// The showing stage's own `EQ colour tint`, for tinting the visualiser
+    /// glow - see `oag_render::mesh_render::zone::write_vis`.
+    ///
+    /// **Naming, not a traced shader input.** `EQ colour tint` and its
+    /// `EQ analogue colour tint` sibling are parsed and land in this table's
+    /// own per-stage struct, but no consumer of either is traced in the
+    /// executable - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+    /// row for `+0x150`. Confidence 70 on "this is the spectrum's own
+    /// colour", from the name and the `EQ` cluster's own reading in
+    /// `docs/formats/effectsettings.md`. The showing stage's own palette
+    /// rather than [`Self::palette`]'s cross-fade, on the same terms
+    /// [`Self::zone_uniform`] already reads unblended.
+    #[must_use]
+    pub fn eq_tint(&self) -> Option<[u8; 3]> {
+        let palette = self.table.stage_palette(self.blend.current)?;
+        let [r, g, b, _] = palette.eq_colour_tint?;
+        Some([r, g, b])
     }
 
     /// What the load report says about this table.

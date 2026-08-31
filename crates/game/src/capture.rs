@@ -516,6 +516,10 @@ pub fn run(
                         gamma: options.settings.display.gamma,
                     },
                 }),
+                // This path has no CLI flag of its own for it, the same gap
+                // `zone_stage` already has here - see `main/headless.rs` for
+                // the one capture path that does.
+                zone_spectrum_test: false,
             },
             audio,
         );

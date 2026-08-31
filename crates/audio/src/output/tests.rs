@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::mixer::{Bus, Play, Sound};
+use crate::spectrum::Spectrum;
 
 fn tone() -> Arc<Sound> {
     let samples = (0..2048).map(|i| ((i % 64) * 400) as i16).collect();
@@ -215,7 +216,13 @@ fn the_render_thread_fills_the_ring_and_stops_when_dropped() {
     let target = render::target_samples(44_100, Duration::from_millis(60));
     let (producer, mut consumer) =
         rtrb::RingBuffer::new(render::ring_capacity(44_100, Duration::from_millis(60)));
-    let ahead = render::Ahead::spawn(Arc::clone(&mixer), producer, target);
+    let ahead = render::Ahead::spawn(
+        Arc::clone(&mixer),
+        producer,
+        target,
+        44_100,
+        Arc::new(Spectrum::new()),
+    );
 
     // It polls, so give it a few passes to fill rather than assuming one.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);

@@ -522,9 +522,18 @@ but no shader has been read and no runtime trace taken.
   alpha**, the shipped textures really do carry discrete per-texel band indices
   (`zonemodetrack10`'s alpha takes exactly the ten consecutive values 31..40),
   and the glow term is gated to **up-facing surfaces** (`saturate(N.y - 0.5)`)
-  - i.e. the microcode itself says *the floor* displays it. What remains open
-  is only whether the 256 palette entries are rewritten per frame with live
-  audio levels, which is a memory question and needs a watchpoint.
+  - i.e. the microcode itself says *the floor* displays it. **The 256 palette
+  entries are confirmed rewritten per frame, 2026-08-31**: `zoneTexVis` is
+  zero-filled at load and then rewritten every frame by
+  `Environment_UpdateStageBlend`, the same function that already cross-fades
+  the stage table into the eight Zone colour vec4s - see
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-sixth pass, confidence 74. What remains open is narrower than before:
+  not *whether* the entries move, but whether the float value driving them is
+  itself audio-reactive or a plain stage-progress fraction - the dispatch
+  shape traced matches the recovered 15-rung stage ladder rather than showing
+  an obvious PCM/spectrum read, so this still needs a watchpoint (or a fuller
+  unwind of the threshold dispatch) to close.
 
 
 ## Open
