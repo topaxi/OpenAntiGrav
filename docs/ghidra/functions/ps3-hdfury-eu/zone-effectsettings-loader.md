@@ -3567,11 +3567,21 @@ to see open.
   it could still be wrong are recorded with the sweep itself: an SPU job DMAing
   into main memory, a pointer round-tripped through memory, `DFEngine.sprx`, and
   a register-model defect that yields false unknowns.
-- **What writes the eight colour vec4s** (`0x00c81460`, `0x00c81470`-`0x00c814d0`),
-  including `zoneColourTint`'s own value. Nothing stores into that range by
-  displacement off `r14`, so the writer is almost certainly indexed VMX
-  (`stvx rV,rA,rB`), which carries no displacement to grep. An RPCS3 write
-  watchpoint on `0x00c81470` settles it; static analysis does not.
+- ~~**What writes the eight colour vec4s**~~ (`0x00c81460`,
+  `0x00c81470`-`0x00c814d0`), including `zoneColourTint`'s own value. Nothing
+  stores into that range by displacement off `r14`, so the writer is almost
+  certainly indexed VMX (`stvx rV,rA,rB`), which carries no displacement to
+  grep. An RPCS3 write watchpoint on `0x00c81470` settles it; static analysis
+  does not.
+
+  **Answered the same day, and the last sentence was wrong** - see the
+  twenty-fourth pass below. It is `Environment_UpdateStageBlend`
+  (`0x003da540`), found **statically**. The prediction about the addressing
+  form was right and the conclusion drawn from it was not: "no displacement to
+  grep" is a reason a *displacement* sweep fails, not a reason static analysis
+  fails. Four sweeps missed it because all four keyed on `displacement(r14)`.
+  Recorded rather than quietly deleted, because "reach for the emulator" is an
+  expensive thing to be told wrongly.
 - **What fills the two-entry palette arrays** at `0x00c81330`-`0x00c81350`
   (parameters 65, 66 and 68-71). Same limitation. Confidence only 60 that they
   hold texture pointers at all - inferred from the `+32` header skip and the
