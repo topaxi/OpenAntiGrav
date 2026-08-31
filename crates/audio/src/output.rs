@@ -180,6 +180,13 @@ impl Output {
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
+        if let Some(spec) = tap {
+            log::info!(
+                "audio: recording {:.0} s of output to {}",
+                spec.seconds,
+                spec.path.display()
+            );
+        }
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
