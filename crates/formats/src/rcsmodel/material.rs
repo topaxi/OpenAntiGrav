@@ -40,6 +40,8 @@
 //! +0x10  u32   state word; the low two bits are [`Material::transparency`]
 //! +0x14  u16   source blend factor
 //! +0x16  u16   destination blend factor
+//! +0x18  u32   alpha test comparison function
+//! +0x1c  f32   alpha test reference, in `[0, 1]`
 //! ```
 //!
 //! Records are not a fixed size: consecutive offsets differ by 96 to 768 bytes
@@ -132,6 +134,42 @@ pub struct Material {
     pub src_factor: u16,
     /// The destination blend factor at `+0x16`.
     pub dst_factor: u16,
+    /// The alpha test comparison function at `+0x18`.
+    ///
+    /// **Confidence 88, from a decompiled RSX write, not a guess at the field's
+    /// existence.** `FUN_005d8f68` in `ps3-hdfury-eu`'s Ghidra database reads
+    /// this word and this material's [`Self::alpha_ref`] straight into
+    /// `cellGcmSetAlphaFunc`'s two arguments (`NV4097_SET_ALPHA_FUNC` at RSX
+    /// register `0x308`, `NV4097_SET_ALPHA_REF` at `0x30c`), gated on
+    /// [`Self::state`] bit 1 - the bit [`Transparency::Mode2`] sets. See
+    /// `docs/formats/rcsmodel.md` and
+    /// `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`.
+    ///
+    /// **Every material measured, [`Transparency::Mode2`] or not, holds one of
+    /// exactly two values**, `0x0201` or `0x0204` - `GL_LESS` and `GL_GREATER`
+    /// in the RSX's OpenGL-inherited numbering, the same family
+    /// [`Factor::from_rsx`] reads. Every [`Transparency::Mode2`] material reads
+    /// `0x0204`, `GL_GREATER`; nothing on the disc where the field is actually
+    /// *consumed* uses `GL_LESS`. Left as the raw `u32` rather than a named
+    /// enum for the same reason [`Self::state`]'s untouched bits are: two
+    /// values out of eight comparison functions RSX defines is thin ground for
+    /// treating this as a settled small enum the way [`Factor`] is.
+    pub alpha_func: u32,
+    /// The alpha test reference at `+0x1c`, authored in `[0, 1]`.
+    ///
+    /// Same evidence as [`Self::alpha_func`]. The same decompiled call scales
+    /// this by `255.0` before writing `NV4097_SET_ALPHA_REF`, converting the
+    /// authored fraction to the register's 8-bit range - confirmed by reading
+    /// the constant directly (`0x437f0000`, exactly `255.0`) rather than
+    /// assumed from the RSX register's usual width.
+    ///
+    /// **Exactly `0.5` disc-wide** - every material name across all 16
+    /// circuits and all three `PSARC` archives, opaque, blended or
+    /// [`Transparency::Mode2`] alike, holds this same value. It is a shared
+    /// default the state block is built with, not a per-material tuned
+    /// reference. See [`Transparency::Mode2`] for what that resolves about
+    /// the crowd-erasure reading it replaces.
+    pub alpha_ref: f32,
     /// The `.gtf` path at `+0x58`: the texture this material paints with.
     ///
     /// **In the clear, and on every material of both models measured** - 4 of 4
@@ -242,16 +280,29 @@ pub enum Transparency {
     /// `1`: see-through, blended with the equation [`Material::blend`] reads
     /// out of the factor pair. 2,362 materials disc-wide.
     Blended,
-    /// `2`: see-through as well, and **not** distinguished from
-    /// [`Self::Blended`] by its equation - 211 of these 212 materials carry the
-    /// same `0302`/`0303` pair.
+    /// `2`: an alpha test, not a blend - **confidence 90, from a decompiled
+    /// RSX write**. 211 of these 212 materials carry the same `0302`/`0303`
+    /// factor pair as [`Self::Blended`], which is why the equation alone
+    /// never distinguished them; what does is that state bit 1 (this value)
+    /// drives `NV4097_SET_ALPHA_TEST_ENABLE` while bit 0
+    /// ([`Self::Blended`]) drives `NV4097_SET_BLEND_ENABLE` - two different
+    /// fixed-function GPU features, read directly out of `FUN_005d8f68` in
+    /// `ps3-hdfury-eu`'s Ghidra database. The comparison and reference are
+    /// [`Material::alpha_func`]/[`Material::alpha_ref`], and both turn out
+    /// to be the disc-wide constants `GL_GREATER`/`0.5` - **a plain 0.5
+    /// cutout, exactly the "obvious hypothesis" an earlier pass tried and
+    /// believed refuted.**
     ///
-    /// What *does* distinguish it is unrecovered. The obvious hypothesis is an
-    /// alpha test, because `jd_alphalambert_alphatest`, `fence_alpha` and
-    /// `nr_crowd_bustle` are here and are the kind of surface a cutout is for -
-    /// but `hd_bombfire_glow` and `zone_death_electricity` are here too and are
-    /// not cutouts, so the name evidence does not hold up and this value stays
-    /// unnamed. See `docs/formats/rcsmodel.md`.
+    /// **That refutation was a measurement error, not a property of the
+    /// data.** It read `nr_crowd_bustle`'s texture as "alpha runs 0..255 at a
+    /// mean of 120, and the threshold takes most of it" - true of the mean,
+    /// and the wrong statistic: the texture is a clean bimodal split, 52.9%
+    /// of texels at `0` and 47.1% at `255`, nothing between. `GL_GREATER`
+    /// against `0.5` keeps exactly the 47.1% - the crowd figures - and
+    /// drops the transparent background between them, which is what a
+    /// cutout is for. A mean near the threshold reads as "erases most of
+    /// it" only if the distribution is assumed uniform; a cutout texture is
+    /// built to be the opposite of uniform. See `docs/formats/rcsmodel.md`.
     Mode2,
 }
 
@@ -314,7 +365,7 @@ pub enum Blend {
 impl Material {
     /// Reads one record, or `None` if it does not fit inside `data`.
     pub(super) fn parse(data: &[u8], at: usize) -> Option<Self> {
-        if at + 0x18 > data.len() {
+        if at + 0x20 > data.len() {
             return None;
         }
         // **Entries 0 and 1 of the material's own input table**, which is what
@@ -328,6 +379,8 @@ impl Material {
             state: ByteOrder::Big.u32(data, at + 0x10),
             src_factor: ByteOrder::Big.u16(data, at + 0x14),
             dst_factor: ByteOrder::Big.u16(data, at + 0x16),
+            alpha_func: ByteOrder::Big.u32(data, at + 0x18),
+            alpha_ref: ByteOrder::Big.f32(data, at + 0x1c),
             texture: entries
                 .first()
                 .and_then(|(_, p)| p.clone())

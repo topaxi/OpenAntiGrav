@@ -183,3 +183,8 @@
 0x00d45f84	data	g_ZoneEffectsActive	80	zone-sky.md
 0x000d14c8	function	Ship_DispatchCollisionFx	68	ship-collision-fx.md
 0x002d9730	function	ShipCollisionFx_Trigger	65	ship-collision-fx.md
+0x005d8f68	function	Material_ApplyRenderState	90	material-state.md
+0x005c1fe0	function	Rsx_SetBlendFunc	92	material-state.md
+0x005c207c	function	Rsx_SetBlendFuncSeparate	92	material-state.md
+0x005c1ec0	function	Rsx_SetAlphaFunc	92	material-state.md
+0x005c1d0c	function	Rsx_SetMethod	88	material-state.md
