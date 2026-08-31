@@ -72,6 +72,22 @@ pub struct Options {
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
     /// two share `TimeTrial_HUD.xml`. See [`hud_layout`].
     pub mode: Mode,
+    /// Force the Zone colour grade to a stage, instead of resting where the
+    /// title's own ladder leaves it.
+    ///
+    /// **A development override, and the only way to see HD/Fury's Zone look
+    /// at all today.** What advances the stage during a race is recovered on
+    /// 2048 and not on HD, so an HD Zone race otherwise sits on whichever
+    /// stage its loader left - see `crate::race::zone_grade`. Comparing a
+    /// frame against the original needs the two on the same rung, and the
+    /// original visibly is not on `Start`: at Moa Therma's start line it is
+    /// already showing `Sub Venom`'s cyan (`Scene.Base Colour` =
+    /// `0.003922 0.847059 1.000000`), where `Start` authors a flat
+    /// `3.0 3.0 3.0` with no hue in it at all.
+    ///
+    /// Clamped to the stages the loaded file names. `None` leaves the ladder
+    /// alone, which is what every non-development caller wants.
+    pub zone_stage: Option<u32>,
     /// Draw the driveable ribbon instead of the track's art meshes.
     ///
     /// **A development view, not a style.** The ribbon is the geometry the
@@ -196,6 +212,7 @@ impl Default for Options {
             opponent_teams: Vec::new(),
             class: SpeedClass::Venom,
             mode: Mode::default(),
+            zone_stage: None,
             ribbon: false,
             collision: false,
             lod: mesh::Lod::Both,

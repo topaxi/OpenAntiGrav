@@ -116,6 +116,7 @@ impl Pending {
             team: self.cli.team.clone(),
             class: self.class,
             mode: self.mode,
+            zone_stage: self.cli.zone_stage,
             opponent_teams,
             ribbon: self.cli.ribbon,
             collision: self.cli.collision,

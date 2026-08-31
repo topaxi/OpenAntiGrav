@@ -412,6 +412,19 @@ pub(crate) struct Cli {
     #[arg(long, default_value = "time_trial")]
     pub(crate) mode: String,
 
+    /// Development override: force the Zone colour grade to a stage.
+    ///
+    /// **The only way to see HD/Fury's Zone look at all today**, because what
+    /// advances the stage during a race is recovered on 2048 and not on HD, so
+    /// an HD Zone race otherwise rests where its loader left it. The original
+    /// is visibly *not* on stage 0 at a start line - Moa Therma's opens on
+    /// `Sub Venom`'s cyan - so a frame compared against it needs this.
+    ///
+    /// Clamped to the stages the loaded file names. Has no effect outside
+    /// `--mode zone`, or on a title that ships no stage table.
+    #[arg(long, value_name = "N")]
+    pub(crate) zone_stage: Option<u32>,
+
     /// Development view: draw the driveable ribbon instead of the track's art
     /// meshes.
     ///

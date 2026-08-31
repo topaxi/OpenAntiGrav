@@ -110,6 +110,52 @@ question**: anything the simulation can see must not depend on the audio
 device, so the spectrum has to stay render-side or be derived from the sample
 stream deterministically.
 
+## 2026-08-31: compared against the original, and the dominant term is the one we do not draw
+
+The maintainer supplied a real HD/Fury frame - a Zone race on Moa Therma at
+the start line - and it is the first side-by-side this thread has had. Both
+halves are in `data/shots/` (gitignored):
+`hd_zone_moatherma_stage1_original.png` against
+`hd_zone_moatherma_stage1_ours.png`.
+
+**First result, and it corrects an assumption made earlier in this thread: the
+original is not on stage `0` at a start line.** Its scene is dominated by a
+strong cyan with a white blowout, and the disc names that exactly:
+`1 Sub Venom.Scene.Base Colour` = `0.003922 0.847059 1.000000`, with
+`Scene.Base Colour Highlight` = `0.000000 1.694118 2.000000` - over `1.0`, so
+it blooms out to white. `0 Start` authors a flat `3.0 3.0 3.0` with no hue in
+it whatever. So an HD Zone race opens on `Sub Venom` or later, which is
+independent evidence about the unrecovered trigger: **whatever drives it does
+not leave the grade where the loader put it.** The earlier note here that a
+start-line comparison would be inert because `Start` authors a black
+`Scene.Texture Colour` was wrong - it reasoned from the one key this port
+happens to draw.
+
+**Second result, and it is the actionable one.** Ours draws the recovered
+textured rule faithfully - the cyan appears, and only where the material's
+albedo is black, which is what the microcode says. But the original is
+*near-monochrome*: its crowds, its orange and red trackside banners, its
+advertising boards and its grey concrete are all subsumed into cyan, black and
+white. A term that only adds where the albedo is already black cannot do that,
+so **the look is carried by the family this port leaves undrawn** - the
+untextured `zoneBase*`/`zoneBaseAlt*` materials, where
+[zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md) records
+that the two rim terms are *the entire surface colour* rather than an addition
+to it. Their inputs are already traced and authored (`Scene.Base Colour
+Highlight` and `Scene.Base Colour`); only the shader path is missing.
+
+That reframes the remaining work. The gap is **not** an unfed input, and it is
+not the visualiser: it is that a Zone race in the original selects a different
+*material variant* per surface, which replaces the shading, where this port
+adds a term on top of the ordinary one. Confidence 80 - the two frames, the
+authored numbers matching the original's hue, and the microcode's own
+"entire surface colour" reading all agree.
+
+**Tooling this produced**: `--zone-stage N` (`oag_game::race::Options::zone_stage`).
+HD rests wherever its loader left the grade, so before this there was no way to
+put an HD Zone race on a named rung at all, and no way to compare a frame
+against an original that is visibly on one.
+
 ## Open
 
 - What the Zone shader does with the six-plus Zone parameters. Unread. This is
@@ -132,14 +178,18 @@ stream deterministically.
 - ~~Load the fifteen `zoneModeTrack{0..14}.gtf` and hold them per stage~~
   **Done, 2026-08-31** - see the section above. Fifteen decode, all distinct,
   ground-truth tested.
-- **Read HD's Zone fragment program.** This is now the single gate on
-  everything visible: the textures are loaded, the parameters are mapped, the
-  effect has a name, and what combines them is the only unread piece. Start
-  from the shader registry (`ShaderRegistry_Find`, `0x005cd728`, and
-  `renderer.md`'s own reading of the program blocks) rather than from the
-  parameter names - the naming has already proved misleading once, since the
-  parameter the stage tint lands in is called `fogColour` and the key that
-  feeds it is called `Texture Colour`.
+- **Draw the untextured `zoneBase*` family** - `colour = zoneBaseI/O.rgb *
+  rim^10 + zoneBaseAltI/O.rgb * rim^5`, replacing the surface shading rather
+  than adding to it. Both colours are already fed from `Scene.Base Colour
+  Highlight` and `Scene.Base Colour`. **This is now the top item**: the
+  side-by-side above shows it is what carries the original's look, and nothing
+  about it is unrecovered. The open question is which materials compile to that
+  variant, which is a `.rcsmaterial` question rather than a microcode one.
+- ~~Read HD's Zone fragment program.~~ **Done** - it is not an engine program
+  at all but a variant compiled into 1,467 of the disc's 1,590 `.rcsmaterial`
+  files, which is why every search of the executable came back empty. Full
+  rule in
+  [zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md).
 - Generate `zoneTexVis` (256x1) rather than looking for a file. **Read the
   packing loop at `0x003d8b40` first** - and read it with the spectrum
   observation in hand, because "an RGB ramp" was the reading *before* anyone

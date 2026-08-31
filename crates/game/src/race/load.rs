@@ -565,6 +565,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ps3_geometry.is_some(),
         title.race,
         options.mode,
+        options.zone_stage,
         &mut report,
     );
     // The track's authored fog volumes. Empty for a ribbon build, and empty for

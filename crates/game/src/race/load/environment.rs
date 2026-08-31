@@ -312,6 +312,7 @@ pub(super) fn staging(
     // is also what keeps the argument count under `clippy::too_many_arguments`.
     race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    zone_stage: Option<u32>,
     report: &mut Vec<String>,
 ) -> Staging {
     // **The circuit's own light rig, where it authors one.** Wipeout HD does:
@@ -345,7 +346,7 @@ pub(super) fn staging(
         light,
         authored_fog,
         hd_bloom,
-        zone_grade: zone_grade(archives, race, mode, track, report),
+        zone_grade: zone_grade(archives, race, mode, zone_stage, track, report),
     }
 }
 
@@ -408,6 +409,7 @@ pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
     race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    forced_stage: Option<u32>,
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<crate::race::zone_grade::ZoneGrade> {
@@ -450,6 +452,23 @@ pub(super) fn zone_grade(
     // pre-race state, not the opening lap's.
     if let Some(grade) = grade.as_mut() {
         grade.show_zone(0);
+    }
+    // **The development override, applied after the title's own ladder.** It
+    // exists because HD's stage trigger is unrecovered, so nothing else can put
+    // an HD Zone race on a rung to compare against the original - see
+    // `crate::race::Options::zone_stage`.
+    if let (Some(grade), Some(stage)) = (grade.as_mut(), forced_stage) {
+        grade.request_stage(stage);
+        grade.commit();
+        // The commit zeroes the weight, verbatim as the traced store does,
+        // which would leave the forced stage showing its predecessor. A forced
+        // stage is asked for whole.
+        grade.set_weight(1.0);
+        report.push(format!(
+            "zone: stage forced to {} by --zone-stage; the title's own ladder is not \
+             driving this",
+            grade.blend().current,
+        ));
     }
     match &grade {
         Some(grade) => report.push(grade.describe()),
