@@ -234,6 +234,43 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-31, the Zone shader's own inputs are traced and the recolour
+  draws.** `Environment_UpdateStageBlend` (`0x003da540`) turns out to write
+  all seven Zone vec4s itself - the twenty-third pass had concluded that only
+  an RPCS3 write watchpoint could settle it. Four prior sweeps missed it
+  because they keyed on `displacement(r14)` and the stores are `stvx rV, r30,
+  rB`, indexed with no displacement and no literal to grep. `zoneEffectInner`
+  / `Outer` are `Scene.Texture Colour` of stage `n` / `n - 1`, `zoneBase*` is
+  `Scene.Base Colour Highlight`, `zoneBaseAlt*` is `Scene.Base Colour`, and
+  `zoneColourTint.xy` is the file's own title-wide `Texture U scale` /
+  `Texture V scale`. `oag_render`'s `mesh.wgsl` draws that subset.
+  Confidence 84-86, full evidence in the twenty-fourth pass of
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+
+  **What that leaves open, all of it narrow:**
+
+  1. **Which of the two parallel feeds a material sees.** `0x00c814e0`-
+     `0x00c81540` receives the identical seven parameters built from the
+     `Track.*` keys. Two of the seven rows are read; the other five follow the
+     same idiom but were not traced to their `li r0` index. Which set a given
+     material gets is presumably the same publisher choice that governs
+     `zoneMode*` versus `zoneModeTrack*`, unconfirmed.
+  2. **`zoneOrigin` (`0x00c81550`) and the sphere radius.** The radius is
+     `H[e].f32@0x08`, copied per frame under a lane-3-only `vsel`; nothing was
+     found writing `zoneOrigin` at all. Inner/outer is a **stage-transition
+     wavefront** - a sphere expanding out of `zoneOrigin` that repaints the
+     world with the new stage - so both are needed only once a transition can
+     be in flight, which needs HD's stage trigger first.
+  3. **`zoneTexVis`, still.** Built at `0x003d8b40` from a static table at
+     `0x008c2d78`, so a port must generate it rather than load it - and the
+     loop's arithmetic does not close (nine passes of 64 texels, source running
+     `+1728` down to `+192`, destination advancing 256 bytes a pass, against a
+     256-entry table). Reconciling that is what the glow term waits on.
+  4. **`zoneAnisoPalette` / `zoneAnisoPaletteOuter`.** Unchanged: no filling
+     write located, and `zonemode.effectsettings` authors no
+     `Scene.Aniso Power` on any of its fifteen stages either, so the rim term
+     has neither a palette nor an exponent from the disc.
+
 - **2026-08-31, later: the tint consumer is `fogColour`, and the two questions
   that replace it are both narrow.** See the struck-through first entry under
   Next Steps for the finding itself; the entries below it are kept as the
@@ -690,6 +727,17 @@ evidence, including the byte-level trace of every function in this chain:
   Zone shader, so wiring this into a render is unstarted.
 
 ## Next Steps
+
+- **Read the remaining five `Track.*` rows of the cross-fader.** Bounded and
+  cheap: `llvm-objdump -d --mcpu=pwr6 --start-address=0x3daa00
+  --stop-address=0x3dab60`, then pair each `stvx vD, r30, rN` with the `li rN`
+  before it and the `lvx` that filled `vD`. Two of the seven are already read
+  (`0x00c814e0` = the two stages' `Track.Aniso Power`, `0x00c814f0` =
+  `Track.Texture Colour` of stage `n`). That would let the renderer pick the
+  right feed once a material group can be told apart.
+- **Close `zoneTexVis`'s build loop** before drawing the visualiser glow. The
+  texel count does not match the table size, and a port that guesses at the
+  reconciliation would be inventing the equaliser rather than reproducing it.
 
 - ~~Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130`~~
   **Done, 2026-08-31 - it is the shader parameter `fogColour`.** Both halves
