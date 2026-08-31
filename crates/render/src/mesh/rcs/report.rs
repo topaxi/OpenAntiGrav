@@ -38,7 +38,18 @@ pub struct Report {
     pub strays: usize,
     /// Chunks no `.vex` node references, drawn in world space. On a circuit
     /// this is the circuit; see [`build_scene`].
+    ///
+    /// **Excludes `Weapon Pad` chunks** - see [`Self::weapon_pads`], the one
+    /// part of this same bucket that is not counted here.
     pub unreferenced: usize,
+    /// `Weapon Pad` chunks, split out of [`Self::unreferenced`] into their own
+    /// model so `oag_game::race::load` can gate them by
+    /// `oag_race::Mode::weapons_enabled` the way the PSP-shaped path already
+    /// gates its own weapon-pad model. Zero on a `.vex` version with no
+    /// recovered `weapon_pad` class id, and zero on a circuit that authors no
+    /// `Weapon Pad` node at all - both read the same from this count alone;
+    /// [`Self::nodes`] and the load report's own text say which.
+    pub weapon_pads: usize,
     /// Vertices whose normal came out of the file rather than off the
     /// triangles. Reported because the difference is visible and the fallback
     /// is silent: see [`face_normals`].
@@ -144,6 +155,9 @@ impl Report {
         } + &match self.unreferenced {
             0 => String::new(),
             n => format!(", plus {n} chunk(s) no node references, drawn in world space"),
+        } + &match self.weapon_pads {
+            0 => String::new(),
+            n => format!(", plus {n} weapon pad chunk(s), drawn separately and gated by mode"),
         } + &match self.see_through {
             0 => String::new(),
             n => format!(", {n} chunk(s) drawn see-through"),

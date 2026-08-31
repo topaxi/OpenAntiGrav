@@ -1,0 +1,129 @@
+//! Wipeout HD's `Weapon Pad` chunks, split out of `build_scene`'s world-space
+//! pass rather than baked unremovably into the circuit's own model.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs a decrypted PS3 disc image,
+//! which this project does not ship. See
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
+//!     -E 'binary(hd_weapon_pad_split_ground_truth)'
+//! ```
+//!
+//! # What this pins
+//!
+//! Reported from play: HD drew weapon pads in every solo mode, not just
+//! `SingleRace`. The cause was that `oag_game::race::load` set
+//! `weapon_pad_model` to `None` on the PS3 path unconditionally, so
+//! `Scene::new`'s `Mode::weapons_enabled` gate had nothing to act on - HD's
+//! weapon pads were never routed through it at all, because they were baked
+//! into the circuit's own `track_model` alongside the road, walls and
+//! scenery. See `docs/gameplay/race-modes.md` and
+//! `crates/render/src/mesh/rcs.rs`'s own doc comment on `build_scene`.
+//!
+//! This checks the fix at the layer it belongs to: the decode, not the
+//! render. `crates/render/examples/hd_pads.rs` already established that
+//! Talon's Junction authors 9 `Weapon Pad` nodes; this checks `build_scene`
+//! pulls exactly those chunks into its own second model and leaves the main
+//! one without them, on the real disc bytes.
+
+use std::path::{Path, PathBuf};
+
+use oag_formats::vex;
+use oag_render::mesh;
+
+fn image() -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
+
+/// Talon's Junction: `hd_pads.rs` counts 9 `Weapon Pad` nodes here, all
+/// resolving to a chunk this circuit's `.rcsmodel` carries.
+const TRACK: &str = "/data/environments/talons_junction/track.vex";
+const ARCHIVE: &str = "PS3_GAME/USRDIR/DATA00.PSARC";
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:{ARCHIVE}", image.display());
+    let vex_data = mesh::read_blob(&spec, TRACK).expect("reading the .vex");
+    let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
+    let model_blob = mesh::read_blob(&spec, &model_name).expect("reading the .rcsmodel");
+
+    // The independent count: walk `Weapon Pad` nodes directly, the way
+    // `hd_pads.rs` does, rather than trusting `build_scene`'s own report to
+    // grade itself.
+    let nodes = vex::nodes(&vex_data).expect("walking the node tree");
+    let classes = vex::classes_of(&vex_data).expect("class table");
+    let pad_class = classes.weapon_pad.expect("weapon_pad id recovered for v6");
+    let rcs_model = oag_formats::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+    let expected_hashes: Vec<u32> = nodes
+        .iter()
+        .filter(|n| n.class_id == pad_class)
+        .filter_map(|n| {
+            let payload = &vex_data[n.payload()];
+            (payload.len() >= 0x34).then(|| vex::byte_order(&vex_data).u32(payload, 0x30))
+        })
+        .filter(|hash| rcs_model.mesh(*hash).is_some())
+        .collect();
+    assert_eq!(
+        expected_hashes.len(),
+        9,
+        "talons_junction should author 9 placed Weapon Pad chunks, the same \
+         count hd_pads.rs reports"
+    );
+
+    let (track_model, weapon_pad_model, report) =
+        mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
+            mesh::read_blob(&spec, path).ok()
+        })
+        .expect("build_scene decodes talons_junction");
+    println!("{}", report.describe());
+
+    assert_eq!(
+        report.weapon_pads,
+        expected_hashes.len(),
+        "build_scene's own weapon-pad chunk count against the independent node walk"
+    );
+    let weapon_pad_model = weapon_pad_model.expect("9 weapon pad chunks should build a model");
+    assert!(!weapon_pad_model.indices.is_empty());
+
+    // **The chunk this project cares about most: it must not double-draw.**
+    // Every draw call in the *circuit's* model carries the `.rcsmodel` chunk
+    // index it came from (`DrawCall::chunk`); none of them may name a chunk
+    // this circuit's weapon pads own.
+    let pad_chunk_indices: Vec<u32> = expected_hashes
+        .iter()
+        .filter_map(|&hash| rcs_model.mesh_index(hash))
+        .map(|i| u32::try_from(i).expect("a chunk index fits in u32"))
+        .collect();
+    assert_eq!(pad_chunk_indices.len(), expected_hashes.len());
+    for draws in [
+        &track_model.draws,
+        &track_model.alpha_tested_draws,
+        &track_model.transparent_draws,
+    ] {
+        for draw in draws {
+            if let Some(chunk) = draw.chunk {
+                assert!(
+                    !pad_chunk_indices.contains(&chunk),
+                    "the circuit model still carries a draw call for weapon pad chunk {chunk}"
+                );
+            }
+        }
+    }
+}

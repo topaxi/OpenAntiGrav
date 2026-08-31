@@ -107,10 +107,17 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
     let Some(geometry) = sibling_geometry(spec, name, data) else {
         return Ok(None);
     };
-    build_scene(name, data, &geometry, &mut |path| {
+    let (mut model, weapon_pads, report) = build_scene(name, data, &geometry, &mut |path| {
         super::read_blob(spec, path).ok()
-    })
-    .map(Some)
+    })?;
+    // Put back together - see `pads::merge_back`'s own doc for why.
+    if let Some(weapon_pads) = weapon_pads {
+        pads::merge_back(&mut model, weapon_pads);
+        let (centre, radius) = bounding_sphere(&model.vertices);
+        model.centre = centre;
+        model.radius = radius;
+    }
+    Ok(Some((model, report)))
 }
 
 /// How a build fetches a material's `.gtf` out of whatever archive the caller
@@ -133,6 +140,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod isolate;
+mod pads;
 pub mod psp2;
 mod skin;
 use skin::{flips, picks, roles, skin, variants};
@@ -286,6 +294,9 @@ fn referenced(
 /// baked into this circuit's file. The sky traffic that is visible here is
 /// the world-space `animating_traffic` chunks, which the second pass draws.
 ///
+/// **A third bucket, `Weapon Pad` chunks, is split into the return tuple's
+/// second element** - see [`pads`].
+///
 /// # Errors
 ///
 /// As [`build`].
@@ -294,23 +305,35 @@ pub fn build_scene(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
-) -> Result<(Model, Report)> {
+) -> Result<(Model, Option<Model>, Report)> {
     let (mut out, mut report) =
         build_with_options(label, data, model_blob, textures, |c| c.mesh, true)?;
 
     let model = rcsmodel::Model::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let nodes = vex::nodes(data).context("walking the node tree")?;
-    let mesh_class = vex::classes_of(data)
-        .ok()
+    let classes = vex::classes_of(data).ok();
+    let mesh_class = classes
         .and_then(|c| c.mesh)
         .context("no mesh class id for this .vex version")?;
     let placed = referenced(data, &nodes, mesh_class, &model);
+    // `None` (only `V6` has a recovered `weapon_pad` id) leaves the pad model empty.
+    let weapon_pad_hashes = classes
+        .and_then(|c| c.weapon_pad)
+        .map(|pad_class| pads::hashes(data, &nodes, pad_class, &model))
+        .unwrap_or_default();
+    let mut pad_out = pads::skeleton(label, &out);
 
     for (chunk_index, chunk) in model.meshes.iter().enumerate() {
         if placed.contains(&chunk.hash) {
             continue;
         }
+        let is_weapon_pad = weapon_pad_hashes.contains(&chunk.hash);
+        let target = if is_weapon_pad {
+            &mut pad_out
+        } else {
+            &mut out
+        };
         let mut emitted = false;
         // **Every surface, not just the chunk's own.** A quarter of the disc's
         // chunks declare more than one, each with its own material, bias and
@@ -332,7 +355,7 @@ pub fn build_scene(
                 report.no_stride += 1;
                 continue;
             };
-            let surface = surface(&model, mesh, &out.textures, &out.material_slots);
+            let surface = surface(&model, mesh, &target.textures, &target.material_slots);
             report.see_through += usize::from(surface.blend.is_some());
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));
             for submesh in &mesh.submeshes {
@@ -351,7 +374,7 @@ pub fn build_scene(
                 let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
                 report.authored_normals += normals.as_deref().map_or(0, authored);
                 emit(
-                    &mut out,
+                    target,
                     Geometry {
                         points: &points,
                         normals: normals.as_deref(),
@@ -370,8 +393,12 @@ pub fn build_scene(
             }
         }
         if emitted {
-            report.unreferenced += 1;
-            out.mesh_count += 1;
+            target.mesh_count += 1;
+            if is_weapon_pad {
+                report.weapon_pads += 1;
+            } else {
+                report.unreferenced += 1;
+            }
         }
     }
 
@@ -379,7 +406,10 @@ pub fn build_scene(
     let (centre, radius) = bounding_sphere(&out.vertices);
     out.centre = centre;
     out.radius = radius;
-    Ok((out, report))
+
+    let pad_out = pads::finish(pad_out);
+
+    Ok((out, pad_out, report))
 }
 
 /// Whether a chunk's declaration names no texture coordinate.

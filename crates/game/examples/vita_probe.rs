@@ -136,9 +136,10 @@ fn main() -> anyhow::Result<()> {
                         match mesh::rcs::build_scene(track, &blob, &rcs_blob, &mut |p| {
                             archive.read_path(p).ok()
                         }) {
-                            Ok((model, built)) => println!(
-                                "build_scene OK: {} triangle(s), {}",
+                            Ok((model, weapon_pads, built)) => println!(
+                                "build_scene OK: {} triangle(s) ({} weapon pad triangle(s)), {}",
                                 model.indices.len() / 3,
+                                weapon_pads.map_or(0, |m| m.indices.len() / 3),
                                 built.describe()
                             ),
                             Err(e) => println!("build_scene: ERROR {e}"),

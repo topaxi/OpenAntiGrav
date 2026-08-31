@@ -517,7 +517,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // what made the distinction matter: it ships one beside every circuit and
     // the container is not HD's, so this used to be a hard error that stopped
     // the race. The report names which of the two happened.
-    let rcs_model = geometry::track_model(
+    let (rcs_model, rcs_weapon_pad_model) = geometry::track_model(
         &mut archives,
         &track,
         &track_blob,
@@ -655,19 +655,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Some(pads)
         }
     };
-    // The pickup pads, built the same way and kept separate for the reason
-    // `mesh::build_weapon_pads` gives: they are a different gameplay object and
-    // a merged buffer could not show one without the other. **Nothing hands
-    // anything out yet** - see the roadmap's weapons item.
-    //
+    // The pickup pads, kept separate for the reason `mesh::build_weapon_pads`
+    // gives: a merged buffer could not show one gameplay object without the
+    // other. **Nothing hands anything out yet** - see the roadmap.
     // **Decoded here regardless of `options.mode`.** Whether it actually reaches
-    // the screen is a `Scene::new` decision, not this one - see its own comment,
+    // the screen is a `Scene::new` decision, not this one - see its own comment
     // and `Mode::weapons_enabled`. Keeping the decode unconditional is what lets
     // `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
     // the trigger volumes on every mode's own default `Options`, and it mirrors
-    // the original's own order of operations: `World_CollectNodeLists` always
-    // walks the tree before anything asks whether weapons are on.
-    let weapon_pad_model = if !vex_geometry {
+    // the original's own order: `World_CollectNodeLists` always walks the tree
+    // before anything asks whether weapons are on. The PS3 path is
+    // `geometry::weapon_pad_model` - see its own doc comment for why.
+    let weapon_pad_model = if rcs_drawn {
+        geometry::weapon_pad_model(rcs_weapon_pad_model, options.mode, &mut report)
+    } else if !vex_geometry {
         None
     } else {
         let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.clone())?;
