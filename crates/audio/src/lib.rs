@@ -39,5 +39,5 @@ pub mod spatial;
 pub mod wav;
 
 pub use mixer::{Bus, Mixer, Play, Sound, VoiceId};
-pub use output::Output;
+pub use output::{Output, Tap, TapSpec};
 pub use spatial::{Emitter, Listener, Placed};

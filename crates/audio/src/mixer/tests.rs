@@ -197,10 +197,83 @@ fn a_bus_gain_only_moves_its_own_bus() {
     assert!(music_energy > 0.0, "silencing SFX must not silence music");
 
     mixer.stop_all();
+    // A stopped voice fades over `RELEASE_FRAMES` rather than vanishing, so
+    // render that out before measuring: otherwise what the SFX assertion below
+    // sees is the music's own release tail. Three 128-frame buffers cover 256.
+    for _ in 0..3 {
+        mixer.render(&mut out);
+    }
     mixer.play(Play::looping(sound, Bus::Sfx));
     mixer.render(&mut out);
     let sfx_energy: f32 = out.iter().map(|s| s.abs()).sum();
     assert_eq!(sfx_energy, 0.0, "the SFX bus was set to zero");
+}
+
+/// The measured reason [`RELEASE_FRAMES`] exists: a held cue is loud where it
+/// is stopped, and clearing the slot there is a step from most of full scale to
+/// zero - which a speaker reproduces as a thump.
+#[test]
+fn a_stopped_voice_fades_out_instead_of_being_cut_dead() {
+    // Full scale throughout, which is what a held cue looks like at the moment
+    // something stops it: nothing about a stop lands near a zero crossing.
+    let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
+
+    let mut out = vec![0.0f32; 256 * CHANNELS];
+    mixer.render(&mut out);
+    assert!(out[0] > 0.9, "the voice is loud before it is stopped");
+
+    mixer.stop(id);
+    assert!(!mixer.is_playing(id), "the handle dies with the stop");
+    mixer.render(&mut out);
+
+    // Down over the release rather than across one sample, and silent after it.
+    assert!(out[0] > 0.9, "the fade starts where the waveform was");
+    for frame in 1..RELEASE_FRAMES as usize {
+        assert!(
+            out[frame * CHANNELS] < out[(frame - 1) * CHANNELS],
+            "frame {frame} did not fall"
+        );
+    }
+    assert!(
+        out[RELEASE_FRAMES as usize * CHANNELS..]
+            .iter()
+            .all(|s| *s == 0.0),
+        "past the release the voice is gone"
+    );
+
+    // And the slot comes back, so a release cannot leak one.
+    assert_eq!(mixer.active_voices(), 0);
+    let again = Arc::new(Sound::new(vec![1_000i16; 64 * 2], 2, 44_100).expect("sound"));
+    assert!(
+        mixer.play(Play::once(again, Bus::Sfx)).is_some(),
+        "the released slot is reusable"
+    );
+}
+
+/// A second stop does not restart the fade, which would make a voice on its way
+/// out get louder again.
+#[test]
+fn stopping_twice_does_not_reopen_the_fade() {
+    let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
+    let mut out = vec![0.0f32; 32 * CHANNELS];
+    mixer.render(&mut out);
+
+    mixer.stop(id);
+    mixer.render(&mut out);
+    let after_first = out[31 * CHANNELS];
+    mixer.stop(id);
+    mixer.stop_all();
+    mixer.render(&mut out);
+    assert!(
+        out[0] < after_first,
+        "the second stop restarted the fade: {} then {}",
+        after_first,
+        out[0]
+    );
 }
 
 #[test]
@@ -487,4 +560,82 @@ fn a_voice_follows_its_own_bus_and_the_master() {
         "the master is not after the bus: {}",
         out[0]
     );
+}
+
+/// The measured reason the closing fade exists: a cue that stops loud was cut
+/// loud, and a step from four fifths of full scale to zero is a thump heard
+/// just *after* the effect rather than during it.
+///
+/// Wipeout HD's numbers, which is where this came from: 102 of its 112
+/// `.COLLISIONS` waveforms end above 0.1 and the worst at 0.766, against every
+/// Pulse cue under 0.02.
+#[test]
+fn a_cue_that_ends_loud_fades_out_instead_of_being_cut() {
+    // Ends at full scale, the way HD's collision waveforms do.
+    let abrupt = Arc::new(Sound::new(vec![i16::MAX; 400 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    mixer.play(Play::once(abrupt, Bus::Sfx)).expect("slot");
+
+    let mut out = vec![0.0f32; 512 * CHANNELS];
+    mixer.render(&mut out);
+
+    let end = out
+        .as_chunks::<CHANNELS>()
+        .0
+        .iter()
+        .rposition(|f| f[0] != 0.0 || f[1] != 0.0)
+        .expect("the cue sounded");
+    assert!(
+        out[end * CHANNELS].abs() < 0.02,
+        "the last sample before silence is {}, which is a click",
+        out[end * CHANNELS]
+    );
+    // Full level well before the end, and monotone down into it.
+    assert!(
+        out[200 * CHANNELS] > 0.9,
+        "the body of the cue is untouched"
+    );
+    for frame in (end - 90)..=end {
+        assert!(
+            out[frame * CHANNELS] <= out[(frame - 1) * CHANNELS],
+            "frame {frame} did not fall"
+        );
+    }
+    assert_eq!(mixer.active_voices(), 0);
+}
+
+/// The fade rides the waveform, so it cannot make a cue any longer than its own
+/// source - which is the failure the first attempt at this had.
+///
+/// That one held the finished voice's last sample and decayed *that*, which
+/// adds a unipolar pulse after the cue: a thump of its own, and one that gets
+/// deeper the longer the fade. This ramps the signal instead, so there is
+/// nothing after the source to hear.
+#[test]
+fn the_fade_does_not_outlast_the_source() {
+    let abrupt = Arc::new(Sound::new(vec![i16::MAX; 100 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    mixer.play(Play::once(abrupt, Bus::Sfx)).expect("slot");
+
+    let mut out = vec![0.0f32; 256 * CHANNELS];
+    mixer.render(&mut out);
+    assert!(
+        out[100 * CHANNELS..].iter().all(|s| *s == 0.0),
+        "nothing sounds past the source's own 100 frames"
+    );
+    assert_eq!(mixer.active_voices(), 0);
+}
+
+/// A cue that already ends near zero - which every Pulse cue does - is scaled
+/// by a ramp that has nothing to remove, so this costs nothing where nothing
+/// was wrong.
+#[test]
+fn a_cue_that_ends_quietly_is_unchanged_by_the_fade() {
+    let clean = Arc::new(Sound::new(vec![0i16; 400 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    mixer.play(Play::once(clean, Bus::Sfx)).expect("slot");
+    let mut out = vec![0.0f32; 512 * CHANNELS];
+    mixer.render(&mut out);
+    assert_eq!(mixer.active_voices(), 0);
+    assert!(out.iter().all(|s| *s == 0.0));
 }

@@ -278,6 +278,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Check whether 2048 is the HD/Fury codebase retargeted, not a Pulse-lineage build](handover/vita-2048-vs-hd-fury-lineage.md)
 - [2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track](handover/2048s-track-vex-parses-but-two-binary-formats-changed.md)
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
+- [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/hd-collisions-flatten-a-severity-tree.md)
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/a-circuits-billboard-slots-are-a-9-entry.md)
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/a-parser-cannot-fail-on-a-field-it.md)
 - [A chunk header is 0x20 bytes and then a *surface* record, and the byte after the layout says which space it is in](handover/a-chunk-header-is-0x20-bytes-and-then.md)

@@ -614,6 +614,12 @@ fn advance_one_tick(
     // nothing else, or the same command line gives a different file on a
     // slower machine.
     audio.tick();
+    // The same two calls `main::session::frame` makes, so that a headless
+    // capture is a usable instrument and not only a picture. `--tap-audio`
+    // needs them in particular: the recording is written from whichever loop
+    // is running, and this one is the only loop a machine with no window has.
+    audio.output().report_health();
+    audio.output().flush_tap();
     if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
         println!("{}", describe(&race.telemetry()));
     }

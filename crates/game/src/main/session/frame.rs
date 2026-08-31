@@ -15,6 +15,14 @@ use super::Session;
 
 impl Session {
     pub(crate) fn frame(&mut self) -> Result<()> {
+        // Whatever the audio callback could not render while this thread held
+        // the mixer lock, said out loud from a thread that can afford to
+        // allocate a sentence. Here rather than in the tick loop because a
+        // dropped buffer is a property of the wall clock, not of the timestep,
+        // and `Output::report_health` throttles itself in frames.
+        self.audio.output().report_health();
+        self.audio.output().flush_tap();
+
         // Before everything, because it is what makes there be anything: until
         // a disc has been picked there is no boot to finish and no front end to
         // hand a window to. Read a frame after the press for the same reason
@@ -108,6 +116,15 @@ impl Session {
             self.stalled = false;
         } else {
             self.meter.record(elapsed.as_secs_f32());
+            // **A stutter, named where it happened.** An audio underrun and a
+            // frame that took 90 ms are the same event seen from two threads,
+            // and the only way to tell that from an audio path that is late on
+            // its own is to have both lines in one terminal. 40 ms is two and a
+            // half frames at 60 Hz - past any ordinary jitter and well under
+            // the load stalls `self.stalled` already excludes.
+            if elapsed > std::time::Duration::from_millis(40) {
+                warn!("frame: {:.1} ms", elapsed.as_secs_f32() * 1000.0);
+            }
         }
         let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
         let steps = self.clock.advance(nanos);

@@ -370,6 +370,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),
         Some(std::path::PathBuf::from("/dev/null")),
+        None,
     );
     let voices =
         |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
@@ -434,6 +435,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),
         Some(std::path::PathBuf::from("/dev/null")),
+        None,
     );
     let voices =
         |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
@@ -511,6 +513,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),
         Some(std::path::PathBuf::from("/dev/null")),
+        None,
     );
     for _ in 0..120 {
         race.tick(&oag_gameplay::InputSnapshot::default());
@@ -584,6 +587,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),
         Some(std::path::PathBuf::from("/dev/null")),
+        None,
     );
     let voices =
         |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());

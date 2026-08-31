@@ -88,6 +88,9 @@ impl Banks {
                         cue.name(),
                         loaded.waveforms.len()
                     ));
+                    if let Some(line) = not_one_event(cue, &loaded) {
+                        report.push(line);
+                    }
                     sounds.insert(cue, loaded);
                 }
                 // Deliberately a report line and not a fallback. Nothing is
@@ -147,6 +150,62 @@ impl Banks {
 fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
     let bank = sblk::Bank::parse(blob)?;
     load_named_cue(&bank, cue.name())
+}
+
+/// The length ratio past which a cue's waveforms cannot all be alternates of
+/// one event.
+///
+/// `crates/game/tests/sfx_ground_truth.rs` already applies this test to Pulse's
+/// `.COLLISIONS` and asserts the fifteen span under 0.2 s - "a cue whose
+/// commands were meant to play *together* would be a stack of different
+/// lengths". Two is generous against that: Pulse's fifteen span 0.204 s to
+/// 0.350 s, a ratio of 1.7.
+const ALTERNATE_LENGTH_RATIO: f32 = 2.0;
+
+/// How many waveforms a cue needs before the ratio above means anything.
+///
+/// A cue that binds two is a pair, and a long one beside a short one is an
+/// ordinary way to author a pair - Pulse's `~SHIELD` is 0.501 s and 1.087 s and
+/// its `~BLOWUP` 0.091 s and 0.276 s, and neither is a severity tree. The thing
+/// worth reporting is *many* waveforms spanning a wide range, which is what a
+/// flattened tree looks like and what a set of takes does not.
+const ALTERNATE_COUNT: usize = 4;
+
+/// Says so when a cue's waveforms are too unalike to be alternates.
+///
+/// **[`Banks::pick`] chooses uniformly among whatever a cue resolves to**,
+/// which is right when they are takes of one event and wrong when they are a
+/// tree. Wipeout HD's `.COLLISIONS` is the case that made this necessary: it
+/// binds nothing itself and plays `c_CShipShip` and `c_CShipWall`, each with
+/// Small/Medium/Large children of its own - **112 waveforms spanning 0.410 s to
+/// 3.266 s**, where the longest are 1.4 s impacts carrying half their energy
+/// below 120 Hz and peaking at 0.809 of full scale in that band. Picked at
+/// random for a light graze, one of those is a bass thump, and on HD it lands
+/// in near-silence because that title's ship bank has no `~ENGINE` cue at all.
+///
+/// Choosing correctly needs the contact's own surface and severity, and which
+/// of the two the original reads for which is not recovered - so this reports
+/// rather than guesses, on the same terms `Banks::load` reports a cue it could
+/// not decode.
+fn not_one_event(cue: Cue, loaded: &Loaded) -> Option<String> {
+    let mut shortest = f32::MAX;
+    let mut longest: f32 = 0.0;
+    for (sound, _) in &loaded.waveforms {
+        shortest = shortest.min(sound.seconds());
+        longest = longest.max(sound.seconds());
+    }
+    (loaded.waveforms.len() > ALTERNATE_COUNT
+        && shortest > 0.0
+        && longest / shortest > ALTERNATE_LENGTH_RATIO)
+        .then(|| {
+            format!(
+                "sfx: {}'s {} waveform(s) span {shortest:.3}s to {longest:.3}s, \
+             which is a tree and not alternates of one event - this engine picks \
+             among them uniformly, so a light event can play a heavy one's sound",
+                cue.name(),
+                loaded.waveforms.len()
+            )
+        })
 }
 
 /// Resolves one **named** cue in an already-parsed bank and decodes what it

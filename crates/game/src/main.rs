@@ -111,18 +111,33 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 /// to read - at `info` the graphics stack alone narrates every adapter, shader
 /// module and pipeline it builds, and the engine's own lines drown in it.
 ///
+/// **`calloop` is pinned to `error`**, and it is the one third-party crate
+/// singled out by name. winit's Wayland backend removes and re-inserts a
+/// key-repeat timer source on every key press
+/// (`winit/src/platform_impl/linux/wayland/seat/keyboard/mod.rs`), so a loaded
+/// machine routinely dispatches a batch that still holds an event for the
+/// token that was just removed, and calloop warns `Received an event for
+/// non-existence source` once per occurrence. The dropped event is a stale
+/// repeat tick for a key this game already tracks itself through
+/// `Controls::set_key`, so nothing is lost and there is nothing for a player
+/// to do about it - it is upstream noise that happens to be loudest exactly
+/// when a race is least able to spare the attention.
+///
 /// `RUST_LOG` replaces the whole expression: `RUST_LOG=info` to quieten this
 /// down to milestones, `RUST_LOG=oag_game::audio=trace` for one module,
-/// `RUST_LOG=warn,wgpu_core=info` to hear the graphics stack instead.
+/// `RUST_LOG=warn,wgpu_core=info` to hear the graphics stack instead, or
+/// `RUST_LOG=warn,calloop=warn` to put the line above back.
 ///
 /// The format carries the level and nothing else. These lines are read by a
 /// player watching a terminal, not shipped to a collector, and a timestamp and
 /// a module path on each would be wider than most of the messages.
 fn init_logging() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,oag=debug"))
-        .format_timestamp(None)
-        .format_target(false)
-        .init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("warn,oag=debug,calloop=error"),
+    )
+    .format_timestamp(None)
+    .format_target(false)
+    .init();
 }
 
 fn main() -> Result<()> {
@@ -229,7 +244,13 @@ fn main() -> Result<()> {
     // headless, so that a player never hears the front end before the window
     // that shows it exists. See the two call sites below and
     // `App::open`.
-    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
+    // `--tap-audio` records what the device is actually handed, which
+    // `--dump-audio` cannot: that one forces the null backend by construction.
+    let tap = cli.tap_audio.clone().map(|path| oag_audio::TapSpec {
+        seconds: cli.tap_seconds,
+        path,
+    });
+    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone(), tap.as_ref());
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {
