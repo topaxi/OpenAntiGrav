@@ -35,6 +35,15 @@ const REPORT_EVERY: u32 = 120;
 /// less than that between samples unless it is near full scale itself.
 const JUMP: f32 = 0.25;
 
+/// The largest step a window may hold without being reported at all.
+///
+/// Well under [`JUMP`], so a mix that is merely *nearly* clicking still shows
+/// up. A busy race genuinely moves this far between samples on its own - the
+/// engine bed's own median step is 0.055 of full scale and its 99.9th
+/// percentile is 0.287, measured on `pulse-psp-eu.chd` - so this is a floor for
+/// "worth a line", not a fault threshold.
+const QUIET_STEP: f32 = 0.40;
+
 /// Counters shared between the output callback and the frame loop.
 #[derive(Debug, Default)]
 pub struct Health {
@@ -44,6 +53,12 @@ pub struct Health {
     buffer_frames: AtomicU64,
     dropped: AtomicU64,
     jumps: AtomicU64,
+    /// The largest step seen, in thousandths of full scale, and the frame
+    /// inside its buffer that it happened at - which says whether the seam
+    /// between two buffers is where the mix breaks or whether it is a voice
+    /// ending somewhere in the middle of one.
+    worst_jump: AtomicU64,
+    worst_jump_at: AtomicU64,
     late: AtomicU64,
     worst_late_us: AtomicU64,
 
@@ -78,16 +93,50 @@ impl Health {
         self.dropped.fetch_add(1, Relaxed);
     }
 
-    /// Records whether this buffer starts where the last one ended.
+    /// Scans a rendered buffer for steps, including the seam with the last one.
     ///
-    /// `tail` is the previous buffer's last frame and `head` this one's first.
-    /// Called only for a buffer that was actually rendered and did not follow a
-    /// drop: the ramp either side of a gap is a deliberate discontinuity and
-    /// counting it would bury the accidental ones.
-    pub(crate) fn check_jump(&self, tail: [f32; 2], head: [f32; 2]) {
-        let step = (head[0] - tail[0]).abs().max((head[1] - tail[1]).abs());
-        if step > JUMP {
-            self.jumps.fetch_add(1, Relaxed);
+    /// **The whole buffer, not only its first frame.** This checked the seam
+    /// alone until 2026-08-31 and reported zero through a race that was audibly
+    /// thumping: a voice ends wherever its own playhead runs out, which with a
+    /// 1,920-frame buffer is at the seam roughly one time in two thousand. A
+    /// blind spot that size reads exactly like a clean mix.
+    ///
+    /// `tail` is the previous buffer's last frame. Called only for a buffer
+    /// that was actually rendered and did not follow a drop: the ramp either
+    /// side of a gap is a deliberate discontinuity and counting it would bury
+    /// the accidental ones.
+    pub(crate) fn scan(&self, stereo: &[f32], tail: [f32; 2]) {
+        let mut previous = tail;
+        let mut worst = 0.0f32;
+        let mut found = 0u64;
+        let mut at = 0usize;
+        for (frame, pair) in stereo.as_chunks::<2>().0.iter().enumerate() {
+            let step = (pair[0] - previous[0])
+                .abs()
+                .max((pair[1] - previous[1]).abs());
+            previous = [pair[0], pair[1]];
+            if step > JUMP {
+                found += 1;
+            }
+            // Tracked whether or not it crossed the threshold, because the
+            // useful reading when the count is zero is *how close* it came - a
+            // report that only ever says "nothing over a quarter" cannot tell a
+            // clean mix from one stepping by a fifth of full scale sixty times
+            // a second.
+            if step > worst {
+                worst = step;
+                at = frame;
+            }
+        }
+        self.jumps.fetch_add(found, Relaxed);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a step is bounded by the mixer's own clamp at full scale"
+        )]
+        let milli = (worst * 1000.0) as u64;
+        if self.worst_jump.fetch_max(milli, Relaxed) < milli {
+            self.worst_jump_at.store(at as u64, Relaxed);
         }
     }
 
@@ -145,14 +194,26 @@ impl Health {
         let d_starved = starved.saturating_sub(self.said_starved.swap(starved, Relaxed));
         let d_clipped = clipped.saturating_sub(self.said_clipped.swap(clipped, Relaxed));
 
-        if d_dropped == 0 && d_jumps == 0 && d_late == 0 && d_starved == 0 && d_clipped == 0 {
+        let worst_jump = self.worst_jump.swap(0, Relaxed) as f32 / 1000.0;
+        // Reported on the worst step alone as well as on the counters, because
+        // a mix that is stepping by a fifth of full scale is audible and counts
+        // as none of the five.
+        if d_dropped == 0
+            && d_jumps == 0
+            && d_late == 0
+            && d_starved == 0
+            && d_clipped == 0
+            && worst_jump < QUIET_STEP
+        {
             return;
         }
 
-        let worst = self.worst_late_us.swap(0, Relaxed) as f32 / 1000.0;
+        let worst_late = self.worst_late_us.swap(0, Relaxed) as f32 / 1000.0;
+        let jump_at = self.worst_jump_at.load(Relaxed);
         warn!(
-            "audio: {d_dropped} dropped, {d_jumps} jump(s) in the mix, \
-             {d_late} late callback(s) (worst {worst:.1} ms over), \
+            "audio: {d_dropped} dropped, {d_jumps} jump(s) in the mix \
+             (worst {worst_jump:.3} at frame {jump_at}), \
+             {d_late} late callback(s) (worst {worst_late:.1} ms over), \
              {d_starved} voice(s) refused, {d_clipped} sample(s) clipped \
              - of {} buffer(s) of {} frame(s) so far",
             self.buffers.load(Relaxed),

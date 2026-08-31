@@ -299,11 +299,24 @@ fn a_silent_output_has_seen_nothing() {
 #[test]
 fn a_step_between_buffers_is_counted_and_a_small_one_is_not() {
     let health = Health::default();
-    health.check_jump([0.5, 0.5], [0.55, 0.45]);
+    health.scan(&[0.55, 0.45], [0.5, 0.5]);
     assert_eq!(health.jumps(), 0, "ordinary movement is not a click");
 
-    health.check_jump([0.8, 0.0], [-0.8, 0.0]);
+    health.scan(&[-0.8, 0.0], [0.8, 0.0]);
     assert_eq!(health.jumps(), 1, "a step across full scale is");
+}
+
+/// The blind spot this had until 2026-08-31: a voice ends wherever its playhead
+/// runs out, which is almost never the first frame of a buffer.
+#[test]
+fn a_step_in_the_middle_of_a_buffer_is_counted_too() {
+    let health = Health::default();
+    let mut buffer = vec![0.7f32; 64 * CHANNELS];
+    for slot in &mut buffer[40 * CHANNELS..] {
+        *slot = 0.0;
+    }
+    health.scan(&buffer, [0.7, 0.7]);
+    assert_eq!(health.jumps(), 1, "a cut at frame 40 is still a cut");
 }
 
 /// Late callbacks keep the worst overshoot, because the count alone does not

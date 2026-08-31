@@ -91,47 +91,74 @@ whatever range the device offers: 1,920 frames here, measured through
 so the deepest stalls will still be heard; what changes is that the ordinary
 ones stop being.
 
+## Two hypotheses tested and refuted, so nobody tests them twice
+
+**The engine's loop is not the seam.** The player's own guess was that `~ENGINE`
+loops and the wrap is the thump - it is 1.211 s long and held for the whole
+race, which fits "regular, every few seconds, even if I hit nothing" exactly.
+It is wrong, and measurably so: rendered four loop periods through a real
+`Mixer`, the step across the wrap is **0.002 of full scale** against a median
+step of 0.055 and a 99.9th percentile of 0.287 in the same bed. The sample was
+authored to loop over its whole decoded buffer and it does.
+
+**And the PS-ADPCM loop flags are not usable as read.** Every block carries a
+flag byte at `+1` which this crate decodes past;
+`pulse-psp-eu.chd`'s `~ENGINE` is 1,907 blocks flagged `0, 6, 2 x 1903, 3, 255`
+- a lead-in, a loop-start mark, the body, a loop-end mark, and a trailing block
+whose flag is not one of the eight defined values. Honouring those marks - loop
+28..53,368 rather than 0..53,396 - was implemented, measured, and **reverted**:
+it takes the seam from 0.002 to **0.176**, sixty times worse. Either the marks
+are one block off from the conventional reading or the encoder set them
+decoratively; what is certain is that the waveform's own seam is at 0 and the
+flags do not point at it. `.COLLISIONS` is flagged the same way
+(`0 x 434, 1, 7`) and its terminator block decodes to silence, so it costs
+nothing there either.
+
 ## Open
 
-**Where the ~96 ms stall comes from is not established.** The player's own
-observation is that the thump follows a boost pad or a collision *by about a
-second*, and that two boosts in sequence give two thumps in sequence - a
-delayed, reliable correlation with a cue rather than with anything obviously
-scheduling-shaped. Two readings, and nothing has separated them:
+**Where the thump comes from is still not known**, and the fault is now in the
+instrument as much as anywhere: `Health::scan` checked only the *seam between*
+two buffers until now, so it reported zero through a race that was audibly
+thumping. A voice ends wherever its own playhead runs out, which with a
+1,920-frame buffer is at the seam roughly one time in two thousand. It now
+scans every frame of every buffer and reports the **worst step it saw and the
+frame it saw it at**, whether or not anything crossed the threshold:
 
-- **The whole process stalls** and the audio thread is collateral. A frame that
-  takes 90 ms and an underrun are the same event from two threads.
-- **Only the audio path stalls** - cpal's ALSA worker runs at ordinary priority
-  and PipeWire's `data-loop.0` on this machine is SCHED_OTHER with no rtkit and
-  no `realtime` group (`ulimit -r` is 0). This was retired earlier when heavier
-  games turned out to be clean, and the underrun evidence puts it back on the
-  list rather than at the top of it.
+```
+audio: 0 dropped, 0 jump(s) in the mix (worst 0.187 at frame 913),
+       0 late callback(s) (worst 0.0 ms over), 0 voice(s) refused,
+       0 sample(s) clipped - of 5310 buffer(s) of 1920 frame(s) so far
+```
 
-`Session::frame` now logs `frame: N ms` for any frame over 40 ms, which
-discriminates them: a `frame:` line beside every `output stream error` is the
-first reading, `output stream error` on its own is the second.
+That number is the whole diagnosis waiting to happen. A busy race genuinely
+moves 0.287 between samples on its own, so anything near or above that is the
+mix stepping, and the frame offset says whether it is at a buffer boundary
+(gain or pan, which `Mixer::render` applies once per buffer and not per sample)
+or in the middle of one (a voice starting or ending).
 
-**Nothing here is confirmed by ear yet** - this session cannot open a window,
-so both the bigger buffer and the release fade are unheard.
+**One candidate is untested and now more likely than it was**: `Mixer::render`
+takes `gain` and `channel_gain` once for the whole buffer, by its own admission
+- "the original moves a pan over a ramp inside SCREAM rather than per sample,
+and a tick is short enough that stepping it here would model an interpolator we
+have not read". A tick was short enough at 512 frames. **At 1,920 frames it is
+40 ms**, and a craft passing the camera changes both across it. Ramping them
+per sample is a small change and would be closer to the original, not further
+from it - but it is a hypothesis, and two have already been wrong this session,
+so the worst-step line comes first.
 
 ## Next Steps
 
-1. Play a race and watch the terminal. Three lines matter: `frame: N ms`,
-   `audio: output stream error`, and the `audio: ... late callback(s)` line.
-2. If `frame:` lines appear beside the underruns, this stops being an audio
-   problem and becomes "what takes 90 ms a second after a boost pad" -
-   `just play-mangohud` for the frametime graph, and the particle effects
-   (`oag_render::psys`) are the first place to look, since a boost and a
-   collision both start one.
-3. If there are no `frame:` lines, the stall is the audio path alone, and the
-   next thing to try is the real-time privileges after all:
-   `sudo pacman -S realtime-privileges && sudo gpasswd -a "$USER" realtime`,
-   then log out. `ps -Lo tid,cls,rtprio -p $(pgrep -x pipewire)` should show
-   `FF` on `data-loop.0` afterwards.
-4. `cargo run -p oag-audio --example device-report --release -- 20` is the same
-   counters with no game around them - if it is late with nothing rendering,
-   the machine is the answer.
-5. Not done either way: the five counters belong on the performance overlay
-   (`crates/game/src/perf.rs`, `draw_list`) rather than only in the log, and
-   `Mixer::starved`/`clipped` have been waiting for that since they were
-   written.
+1. Play a race and read the `worst N at frame M` figure on the `audio:` line.
+   That is the measurement everything else waits on.
+2. **Worst near or above 0.3, at a frame that is not 0**: a voice is starting or
+   ending discontinuously. The frame offset times 1/48,000 says when inside the
+   buffer, and the release fade already covers a *stopped* voice, so look at
+   what starts.
+3. **Worst near or above 0.3, at frame 0 or near it**: the per-buffer gain and
+   pan staircase above. Ramp them per sample.
+4. **Worst comfortably under 0.3 and still thumping**: our samples are clean and
+   the fault is downstream of this process. The next instrument is a tap in the
+   callback that writes exactly what cpal was handed to a WAV, which
+   `--dump-audio` cannot do because it forces the null backend.
+5. Still not done: the counters belong on the performance overlay
+   (`crates/game/src/perf.rs`, `draw_list`) rather than only in the log.

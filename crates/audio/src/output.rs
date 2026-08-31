@@ -377,8 +377,8 @@ where
                 // Not after a drop: the ramp either side of a gap is a
                 // deliberate discontinuity, and counting it would bury the
                 // accidental ones this exists to find.
-                if !recovering && scratch.len() >= CHANNELS {
-                    callback_health.check_jump(tail, [scratch[0], scratch[1]]);
+                if !recovering {
+                    callback_health.scan(&scratch, tail);
                 }
             } else {
                 callback_health.dropped();
