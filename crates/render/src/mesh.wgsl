@@ -351,11 +351,30 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // not projected through `zoneOrigin` - which is the counter-intuitive half of
 // the reading, and is confirmed from the file side by the engine's own schema
 // naming the two lanes "Texture U scale" and "Texture V scale".
-fn zone_surface(albedo: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+//
+// **This returns the sample and its mask, not the finished term**, because the
+// two shading paths below sum in different colour spaces and `pow(a * b, g)`
+// is not `pow(a, g) * b`. `zoneTex` is a texture and wants the same decode
+// every other sample here gets; `zoneEffect` is a shader parameter and wants
+// none - it is authored well past 1.0 (to 3.0 on stage 12), which is a
+// multiplier's range and not a colour's.
+//
+// **Scope, stated because it is an approximation.** This applies to every
+// surface `mesh.wgsl` draws, and the original applies it per material: 1,467
+// of the disc's 1,590 `.rcsmaterial` files carry a Zone variant, so 123 do
+// not. Craft hulls, the sky cube, pads and the collision wireframe all reach
+// this path here and would pick up stage colour wherever they happen to carry
+// pure-black texels, which the original would leave alone. It is the same
+// shape as the shared specular exponent and the blanket sun term above - the
+// per-material branch that would tell the families apart does not exist yet -
+// and the minority it is wrong for is 123 materials of 1,590.
+fn zone_sample(albedo: vec3<f32>, uv: vec2<f32>) -> vec4<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    let zone_col = textureSample(zone_tex, zone_sampler, zone_uv).rgb * scene.zone.effect.rgb;
+    let sample = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
     let black_mask = saturate((albedo.r + albedo.g + albedo.b) * 100000.0);
-    return albedo + zone_col * (1.0 - black_mask) * scene.zone.enabled;
+    // `.a` carries the mask *and* the on/off switch, so a draw outside a Zone
+    // race multiplies to nothing whatever the sample held.
+    return vec4<f32>(sample, (1.0 - black_mask) * scene.zone.enabled);
 }
 
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
@@ -503,10 +522,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let second = textureSample(lightmap, albedo_sampler, in.texcoord);
     let picture = select(first, second, (in.slots & 2u) != 0u);
     let coverage = select(first, second, (in.slots & 4u) != 0u);
-    let texel = vec4<f32>(
-        zone_surface(picture.rgb, in.texcoord),
-        coverage[(in.slots >> 3u) & 3u],
-    );
+    let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
+
+    // The Zone term, in both domains, from one sample. See `zone_sample`.
+    let zone = zone_sample(texel.rgb, in.texcoord);
+    let zone_linear = pow(zone.rgb, vec3<f32>(2.2)) * scene.zone.effect.rgb * zone.a;
+    let zone_gamma = zone.rgb * scene.zone.effect.rgb * zone.a;
 
     // The read specular term: half-vector against the sun, and the exponent
     // is a **stand-in**. It is an inline constant of each fragment program,
@@ -543,7 +564,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // stand-in path below, where it is a tint and every other title authors
     // it as one.
     let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
-    let lit_linear = texel_linear * authored + specular;
+    // `surface = albedo + zoneCol`, then `colour = light * surface` - the
+    // microcode's own order, and on this path both terms are linear.
+    let lit_linear = (texel_linear + zone_linear) * authored + specular;
     let encoded = pow(
         clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
         vec3<f32>(1.0 / 2.2),
@@ -572,7 +595,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // builds it rather than the HD loader. `colour_is_light` is a property of
     // the model and answers both.
     let tint = mix(in.colour.rgb, vec3<f32>(1.0), colour_is_light);
-    let plain = texel.rgb * tint * light;
+    // The gamma-domain sum, for the same reason this whole path is gamma: a
+    // prelit surface's light is baked into its vertex colours in the space the
+    // asset authors, so a linear summand would be the one term shaded twice.
+    let plain = (texel.rgb + zone_gamma) * tint * light;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

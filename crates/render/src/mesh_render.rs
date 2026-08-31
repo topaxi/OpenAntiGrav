@@ -423,6 +423,7 @@ pub fn build(
         ],
     });
 
+    let zone_entries = zone::layout_entries();
     let fog_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         // Labelled for what the buffer holds, which is `Scene` - fog *and* the
         // light rig. The three "fog" labels here predated `Light` joining it.
@@ -443,8 +444,8 @@ pub fn build(
             // not of a material slot, so binding it here uploads it once per
             // model instead of once per slot naming a material. See
             // [`zone::layout_entries`].
-            zone::layout_entries()[0],
-            zone::layout_entries()[1],
+            zone_entries[0],
+            zone_entries[1],
         ],
     });
 

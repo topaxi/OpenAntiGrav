@@ -466,6 +466,24 @@ impl Light {
 ///   `zoneEffectInner`/`zoneEffectOuter`. Confidence 84.
 /// - The texture is the stage's own `zoneModeTrack<n>.gtf`.
 ///
+/// # Two approximations, stated
+///
+/// **The recolour reaches every surface this renderer draws, and the original
+/// applies it per material.** 1,467 of the disc's 1,590 `.rcsmaterial` files
+/// carry a Zone variant, so 123 do not - and craft hulls, the sky cube, pads,
+/// rockets and the collision wireframe all reach `mesh.wgsl` here. Wherever
+/// one of those carries pure-black texels it picks up stage colour the
+/// original would leave alone. Same shape as the shared specular exponent and
+/// the blanket sun term `mesh.wgsl` already carries; the per-material branch
+/// that would separate the families does not exist yet.
+///
+/// **The sum happens in each shading path's own colour space.** `zoneTex` is a
+/// texture and takes the same `pow(x, 2.2)` decode every other sample here
+/// takes; `zoneEffect` is a shader parameter and takes none - it is authored
+/// past `1.0` (to `3.0` on stage 12), which is a multiplier's range. Getting
+/// that wrong is invisible whenever `zoneEffect` is exactly `1.0`, which is
+/// why `crates/render/tests/zone_recolour.rs` binds `2.0`.
+///
 /// **Three terms of the recovered rule are deliberately absent**, because
 /// nothing on the disc feeds them and this project does not invent:
 ///
@@ -477,13 +495,27 @@ impl Light {
 ///    256-entry lookup is built at runtime from a static table inside the
 ///    executable, which is game content this project may not carry, and the
 ///    build loop's own arithmetic does not yet close.
-/// 3. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
+/// 3. `zoneBaseInner`/`zoneBaseOuter` and their `Alt` siblings, which are the
+///    *untextured* material family - `colour = zoneBase.rgb * rim^10 +
+///    zoneBaseAlt.rgb * rim^5`, with both exponents inline literals in the
+///    microcode. Their inputs *are* located (`Scene.Base Colour Highlight` and
+///    `Scene.Base Colour`); what is missing is the per-material branch that
+///    would tell that family from this one.
+/// 4. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
 ///    and the radius is a field of a per-environment struct whose own writer is
 ///    unfound. It does not matter here: the split is a *stage-transition
 ///    wavefront* between stage `n` and stage `n - 1`, and this build never has
 ///    a transition in flight, so both sides read the same stage and the test is
 ///    a no-op whichever way it would have gone.
-#[repr(C)]
+// **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
+// alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
+// starts at a 16-aligned offset there. Rust's own alignment for it is 4, and
+// the two layouts currently agree only because `Fog + Light + time` happens to
+// end on a multiple of 16 - a field added above would silently desynchronise
+// them, and `min_binding_size: None` means wgpu would not catch it. Stating
+// the alignment makes Rust place it the way WGSL does; the assertion below
+// checks the result.
+#[repr(C, align(16))]
 #[derive(Debug, Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Zone {
     /// `zoneColourTint.xy` - the zone texture's own coordinate scale. `1.0` on
@@ -543,6 +575,19 @@ impl Scene {
         }
     }
 }
+
+const _: () = assert!(
+    std::mem::size_of::<Zone>() == 32,
+    "mesh.wgsl's Zone is two vec4s"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, zone).is_multiple_of(16),
+    "WGSL puts Scene.zone at a 16-aligned offset; Rust must agree"
+);
+const _: () = assert!(
+    std::mem::size_of::<Scene>().is_multiple_of(16),
+    "a uniform buffer's own size is 16-aligned in WGSL too"
+);
 
 /// Size, in bytes, of bind group 2's uniform buffer.
 ///
