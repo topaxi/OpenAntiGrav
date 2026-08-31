@@ -739,6 +739,16 @@ evidence, including the byte-level trace of every function in this chain:
   next step in that direction is the *selection*, not the layout: read which of
   the eight parameter publishers a material's draw goes through, the same
   question that decides `zoneMode*` versus `zoneModeTrack*`.
+- **Settle whether the two Zone publications are sequential or alternative** -
+  and note the question is *not* "which branch chooses". Neither prologue in
+  `FUN_003ff860` has a guarding branch; both are reached by fall-through, with
+  only a local null check on the texture handle in between. So they are more
+  likely two draw states built one after the other. The concrete check: both
+  publish through `*(*(arg0) + 0xd8)`, so establish whether `*(arg0)` is the
+  same object at `0x400348` and `0x4007d8`. Confidence 60 on the sequential
+  reading; recorded so the next reader does not repeat the search for a
+  selector that is not there. Each of the seven publishers has exactly one
+  direct caller, so the split is inside each publisher, not between them.
 - **Find `zoneOrigin`'s writer, or establish it has none.** Its absence is now
   structural rather than a search failure - it sits at `+0x35a0`, the one gap
   in an otherwise unbroken run of vec4s this function writes - so the search

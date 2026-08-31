@@ -4154,6 +4154,27 @@ the peephole reading the rest of this page is built on. **Not attempted; no
 claim made.** The pairing above does not depend on it, which is what makes it
 usable meanwhile.
 
+**And the framing "which branch chooses" is probably wrong.** Both prologues
+were checked for a guarding branch and neither has one: the only branch
+reaching either is its own null check on the texture handle
+(`cmpwi cr7, r8, 0` / `bt` over an `addi r7, r8, 32`, the `+32` header skip),
+at `0x400340` and `0x4007d0` respectively, and both prologues are otherwise
+reached by **fall-through** from ~290 instructions of unrelated publication.
+So the two are more likely published **in sequence** than chosen between - two
+draw states built one after the other, rather than one built two ways. If that
+holds, the question a port needs answered is not "which branch" but "which
+object": both blocks publish through `*(*(arg0) + 0xd8)`, and whether `*(arg0)`
+is the same object at both points is the thing to check. **Confidence 60 on
+the sequential reading, and nothing is built on it** - it is recorded to stop
+the next reader spending the effort this pass spent looking for a selector
+branch that is not there.
+
+Each of the seven publishers has exactly **one** direct caller
+(`0x006ce6e0`, `0x0040e318`, `0x006cf358`, `0x003e6918`, `0x006cdf60`,
+`0x006cded0`; `FUN_003ff860` itself has none and is presumably reached through
+a function pointer), so the Scene/Track split is not "one publisher per group"
+either - it is inside each of them.
+
 The shared tail is a **warning** as well as evidence, and worth carrying
 forward: a sweep that attributes those three stores to whichever prologue it
 happened to walk first gets the Scene/Track answer wrong for the other half.
