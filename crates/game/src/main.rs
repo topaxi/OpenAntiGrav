@@ -251,15 +251,15 @@ fn main() -> Result<()> {
         path,
     });
     // **Two and a half frames of whatever the loop is capped at, floored at
-    // `oag_audio::MIN_BUFFER`.** The device queue exists to cover a stall and a
-    // stall is a frame, so a fixed 40 ms is two and a half frames at 60 Hz and
-    // one and a fifth at the 30 the menus also offer - where one missed frame
-    // outruns it. Unlimited and anything above 60 Hz take the floor, which is
-    // where the measurement that chose it was made.
+    // `oag_audio::MIN_BUFFER`.** The render-ahead queue exists to cover a stall
+    // and a stall is a frame, so a fixed number of milliseconds is the wrong
+    // unit: 60 ms is three and a half frames at 60 Hz and one and four fifths
+    // at the 30 the menus also offer. Unlimited and anything above 60 Hz take
+    // the floor.
     //
-    // Read off the *configured* cap rather than the achieved rate, because the
-    // stream's buffer is fixed when it is built and cannot follow a frame rate
-    // that turns out slower than the player asked for. That case is named in
+    // Read off the *configured* cap rather than the achieved rate: the ring is
+    // sized when the stream is built and does not follow a frame rate that
+    // turns out slower than the player asked for. That case is named in
     // `handover/` rather than papered over here.
     let buffer = settings
         .display

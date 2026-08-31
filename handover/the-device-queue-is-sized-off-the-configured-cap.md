@@ -1,4 +1,4 @@
-# The device queue is sized off the *configured* frame cap, not the achieved one
+# The audio queue is ours now, and the frame stalls are what is left
 
 Asked after the HD thump landed: *"why are audio skips tied to the frame?
 should this be put in a different thread? dropping to a slower device with
@@ -67,45 +67,42 @@ asked for and did not have: `frame: 49.5 ms` and `frame: 48.4 ms` beside
 `1 late callback(s) (worst 25.1 ms over)`, with the mix itself clean - 0
 dropped, 0 jumps, worst step 0.064.
 
+## What landed
+
+[ADR-0032](../docs/architecture/adr/0032-render-ahead-into-a-ring.md): a
+dedicated thread renders the mixer ahead into an `rtrb` ring and the `cpal`
+callback does nothing but copy out of it. The depth is `oag_audio::MIN_BUFFER`
+(60 ms) or the caller's own target, whichever is larger - the same number on
+every host, and exactly how long a stall it covers. Nothing is asked of the
+device any more. ADR-0031's spin is gone with it; its declick ramps are not.
+
 ## Open
 
-**The queue depth is not ours to choose, and on PipeWire it never will be.**
-Asking the device is the only lever `Output` has, and the measurement above
-says the device declines. The only way to hold more audio than the graph's
-quantum is to hold it **ourselves**: a ring buffer that a dedicated thread
-renders into ahead of time, with the `cpal` callback doing nothing but copying
-out of it. That would put the tolerance under this project's control rather
-than PipeWire's, and it would take the mixer lock off the audio thread
-entirely - which is the other half of
-[ADR-0031](../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)'s
-unfinished business. It is a change to the shape ADR-0018 sets out and wants an
-ADR of its own.
+**It does not cover the worst stall measured.** Frames of 80 ms outrun 60 ms of
+queue. Raising the depth is a one-line change and a bad one - the depth is also
+the delay on a collision cue - so **the remaining honest fix is the stall
+itself**, which is a renderer question and not an audio one. `frame: N ms` is
+in the log to point at it.
 
-**The other reading of the same log is that the frame stalls are the bug.**
-40 to 80 ms frames in an HD race is 12 to 24 fps in the spikes, and audio
-lateness is a symptom of it rather than a fault of its own. Fixing the stall
-fixes both, and improves the thing the player is actually looking at.
+**The configured cap is still not the achieved rate.** The ring is sized when
+the stream is built, so a machine set to 240 that delivers 30 gets the floor.
+Resizing it live is now *possible* in a way it was not when the number belonged
+to the sound server - the ring is ours - but it means rebuilding the stream or
+holding the ring behind an indirection, and nothing has shown it is needed.
 
-**The mutex is the remaining coupling, and it is not a frame one.** The frame
-thread and the audio thread share `Mutex<Mixer>`; the callback waits out a
-briefly-held lock and counts the buffers it still loses
-([ADR-0031](../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)),
-and that counter has read zero in every run since. The lock-free command queue
-that would remove it entirely is scoped in ADR-0031's alternatives and is
-blocked on the same thing it was then: `position`, `is_playing` and
-`active_voices` are read back by `race_music`, the movie path and the tests, so
-it needs a published state snapshot coming the other way rather than a queue
-going one.
+**Unmeasured on the machine that has the fault.** This session cannot open a
+window; the ring is verified by a headless test that spawns the real thread
+against a real mixer, and by five seconds of a tone through a real device with
+nothing dropped. Whether it silences the lateness in an HD race is unheard.
 
 ## Next Steps
 
-1. Decide which of the two the next piece of work is: a render-ahead ring under
-   our own control, or the frame stalls that make the queue's size matter. They
-   are not alternatives in the long run, only in the order.
-2. `frame: 183.3 ms` fires on the frame that loads a race, which `Session`'s
+1. Race HD and read the `audio:` line. `0 dropped` with `late callback(s)` now
+   means the device was late and the ring covered it, which is the whole point;
+   `dropped` climbing means 60 ms was not enough and the stall is the thing to
+   chase.
+2. Then the stalls: 40 to 80 ms frames in an HD race is 12 to 24 fps in the
+   spikes. `just play-mangohud` for the frametime graph.
+3. `frame: 183.3 ms` fires on the frame that loads a race, which `Session`'s
    own `stalled` flag is supposed to exclude from the meter and evidently does
-   not exclude from this log. Cosmetic, and it makes the log harder to read
-   than it needs to be.
-3. An audio-latency row in the settings would let a player make the trade
-   themselves, and on PipeWire it would have nothing to set. Worth it only
-   after item 1.
+   not exclude from this log. Cosmetic, and it makes the log harder to read.

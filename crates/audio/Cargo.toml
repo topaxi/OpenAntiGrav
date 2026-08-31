@@ -37,6 +37,7 @@ log.workspace = true
 # distribution shipping PipeWire already has. The dependency is target-gated
 # upstream, so Windows and macOS are unaffected.
 cpal = { version = "0.18.1", features = ["pipewire"] }
+rtrb = "0.4.0"
 
 [lints]
 workspace = true

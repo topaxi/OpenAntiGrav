@@ -1,5 +1,5 @@
 //! `Output`'s tests, out of line because the inline-test ceiling is 200 lines
-//! and the contended callback path needs more than the format conversions did.
+//! and the gap-covering path needs more than the format conversions did.
 
 use super::*;
 use crate::mixer::{Bus, Play, Sound};
@@ -99,113 +99,36 @@ fn extra_channels_are_left_silent_rather_than_filled_with_a_guess() {
     );
 }
 
-/// The uncontended path is unchanged: the mixer renders and nothing is counted.
+/// A gap that begins mid-buffer ramps the signal it did get down to zero, so
+/// the silence after it does not start with a step.
 #[test]
-fn an_uncontended_buffer_is_rendered() {
-    let mixer = Mutex::new(Mixer::new(44_100));
-    mixer
-        .lock()
-        .unwrap()
-        .play(Play::looping(tone(), Bus::Music))
-        .expect("a voice");
+fn a_buffer_the_ring_could_not_fill_ramps_down_into_the_gap() {
+    let mut scratch = vec![0.8f32; 128 * CHANNELS];
+    fade_out(&mut scratch);
 
-    let mut scratch = Vec::new();
-    let mut declick = Declick::default();
-    assert!(render_stereo(
-        &mixer,
-        &mut scratch,
-        256,
-        Duration::from_micros(100),
-        &mut declick
-    ));
-    assert_eq!(scratch.len(), 256 * CHANNELS);
-    assert!(scratch.iter().any(|s| *s != 0.0));
-    assert!(!declick.recovering);
-}
-
-/// The point of the waiting budget: a lock held for less than it is a late
-/// buffer, not a lost one.
-///
-/// The budget here is two seconds against a 2 ms hold, which is nothing like a
-/// real one. That is deliberate: the assertion is about the *mechanism* - that
-/// the callback waits at all - and a margin that wide survives Windows, whose
-/// default timer resolution is ~15.6 ms and turns a 2 ms sleep into a 15 ms
-/// one. The behaviour this guards against, a single `try_lock`, returns false
-/// in microseconds no matter how generous the budget is.
-#[test]
-fn a_briefly_held_lock_is_waited_out_rather_than_dropped() {
-    let mixer = Arc::new(Mutex::new(Mixer::new(44_100)));
-    mixer
-        .lock()
-        .unwrap()
-        .play(Play::looping(tone(), Bus::Music))
-        .expect("a voice");
-
-    let held = Arc::clone(&mixer);
-    let (tx, rx) = std::sync::mpsc::channel();
-    let holder = std::thread::spawn(move || {
-        let guard = held.lock().unwrap();
-        tx.send(()).unwrap();
-        std::thread::sleep(Duration::from_millis(2));
-        drop(guard);
-    });
-    rx.recv().expect("the holder to have taken the lock");
-
-    let mut scratch = Vec::new();
-    let mut declick = Declick::default();
-    let rendered = render_stereo(
-        &mixer,
-        &mut scratch,
-        256,
-        Duration::from_secs(2),
-        &mut declick,
-    );
-    holder.join().unwrap();
-
+    assert!(scratch[0] > 0.79, "the body of what arrived is untouched");
+    let end = 128 - 1;
     assert!(
-        rendered,
-        "a hold well inside the budget must not cost a buffer"
+        scratch[end * CHANNELS].abs() < 0.02,
+        "and it ends at silence"
     );
-    assert!(scratch.iter().any(|s| *s != 0.0));
+    for frame in (128 - DECLICK_FRAMES + 1)..128 {
+        assert!(
+            scratch[frame * CHANNELS] < scratch[(frame - 1) * CHANNELS],
+            "frame {frame} did not fall"
+        );
+    }
 }
 
-/// And past the budget it gives up rather than blocking - the property that
-/// keeps the device's deadline out of the frame loop's hands.
+/// And a gap that begins on a buffer boundary - nothing arrived at all - decays
+/// from where the previous buffer ended instead, because that step is real too.
 #[test]
-fn a_lock_held_past_the_budget_gives_up() {
-    let mixer = Mutex::new(Mixer::new(44_100));
-    let guard = mixer.lock().expect("the lock");
+fn a_gap_that_starts_at_a_boundary_decays_from_the_last_frame() {
+    let mut scratch = vec![0.0f32; 128 * CHANNELS];
+    ramp_from(&mut scratch, [1.0, -1.0]);
 
-    let mut scratch = Vec::new();
-    let mut declick = Declick::default();
-    let rendered = render_stereo(
-        &mixer,
-        &mut scratch,
-        256,
-        Duration::from_micros(200),
-        &mut declick,
-    );
-    drop(guard);
-
-    assert!(!rendered);
-    assert_eq!(scratch.len(), 256 * CHANNELS);
-    assert!(declick.recovering, "the next buffer has to ramp back in");
-}
-
-/// The declick itself, and the reason this is not a `fill(0.0)`: a gap that
-/// starts with a step from full scale to zero is a click, which is louder than
-/// the millisecond it replaces.
-#[test]
-fn a_dropped_buffer_ramps_down_from_the_last_sample_rather_than_cutting() {
-    let mut scratch = vec![0.0; 256 * CHANNELS];
-    ramp_down(&mut scratch, [1.0, -1.0]);
-
-    assert!(
-        scratch[0] > 0.9,
-        "the ramp has to start next to the last sample, not at zero"
-    );
+    assert!(scratch[0] > 0.9, "the ramp starts next to the last sample");
     assert!(scratch[1] < -0.9);
-    // Monotone down over the ramp, then silence for the rest of the buffer.
     for frame in 1..DECLICK_FRAMES {
         assert!(scratch[frame * CHANNELS] < scratch[(frame - 1) * CHANNELS]);
     }
@@ -213,14 +136,14 @@ fn a_dropped_buffer_ramps_down_from_the_last_sample_rather_than_cutting() {
         scratch[DECLICK_FRAMES * CHANNELS..]
             .iter()
             .all(|s| *s == 0.0),
-        "past the ramp a dropped buffer is silent"
+        "past the ramp the gap is silent"
     );
 }
 
 /// The other edge: the first buffer after a gap starts at silence too.
 #[test]
-fn the_buffer_after_a_drop_ramps_back_in() {
-    let mut scratch = vec![1.0; 256 * CHANNELS];
+fn the_buffer_after_a_gap_ramps_back_in() {
+    let mut scratch = vec![1.0f32; 256 * CHANNELS];
     ramp_up(&mut scratch);
 
     assert!(scratch[0] < 0.1, "resuming must not step up from silence");
@@ -231,55 +154,88 @@ fn the_buffer_after_a_drop_ramps_back_in() {
         scratch[DECLICK_FRAMES * CHANNELS..]
             .iter()
             .all(|s| *s == 1.0),
-        "past the ramp the rendered signal is untouched"
+        "past the ramp the signal is untouched"
     );
 }
 
-/// A buffer shorter than the ramp still ends at silence rather than part-way
-/// down it - the case a 32-frame PipeWire quantum actually hits.
+/// A buffer shorter than the ramp still reaches silence rather than stopping
+/// part-way down it - the case a 32-frame PipeWire quantum actually hits.
 #[test]
 fn a_buffer_shorter_than_the_ramp_still_reaches_silence() {
-    let mut scratch = vec![0.0; 8 * CHANNELS];
-    ramp_down(&mut scratch, [1.0, 1.0]);
+    let mut scratch = vec![1.0f32; 8 * CHANNELS];
+    fade_out(&mut scratch);
     assert_eq!(scratch[7 * CHANNELS], 0.0);
-    assert_eq!(scratch[7 * CHANNELS + 1], 0.0);
 
-    let mut scratch = vec![1.0; 8 * CHANNELS];
+    let mut scratch = vec![0.0f32; 8 * CHANNELS];
+    ramp_from(&mut scratch, [1.0, 1.0]);
+    assert_eq!(scratch[7 * CHANNELS], 0.0);
+
+    let mut scratch = vec![1.0f32; 8 * CHANNELS];
     ramp_up(&mut scratch);
     assert_eq!(scratch[7 * CHANNELS], 1.0);
 }
 
-/// The tail is read off what was rendered, so the ramp starts where the music
-/// actually was rather than at an assumed full scale.
+/// The tail is read off what was played, so a gap ramps from where the music
+/// actually was rather than from an assumed full scale.
 #[test]
-fn the_tail_follows_the_last_rendered_frame() {
-    let rendered = [0.9, -0.9, 0.25, -0.25];
-    assert_eq!(last_frame(&rendered), [0.25, -0.25]);
+fn the_tail_follows_the_last_played_frame() {
+    let played = [0.9, -0.9, 0.25, -0.25];
+    assert_eq!(last_frame(&played), [0.25, -0.25]);
     assert_eq!(last_frame(&[]), [0.0, 0.0]);
 }
 
-/// A poisoned lock gives up at once instead of spending a budget per buffer on
-/// a lock that will never be free again.
+/// The ring holds the target plus one chunk, so the render thread always has
+/// room to write a whole chunk and the occupancy sits at the target rather than
+/// a chunk under it.
 #[test]
-fn a_poisoned_lock_is_not_waited_on() {
-    let mixer = Arc::new(Mutex::new(Mixer::new(44_100)));
-    let poison = Arc::clone(&mixer);
-    let _ = std::thread::spawn(move || {
-        let _guard = poison.lock().unwrap();
-        panic!("poisoning the mixer on purpose");
-    })
-    .join();
-
-    // Ten seconds against a one-second assertion, for the same reason the test
-    // above is generous: correct behaviour returns in microseconds and the
-    // behaviour being guarded against takes the whole budget, so the margin can
-    // be as wide as a loaded CI machine needs.
-    let started = std::time::Instant::now();
-    assert!(acquire(&mixer, Duration::from_secs(10)).is_none());
+fn the_ring_holds_the_target_plus_room_to_write() {
+    let target = Duration::from_millis(60);
+    let capacity = render::ring_capacity(48_000, target);
+    let held = capacity / CHANNELS;
     assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "a poisoned lock must not be waited out"
+        (2_880..=3_500).contains(&held),
+        "{held} frames is not 60 ms of 48 kHz plus a chunk"
     );
+}
+
+/// The render thread fills the ring and stops when its handle drops.
+///
+/// **The one test of the new shape a machine with no sound card can run.**
+/// There is no device here and none is needed: the thread renders a real mixer
+/// into a real ring, which is every part of it except the copy out.
+#[test]
+fn the_render_thread_fills_the_ring_and_stops_when_dropped() {
+    let mixer = Arc::new(Mutex::new(Mixer::new(44_100)));
+    mixer
+        .lock()
+        .unwrap()
+        .play(Play::looping(tone(), Bus::Music))
+        .expect("a voice");
+
+    let (producer, mut consumer) = rtrb::RingBuffer::new(8_192);
+    let ahead = render::Ahead::spawn(Arc::clone(&mixer), producer);
+
+    // It polls, so give it a few passes to fill rather than assuming one.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while consumer.slots() < 4_096 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        consumer.slots() >= 4_096,
+        "the ring held {} sample(s) after five seconds",
+        consumer.slots()
+    );
+
+    let mut out = vec![0.0f32; 2_048];
+    let (_, unfilled) = consumer.pop_partial_slice(&mut out);
+    assert!(unfilled.is_empty(), "and it hands out what it rendered");
+    assert!(out.iter().any(|s| *s != 0.0), "which is audio, not zeroes");
+
+    drop(ahead);
+    // Dropping joins, so by here nothing is writing: the count cannot move.
+    let settled = consumer.slots();
+    std::thread::sleep(Duration::from_millis(50));
+    assert_eq!(consumer.slots(), settled, "the thread is still rendering");
 }
 
 /// The counters a loaded machine is diagnosed with. A null output has no
@@ -328,66 +284,6 @@ fn a_late_callback_is_counted_with_its_worst_overshoot() {
     health.late(9_000);
     health.late(2_000);
     assert_eq!(health.late_callbacks(), 3);
-}
-
-/// The buffer this asks a device for: the target, clamped into what it offers.
-#[test]
-fn the_requested_buffer_is_forty_milliseconds_of_the_devices_own_rate() {
-    let range = cpal::SupportedBufferSize::Range { min: 32, max: 8192 };
-    assert_eq!(
-        requested_buffer_size(&range, 48_000, MIN_BUFFER),
-        cpal::BufferSize::Fixed(1920)
-    );
-    assert_eq!(
-        requested_buffer_size(&range, 44_100, MIN_BUFFER),
-        cpal::BufferSize::Fixed(1764)
-    );
-}
-
-/// A device that cannot reach 40 ms gets its own ceiling rather than a request
-/// it would refuse to build a stream for.
-#[test]
-fn a_narrow_range_is_clamped_rather_than_overrun() {
-    let small = cpal::SupportedBufferSize::Range { min: 64, max: 256 };
-    assert_eq!(
-        requested_buffer_size(&small, 48_000, MIN_BUFFER),
-        cpal::BufferSize::Fixed(256)
-    );
-    let large = cpal::SupportedBufferSize::Range {
-        min: 4096,
-        max: 8192,
-    };
-    assert_eq!(
-        requested_buffer_size(&large, 48_000, MIN_BUFFER),
-        cpal::BufferSize::Fixed(4096)
-    );
-}
-
-/// And a device that will not say keeps its own default: a fixed size guessed
-/// against an unknown range is how a stream fails to build at all.
-/// A caller with a slower loop asks for more, which is the whole point of the
-/// target being a parameter: 40 ms is two and a half frames at 60 Hz and one
-/// and a fifth at 30.
-#[test]
-fn a_slower_loop_asks_for_a_bigger_buffer() {
-    let range = cpal::SupportedBufferSize::Range { min: 32, max: 8192 };
-    let thirty_hz = Duration::from_millis(83);
-    let cpal::BufferSize::Fixed(frames) = requested_buffer_size(&range, 48_000, thirty_hz) else {
-        panic!("a stated range gets a fixed size");
-    };
-    // 83 ms of 48 kHz, give or take what a single-precision second costs.
-    assert!(
-        (3_980..=3_990).contains(&frames),
-        "{frames} frames is not 83 ms"
-    );
-}
-
-#[test]
-fn an_unknown_range_is_left_alone() {
-    assert_eq!(
-        requested_buffer_size(&cpal::SupportedBufferSize::Unknown, 48_000, MIN_BUFFER),
-        cpal::BufferSize::Default
-    );
 }
 
 /// The tap fills once and is taken once, which is what makes writing it from
