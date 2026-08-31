@@ -60,6 +60,7 @@ fn model(slots: usize, decoded: usize) -> Model {
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),

@@ -846,6 +846,21 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
 // Pure's pad.
 const ALPHA_TEST_THRESHOLD: f32 = 1.0 / 255.0;
 
+// **Wipeout HD authors its own reference**, and this is where it arrives:
+// a `Transparency::Mode2` material carries the `GL_GREATER`/`0.5` pair its
+// `Material_ApplyRenderState` programs into `NV4097_SET_ALPHA_FUNC` and
+// `SET_ALPHA_REF`, and `mesh_render::build` passes it here off
+// `Model::alpha_test_ref`. The default is the constant above, so every PSP
+// and PS2 model - which authors no reference this project has recovered -
+// keeps the picture it had. Only `GL_GREATER` is reproduced: the comparison
+// below is `<`, and `mesh::rcs::cutout` reports a material asking for
+// anything else instead of drawing it inverted.
+//
+// `<` rather than `<=` for `GL_GREATER`'s "keep what is strictly above" is
+// exact on this data either way: the alpha is 8-bit, and `0.5` sits between
+// `127/255` and `128/255`, so no texel can land on the boundary.
+override alpha_test_ref: f32 = ALPHA_TEST_THRESHOLD;
+
 // Used only by the cutout pipeline - see
 // `oag_render::mesh::Model::alpha_tested_draws`. Unlike `fs_main_blend`, this
 // keeps depth write on (see `mesh_render::build`): a batch tagged
@@ -863,7 +878,7 @@ const ALPHA_TEST_THRESHOLD: f32 = 1.0 / 255.0;
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    if shaded.a < ALPHA_TEST_THRESHOLD {
+    if shaded.a < alpha_test_ref {
         discard;
     }
     return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
@@ -887,7 +902,7 @@ fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
 @fragment
 fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     let shaded = lit_texel(in);
-    if shaded.a < ALPHA_TEST_THRESHOLD {
+    if shaded.a < alpha_test_ref {
         discard;
     }
     return MrtOutput(

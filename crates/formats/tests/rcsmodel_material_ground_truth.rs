@@ -235,6 +235,21 @@ fn every_factor_the_disc_uses_is_one_of_the_four_named_ones() {
         };
         match material.blend() {
             Blend::Opaque | Blend::Factors { .. } => mapped += 1,
+            // **Mode 2 does not consume the pair at all** - it is an alpha
+            // test with blending off, see `Blend::AlphaTest` - so `blend()`
+            // has nothing to say about its factors and the 212 materials in
+            // it would drop out of this census silently. The question here is
+            // about the *value in the record*, which those records still
+            // carry, so they are asked directly instead.
+            Blend::AlphaTest => match (
+                rcsmodel::Factor::from_rsx(src),
+                rcsmodel::Factor::from_rsx(dst),
+            ) {
+                (Some(_), Some(_)) => mapped += 1,
+                _ => {
+                    unmapped.entry((src, dst)).or_default().insert(name);
+                }
+            },
             Blend::Unmapped { src, dst } => {
                 unmapped.entry((src, dst)).or_default().insert(name);
             }

@@ -169,6 +169,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         vertex_colour_is_light: false,
 
         flame: None,
+        alpha_test_ref: None,
         centre,
         radius,
         anim_tracks: Vec::new(),

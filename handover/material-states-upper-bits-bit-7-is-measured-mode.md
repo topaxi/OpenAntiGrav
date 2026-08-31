@@ -42,11 +42,29 @@ disc-wide - see
 and [rcsmodel.md](../docs/formats/rcsmodel.md#mode-2-is-a-plain-alpha-test-after-all-2026-08-31)
 for the full evidence, including the correction of this thread's own earlier
 "refuted by the picture" reading, which turned out to be a mean-vs-distribution
-measurement error, not a fact about the mechanism. **The remaining "wire it
-into `oag_render`" work moved to its own thread**,
-[mode-2s-alpha-test-is-decoded-not-wired.md](mode-2s-alpha-test-is-decoded-not-wired.md),
-since it is an implementation task now, not a reverse-engineering one, and
-this file stays about bit 7, which is still genuinely unresolved.
+measurement error, not a fact about the mechanism. The remaining "wire it
+into `oag_render`" work went to a thread of its own and landed the same day -
+see below - and this file stays about bit 7, which is still genuinely
+unresolved.
+
+**2026-08-31, later: mode 2 is wired, and it handed this thread a symptom.**
+`oag_render` draws `Transparency::Mode2` as a real cutout now (see
+[rcsmodel.md](../docs/formats/rcsmodel.md#mode-2-is-wired-and-it-is-not-subtle-on-every-material-2026-08-31)),
+and with it comes the classic alpha-test failure at minification. Measured on
+`amphiseum` with `OAG_ALBEDO_ONLY=1` and only the change varying: one crowd
+slot alone (`OAG_ONLY_SLOT=574`, radius 213) goes 44,313 non-background pixels
+blended to 24,290 tested, which is the cutout working; all 25 crowd chunks at
+once (radius 902) go **7,640 to 8** - the crowd is gone. The arithmetic that
+predicts it is on that page: a minifying surface's filtered sample converges
+on its texture's mean alpha, and `nr_crowd_bustle`'s is `0.4858`, just under
+the `0.5` reference, so the test fails everywhere at once.
+
+Alpha-to-coverage is the standard fix for exactly that, and **the `_atoc`
+textures this thread is about are the crowd, the foliage and the traffic
+sprites** - the same surfaces. So bit 7's content-class inference has a
+rendering symptom pointing at it now as well as a naming coincidence. Do not
+read that as evidence: it is a reason the inference is plausible, and the
+register write is still what would settle it.
 
 ## Open
 
@@ -54,6 +72,10 @@ this file stays about bit 7, which is still genuinely unresolved.
   a confidence-55 content-class inference, not confirmed against the
   executable.
 - Bit 7 is not wired into `oag_render`.
+- Whether the mode-2 cutout's minification artefact above is what the disc
+  uses bit 7 to avoid. Suggestive, not established: nothing has read the bit's
+  own register write, and the artefact would equally follow from this
+  project's mip and sampler choices rather than from the original's.
 
 ## Next Steps
 

@@ -139,6 +139,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
     None
 }
 
+mod cutout;
 mod isolate;
 mod pads;
 pub mod psp2;
@@ -240,6 +241,7 @@ pub fn build_scene(
             };
             let surface = surface(&model, mesh, &target.textures, &target.material_slots);
             report.see_through += usize::from(surface.blend.is_some());
+            report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));
             for submesh in &mesh.submeshes {
                 if submesh.vertex_count == 0 || submesh.index_count == 0 {
@@ -341,16 +343,22 @@ fn surface(
     // `DEFAULT` for a slot with no reading, which is what every title but HD
     // has and what an HD material whose microcode did not trace answers.
     let roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
-    let blend = match model.material_of(mesh).map(rcsmodel::Material::blend) {
+    let material = model.material_of(mesh);
+    let blend = match material.map(rcsmodel::Material::blend) {
         // Only a painted surface can be blended - see above.
         Some(rcsmodel::Blend::Factors { src, dst }) if texture.is_some() => {
             Some(blend_state(src, dst))
         }
         _ => None,
     };
+    // Same rule, same reason: the alpha a cutout tests is the texture's, so an
+    // unpainted one has nothing to test and stays in the opaque pass rather
+    // than discarding against the white 1x1's alpha of 1.
+    let cutout = texture.is_some() && material.is_some_and(|m| cutout::of(m).is_some());
     Surface {
         texture,
         blend,
+        cutout,
         roles,
     }
 }
@@ -435,6 +443,10 @@ struct Surface {
     /// authors a factor *pair* and Pulse's three classes have no member for
     /// most of them - see `mesh::DrawCall::blend_state`.
     blend: Option<wgpu::BlendState>,
+    /// Whether this surface is an alpha-test cutout - `Transparency::Mode2`,
+    /// see [`cutout`]. Never set together with [`Self::blend`]: mode 2 turns
+    /// the alpha test on and blending off, and they are separate registers.
+    cutout: bool,
 }
 
 /// Zero for a coordinate that is not a finite number.
@@ -584,9 +596,13 @@ fn emit(
 
     out.indices
         .extend(indices.iter().map(|&i| first_vertex + u32::from(i)));
-    let list = match surface.blend {
-        Some(_) => &mut out.transparent_draws,
-        None => &mut out.draws,
+    // Three lists, and the cutout is the middle one: it writes depth like the
+    // opaque pass and is drawn before the blended pass, which is exactly what
+    // an alpha test is - see `cutout` and `mesh::Model::alpha_tested_draws`.
+    let list = match (surface.blend, surface.cutout) {
+        (Some(_), _) => &mut out.transparent_draws,
+        (None, true) => &mut out.alpha_tested_draws,
+        (None, false) => &mut out.draws,
     };
     list.push(DrawCall {
         moving: place.xform != 0,
@@ -731,6 +747,10 @@ fn build_with_options(
     // it, and it is a property of the model rather than of the target because
     // the capture and viewer paths draw these same models into a gamma one.
     out.vertex_colour_is_light = true;
+    // The disc's own alpha-test reference, for the cutout draws below - see
+    // `cutout`, which reports a comparison this shader cannot reproduce
+    // rather than drawing one wrongly.
+    out.alpha_test_ref = cutout::reference(&model, &mut report);
     out.material_variants = material_variants;
     out.material_slots = material_slots;
 
@@ -789,6 +809,7 @@ fn build_with_options(
 
             let surface = surface(&model, mesh, &out.textures, &out.material_slots);
             report.see_through += usize::from(surface.blend.is_some());
+            report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));
             for submesh in &mesh.submeshes {
                 if submesh.vertex_count == 0 || submesh.index_count == 0 {

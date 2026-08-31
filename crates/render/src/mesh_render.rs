@@ -78,10 +78,16 @@ pub struct Built {
     /// Opaque pass: depth write on, no blending. Draws [`Model::draws`].
     pub pipeline: wgpu::RenderPipeline,
     /// Cutout pass: depth write on, no blending, `discard` below
-    /// `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` (an invented placeholder, not a
-    /// recovered GE reference value). Draws [`Model::alpha_tested_draws`] as
+    /// `mesh.wgsl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
     /// `blend_pipeline`.
+    ///
+    /// **The reference is per model**, not a constant in the shader: a
+    /// Wipeout HD material authors it (`GL_GREATER`/`0.5` disc-wide - see
+    /// [`Model::alpha_test_ref`] and `mesh::rcs::cutout`) and [`build`]
+    /// pushes it here as a pipeline override. A model that authors none keeps
+    /// the shader's default, which is the PSP reference `mesh.wgsl`'s own
+    /// `ALPHA_TEST_THRESHOLD` carries the evidence for.
     pub alpha_test_pipeline: wgpu::RenderPipeline,
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
@@ -256,6 +262,13 @@ pub fn build(
     }
     if model.vertex_colour_is_light {
         constants.push(("colour_is_light", 1.0));
+    }
+    // A fourth: the alpha-test reference the model's own materials author,
+    // which on Wipeout HD is the `GL_GREATER`/`0.5` pair its mode-2 materials
+    // carry. Left off for a model with none, so `mesh.wgsl`'s own default -
+    // the recovered PSP reference - stands. See `mesh::rcs::cutout`.
+    if let Some(reference) = model.alpha_test_ref {
+        constants.push(("alpha_test_ref", f64::from(reference)));
     }
     if let Some(flame) = model.flame {
         constants.extend([

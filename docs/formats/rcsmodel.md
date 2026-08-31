@@ -1036,16 +1036,84 @@ combined in between: block `#3` samples sampler hash `0x11cb4f74` at unit 1
 into the register that becomes output alpha, and that hash is exactly
 `Material::texture_sampler` for `crowd_avatars_22x4.gtf` on this material.
 
-**Still not wired.** `oag_render` has no fixed-function alpha test, and
-`Material::blend()` currently routes `Transparency::Mode2` through the same
-`Blend::Factors` alpha-blend path as `Transparency::Blended`, because both
-satisfy `is_see_through()`. Given the crowd texture's hard `0`/`255` split,
-per-pixel colour is likely close either way, but blending and testing differ
-in depth-buffer interaction - alpha test writes depth like opaque geometry,
-blending typically does not - so this is a real if probably subtle
-correctness gap, not yet checked against a screenshot. Wiring a true test
-needs a shader-side `discard` in `mesh.wgsl`, since `wgpu` has no
-fixed-function equivalent to bind.
+### Mode 2 is wired, and it is not subtle on every material (2026-08-31)
+
+**`Material::blend()` answers `Blend::AlphaTest` now**, a variant of its own
+rather than the `Blend::Factors` it shared with `Transparency::Blended`, and
+`oag_render::mesh::rcs` puts those chunks in `Model::alpha_tested_draws` -
+depth write on, blending off, drawn between the opaque pass and the blended
+one. `wgpu` has no fixed-function alpha test, so the comparison is a
+shader-side `discard` in `mesh.wgsl`; the **reference travels as a pipeline
+override** (`alpha_test_ref`, off `Model::alpha_test_ref`) rather than as a
+constant in the shader, so the number drawn with is the disc's own and a
+disc that authored a different one would draw with that instead. Only
+`GL_GREATER` is reproduced - `mesh::rcs::cutout` counts a material asking for
+anything else in `Report::cutout_unread` and leaves it opaque, because
+drawing a `GL_LESS` cutout through a `GL_GREATER` shader inverts it. Zero on
+every circuit measured.
+
+**Whether the cutoff changes the picture depends on the material, and for two
+of them it changes it a lot.** `crates/render/examples/hd_mode2_alpha.rs`
+histograms the channel each material's own microcode says its coverage comes
+from - not entry 0's `a` blindly - across every circuit of all three
+archives. **103 mode-2 records under 8 distinct names, every one
+`GL_GREATER`/`0.5`, every one taking coverage from the first texture's `a`:**
+
+| material | records | chunks | texels strictly between 0 and 255 | kept by `> 0.5` | mean alpha |
+| --- | --- | --- | --- | --- | --- |
+| `cf_alpha4glow` | 15 | 38 | 67.07 % | 36.2 % | 0.3865 |
+| `jd_alphalambert_test` | 5 | 10 | 19.92 % | 49.0 % | 0.4860 |
+| `emissive_alpha_heathaze_test` | 4 | 54 | 0.23 % | 72.9 % | 0.7288 |
+| `fence_alpha` | 11 | 11 | 0.13 % | 24.3 % | 0.2429 |
+| `nr_crowd_bustle` | 33 | 1,123 | 0.11 % | 48.6 % | 0.4858 |
+| `jd_alphalambert_alphatest` | 2 | 45 | 0.00 % | 44.7 % | 0.4469 |
+| `lambert` | 32 | 100 | 0.00 % | 44.8 % | 0.4476 |
+| `uv_anim_diffuse_alpha_emissive` | 1 | 65 | 0.00 % | 0.8 % | 0.0077 |
+
+**Two of the eight names are new against the six the mode-1/mode-2 census
+above lists**, and the difference is scope rather than a correction: that
+sweep covered 12 circuits in both directions, this one covers all 16
+environment directories of all three `PSARC` archives. `lambert` and
+`jd_alphalambert_alphatest` are drawn either way - 100 and 45 chunk surfaces
+name them.
+
+So the "colour is close either way" reasoning the crowd's own histogram
+supported **does not generalise**: it holds for six of the eight, and
+`cf_alpha4glow` - two thirds of its texels on a gradient - is a different
+picture blended than tested.
+
+**Measured against a frame.** `just view <image>:...PSARC --mesh
+/data/environments/amphiseum/track.vex` reports 274 see-through chunks before
+and 182 see-through plus 92 cutout after. Rendering one crowd slot alone
+(`OAG_ONLY_SLOT=574 OAG_ALBEDO_ONLY=1`, one variable between the two frames)
+is where it shows: blended, the amphitheatre's stands are a flat grey sheet
+of 44,313 non-background pixels; tested, 24,290 - 55 % of them, against the
+48.6 % of the texture's own texels that clear the reference - and they carry
+the rows of individual avatars the texture actually holds instead of a smear.
+On `01_vineta_k`'s isolated `cf_alpha4glow` the surviving strips draw at full
+intensity rather than washed into the background: 19 of the frame's 25
+changed pixels are newly lit.
+
+**And a cutout disappears under minification, which is worth stating rather
+than rediscovering.** At a framing that puts all 25 of amphiseum's crowd
+chunks in one 960x720 capture (radius 902 against radius 213 for the single
+slot above), the same comparison goes 7,640 non-background pixels blended to
+**8** tested - the crowd is simply gone. The mean-alpha column is why: as a
+surface minifies its footprint covers more and more of the texture, so the
+filtered sample converges on the texture's mean, and **seven of the eight
+means sit below `0.5`** - `nr_crowd_bustle`'s at `0.4858`, a hair under. Once
+every sample is that mean, `GL_GREATER` against `0.5` fails everywhere at
+once rather than thinning gradually.
+
+**Confidence 75 on that explanation**, from the arithmetic and two framings
+of the same geometry rather than from reading the sampler: nothing here has
+checked which mip level `mesh.wgsl`'s sampler actually selects, and the
+prediction it makes for `emissive_alpha_heathaze_test` - mean `0.7288`,
+so it should go *solid* under minification rather than vanish - has not been
+captured. The behaviour is the RSX's too, and whether the original mitigates
+it is unread; the disc's `..._atoc.gtf` texture names point at
+alpha-to-coverage, on exactly the crowd, foliage and traffic surfaces this
+affects. That is `Material::state` bit 7's open question, not this one.
 
 ### The factor values, and which are mapped
 
@@ -1556,11 +1624,17 @@ Named explicitly, with what each would take.
    texture's alpha is a clean bimodal `0`/`255` split, not the roughly-uniform
    spread "a mean of 120 discards most of it" assumed; the threshold keeps
    exactly the 47.1% that is the crowd figures. See
-   [above](#mode-2-is-a-plain-alpha-test-after-all-2026-08-31). **What is
-   left**: bit 7's question is untouched by this pass, and `oag_render` does
-   not yet implement the alpha test this resolves - `Material::blend()` still
-   routes mode 2 through the alpha-*blend* path, a real if likely subtle
-   depth-interaction gap.
+   [above](#mode-2-is-a-plain-alpha-test-after-all-2026-08-31). **And it is
+   drawn as one now** (same day): `Material::blend()` answers its own
+   `Blend::AlphaTest`, the chunks go in `Model::alpha_tested_draws`, and the
+   reference reaches `mesh.wgsl` as a pipeline override off the disc's own
+   value rather than as a constant - see
+   [above](#mode-2-is-wired-and-it-is-not-subtle-on-every-material-2026-08-31),
+   where a histogram of all eight mode-2 names - eight rather than this
+   bullet's six, because that sweep covered 12 circuits and this one covers
+   all 16 of all three archives - shows the "subtle either way" reading
+   holding for six of them and failing outright for `cf_alpha4glow`. **What is left**: bit 7's
+   question is untouched by this pass.
 10. **Which of a vertex's several texture coordinates a shader actually
     samples**, per material. The declaration names them - `Uv1`, `Uv2`,
     `lightmapUV`, `map1`, `map2`, `Uvset1` - and

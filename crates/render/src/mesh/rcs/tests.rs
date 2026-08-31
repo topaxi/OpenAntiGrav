@@ -68,6 +68,8 @@ fn the_report_names_both_kinds_of_absence() {
         unreferenced: 639,
         weapon_pads: 9,
         see_through: 257,
+        cutout: 41,
+        cutout_unread: 0,
         untextured: 3,
         lightmapped: 4,
         lightmap_undecoded: 0,
@@ -90,6 +92,11 @@ fn the_report_names_both_kinds_of_absence() {
         "{line}"
     );
     assert!(line.contains("257 chunk(s) drawn see-through"), "{line}");
+    assert!(
+        line.contains("41 chunk(s) drawn as an alpha-test cutout"),
+        "a cutout is a different GPU feature from a blend, and this crate drew \
+         every one of them as the other one until the state word was read: {line}"
+    );
     assert!(
         line.contains("40 of 42 drawn material(s) resolved"),
         "{line}"
