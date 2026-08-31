@@ -197,10 +197,81 @@ fn a_bus_gain_only_moves_its_own_bus() {
     assert!(music_energy > 0.0, "silencing SFX must not silence music");
 
     mixer.stop_all();
+    // A stopped voice fades over `RELEASE_FRAMES` rather than vanishing, so
+    // render that out before measuring: otherwise what the SFX assertion below
+    // sees is the music's own release tail. 128 frames covers 64.
+    mixer.render(&mut out);
     mixer.play(Play::looping(sound, Bus::Sfx));
     mixer.render(&mut out);
     let sfx_energy: f32 = out.iter().map(|s| s.abs()).sum();
     assert_eq!(sfx_energy, 0.0, "the SFX bus was set to zero");
+}
+
+/// The measured reason [`RELEASE_FRAMES`] exists: a held cue is loud where it
+/// is stopped, and clearing the slot there is a step from most of full scale to
+/// zero - which a speaker reproduces as a thump.
+#[test]
+fn a_stopped_voice_fades_out_instead_of_being_cut_dead() {
+    // Full scale throughout, which is what a held cue looks like at the moment
+    // something stops it: nothing about a stop lands near a zero crossing.
+    let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
+
+    let mut out = vec![0.0f32; 256 * CHANNELS];
+    mixer.render(&mut out);
+    assert!(out[0] > 0.9, "the voice is loud before it is stopped");
+
+    mixer.stop(id);
+    assert!(!mixer.is_playing(id), "the handle dies with the stop");
+    mixer.render(&mut out);
+
+    // Down over the release rather than across one sample, and silent after it.
+    assert!(out[0] > 0.9, "the fade starts where the waveform was");
+    for frame in 1..RELEASE_FRAMES as usize {
+        assert!(
+            out[frame * CHANNELS] < out[(frame - 1) * CHANNELS],
+            "frame {frame} did not fall"
+        );
+    }
+    assert!(
+        out[RELEASE_FRAMES as usize * CHANNELS..]
+            .iter()
+            .all(|s| *s == 0.0),
+        "past the release the voice is gone"
+    );
+
+    // And the slot comes back, so a release cannot leak one.
+    assert_eq!(mixer.active_voices(), 0);
+    let again = Arc::new(Sound::new(vec![1_000i16; 64 * 2], 2, 44_100).expect("sound"));
+    assert!(
+        mixer.play(Play::once(again, Bus::Sfx)).is_some(),
+        "the released slot is reusable"
+    );
+}
+
+/// A second stop does not restart the fade, which would make a voice on its way
+/// out get louder again.
+#[test]
+fn stopping_twice_does_not_reopen_the_fade() {
+    let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
+    let mut mixer = Mixer::new(44_100);
+    let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
+    let mut out = vec![0.0f32; 32 * CHANNELS];
+    mixer.render(&mut out);
+
+    mixer.stop(id);
+    mixer.render(&mut out);
+    let after_first = out[31 * CHANNELS];
+    mixer.stop(id);
+    mixer.stop_all();
+    mixer.render(&mut out);
+    assert!(
+        out[0] < after_first,
+        "the second stop restarted the fade: {} then {}",
+        after_first,
+        out[0]
+    );
 }
 
 #[test]

@@ -19,8 +19,8 @@ impl Session {
         // the mixer lock, said out loud from a thread that can afford to
         // allocate a sentence. Here rather than in the tick loop because a
         // dropped buffer is a property of the wall clock, not of the timestep,
-        // and `Output::report_dropouts` throttles itself in frames.
-        self.audio.output().report_dropouts();
+        // and `Output::report_health` throttles itself in frames.
+        self.audio.output().report_health();
 
         // Before everything, because it is what makes there be anything: until
         // a disc has been picked there is no boot to finish and no front end to

@@ -76,6 +76,28 @@ impl Bus {
     }
 }
 
+/// Output frames a stopped voice fades over rather than being cut dead.
+///
+/// About 1.5 ms at 44.1 kHz, the same length the output callback's own declick
+/// uses ([ADR-0031](../../../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)),
+/// and for the same reason one level down.
+///
+/// **Measured, not chosen for tidiness.** Every held cue on the Pulse discs
+/// peaks close to full scale - `~ENGINE` at 0.958, `~SHIELD` at 0.949,
+/// `~ROCKLOCK` at 0.949 - and [`Mixer::stop`] used to clear the slot outright,
+/// which cuts the waveform wherever the playhead happened to be. A step from
+/// most of full scale to zero is a click, and a click through a speaker is
+/// heard as a thump rather than as the silence it actually is. A one-shot
+/// running to its own end does not need this - the same measurement puts every
+/// cue's last sample under 0.02 - but a *stopped* one has no reason to be
+/// anywhere near zero.
+///
+/// **This is not the hardware's envelope.** `__sceSasSetADSR`'s release is real
+/// and unrecovered ([ADR-0018](../../../docs/architecture/adr/0018-audio-mixer-architecture.md)
+/// defers it); this is the shortest fade that removes a discontinuity, and it
+/// is deliberately too short to be mistaken for one.
+const RELEASE_FRAMES: u32 = 64;
+
 /// Decoded audio, ready to play.
 ///
 /// Interleaved 16-bit signed, the form both PS-ADPCM decode
@@ -182,11 +204,29 @@ struct Voice {
     pan: Option<f32>,
     looping: bool,
     generation: u32,
+    /// Output frames left of the fade a stopped voice goes out on, or `None`
+    /// while it is sounding normally. See [`RELEASE_FRAMES`].
+    release: Option<u32>,
 }
 
 impl Voice {
     fn is_free(&self) -> bool {
         self.sound.is_none()
+    }
+
+    /// Takes the handle away and starts the fade out.
+    ///
+    /// Generation zero is the one no [`VoiceId`] can carry - [`Mixer::play`]
+    /// increments before it hands one out, so the first is one - which is what
+    /// makes a releasing voice unaddressable without a second flag. Called
+    /// twice, the fade is not restarted: the second stop of a voice already on
+    /// its way out would otherwise make it louder again.
+    fn release(&mut self) {
+        if self.is_free() {
+            return;
+        }
+        self.generation = 0;
+        self.release.get_or_insert(RELEASE_FRAMES);
     }
 }
 
@@ -303,10 +343,21 @@ impl Mixer {
         self.master_gain = gain.max(0.0);
     }
 
-    /// How many voices are sounding.
+    /// How many voices are live - started, not stopped, not finished.
+    ///
+    /// **A voice on its release fade is not counted, though it is still
+    /// sounding and still holding its slot** for up to [`RELEASE_FRAMES`]
+    /// output frames. Every caller reads this as "did the thing I started get
+    /// released", which is a question about the handle rather than about the
+    /// last millisecond and a half of its tail; counting the fade would make
+    /// "stopped" mean "stopped, then rendered", which is a distinction no
+    /// caller has.
     #[must_use]
     pub fn active_voices(&self) -> usize {
-        self.voices.iter().filter(|v| !v.is_free()).count()
+        self.voices
+            .iter()
+            .filter(|v| !v.is_free() && v.release.is_none())
+            .count()
     }
 
     /// How many starts have been refused for want of a free slot.
@@ -358,6 +409,7 @@ impl Mixer {
             pan: play.pan,
             looping: play.looping,
             generation,
+            release: None,
         };
         Some(VoiceId {
             slot: slot as u16,
@@ -365,10 +417,15 @@ impl Mixer {
         })
     }
 
-    /// Stops a voice and frees its slot. A stale handle does nothing.
+    /// Stops a voice. A stale handle does nothing.
+    ///
+    /// The handle is dead the moment this returns - [`Self::is_playing`] says
+    /// no and nothing can retune it - but the slot is held for
+    /// [`RELEASE_FRAMES`] more output frames while the voice fades, because
+    /// clearing it here is what put a step into the mix. See that constant.
     pub fn stop(&mut self, id: VoiceId) {
         if let Some(voice) = self.voice_mut(id) {
-            *voice = Voice::default();
+            voice.release();
         }
     }
 
@@ -377,7 +434,7 @@ impl Mixer {
     pub fn stop_bus(&mut self, bus: Bus) {
         for voice in &mut self.voices {
             if voice.bus == Some(bus) {
-                *voice = Voice::default();
+                voice.release();
             }
         }
     }
@@ -385,7 +442,7 @@ impl Mixer {
     /// Stops every voice.
     pub fn stop_all(&mut self) {
         for voice in &mut self.voices {
-            *voice = Voice::default();
+            voice.release();
         }
     }
 
@@ -545,11 +602,26 @@ impl Mixer {
             let frames = sound.frames();
 
             let mut finished = false;
+            // Counted down inside the loop so the fade is per output frame
+            // rather than per buffer: a 512-frame buffer would otherwise take
+            // the whole release in one step, which is the click this removes.
+            let mut release = voice.release;
             for chunk in out.as_chunks_mut::<CHANNELS>().0 {
                 if frames == 0 {
                     finished = true;
                     break;
                 }
+                let fade = match release {
+                    None => 1.0,
+                    Some(0) => {
+                        finished = true;
+                        break;
+                    }
+                    Some(left) => {
+                        release = Some(left - 1);
+                        left as f32 / RELEASE_FRAMES as f32
+                    }
+                };
                 if voice.position >= frames as f64 {
                     if voice.looping {
                         // Modulo rather than reset: at a step above one frame
@@ -571,13 +643,15 @@ impl Mixer {
                     sound.frame(index + 1)
                 };
                 for (c, sample) in chunk.iter_mut().enumerate() {
-                    *sample += (a[c] + (b[c] - a[c]) * frac) * gain * channel_gain[c];
+                    *sample += (a[c] + (b[c] - a[c]) * frac) * gain * channel_gain[c] * fade;
                 }
                 voice.position += step;
             }
 
             if finished {
                 *voice = Voice::default();
+            } else {
+                voice.release = release;
             }
         }
 

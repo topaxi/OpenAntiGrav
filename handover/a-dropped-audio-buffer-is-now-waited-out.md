@@ -1,122 +1,112 @@
-# A dropped audio buffer is now waited out and ramped, and nobody has heard it yet
+# The race thumps when a sound stops, and three of the four candidates are measured out
 
-Reported from play on 2026-08-31: a music/sound hiccup under load, alongside
-`[WARN ] [calloop] Received an event for non-existence source: TokenInner { id:
-3, version: 10, sub_id: 0 }` in the terminal.
+Reported from play on 2026-08-31: a thump under load, *"a bit like a bad bass
+drum"*, alongside `[WARN ] [calloop] Received an event for non-existence source`
+in the terminal. Refined over the session, by the person who could hear it:
 
-The two are **not** cause and effect. The calloop line is winit's Wayland
-backend removing and re-inserting a key-repeat timer source on every key press
-(`winit-0.30.13/src/platform_impl/linux/wayland/seat/keyboard/mod.rs:167`, and
-the `remove` twenty lines above it); slot 3 is the first slab slot after the
+- it happens **every few seconds**, not once;
+- **collision sounds trigger it much more often**;
+- it **cuts a playing cue** - "speed pad boost sound abruptly stops";
+- and, decisively, *"sounds a bit like the bump happens when a sound stops"*;
+- **no log line ever accompanies it**, on either the old code or this branch;
+- **vastly more demanding games on the same machine are clean**.
+
+## What the calloop line is, and why it is not this
+
+winit's Wayland backend removes and re-inserts a key-repeat timer source on
+every key press (`winit-0.30.13/src/platform_impl/linux/wayland/seat/keyboard/mod.rs:167`,
+and the `remove` twenty lines above it). Slot 3 is the first slab slot after the
 three sources winit inserts permanently at startup - the Wayland queue, the
 user-event channel and the awakener - so `id: 3, version: 10` is that timer on
 its tenth reuse. Under load a dispatched batch still carries an event for the
-token that was just removed, and calloop warns. The dropped event is a stale
-key-repeat tick for a key this game tracks itself through `Controls::set_key`,
-so nothing is lost. It is filtered to `error` in `init_logging` (both
-`crates/game/src/main.rs` and `crates/view/src/logging.rs`); `RUST_LOG=warn,calloop=warn`
-puts it back.
+token just removed, and calloop warns. The dropped event is a stale repeat tick
+for a key this game tracks itself through `Controls::set_key`. It is filtered to
+`calloop=error` in `init_logging` (`crates/game/src/main.rs` and
+`crates/view/src/logging.rs`); `RUST_LOG=warn,calloop=warn` puts it back.
 
-The hiccup is the mixer-lock contention [ADR-0018](../docs/architecture/adr/0018-audio-mixer-architecture.md)
-predicted in so many words. [ADR-0031](../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)
-supersedes that consequence: the callback now waits out a held lock (spin
-alternating with `yield_now`, budget a quarter of the buffer's own playing time
-capped at 500 µs), and ramps down/up over 64 frames around a buffer it still
-loses instead of cutting to zeroes.
+## What was measured, and what each measurement ruled out
+
+**The mixer's arithmetic is not saturating.** A 60 s autopilot race dumped with
+`--dump-audio` (`cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd
+--race --autopilot --screenshot /tmp/r.png --ticks 3600 --dump-audio /tmp/r.wav`)
+peaks at 12,588/32,767 - **-8.3 dBFS, zero full-scale samples**. Clipping was a
+live theory and this retires it for that run. Note the dump forces the null
+backend by construction, so it exercises `render_tick` and not the callback.
+
+**A cue running to its own end does not click.** Probed off
+`pulse-psp-eu.chd` through `Banks::load`: every one-shot's last sounding sample
+is under 0.02 of full scale - `SPEEDUPPAD` and `.COLLISIONS` are exactly 0.0000.
+So "the boost sound abruptly stops" is not the boost sound ending.
+
+**But every cue is loud, and the held ones are cut mid-waveform.** The same
+probe: `SPEEDUPPAD` peaks at 0.955, `.COLLISIONS` at 0.993, `~ENGINE` at 0.958,
+`~SHIELD` at 0.949, `~ROCKLOCK` at 0.949. `Mixer::stop` cleared the slot
+outright, so stopping any of those put a step from most of full scale to zero
+into the mix, at whatever point the playhead had reached. **That is the one
+thing in the code that matches "the bump happens when a sound stops"**, and it
+is what this branch now fixes - see `RELEASE_FRAMES` in `crates/audio/src/mixer.rs`.
+
+**The device path is clean at idle.** `cargo run -p oag-audio --example
+device-report --release -- 8` on this machine: `Default Audio Device`, 48 kHz,
+**512-frame buffer (10.7 ms)**, and over 8 s of a looping tone through the real
+mixer, 0 dropped, 0 jumps, 0 late callbacks. That is a floor, not a race.
+
+**Real-time scheduling is not the answer.** PipeWire's `data-loop.0` genuinely
+runs SCHED_OTHER here (no rtkit, no `realtime` group, `ulimit -r` 0), which was
+a live theory until the report that heavier games on the same machine are fine.
+Recorded because it is true and someone will find it again, not because it
+explains this.
+
+**cpal's `realtime` feature was tried and reverted** - do not re-add it without
+reading this. On Linux `audio_thread_priority` promotes a thread *only* through
+rtkit over D-Bus (`rt_linux.rs:92`), and cpal declares the crate
+`default-features = false`, so plain `features = ["realtime"]` compiles to the
+blanket no-op fallback (`audio_thread_priority-0.35.1/src/lib.rs:100-120`) and
+does nothing at all. The feature that works is `realtime-dbus`, which pulls
+libdbus into the workspace and still does nothing on a machine with no rtkit.
 
 ## Open
 
-**What the glitch actually sounds like**, asked for after the first round of
-guessing and worth more than either of the theories below: *"a bit like a bad
-bass drum, it also aborts a current sfx (for example speed pad boost sound
-abruptly stops)"*.
+**Whether the release fade actually silences the thump is unverified.** This
+session cannot open a GUI window, so every measurement above is offline or
+idle, and the ear that reported the fault is the only instrument that can close
+it.
 
-That is a very exact description of what the **pre-fix** callback did, and it
-is worth reading before anything else here. PipeWire's quantum on this machine
-is 1024 frames at 48 kHz - **21 ms**. One `try_lock` miss under the old code
-zero-filled that whole buffer, so what came out was: a step discontinuity into
-silence (a low thump), 21 ms of nothing in *every* voice at once, then a step
-back out (another thump). On a short cue like the pad boost, 21 ms is enough of
-it to sound like the sound was cut off rather than interrupted. Two thumps
-21 ms apart is about 47 Hz, which is exactly "a bad bass drum".
-
-**So the first thing to establish is which binary was played.** The run that
-produced "glitches, no logs" may have been the main checkout rather than this
-branch, in which case there was no counter to print and no ramp to hear, and
-the description above is the bug this branch already fixes rather than evidence
-against it. `cd ../oag-audio-glitch && just play` is the command; nothing in
-the main checkout has any of this.
-
-If the glitch survives *this* branch, the rest of this section applies.
-
-**The other candidate, and it is not ours.** Played again with the change in,
-the hiccups still happened and **neither** diagnostic line appeared - no
-`audio: dropped N buffer(s) to mixer-lock contention`, no
-`audio: output stream error`. Both were checked as reachable: `report_dropouts`
-is called from `Session::frame`, `warn!` passes the default filter, and cpal's
-ALSA worker does call the error callback on `ErrorKind::Xrun`
-(`cpal-0.18.1/src/host/alsa/mod.rs:1000-1010`). Silence from both means neither
-mechanism fired.
-
-What the machine says instead (2026-08-31, `nobby`, Arch):
+If it does not, the instrument to read is now in the code.
+`Output::report_health` runs once per frame from `Session::frame` and logs one
+line every ~120 frames whenever any of five counters moved:
 
 ```
-$ ps -Lo tid,cls,rtprio,ni,comm -p $(pgrep -x pipewire)
-    TID CLS RTPRIO  NI COMMAND
-   2292  TS      -   0 pipewire
-   2317  TS      -   0 module-rt
-   2332  TS      -   0 data-loop.0     <- the audio graph thread
-$ ulimit -r
-0
-$ pacman -Qq realtime-privileges rtkit
-error: package 'realtime-privileges' was not found
-error: package 'rtkit' was not found
+audio: 0 dropped, 4 jump(s) in the mix, 0 late callback(s) (worst 0.0 ms over),
+       0 voice(s) refused, 0 sample(s) clipped - of 5310 buffer(s) of 512 frame(s) so far
 ```
 
-**PipeWire's own `data-loop` runs SCHED_OTHER at nice 0.** `module-rt` is
-loaded and has nothing to grant it: no rtkit daemon, no `realtime` group, an
-rtprio limit of 0. The graph quantum is 1024 frames at 48 kHz - 21 ms - and a
-GPU-bound game preempting a normal-priority thread past that deadline is a
-glitch PipeWire absorbs internally. With `default` routed through the
-PipeWire ALSA plugin (`/etc/alsa/conf.d/50-pipewire.conf`), that underrun never
-becomes an `EPIPE` reaching the client, so cpal cannot see it and nothing in
-this process can log it. That is exactly "glitches, no logs".
+Each column names a different fault and they do not overlap - see
+`crates/audio/src/output/health.rs`:
 
-If that is right, **the fix is on the machine, not in this repo**, and the same
-glitch should be reproducible in any application under the same load.
-
-`crates/audio`'s own two improvements stand on their merits either way - a
-single `try_lock` was throwing away winnable collisions and zeroes were a
-click - but neither is the cause of what was reported, and this thread should
-not be closed as though they were.
+- **dropped** - the mixer lock was still held when the callback's waiting
+  budget ran out ([ADR-0031](../docs/architecture/adr/0031-wait-briefly-for-the-mixer-lock.md)).
+- **jumps** - the callback rendered normally and the samples still step
+  discontinuously from the previous buffer's last frame. **A click in our own
+  mix**, which is what a surviving thump should look like.
+- **late** - more wall-clock time passed between two callbacks than the buffer
+  between them was worth. The device path or the scheduler, not this crate.
+- **refused** - `Mixer::play` had no free slot. The user's own guess ("maybe
+  there's not enough parallel sounds") lands here, and it would be heard as a
+  *missing* sound rather than a thump.
+- **clipped** - the voice sum saturating.
 
 ## Next Steps
 
-1. **Play this branch**, not the main checkout: `cd ../oag-audio-glitch && just play`.
-   If the thump is gone or much quieter, the ramp is working and the counter
-   says how often it still happens.
-2. **Measure the graph.** `pw-top` has an `ERR` column that counts xruns per node. Run
-   `pw-top -b -n 60 > /tmp/pwtop.log` alongside a race and read the `ERR`
-   column for the output sink. Non-zero and climbing while the hiccups happen
-   settles it.
-3. **Then grant the privileges and measure again**, which is the actual repair:
-   `sudo pacman -S realtime-privileges && sudo gpasswd -a "$USER" realtime`,
-   then log out and back in. PipeWire's `module-rt` takes the direct
-   `pthread_setschedparam` route once the rtprio limit allows it; `ps -Lo
-   tid,cls,rtprio -p $(pgrep -x pipewire)` should then show `FF` on
-   `data-loop.0`.
-4. Only if the hiccups survive a real-time graph is there anything left here to
-   fix, and at that point the counter from step 1 of the old plan is the one to
-   read.
-
-**cpal's `realtime` feature was tried and reverted, deliberately** - do not
-re-add it without reading this. On Linux, `audio_thread_priority` promotes a
-thread *only* through rtkit over D-Bus (`rt_linux.rs:92`, `rtkit_set_realtime`),
-and cpal declares the crate `default-features = false`, so plain
-`features = ["realtime"]` compiles to the blanket no-op fallback
-(`audio_thread_priority-0.35.1/src/lib.rs:100-120`) and does nothing at all.
-The feature that works is `realtime-dbus`, which pulls libdbus - a new C build
-dependency for the whole workspace on Linux - and which still does nothing on a
-machine with no rtkit, which is the machine that has the symptom. It is worth
-revisiting once the limits.d route above is in place and there is evidence that
-*our* worker thread, rather than PipeWire's, is the late one.
+1. Play a race on this branch and listen. If the thump is gone, delete this
+   thread and the branch is done.
+2. If it survives, read the `audio:` line. Which column moved is the whole
+   diagnosis: jumps means our mix, late means the device path, refused means
+   the voice pool, clipped means the gain staging.
+3. `cargo run -p oag-audio --example device-report --release -- 20` is the
+   same counters with no game around them, for separating a fault in the race
+   from a fault in the device path.
+4. Not done, and the obvious follow-up either way: the five counters belong on
+   the performance overlay (`crates/game/src/perf.rs`, `draw_list`) rather than
+   only in the log, and `Mixer::starved`/`clipped` have been waiting for that
+   since they were written.

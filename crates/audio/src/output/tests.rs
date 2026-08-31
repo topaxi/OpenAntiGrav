@@ -282,13 +282,37 @@ fn a_poisoned_lock_is_not_waited_on() {
     );
 }
 
-/// The counter a loaded machine is diagnosed with. A null output has no
+/// The counters a loaded machine is diagnosed with. A null output has no
 /// callback, so this is the floor rather than the behaviour under contention.
 #[test]
-fn a_silent_output_has_dropped_nothing() {
+fn a_silent_output_has_seen_nothing() {
     let output = Output::null(44_100);
-    assert_eq!(output.dropped_buffers(), 0);
-    // Reports nothing, and says so by leaving the reported count alone.
-    output.report_dropouts();
-    assert_eq!(output.reported.load(Ordering::Relaxed), 0);
+    assert_eq!(output.health().dropped_buffers(), 0);
+    assert_eq!(output.health().jumps(), 0);
+    assert_eq!(output.health().late_callbacks(), 0);
+    // Reports nothing, and is not due to on the first frame either.
+    output.report_health();
+}
+
+/// A jump is a step between two adjacent buffers, and the threshold is what
+/// keeps ordinary loud audio from reading as one.
+#[test]
+fn a_step_between_buffers_is_counted_and_a_small_one_is_not() {
+    let health = Health::default();
+    health.check_jump([0.5, 0.5], [0.55, 0.45]);
+    assert_eq!(health.jumps(), 0, "ordinary movement is not a click");
+
+    health.check_jump([0.8, 0.0], [-0.8, 0.0]);
+    assert_eq!(health.jumps(), 1, "a step across full scale is");
+}
+
+/// Late callbacks keep the worst overshoot, because the count alone does not
+/// say whether the machine missed by a millisecond or by a buffer.
+#[test]
+fn a_late_callback_is_counted_with_its_worst_overshoot() {
+    let health = Health::default();
+    health.late(1_000);
+    health.late(9_000);
+    health.late(2_000);
+    assert_eq!(health.late_callbacks(), 3);
 }

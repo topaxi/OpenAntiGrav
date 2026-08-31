@@ -13,15 +13,17 @@
 //! and only the handoff to hardware is missing. That mirrors
 //! `oag_input::Controls::without_pad`, which exists for exactly the same reason.
 
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use log::{debug, error, warn};
+use log::{error, warn};
 
 use crate::mixer::{CHANNELS, Mixer};
+
+mod health;
+pub use health::Health;
 
 /// The rate used when there is no device to ask.
 ///
@@ -62,10 +64,6 @@ const SPINS_PER_YIELD: u32 = 64;
 /// are discontinuities of amplitude alone and a short ramp removes them.
 const DECLICK_FRAMES: usize = 64;
 
-/// Frames between two reports of the dropped-buffer count, at 60 Hz about five
-/// seconds. See [`Output::report_dropouts`].
-const REPORT_EVERY: u32 = 300;
-
 /// A mixer, and optionally the device draining it.
 pub struct Output {
     mixer: Arc<Mutex<Mixer>>,
@@ -74,17 +72,14 @@ pub struct Output {
     stream: Option<cpal::Stream>,
     sample_rate: u32,
     device: Option<String>,
-    /// Buffers the callback gave up on, shared with the callback itself.
+    /// What the callback saw, shared with the callback itself.
     ///
     /// The mixer's own `starved` counter is the precedent: a failure the
     /// player can hear should be one a maintainer can count. Unlike `starved`
-    /// this one is read by [`Output::report_dropouts`] rather than by tests
+    /// this one is read by [`Output::report_health`] rather than by tests
     /// alone, because it is the only way a machine that cannot open a window
-    /// learns whether the machine that can is still dropping buffers.
-    dropped: Arc<AtomicU64>,
-    /// What [`Output::report_dropouts`] has already said, and how long ago.
-    reported: AtomicU64,
-    since_report: AtomicU32,
+    /// learns what is happening on the machine that can.
+    health: Arc<Health>,
 }
 
 // `cpal::Stream` is deliberately not `Debug`, and the workspace warns on a
@@ -95,7 +90,7 @@ impl std::fmt::Debug for Output {
             .field("sample_rate", &self.sample_rate)
             .field("device", &self.device)
             .field("streaming", &self.stream.is_some())
-            .field("dropped", &self.dropped_buffers())
+            .field("dropped", &self.health.dropped_buffers())
             .finish()
     }
 }
@@ -117,9 +112,7 @@ impl Output {
             stream: None,
             sample_rate: rate,
             device: None,
-            dropped: Arc::new(AtomicU64::new(0)),
-            reported: AtomicU64::new(0),
-            since_report: AtomicU32::new(0),
+            health: Arc::new(Health::default()),
         }
     }
 
@@ -149,7 +142,7 @@ impl Output {
         let sample_rate = config.sample_rate;
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
-        let dropped = Arc::new(AtomicU64::new(0));
+        let health = Arc::new(Health::default());
 
         // **The device's own sample format, not `f32`.** This built an `f32`
         // stream unconditionally until finding U1 of the 2026-08-18 review, and
@@ -160,16 +153,16 @@ impl Output {
         // `spread` is generic over the destination for that reason.
         let format = supported.sample_format();
         let stream = match format {
-            cpal::SampleFormat::F32 => build::<f32>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::F64 => build::<f64>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::I8 => build::<i8>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::I16 => build::<i16>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::I32 => build::<i32>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::I64 => build::<i64>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::U8 => build::<u8>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::U16 => build::<u16>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::U32 => build::<u32>(&device, config, &mixer, &dropped),
-            cpal::SampleFormat::U64 => build::<u64>(&device, config, &mixer, &dropped),
+            cpal::SampleFormat::F32 => build::<f32>(&device, config, &mixer, &health),
+            cpal::SampleFormat::F64 => build::<f64>(&device, config, &mixer, &health),
+            cpal::SampleFormat::I8 => build::<i8>(&device, config, &mixer, &health),
+            cpal::SampleFormat::I16 => build::<i16>(&device, config, &mixer, &health),
+            cpal::SampleFormat::I32 => build::<i32>(&device, config, &mixer, &health),
+            cpal::SampleFormat::I64 => build::<i64>(&device, config, &mixer, &health),
+            cpal::SampleFormat::U8 => build::<u8>(&device, config, &mixer, &health),
+            cpal::SampleFormat::U16 => build::<u16>(&device, config, &mixer, &health),
+            cpal::SampleFormat::U32 => build::<u32>(&device, config, &mixer, &health),
+            cpal::SampleFormat::U64 => build::<u64>(&device, config, &mixer, &health),
             // `SampleFormat` is `#[non_exhaustive]`, and the packed 24-bit and
             // DSD formats have no `FromSample<f32>` to convert through. Named
             // rather than silently silent, which is the failure this arm's
@@ -183,9 +176,7 @@ impl Output {
             stream: Some(stream),
             sample_rate,
             device: Some(name),
-            dropped,
-            reported: AtomicU64::new(0),
-            since_report: AtomicU32::new(0),
+            health,
         })
     }
 
@@ -222,51 +213,29 @@ impl Output {
         self.stream.is_some()
     }
 
-    /// Buffers the output callback gave up on rather than render.
-    ///
-    /// Each one is a gap of roughly a device buffer in every voice at once -
-    /// ramped at both edges so it is a gap and not a click, but still audible
-    /// as a hiccup in music. Non-zero means the mixer lock was held past the
-    /// callback's whole waiting budget, which in practice means the thread
-    /// holding it was preempted, which in practice means the machine is
-    /// loaded.
+    /// What the output callback has seen, for a test or an overlay to read.
     #[must_use]
-    pub fn dropped_buffers(&self) -> u64 {
-        self.dropped.load(Ordering::Relaxed)
+    pub fn health(&self) -> &Health {
+        &self.health
     }
 
-    /// Logs the dropped-buffer count when it grows, at most every
-    /// [`REPORT_EVERY`] calls.
+    /// Logs what the callback saw since the last report, if anything changed.
     ///
     /// **Called from the frame loop, never from the callback.** Formatting a
     /// message allocates, and the audio thread is the one place in this crate
     /// where an allocation is a dropout of its own; the callback therefore only
-    /// ever bumps an atomic and this reads it back from a thread that can
-    /// afford the sentence. Throttled by frames rather than by a clock because
-    /// nothing in this crate reads one.
-    pub fn report_dropouts(&self) {
-        let dropped = self.dropped.load(Ordering::Relaxed);
-        let reported = self.reported.load(Ordering::Relaxed);
-        if dropped == reported {
-            self.since_report.store(0, Ordering::Relaxed);
+    /// ever bumps an atomic and this reads them back from a thread that can
+    /// afford the sentence.
+    ///
+    /// The mixer's own two counters are folded in here rather than reported
+    /// separately, because the useful reading is which of the five moved
+    /// together - see [`Health`].
+    pub fn report_health(&self) {
+        if !self.health.due() {
             return;
         }
-        if self.since_report.fetch_add(1, Ordering::Relaxed) < REPORT_EVERY && reported != 0 {
-            return;
-        }
-        self.since_report.store(0, Ordering::Relaxed);
-        self.reported.store(dropped, Ordering::Relaxed);
-        // The first one is a warning because it says something about the
-        // machine the player is on; the rest are debug, because by then they
-        // have been told and a race has better uses for the terminal.
-        if reported == 0 {
-            warn!(
-                "audio: dropped {dropped} buffer(s) to mixer-lock contention - \
-                 a short gap in every voice. Expected under heavy load."
-            );
-        } else {
-            debug!("audio: {dropped} buffer(s) dropped to mixer-lock contention so far");
-        }
+        let (starved, clipped) = self.with_mixer(|mixer| (mixer.starved(), mixer.clipped()));
+        self.health.report(starved, clipped);
     }
 
     /// Runs `f` against the mixer.
@@ -310,14 +279,14 @@ fn build<T>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
     mixer: &Arc<Mutex<Mixer>>,
-    dropped: &Arc<AtomicU64>,
+    health: &Arc<Health>,
 ) -> Result<cpal::Stream>
 where
     T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
 {
     let device_channels = usize::from(config.channels).max(1);
     let callback_mixer = Arc::clone(mixer);
-    let callback_dropped = Arc::clone(dropped);
+    let callback_health = Arc::clone(health);
     // Seconds per frame, so the waiting budget can be derived from the size of
     // the buffer actually handed over - a PipeWire quantum of 64 frames is
     // 1.45 ms and a 2,048-frame ALSA period is 46 ms, and a budget that suits
@@ -327,6 +296,12 @@ where
     // device actually has. Allocated once here rather than in the callback.
     let mut scratch: Vec<f32> = Vec::new();
     let mut declick = Declick::default();
+    // When the previous callback returned, so the next one can say whether more
+    // wall-clock time passed than the buffer between them was worth. This is
+    // the measurement that separates "something in this process was late" from
+    // "the samples this process produced have a step in them", and the two
+    // sound identical from a chair.
+    let mut previous: Option<Instant> = None;
 
     let stream = device.build_output_stream(
         config,
@@ -335,8 +310,31 @@ where
             let budget = Duration::from_secs_f32(frames as f32 * seconds_per_frame * SPIN_FRACTION)
                 .min(SPIN_CAP);
 
-            if !render_stereo(&callback_mixer, &mut scratch, frames, budget, &mut declick) {
-                callback_dropped.fetch_add(1, Ordering::Relaxed);
+            let now = Instant::now();
+            if let Some(previous) = previous {
+                // Against the *previous* buffer's playing time, which is this
+                // one's in every configuration cpal offers. Twice it, because a
+                // period's worth of jitter is ordinary and only a gap is not.
+                let owed = Duration::from_secs_f32(frames as f32 * seconds_per_frame);
+                let elapsed = now.duration_since(previous);
+                if elapsed > owed * 2 {
+                    callback_health.late((elapsed - owed).as_micros() as u64);
+                }
+            }
+            previous = Some(now);
+
+            let tail = declick.tail;
+            let recovering = declick.recovering;
+            callback_health.buffer(frames);
+            if render_stereo(&callback_mixer, &mut scratch, frames, budget, &mut declick) {
+                // Not after a drop: the ramp either side of a gap is a
+                // deliberate discontinuity, and counting it would bury the
+                // accidental ones this exists to find.
+                if !recovering && scratch.len() >= CHANNELS {
+                    callback_health.check_jump(tail, [scratch[0], scratch[1]]);
+                }
+            } else {
+                callback_health.dropped();
             }
 
             spread(&scratch, data, device_channels);
