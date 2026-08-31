@@ -36,31 +36,45 @@ conditional, effect rather than definitionally unwireable. New diagnostic:
 `hd_state_census`'s now-uncapped bit-7 name list and `hd_params`'s
 state/bit-7 printout.
 
+**2026-08-31: the microcode route for `Transparency::Mode2` is closed, empty.**
+All 86 fragment blocks across its six materials were disassembled with
+`scripts/ps3-microcode.py` and checked for a `KIL` or a mode-2-specific
+comparison. `KIL` never appears anywhere in the six; the only comparisons
+present (`SLT` against `zoneColourTint`, an `ADD_SAT ..., -0.5` range-compress)
+are ordinary shared boilerplate, confirmed present identically in a mode-0
+control (`track_surface`) and a mode-1 control (`glass_texture`). Full writeup
+at [rcsmodel.md](../docs/formats/rcsmodel.md), "Mode 2's six materials carry
+no fragment-program kill". **This isn't a narrower miss - it retires the
+whole microcode avenue for mode 2**: a programmable discard would show
+directly in the fragment program, and it doesn't, on any of the six. Mode 2
+is fixed-function RSX state, the same class of mechanism bit 7 is suspected
+of selecting, and the two open items below now point at exactly the same
+missing evidence.
+
 ## Open
 
 - Bit 7's specific GPU meaning ("alpha-to-coverage" versus something else) is
   a confidence-55 content-class inference, not confirmed against the
   executable.
-- `Transparency::Mode2`'s split from mode 1 is unrecovered; the obvious name
-  hypothesis (a 0.5 alpha cutout) is refuted by the crowd-alpha experiment.
+- `Transparency::Mode2`'s split from mode 1 is unrecovered, and is now known
+  **not** to be a shader-side cutout (the microcode has no kill in any of its
+  six materials - see above). What's left is fixed-function GPU state.
 - Neither bit 7 nor `Transparency::Mode2` is wired into `oag_render`.
 
 ## Next Steps
 
-- Tie bit 7 to an RSX method write in `ps3-hdfury-eu`'s Ghidra database, to
-  move "alpha-to-coverage" from a content-class inference to a decompiled
-  read. The database is a fresh import with no material/RSX-state functions
-  named yet, so this starts cold - from method-constant pattern matching in
-  the render layer's own address range, not from an existing name to search
-  for. See `docs/reverse-engineering/toolchain.md` and the per-function TOC
-  trap on PS3 Ghidra work.
-- Dump the fragment programs for `Transparency::Mode2`'s six material names
-  with `scripts/ps3-microcode.py` and look for a kill/comparison at a
-  threshold that isn't 0.5. This is microcode work, unlike bit 7 above: a
-  comparison-and-kill is visible in the fragment program itself, where
-  fixed-function GPU state like alpha-to-coverage is not.
-- Once either of the above resolves what a bit or mode actually selects,
-  wire it into `oag_render`. For bit 7 specifically: outside a race
-  `sample_count` is 1, so `alpha_to_coverage_enabled` would visibly do
-  nothing there - don't mistake that for a wiring bug, check it during a race
-  with MSAA on instead.
+- Tie bit 7 **and** mode 2 to RSX method writes in `ps3-hdfury-eu`'s Ghidra
+  database - they now need the identical evidence, so one pass through the
+  render layer's method-constant patterns can look for both at once. The
+  database is a fresh import with no material/RSX-state functions named yet,
+  so this starts cold - from method-constant pattern matching in the render
+  layer's own address range, not from an existing name to search for. See
+  `docs/reverse-engineering/toolchain.md` and the per-function TOC trap on PS3
+  Ghidra work. This is the only remaining path for either: the microcode
+  route for mode 2 is retired (above), and bit 7 was never a microcode
+  question to begin with.
+- Once either resolves what a bit or mode actually selects, wire it into
+  `oag_render`. For bit 7 specifically: outside a race `sample_count` is 1,
+  so `alpha_to_coverage_enabled` would visibly do nothing there - don't
+  mistake that for a wiring bug, check it during a race with MSAA on
+  instead.

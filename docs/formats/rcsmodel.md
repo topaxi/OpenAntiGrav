@@ -950,6 +950,43 @@ the feature is a conditional no-op rather than definitionally unwireable -
 `wgpu::MultisampleState::alpha_to_coverage_enabled` takes effect only when
 `count` is greater than 1.
 
+### Mode 2's six materials carry no fragment-program kill (2026-08-31)
+
+**The microcode route the previous section left open comes back empty.**
+Every fragment block of all six mode-2 material names
+(`nr_crowd_bustle`, `jd_alphalambert_test`, `fence_alpha`,
+`emissive_alpha_heathaze_test`, `cf_alpha4glow`,
+`uv_anim_diffuse_alpha_emissive` - 86 blocks total, decoded end to end with
+[`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py)) was checked for
+a `KIL` instruction or a comparison op (`SLT`/`SGE`/`SEQ`/`SNE`/`SGT`/`SLE`)
+against anything but the shared boilerplate below. **`KIL` never appears.**
+The only comparisons present are `SLT` against parameter `0xa410aa44`
+(`zoneColourTint`, per
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)) and a family of
+`ADD_SAT ..., -0.5` range-compresses - and both are present, identically, in
+a mode-0 material (`track_surface`) and a mode-1 material (`glass_texture`)
+checked as controls. Neither is mode-2-specific; both are ordinary shared
+fragment boilerplate (a zone-tint fog term, a signed-normal decode), not an
+alpha-cutout threshold. Confidence 80 that no cutout comparison exists in
+these six materials' fragment code specifically - lower than the container
+facts on this page because it is an absence claim over 86 blocks, not a
+positive pattern match, and the three opcodes still unnamed in this corpus
+(`0x3b`/`0x3d`/`0x3e`, see [rcsmaterial.md](rcsmaterial.md)) are read as
+normalise/rsq helpers from their position rather than confirmed, so a
+disguised comparison hiding in one of them cannot be fully ruled out.
+
+**This refutes the premise the previous section's open item was written
+against, not just the specific guess.** A programmable discard is something
+the fragment microcode would show directly; its absence across every mode-2
+material means mode 2 is not implemented as a shader-side cutout at all.
+What is left is fixed-function GPU state - an `ALPHA_REF`/`ALPHA_FUNC`-style
+comparison the RSX applies after the fragment program runs, the same class of
+mechanism bit 7 above is suspected of selecting (alpha-to-coverage). Neither
+is visible in a fragment program by construction: both are register writes
+made around the draw call, not instructions inside it. Resolving what mode 2
+selects now needs the same evidence bit 7 needs - a decompiled RSX method
+write in `ps3-hdfury-eu`'s Ghidra database - not more microcode reading.
+
 ### The factor values, and which are mapped
 
 **Confidence 70 on the enum itself.** The four values the disc uses are
@@ -1450,11 +1487,13 @@ Named explicitly, with what each would take.
    routing mode 2 through `oag_render`'s existing alpha-test pipeline erases
    the crowd entirely, because `crowd_avatars_22x4.gtf`'s alpha runs 0..255 at
    a mean of 120 and the threshold takes most of it. So mode 2 is not a plain
-   0.5 cutout, and what it *is* still wants the microcode. The microcode route
-   is now open -
-   [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py) disassembles
-   both RSX program kinds - but nothing has yet tied a state-word bit to a
-   variant choice.
+   0.5 cutout. **The microcode route came back empty (2026-08-31)**: all 86
+   fragment blocks across the six mode-2 materials were checked and none
+   carries a `KIL` or a comparison specific to mode 2 - see
+   [above](#mode-2s-six-materials-carry-no-fragment-program-kill-2026-08-31).
+   What is left is fixed-function RSX state, the same evidence class bit 7
+   needs - nothing has yet tied a state-word bit to a decompiled register
+   write.
 10. **Which of a vertex's several texture coordinates a shader actually
     samples**, per material. The declaration names them - `Uv1`, `Uv2`,
     `lightmapUV`, `map1`, `map2`, `Uvset1` - and
