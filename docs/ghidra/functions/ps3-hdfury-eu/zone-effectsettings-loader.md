@@ -3131,6 +3131,225 @@ Applied and saved live: `Render_SetClipPlanes` (65), `Render_ClassifyAgainstPlan
 (65), `Render_RunCompiledOps` (58); rows added to `names.tsv` citing this
 section.
 
+## 2026-08-31, a twenty-second pass: **the tint consumer is found** - `0x00c49110` is the shader parameter `fogColour`'s value pointer
+
+Continuing this page's own next step: read the three opcodes the twenty-first
+pass left unfetched, then, if the tint is not among them, take the one static
+route the thread had never tried (identify the object behind `*(obj+0xd8)` from
+its allocation). Both halves landed, and the second one closes the search this
+page has been running since its fourteenth pass.
+
+### First, a correction: the twenty-first pass's tag numbering is off by a slot in the 7-11 band
+
+Re-read the 16-entry table at `0x00927518` byte by byte and dereferenced every
+OPD, rather than carrying the previous pass's table forward. The handler
+addresses descend monotonically as the tag ascends across the whole `4..15`
+range, which makes the misalignment self-evident once both columns are written
+out:
+
+| tag | OPD slot | handler | previous pass said |
+| ---: | --- | --- | --- |
+| 7 | `0x008a0f98` | `FUN_005d6920` | listed as tag 9 |
+| 8 | `0x008a0f90` | `FUN_005d68d0` | correct |
+| 9 | `0x008a0f88` | `FUN_005d6878` | listed as tag 11 |
+| 10 | `0x008a0f80` | `FUN_005d6820` | correct |
+| 11 | `0x008a0f78` | `FUN_005d67d0` | not listed at all |
+
+Tags 0, 2-6, 12 and 15 were right as published. So the two handlers that pass
+described as "unread tags 7 and 13" were in fact tags 9 and 11's neighbours -
+the genuinely unread slots were **11, 13 and 14**, and all three are read below.
+
+### The three remaining opcodes: a bounding-volume trio, and still no tint
+
+All three have the same two-word shape (`read w0, w1 from the stream; call a
+helper(ctx, w0, w1)`), and the helpers make them a coherent set:
+
+| tag | handler -> helper | what it does |
+| ---: | --- | --- |
+| 11 | `FUN_005d67d0` -> `FUN_005d6e68` | `ctx+0xbc = w0; ctx+0xc0 = w1` - installs a bounding-volume array base and a second word |
+| 13 | `FUN_005d6708` -> `FUN_005d6ff8` | `lvx v2,0,w0` - loads the volume from an **absolute pointer in the stream** - then `Render_ClassifyAgainstPlanes(ctx+0x50)`, sets or clears visibility bit `w1` in the byte array at `*(ctx+8)`, and sets `ctx+4 |= 4` |
+| 14 | `FUN_005d66b8` -> `FUN_005d71d8` | byte-for-byte the same as tag 13 **except** the volume is fetched from `*(ctx+0xbc) + w0*0x10` - i.e. indexed into the array tag 11 installed |
+
+Tags 13 and 14 decompile *identically* - Ghidra drops the one instruction that
+distinguishes them. The difference is only visible in the disassembly
+(`0x005d71ec: rlwinm r4,r4,0x4,0x0,0x1b` followed by `lwz r0,0xbc(r31)` and
+`add r4,r4,r0`, against tag 13's bare `lvx v2,0,r4`), which is the same class
+of trap as this page's sign error: **two functions that decompile the same are
+not necessarily the same function.**
+
+So the dispatcher is now fully mapped, 15 real tags out of 16, and the
+twenty-first pass's conclusion holds unchanged and is now exhaustive rather
+than probable: **nothing in `Render_RunCompiledOps` touches `+0xd8` or
+`+0xf8`.** The consumer is outside this dispatcher, exactly as that pass
+predicted.
+
+### The static route that worked: the parameter table is at a fixed address
+
+`Scene_PrepareFrame` assigns `obj+0xd8` from `block[0x7c60]` at `0x003ab2a4`,
+so the object's identity is whatever that scene-block slot holds. Its one
+writer, found by an operand search for `0x7c60` across the image, is a single
+instruction:
+
+```text
+003aa7d0  lwz  r8, -0x6238(r2)     ; TOC 0x008bd3c4 -> slot 0x008b718c -> 0x00d42220
+003aa7d4  stw  r8, 0x7c60(r9)      ; r9 = 0x00c49000, the scene render block
+```
+
+**The value is a link-time constant, not an allocation** - which is why the
+allocator-tag route this page had queued as "the one static route not yet
+tried" was never going to fire: there is no `FwMemAllocator_Allocate` call to
+find a `__FILE__` string on. The table is at the fixed address **`0x00d42220`**.
+
+Exactly two instructions in the whole image use the displacement `-0x6238(r2)`.
+The second, `0x00078dec`, belongs to a function whose own TOC is
+`0x008a72a0`, not `0x008bd3c4` - `scripts/ps3-toc.py resolve 0x00078dd8
+-0x6238` prints `0x008c3640`, an unrelated slot. **So `Scene_InitRenderBlock`
+is the only code in the image that ever loads this table's address**, and
+every other reference reaches it through the scene block or through
+`obj+0xd8`. (Recorded because the naive reading of that second hit - two
+touchers of the same table - is wrong, and the per-function TOC is the only
+thing that says so.)
+
+### And `0x00d42220` is the engine shader parameter table
+
+[renderer.md](renderer.md) already recovered the other end of this, in a
+section written without knowing it would meet this one:
+
+- `*(0x008b7f04)` is the shader engine's own struct base. Read directly from
+  the file image: **`0x00d3e220`** - a static initialiser, not a runtime
+  allocation, which corrects `renderer.md`'s "runtime-allocated struct
+  pointer" in passing.
+- `Shader_InitEngineParams` (`0x003f1300`) builds **81 parameter entries** at
+  `base + 0x4000 + i*0x20`, each through `Shader_InitParamEntry`
+  (`0x005d4cf8`), whose layout puts the **value pointer at `+0x18`** and the
+  vec4 count at `+0x1c`.
+
+`0x00d3e220 + 0x4000` = **`0x00d42220`**. The two addresses meet exactly.
+`*(obj+0xd8)` is the engine parameter entry array, and a write to
+`*(obj+0xd8) + N` is a write to parameter `(N - 0x18) / 0x20`'s value pointer.
+
+For the tint: `0xf8` -> `(0xf8 - 0x18) / 0x20` = **parameter 7**, and
+parameter 7 is `fogColour`, read straight out of the initialiser
+(`Shader_InitParamEntry(base + 0x40e0, ~crc32("fogColour"), 0xc000, name, 0,
+1)`). Its value pointer therefore lives at `0x00d3e220 + 0x40f8` =
+**`0x00d42318`** - which is `0x00d42220 + 0xf8`, the very slot
+`Scene_PrepareFrame` writes at `0x003ab430`:
+
+```text
+003ab2cc  addi r23, r31, 0x110     ; r23 = 0x00c49000 + 0x110 = 0x00c49110
+003ab430  stw  r23, 0xf8(r11)      ; fogColour.value = 0x00c49110
+003ab438  stw  r7,  0xfc(r9)       ; fogColour.count = 1, matching its initialiser's own vec4 count
+```
+
+**The chain is closed end to end**: `zonemode.effectsettings` ->
+`g_effect_settings_stages` -> `Environment_UpdateStageBlend` -> `0x00c81a5c`
+-> `Scene_PrepareFrame` merges it into `0x00c49110` -> published as the shader
+parameter **`fogColour`** -> consumed by every shader that declares
+`fogColour`. Confidence **90**: three independent confirmations (the
+arithmetic meets on the nose; the count field is written alongside and matches
+the initialiser's own argument; and the same instruction pattern maps eleven
+other parameters onto their correct scene-block sources, below).
+
+### The rest of the publication block, decoded the same way
+
+The `stw value / stw count` pairs between `0x003ab2b4` and `0x003ab438` publish
+twelve parameters in one run. Each source register traces back to an `addi rX,
+r31, <offset>` with `r31 = 0x00c49000`:
+
+| table off | param | name | source |
+| --- | ---: | --- | --- |
+| `0x18` | 0 | `time` | `block+0x7c20` |
+| `0x38` | 1 | `viewProj` | `block+0xc0` (4 vec4s - a matrix) |
+| `0x58` | 2 | `view` | `block+0x00` |
+| `0x78` | 3 | `world` | r28 |
+| `0x98` | 4 | `eyePositionWorldSpace` | `block+0x100` |
+| **`0xf8`** | **7** | **`fogColour`** | **`block+0x110`** |
+| `0x158` | 10 | `constantAmbientColour` | `block+0x7ba0` |
+| `0x178` | 11 | `falseLightDirectionPower` | `block+0x7be0` |
+| `0x198` | 12 | `prelitScaleSpecular` | `block+0x7bf0` |
+| `0x1b8` | 13 | `prelitBias` | `block+0x7c10` |
+| `0x1d8` | 14 | `directionalLight0DirectionWorldSpace` | `block+0x7bd0` |
+| `0x1f8` | 15 | `directionalLight0Colour` | `block+0x7bb0` |
+
+Every one of these is a semantically sensible pairing (`view` at the block's
+own origin, `viewProj` as the only 4-vec4 entry in the run, the lighting
+parameters clustered in the `0x7ba0`-`0x7c10` band the nineteenth pass already
+identified as a dense `float4` run) - which is what raises the `fogColour`
+identification from arithmetic to corroborated. It also retires this page's
+`+0x198` puzzle: `FUN_006ce6e0` installing `block+0x7c00` at `*(obj+0xd8)+0x198`
+is that function binding **`prelitScaleSpecular`**, an ordinary parameter
+write, not a second mechanism.
+
+The same pattern continues past this run for `distortion`, `refractProject`,
+`reflectProject`, `quakePointA/B`, `quakeOffset`, `quakeTrackUpNormal`,
+`zoneOrigin`, `zoneTexInner`..`zoneTexVis`, `zoneAnisoPalette*`,
+`GradientColour0..3`, `iblScalePower` and `globalAlphaScaler` - i.e.
+**`Scene_PrepareFrame` is where the Zone shader's own parameters are bound
+too**, which is the thread to pull next.
+
+### The tint is a `.w`, not a colour: the merge block reads exactly
+
+The nineteenth pass's read of the merge is confirmed instruction by
+instruction, and sharpened. Six TOC slots feed it, three pointing at vec4s and
+three at scalars, interleaved:
+
+| slot | holds | role |
+| --- | --- | --- |
+| `0x008b71c8` | `0x00c815e0` | vec4 A (rgb) |
+| `0x008b71cc` | **`0x00c81a5c`** | scalar A |
+| `0x008b71d0` | `0x00c815f0` | vec4 B |
+| `0x008b71d4` | `0x00c81a60` | scalar B |
+| `0x008b71d8` | `0x00c81600` | vec4 C |
+| `0x008b71dc` | `0x00c81a64` | scalar C |
+
+Each scalar is bounced through the stack, `lvewx`-loaded, `vperm`-ed and
+`vspltw`-ed to a full splat, then `vsel`-merged into its vec4 under the mask in
+`v6`. **`v6` is built two instructions apart from constants** -
+`0x003aaebc: vxor v7,v7,v7`, `0x003aaed8: vspltisw v1,-1`, `0x003aaef8:
+vsldoi v6,v7,v1,4` - which yields `[0, 0, 0, 0xffffffff]`. A `vsel` under that
+mask replaces **lane 3 only**. So each scalar becomes the **`.w`** of its
+colour, and the three results are stored to `block+0x110`, `+0x120` and
+`+0x130` (`li r28,0x110`, `li r27,0x120`, `li r0,0x130` at `0x003aad80`,
+`0x003aad64` and `0x003aafc8`), confirming the twentieth pass's correction of
+the destinations exactly.
+
+`fogColour` is therefore `rgb` from `0x00c815e0` and `.w` from `0x00c81a5c` -
+**a colour and a density packed into one `float4`**, which is precisely the
+shape `.effectsettings` authors its fog in (`Fog colour` + its own density,
+three times over: `Fog`, `Alt Fog`, `Track Fog`). Three `(rgb, scalar)` pairs
+merging into three vec4s, of which the first is the engine's fog colour, is a
+strong structural match for those three fog blocks. Confidence **65** on that
+reading - structural and vocabulary evidence, no direct parse-offset proof.
+
+**And it puts a real question against this page's own `Scene.Texture Colour`
+attribution** (confidence 85, seventeenth pass): the three floats at
+`0x00c81a5c`/`0x60`/`0x64` are not a colour's three channels feeding one
+destination, they are three *independent* scalars, each landing in the `.w` of
+a *different* colour. If they are the three fog densities, then whatever key
+`Environment_UpdateStageBlend` reads into `iVar8+0x3aac` is not
+`Scene.Texture Colour`'s rgb. Both readings rest on real traces and are
+recorded here unreconciled rather than one being quietly dropped - the
+resolution is a parse-offset re-check against the schema.
+
+### Names applied
+
+- `Scene_InitRenderBlock` (`0x003aa618`, 75) - initialises the fixed scene
+  render block at `0x00c49000` (identity matrices into `+0x00`-`+0xf0`, zeroed
+  `float4` run at `+0x7ba0`-`+0x7c30`, unit vectors at `+0x7c40`/`+0x7c50`) and
+  installs the engine parameter-entry pointer at `+0x7c60`. Gated on
+  `(param_1 == 1 && param_2 == 0xffff)`, byte-for-byte the same module-init
+  signature `Shader_InitEngineParams` carries - two halves of the same
+  renderer bring-up.
+- `g_ShaderEngineParamBase` (`0x008b7f04`, data, 88) - the static slot holding
+  `0x00d3e220`, the shader engine struct whose `+0x4000` array is this page's
+  `*(obj+0xd8)`.
+
+`Render_SetClipPlanes`, `Render_ClassifyAgainstPlanes` and
+`Render_RunCompiledOps` keep the confidences the twenty-first pass gave them;
+this pass's completion of the opcode table corroborates all three without
+moving them.
+
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

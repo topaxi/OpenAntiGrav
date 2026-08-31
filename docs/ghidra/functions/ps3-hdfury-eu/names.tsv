@@ -175,3 +175,5 @@
 0x005d6e78	function	Render_SetClipPlanes	65	zone-effectsettings-loader.md
 0x005bd0d8	function	Render_ClassifyAgainstPlanes	65	zone-effectsettings-loader.md
 0x005d4a08	function	Render_RunCompiledOps	58	zone-effectsettings-loader.md
+0x003aa618	function	Scene_InitRenderBlock	75	zone-effectsettings-loader.md
+0x008b7f04	data	g_ShaderEngineParamBase	88	zone-effectsettings-loader.md
