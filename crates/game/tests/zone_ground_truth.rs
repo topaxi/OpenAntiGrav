@@ -48,6 +48,7 @@
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 use oag_game::{catalogue, race};
+use oag_gameplay::input::Button;
 use oag_physics::SpeedClass;
 use oag_title::ZoneCircuit;
 use std::path::{Path, PathBuf};
@@ -877,4 +878,94 @@ fn every_titles_zone_handling_is_one_classless_block() {
         );
         println!("{name}: {entry} is team=ZoneMode with no <Class>");
     }
+}
+
+/// **Zone's exhaust lights up with the accelerate button never touched, the
+/// same way the original does.**
+///
+/// Zone mode's engine force comes from `Environment::auto_speed`
+/// (`crates/physics/src/forces.rs`), which replaces the throttle entirely at
+/// the physics layer - a Zone craft accelerates with nothing held down. Before
+/// 2026-08-31 `Race::advance_exhausts` (`crates/game/src/race/effects.rs`) fed
+/// the exhaust's `intensity` ramp from `ship.thrust` regardless of mode - the
+/// raw accelerate-button state `crates/physics/src/controls.rs` writes every
+/// tick - so a Zone craft flown with nothing held (which nothing in the mode
+/// requires) kept `intensity` pinned at zero and drew no flare or trail at
+/// all, even at 374 km/h. **Confirmed live against the original**: the trail
+/// is visible with no button held, so this was a real divergence, not an
+/// inherited quirk.
+///
+/// The fix mirrors `oag_physics::engine::engine`'s own four-corner gate -
+/// `grounded > 0.0` - which is the same condition the force law already uses
+/// to decide whether the auto-speed thrust applies this tick, rather than
+/// inventing a second one.
+///
+/// This test is the regression: intensity has to come up substantially with
+/// nothing held, on the same order the accelerate-held control case reaches,
+/// while the craft's speed - driven by `auto_speed` alone - is identical
+/// either way.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
+    let Some(path) = image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let source = path.display().to_string();
+
+    let loaded = race::load(&race::Options {
+        source: source.clone(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::Zone,
+        ..race::Options::default()
+    })
+    .expect("loading the zone race");
+
+    const TICKS: u32 = 300;
+
+    // Control: accelerate held throughout, the same shape
+    // `race_ground_truth.rs`'s driving tests use. This is the sanity check
+    // that the mechanism itself works in this port at all.
+    let mut held_race = race::Race::start(loaded.setup.clone());
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
+    for _ in 0..TICKS {
+        held_race.tick(&held.snapshot());
+    }
+    let held_intensity = held_race.exhaust_of(0).intensity();
+    let held_speed = held_race.exhaust_of(0).speed_kmh();
+    assert!(
+        held_intensity > 0.5,
+        "holding accelerate through {TICKS} ticks should have driven the \
+         exhaust intensity up: {held_intensity} at {held_speed} km/h"
+    );
+
+    // The case in question: accelerate never pressed. Zone's auto-speed does
+    // not need it, so this is a normal way to play the mode.
+    let mut coasting_race = race::Race::start(loaded.setup);
+    for _ in 0..TICKS {
+        coasting_race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let coasting_intensity = coasting_race.exhaust_of(0).intensity();
+    let coasting_speed = coasting_race.exhaust_of(0).speed_kmh();
+
+    println!(
+        "held: intensity {held_intensity} at {held_speed} km/h; \
+         coasting: intensity {coasting_intensity} at {coasting_speed} km/h"
+    );
+
+    assert!(
+        coasting_speed > 100.0,
+        "auto_speed should have the craft moving fast with nothing held: {coasting_speed} km/h"
+    );
+    assert!(
+        (coasting_speed - held_speed).abs() < 1.0,
+        "auto_speed should put both runs at the same speed regardless of \
+         whether accelerate was held: held {held_speed} km/h, coasting {coasting_speed} km/h"
+    );
+    assert!(
+        coasting_intensity > 0.3,
+        "exhaust intensity should have come up substantially with accelerate \
+         never pressed, the same way the original's flare and trail are lit \
+         with nothing held: {coasting_intensity} at {coasting_speed} km/h \
+         (held case reached {held_intensity})"
+    );
 }

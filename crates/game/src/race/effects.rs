@@ -85,6 +85,20 @@ impl Race {
     /// backwards axis, so a segment keeps the orientation the craft had when it
     /// was laid down rather than swinging with the current pose as the ship
     /// turns.
+    ///
+    /// **Zone mode does not read `ship.thrust` for this.** Confirmed live: the
+    /// original shows a lit flare and a full trail with no button held at all,
+    /// which `ship.thrust` alone cannot explain - it is the raw accelerate-button
+    /// state `oag_physics::controls::update` writes every tick, and Zone's
+    /// `Environment::auto_speed` (`crates/physics/src/forces.rs`) replaces the
+    /// throttle entirely at the force law without touching it. Left wired to the
+    /// button, `crates/game/tests/zone_ground_truth.rs`'s
+    /// `zone_speed_is_automatic_but_exhaust_intensity_still_follows_the_accelerate_button`
+    /// caught exhaust intensity pinned at exactly `0.0` for 300 ticks at 374 km/h.
+    /// So this mirrors `oag_physics::engine::engine`'s own four-corner gate -
+    /// `grounded > 0.0` - rather than the button, which is the same condition the
+    /// force law is already using to decide whether the auto-speed thrust applies
+    /// this tick.
     pub(super) fn advance_exhausts(&mut self) {
         for slot in 0..self.world.ship_count as usize {
             if !self.world.ships[slot].active {
@@ -92,7 +106,11 @@ impl Race {
             }
             let ship = &self.world.ships[slot].physics;
             let position = ship.body.position;
-            let thrust = ship.thrust;
+            let thrust = if self.zone.is_some() && ship.grounded > 0.0 {
+                oag_physics::controls::CONTROL_MAX
+            } else {
+                ship.thrust
+            };
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
             self.exhaust[slot].advance(self.dt, thrust, speed, &mut self.exhaust_rng[slot]);
