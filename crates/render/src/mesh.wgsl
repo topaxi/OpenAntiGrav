@@ -106,7 +106,9 @@ struct Zone {
     _pad: f32,
     // `zoneEffect<Inner|Outer>`: the showing stage's `Track.Texture Colour` -
     // `Track` because the texture set this binds decides it; see
-    // `mesh_render::Zone`.
+    // `mesh_render::Zone`. `.w` is `Track.EQ brightness`: how hard the
+    // visualiser glow drives at this stage, `0.0` before the race starts and
+    // `20.0` from `Sub Venom` on - see `zone_glow` below.
     effect: vec4<f32>,
     // `zoneBase<Inner|Outer>`: `Track.Base Colour Highlight`, the `rim^10`
     // summand. `.w` unused - the exponent is a microcode literal.
@@ -193,6 +195,15 @@ override colour_is_light: f32 = 0.0;
 // binds a 1x1 black, which is the identity once `scene.zone.enabled` is 0.
 @group(2) @binding(1) var zone_tex: texture_2d<f32>;
 @group(2) @binding(2) var zone_sampler: sampler;
+// The same texels as `zone_tex`, point-filtered - see `zone_glow` below for
+// why a band index wants this rather than `zone_sampler`.
+@group(2) @binding(3) var zone_nearest_sampler: sampler;
+// The visualiser lookup - `zoneTexVis` - a 256x1 strip `oag_render::mesh_render::zone::write_vis`
+// rewrites every frame from a real audio spectrum. All-black until the first
+// write, which is the identity on `zone_glow`'s own sum. See that function
+// and `crates/render/src/mesh_render/zone.rs`.
+@group(2) @binding(4) var zone_vis_tex: texture_2d<f32>;
+@group(2) @binding(5) var zone_vis_sampler: sampler;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -435,6 +446,59 @@ fn zone_base_term(rim: f32) -> vec3<f32> {
     return scene.zone.base.rgb * pow(r, 10.0) + scene.zone.base_alt.rgb * pow(r, 5.0);
 }
 
+// The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
+// zoneTexVis[band].rgb`, read out of the Zone shader's own fragment microcode
+// - `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. Re-read
+// instruction by instruction against the project's own fixed decoder on
+// 2026-08-31 (the condition-code and parameter-patch defects that page's own
+// "Two `ps3-microcode.py` defects" section fixed the same day) and found
+// **complete**: every register in the block traces to a named parameter, a
+// known texture unit or the fog term already read elsewhere in this file, so
+// nothing multiplies into it that this project has not already read.
+// Confidence 84 on the structure, unchanged by the re-read since it only
+// confirmed rather than moved it.
+//
+//     band = zoneTex<I|O>Nearest(zoneUV).a
+//     glow = max( saturate(N.y - 0.5) * (1 - windowDepth) * E.w
+//                * zoneTexVis[band].rgb , 0 )
+//
+// `zoneUV` is the same coordinate `zone_sample` builds - the microcode reuses
+// it rather than a second one. `E.w` is `scene.zone.effect.w`, `Track.EQ
+// brightness`: the disc's own per-stage drive scalar, `0.0` before the race
+// starts and `20.0` from `Sub Venom` on.
+//
+// **`zoneTexVis` here is not the original's own table.** HD/Fury zero-fills
+// it at load and rewrites it every frame from `Environment_UpdateStageBlend`
+// - confirmed, not a static ramp - but *what* it writes is a float compared
+// against the recovered per-stage threshold ladder, and whether that float is
+// itself audio-reactive or a plain stage-progress fraction is unread; closing
+// it needs an RPCS3 watchpoint on the value the comparison reads. See
+// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+// twenty-sixth pass. This samples `zone_vis_tex`, which
+// `oag_render::mesh_render::zone::write_vis` fills every frame from a genuine
+// spectrum of this project's own mixer output - the honest reading of "feed
+// the shader audio data" while the original's own feed is unread, not a
+// transcription of anything on the disc. See that function's own doc
+// comment.
+//
+// **One additive term of the microcode's own glow is left out**:
+// `5.0 * saturate(1 - 0.1 * (distance - zoneColourTint.w))`, the sphere
+// test's own bonus, on the same terms `mesh_render::Zone`'s doc comment
+// already states for the sphere test itself: `zoneOrigin` has no located
+// writer, so there is no source for `distance` to read, and inventing one
+// would be exactly the stand-in `CLAUDE.md` rules out.
+//
+// `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
+// own window-space depth in `0..1`, the same convention the microcode's own
+// `f[POS]` carries.
+fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>) -> vec3<f32> {
+    let zone_uv = scene.zone.uv_scale * (1.0 - uv);
+    let band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
+    let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
+    let up = clamp(n.y - 0.5, 0.0, 1.0);
+    return max(up * (1.0 - window_depth) * scene.zone.effect.w * vis, vec3<f32>(0.0));
+}
+
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
 
@@ -636,6 +700,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let zone = zone_sample(in.texcoord);
     let zone_linear = pow(zone, vec3<f32>(2.2)) * scene.zone.effect.rgb + zone_base;
     let zone_gamma = zone * scene.zone.effect.rgb + zone_base;
+    // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
+    // rather than trusting `effect.w` to be zero off a Zone race, the same
+    // belt-and-braces `surface_linear`/`plain` below already take.
+    let zone_glow_term =
+        zone_glow(n, in.clip.z, in.texcoord) * scene.zone.enabled;
 
     // The read specular term: half-vector against the sun, and the exponent
     // is a **stand-in**. It is an inline constant of each fragment program,
@@ -678,7 +747,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // mix weight: it is 0.0 for every draw that is not a Zone race with all
     // its inputs resolved, and there this is `texel_linear` unchanged.
     let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
-    let lit_linear = surface_linear * authored + specular;
+    // `colour = light * surface + glow` - the microcode's own order. The
+    // visualiser glow is not itself lit, on the same terms the HD-emissive
+    // `glow` below is added after the light multiply rather than folded into
+    // it.
+    let lit_linear = surface_linear * authored + specular + zone_glow_term;
     let encoded = pow(
         clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
         vec3<f32>(1.0 / 2.2),
@@ -713,7 +786,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The glow is **added after the light**, which is where the microcode puts
     // it: the accumulate reads `H0` once the lightmap and the interpolated
     // term have already multiplied the albedo, so a glow is not itself lit.
-    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light + glow;
+    // The visualiser glow rides here too, undecoded on the same terms
+    // `zone_gamma` already is on this path - it is a shader parameter and
+    // texture-lookup product, not an albedo sample, so it owes no sRGB
+    // decode either way.
+    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light
+        + glow + zone_glow_term;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

@@ -20,6 +20,13 @@ impl Scene {
     ///
     /// Returns what the track's frustum culling did, for the performance
     /// overlay - see [`SceneStats`].
+    ///
+    /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
+    /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
+    /// a frame. Empty outside a Zone race or with nothing to draw it into is
+    /// fine: [`oag_render::mesh_render::zone::write_vis`] is a no-op on an
+    /// empty slice. See [`crate::race::zone_grade::ZoneGrade`] for the stage
+    /// tint this is coloured by.
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
@@ -34,6 +41,7 @@ impl Scene {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: crate::display::MotionBlur,
+        zone_spectrum: &[f32],
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -159,6 +167,12 @@ impl Scene {
                 .as_ref()
                 .map_or_else(Default::default, |grade| grade.zone_uniform()),
         };
+        // The visualiser's own tint - the showing stage's `EQ colour tint`,
+        // or `None` where the file authors none (every 2048 table, and any
+        // HD stage this project has not measured past `Start`/`Sub Venom`).
+        // Not substituted with white: a missing input draws nothing, the
+        // same rule `zone_uniform` above already keeps for its own inputs.
+        let zone_tint = self.zone_grade.as_ref().and_then(|grade| grade.eq_tint());
         for drawable in [
             Some(&self.track),
             self.collision.as_ref(),
@@ -169,6 +183,11 @@ impl Scene {
         .flatten()
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
+            // Written for every drawable on this list regardless of whether a
+            // Zone race is running: it blanks the lookup with no spectrum or
+            // no tint, and `scene.zone.enabled` already gates the glow off
+            // outside a Zone race, so this is cheap and never wrong to call.
+            drawable.write_zone_vis(queue, zone_spectrum, zone_tint);
         }
         // **The craft get the same scene with the Zone half switched off**,
         // because the disc says they are not in it. The twelve

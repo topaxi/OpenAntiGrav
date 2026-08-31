@@ -416,16 +416,17 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
         "the Scene half would be black here - the wrong half of the pair"
     );
 
-    // `"1 Sub Venom.Track.Texture Colour"=4.584567 6.537755 6.917541`.
+    // `"1 Sub Venom.Track.Texture Colour"=4.584567 6.537755 6.917541`,
+    // `"1 Sub Venom.Track.EQ brightness"=20.000000`.
     grade.request_stage(1);
     assert!(grade.commit());
     let sub_venom = grade.zone_uniform();
     assert_eq!(sub_venom.uv_scale, [1.0, 1.0]);
     assert_eq!(
         sub_venom.effect,
-        [4.584_567, 6.537_755, 6.917_541, 0.0],
-        "the stage's own Track.Texture Colour, and a zero glow scale because \
-         zoneTexVis is not fed"
+        [4.584_567, 6.537_755, 6.917_541, 20.0],
+        "the stage's own Track.Texture Colour, and the disc's own glow drive \
+         scalar now that mesh.wgsl's zone_glow draws it"
     );
 
     // **The unblended stage, not the cross-fade.** `commit` zeroes the weight,

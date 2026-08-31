@@ -285,6 +285,7 @@ impl Session {
             texture_binds,
             fog_bind,
             fog_buffer: _,
+            zone_vis_texture: _,
             anim_bind,
             anim_buffer,
             node_anim_buffer,

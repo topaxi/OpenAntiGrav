@@ -173,6 +173,21 @@ pub struct CaptureOptions {
     /// the frame that is written out. See `oag_render::post::motion_blur` and
     /// `docs/rendering/motion-blur.md`.
     pub motion_blur: crate::display::MotionBlur,
+    /// Replaces the live audio spectrum with a fixed synthetic ramp before
+    /// the frame is drawn. `--zone-spectrum-test`.
+    ///
+    /// **Exists because the live spectrum otherwise makes a Zone capture
+    /// useless as evidence twice over.** On the null backend `--screenshot`
+    /// always runs on - `audio.output().spectrum()` never publishes, since no
+    /// render-ahead thread ever spawns without a device - so an ordinary
+    /// capture shows no glow at all, whatever the scene actually authors.
+    /// With a real device attached instead, the spectrum is live and
+    /// non-deterministic, which is the wrong kind of input for a comparison
+    /// two runs are supposed to agree on. A fixed ramp is neither: visible on
+    /// the null backend and identical on every run, on the same terms
+    /// `--zone-stage` exists to make the colour grade itself checkable
+    /// without a live race to drive it there.
+    pub zone_spectrum_test: bool,
 }
 
 /// [`Presented`] with the scene size worked out.
@@ -428,6 +443,7 @@ pub fn capture(
         let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race capture primer"),
         });
+        let spectrum = zone_spectrum(options, audio);
         scene.render(
             &device,
             &queue,
@@ -440,6 +456,7 @@ pub fn capture(
             options.pvs_culling,
             options.anim_seconds,
             options.motion_blur,
+            &spectrum,
         );
         queue.submit(Some(primer.finish()));
         advance_one_tick(&mut race, &mut held, audio, options, tick);
@@ -458,6 +475,7 @@ pub fn capture(
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
     // As in `RaceStage::render`: the grade follows the zone the race reached.
     scene.sync_zone_grade(&race);
+    let spectrum = zone_spectrum(options, audio);
     scene.render(
         &device,
         &queue,
@@ -474,6 +492,7 @@ pub fn capture(
         // the smear a player sees is the smear the PNG shows. Off, the pass
         // never observed a previous camera and encodes nothing.
         options.motion_blur,
+        &spectrum,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show
@@ -572,6 +591,27 @@ pub fn capture(
         .with_context(|| format!("writing {}", options.path.display()))?;
     println!("wrote {} ({width}x{height})", options.path.display());
     Ok(())
+}
+
+/// The spectrum to feed `Scene::render` with: a fixed, deterministic ramp
+/// under [`CaptureOptions::zone_spectrum_test`], or [`Output::spectrum`]'s
+/// live one otherwise. See that field's own doc comment for why a capture
+/// wants the override.
+///
+/// [`Output::spectrum`]: oag_audio::Output::spectrum
+fn zone_spectrum(options: &CaptureOptions, audio: &crate::audio::Audio) -> [f32; oag_audio::BANDS] {
+    if options.zone_spectrum_test {
+        std::array::from_fn(|i| {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "oag_audio::BANDS is 32; no precision lost casting a band index"
+            )]
+            let t = i as f32 / (oag_audio::BANDS - 1) as f32;
+            t
+        })
+    } else {
+        audio.output().spectrum().levels()
+    }
 }
 
 /// One simulation tick of a capture: `tick`'s input, the race step, and the

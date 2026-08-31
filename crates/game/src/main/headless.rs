@@ -419,6 +419,7 @@ pub(crate) fn run_race(
                         gamma: settings.display.gamma,
                     },
                 }),
+                zone_spectrum_test: cli.zone_spectrum_test,
             },
             &mut audio,
         )?;

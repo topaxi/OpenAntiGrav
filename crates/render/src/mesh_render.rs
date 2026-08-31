@@ -34,7 +34,7 @@ mod anisotropy;
 pub use anisotropy::Anisotropy;
 
 mod texture;
-mod zone;
+pub mod zone;
 
 /// The optional device features this renderer uses when the adapter has them.
 ///
@@ -126,6 +126,11 @@ pub struct Built {
     pub fog_bind: wgpu::BindGroup,
     /// The buffer behind [`Built::fog_bind`], initialised to [`Scene::off`].
     pub fog_buffer: wgpu::Buffer,
+    /// The Zone visualiser's own lookup texture, bound at bind group 2's
+    /// binding 4 - see [`zone::layout_entries`]. All-black until
+    /// [`zone::write_vis`] is called on it; write it once a frame to animate
+    /// the glow, the same rhythm [`Built::fog_buffer`] already runs at.
+    pub zone_vis_texture: wgpu::Texture,
     /// Bind group 3, holding [`TexAnims`]. Bound by every draw; write
     /// [`Built::anim_buffer`] once a frame to animate.
     pub anim_bind: wgpu::BindGroup,
@@ -349,13 +354,17 @@ pub fn build(
                 },
                 count: None,
             },
-            // The Zone stage's own texture and sampler, in the *scene* group
-            // rather than the per-material one: it is a property of the race,
-            // not of a material slot, so binding it here uploads it once per
+            // The Zone stage's own texture, its two samplers and the
+            // visualiser lookup, in the *scene* group rather than the
+            // per-material one: they are a property of the race, not of a
+            // material slot, so binding them here uploads them once per
             // model instead of once per slot naming a material. See
             // [`zone::layout_entries`].
             zone_entries[0],
             zone_entries[1],
+            zone_entries[2],
+            zone_entries[3],
+            zone_entries[4],
         ],
     });
 
@@ -370,7 +379,7 @@ pub fn build(
         mapped_at_creation: false,
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
-    let (zone_sampler, zone_view) = zone::resources(device, queue, anisotropy, zone);
+    let zone_resources = zone::resources(device, queue, anisotropy, zone);
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &fog_layout,
@@ -381,11 +390,23 @@ pub fn build(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(&zone_view),
+                resource: wgpu::BindingResource::TextureView(&zone_resources.view),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::Sampler(&zone_sampler),
+                resource: wgpu::BindingResource::Sampler(&zone_resources.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&zone_resources.nearest_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(&zone_resources.vis_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Sampler(&zone_resources.vis_sampler),
             },
         ],
     });
@@ -861,6 +882,7 @@ pub fn build(
         node_anim_buffer,
         fog_bind,
         fog_buffer,
+        zone_vis_texture: zone_resources.vis_texture,
         pipeline,
         alpha_test_pipeline,
         blend_pipeline,

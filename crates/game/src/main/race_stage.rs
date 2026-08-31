@@ -40,6 +40,7 @@ impl RaceStage {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
+        zone_spectrum: &[f32],
     ) -> race::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs
@@ -58,6 +59,7 @@ impl RaceStage {
             pvs_cull,
             anim_seconds,
             motion_blur,
+            zone_spectrum,
         );
 
         // Over the scene and inside the same target, so the HUD is drawn at the
@@ -140,6 +142,10 @@ impl RaceStage {
             // previous camera and nothing the blur pipelines add to warm -
             // they are fullscreen passes with no per-scene variants.
             display::MotionBlur::Off,
+            // Empty: this frame is discarded, and the Zone visualiser
+            // pipeline variant it would warm is the same one every other
+            // Zone draw uses regardless of what the lookup holds.
+            &[],
         );
         gpu.queue.submit(Some(encoder.finish()));
         if let Err(e) = gpu.device.poll(wgpu::PollType::wait_indefinitely()) {

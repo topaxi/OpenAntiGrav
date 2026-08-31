@@ -251,6 +251,11 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         sky_reflection_colour: Some([0, 0, 0, 255]),
         sky_horizon_colour: Some([0.0, 0.0, 0.0]),
         sky_zenith_colour: Some([0.0, 0.0, 0.0]),
+        // Both `EQ` colours are flat white on `Start` - the visualiser drives
+        // at zero brightness here anyway (`track_eq_brightness` above), so a
+        // white tint on a zero-brightness lookup is silent either way.
+        eq_colour_tint: Some([255, 255, 255, 255]),
+        eq_analogue_colour_tint: Some([255, 255, 255, 255]),
     };
     // `Sub Venom`: a cyan fog at a real density, a brighter ambient, a sunless
     // rig and a white sky reflection - the escalation this table exists for.
@@ -275,6 +280,10 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         sky_reflection_colour: Some([255, 255, 255, 255]),
         sky_horizon_colour: Some([0.0, 0.211_765, 0.247_059]),
         sky_zenith_colour: Some([0.003_922, 0.286_275, 0.466_667]),
+        // The same cyan the rest of this stage's palette carries - `1 216
+        // 255`, byte for byte, on both the banded and the "analogue" key.
+        eq_colour_tint: Some([1, 216, 255, 255]),
+        eq_analogue_colour_tint: Some([1, 216, 255, 255]),
     };
     assert_eq!(effect.stage_palette(0), Some(start));
     assert_eq!(effect.stage_palette(1), Some(sub_venom));

@@ -4187,6 +4187,95 @@ None. `FUN_003ff860` and its six siblings are read only for their constants;
 what they *are* - which draw path each serves - is exactly the question left
 open, and a name would answer it.
 
+## 2026-08-31, a twenty-sixth pass: `0x003d8b40` is not `zoneTexVis`'s build loop - it builds something else, and the real writer is found
+
+Set out to answer [zone-shader.md](zone-shader.md#what-this-does-not-settle)'s
+open question - is `zoneTexVis` a static load-time ramp, or rewritten per
+frame - by reading the loop that page named as the build site. **The loop is
+real and was read correctly on its own terms, but it does not build
+`zoneTexVis`.**
+
+**`zoneTexVis`'s own address, traced independently rather than trusted from
+citation.** The engine parameter table's own stride is `0x20` and the
+twenty-third pass above already anchors parameter 60 (`zoneTexInner`) at
+`60*0x20 + 0x1c = 0x79c`; parameter 64 (`zoneTexVis`, same table) is therefore
+`64*0x20 + 0x1c = 0x81c`. Its store in `Scene_PrepareFrame` reads a getter,
+`0x003cdd20`, which decompiles to one line with no parameters:
+`return uRam008b7940 + 0x32b0`. That resolves to `iVar8 + 0x32b0 =
+0x00c7dfb0 + 0x32b0 = 0x00c81260` - exactly the address `zone-shader.md`
+already named, now confirmed by a second, independent route rather than
+repeated from the same one.
+
+**`0x003d8b40` writes a *different* field of the same struct**, `iVar8 +
+0x335c = 0x00c8130c` - 172 bytes from `zoneTexVis`'s own `0x32b0`, which is
+almost certainly how the two got conflated in the first reading. Read at
+instruction level (disassembly, not decompile - `Environment_LoadStageTextures`
+carries the same TOC hazard [memory.md](memory.md) documents, so a decompile
+here cannot be trusted further than a raw trace):
+
+- **Ten passes, not nine.** The loop's own exit test (`cmpwi cr7,r5,0` /
+  `bne`) checks the *pre-decrement* offset, which includes `0`; the prior
+  count stopped at `192` and missed the pass that reads `0`. Ten passes of 64
+  texels is 640, not 256.
+- **The destination is a 64x10 object**, created via `bl 0x005aa3a0` with
+  literal arguments `(dest, 0, 1, 0x40, 10, 1, ...)` - `0x40` (64) and `10`
+  matching the loop's own shape independently of the control-flow trace.
+- **The source table, dumped in full** (`read_memory 0x008c2d78` length
+  `1920`, the TOC-resolved base -
+  `python3 scripts/ps3-toc.py resolve 0x003d6dc8 -0x57D0`), **is not a
+  gradient**: three fixed colours (`0xDEDEFF`, `0xEF4242`, `0x00BD00`) on
+  black, roughly a third of texels lit, a 32-texel horizontal repeat, colour
+  banding by row. A sparse three-colour glyph, not a ramp a per-band lookup
+  would read - which is consistent with it being the wrong object entirely.
+  **What picture it is is not named here**: real structure, but nothing in it
+  distinguishes one reading from another, and this project does not commit to
+  a guess it cannot check.
+
+**`zoneTexVis`'s real load-time fill, a few dozen instructions later in the
+same function, is a plain zero-fill** - 256 texels of `0x00000000` - not a
+table of any kind.
+
+**And it is rewritten every frame - the open question, answered.**
+`Environment_UpdateStageBlend` (`0x003da540`), already identified by the
+twenty-fourth pass above as the writer of the eight Zone colour vec4s, also
+touches `iVar8+0x32b0` - `zoneTexVis`'s own slot - in the same function.
+Traced at instruction level from `0x003dba04` (`lwz r10,0x32b0(r30)`, loading
+the same wrapper the load-time zero-fill wrote): the surrounding stage-index
+switch (0-14, the same ladder [zone-speed-class-table.md](zone-speed-class-table.md)
+documents) stores a packed-RGBA word, built from a float `f1` by the same
+`fctiwz`/`rlwinm` idiom this binary uses throughout, into texel offsets `1`,
+`2`, ..., `10` and `161` (`0x284 / 4 = 161`) of the pixel buffer - confirmed
+by the same field access (`obj+0x10`) the load-time zero-fill used, not
+inferred. `get_function_callers` on `0x003da540` returns exactly one caller,
+`Scene_PrepareFrame` - the per-frame render-setup entry point every other
+Zone parameter in this file is published from.
+
+So: **static ramp vs. rewritten per frame resolves to rewritten per frame**,
+confidence 74 (the writer and its per-frame call path are both found
+statically; capped below the loop-mechanics reading because *what* `f1`
+itself is was not traced further - the dispatch shape matches the recovered
+15-rung stage ladder rather than showing an obvious PCM/spectrum buffer read
+in what this pass unwound, so **whether the written value is audio-reactive
+or a stage-progress fraction remains open**). The eight vec4s at
+`0x00c81460`-`0x00c814d0` [zone-shader.md](zone-shader.md) names are a
+separate, still-unfound per-frame handle - this pass does not touch those.
+
+**A capability trap worth recording alongside the finding**:
+`get_xrefs_to` on `0x008b7940` and on `0x00c81260`/`0x00c8130c` directly
+returns nothing, and is proven blind here - it misses the confirmed
+`lwz r14,-0x5a84(r2)` TOC-relative load that resolves to `0x008b7940` in the
+first place. `search_instructions` for the literal displacement operands
+(`32b0`, `335c`) across the whole image, filtered by hand for coincidental
+branch-target matches and unrelated TOC bases, is what actually closed the
+"any other writer?" question - the same technique
+[memory.md](memory.md)'s own trap write-up already warns a plain xref search
+cannot be trusted for.
+
+### Names applied
+
+None. `Environment_UpdateStageBlend`'s `zoneTexVis`-writing block and the
+object at `iVar8+0x335c` are both read only for what they touch; neither has
+the second independent leg this project's naming threshold asks for.
 
 ## See also
 

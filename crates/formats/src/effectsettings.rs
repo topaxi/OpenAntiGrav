@@ -259,6 +259,8 @@ impl EffectSettings {
             sky_zenith_colour: self
                 .stage_rgb(stage, key::SKY_ZENITH_COLOUR)
                 .or_else(|| self.stage_rgb(stage, key::SKY_ZENITH_COLOUR_2048)),
+            eq_colour_tint: self.stage_rgba8(stage, key::EQ_COLOUR_TINT),
+            eq_analogue_colour_tint: self.stage_rgba8(stage, key::EQ_ANALOGUE_COLOUR_TINT),
         })
     }
 
@@ -464,6 +466,23 @@ pub mod key {
     /// Three floats, on the same terms as [`SKY_HORIZON_COLOUR`].
     pub const SKY_ZENITH_COLOUR: &str = "Sky zenith colour";
 
+    /// The visualiser's own two colours, byte-written like
+    /// [`SKY_REFLECTION_COLOUR`]. `%s.EQ colour tint`, entry 62 of the schema
+    /// table (`0x008b79cc`) - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+    /// Read alongside [`EQ_ANALOGUE_COLOUR_TINT`] because the maintainer's own
+    /// play (`docs/formats/effectsettings.md#the-eq-keys-are-an-audio-spectrum-observed-in-play`)
+    /// names the whole `EQ` cluster an equaliser; **no consumer of either key
+    /// is traced in the executable** (`zone-effectsettings-loader.md`'s own
+    /// row for `+0x150` reads "nothing"), so the mapping onto "the banded
+    /// spectrum's colour" is naming and shape alone, confidence 70.
+    pub const EQ_COLOUR_TINT: &str = "EQ colour tint";
+    /// `%s.EQ analogue colour tint`, entry 63 of the same schema table,
+    /// `+0x154` of the same per-stage struct. "Analogue" reads as the
+    /// smoothed/needle-style variant beside the banded [`EQ_COLOUR_TINT`], on
+    /// the same unconfirmed footing.
+    pub const EQ_ANALOGUE_COLOUR_TINT: &str = "EQ analogue colour tint";
+
     /// Wipeout 2048's own spelling of the environment's distance fog, and the
     /// one key on this list that is **not** in HD's schema table.
     ///
@@ -549,6 +568,10 @@ pub struct StagePalette {
     pub sky_horizon_colour: Option<[f32; 3]>,
     /// [`key::SKY_ZENITH_COLOUR`]. Read, not drawn.
     pub sky_zenith_colour: Option<[f32; 3]>,
+    /// [`key::EQ_COLOUR_TINT`], byte-written like [`Self::sky_reflection_colour`].
+    pub eq_colour_tint: Option<[u8; 4]>,
+    /// [`key::EQ_ANALOGUE_COLOUR_TINT`], on the same terms.
+    pub eq_analogue_colour_tint: Option<[u8; 4]>,
 }
 
 /// One float channel of the blend, in the float domain the key is authored in.
@@ -695,6 +718,14 @@ impl StagePalette {
                 self.sky_zenith_colour,
                 previous.sky_zenith_colour,
                 fade3,
+            ),
+            eq_colour_tint: fade_field(self.eq_colour_tint, previous.eq_colour_tint, |c, p| {
+                cross_fade_rgba8(c, p, weight)
+            }),
+            eq_analogue_colour_tint: fade_field(
+                self.eq_analogue_colour_tint,
+                previous.eq_analogue_colour_tint,
+                |c, p| cross_fade_rgba8(c, p, weight),
             ),
         }
     }

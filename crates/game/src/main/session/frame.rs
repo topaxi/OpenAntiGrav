@@ -534,6 +534,10 @@ impl Session {
             }
             Stage::Race(stage) => {
                 let start = timing_first_race_frame.then(std::time::Instant::now);
+                // The Zone visualiser's own input - see
+                // `oag_audio::spectrum` and `race::scene::frame::Scene::render`'s
+                // own doc comment on this parameter.
+                let zone_spectrum = self.audio.output().spectrum().levels();
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
@@ -544,6 +548,7 @@ impl Session {
                     pvs_culling,
                     self.anim_seconds,
                     self.settings.graphics.motion_blur,
+                    &zone_spectrum,
                 );
                 if let Some(start) = start {
                     info!("first race frame: encoded in {:?}", start.elapsed());

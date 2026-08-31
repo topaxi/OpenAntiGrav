@@ -35,6 +35,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::mixer::{CHANNELS, Mixer};
+use crate::spectrum::{Analyzer, Spectrum};
 
 /// Output frames rendered per pass under the mixer lock.
 ///
@@ -75,6 +76,8 @@ impl Ahead {
         mixer: Arc<Mutex<Mixer>>,
         mut ring: rtrb::Producer<f32>,
         target: usize,
+        sample_rate: u32,
+        spectrum: Arc<Spectrum>,
     ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
@@ -83,6 +86,10 @@ impl Ahead {
             .spawn(move || {
                 let mut scratch = vec![0.0f32; CHUNK_FRAMES * CHANNELS];
                 let capacity = ring.buffer().capacity();
+                // Off the real-time device callback, which is the reason this
+                // can afford to allocate and run a per-band transform at all -
+                // see `spectrum`'s own module docs.
+                let mut analyzer = Analyzer::new();
                 while !flag.load(Ordering::Relaxed) {
                     // Fill while another whole chunk still fits under the
                     // target, then sleep. A partial push would leave the ring's
@@ -97,6 +104,11 @@ impl Ahead {
                             // spinning on a lock that will never be taken.
                             Err(_) => return,
                         }
+                        // Analysed on exactly what was just rendered, before it
+                        // leaves for the ring - the freshest samples this
+                        // thread ever sees, and the same ones the device will
+                        // play a queue-depth later.
+                        spectrum.publish(analyzer.process(&scratch, sample_rate));
                         let (_, rest) = ring.push_partial_slice(&scratch);
                         debug_assert!(rest.is_empty(), "room was checked above");
                     }

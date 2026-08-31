@@ -449,6 +449,18 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "N")]
     pub(crate) zone_stage: Option<u32>,
 
+    /// Development override: draw the Zone visualiser glow from a fixed
+    /// synthetic ramp instead of this project's own live audio spectrum.
+    ///
+    /// **The only way to see the glow in a capture at all.** `--screenshot`
+    /// runs on the null audio backend, which never publishes a spectrum -
+    /// so an ordinary capture shows no glow whatever the scene authors, and
+    /// a real device's spectrum is live and non-deterministic, the wrong
+    /// input for a comparison two runs are meant to agree on. See
+    /// `race::CaptureOptions::zone_spectrum_test`'s own doc comment.
+    #[arg(long)]
+    pub(crate) zone_spectrum_test: bool,
+
     /// Development view: draw the driveable ribbon instead of the track's art
     /// meshes.
     ///
