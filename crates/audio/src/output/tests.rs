@@ -126,9 +126,12 @@ fn an_uncontended_buffer_is_rendered() {
 /// The point of the waiting budget: a lock held for less than it is a late
 /// buffer, not a lost one.
 ///
-/// 20 ms of budget against a 2 ms hold, because this runs on CI machines that
-/// are themselves loaded and the assertion is about the *mechanism* - that the
-/// callback waits at all - rather than about a real device's timing.
+/// The budget here is two seconds against a 2 ms hold, which is nothing like a
+/// real one. That is deliberate: the assertion is about the *mechanism* - that
+/// the callback waits at all - and a margin that wide survives Windows, whose
+/// default timer resolution is ~15.6 ms and turns a 2 ms sleep into a 15 ms
+/// one. The behaviour this guards against, a single `try_lock`, returns false
+/// in microseconds no matter how generous the budget is.
 #[test]
 fn a_briefly_held_lock_is_waited_out_rather_than_dropped() {
     let mixer = Arc::new(Mutex::new(Mixer::new(44_100)));
@@ -154,12 +157,15 @@ fn a_briefly_held_lock_is_waited_out_rather_than_dropped() {
         &mixer,
         &mut scratch,
         256,
-        Duration::from_millis(20),
+        Duration::from_secs(2),
         &mut declick,
     );
     holder.join().unwrap();
 
-    assert!(rendered, "a 2 ms hold must not cost a buffer against 20 ms");
+    assert!(
+        rendered,
+        "a hold well inside the budget must not cost a buffer"
+    );
     assert!(scratch.iter().any(|s| *s != 0.0));
 }
 
@@ -264,10 +270,14 @@ fn a_poisoned_lock_is_not_waited_on() {
     })
     .join();
 
+    // Ten seconds against a one-second assertion, for the same reason the test
+    // above is generous: correct behaviour returns in microseconds and the
+    // behaviour being guarded against takes the whole budget, so the margin can
+    // be as wide as a loaded CI machine needs.
     let started = std::time::Instant::now();
-    assert!(acquire(&mixer, Duration::from_millis(50)).is_none());
+    assert!(acquire(&mixer, Duration::from_secs(10)).is_none());
     assert!(
-        started.elapsed() < Duration::from_millis(25),
+        started.elapsed() < Duration::from_secs(1),
         "a poisoned lock must not be waited out"
     );
 }
