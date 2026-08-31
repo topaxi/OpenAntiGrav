@@ -30,10 +30,20 @@ thump - *after* the effect, exactly as reported. It is very likely what
 `__sceSasSetADSR`'s release envelope covers on the real hardware, which
 [ADR-0018](../docs/architecture/adr/0018-audio-mixer-architecture.md) defers.
 
-`Voice::end` now fades from where the waveform stopped, over the same 64
-frames (~1.5 ms) `Mixer::stop` uses, starting **in the buffer the cue ended in**
-rather than at the top of the next one. The same measurement after: HD's worst
-step into silence is **0.013**, and no cue on either title is over 0.02.
+**The fix took two goes, and the first one is the instructive half.** It held
+the finished voice's last sample and decayed *that* over 64 frames, which took
+HD's worst step from 0.804 to 0.013 - and was still audible, correctly reported
+as "less loud". Holding a value and ramping it to zero is a **unipolar pulse**,
+which is a low-frequency thump in its own right, and lengthening the ramp only
+moves the pulse deeper into the bass. There is no length that fixes it.
+
+What works is ramping the **waveform** instead: the closing fade is applied to
+the last `RELEASE_FRAMES` of the source, so the signal keeps oscillating while
+its envelope falls and nothing is added after the cue. That has no floor, so the
+fade can be 256 frames (~5.8 ms) rather than 64, bounded to a quarter of the
+source so a short cue is shortened rather than swallowed. Measured after: HD's
+worst step into silence is **0.0031**, down from 0.804 - and no cue on either
+title is over 0.003.
 
 ## The other HD finding, unfixed
 
