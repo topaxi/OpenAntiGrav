@@ -379,8 +379,11 @@ object itself** (`FUN_0887a0fc` constructs one, zeroing exactly the fields
 and `FUN_08a6b5c8` keys a second, larger (`0xc80`-byte) child scene object
 `Race_CreateModeObject` builds right after, via `FUN_08886950` - which is
 itself the function that calls `World_LoadTrack`. Neither reads
-`DirectionalLight`'s fields; recorded here so a future pass doesn't
-re-open them expecting a lighting connection.
+`DirectionalLight`'s fields, so neither is a lighting class - but
+**correction, "A fifth pass" below**: `FUN_08a6b5bc` specifically turns out
+to be load-bearing for this thread anyway, as the class key that identifies
+the World/marker-container object itself. A future pass shouldn't skip it
+for the reason this paragraph originally gave.
 
 **Exhaustively checked: `DirectionalLight`'s class stub (`0x08a6b35c`) has
 exactly 5 references in the whole binary**, all now read - the collector
@@ -473,6 +476,83 @@ silent on this class of call, not just the printed constant** - a future pass
 chasing "no callers found" on an EU function should check for this pattern
 (a `func_0x0000XXXX`/`func_0x000XXXXX` call target under `0x00800000`) before
 concluding the function is actually uncalled.
+
+### A fifth pass: `Race_CreateModeObject` confirms the exact object chain, and `FUN_08886950`'s own `param_1` is one hop short of the world object
+
+2026-08-31, same session. The fourth pass's Open update above asked whether
+`FUN_08886950`'s own `param_1` is the object `World_CollectMarkerLists`
+receives. Decompiling `Race_CreateModeObject` (`0x08821038`, already named,
+confidence not separately recorded on this page before now) answers it
+directly - it is the function that builds both objects "A second, unrelated
+structural finding" above only inferred the class keys for:
+
+```c
+void Race_CreateModeObject(int param_1)
+{
+    ...
+    iVar2 = func_0x0014291c(0x6d0, ...);      // alloc 0x6d0 bytes
+    *(int *)(iVar2 + 8) = param_1;             // tag: parent = Race_CreateModeObject's own param_1
+    func_0x000760fc();                         // ctor: 0x000760fc + 0x08804000 = 0x0887a0fc = FUN_0887a0fc
+    *(undefined4 *)(iVar4 + 4) = func_0x002675bc();  // class tag = FUN_08a6b5bc (World/marker-container)
+    ...
+    iVar2 = func_0x0014291c(0xc80, ...);      // alloc 0xc80 bytes
+    *(int *)(iVar2 + 8) = iVar4;               // tag: parent = the 0x6d0-byte object just built
+    func_0x00082950();                         // ctor: 0x00082950 + 0x08804000 = 0x08886950 = FUN_08886950
+    *(undefined4 *)(iVar4 + 4) = func_0x002675c8();  // class tag = FUN_08a6b5c8 (the 0xc80-byte scene object)
+    ...
+}
+```
+
+This nails down, with a real allocation size for the first time
+(`0x6d0`/1,744 bytes for the World/marker-container object, alongside the
+already-documented `0xc80` for its child), exactly the chain "A second,
+unrelated structural finding" above only inferred from the two class stubs:
+**the World/marker-container object is built first, and the `0xc80`-byte
+scene object `FUN_08886950` constructs (its own `param_1`) is tagged as that
+World object's own *child*, with its own `+8` field set to point back at the
+World object.**
+
+**This answers the fourth pass's question: no, `FUN_08886950`'s own `param_1`
+is not the world object - it is one hop short of it.** The world object is
+`*(FUN_08886950_param_1 + 8)`. Since the fourth pass already read
+`FUN_08886950`'s full body and found it never reads that `+8` field for its
+own purposes (it only ever writes to its own object and tags/registers its
+own children), `FUN_08886950` is ruled out as the consumer for this reason
+specifically, not merely "checked and found nothing" - it never resolves the
+world pointer at all, so it structurally cannot read fields on it.
+
+**A object-scoped global exists for the `0xc80` object, and three of its
+readers were sampled and ruled out - but this global is not the route to the
+world object either, so this does not narrow the search.** `FUN_08886950`
+stashes its own `param_1` (the `0xc80` object, not the world object) into
+`_DAT_00059838` (`*(_DAT_00059838 + 8)` would reach the world object, one
+hop further). `get_xrefs_to` on `0x00059838` cleanly returns 15 references
+(14 real reads plus `FUN_08886950`'s own write - this works because it is a
+data address, not a `jal` target, so it doesn't hit the wart above). Three
+were decompiled to see the shape of what this global's readers do:
+`FUN_08887ad4` reads `_DAT_00059838 + 0xb40` (a view-matrix upload,
+`Gu_SetMatrix`-shaped); `FUN_0891e4ac` and one branch inside the fog-setup
+function at `0x08905b08` both call `Fog_FindVolume` (`0x088875c0`, already
+named) directly on `_DAT_00059838`, which reads *that* object's own
+`+0xb3c`/`+0x81c`/`+0xc50` fields (a per-object fog-volume list) - toggling
+`GU_FOG` (state 7) and computing fog GE constants respectively. **All three
+read fields of the `0xc80` object itself, none dereferences its `+8`** - so
+this samples as evidence the global isn't how a lighting consumer would
+reach the world object, not as a cleared search. The other 11 xrefs were not
+decompiled.
+
+**The bounded search this converges on**: every function that resolves the
+world object *by its class* must call `FUN_08a6b5bc` (`0002675bc`
+un-rebased) the same way `Race_CreateModeObject` and `World_LoadTrack_q` do -
+this is the same standard the doc already applied to `DirectionalLight`'s
+own class stub ("exactly 5 references... all now read"). That enumeration
+was not completed this pass (a `jal` to `0x002675bc` is exactly the call-target
+wart described above, so `get_xrefs_to` on `0x08a6b5bc` should be expected to
+under-count and needs `search_instructions` on the un-rebased operand
+`jal 0x002675bc` unioned with it, per the same workaround
+`HANDOVER.md`'s trap entry already prescribes) - left as the concrete next
+step rather than started and left half-finished in the same pass that just
+corrected an over-claim on the same question.
 
 ## Open
 
