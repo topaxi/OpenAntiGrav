@@ -20,10 +20,13 @@
 //!
 //! # Reach
 //!
-//! **119 material slots across the 16 circuits**, from 51 on Modesto Heights
-//! and 31 on Tech de Ra down to none at all on the four Zone tracks - measured
-//! by `crates/render/examples/hd_emissive_reach.rs`, which joins the same three
-//! conditions this module applies.
+//! **119 material slots across the 16 circuits** declare the engine's `time`
+//! *and* accumulate, from 51 on Modesto Heights and 31 on Tech de Ra down to
+//! none at all on the four Zone tracks - `crates/render/examples/hd_emissive_reach.rs`.
+//! This module is looser by design and gives a layer to any accumulating slot,
+//! **83 on Modesto Heights**, because a material that adds its second texture
+//! without a clock still has a glow to draw. What it does *not* do is scroll
+//! one it has no rate for; see the three populations below.
 
 use oag_formats::{rcsmaterial, rcsmodel};
 
@@ -37,10 +40,8 @@ const TINT: u32 = 0xe8bc_d7f5;
 const OFFSET: u32 = 0x7825_6a45;
 /// `b`, what that sum is scaled by: parameter `0x78787596`.
 const SCALE: u32 = 0x7878_7596;
-
-/// None of the three has a preimage yet, so each is cited by hash. See
-/// `crates/render/examples/hd_param_names.rs`, which named 64 of 300.
-const _: () = ();
+// None of the three has a preimage yet, so each is cited by hash. See
+// `crates/render/examples/hd_param_names.rs`, which named 64 of 300.
 
 /// The glow table and each material's index into it, plus one.
 ///
@@ -94,27 +95,40 @@ pub(super) fn emissive(
             continue;
         }
 
-        let value = |hash: u32, default: f32| {
-            material
-                .parameters
-                .iter()
-                .find(|p| p.hash == hash)
-                .map_or(default, |p| p.value[0])
+        let find = |hash: u32| material.parameters.iter().find(|p| p.hash == hash);
+        let tint = find(TINT).map_or([1.0, 1.0, 1.0], |p| [p.value[0], p.value[1], p.value[2]]);
+
+        // **A material that accumulates is not necessarily one that scrolls**,
+        // and conflating the two is a defect rather than an approximation. The
+        // three populations, over the circuits measured:
+        //
+        // - it authors `a` and `b` (`mt_uvanim_diffuse_emissive`) - the scroll
+        //   is per material and this replays it;
+        // - it declares `time` but authors neither
+        //   (`nr_billboardholographicscanlines`, 17 slots on one circuit;
+        //   `scanlinebillboard`, `scroller_glow_v3`, `pipefx_v2`) - its
+        //   coordinate constants are the shader's own **inline literals**,
+        //   which live in the code rather than in the material record and
+        //   which this reading has not recovered;
+        // - it does not declare `time` at all (`glass_texture_customr`,
+        //   `and_diffuse_emissive`, `bluemetal`) - a still additive layer.
+        //
+        // Only the first scrolls here. **A `scale` of 0 is the most
+        // destructive value in the range, not a neutral one**: it annihilates
+        // the surface's own `v`, so every pixel samples one row of the texture
+        // and that row marches down it. Defaulting to `1.0` and gating the
+        // clock on the material having authored the pair is the honest shape -
+        // the second population draws its glow still rather than sliding
+        // through a texture on a rate nobody read.
+        let (offset, scale, rate) = match (find(OFFSET), find(SCALE)) {
+            (Some(a), Some(b)) => (a.value[0], b.value[0], 1.0),
+            _ => (0.0, 1.0, 0.0),
         };
-        let tint = material
-            .parameters
-            .iter()
-            .find(|p| p.hash == TINT)
-            .map_or([1.0, 1.0, 1.0], |p| [p.value[0], p.value[1], p.value[2]]);
-        // **A missing scroll is a still layer, not a missing layer.** 24 of
-        // the 311 records carrying a tint author no `a`/`b` pair at all; their
-        // glow is drawn and simply does not move, which is what `b` of 0 would
-        // give anyway. Defaulting the *tint* to white is the same trade in the
-        // other direction and is what an unpatched constant already is.
         let layer = Emissive {
             tint,
-            offset: value(OFFSET, 0.0),
-            scale: value(SCALE, 0.0),
+            offset,
+            scale,
+            rate,
         };
 
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {

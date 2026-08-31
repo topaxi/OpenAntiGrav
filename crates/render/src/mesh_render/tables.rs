@@ -135,8 +135,8 @@ pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 pub struct Emissives {
     /// `rgb` the tint, `w` the coordinate offset `a`.
     pub tint_offset: [[f32; 4]; crate::mesh::rcs::EMISSIVE_LIMIT],
-    /// `x` the coordinate scale `b`; the rest is padding a uniform array's
-    /// 16-byte stride forces either way.
+    /// `x` the coordinate scale `b`, `y` whether the clock moves this layer;
+    /// the rest is padding a uniform array's 16-byte stride forces either way.
     pub scale: [[f32; 4]; crate::mesh::rcs::EMISSIVE_LIMIT],
 }
 
@@ -161,7 +161,7 @@ impl Emissives {
             .enumerate()
         {
             out.tint_offset[slot + 1] = [layer.tint[0], layer.tint[1], layer.tint[2], layer.offset];
-            out.scale[slot + 1] = [layer.scale, 0.0, 0.0, 0.0];
+            out.scale[slot + 1] = [layer.scale, layer.rate, 0.0, 0.0];
         }
         out
     }

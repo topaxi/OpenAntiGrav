@@ -224,7 +224,7 @@ struct NodeAnims {
 struct Emissives {
     // `rgb` the tint, `w` the coordinate offset `a`.
     tint_offset: array<vec4<f32>, 64>,
-    // `x` the coordinate scale `b`.
+    // `x` the coordinate scale `b`, `y` whether the clock moves this layer.
     scale: array<vec4<f32>, 64>,
 };
 @group(3) @binding(2) var<uniform> emissives: Emissives;
@@ -602,8 +602,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // glow tiled wrongly across the surface rather than as a missing one.
     let glow_slot = in.slots >> 16u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
-    let glow_scale = emissives.scale[glow_slot].x;
-    let glow_v = (in.texcoord.y + glow_tint_offset.w) * glow_scale + scene.time.x;
+    let glow_scale = emissives.scale[glow_slot];
+    // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
+    // that adds its second texture is not necessarily one that scrolls it:
+    // some read `time` while keeping their coordinate constants as the
+    // shader's own inline literals, which this reading has not recovered, and
+    // some never read it at all. A `b` of 0 with the clock ungated is the
+    // worst of both - it annihilates the surface's own `v` and marches one row
+    // of the texture across it. See `oag_render::mesh::Emissive::rate`.
+    let glow_v = (in.texcoord.y + glow_tint_offset.w) * glow_scale.x
+        + scene.time.x * glow_scale.y;
     let glow_sample = textureSample(
         lightmap,
         albedo_sampler,

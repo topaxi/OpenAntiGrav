@@ -92,6 +92,7 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
             continue;
         };
         circuits += 1;
+        let mut alpha_from_second = 0usize;
         let carrying: Vec<usize> = model
             .material_slots
             .iter()
@@ -135,6 +136,22 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
                 model.lightmaps.get(slot).is_some_and(Option::is_some),
                 "{path} slot {slot} adds a texture that did not decode"
             );
+            // **Adding and replacing the picture are exclusive**, and this
+            // asserts it rather than inferring it from what `Texel::merge`
+            // does with an accumulate: both bits firing would sample unit 1
+            // twice, once as the surface and once as a glow on top of itself.
+            // Zero of the 131 slots measured across these three circuits do.
+            assert_eq!(
+                packed & slots::ALBEDO_FROM_SECOND,
+                0,
+                "{path} slot {slot} both adds and replaces its picture"
+            );
+            // **The alpha is a different question and does co-occur**, on 30
+            // of those slots: a material can take its coverage from unit 1 and
+            // add unit 1's colour as a glow, which is two channels rather than
+            // two pictures. Asserted as a measurement so a future change that
+            // stopped it happening is noticed.
+            alpha_from_second += usize::from(packed & slots::ALPHA_FROM_SECOND != 0);
         }
 
         // The index lives in the high half and the roles in the low half; a
@@ -150,8 +167,14 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
             model.emissive.len() < mesh::rcs::EMISSIVE_LIMIT,
             "{path} needs more glow slots than the shader's table holds"
         );
+        println!("  {alpha_from_second} of them also take their coverage from unit 1");
     }
     assert_eq!(circuits, CIRCUITS.len(), "every circuit was reachable");
+}
+
+/// Borrowed as `[u8; 4]` chunks, so the fold above reads two frames at once.
+fn dark_pixels(pixels: &[u8]) -> impl Iterator<Item = &[u8; 4]> {
+    pixels.as_chunks::<4>().0.iter()
 }
 
 /// Claim 3: the glow reaches the frame, and the clock moves it.
@@ -213,10 +236,35 @@ fn the_glow_reaches_the_frame_and_the_clock_moves_it() {
             .iter()
             .filter(|v| v.slots & slots::ADD_SECOND != 0)
             .count();
-        let lit = shot(&model, 0.0);
-        let unlit = shot(&dark, 0.0);
+        // **At a non-zero clock.** At `0.0` a layer whose scroll is wrong is
+        // still sampling row 0, which looks like a plausible colour; the
+        // defect only opens up once the clock advances. Reported as a
+        // magnitude rather than a count of differing pixels, because a count
+        // cannot tell a glow that is framed small from one that computes to
+        // near zero.
+        let lit = shot(&model, 2.0);
+        let unlit = shot(&dark, 2.0);
         let total = lit.len() / 4;
         let contributed = differing(&lit, &unlit);
+        let (peak, sum) = lit.as_chunks::<4>().0.iter().zip(dark_pixels(&unlit)).fold(
+            (0i32, 0i64),
+            |(peak, sum), (a, b)| {
+                let d = (0..3)
+                    .map(|k| i32::from(a[k]).abs_diff(i32::from(b[k])) as i32)
+                    .max()
+                    .unwrap_or(0);
+                (peak.max(d), sum + i64::from(d))
+            },
+        );
+        println!(
+            "{path}: glow peak {peak}/255, mean {:.3}/255 over the frame",
+            sum as f64 / total as f64
+        );
+        assert!(
+            peak > 1,
+            "{path} draws a glow whose brightest pixel moves by {peak}/255 - \
+             the table reaches the shader and computes to nothing"
+        );
         println!(
             "{path}: the glow is on {carrying} of {} vertices and paints \
              {contributed} of {total} pixels at this camera",

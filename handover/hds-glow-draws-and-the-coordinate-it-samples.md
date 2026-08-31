@@ -16,6 +16,16 @@ across the 16 circuits**, 62,904 of Modesto Heights' 1,151,776 vertices.
 `crates/render/tests/hd_emissive_glow_ground_truth.rs` measures the glow's own
 pixel contribution by rendering the same model with the bit cleared.
 
+**A material that accumulates is not necessarily one that scrolls**, and the
+first cut of this conflated them. Three populations: it authors its own `a`/`b`
+pair and scrolls; it declares `time` but keeps those constants as the shader's
+own **inline literals**, which live in the code rather than the material record
+and which this reading has not recovered (`nr_billboardholographicscanlines`,
+17 slots on one circuit); or it never reads the clock at all. Only the first
+scrolls, and `Emissive::rate` is what carries that. Recovering the second
+population's rate means following the patch chain to an *unpatched* constant -
+`fragment::Instruction::constant` already holds it - and nobody has.
+
 **The one approximation, and it is the interesting residual.** The program
 addresses unit 1 from **`f[TC3]`**, and this renderer hands it `texcoord` - the
 coordinate it reads out of the last four bytes of a vertex. Whether the UV set
@@ -39,6 +49,8 @@ frame-accurate comparison against RPCS3 and for nothing else today.
 
 ## Open
 
+- The scroll rate of the ~25 slots whose coordinate constants are shader inline
+  literals rather than authored parameters is unrecovered; they draw still.
 - The UV set feeding `f[TC3]` is not established, so the glow's coordinate is a
   stated approximation. A mismatch tiles a glow wrongly rather than dropping it.
 - What the engine's `time` actually counts is unread.

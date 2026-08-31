@@ -24,5 +24,20 @@ pub struct Emissive {
     /// `b`, parameter `0x78787596`: what that sum is scaled by. The clock is
     /// added *after* it, so the surface scrolls one texture unit per second
     /// whatever `b` is, and `b` is what sets how much of the texture that is.
+    ///
+    /// **Defaults to `1.0`, never `0.0`.** Zero is the most destructive value
+    /// in the range rather than a neutral one: it annihilates the surface's own
+    /// `v`, leaving every pixel on one row of the texture and that row marching
+    /// down it once the clock advances.
     pub scale: f32,
+    /// Whether the clock moves this layer: `1.0` where the material authored
+    /// its own `a`/`b` pair and `0.0` where it did not.
+    ///
+    /// **Not the same question as whether the program declares `time`.** A
+    /// material can read the clock and still keep its coordinate constants as
+    /// the shader's own inline literals rather than in its record -
+    /// `nr_billboardholographicscanlines` does, on 17 slots of one circuit -
+    /// and this reading has not recovered those. Such a layer is drawn still,
+    /// which under-claims rather than sliding a texture at a rate nobody read.
+    pub rate: f32,
 }
