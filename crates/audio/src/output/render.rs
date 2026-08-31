@@ -63,19 +63,33 @@ pub(crate) struct Ahead {
 }
 
 impl Ahead {
-    /// Starts rendering `mixer` into `ring` and keeps it full.
-    pub(crate) fn spawn(mixer: Arc<Mutex<Mixer>>, mut ring: rtrb::Producer<f32>) -> Self {
+    /// Starts rendering `mixer` into `ring` and holds it at `target` samples.
+    ///
+    /// **`target`, not "full".** The ring is one chunk larger than the target so
+    /// that a write always fits, and occupancy is latency: filling to the brim
+    /// would put the delay *above* the number the caller asked for rather than
+    /// at it. Stopping a chunk short instead keeps it inside
+    /// `(target - CHUNK_FRAMES, target]`, so the depth a caller names is a
+    /// ceiling on how late a cue is heard and not a floor.
+    pub(crate) fn spawn(
+        mixer: Arc<Mutex<Mixer>>,
+        mut ring: rtrb::Producer<f32>,
+        target: usize,
+    ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
         let handle = std::thread::Builder::new()
             .name("oag-audio-render".to_string())
             .spawn(move || {
                 let mut scratch = vec![0.0f32; CHUNK_FRAMES * CHANNELS];
+                let capacity = ring.buffer().capacity();
                 while !flag.load(Ordering::Relaxed) {
-                    // Fill while there is room for a whole chunk, then sleep.
-                    // A partial push would leave the ring's occupancy sawing
-                    // against the chunk size for no gain.
-                    while ring.slots() >= scratch.len() {
+                    // Fill while another whole chunk still fits under the
+                    // target, then sleep. A partial push would leave the ring's
+                    // occupancy sawing against the chunk size for no gain.
+                    while capacity - ring.slots() + scratch.len() <= target
+                        && ring.slots() >= scratch.len()
+                    {
                         match mixer.lock() {
                             Ok(mut mixer) => mixer.render(&mut scratch),
                             // A poisoned mixer is a panic somewhere else that
@@ -109,17 +123,25 @@ impl Drop for Ahead {
     }
 }
 
-/// Samples the ring holds, given a target depth in seconds.
+/// Samples to hold ahead of the device, for a target depth in seconds.
 ///
-/// One chunk over the target, so that the thread above always has room to
-/// write a whole chunk and the occupancy sits at the target rather than a chunk
-/// under it.
-pub(crate) fn ring_capacity(sample_rate: u32, target: Duration) -> usize {
+/// This is the number [`Ahead::spawn`] holds the ring at, and therefore the
+/// ceiling on how late a cue is heard.
+pub(crate) fn target_samples(sample_rate: u32, target: Duration) -> usize {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "a sample count from a caller-supplied duration"
     )]
     let frames = (sample_rate as f32 * target.as_secs_f32()) as usize;
-    frames * CHANNELS + CHUNK_FRAMES * CHANNELS
+    // At least a chunk, or the loop above can never write anything.
+    (frames * CHANNELS).max(CHUNK_FRAMES * CHANNELS)
+}
+
+/// Samples the ring is built with, for a given target.
+///
+/// One chunk over the target, so a write always fits and the target itself is
+/// reachable rather than a chunk short of the brim.
+pub(crate) fn ring_capacity(sample_rate: u32, target: Duration) -> usize {
+    target_samples(sample_rate, target) + CHUNK_FRAMES * CHANNELS
 }

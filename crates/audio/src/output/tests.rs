@@ -184,17 +184,17 @@ fn the_tail_follows_the_last_played_frame() {
     assert_eq!(last_frame(&[]), [0.0, 0.0]);
 }
 
-/// The ring holds the target plus one chunk, so the render thread always has
-/// room to write a whole chunk and the occupancy sits at the target rather than
-/// a chunk under it.
+/// The depth a caller names is a **ceiling** on how late a cue is heard, so the
+/// thread holds the ring at the target and the ring is one chunk larger so a
+/// write always fits.
 #[test]
-fn the_ring_holds_the_target_plus_room_to_write() {
+fn the_target_is_the_latency_and_the_ring_is_a_chunk_larger() {
     let target = Duration::from_millis(60);
-    let capacity = render::ring_capacity(48_000, target);
-    let held = capacity / CHANNELS;
+    let held = render::target_samples(48_000, target) / CHANNELS;
+    assert_eq!(held, 2_880, "60 ms of 48 kHz");
     assert!(
-        (2_880..=3_500).contains(&held),
-        "{held} frames is not 60 ms of 48 kHz plus a chunk"
+        render::ring_capacity(48_000, target) > render::target_samples(48_000, target),
+        "the ring has room to write past the target"
     );
 }
 
@@ -212,18 +212,26 @@ fn the_render_thread_fills_the_ring_and_stops_when_dropped() {
         .play(Play::looping(tone(), Bus::Music))
         .expect("a voice");
 
-    let (producer, mut consumer) = rtrb::RingBuffer::new(8_192);
-    let ahead = render::Ahead::spawn(Arc::clone(&mixer), producer);
+    let target = render::target_samples(44_100, Duration::from_millis(60));
+    let (producer, mut consumer) =
+        rtrb::RingBuffer::new(render::ring_capacity(44_100, Duration::from_millis(60)));
+    let ahead = render::Ahead::spawn(Arc::clone(&mixer), producer, target);
 
     // It polls, so give it a few passes to fill rather than assuming one.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while consumer.slots() < 4_096 && std::time::Instant::now() < deadline {
+    while consumer.slots() < target / 2 && std::time::Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
+    let held = consumer.slots();
     assert!(
-        consumer.slots() >= 4_096,
-        "the ring held {} sample(s) after five seconds",
-        consumer.slots()
+        held >= target / 2,
+        "the ring held {held} sample(s) after five seconds"
+    );
+    // And it stops at the target rather than filling to the brim, because the
+    // occupancy is the latency.
+    assert!(
+        held <= target,
+        "{held} sample(s) is past the {target} it was told to hold"
     );
 
     let mut out = vec![0.0f32; 2_048];

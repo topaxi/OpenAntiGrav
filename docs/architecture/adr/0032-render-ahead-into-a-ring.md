@@ -52,8 +52,10 @@ that is too shallow, because that is a different failure.
 the `cpal` callback does nothing but copy out of it.** `output::render::Ahead`
 owns the thread; `rtrb` owns the ring.
 
-**The depth is this project's number.** `MIN_BUFFER` is 60 ms and the caller may
-ask for more - the composition root asks for two and a half frames of the
+**The depth is this project's number, and it is a ceiling.** The thread holds
+the ring at the target rather than filling it to the brim, so the depth a
+caller names is the most a cue can be delayed rather than the least.
+`MIN_BUFFER` is 60 ms and the caller may ask for more - the composition root asks for two and a half frames of the
 configured frame cap. It is the same on every host, it is exactly how long a
 stall the queue covers, and it is exactly how late a cue is heard. Nothing is
 asked of the device at all any more: whatever it wants per callback is now
@@ -99,11 +101,14 @@ single-producer single-consumer ring is exactly the thing not to write twice.
 
 ## Consequences
 
-**60 ms of latency, deliberately and honestly.** A cue is heard when the ring
-drains to it. That is three and a half frames at 60 Hz, and it is the price of
-covering a stall of the same size. Before this it was whatever the sound server
-happened to be doing, which was sometimes 5 ms and sometimes 21 ms and never a
-decision.
+**Up to 60 ms of latency, deliberately and honestly.** A cue is heard when the
+ring drains to it, so the depth is the delay. The thread holds the ring *at*
+the target rather than filling it, so the figure is a ceiling: about 49 to
+60 ms at 48 kHz, one render chunk of spread. Against what it replaced that is
+roughly 40 ms added - the device buffer this used to rely on was 5 to 21 ms on
+PipeWire, and cue emission already cost up to a tick on top of either. Before
+this the number was whatever the sound server happened to be doing; now it is a
+decision, which is the part that matters.
 
 **It does not cover the worst stall measured.** Frames of 80 ms outrun 60 ms of
 queue, and raising the depth to cover them would put the delay on a collision

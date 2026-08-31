@@ -58,6 +58,13 @@ pub const DEFAULT_SAMPLE_RATE: u32 = 44_100;
 /// on a collision starts being something a player can feel, and the honest
 /// place to spend the rest is the stall.
 ///
+/// **It is a ceiling and not a constant.** The render thread stops a chunk
+/// short of it rather than filling to the brim, so a cue is heard between
+/// `60 ms - CHUNK` and 60 ms after the tick that raised it - about 49 to 60 ms
+/// at 48 kHz. Against what it replaced that is roughly 40 ms added: the device
+/// buffer this used to rely on was 5 to 21 ms on PipeWire, and cue emission
+/// already cost up to a tick on top of either.
+///
 /// **A caller whose loop is slower than 60 Hz should ask for more**, because
 /// what matters is frames rather than milliseconds: at a 30 Hz cap this is one
 /// and four fifths of a frame.
@@ -282,7 +289,11 @@ impl Output {
 
         // After the stream, so a device that refuses to open does not leave a
         // thread rendering into a ring nothing will ever read.
-        let ahead = render::Ahead::spawn(Arc::clone(&mixer), producer);
+        let ahead = render::Ahead::spawn(
+            Arc::clone(&mixer),
+            producer,
+            render::target_samples(sample_rate, buffer.max(MIN_BUFFER)),
+        );
 
         Ok(Self {
             mixer,
