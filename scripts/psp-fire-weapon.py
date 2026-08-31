@@ -39,6 +39,24 @@ structure. `Weapons_DispatchFire` walks an **inline array in the world**:
 from the dispatcher's own argument and indexes that array, which is why the
 breakpoint here is `Weapons_DispatchFire` and not the ship update.
 
+**Missile (bit `0x40`) and LeachBeam (bit `0x8000`) are identified
+(`docs/ghidra/functions/psp-pulse-usa/missile.md`'s id-to-bit table,
+confidence 90 on Missile) but not in `WEAPONS` below, and calling `fire()`
+with those raw bits directly did not work - not "fired but no visible
+effect," the bit was never observed consumed at all.** Tried twice
+(2026-08-31, `docs/ghidra/functions/psp-pulse-eu/lighting.md`'s ninth pass),
+on two separate freshly booted, confirmed-live emulators; both attempts
+were followed by PPSSPP crashing (`Bad memory access... Stopping emulation`,
+identical JIT block both times, a few minutes into the session). Whether
+the crash is caused by firing these two weapons this way, or is a
+coincidence with something else deterministic about that race (an AI
+opponent naturally firing one, for instance - seven other craft call the
+same dispatcher every tick with real state), is not established. Checked
+and ruled out: `Weapon_FireMissile` (`0x088685cc`) writes `craft+0x1bc =
+0xffffffff` itself, unconditionally, so `fire()`'s own null-target write
+isn't the culprit. Before spending a session on either weapon here, read
+that ninth pass first.
+
 Subcommands are the weapon names in `WEAPONS`. `--probe-dispatch` skips firing
 and just reports the arguments `Weapons_DispatchFire` is called with.
 """

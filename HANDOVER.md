@@ -332,7 +332,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`12_Track`'s sky draws one white face](handover/12-tracks-sky-draws-one-white-face.md)
 - [Audio: race SFX plays on all three titles](handover/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/oag-trace-plan-has-never-been-replayed-into.md)
-- [M6 authored lighting: no hardware light slot found enabled](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
+- [M6 authored lighting: no hardware light slot found enabled, and no `DirectionalLight` consumer found anywhere](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
 - [Ghidra target of record is `psp-pulse-eu`; EU cross-verification is owed](handover/ghidra-target-of-record-is-psp-pulse-eu.md)
 - [`/psp-pure-usa`, `/psp-pure-eu` and `/psp-pure-eu-reimport` were missing from the project on 2026-08-10, despite the 2026-08-09 note below describing them as already imported and saved](handover/psp-pure-usa-psp-pure-eu-and-psp.md)
 - [The EU/Pure imports have never been diffed](handover/the-eu-pure-imports-have-never-been-diffed.md)
@@ -520,6 +520,9 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A stale or invalid PPSSPP memory watchpoint address is not harmless - it can stop emulation outright, and two debugger connections racing the same execution breakpoint is how one gets computed.** 2026-08-31, chasing [the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md)'s live capture. `psp-drive.py restart`'s own internal `Ship_UpdateCraft` breakpoint and a second, independent connection's own breakpoint at the same address raced each other (PPSSPP execution breakpoints are global CPU state, shared across every client), producing a garbage field read (`craft+0x1CC` came back `0`) that got armed as a watchpoint on address `0x30`. It sat at 0 hits, `enabled: false`, looking exactly as harmless as a working-but-quiet watchpoint should - then `E[MEMMAP] Bad memory access detected! 00000030 ... Stopping emulation` killed the session minutes later, identically across two independent boots. Full account, including the fix (take an address a running script already printed instead of re-deriving it with a second breakpoint):
+[`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md#a-stale-or-invalid-watchpoint-address-is-not-harmless---it-can-stop-emulation-outright).
 
 **RPCS3 with no PS3 firmware installed fails in three different, non-obvious ways depending on how you ask, and a naive liveness check lies about all of them.** 2026-08-30, first `rpcs3-drive.py browse` run in this checkout. A fresh `~/.config/rpcs3/dev_flash` is empty (firmware is a separate, user-supplied install - a disc's own bundled updater under `data/extracted/<title>/PS3_UPDATE/PS3UPDAT.PUP`, where one is present, is a legitimate source, but installing it is the user's call, not a session default). Symptoms: a normal boot prints `Firmware is missing` and exits; `rpcs3 --no-gui --installfw <path>` refuses outright (`Cannot perform installation in no-gui mode!`); `rpcs3 --installfw <path>` with no `--no-gui` needs a real GUI pass and does nothing headless. **`pgrep -x rpcs3` never matches** - the actual process `comm` is `AppRun.wrapped` (the AppImage wrapper), so any liveness or exit check built on it is silently wrong in both directions; check `/proc/<pid>` or grep `AppRun.wrapped` instead, or better, read `TTY.log` growth the way `Session.wait_for_screen` already does. Once firmware is in place, RPCS3's own first-run **"Welcome" dialog is a native Qt window that overlays every screenshot** (nothing under it is visible, including circuit-select text) and nothing the gamepad sends reaches it - fix is `infoBoxEnabledWelcome=false` in `~/.config/rpcs3/GuiConfigs/CurrentSettings.ini`, not a button. **A manual `rpcs3 ...` launch that sets `DISPLAY=127.0.0.1:77` in one Bash call and launches in a later, separate call drops the export** - shell env state does not persist across this harness's tool calls - and the emulator opens a real window on the user's desktop instead of Xvfb, interrupting their session. `scripts/rpcs3-drive.py`'s `Session` sets `DISPLAY`/`QT_QPA_PLATFORM` in-process via `emulator_env()` and is not exposed to this; prefer it over a manual `rpcs3` invocation for exactly this reason. Separately, `EpilepsyWarning`'s live path needs a `cross` press or a boot stalls there for its whole timeout - see [the boot-chain thread](handover/wipeout-hds-front-end-boots-off-a-chain.md) and `Session.wait_for_screen_pressing`.
 
@@ -1023,6 +1026,19 @@ static bytes (not already surfaced via a working xref) is a pre-relocation
 candidate, not just call targets. `get_xrefs_to`/`get_xrefs_from` on the
 naively-read address will report nothing either way, which reads exactly
 like "no reference" and is not.
+
+**`psp-pulse-eu` has the same `jal` wart, not just `psp-pulse-usa`.** Found
+2026-08-31 tracing `World_LoadTrack_q` (`0x088835f0`, EU) for
+[the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md):
+its call into `World_CollectMarkerLists` (`0x0887a1c4`) decompiles as
+`func_0x000761c4(...)`, and `get_xrefs_to`/`get_function_callers` on
+`0x0887a1c4` both return empty despite a live PPSSPP capture already having
+confirmed the call executes. `0x000761c4 + 0x08804000 = 0x0887a1c4` exactly -
+same fix, second binary. This nudges the still-open "general PSP-ELF trait
+vs. this project's importer" question above toward the importer, since both
+binaries went through the same procedure; not settled by one data point, but
+worth weighing next time it comes up. Full account:
+[`lighting.md`](docs/ghidra/functions/psp-pulse-eu/lighting.md#a-fourth-pass-world_loadtracks-own-body-is-now-disassembly-verified-to-hold-no-consumer-and-its-name-is-doubtful).
 
 ## Verification status: what to lean on
 
