@@ -261,6 +261,70 @@ reflects it, the way `bloom` and `anti_aliasing` already do.
 > gather skip those pixels, depth-tested so the road still blurs up to each
 > silhouette. The velocity tier replaces the mask with measurement.
 
+### The tile lattice, and the jitter that hides it
+
+Reported from play, 2026-08-31: with motion blur on, steering through a turn
+shows faint **squares near the centre of the screen**. They are the tile grid.
+
+Every pixel of a tile reads the same dominant velocity, so wherever the
+scene's motion ramps across the screen - the road ahead of a craft, most of
+the frame in a turn - the gather's span changes in steps rather than
+smoothly. The reach cap doubles as the tile edge, so those steps are `8 %` of
+the viewport height apart: **87 px at 1080p**, and the lattice is anchored to
+the window rather than to the world, so the scene flows through a stationary
+grid. That is what makes a small error legible - the eye locks onto
+stationary structure in a moving field.
+
+Measured by driving `post::motion_blur`'s own chain on a synthetic frame:
+velocity purely vertical, its magnitude ramping along x from zero to past the
+cap, depth flat, and the colour a 40-row bright block, so the smear above the
+block reads the gather out directly. At 1920x1080:
+
+| | peak phase of the profile's \|2nd difference\|, mod 87 | ratio over median |
+| --- | --- | --- |
+| Nearest tile lookup, `strength 0.5` | **0** - the tile edge | 2.33 |
+| Nearest tile lookup, `strength 0.75` | **0** | 2.59 |
+| Jittered lookup, `strength 0.5` | 84 | 1.48 |
+| Jittered lookup, `strength 0.75` | 84 | 1.43 |
+
+Before the jitter, every tile boundary from x=174 to x=1305 stepped the smear
+profile up by 0.9-2.4 levels in a single pixel column - 5-13 % of its own
+level, 3 to 10 times the local trend, and **always the same sign**, which is
+neighbour-max raising the dominant as the lookup crosses over. After, the
+mean tile-edge step is 0.8 times the local trend with mixed signs: gone.
+A control period of 44 px shows no phase preference either way (1.29-1.35),
+which is what says the 87 px result was the lattice and not the measure.
+
+Confirmed in play the same day: the squares are gone, and what is left is a
+faint dither along a smear's edge that is not visible in motion, only on a
+frozen frame. That is the trade landing exactly where the comment says it
+would.
+
+Two things the measurement does *not* say. The steps vanish at both ends of the ramp -
+below half a pixel of dominant motion the pass returns the pixel untouched,
+and past the cap every tile clamps to the same value - so the blocking only
+lives in the band between, which is why it reads as local rather than as a
+full-screen grid. And it was never reproduced in a capture of a real race:
+at the ~85 km/h a headless `--race --hold cross` reaches, the whole effect is
+0.6 of 255 and the lattice does not rise above the scene's own content.
+
+The trade the jitter makes is in
+[`motion_blur.wgsl`](../../crates/render/src/post/motion_blur.wgsl)'s own
+comment: a smear's boundary becomes stochastic where it was hard. It cannot
+under-reach - the tile the lookup lands on is at most one away, and that
+tile's neighbour-max already covers the pixel's own tile.
+
+**The other two suspects, ruled out rather than assumed.** The centre tap's
+`TAPS / max(own_reach, 0.5)` weight follows the smooth per-pixel reach, so it
+can bend the ramp but cannot step it. And `SOFT_Z` compares nonlinear 0..1
+depths against a constant, which *is* dimensionally wrong - the world
+distance it tolerates grows with the square of the distance - but it
+contributes nothing here: the same velocity ramp run against a flat depth and
+against a perspective road (z 4..3000, near 0.1, far 5000) gives profiles
+that differ by 3 levels out of 198, and a constant velocity over that road
+depth gives no structure at all. Worth fixing on its own terms; not worth
+blaming for this.
+
 ## What the velocity buffer does not solve
 
 Both of these read as solved once an MRT target exists. Neither is.
