@@ -581,20 +581,37 @@ its decompile alone:
 | `FUN_08900984` (`0x08900984`-`0x08900c53`) | **Decompiled and ruled out this pass** - constructs a *fresh, disposable* `0x6d0`-byte world object of its own (not a lookup of an existing one) and calls `World_CollectMarkerLists` on it as its last real act before an unrelated list-removal bookkeeping step; no read of `+0x40`/`+0x7c` follows. Contains `0x08900bb8`, one of the "two other call sites" this page's live capture already covered (front-end/menu scene graph, all-zero counts) - the decompile now explains *why* those counts were zero (a freshly built, empty scene graph, not the raceable track) rather than merely matching the address |
 | `FUN_08900c54` (`0x08900c54`-`0x08900e53`) | **Decompiled and ruled out this pass**, identical shape to `FUN_08900984` - builds its own fresh world object, calls `World_CollectMarkerLists` on it, returns immediately after with no field read. Contains `0x08900e1c`, the other already-covered call site |
 | `Mesh_ApplyMaterialLighting` (`0x0890cea8`) | **Already fully quoted on this page (confidence 78) - and its own quoted body contains this exact tag-walk**, missed until this pass connected the two: it caches the resolved world pointer at `material+0xc4`, but the instructions already quoted above never read a field back off that cached pointer - the material-ambient reads that follow it (`param_1+0x70`, `param_1+0x6c`) are the *material's own* fields, not the world object's. **Resolved this pass**: `material+0xc4` is write-only across every known caller. `search_instructions` on the un-rebased `jal` target found this function has **three** call sites, not the two this page previously named (see the correction above `Mesh_ApplyMaterialLighting`'s own quoted body) - `Mesh_CompileDisplayLists` and `FUN_0890ed84` were already read in full and confirmed clean for `+0xc4`, and the newly found third caller `FUN_08930290` was scanned (not fully read - it is a second, large per-frame draw dispatcher this page never previously mentioned) and shows no `+0xc4` read either. A blind `lw ...,0xc4(...)` sweep across the whole binary was tried first and abandoned as not viable (`+0xc4` is a common offset - 50+ unrelated matches before the scan even finished); checking the three actual callers by name is what converged |
-| `FUN_088b7504` | Genuinely unread this pass |
-| `FUN_088b8d00` | Genuinely unread this pass - calls the class key **three times** (`0x088b8e4c`, `0x088b8fa0`, `0x088b90e8`), suggesting three separate lookups or a loop over several objects |
-| `FUN_0890e494` | Genuinely unread this pass |
-| `Vex_LoadModel` | Genuinely unread this pass - already a named, high-confidence function for a completely different purpose (model loading), which is a useful data point on its own: it corroborates that resolving the world object by class is a **generic, reused idiom** across this codebase, not something lighting-specific, so most of these 10 functions likely want the world object for unrelated bookkeeping and only a minority (if any) touch `+0x40`/`+0x7c` |
+| `FUN_088b7504` | **Decompiled and ruled out (seventh pass)** - same shape as `Race_CreateModeObject`/`FUN_08900984`/`FUN_08900c54`: constructs its own fresh `0x6d0`-byte world object and tags it with the class key. A tag *write*, not a read. Also writes several unrelated float constants (`0.7`, `0.7`, `20.0`, `100.0`) to its own object - looks like a distance/LOD parameter block for a specific game mode, not examined further |
+| `FUN_088b8d00` | **Decompiled and ruled out (seventh pass)**. Calls the class key **three times** (`0x088b8e4c`, `0x088b8fa0`, `0x088b90e8`) but not as a tree-walk of its own - it passes the resolved class key **as a query parameter** into a different helper, `func_0x000b43fc` (un-rebased), a pattern not seen elsewhere on this page. The rest of the function is text/resource lookups gated on a difficulty-like 3-way branch (`param+0x94`/`+0x98`) - reads as a UI/results-text function, not a render one. No `+0x40`/`+0x7c` reference anywhere in the body |
+| `FUN_0890e494` | **Decompiled (seventh pass) - and turns out to be the actual writer of `Mesh_ApplyMaterialLighting`'s `material+0xc4` cache**, not a reader of `DirectionalLight`. It runs the identical tag-walk and writes the result straight to `param_1+0xc4` at what reads as material/mesh-node construction time; `Mesh_ApplyMaterialLighting`'s own tag-walk (already documented above) is a lazy-init fallback for the case this hasn't run yet, not the primary writer. Confirms rather than reopens the "write-only" finding above - this is simply *which* function does most of the writing. The rest of the function resolves two more classes into `param_1+0x70`/`+0x74`, does texture-UV scaling math, and ends in the same `+0xdc..+0x108` colour-packing block seen in `FUN_0890ed84`/`Mesh_CompileDisplayLists`/`FUN_08930290` - a generic, reused block, not lighting-specific |
+| `Vex_LoadModel` | **Decompiled and ruled out (seventh pass)** - already a named, high-confidence function for a completely different purpose (model loading). Runs the same tag-walk, caching the result at its *own* `+0xac` (a different offset than the material's `+0xc4` - different struct, same idiom) with no field read following it. Corroborates that resolving the world object by class is a **generic, reused idiom** across this codebase, not something lighting-specific |
 
-**Net effect**: of the 12 call sites (10 unique functions), 6 are now
-genuinely ruled out or accounted for by real evidence (`World_LoadTrack_q`,
-`FUN_08900984` and `FUN_08900c54` all read and ruled out; `Race_CreateModeObject`
-and `FUN_0887a0fc` are tag *writes*, not reads; `Mesh_ApplyMaterialLighting`'s
-own `material+0xc4` question is now closed, write-only across all three of
-its callers), leaving **4 functions genuinely unread**: `FUN_088b7504`,
-`FUN_088b8d00`, `FUN_0890e494`, `Vex_LoadModel`. This is a substantially
-smaller, better-bounded set than "1,228 instructions" or "14 global readers"
-- left as the concrete next step.
+**Net effect: the class-key enumeration is now fully closed, not partially.**
+All 12 call sites across all 10 unique functions have been decompiled this
+session or previously - `FUN_0887a0fc` alone was not separately decompiled,
+its self-tagging inferred from the page's own established zeroing evidence
+for the world object's constructor, above - and **none reads `world+0x40` or
+`world+0x7c`**. Six are tag *writes* (constructing a fresh world object, or a
+material/model caching the resolved pointer for later, unconsumed use):
+`Race_CreateModeObject`, `FUN_0887a0fc`, `FUN_08900984`, `FUN_08900c54`,
+`FUN_088b7504`, `Vex_LoadModel`. Two forward the resolved pointer elsewhere
+without reading it themselves: `World_LoadTrack_q` (to
+`World_CollectMarkerLists`) and `FUN_0890e494` (into `material+0xc4`, for
+`Mesh_ApplyMaterialLighting`'s own later, equally fruitless check). One
+queries a different helper with the class key as a parameter rather than
+walking the tree: `FUN_088b8d00`. This is a genuinely exhaustive negative
+result across every function that resolves the world object *by its class*
+- the same standard this page already applied to `DirectionalLight`'s own
+class stub, now applied to the mechanism a consumer would most plausibly use
+to reach it.
+
+**What this enumeration cannot see, precisely stated**: a consumer that
+holds the world pointer some other way - passed down as an argument, read
+back from a cached field like `material+0xc4` or `Vex_LoadModel`'s own
+`model+0xac`, or reached through a global - never calls `FUN_08a6b5bc` itself
+and so cannot appear in a search keyed on that call. `FUN_08930290` (below)
+is exactly this shape, which is why it survived an otherwise exhaustive
+sweep and remains the one open lead.
 
 **A second per-frame draw dispatcher this page never mentioned:**
 `FUN_08930290`, found while enumerating `Mesh_ApplyMaterialLighting`'s real
@@ -645,21 +662,24 @@ opened this session.
   structurally (`Race_CreateModeObject`, fifth pass, confirms its `param_1`
   is one hop short of the world object, and it never reads that hop). The
   class-based lookup path - every function that resolves the world object by
-  its class stub `FUN_08a6b5bc` - is now enumerated (sixth pass): 12 call
-  sites, 10 unique functions, of which 6 are genuinely ruled out or
-  accounted for by real evidence (`World_LoadTrack_q`, `FUN_08900984` and
-  `FUN_08900c54` all decompiled and ruled out; `Race_CreateModeObject` and
-  `FUN_0887a0fc` are tag *writes*, not reads; `Mesh_ApplyMaterialLighting`'s
-  own `material+0xc4` cache - a separate question this pass also
-  closed, see below - is write-only across all three of its callers).
-  **Remaining, concrete, and short**: `FUN_088b7504`, `FUN_088b8d00` (3 call
-  sites, possibly a loop over several objects), `FUN_0890e494` and
-  `Vex_LoadModel` are genuinely unread. See "A sixth pass" above for the full
-  table and reasoning per function. The per-frame draw dispatcher's one
-  ambiguous touch already turned out to be an out-of-bounds artifact, and
-  every sibling display-list function was already checked for `+0x40`/`+0x7c`
-  - so this enumerated list, not a fresh trace of
-  `World_LoadTrack_q`/`FUN_08886950`, is where the search continues.
+  its class stub `FUN_08a6b5bc` - is now **exhaustively closed** (sixth and
+  seventh passes): all 12 call sites across all 10 unique functions read or
+  decompiled, and **none reads `world+0x40` or `world+0x7c`**. Six are tag
+  writes constructing a fresh world object or caching the resolved pointer
+  for later, unconsumed use; two forward it elsewhere without reading it
+  themselves; one queries a different helper with the class key as a
+  parameter instead of walking the tree. `Mesh_ApplyMaterialLighting`'s own
+  `material+0xc4` cache, a separate question this pass also closed, is
+  write-only across all three of its callers (one more caller than this page
+  previously named - see below). See "A sixth pass" above for the full table
+  and reasoning per function. The per-frame draw dispatcher's one ambiguous
+  touch already turned out to be an out-of-bounds artifact, and every
+  sibling display-list function was already checked for `+0x40`/`+0x7c` too
+  - **this is now the strongest negative result on this page**: every
+  class-based path to the world object, not just the ones this page
+  happened to read first, comes up empty. The only lead this doesn't cover
+  is `FUN_08930290` (below), which never calls the class key at all and so
+  couldn't be found this way.
 - **`Mesh_ApplyMaterialLighting` has three call sites, not the two this page
   previously named, and the third is a second per-frame draw dispatcher
   (`FUN_08930290`) this page never mentioned before this pass.** Found while
