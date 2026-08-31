@@ -3815,6 +3815,13 @@ The full seven non-stage registrations, with the flag each is registered under
 
 **`Target zone level`, `Transition start speed` and `Transition acceleration`
 are a developer stage driver** - flag 2, so not authored in the shipped file.
+**The file side agrees, and was measured before this pass rather than after**:
+[effectsettings.md](../../../formats/effectsettings.md#each-stages-own-key-groups)
+records that of the schema's 73 entries only 8 never appear in any of HD's four
+shipped files, and five of those eight are exactly the group name and the four
+flag-2 keys above - while `Texture U scale`/`Texture V scale`, the two flag-0
+ones, are authored (both `1.000000`). That is an independent confirmation of
+the flag's meaning, from a check run for another reason entirely.
 They are not the race's own trigger (still unfound), but they are the first
 named handle on it, and `Transition start speed`/`acceleration` are the obvious
 candidates for what advances `H[e].f32@0x08`, the sphere radius. Confidence 65

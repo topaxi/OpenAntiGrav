@@ -166,6 +166,33 @@ off the seventeen-record zone-number ladder read out of that title's
 executable (see [Open](#open)). HD/Fury still rests where its loader leaves
 it, because its own Zone stage source has no found writer.
 
+**2026-08-31: on HD the binding is found, and the Zone recolour draws.**
+`Environment_UpdateStageBlend` (`0x003da540`) copies the showing stage's
+`Scene.Texture Colour` into the shader parameters `zoneEffectInner` /
+`zoneEffectOuter`, and `Environment_RegisterStageSchema` (`0x003d0b98`)
+registers the two prefix-free keys `Texture U scale` / `Texture V scale`
+directly into `zoneColourTint.xy` - so both feeds are traced rather than
+guessed. `oag_render::mesh_render::Zone` and `mesh.wgsl`'s `zone_surface`
+draw the part of the material variant those two feed:
+
+```text
+zoneUV    = zoneColourTint.xy * (1 - meshUV)
+zoneCol   = zoneTex(zoneUV).rgb * zoneEffect.rgb
+blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
+surface   = albedo + zoneCol * (1 - blackMask)
+```
+
+which lands **only where the material's own diffuse is pure black** - the
+artists' own switch for what lights up in Zone mode. Three terms of the rule
+stay undrawn for want of a source: the rim-lit `zoneAnisoPalette` summand (no
+filling write located, and this file authors no `Scene.Aniso Power` on any of
+its fifteen stages), the visualiser glow (`zoneTexVis` is built from a table
+inside the executable), and the inner/outer sphere test (`zoneOrigin` has no
+located writer - and it is a no-op in this build, both sides reading the same
+stage). See
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-31-a-twenty-fourth-pass-the-eight-zone-vec4s-writer-is-found-statically---environment_updatestageblend-cross-fades-the-stage-table-straight-into-them)
+and [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md).
+
 **2048's key vocabulary is not HD's, and one difference is load-bearing.**
 HD spells the environment fog as two keys, `Lighting.Fog colour` (four
 numbers, alpha `0`) and `Lighting.Fog density`. 2048 spells it as one,
@@ -729,6 +756,13 @@ but no shader has been read and no runtime trace taken.
   four keys (`Detonator` mine/bomb, `Airbrake`) do reach a draw through their
   own getters. The two titles apply this table in structurally different
   places, which is why HD's search kept coming up empty.
+- **Superseded on HD, 2026-08-31, and still open on 2048.** The bullet below
+  says HD's `Scene.*`/`Track.*` keys have no located consumer. They do:
+  `Environment_UpdateStageBlend` writes seven of them into the Zone shader's
+  own parameters, and `Scene.Texture Colour` now draws (see [What is read and
+  what is not](#what-is-read-and-what-is-not)). What remains open on HD is
+  which of the two parallel feeds - `Scene.*` or `Track.*` - a given material
+  sees, and everything below still stands for 2048.
 - **Only the fog and a light tint reach the picture, and on HD the blocker is
   a binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone
   race: "it only changes the fog, it should affect all textures and such."
