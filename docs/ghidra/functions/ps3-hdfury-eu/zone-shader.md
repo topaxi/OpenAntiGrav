@@ -9,7 +9,10 @@ a "Zone shader" came back empty: there is nothing there to find.
 Read in full from three materials that agree with each other:
 
 ```sh
-# the three materials read here (they live in DATA00; the textures in DATA02)
+# the three materials read here. NOTE the archive split is not uniform:
+# cf_constantcolourglow is in DATA02, the other two in DATA00, and the
+# textures are in DATA02 - guessing one archive for "materials" is the same
+# mistake that contaminated a census below.
 data/environments/zone_1/materials/billboarddiffuse.rcsmaterial
 data/environments/01_vineta_k/materials/cf_constantcolourglow.rcsmaterial
 data/environments/zone_2/materials/gradientcolour1.rcsmaterial
@@ -135,6 +138,30 @@ both times, which is the check that separates a real read from a sign slip.
 exponents of `pow(1 - dot(N,-V), p)`, which indexes `zoneAnisoPalette` and
 `zoneAnisoPaletteOuter` respectively. Confidence 82.
 
+**A second, independent confirmation that `zoneColourTint.w` is the radius -
+from the materials rather than the executable.** In
+`01_vineta_k/materials/cf_constantcolourglow.rcsmaterial` (DATA02), twelve of
+twenty fragment blocks are Zone-bearing, and they split exactly:
+
+- six declare **Inner only** (`zoneBaseInner`, `zoneBaseAltInner`) and **no**
+  `zoneColourTint`;
+- six declare **Inner and Outer** and **do** declare `zoneColourTint`.
+
+12 of 12, no exceptions. **These blocks sample nothing at all**, so
+`zoneColourTint.xy` - a texture-coordinate scale - is of no possible use to
+them. The only lane they can want is the one that selects between an Inner and
+an Outer of every other parameter, which is `.w`. The rule "a block declares
+`zoneColourTint` exactly when it needs the radius" then also holds from the
+other side: `billboarddiffuse`'s Inner-only blocks *do* declare it, because
+they sample and therefore need `.xy`.
+
+Confidence 82 - the correlation is exact but rests on one material. It is
+worth more than its score suggests, because it is derived from the *declaration
+tables* and so shares no step with the `vsel` lane-3 result in
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md)'s twenty-fourth
+pass, which reached the same conclusion from the per-frame blend in the
+executable.
+
 ## Two findings that change what the artists were doing
 
 **On the four Zone arenas - and only there - the recolour applies where the
@@ -228,10 +255,16 @@ census showing the shape is universal on circuits, against no dataflow proof
 that the minority of blocks which *do* fetch albedo RGB keep it out of the
 surface.
 
-`zoneAnisoPower` was also said here not to be used by "this family". That is
-retracted too: `zone_1/materials/billboarddiffuse.rcsmaterial` declares it
-(`0x7d494659`, **float2**, confirming the two-lane reading) in the same block
-that samples `zoneTexInner` and declares `zoneColourTint`.
+**One retraction here was itself too broad, and is withdrawn.** This page also
+said `zoneAnisoPower` "is not used by this family at all", and that was struck
+on the grounds that `zone_1/materials/billboarddiffuse.rcsmaterial` declares it
+(`0x7d494659`, **float2**, which does confirm the two-lane reading). That is
+not a counterexample: `billboarddiffuse` is the *sampling* shape, not the
+rim-only one, so it says nothing about the shape the sentence was about. Read
+off the disc, `cf_constantcolourglow` declares `zoneAnisoPower` in **none** of
+its twelve Zone blocks. **The original sentence was true of the material it was
+written about; only the word "family" was wrong.** Over-correcting a claim is
+its own way of putting something false on the page.
 
 `GradientColour1` is declared as a **sampler on unit 0** in
 `zone_2/materials/gradientcolour1.rcsmaterial` - the slot `Texture1` occupies
