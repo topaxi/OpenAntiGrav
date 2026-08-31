@@ -249,15 +249,18 @@ evidence, including the byte-level trace of every function in this chain:
 
   **What that leaves open, all of it narrow:**
 
-  1. **Which of the two parallel feeds a material sees.** The block itself is
-     now read whole - `0x00c81450`-`0x00c81600` is a full table in the
-     twenty-fourth pass, all twenty stores traced, confidence 84: `Scene.*` and
-     `Track.*` are two *complete* parallel feeds of the same seven parameters,
-     and `Sky {horizon,zenith} colour` is cross-faded on the same terms into
-     `0x00c81560`-`0x00c81590`. What is left is only the selection: which set a
-     given material gets, presumably the same publisher choice that governs
-     `zoneMode*` versus `zoneModeTrack*`. `oag_render` binds the `Scene` group
-     to everything meanwhile, which is stated in `mesh_render::Zone`.
+  1. **Which of the two parallel feeds a material sees - half answered.**
+     The *pairing* is settled (twenty-fifth pass, confidence 86): HD publishes
+     the Zone parameters twice and the two publications are one routine with
+     two prologues, sharing their tail. One prologue binds `zoneMode*` beside
+     the `Scene.*` colours, the other `zoneModeTrack*` beside the `Track.*`
+     ones - so "which texture set" and "which colour group" are a single
+     choice. Reading, confidence 78: `Scene` is scenery, `Track` is the track
+     surface. `oag_render` binds the track set, so it now takes
+     `Track.Texture Colour`, which matters: `Start` authors `Scene` black and
+     `Track` at `9.0`. **What is left open is only which prologue a given draw
+     enters through**, and that needs control-flow reconstruction over
+     `FUN_003ff860` rather than peephole reading.
   2. **`zoneOrigin` (`0x00c81550`) and the sphere radius.** The radius is
      `H[e].f32@0x08`, copied per frame under a lane-3-only `vsel`; nothing was
      found writing `zoneOrigin` at all. Inner/outer is a **stage-transition

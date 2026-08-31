@@ -183,7 +183,17 @@ surface   = albedo + zoneCol * (1 - blackMask)
 ```
 
 which lands **only where the material's own diffuse is pure black** - the
-artists' own switch for what lights up in Zone mode. Three terms of the rule
+artists' own switch for what lights up in Zone mode.
+
+**Which of the two colour groups feeds it is not a free choice.** HD publishes
+these parameters twice, and the two publications are one routine with two
+prologues sharing a tail: one binds the `zoneMode*` textures beside the
+`Scene.*` colours, the other `zoneModeTrack*` beside the `Track.*` ones.
+Confidence 86. So the texture set and the colour group are a single choice, and
+this engine - which binds the track set, the one carrying real art - takes
+`Track.Texture Colour`. It is not cosmetic: `Start` authors
+`Scene.Texture Colour` pure black and `Track.Texture Colour` at `9.0`, and an
+HD Zone race rests on `Start`. Three terms of the rule
 stay undrawn for want of a source: the rim-lit `zoneAnisoPalette` summand (no
 filling write located, and this file authors no `Scene.Aniso Power` on any of
 its fifteen stages), the visualiser glow (`zoneTexVis` is built from a table

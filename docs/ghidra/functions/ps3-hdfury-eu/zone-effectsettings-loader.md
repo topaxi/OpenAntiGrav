@@ -4022,6 +4022,151 @@ and `stvx v0, r1, r0` at `0x003dab00` are base **`r1`**, the stack - register
 spills in the middle of the same run, not global writes. A sweep that keys on
 the mnemonic alone counts them as destinations.
 
+## 2026-08-31, a twenty-fifth pass: the texture set and the colour group are **one** choice
+
+The twenty-fourth pass left "which of the two parallel feeds a material sees"
+as the last open question in the Zone parameter block. Half of it is answered
+here, and the half that is answered is the half a port needs.
+
+### The two publications are paired, end to end
+
+The eight publishers were swept for every `stw rS, K(rA)` where `K % 0x20` is
+`0x18` or `0x1c` - the value-pointer and count stores the twenty-second pass
+identified - with `rS` resolved back through the TOC. `FUN_003ff860` carries
+the pattern in full, and the other six two-block publishers repeat it. Each
+cell below is the `lwz r6,-N(r2)` that fills the register the store consumes:
+
+| | block 1 (`0x400358`-`0x400544`) | block 2 (`0x4007ec`-`0x4009d0`) |
+| --- | --- | --- |
+| param 60 `zoneTexInner` | `0x00c81368` **`zoneMode*`** | `0x00c813e0` **`zoneModeTrack*`** |
+| param 61 `...Nearest` | `0x00c813a4` | `0x00c8141c` |
+| param 54 `zoneEffectOuter` | `0x00c81490` **Scene** | `0x00c81500` **Track** |
+| param 57 `zoneBaseAltInner` | `0x00c814c0` **Scene** | `0x00c81530` **Track** |
+| param 58 `zoneBaseAltOuter` | `0x00c814d0` **Scene** | `0x00c81540` **Track** |
+| param 67 `zoneAnisoPower` | `0x00c81460` **Scene** | `0x00c814e0` **Track** |
+
+**So `zoneMode*` always ships with the `Scene.*` colours and `zoneModeTrack*`
+always ships with the `Track.*` ones.** Confidence **85**: every constant is a
+TOC-resolved `lwz rX,-N(r2)` sitting at the store that consumes it, and the
+pairing holds across seven publishers rather than one.
+
+Corroborated from a second direction: `Scene_PrepareFrame` (`0x003aa888`)
+publishes **only** the Scene group - parameters 52-58 and 67 - and its one
+sampler slot is `zoneMode*Nearest`. It never touches a Track value pointer. It
+is the *scene* publisher and it binds the blank set, which is exactly what the
+pairing predicts.
+
+### The last three parameters share one tail, and that is the proof
+
+The bottom three rows of that table are not two pieces of code that happen to
+agree. **They are the same three instructions, entered twice.**
+
+```text
+40053c  lwz r6, -20656(r2)   ; block 1 loads its triple: 0x00c814c0 (Scene 57)
+400540  lwz r5, -20652(r2)   ;                           0x00c814d0 (Scene 58)
+400544  lwz r4, -20648(r2)   ;                           0x00c81460 (Scene 67)
+        ... falls through ...
+400560  stw r6, 1848(r11)    ; 57*0x20 + 0x18
+400580  stw r5, 1880(r11)    ; 58*0x20 + 0x18
+4005a0  stw r4, 2168(r10)    ; 67*0x20 + 0x18
+
+4009c8  lwz r6, -20612(r2)   ; block 2 loads its triple: 0x00c81530 (Track 57)
+4009cc  lwz r5, -20608(r2)   ;                           0x00c81540 (Track 58)
+4009d0  lwz r4, -20604(r2)   ;                           0x00c814e0 (Track 67)
+4009ec  b   0x400560         ; into the very tail block 1 falls through to
+```
+
+One publication tail, two register triples, Scene from one entry and Track
+from the other, lane for lane. There is no reading of that which does not pair
+the groups. Confidence **86** on the pairing on the strength of this alone -
+higher than the table above, because a shared tail cannot be a coincidence
+between two independently written blocks.
+
+It is also why the two resist separation: they are not two blocks, they are one
+routine with two prologues.
+
+Reproduce - all twelve displacements checked, and note `resolve` parses its
+argument as **hex**:
+
+```sh
+ELF=data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf
+llvm-objdump -d --mcpu=pwr6 --start-address=0x400340 --stop-address=0x400420 $ELF
+llvm-objdump -d --mcpu=pwr6 --start-address=0x400530 --stop-address=0x4005b0 $ELF
+llvm-objdump -d --mcpu=pwr6 --start-address=0x4007d0 --stop-address=0x400a00 $ELF
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50C8 -0x509C   # 0xc81368, 0xc813e0
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50C4 -0x5098   # 0xc813a4, 0xc8141c
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50BC -0x5090   # 0xc81490, 0xc81500
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50B0 -0x5084   # 0xc814c0, 0xc81530
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50AC -0x5080   # 0xc814d0, 0xc81540
+python3 scripts/ps3-toc.py resolve 0x003ff860 -0x50A8 -0x507C   # 0xc81460, 0xc814e0
+```
+
+### What that says the two groups *are*
+
+Three independent lines point the same way, and none of them is the offset
+table:
+
+1. **The names.** `Scene.*` and `Track.*`, in a schema that also spells
+   `Lighting.*` and `Sky *` for things those words plainly mean.
+2. **The art.** The `zoneMode*` set is fifteen byte-identical flat whites
+   whose alpha is `255` everywhere, so a surface drawn through block 1 can
+   display no band pattern at all; `zoneModeTrack*` carries fifteen genuinely
+   distinct images.
+3. **Play.** The maintainer's observation, recorded on
+   [effectsettings.md](../../../formats/effectsettings.md), is that the *floor*
+   shows the equaliser - which is also what
+   [zone-shader.md](zone-shader.md)'s `saturate(N.y - 0.5)` gate on the glow
+   says, arrived at from the microcode without looking for it.
+
+So: **`Scene` is scenery, `Track` is the track surface.** Confidence **78** -
+three converging readings, no traced material-to-block edge.
+
+### The authored values make the choice load-bearing, not cosmetic
+
+`zonemode.effectsettings`, both keys, all fifteen stages (read through
+`EffectSettings::stage_palette`):
+
+| stage | `Scene.Texture Colour` | `Track.Texture Colour` |
+| ---: | --- | --- |
+| 0 `Start` | **0, 0, 0** | **9, 9, 9** |
+| 1 `Sub Venom` | 0.72, 0.91, 0.96 | 4.58, 6.54, 6.92 |
+| 8 `Phantom` | 0, 0, 0 | 3.26, 4.44, 7.5 |
+| 12 `Subsonic` | 3, 3, 3 | 5, 0, 0 |
+| 14 `Supersonic` | **0, 0, 0** | **9, 9, 9** |
+
+**The `Scene` key is authored pure black on four stages and the `Track` key on
+none**, and the two disagree hardest exactly where it matters most: stage
+`Start`, which is where an HD Zone race rests because its own loader resets the
+stage to zero and its trigger is unrecovered. A port that binds the track
+texture set and reaches for the `Scene` colour draws nothing at all; the same
+port with the `Track` colour draws the file's brightest stage. That is the
+difference this pass makes to `oag_render`, and it is why the pairing had to be
+read rather than assumed.
+
+### What is still unread: which block a draw goes through
+
+The two entries sit in one function about `0x450` bytes apart, share their
+publication tail, and both publish through `*(*(arg0) + 0xd8)`; the compiler
+has reordered the basic blocks between them heavily - `0x4005c8` branches
+backwards to `0x3ffc50`, `0x400638` forwards to `0x4009f0`. Telling the two
+entries apart needs control-flow reconstruction over the whole function, not
+the peephole reading the rest of this page is built on. **Not attempted; no
+claim made.** The pairing above does not depend on it, which is what makes it
+usable meanwhile.
+
+The shared tail is a **warning** as well as evidence, and worth carrying
+forward: a sweep that attributes those three stores to whichever prologue it
+happened to walk first gets the Scene/Track answer wrong for the other half.
+The sweep that produced the table above did exactly that on its first run and
+reported parameters 57, 58 and 67 as Scene-only.
+
+### Names applied
+
+None. `FUN_003ff860` and its six siblings are read only for their constants;
+what they *are* - which draw path each serves - is exactly the question left
+open, and a name would answer it.
+
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
