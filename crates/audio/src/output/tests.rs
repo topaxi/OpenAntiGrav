@@ -316,3 +316,46 @@ fn a_late_callback_is_counted_with_its_worst_overshoot() {
     health.late(2_000);
     assert_eq!(health.late_callbacks(), 3);
 }
+
+/// The buffer this asks a device for: 40 ms, clamped into what it offers.
+#[test]
+fn the_requested_buffer_is_forty_milliseconds_of_the_devices_own_rate() {
+    let range = cpal::SupportedBufferSize::Range { min: 32, max: 8192 };
+    assert_eq!(
+        requested_buffer_size(&range, 48_000),
+        cpal::BufferSize::Fixed(1920)
+    );
+    assert_eq!(
+        requested_buffer_size(&range, 44_100),
+        cpal::BufferSize::Fixed(1764)
+    );
+}
+
+/// A device that cannot reach 40 ms gets its own ceiling rather than a request
+/// it would refuse to build a stream for.
+#[test]
+fn a_narrow_range_is_clamped_rather_than_overrun() {
+    let small = cpal::SupportedBufferSize::Range { min: 64, max: 256 };
+    assert_eq!(
+        requested_buffer_size(&small, 48_000),
+        cpal::BufferSize::Fixed(256)
+    );
+    let large = cpal::SupportedBufferSize::Range {
+        min: 4096,
+        max: 8192,
+    };
+    assert_eq!(
+        requested_buffer_size(&large, 48_000),
+        cpal::BufferSize::Fixed(4096)
+    );
+}
+
+/// And a device that will not say keeps its own default: a fixed size guessed
+/// against an unknown range is how a stream fails to build at all.
+#[test]
+fn an_unknown_range_is_left_alone() {
+    assert_eq!(
+        requested_buffer_size(&cpal::SupportedBufferSize::Unknown, 48_000),
+        cpal::BufferSize::Default
+    );
+}

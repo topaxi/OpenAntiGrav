@@ -54,6 +54,14 @@ const SPIN_CAP: Duration = Duration::from_micros(500);
 /// case and yielding is right for the preempted one, so this does both.
 const SPINS_PER_YIELD: u32 = 64;
 
+/// How much audio to keep queued at the device, in seconds.
+///
+/// 40 ms - two and a half frames at 60 Hz. See where it is used in
+/// [`Output::open`] for the measurement that chose it. Clamped into whatever
+/// range the device actually offers, so a device that cannot go this high gets
+/// its own maximum and one that will not say gets its own default.
+const TARGET_BUFFER_SECONDS: f32 = 0.040;
+
 /// Frames a dropped buffer ramps over, either side of the gap.
 ///
 /// About 1.5 ms at 44.1 kHz. A dropped buffer used to be filled with zeroes
@@ -137,9 +145,25 @@ impl Output {
             .default_output_config()
             .with_context(|| format!("reading the default output config of {name}"))?;
 
-        let config: cpal::StreamConfig = supported.config();
+        let mut config: cpal::StreamConfig = supported.config();
         // `cpal::SampleRate` is a plain `u32` alias as of 0.18, not a newtype.
         let sample_rate = config.sample_rate;
+
+        // **Ask for a bigger buffer than the device would have chosen.**
+        // `default_output_config` was taken verbatim until 2026-08-31 and gave
+        // 512 frames on this machine's PipeWire - 10.7 ms, which is a deadline
+        // a game misses. Instrumented during a race it produced a run of
+        // `A buffer underrun or overrun occurred` from ALSA with callbacks
+        // arriving up to 96 ms late, while the mix itself was measurably clean:
+        // no dropped buffers, no discontinuities, no refused voices, nothing
+        // clipped. Nothing about the samples was wrong; there was simply not
+        // enough of them queued to survive a stall.
+        //
+        // The cost is latency, and it is paid knowingly: a cue is up to a
+        // frame and a half later than it was. That is the right side of the
+        // trade for a racing game, where a thump in the music is louder than
+        // 40 ms of lateness is late.
+        config.buffer_size = requested_buffer_size(supported.buffer_size(), sample_rate);
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
@@ -267,6 +291,29 @@ impl Output {
         }
         self.with_mixer(|mixer| mixer.render_tick(tick_hz, out))
     }
+}
+
+/// The buffer size to ask a device for, given what it says it supports.
+///
+/// [`TARGET_BUFFER_SECONDS`] clamped into the device's own range, or
+/// [`cpal::BufferSize::Default`] when it will not say what its range is -
+/// guessing a fixed size against an unknown range is how a stream fails to
+/// build at all, and a device whose default is already generous is not one this
+/// needs to argue with.
+fn requested_buffer_size(
+    supported: &cpal::SupportedBufferSize,
+    sample_rate: u32,
+) -> cpal::BufferSize {
+    let cpal::SupportedBufferSize::Range { min, max } = supported else {
+        return cpal::BufferSize::Default;
+    };
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a frame count, bounded by the device's own range below"
+    )]
+    let want = (sample_rate as f32 * TARGET_BUFFER_SECONDS) as u32;
+    cpal::BufferSize::Fixed(want.clamp(*min, *max))
 }
 
 /// Builds and starts one output stream in the device's own sample format.
