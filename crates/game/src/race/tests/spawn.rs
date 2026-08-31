@@ -341,6 +341,65 @@ fn a_slot_facing_back_down_its_own_track_is_turned_round() {
     assert!(forward.y.abs() < 1.0e-3, "{forward}");
 }
 
+/// A solo mode grids the player on slot 1, not slot 8.
+///
+/// The bug this guards: the player used to be placed directly on the authored
+/// `Start Position` node, which is grid slot 8 - the back - on every mode,
+/// including the three solo ones where there is no field to be at the back
+/// *of*. See `Race::start`'s own comment on `solo_slot_one` for the evidence
+/// (a live time-trial capture) and `docs/ghidra/functions/psp-pulse-usa/grid.md`
+/// for why slot 8 is right for a full grid.
+///
+/// The synthetic straight runs along `+x`; the node is planted at its very
+/// start, so slot 1 - `GRID_ROW_PITCH * 7` ahead of it - lands well past where
+/// the node itself sits, and slot 8 (the pre-fix behaviour) would not move at
+/// all.
+#[test]
+fn a_solo_mode_starts_on_slot_one_not_slot_eight() {
+    let mut setup = setup(hulled_handling());
+    assert!(
+        !setup.mode.has_opponents(),
+        "the fixture's default mode must be a solo one for this test to mean anything"
+    );
+    setup.start_position = Some(oag_formats::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, 1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let race = Race::start(setup);
+
+    assert_eq!(race.world.ship_count, 1, "a solo mode fields one ship");
+    let position = race.ship().physics.body.position;
+    assert!(
+        position.x > 50.0,
+        "slot 1 is far ahead of the node along the track's own +x, not on top of \
+         it: {position}"
+    );
+}
+
+/// The counterpart to the test above: a full grid still anchors the player on
+/// the authored node itself - slot 8 - unmoved by the solo-mode fix.
+#[test]
+fn a_full_grid_still_starts_the_player_on_slot_eight() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.start_position = Some(oag_formats::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, 1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let race = Race::start(setup);
+
+    assert_eq!(race.world.ship_count, 8, "a full grid fields eight ships");
+    let position = race.ship().physics.body.position;
+    assert!(
+        position.x.abs() < 5.0,
+        "slot 8 is the node itself, not ahead of it: {position}"
+    );
+}
+
 /// A slot that agrees with its track keeps its **own** heading, not the
 /// spline's rounding of it.
 ///

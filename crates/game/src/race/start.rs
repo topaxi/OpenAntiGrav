@@ -76,11 +76,51 @@ impl Race {
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
         // adds back to it.
         oag_physics::damage::reset(&mut ship.physics, &handling.dimensions);
+        // Whether this race fields the full eight-slot grid at all: the mode's
+        // own answer, or the `--opponents` escape hatch that measurement's own
+        // ground-truth tests use to force it. Read once, because both the
+        // player's own pose below and the opponent loop further down have to
+        // agree on it.
+        let full_grid = start_position.is_some() && (mode.has_opponents() || opponents);
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
         let base = spawn_pose(&spline, start_position.as_ref(), &collision, &handling);
-        if let Some(pose) = pose_override.or(base) {
+        // A solo mode (time trial, speed lap, Zone) grids the player alone, and
+        // alone they go on slot 1, not slot 8.
+        //
+        // `base` above is the authored `Start Position` node's own pose, and
+        // `grid.md` measures that node as **slot 8** - the back of an eight-car
+        // grid, confirmed against a live single-race capture. That is right for
+        // a full grid, where the player really does occupy slot 8 in the
+        // original. It is not evidence for where a *solo* run starts: nothing
+        // in this project has read whether `Race_SpawnGrid` even runs for a
+        // field of one, and its own "a short grid packs to the back" compaction
+        // rule (`grid.md`) would say slot 8 there too if it does.
+        //
+        // What the reference capture does say: `docs/formats/track.md
+        // #start-position` reads a live time trial start pose on `16_Track`
+        // that lands 137.9 units *ahead* of the authored node and 22.4 to its
+        // left. That is slot 1's own offset from the node - `7 *
+        // GRID_ROW_PITCH` is 138.53, and slot 1 is the odd slot that takes
+        // `GRID_COLUMN_OFFSET` to the left - to within the couple of units the
+        // eight-slot grid's own per-slot residual already carries. So slot 1 is
+        // measured for a time trial, not merely picked; speed lap and Zone are
+        // extended to it by the same mode-sharing `race-modes.md` already
+        // documents rather than a capture of their own, and the load report
+        // says so.
+        //
+        // Gated on an authored slot existing at all, same as `full_grid` is:
+        // with no `Start Position` node, `base` is [`spawn_pose`]'s spline
+        // fallback, not an anchor a grid offset means anything relative to -
+        // walking `GRID_ROW_PITCH` forward of *that* would invent a slot from
+        // a pose nobody authored, which is exactly what a track with no node
+        // already opts out of for the seven opponents below.
+        let solo_slot_one = (!full_grid && start_position.is_some())
+            .then_some(base)
+            .flatten()
+            .map(|base| grid_poses(base, &spline, &collision, spawn_height(&handling))[0]);
+        if let Some(pose) = pose_override.or(solo_slot_one).or(base) {
             ship.place_at(pose);
         }
 
@@ -89,7 +129,8 @@ impl Race {
         // every rule, camera and HUD in this file means by "the ship", and slot
         // 8 is where the original puts the local player and where the authored
         // `Start Position` node is. So the seven opponents are ahead of the
-        // player, which is what a Pulse grid looks like.
+        // player, which is what a Pulse grid looks like. That is the full-grid
+        // case only - see `solo_slot_one` above for the other one.
         //
         // Each one gets a driver here and its own `Environment`, standing and
         // exhaust as the race runs - see [`Self::step_opponents`],
@@ -136,8 +177,7 @@ impl Race {
             }
         };
         if pose_override.is_none()
-            && start_position.is_some()
-            && (mode.has_opponents() || opponents)
+            && full_grid
             && let Some(base) = base
         {
             let poses = grid_poses(base, &spline, &collision, spawn_height(&handling));

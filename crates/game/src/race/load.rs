@@ -129,10 +129,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let weapon_pad_class = track_classes.weapon_pad;
     let start_position = start_position_of(&track_blob);
     match start_position {
-        Some(slot) => report.push(format!(
-            "Start Position: {:?} facing {:?}",
-            slot.position, slot.forward
-        )),
+        Some(slot) => {
+            report.push(format!(
+                "Start Position: {:?} facing {:?}",
+                slot.position, slot.forward
+            ));
+            // Slot 8 (this node) is measured for a full grid; a solo mode
+            // instead uses this project's own reading of slot 1 - see
+            // `Race::start`.
+            if !(options.mode.has_opponents() || options.opponents) {
+                report.push(
+                    "solo mode: player on grid slot 1 (front), this project's own reading, \
+                     not a separate measurement"
+                        .to_string(),
+                );
+            }
+        }
         None => report.push("no Start Position node: spawning on the spline instead".to_string()),
     }
     let nodes = surfaces::of_track(&mut archives, &track, &track_blob, &mut report)?;
