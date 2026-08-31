@@ -1460,10 +1460,27 @@ never the strings, so 0 of 300 preimage against the whole shader corpus.
 | `0x8f2fe704` | `UV_offset` | 5 | `hd_plasmaring_glow` and the explosion glows |
 
 `uvScale`/`uvOffset` being the two commonest parameters on the disc, and always
-appearing together and in equal number, is the static half of the same story:
-a material's coordinate is `uv * uvScale + uvOffset` before anything animates
-it. **Nothing here reads either yet**, which is a second reason a scroll would
-be invisible - the surfaces carrying one would tile wrongly first.
+appearing together and in equal number, looked like the static half of the same
+story. **The values say otherwise, and this section used to claim otherwise.**
+The operation is confirmed at instruction level -
+`simpletextureandtexturealphauvoffsetscale`'s vertex block does
+`MUL R1.xy, v[2].xy, c[207].xy` then `ADD R1.xy, R1.xy, c[208].xy`, with
+`c[207]`/`c[208]` the two parameters (a vertex program's `c[N]` is register
+`N + 256`), so it is `uv * uvScale + uvOffset` exactly as the names say. What is
+*authored* is almost always nothing:
+
+| | Records |
+| --- | ---: |
+| Carry the pair (4 archives swept) | 2,582 |
+| **Of those, the identity** - scale `(1, 1)`, offset `(0, 0)` | **2,510** |
+| Offset by a whole tile in `v`, a no-op under a repeat sampler | 21 |
+| A genuine sub-tile offset | **~51**, every one on an `hd_adverts` billboard |
+
+**`uvScale` is `(1, 1)` on every record on the disc** - all 42 distinct value
+pairs have it - so the scale half is authored and never used. This page
+previously said "the surfaces carrying one would tile wrongly first", and
+`crates/render/examples/hd_uv_transform_census.rs` is what withdrew it: reading
+these would move about fifty billboard surfaces, not a circuit.
 
 ## Open
 
@@ -1477,8 +1494,10 @@ be invisible - the surfaces carrying one would tile wrongly first.
   arbitrary: the named ones are artist-facing (`Colour`, `Speed`, `Brightness`)
   and the unnamed ones cluster on one material each, which is what a name that
   never reaches the executable's own string table looks like.
-- **`uvScale`, `uvOffset` and the `time` scroll are read and unwired**, in that
-  order of what should land first - the static transform before the animation.
+- **The `time` scroll is read and unwired**, and what blocks it is the additive
+  second-texture layer rather than the scroll itself. `uvScale`/`uvOffset` are
+  read and unwired too and are **not** the cheaper first step they looked like:
+  2,510 of 2,582 records author the identity.
 - **The microcode**, which is where the operation - multiply, add, replace -
   actually is.
 

@@ -358,8 +358,12 @@ engine `time`".
 **It is measured and not wired, and wiring the scroll by itself would change no
 pixel.** The family this reads adds its scrolled second texture to the diffuse;
 `mesh.wgsl` *selects* between the two textures instead, so there is nothing for
-a scroll to move until the additive emissive layer exists - which is the
-per-material shader path that page defers, and where two general
-classification rules have already been tried and refuted. The order to land
-things in is `uvScale`/`uvOffset` first (the static transform, and the disc's
-two commonest parameters), then the additive layer, then the clock.
+a scroll to move until the additive emissive layer exists - so the additive
+layer is what to land, and the clock rides in with it.
+
+**`uvScale`/`uvOffset` are not the cheaper first step they looked like.** They
+are the disc's two commonest parameters and this section used to name them as
+the thing to do first; **2,510 of 2,582 records author the identity**, and
+`uvScale` is `(1, 1)` on every record on the disc. About fifty billboard
+surfaces carry a real sub-tile offset. The numbers are on
+[`rcsmaterial.md`](../formats/rcsmaterial.md).
