@@ -875,11 +875,17 @@ pub struct Race {
     /// 4-tick duration, so something has to own them, and this latch is what
     /// holds the attachment across the ticks of one contact.
     ///
-    /// **Confidence 55, and the low half is which owner.** That a looping
-    /// effect needs one is the flag's own contract. That the owner is *wall
-    /// contact* is inference from what the effect is: no HD trigger has been
-    /// read, and `ShipCollisionFx_Trigger` is Pulse's. What would settle it is
-    /// HD's own dispatch, which nothing has looked at.
+    /// **Confidence 55 on the owner, and reading HD's own dispatch
+    /// complicated rather than confirmed it (2026-08-31, see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`).** That a
+    /// looping effect needs one is the flag's own contract - not in
+    /// question. That the owner is *wall contact* specifically still is:
+    /// HD's `ShipCollisionFx_Trigger_q` names two of its four `kind`
+    /// branches from literal strings, and neither is
+    /// `WO_SHIP_COLL_SPARK_DAMAGE` - one is a previously-unrecorded
+    /// `WO_SHIP_SPARK_DAMAGE_WEAPON`, the other is the no-damage variant.
+    /// What actually fires the plain damage variant this field models is
+    /// still unread; do not treat that page as having settled this.
     sparks_attached: bool,
     /// Whether slot 0 is being driven by its own [`oag_ai::Driver`] instead of
     /// by the input snapshot. See [`Self::set_autopilot`].
