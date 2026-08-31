@@ -1,0 +1,172 @@
+Adds GDB `Z3`/`z3` (read watchpoint) support to RPCS3's debug stub, extending
+`rpcs3-gdb-write-watchpoints.patch` (apply that one first - this one's hunks
+assume it's already in place). Applies to the same RPCS3 commit, 3ef20ebb0
+("Fix iso path checks", RPCS3_GIT_VERSION 19884-3ef20ebb), and needs the same
+build flags (`-DHAS_MEMORY_BREAKPOINTS=ON`, `-DUSE_LTO=OFF`) -
+scripts/build-rpcs3-watchpoints.sh applies both in sequence.
+
+Unlike the write side, PPU reads don't go through a single per-width
+`vm::write<T>()`-shaped function in `vm.h` you can hook once. Scalar and
+vector loads alike (`LWZ`, `LFS`, `LVX`, `LVLX`, `LVRX`, ...) all call
+`ppu_feed_data<T>()` in `rpcs3/Emu/Cell/PPUInterpreter.cpp` - confirmed by
+reading through the file's call sites rather than assumed - which is the one
+genuine read-side choke point and already has an existing,
+`RPCS3_HAS_MEMORY_BREAKPOINTS`-gated `bp_read` check for the Qt debugger
+sitting right there for `gdb_watch_check_read()` to sit beside. `STVLX`/
+`STVRX`'s misaligned partial-store paths are not reads and are an existing,
+symmetric gap the write side already has too - not something this patch
+needs to fix.
+
+Same scope limitation as `Z0`/`Z2`: only fires under `PPU Decoder:
+Interpreter (static)`, for the same reason (the LLVM recompiler generates
+code that never calls back into either choke point).
+
+Verified at the protocol level against a live Wipeout HD/Fury session: `Z3`
+answers `OK`, `z3` removes cleanly, parsing/registry/active-flag bookkeeping
+all work exactly like `Z2`'s equivalents. End-to-end trap-firing on a real
+guest read was attempted against `0x00c81a5c` (Scene.Texture Colour's blend
+output, see docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
+and did not fire in an Arcade-mode race - root-caused to that address's own
+reader not executing outside Zone mode (checked with a `Z0` breakpoint via
+resume-slice-and-PC-walk, not the stop-reply path, and cross-checked against
+RPCS3.log's own "Read watchpoint hit" line as ground truth), not a defect in
+this patch. A same-mechanism, mode-independent end-to-end trap has not been
+recorded yet; see docs/reverse-engineering/rpcs3-debugger.md.
+diff --git a/rpcs3/Emu/GDB.cpp b/rpcs3/Emu/GDB.cpp
+index e3a904f..3d698b6 100644
+--- a/rpcs3/Emu/GDB.cpp
++++ b/rpcs3/Emu/GDB.cpp
+@@ -130,9 +130,11 @@ namespace
+ 	};
+ 
+ 	gdb_watch_registry g_gdb_watches;
++	gdb_watch_registry g_gdb_read_watches;
+ }
+ 
+ atomic_t<bool> g_gdb_watch_active{false};
++atomic_t<bool> g_gdb_read_watch_active{false};
+ 
+ bool gdb_watch_check_write(u32 addr, u32 size, ppu_thread* ppu)
+ {
+@@ -164,6 +166,33 @@ bool gdb_watch_check_write(u32 addr, u32 size, ppu_thread* ppu)
+ 	return true;
+ }
+ 
++bool gdb_watch_check_read(u32 addr, u32 size, ppu_thread* ppu)
++{
++	// Called from ppu_feed_data<T>() in Emu/Cell/PPUInterpreter.cpp, the
++	// choke point every PPU load instruction (scalar and vector) passes
++	// through - see the comment there. Same fast-exit-in-the-callee shape
++	// as gdb_watch_check_write() above, for the same reason: it has to run
++	// at genuine per-call runtime rather than get traced away.
++	if (!ppu || !g_gdb_read_watch_active.load())
++	{
++		return false;
++	}
++
++	if (!g_gdb_read_watches.overlaps(addr, size))
++	{
++		return false;
++	}
++
++	GDB.success("Read watchpoint hit: %d byte(s) at 0x%x.", size, addr);
++
++	if (!ppu->state.test_and_set(cpu_flag::dbg_pause))
++	{
++		ppu->check_state();
++	}
++
++	return true;
++}
++
+ #ifndef _WIN32
+ int closesocket(int s)
+ {
+@@ -1020,6 +1049,27 @@ bool gdb_thread::cmd_set_breakpoint(gdb_cmd& cmd)
+ 		GDB.success("Added write watchpoint at 0x%x, length %d.", addr, len);
+ 		return send_cmd_ack("OK");
+ 	}
++	//read watchpoint
++	if (type == '3')
++	{
++		u32 addr = INVALID_PTR;
++		u32 len = 0;
++		if (cmd.data.find(';') != umax)
++		{
++			GDB.warning("Received request to set watchpoint with condition, but they are not supported.");
++			return send_cmd_ack("E01");
++		}
++		sscanf_s(cmd.data.c_str(), "3,%x,%x", &addr, &len);
++		if (addr == INVALID_PTR || len == 0)
++		{
++			GDB.warning("Can't parse watchpoint request, data: '%s'.", cmd.data);
++			return send_cmd_ack("E02");
++		}
++		g_gdb_read_watches.add(addr, len);
++		g_gdb_read_watch_active = true;
++		GDB.success("Added read watchpoint at 0x%x, length %d.", addr, len);
++		return send_cmd_ack("OK");
++	}
+ 	//other breakpoint types are not supported
+ 	return send_cmd_ack("");
+ }
+@@ -1056,6 +1106,22 @@ bool gdb_thread::cmd_remove_breakpoint(gdb_cmd& cmd)
+ 		GDB.success("Removed write watchpoint at 0x%x, length %d.", addr, len);
+ 		return send_cmd_ack("OK");
+ 	}
++	//read watchpoint
++	if (type == '3')
++	{
++		u32 addr = INVALID_PTR;
++		u32 len = 0;
++		sscanf_s(cmd.data.c_str(), "3,%x,%x", &addr, &len);
++		if (addr == INVALID_PTR || len == 0)
++		{
++			GDB.warning("Can't parse watchpoint remove request, data: '%s'.", cmd.data);
++			return send_cmd_ack("E01");
++		}
++		g_gdb_read_watches.remove(addr, len);
++		g_gdb_read_watch_active = !g_gdb_read_watches.empty();
++		GDB.success("Removed read watchpoint at 0x%x, length %d.", addr, len);
++		return send_cmd_ack("OK");
++	}
+ 	//other breakpoint types are not supported
+ 	return send_cmd_ack("");
+ 
+diff --git a/rpcs3/Emu/Memory/vm.h b/rpcs3/Emu/Memory/vm.h
+index 85bc011..ed665e8 100644
+--- a/rpcs3/Emu/Memory/vm.h
++++ b/rpcs3/Emu/Memory/vm.h
+@@ -31,6 +31,15 @@ void ppubreak(ppu_thread& ppu);
+ extern atomic_t<bool> g_gdb_watch_active;
+ bool gdb_watch_check_write(u32 addr, u32 size, ppu_thread* ppu);
+ 
++// GDB remote-serial read watchpoints (Z3/z3 packets, see Emu/GDB.cpp). Same
++// shape as the write side above, but the choke point is not here in vm.h -
++// PPU loads go through ppu_feed_data<T>() in Emu/Cell/PPUInterpreter.cpp,
++// which already has an existing RPCS3_HAS_MEMORY_BREAKPOINTS-gated bp_read
++// check for the Qt debugger; gdb_watch_check_read() is called right beside
++// it. Declared here anyway so both watch mechanisms have one obvious home.
++extern atomic_t<bool> g_gdb_read_watch_active;
++bool gdb_watch_check_read(u32 addr, u32 size, ppu_thread* ppu);
++
+ namespace utils
+ {
+ 	class shm;
+diff --git a/rpcs3/Emu/Cell/PPUInterpreter.cpp b/rpcs3/Emu/Cell/PPUInterpreter.cpp
+index d01eac3..130d9b6 100644
+--- a/rpcs3/Emu/Cell/PPUInterpreter.cpp
++++ b/rpcs3/Emu/Cell/PPUInterpreter.cpp
+@@ -459,6 +459,12 @@ auto ppu_feed_data(ppu_thread& ppu, u64 addr)
+ 		debugbp_log.success("BPMR: breakpoint reading 0x%x at 0x%x", value, addr);
+ 		ppubreak(ppu);
+ 	}
++
++	// GDB Z3/z3 read watchpoint (Emu/GDB.cpp). Every scalar and vector PPU
++	// load funnels through this function, so this is the one choke point
++	// for the read side - unlike vm::write<T>() in vm.h, there is no
++	// per-width vm::read<T>() wrapper to hook instead.
++	gdb_watch_check_read(static_cast<u32>(addr), sizeof(T), &ppu);
+ #endif
+ 
+ 	if constexpr (!((Flags == use_feed_data) || ...))

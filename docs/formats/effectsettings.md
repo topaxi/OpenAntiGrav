@@ -578,15 +578,111 @@ traced.
   meaning, and nothing recovered says what advances the field afterwards.
   This build keeps `cross_fade_rgba8`'s convention and zeroes on commit the
   way the traced store does, which is visibly consistent but not evidence.
-- **Which schema keys the three blended runtime fields are.** The cross-fade
-  reads three 16-byte fields per stage; the correspondence to
-  `Scene.Texture/Near/Base Colour` is positional and explicitly unconfirmed,
-  so the Rust side blends fields chosen by the *file's own key names*
-  instead. A read of the schema's destination-pointer-to-struct-offset
-  mapping would settle it - and would also settle whether the byte-domain
-  blend applies to keys this project currently fades in floats, which it does
-  because three of `zonemode.effectsettings`' own colours exceed `1.0` and
-  byte quantisation would send them all to white.
+- ~~**Which schema keys the three blended runtime fields are.**~~
+  **Answered 2026-08-30, and the old guess was two-thirds right.** The full
+  key-to-offset table for HD's `0x250` per-stage struct
+  (`g_effect_settings_stages`, `0x00c7efb0`) is enumerated from
+  `Environment_RegisterStageSchema`'s own registration calls - 51 keys,
+  confidence 88, self-validated three ways (the offsets fill the `0x250`
+  stride exactly with 24 padding bytes; the only two overlaps are
+  `Scene`/`Track.EQ brightness` sitting in the fourth lane of their
+  respective `Texture Colour`; and every 16-byte key uses a 16-byte helper
+  and every 4-byte key a 4-byte one). The three cross-faded fields are:
+
+  | offset | guessed | measured |
+  | ---: | --- | --- |
+  | `+0x00` | `Scene.Texture Colour` | **`Scene.Texture Colour`** |
+  | `+0x20` | `Scene.Near Colour` | **`Scene.Base Colour Highlight`** (`Near Colour` is `+0x10`) |
+  | `+0x40` | `Scene.Base Colour` | **`Scene.Base Colour`** |
+
+  The `Lighting.*` keys this project reads by name land at `+0x190`
+  (`Sun colour`), `+0x1a0`/`+0x1d0` (`Fog colour`/`density`), `+0x1e0`
+  (`Constant Ambient Colour`), `+0x1f0`/`+0x200` (`Prelit Colour
+  Scale`/`Power`) - so the name-keyed reading here and the runtime's
+  offset-keyed one agree, which was previously an assumption. Full table on
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-fourteenth-pass-the-key-to-offset-table-is-enumerated-in-full-and-it-corrects-effectsettingsmds-positional-guess).
+  **2048's own table is not recovered** - its key inventory is now
+  enumerated from its executable, but the destination tracking that works on
+  HD's PowerPC does not survive Thumb's register reuse, and the wrong
+  offsets are deliberately not published.
+
+  The Rust side still blends fields chosen by the *file's own key names*,
+  which this measurement vindicates rather than changes.
+
+  **2026-08-30: the mapping's producer is found, the mapping itself is not.**
+  `Environment_RegisterStageSchema` (`0x003d0b98` on HD, `0x8104714c` on
+  2048) is the function that hands each `"%s.<Key>"` template, formatted
+  against a stage name, to a typed registration helper together with that
+  stage's destination pointer - so the key-to-offset table exists in code and
+  is enumerable. Two things stop this from being read off it cheaply: HD's
+  registrar keeps **several** running base registers, each advanced by
+  `0x250` per stage (so the per-stage data is spread over more than one
+  region, and an offset means nothing without its base - one promising mid-pass
+  reading was withdrawn for exactly that reason), and 2048's takes its
+  destinations from precomputed stack slots rather than `base + imm`
+  literals. The bounded route is either `GHIDRA_MCP_ALLOW_SCRIPTS=1` on the
+  Ghidra MCP server - `run_script_inline` currently refuses - or ~700
+  instructions of `disassemble_bytes` zipped by hand. The **nine** typed
+  helpers HD's registrar calls (`0x005d35c0`, `0x005d3cc8`, `0x005d3e18`,
+  `0x005d3ec0`, `0x005d4010`, `0x005d40b8`, `0x005d4220`, `0x005d4418`,
+  `0x005d46b8`) are what settles the byte-versus-float storage question -
+  **three are now read, and they settle it: both domains are real, in the
+  same file.** Each helper is a wrapper over `FwKeyedText_AddSchemaEntry`
+  (`0x005d3680`, confidence 85) with literal type constants, and that
+  function writes the 36-byte record field by field - `+0x00`/`+0x01` two
+  type-tag bytes, `+0x02` a `u16` component count, `+0x04` the destination
+  pointer, `+0x08` the key name - advancing the registry by `0x24`, which
+  confirms the 36-byte stride from the *writing* side. The four
+  `Detonator * Colour` keys register with a count of `1` into consecutive
+  **4-byte** slots; `Airbrake Colour` registers with a count of `4` into a
+  different region entirely, i.e. **16 bytes**. So a single blend domain
+  would be wrong for one group or the other - which is the straddle
+  `cross_fade_rgba8` and `fade_scalar` already implement, now on evidence.
+  This also **refutes** (rather than merely leaving unproven) the withdrawn
+  reading that the cross-faded `+0x00` might be a Detonator colour: that
+  blend reads 16-byte fields and the Detonator colours are 4-byte. See
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-twelfth-pass-the-schemas-registrar-is-found-on-both-titles---and-the-compile-time-array-framing-was-wrong).
+- **2026-08-30: on 2048 the original grades the *whole frame*, in a composite
+  shader - so the "which material does `Colour 3` recolour" framing below was
+  the wrong question.** `Zone_UpdateStage`'s blended stage colour is published
+  to `g_zone_blended_stage_colour` (`0x816af070`) by
+  `Zone_SetBlendedStageColour` (`0x8103876e`) and read by an 11.9 KB function
+  calling 33 `SceGxm_*` entry points; the sibling that also writes it carries
+  the shader-name table `wo_composite_zone_fp`/`_vp` and
+  `wo_composite_zone_hdfury_fp`/`_vp`, alongside bloom, blur and the ordinary
+  composite programs. Confidence 80 - the data flow is traced and the names
+  are the disc's own; the shader binary itself is not extracted, so how the
+  pass combines the colour with the frame is unrecovered. **A full-screen
+  grade needs no per-material binding**, which removes the blocker the bullet
+  below describes - what it needs instead is `wo_composite_zone_fp`. See
+  [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-seventh-pass-2048-does-have-a-consumer---the-zone-grade-is-a-full-screen-composite-shader-not-a-per-material-recolour).
+  **HD is the opposite case**: its `Scene.*`/`Track.*` keys have no located
+  consumer at all - seven per-key getters that nothing branches to - while
+  four keys (`Detonator` mine/bomb, `Airbrake`) do reach a draw through their
+  own getters. The two titles apply this table in structurally different
+  places, which is why HD's search kept coming up empty.
+- **Only the fog and a light tint reach the picture, and on HD the blocker is
+  a binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone
+  race: "it only changes the fog, it should affect all textures and such."
+  That is what this build does, and on 2048 it is the *most* it can do -
+  2048's per-stage blocks author no `Lighting.*` keys at all, so
+  `ZoneGrade::light` is a no-op on that title by construction and fog is the
+  only channel `StagePalette` can reach.
+
+  The rest of what a stage authors - `Colour 1..8.Colour`,
+  `Window Colour 1..3.Gradient 1..3`, `Track Paint.{Primary,Secondary}
+  Colour`, `Background.Diffuse Colour`, `EQ.*`, `Cube Animation Colour 1`,
+  `Edge Colour` - is **indexed into the circuit's own art**, and nothing
+  recovered says which material, mesh or shader slot index `3` is. A
+  key-to-offset table would say where a parsed colour lands in memory; it
+  would still not say what draws with it. **That binding is the open
+  question**, and until it is answered, wiring any of these would mean
+  choosing a material to recolour, which is precisely the invented
+  correspondence `CLAUDE.md` rules out. The two that might not need it -
+  `Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` - are already
+  parsed into `StagePalette` and are unwired only because this engine's sky
+  is textured geometry with no colour input yet; that is a missing seam on
+  this side, not a missing fact about the disc.
 
 ## See also
 

@@ -397,9 +397,15 @@ boundaries are measured, not reconciled after an off-by-one guess:
   address sits in memory immediately after the key-name array ends, which
   is itself corroboration that the two are a matched pair rather than
   coincidentally adjacent.
-- `0x007b26c8` (`Data/Tex/DetonatorMode0.gtf`) - the per-stage texture
-  table's own first filename, already named on this page - appears two
-  words further on, at `0x008b7af8`, inside that table, not this array.
+- `0x007b26c8` (`g_detonator_mode_texture_names`, the per-stage texture
+  table's own first filename, named on this page) appears two words further
+  on, inside that table rather than this run.
+
+  > **Corrected 2026-08-30 (eleventh pass): it is at `0x008b7afc`, not
+  > `0x008b7af8`.** `0x008b7af8` holds `0x009384e1`, the byte-flag pointer
+  > both `Environment_LoadStageTextures` and `Environment_UpdateStageBlend`
+  > gate their mode dispatch on. Read directly: the four words from
+  > `0x008b7af0` are `00c7efb0 00936fe8 009384e1 007b26c8`.
 
 So 73 is a measured length (float boundary in, destination-base boundary
 out), not a count that happened to land on a round number. Separately, this
@@ -1488,6 +1494,1642 @@ there, not writing the field.
 `zone_stages: None` rather than 2048's numbers - which name a thirteen-stage
 ladder this title does not have. See
 `crates/game/src/race/zone_grade.rs`'s module docs.
+
+## 2026-08-30, an eleventh pass: the two mode texture-name tables are read whole and named, and three cited addresses are deliberately left unnamed
+
+The tenth pass cited the two texture-path table pointers as evidence that
+mode `0xe` is Detonator without reading past their first string. Both tables
+are now read end to end, and their layout was **reconstructed and then
+verified against an address the reconstruction predicted** rather than
+sampled.
+
+### `g_zone_mode_texture_names` (`0x007b2b10`), confidence 85
+
+Fifteen entries, `Data/Tex/zoneMode0.gtf` .. `zoneMode14.gtf`, **stride 24**,
+spanning `0x007b2b10`-`0x007b2c78`. Clean and uniform - the count matches the
+fifteen `zonemode*.gtf` this project already reads off the disc, and the
+block ends exactly where the next one begins. This is the base
+`Environment_LoadStageTextures` (`0x003d6dc8`) passes in `r4` when
+`g_GameState.mode` is **not** `0xe` (`lwz r4,-0x5848(r2)` at `0x003d7208`).
+
+### `g_zone_mode_track_texture_names` (`0x007b2c78`), confidence 85
+
+Fifteen entries, `Data/Tex/zoneModeTrack0.gtf` .. `Track14.gtf`, stride 28,
+starting immediately after the block above. This is the set that carries the
+real escalating art; the general set decodes to flat white on all fifteen
+files - see [effectsettings.md](../../../formats/effectsettings.md).
+
+### `g_detonator_mode_texture_names` (`0x007b26c8`), confidence 85
+
+Fifteen entries, `Data/Tex/DetonatorMode0.gtf` .. `DetonatorMode14.gtf`, and
+the base the `mode == 0xe` branch passes (`lwz r4,-0x58c8(r2)` at
+`0x003d8d08`). **Its layout is irregular and the irregularity is real, not a
+misread**: entry `0` sits at `+0x00`, a pooled 16-byte `"unlabeled"` constant
+sits at `+0x20`, and entries `1`-`14` follow from `+0x30` at stride 32.
+
+That irregularity is why this is stated as a reconstruction: predicting entry
+`14` at `0x007b26f8 + 32*13` gives `0x007b2898`, and reading there returns
+`Data/Tex/DetonatorMode14.gtf` followed immediately by
+`Data/Tex/DetonatorModeTrack0.gtf`. A layout that predicts an address it was
+not fitted to is checked, not assumed. **What is still unexplained** is the
+`"unlabeled"` constant itself - a second TOC slot (`0x008b7b00`) holds its
+address, so it is reachable in its own right and is plausibly an unrelated
+pooled string the linker placed inside this block, which would mean the
+consumer never strides across it. Not chased.
+
+### `g_detonator_mode_track_texture_names` (`0x007b28b8`), confidence 85
+
+Fifteen entries, `Data/Tex/DetonatorModeTrack0.gtf` .. `Track14.gtf`, stride
+40. Its base is the address the reconstruction above lands on, read directly.
+
+### Three cited addresses that are deliberately **not** named
+
+Recorded so the next pass does not read their absence as an oversight.
+
+- **`0x008b7c00`** - the TOC slot holding `0x0098767c`, the two-entry pointer
+  array `Environment_UpdateStageBlend`'s Zone fall-through reads
+  `[n]->+0x640` from. `0x0098767c` is **`.bss`**: `read_memory` there fails
+  outright, so there are no compile-time contents to identify the element
+  type from, and no writer has been found. Calling it a *craft* array is an
+  analogy to 2048's own per-craft `+0x634`, not a reading of this binary -
+  which puts it under `CLAUDE.md`'s 50 floor, so the hypothesis is written
+  here and `PTR_DAT_008b7c00` keeps its generated name. **What is
+  established**: two entries, indexed by the same `0`/`1` viewport index
+  `Environment_UpdateStageBlend` takes as `param_2`, and its element carries
+  Zone's stage index at `+0x640`.
+- **`0x003d71ec`** (the `cmpwi cr7,r0,0xe` mode test) and **`0x00067c80`**
+  (the `stw r0,0x2e10(r31)` increment) are instruction addresses inside
+  `Environment_LoadStageTextures` and `Detonator_UpdateRace`, both already
+  named. There is no distinct entity to name at either.
+- **`0x000647c4`/`0x00064d44`** sit inside `SPDetonator`'s two constructors.
+  [race-manager.md](race-manager.md) identifies all 22 derived-class
+  constructors and deliberately names none of them, for reasons that page
+  records; naming one pair here because this thread happened to need it would
+  contradict that decision without revisiting it.
+
+## 2026-08-30, an eleventh pass: a live write watchpoint on `craftArray[0]->+0x640`, armed twice, zero hits
+
+With the patched RPCS3 build (`docs/reverse-engineering/rpcs3-debugger.md`'s "A patched build exists" section) and `PPU Decoder: Interpreter (static)`, drove a real HD/Fury boot to a live race twice and watched the exact address the tenth pass computed - `craftArray[0]->+0x640`, resolved live from `*(0x008b7c00)` rather than trusted from the `.data` snapshot - with a genuine `Z2` write watchpoint, holding thrust for 120 seconds each run.
+
+**Run 1, an ordinary Campaign race** (the default `RACE_WALK`, mode not `0xe`/`0xd`/`0x15` so the same fallback branch fires): `craftArray[0] = 0x329021b0`, watch target `0x329027f0`, value `0x00000001` before arming. `Z2` armed cleanly (`OK`). No hit in 120s; the value read back `0x00000001` afterward.
+
+**Run 2, intended as a genuine Zone race and corrected below - it was actually Eliminator.** Reached by driving the front end's own `racebox_definition.xml` `<List name="Mode">` (`Main Menu` -> right -> `Racebox` -> `Single Player`, four `right` presses at the Mode list, confirm -> `Track Creation` -> `Team Selection` -> `Launch Game` -> `InGame`). Same result regardless: `craftArray[0] = 0x329021b0`, target `0x329027f0`, value `0x00000001` throughout, `Z2` armed cleanly, no hit in 120s.
+
+**Correction, same day, caught while chasing a play-based lead that pointed the other way**: the Mode list's on-screen order, browsed directly with a screenshot per step, is `Arcade -> Time Trial -> Speed Lap -> Eliminator -> Zone` - the XML idstring `Tournament` displays as `ELIMINATOR` on screen, not as its own name. Four `right` presses reaches `Zone` **only if all four register**; `Session.navigate()`'s per-tap presses have no confirmation (unlike the outer walk's cross-presses, which retry until `TTY.log` reports a screen change), and a real run silently dropped one of the four, landing on `Eliminator` with no error and no visible sign in the log - `nav right` prints unconditionally whether or not the press actually moved the highlight. A screenshot taken right after the boot that produced this section's own Run 2 confirms it: `ELIMINATOR`'s rules screen (`"Score points for damaging and eliminating opponents"`), not Zone's. **So Run 2 above is a real result for Eliminator mode, not for Zone** - still a fallback-branch race (Eliminator is not `0xe`/`0xd`/`0x15` either, so `craftArray[n]->+0x640` is still the right address), but the "entered through the mode selector, not inferred" claim this pass made was not actually true for the run it described. A genuine Zone-mode write watchpoint on this address is still not done; see the thread's own tracking for the redo, done with a verification screenshot before confirming the mode this time.
+
+**A write watchpoint fires on any write to the address, regardless of whether the value changes** - so both runs above are "the address was never written at all" in their own 120-second windows, not "the value stayed at 1". That still held across two different non-Detonator modes (Campaign, Eliminator) with the live pointer re-resolved each time - a real negative for those two, just not yet for Zone specifically.
+
+**What this does and does not settle.** It does not prove no writer exists anywhere in the binary - 120 seconds under a slowed interpreter decoder may not correspond to enough in-game time or the right in-race event for whatever the write is actually gated on, this pass did not verify the craft was ever above a walking pace during the window (no speed/velocity field was read alongside the target), and - per the correction above - neither run was confirmed to be Zone mode itself, only "not Detonator/`0xd`/`0x15`". It does sharpen the live-verification path for the next attempt: the exact command sequence to reach the Mode list is known, the actual on-screen order is now measured (`Arcade`/`Time Trial`/`Speed Lap`/`Eliminator`/`Zone`) rather than assumed from the XML, and the fix for the dropped-press trap is to verify with a screenshot before confirming rather than trust an unconfirmed tap count. The craft pointer resolved identically and stably across boots (`0x329021b0` both times, though that may just be this build/save-state's own allocator determinism rather than anything address-worth trusting long-term). A longer window, an in-race progress check, and - now - an actually-verified Zone-mode run are the next concrete steps rather than another blind static sweep.
+
+Nothing renamed, nothing wired into Rust from this pass. `PPU Decoder` restored to `Recompiler (LLVM)` afterward - this patched-build interpreter requirement is temporary per session, not a standing environment change.
+
+## 2026-08-30, a twelfth pass: the schema's registrar is found on both titles - and the "compile-time array" framing was wrong
+
+Picked up `effectsettings.md`'s own open question - which key lands at which
+per-stage offset - and found the mechanism that answers it, without being able
+to enumerate it in full. Two corrections and one new function on each title.
+
+### `Environment_RegisterStageSchema` (`0x003d0b98`), confidence 85
+
+The ~24 KB neighbour this page ruled out twice as "just memsets" is the
+**schema registrar**. Its tail, read directly:
+
+```
+003d5adc  lwz  r4, -0x58e4(r2)      ; a "%s.<Key>" template out of the TOC
+003d5ae0  or   r5, r26, r26         ; the stage's own name
+003d5ae4  or   r3, r27, r27         ; the formatted-name buffer
+003d5ae8  bl   0x00455230           ; buffer = format(template, stageName)
+003d5af0  rldicl r4, r21, 0x0, 0x20 ; destination = r21 + 0x00
+003d5af4  li   r6, 0x0
+003d5af8  or   r3, r24, r24         ; the registry
+003d5afc  or   r5, r27, r27         ; the formatted name
+003d5b00  bl   0x005d40b8           ; register(registry, destination, name, 0)
+...
+003d5b90  addi r21, r21, 0x250      ; next stage
+003d5b9c  cmpwi cr7, r31, 0xe       ; fifteen iterations
+```
+
+So for each of the fifteen stages it formats every key template against that
+stage's name and hands the result, plus a destination pointer, to a
+registration helper - which is exactly the table `FwKeyedText_ParseEntry`
+later looks a parsed key up in. Reached from two thin wrappers,
+`FUN_003d69c0`/`FUN_003d69d0`, sitting immediately before
+`Environment_LoadStageTextures`.
+
+**Nine distinct typed helpers** are called, which is the shape a per-value-type
+registration API has: `0x005d35c0`, `0x005d3cc8`, `0x005d3e18`, `0x005d3ec0`,
+`0x005d4010`, `0x005d40b8`, `0x005d4220`, `0x005d4418`, `0x005d46b8`. None is
+read yet; between them they would settle `effectsettings.md`'s open question
+about which keys are stored as packed bytes and which as floats.
+
+### This confirms the vocabulary from code, and corrects how it was framed
+
+[The 2026-08-29 pass](#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess)
+called `0x008b79cc` "a 73-entry compile-time array of key-name strings" and
+rested its identification on position, content and a sibling-array precedent
+rather than on a traced consumer. **Both halves need amending:**
+
+- **The consumer is now traced.** This registrar loads those slots and hands
+  each one to a registration helper together with a per-stage destination.
+  The vocabulary finding is confirmed rather than inferred;
+  `g_EffectSettingsSchemaKeyNames`' confidence moves **82 -> 90**.
+- **It is not an array.** `0x008b79cc`-`0x008b7b7c` sits inside this module's
+  **TOC** (the same region every `-0x5xxx(r2)` displacement on this page
+  resolves into - `0x008bd3c4 - 0x59f8` reaches its base). The registrar
+  loads each slot individually with its own `lwz rX,-N(r2)`; nothing indexes
+  it. Confirmed two ways: `get_xrefs_to 0x008b79cc` returns nothing, and
+  `search_byte_patterns` for `008b79cc` finds no word anywhere holding that
+  address - a real array would have to be reached from somewhere. The 73
+  entries and their order are unaffected: the linker emits TOC slots in
+  first-use order, which for this function is the order the keys are
+  registered in.
+
+### What this does **not** settle: the key-to-offset table
+
+The destinations are **not** one flat `0x250` struct. The registrar keeps
+several running base registers, each advanced by `0x250` per stage - `r21`
+(at `0x003d5b90`) and `r23` (at `0x003d5ad0`) both do it, and one destination
+is computed as `r23 + r22 + 0x220` (`0x003d5ab8`) rather than from a single
+base at all. So the per-stage data is spread across **more than one**
+`0x250`-stride region, and a destination offset is only meaningful once its
+base register is identified. Neither `r21`'s nor `r23`/`r22`'s base was
+traced this pass.
+
+**So `effectsettings.md`'s positional guess - that the three RGBA fields
+`Environment_UpdateStageBlend` cross-fades at `+0x00`/`+0x20`/`+0x40` are
+`Scene.Texture/Near/Base Colour` - is still neither confirmed nor refuted**,
+and one reading that looked promising mid-pass was withdrawn before it
+shipped: the last four registrations land at `r21 + 0x00/0x04/0x08/0x0c` and
+the last four key templates are the `Detonator Bomb` colours, which would
+have made `+0x00` a bomb colour - but only if `r21` were the same base
+`Environment_UpdateStageBlend` reads, and it is not established that it is.
+Recorded as a trap: **on this registrar, an offset without its base register
+is not a fact.**
+
+**Enumerating the full 73-row table is a bounded but unspent job.** The
+in-process route is closed on this bridge - `run_script_inline` refuses with
+"Script execution disabled. Set `GHIDRA_MCP_ALLOW_SCRIPTS=1`" - so it needs
+either that variable set on the Ghidra MCP server or ~700 instructions of
+`disassemble_bytes` across `0x003d4fb0`-`0x003d5ba8`, zipped by hand. It was
+not spent here because the offsets it yields are **HD's**, and HD is the
+title with no recovered stage trigger; see the note on 2048 below.
+
+### 2048 has the same registrar: `Environment_RegisterStageSchema` (`0x8104714c`), confidence 80
+
+Same shape, on a binary with no TOC defect:
+
+```
+8104bbe0  movw/movt r1, #0x8150a5c0   ; "Zone %s.Growing Texture.Colour"
+8104bbe4  mov  r0, r8                 ; buffer
+8104bbe6  mov  r2, sp                 ; stage name
+8104bbec  blx  0x813f38e0             ; format
+8104bbf0  ldr.w r1, [sp,#0xcc8]       ; destination pointer
+8104bbfa  bl   0x812f9dac             ; typed register helper
+```
+
+Found from the template strings rather than from the loader: `search_strings`
+for `Growing Texture` and `Environment Fog Colour` returns
+`"Zone %s.Growing Texture.{Colour,Scale Bias,Factors}"` and
+`"Zone %s.Fog.Environment Fog Colour"`, whose only references are inside this
+function. Its destinations come from precomputed stack slots and registers
+rather than `base + imm` literals, so reading its offset table needs the
+prologue that fills them, not a peephole - the same job as HD's, differently
+shaped. Four typed helpers appear in the sampled window (`0x812f9dac`,
+`0x812f9ea4`, `0x812f9d30`, `0x812f9d6e`).
+
+Also surfaced, unchased: `"Debug.Reload Growing Textures"` (`0x81509e3c`) -
+2048 has a named Growing Texture subsystem with its own debug reload, which
+is a better handle on that effect than anything the file side has offered.
+
+### Nothing wired
+
+No render consumer was found for any key this pass, so nothing reaches
+`oag_render`. **The blocker is not the offset table** - it is that an offset
+says where a parsed colour lands, not which material or mesh it recolours.
+`Colour 1..8.Colour`, `Window Colour 1..3.Gradient 1..3` and
+`Track Paint.{Primary,Secondary} Colour` are all *indexed into the circuit's
+own art*, and nothing recovered says what index 3 is. That binding is the
+real open question behind "it should affect all textures".
+
+## 2026-08-30, a thirteenth pass: the 36-byte schema record is read, and two storage domains are confirmed in one file
+
+Picked up the twelfth pass's own cheapest next step - read the typed
+registration helpers - and it turned out to settle more than the storage
+question it was aimed at.
+
+### `FwKeyedText_AddSchemaEntry` (`0x005d3680`), confidence 85
+
+Every one of the nine helpers `Environment_RegisterStageSchema` calls is a
+three-line wrapper of the same shape:
+
+```c
+void helper(registry, dest, name, flags) {
+    <path walk>(dest, name, flags & 0xff, *(registry + 0x410));
+    if (flags != 0) return;
+    FwKeyedText_AddSchemaEntry(registry, dest, name, A, B, C);
+}
+```
+
+and `FwKeyedText_AddSchemaEntry` appends one record to a vector, writing
+exactly:
+
+```
+record[0x00] u8   = C          (param_6)
+record[0x01] u8   = B          (param_5)
+record[0x02] u16  = A          (param_4)
+record[0x04] u32  = dest       *** the destination pointer ***
+record[0x08] ...  = std::string name   (SSO: 0x0c data/inline, 0x1c length, 0x20 capacity)
+*(registry + 8) = record + 0x24
+```
+
+**The stride is `0x24` = 36 bytes**, read from the vector's own end-pointer
+advance - independently confirming the 36-byte stride
+[the 2026-08-29 pass](#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess)
+derived from `FwKeyedText_ParseEntry`'s `(end - start) / 36` loop bound, now
+from the *writing* side rather than the reading side. The same
+divide-by-36-via-multiply idiom (`>> 2` then `* 0x38e38e39`) appears in this
+function's own capacity check.
+
+So the record is `{type tags, destination pointer, key name}` - the layout
+this page has been describing structurally since its fifth pass, now read
+field by field.
+
+### Two storage domains, in the same file - which settles an open question and kills a withdrawn reading for good
+
+Three helpers read, with their `(A, B, C)` literals:
+
+| Helper | `(A, B, C)` | Example key registered through it |
+| --- | --- | --- |
+| `0x005d40b8` | `(1, 4, 3)` | `%s.Detonator Mine Colour`, `%s.Detonator Bomb Outer Colour` |
+| `0x005d3ec0` | `(4, 3, 8)` | `%s.Airbrake Colour` |
+| `0x005d4418` | `(4, 1, 8)` | (not tied to a key this pass) |
+
+Tied to keys by resolving the registration loop's own TOC slots: `-0x58e8` ..
+`-0x58d8` are schema indices 68-72, which read
+`%s.Airbrake Colour`, `%s.Detonator Mine Colour`,
+`%s.Detonator Mine Electricity Colour`, `%s.Detonator Bomb Inner Colour`,
+`%s.Detonator Bomb Outer Colour` - the vocabulary's own last five entries.
+
+The four Detonator colours land at `r21 + 0x00`, `+0x04`, `+0x08`, `+0x0c` -
+**four bytes apart**, through the `A = 1` helper. `Airbrake Colour` goes
+through the `A = 4` helper to an entirely different base
+(`r23 + r22 + 0x220`). Reading `A` as a component count: the Detonator
+colours are **single 4-byte packed values** and `Airbrake Colour` is **four
+components, 16 bytes**.
+
+**What this settles**: `effectsettings.md`'s open question - whether the
+byte-domain blend applies to keys this project fades in floats - is answered
+"both domains are real, in the same file". A single blend domain would be
+wrong for one group or the other, which is exactly the straddle
+`cross_fade_rgba8` (bytes) and `fade_scalar` (floats) already implement.
+
+**What this kills, on positive evidence rather than caution**: the twelfth
+pass withdrew a reading that `+0x00` of the cross-faded stage struct might be
+a Detonator Bomb colour, on the grounds that `r21`'s base was unidentified.
+That reading is now **refuted**, not merely unproven: `Environment_UpdateStageBlend`
+cross-fades **16-byte** fields at `+0x00`/`+0x20`/`+0x40`, and `r21`'s array
+holds **4-byte** packed values at `+0x00`/`+0x04`/`+0x08`/`+0x0c`. Different
+element sizes, so different arrays. `r21` is a packed-colour region and is
+not the stage struct the blend reads.
+
+### A correction to the twelfth pass's own next-step list
+
+That pass suggested `"Debug.Reload Growing Textures"` (`0x81509e3c`, 2048) as
+"a named Growing Texture subsystem with its own debug reload" and a good
+handle on that effect. **`get_xrefs_to` puts its only reference inside
+`Environment_RegisterStageSchema` itself** (`0x8104b368`) - it is another
+*registered schema key*, not a subsystem entry point. It still implies a
+reload hook exists somewhere behind that key's destination, but it is not the
+shortcut that item made it sound like.
+
+### Still not read
+
+The remaining six helpers, and the key-to-offset table itself - the
+destination bases are unchanged from the twelfth pass. Nothing here reaches
+the renderer: an offset and a storage width still do not say which material a
+colour recolours.
+
+## 2026-08-30, a fourteenth pass: the key-to-offset table is enumerated in full, and it corrects `effectsettings.md`'s positional guess
+
+`GHIDRA_MCP_ALLOW_SCRIPTS=1` is live, so the twelfth pass's "bounded but
+unspent job" got spent. A `run_script_inline` walk of
+`Environment_RegisterStageSchema`'s loop body
+(`0x003d4f00`-`0x003d5bb0`) tracks each register symbolically as
+`base + offset`, resolves each `lwz rX,-N(r2)` against this function's TOC
+(`0x008bd3c4`) to the key template it loads, and pairs the two at every
+registration call. **Confidence 88.**
+
+**58 registration calls, 51 of them per-stage** (the first seven run before
+the loop and target non-stage globals). Every per-stage destination resolves
+to `r22 + r23 + offset`, where `r23` advances by `0x250` per iteration - so
+the base is the already-identified per-stage table, now named
+**`g_effect_settings_stages`** (`0x00c7efb0`, i.e. `iVar8 + 0x1000`).
+
+### Why this table is trustworthy: it validates itself
+
+Three independent consistency checks, all run after the enumeration rather
+than assumed:
+
+- **The offsets fill the stride exactly.** The highest key ends at
+  `0x250` - the struct's own stride - with only **24** unassigned padding
+  bytes (`0x158`-`0x15f`, `0x1dc`-`0x1df`, `0x214`-`0x21f`).
+- **The only two overlaps are meaningful ones.** `Scene.EQ brightness`
+  (`+0x0c`) sits in the fourth lane of `Scene.Texture Colour` (`+0x00`, 16
+  bytes) and `Track.EQ brightness` (`+0x6c`) in the fourth lane of
+  `Track.Texture Colour` (`+0x60`). Nothing else collides.
+- **Widths agree with the helpers.** Every key registered through
+  `0x005d3ec0`/`0x005d3e18`/`0x005d3cc8`/`0x005d4010` is 16 bytes apart from
+  its neighbour; every key through `0x005d4418`/`0x005d40b8` is 4 bytes
+  apart. That is the byte/float split the thirteenth pass inferred from three
+  helpers, now confirmed across all nine by geometry.
+
+### The correction: two of the three guessed fields were right, one was not
+
+`effectsettings.md` has carried a positional guess that the three 16-byte
+fields `Environment_UpdateStageBlend` cross-fades at `+0x00`/`+0x20`/`+0x40`
+are `Scene.Texture / Near / Base Colour`. Measured:
+
+| offset | guessed | actual |
+| ---: | --- | --- |
+| `+0x00` | `Scene.Texture Colour` | **`Scene.Texture Colour`** - correct |
+| `+0x20` | `Scene.Near Colour` | **`Scene.Base Colour Highlight`** - wrong; `Near Colour` is at `+0x10` |
+| `+0x40` | `Scene.Base Colour` | **`Scene.Base Colour`** - correct |
+
+So the blend fades the scene's texture colour, its highlight and its base -
+a coherent triple, and not the one the guess named.
+
+### The full table
+
+| offset | bytes | key (after the `%s.` stage prefix) | helper |
+| ---: | ---: | --- | --- |
+| `+0x000` | 16 | `Scene.Texture Colour` | `0x005d3ec0` |
+| `+0x00c` | 4 | `Scene.EQ brightness` | `0x005d4418` |
+| `+0x010` | 16 | `Scene.Near Colour` | `0x005d3ec0` |
+| `+0x020` | 16 | `Scene.Base Colour Highlight` | `0x005d3ec0` |
+| `+0x030` | 16 | `Scene.Base Colour Highlight Middle` | `0x005d3ec0` |
+| `+0x040` | 16 | `Scene.Base Colour` | `0x005d3ec0` |
+| `+0x050` | 16 | `Scene.Base Colour Middle` | `0x005d3ec0` |
+| `+0x060` | 16 | `Track.Texture Colour` | `0x005d3ec0` |
+| `+0x06c` | 4 | `Track.EQ brightness` | `0x005d4418` |
+| `+0x070` | 16 | `Track.Near Colour` | `0x005d3ec0` |
+| `+0x080` | 16 | `Track.Base Colour Highlight` | `0x005d3ec0` |
+| `+0x090` | 16 | `Track.Base Colour Highlight Middle` | `0x005d3ec0` |
+| `+0x0a0` | 16 | `Track.Base Colour` | `0x005d3ec0` |
+| `+0x0b0` | 16 | `Track.Base Colour Middle` | `0x005d3ec0` |
+| `+0x0c0` | 16 | `Scene.Gradient1.Colour0` | `0x005d3ec0` |
+| `+0x0d0` | 16 | `Scene.Gradient1.Colour1` | `0x005d3ec0` |
+| `+0x0e0` | 16 | `Scene.Gradient1.Colour2` | `0x005d3ec0` |
+| `+0x0f0` | 16 | `Scene.Gradient2.Colour0` | `0x005d3ec0` |
+| `+0x100` | 16 | `Scene.Gradient2.Colour1` | `0x005d3ec0` |
+| `+0x110` | 16 | `Scene.Gradient2.Colour2` | `0x005d3ec0` |
+| `+0x120` | 16 | `Scene.Gradient3.Colour0` | `0x005d3ec0` |
+| `+0x130` | 16 | `Scene.Gradient3.Colour1` | `0x005d3ec0` |
+| `+0x140` | 16 | `Scene.Gradient3.Colour2` | `0x005d3ec0` |
+| `+0x150` | 4 | `EQ colour tint` | `0x005d40b8` |
+| `+0x154` | 4 | `EQ analogue colour tint` | `0x005d40b8` |
+| `+0x160` | 16 | `Sky zenith colour` | `0x005d4010` |
+| `+0x170` | 16 | `Sky horizon colour` | `0x005d4010` |
+| `+0x180` | 4 | `Scene.Aniso Power` | `0x005d4418` |
+| `+0x184` | 4 | `Track.Aniso Power` | `0x005d4418` |
+| `+0x188` | 4 | `Radial Bloom Intensity` | `0x005d4418` |
+| `+0x18c` | 4 | `Lighting.Sky reflection colour` | `0x005d40b8` |
+| `+0x190` | 16 | `Lighting.Sun colour` | `0x005d3e18` |
+| `+0x1a0` | 16 | `Lighting.Fog colour` | `0x005d3e18` |
+| `+0x1b0` | 16 | `Lighting.Alt Fog colour` | `0x005d3e18` |
+| `+0x1c0` | 16 | `Lighting.Track Fog colour` | `0x005d3e18` |
+| `+0x1d0` | 4 | `Lighting.Fog density` | `0x005d4418` |
+| `+0x1d4` | 4 | `Lighting.Alt Fog density` | `0x005d4418` |
+| `+0x1d8` | 4 | `Lighting.Track Fog density` | `0x005d4418` |
+| `+0x1e0` | 16 | `Lighting.Constant Ambient Colour` | `0x005d3e18` |
+| `+0x1f0` | 16 | `Lighting.Prelit Colour Scale` | `0x005d3e18` |
+| `+0x200` | 16 | `Lighting.Prelit Colour Power` | `0x005d3cc8` |
+| `+0x210` | 4 | `Aurora Colour` | `0x005d40b8` |
+| `+0x220` | 16 | `Airbrake Colour` | `0x005d3ec0` |
+| `+0x230` | 4 | `Detonator Mine Colour` | `0x005d40b8` |
+| `+0x234` | 4 | `Detonator Mine Electricity Colour` | `0x005d40b8` |
+| `+0x238` | 4 | `Detonator Bomb Inner Colour` | `0x005d40b8` |
+| `+0x23c` | 4 | `Detonator Bomb Outer Colour` | `0x005d40b8` |
+| `+0x240` | 4 | `Track.Luminance Power` | `0x005d4418` |
+| `+0x244` | 4 | `Scene.Luminance Power` | `0x005d4418` |
+| `+0x248` | 4 | `Scene.Aniso Curve` | `0x005d4418` |
+| `+0x24c` | 4 | `Track.Aniso Curve` | `0x005d4418` |
+
+### What this hands the render side, and what it does not
+
+**It does**: the `Lighting.*` keys this project already reads by name resolve
+to `+0x190` (`Sun colour`), `+0x1a0` (`Fog colour`), `+0x1d0` (`Fog
+density`), `+0x1e0` (`Constant Ambient Colour`), `+0x1f0`/`+0x200`
+(`Prelit Colour Scale`/`Power`) - so `oag_formats::effectsettings`'s
+name-keyed reading and the runtime's offset-keyed one agree, which was
+previously an assumption. It also shows the `Fog`/`Alt Fog`/`Track Fog`
+triple is three *parallel* blocks, matching this project's decision to use
+the primary pair.
+
+**It does not** answer the binding question. `Scene.*` and `Track.*` are the
+encouraging half - they are **not** indexed, they are two named material
+groups, so "which material does this recolour" has a plausible answer on HD
+(scenery versus track) rather than an index nobody can resolve. But no
+consumer of any of these offsets was traced this pass, and HD is still the
+title with no recovered stage trigger.
+
+### 2048: the key inventory is enumerated, the offsets are **not** and must not be cited
+
+The same technique was run against `Environment_RegisterStageSchema`
+(`0x8104714c`). It recovers **67 registrations, 51 of them per-stage with
+their key names** - `Window Colour 1..3.{Gradient 1..3, Emissive}`,
+`Edge Colour`, `Colour 1..8.{Colour, Emissive}`,
+`Cube Animation Colour 1.*`, `EQ.{Colour A/B/C, Mid-Band Position, BG
+Colour A/B/C, BG Mid-Band Position}`, `Track Paint.{Primary,Secondary}
+Colour`, `Growing Texture.{Colour, Scale Bias, Factors}`,
+`Background.Diffuse Colour`, `Sky.{Horizon,Zenith} Colour`,
+`Fog.{Environment,Track} Fog Colour` - which is the first enumeration of
+2048's per-stage vocabulary from its **executable** rather than from a
+shipped file.
+
+**Its destination column is wrong and is deliberately not reproduced here.**
+On Thumb the destination register `r1` is also the register the key
+template's `movw`/`movt` pair writes, and the destinations arrive from
+precomputed stack slots; the tracker resolved many of them to stale
+constants (the same value `0x8151c6fc` repeats across unrelated keys, which
+cannot be true). Recorded as a negative result: **2048's key-to-offset table
+needs a tracker that models its prologue's stack-slot fills, not the
+register-only one that works on HD.**
+
+## 2026-08-30, a fifteenth pass: the stage table has a per-key getter API - four keys reach a draw, and the `Scene`/`Track` colours reach nothing
+
+Pulled the shader-consumer thread. **There is no generic material-parameter
+upload path**: nothing downstream of the effectSettings struct touches
+`Shader_InitEngineParams` / `ShaderRegistry_*` / `g_ShaderParameterNames`.
+What exists instead is a **per-key getter API**, and it answers the question
+more sharply than a shader trail would have.
+
+### The getters
+
+`search_instructions` for `-0x5a84(r2)` - the TOC slot holding `iVar8`, the
+only route to `g_effect_settings_stages` other than the registrar's own -
+returns 29 sites, and sixteen of them are **tiny functions** clustered at
+`0x003cd870`-`0x003ce120`, each reading exactly one offset. Cross-referenced
+against the fourteenth pass's key-to-offset table:
+
+| getter | struct offset | key | reached by |
+| --- | ---: | --- | --- |
+| `0x003cdbd0` `Environment_GetStageMineColour` | `+0x230` | `Detonator Mine Colour` | `FUN_00138e58`, `FUN_001395f0` |
+| `0x003cdc00` `Environment_GetStageMineElectricityColour` | `+0x234` | `Detonator Mine Electricity Colour` | `FUN_001395f0` |
+| `0x003cdc30` `Environment_GetStageBombInnerColour` | `+0x238` | `Detonator Bomb Inner Colour` | `FUN_001340d8` |
+| `0x003cdc60` `Environment_GetStageBombOuterColour` | `+0x23c` | `Detonator Bomb Outer Colour` | `FUN_001340d8` |
+| `0x003cde20` `Environment_GetStageAirbrakeColour` | `+0x220` | `Airbrake Colour` | `FUN_00107b58`, `FUN_00107c28` |
+| `0x003cdd40` | `+0x70` (and `+0x210`) | `Track.Near Colour`, `Aurora Colour` | `FUN_00298268` |
+| `0x003cde60` | `+0x40` | `Scene.Base Colour` | **nothing** |
+| `0x003cded0` | `+0x20` | `Scene.Base Colour Highlight` | **nothing** |
+| `0x003ce000` | `+0x60` | `Track.Texture Colour` | **nothing** |
+| `0x003ce070` | `+0xa0` | `Track.Base Colour` | **nothing** |
+| `0x003ce0e0` | `+0x80` | `Track.Base Colour Highlight` | **nothing** |
+| `0x003cdf40`, `0x003cdfa0` | `+0x150` | `EQ colour tint`, `EQ analogue colour tint` | **nothing** |
+
+The offsets in the getters are written `iVar8 + 0x1230` and so on - i.e.
+`0x1000 + key offset` - which is a second, independent confirmation of the
+fourteenth pass's table: the two were derived from different functions and
+agree on every key they share.
+
+So the effectSettings stage palette **is** consumed at draw time on HD, but
+**per effect**: the mine, the bomb, the airbrake each pull their own key
+through their own getter. That is why no shader-parameter trail exists to
+find - the design never had one.
+
+### The negative, and how it was made trustworthy
+
+"Nothing calls it" is the claim most likely to be an artefact of a missed
+reference, so it was established twice and the first attempt was discarded:
+
+- **Discarded**: scanning the whole image for a word holding each getter's
+  OPD descriptor address. It reported "no hits" for all of them - *including
+  the two known-good controls*, so the test does not discriminate. Calls here
+  go `bl <thunk>` -> `b <getter>`, never through a descriptor load. Recorded
+  because it is a plausible-looking test that proves nothing.
+- **Kept**: scanning every `bl`/`b` instruction in the image, resolving its
+  flow target, and separately following the small TOC thunks
+  (`std r2,0x28(r1)` / `addis` / `subi` / `b <target>`) that HD uses for
+  cross-module calls. With `Environment_GetStageAirbrakeColour` (`+0x220`)
+  and the `+0x70` getter as **positive controls in the same scan** - both
+  resolved their real callers - the seven getters above came back with **no
+  branch anywhere in the image targeting them**.
+
+**So `Scene.Base Colour`, `Scene.Base Colour Highlight`, `Track.Texture
+Colour`, `Track.Base Colour`, `Track.Base Colour Highlight` and both `EQ`
+tints have no consumer through this API.** Confidence 85 on the negative -
+two controls in the same scan is what earns that, rather than an absence of
+hits alone.
+
+### What this does and does not settle for "it should affect all textures"
+
+**Does**: it rules out the mechanism the search was aimed at. There is no
+material-parameter upload to redirect these colours into, on HD, and the
+getters that would serve `Scene`/`Track` are dead code.
+
+**Does not**: it does not prove the offsets are unread. `FUN_003ce2c0`
+(~10.4 KB, the second site that re-derives the cross-fade inline) reads
+struct offsets *directly* rather than through the getters, and `+0x20` and
+`+0x150` are both among the displacements it uses - though on this function
+a bare displacement is not attributable to a base without the same tracking
+the registrar needed, so that is a lead and not a finding. **That is the one
+remaining route by which `Scene.*`/`Track.*` could reach a draw on HD**, and
+it is the next thing to read.
+
+**Nothing is wired.** Confirming that the airbrake and the Detonator
+mine/bomb pull their colours from this table is real, but all three are
+effects this engine does not draw, and HD still has no recovered stage
+trigger.
+
+## 2026-08-30, a sixteenth pass: `Scene.Texture Colour`'s blend output is located, and the last alternative route is closed
+
+Pushing on `Scene.*`/`Track.*` specifically, per the user's stated priority.
+Three results: the blend runs inside the render path (confirmed, not
+assumed), its output address is now concrete, and the route this page
+flagged last pass as "the one remaining way `Scene.*` could reach a draw"
+turns out not to exist.
+
+### The blend runs inside HD's own scene render-prep
+
+`Environment_UpdateStageBlend` has exactly **one** caller, and it is
+`0x003aa888` - **renamed `Scene_PrepareFrame`** (confidence 78). Its named
+callees settle what it is: `Scene_RefreshNodeMatrices`, `Pvs_IsUsable`,
+`Pvs_CellBitmap`, `Pvs_NearestCellCached`, `Pvs_BitmapBytes`,
+`Visibility_HideChunk`, `Visibility_ShowAllChunks`,
+`Visibility_CopyCellMask`, `GcmContext_Callback`. Scene graph, visibility
+and the RSX command context - this is render preparation, and the stage
+blend is a step inside it. Full chain, thunk-resolved:
+
+```
+FUN_0067f078 -> FUN_00757de0 (TOC thunk) -> FUN_003e26d0 -> Scene_PrepareFrame -> Environment_UpdateStageBlend
+```
+
+### The blended-output area, located
+
+The fourth pass said this function "copies three RGBA-shaped fields into a
+small blended-output area" without saying where. Traced with base-register
+tracking across `0x003dc580`-`0x003dc600`:
+
+```
+003dc588  lfs f12, 0x1000(r9)    ; stage A, struct +0x00  ) Scene.Texture
+003dc590  lfs f0,  0x1004(r9)    ; stage A, struct +0x04  ) Colour's
+003dc584  lfs f11, 0x1008(r9)    ; stage A, struct +0x08  ) x, y, z
+003dc5a0  lfs f10, 0x1000(r10)   ; stage B, the other side of the fade
+003dc5a4  lfs f8,  0x1004(r10)
+003dc598  lfs f9,  0x1008(r10)
+003dc5c0  stfs f12, 0x3aac(r30)  ; *** r30 = iVar8, so 0x00c81a5c ***
+003dc5c8  stfs f0,  0x3ab0(r30)  ;                     0x00c81a60
+003dc5d0  stfs f11, 0x3ab4(r30)  ;                     0x00c81a64
+```
+
+`r30` is `iVar8` (`lwz r30,-0x5a84(r2)` at `0x003da780`) and `r9`/`r10` are
+`stage*0x250` for the two stages, so the reads are
+`g_effect_settings_stages[stage] + 0x00/0x04/0x08` - **`Scene.Texture
+Colour`'s first three floats**, per the fourteenth pass's table - and the
+write is a fixed three-float global at **`0x00c81a5c`**. Confidence 85.
+
+That is a far better search target than "somewhere in the struct": the
+consumer of `Scene.Texture Colour` is whatever reads `0x00c81a5c`.
+
+### The last alternative route is closed
+
+The fifteenth pass ended by naming `FUN_003ce2c0` - the second site that
+re-derives the cross-fade inline - as "the one remaining route by which
+`Scene.*`/`Track.*` could reach a draw on HD". **It is not a route**: the
+same thunk-aware branch scan that found `Environment_UpdateStageBlend`'s
+caller finds **no branch anywhere in the image targeting `FUN_003ce2c0`**,
+only its OPD descriptor. It is unreached, exactly like the seven dead
+getters.
+
+### No reader for `0x00c81a5c` is located, and a displacement sweep cannot find one
+
+Sweeping the image for instructions using displacements `0x3a80`-`0x3b40`
+returns dozens of hits across unrelated functions - the base-blind trap this
+page's fifth pass already recorded. Two candidates looked real because they
+read all three slots as **floats** at the right widths
+(`FUN_00661f00` at `+0x3aac`/`+0x3ab0`/`+0x3ab4`, `FUN_00661c64` over the
+neighbouring `Environment_LoadStageTextures` region) - and **both fail a
+base check**: `FUN_00661f00` performs no TOC loads at all, so its base is
+caller-supplied and cannot be `iVar8`; `FUN_00661c64`'s single TOC load
+resolves to `0x00927794`, not `iVar8`. Recorded so the next pass does not
+re-derive them as leads.
+
+**So the reader is unfound, and displacement search is the wrong tool for
+it** - it needs base-aware tracking over candidate functions, the same
+treatment the registrar got.
+
+### The cheap way to settle it
+
+`0x00c81a5c` is a **fixed address, written by code now confirmed to run
+every frame inside `Scene_PrepareFrame`**. Unlike the `craftArray[n]->+0x640`
+hunt - where two watchpoint runs caught nothing because nothing may write
+that field at all - a watchpoint here has a guaranteed writer, so a read
+watch on `0x00c81a5c` during any HD race (Zone or not; the blend runs in
+every mode) names the consumer directly. That is one RPCS3 run against an
+address with a known-good control built in.
+
+## 2026-08-30, a seventeenth pass: `FUN_003ce2c0` is not the `Scene`/`Track` consumer, and the fourth pass's claim about it was wrong
+
+The deciding read, done with the same base-register tracking the registrar
+enumeration used. **The answer is no**, and one of this page's own claims does
+not survive it.
+
+### It does not read the stage table
+
+Base-aware trace of all 10,452 bytes of `FUN_003ce2c0`: it loads `iVar8` from
+its TOC **once**, and **63** accesses resolve onto that base. Every one of them
+lands at `+0x84`, in the `+0x32bc`-`+0x3374` block, or at `+0x6640`.
+
+**None is in the `+0x1000`-`+0x1250` window** - the stage table
+(`g_effect_settings_stages` is `iVar8 + 0x1000`, fifteen rows of `0x250`). So
+this function does not read the per-stage struct at all; it works on a
+different region of the same object.
+
+> **This corrects [the fourth pass](#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead)**,
+> which described `FUN_003ce2c0` as re-deriving "the identical blend
+> `FUN_003da540` computes - same `-1`/clamp-to-zero previous-stage arithmetic,
+> same `*0x250` stride, same `+0x1000`/`+0x1004` RGBA reads". The `+0x1000`
+> half is not supported: with the base tracked rather than the displacement
+> read bare, there is no `+0x1000`-window access through `iVar8` in this
+> function. That claim came from reading displacements without their bases -
+> the same trap this page has now hit three separate times.
+>
+> **Scoped honestly**: what is established is "no access *via `iVar8`*". The
+> tracker follows `addi`/`add`/`or`/`rldicl` and displacement forms, not
+> indexed (`lfsx`/`lwzx`) ones, and would not see a stage pointer arriving as
+> a *parameter*. Neither would change the conclusion below, because that rests
+> on reachability, not on this trace.
+
+### It is not reached either
+
+Two tests, one of which is reported only with its own limitation attached:
+
+- **Branch scan** (the discriminating one, controls in the same run): no
+  `bl` or `b` anywhere in the image targets `0x003ce2c0`.
+- **Descriptor-held scan**: no word in initialised memory holds its OPD
+  address `0x0088c240`. **Non-discriminating on its own** - the control,
+  `Environment_UpdateStageBlend`'s own descriptor `0x0088c278`, comes back
+  "held by nothing" too, and that function is definitely called. It rules out
+  a vtable install from initialised data and nothing more.
+
+### What this closes
+
+**HD's executable, as far as static analysis reaches, does not draw
+`Scene.*`/`Track.*` recolouring.** The full chain is now traced and every
+branch of it ends:
+
+| stage | status |
+| --- | --- |
+| authored in `zonemode.effectsettings` | yes - 51 keys |
+| registered into a schema with a destination | yes - `Environment_RegisterStageSchema` |
+| parsed into `g_effect_settings_stages` at known offsets | yes - key-to-offset table, confidence 88 |
+| `Scene.Texture Colour` cross-faded per frame | yes - into `0x00c81a5c`, inside `Scene_PrepareFrame` |
+| **that output read by anything** | **no reader located** |
+| `Scene`/`Track` per-key getters called | **no - seven getters, no branch targets them** |
+| `FUN_003ce2c0` as an alternative reader | **no - reads a different region, and is unreached** |
+
+Four keys *do* reach a draw (`Detonator Mine`/`Mine Electricity`/`Bomb
+Inner`/`Bomb Outer`, `Airbrake Colour`) - so the mechanism is real and
+exercised, just not for the scene and track groups.
+
+**What would still overturn this**: a reader of `0x00c81a5c` reached through
+an indirect call, or a consumer taking a stage pointer as an argument -
+neither visible to a static branch scan. A **read watchpoint on
+`0x00c81a5c`** settles both in one run, and that address has a confirmed
+per-frame writer to serve as the control.
+
+## 2026-08-30, an eighteenth pass: play evidence overturns the static "no reader located" conclusion - HD's Zone mode does recolour the scene
+
+The seventeenth pass's table above says, honestly, "no reader located" for
+`Scene`/`Track` and lists what would overturn it - all static. This pass is
+not static: it is a real boot, driven start to finish, with a screenshot
+before the recolour and one well after.
+
+**Method.** `Main Menu -> right -> cross` (Single Player), four confirmed
+`right` taps at the Mode list with a screenshot after each one (the eleventh
+pass's dropped-tap trap - this run's step 4 shot was checked and does say
+`ZONE` before confirming), `cross` to commit, then the outer walk's own
+retrying cross-presses through `Track Creation -> Team Selection -> Launch
+Game` to `InGame`. Held thrust only, no steering, from 15 seconds after
+arrival, with a screenshot at t+15s and another at t+60s (t+60s chosen after
+an earlier attempt's 150-second hold ran the entire race to completion and
+landed both shots outside it - on the pre-race grid and the post-race
+results screen respectively, neither of which shows a track at all).
+
+**Result.** The t+15s shot: a cyan track and cyan-lit surrounding structure,
+HUD reading `ZONE 0 / SUB-VENOM`. The t+60s shot: the same HUD's zone counter
+has advanced past `FLASH`/`SUB-RAPTER`, and the track surface, its side
+barriers, and a large flat-faced building alongside the track have all
+shifted - the track/barrier to purple-magenta, the building to solid yellow.
+Ship livery is the one constant between the two frames (this game's own paint
+job, not scenery). This is a genuine, confirmed Zone-mode run (mode list
+verified on-screen per shot 4, not inferred from a tap count) - the exact gap
+the eleventh pass's write-watchpoint attempts left open.
+
+**Per this project's leakage policy, the screenshots themselves are not
+committed** (`just audit-leakage`, `docs/overview/legal.md`) - described here
+in prose instead, same as every other play-observed finding on this page.
+
+**What this does and does not settle.** It proves `Scene.*`/`Track.*`-shaped
+recolouring genuinely happens in a real Zone race - the "does HD do this at
+all" question the render-wiring work needs answered is now yes, empirically,
+independent of whatever the static trail finds. It does **not** identify
+*which* mechanism drives it: `0x00c81a5c`'s reader is still unlocated, the
+per-key getters for `Scene`/`Track` are still uncalled in the static scan,
+and a shading path this page has not yet considered (a post-process tint, a
+fog-driven material parameter, something reached only through an indirect
+call) remains just as plausible as `0x00c81a5c` finally being read somewhere
+this page's tools can't see. **Do not wire anything into `oag_render` off
+this pass alone** - it confirms the target behaviour exists, not the
+mechanism to reproduce it; per `CLAUDE.md`'s "never invent what the assets
+already author," wiring needs the actual reader, not a plausible stand-in
+that happens to look right in the same two colours.
+
+**Next step**: the read watchpoint on `0x00c81a5c` the seventeenth pass
+proposed, now doubly motivated - it would either find the missing reader
+(closing this chain for good) or come back negative again, which would mean
+looking past `0x00c81a5c` entirely for a second, unidentified consumer of the
+per-stage palette. A composition-matched before/after pair (same track
+section, different stage colour, rather than this pass's two different
+segments) would sharpen the visual evidence further but isn't needed to
+settle "does it happen at all" - it already does.
+
+## 2026-08-30: the post-process route is closed by enumeration, not by search
+
+The eighteenth pass above leaves "a post-process tint" open as one of the
+plausible mechanisms behind the recolour it proved happens. It is now
+**ruled out**, and by a different method than this page has been using: instead
+of looking for a consumer of the stage table, a parallel thread enumerated the
+*inputs* of the post chain's resolve pass exhaustively. See
+[renderer.md](renderer.md), "The resolve's full-screen colour inputs,
+enumerated".
+
+There are exactly five full-screen colour inputs across the three resolve
+programs, and in the shipped executable:
+
+- `fullscreenTintColour` is bound every frame with `(0,0,0,0)` - the global it
+  reads (`0x00c50f00`) is cleared by the present path each frame and written
+  non-zero by nothing, established by a whole-image scan rather than a
+  branch scan;
+- `saturation`, `finalScale` and `finalBias` are photo mode's exposure controls,
+  reached through a cross-TOC trampoline from `PhotoMode_Update`, and both
+  float4s are built **grey**, so they cannot express a hue at all;
+- `colourScale` is bound every frame with `(1,1,1,1)`, its three setters having
+  no caller anywhere in the image.
+
+So the recolour the eighteenth pass observed **cannot** be happening on the
+composited frame. Whatever drives it acts earlier - per-material, per-light, or
+through a program this enumeration does not cover (`FunkLayerColour2d_fp`, the
+flat-colour quad, is the one post program that could paint a full-screen colour
+by a route other than the resolve, and is untouched by that work). The
+`0x00c81a5c` read watchpoint stays the right next step; this narrows where a
+negative result would send the search, and removes one of the three candidates
+the eighteenth pass listed.
+
+It also sharpens the contrast with 2048, which *does* grade the whole frame in
+a composite shader: the two engines are not doing the same thing here, so the
+2048 finding should not be carried across as a template for HD.
+
+## 2026-08-30: a closer-matched screenshot pair, and why one lap can't do better
+
+The eighteenth pass's pair (t+15s/t+60s) proved the recolour but on two
+visibly different stretches of track - fair for "does this happen at all",
+weaker as a side-by-side. Attempted a tighter pair: a 25-frame burst, one
+screenshot every 4 seconds through a second confirmed Zone run (Mode list
+screenshot checked before confirming, same as before).
+
+**Zone in this game is not a looping short circuit - it is one 6.536 km lap of
+a real, non-repeating circuit**, per the Results screen (`LAPS CLEARED: 1`).
+That matters for this exercise specifically: there is no track segment the
+ship passes twice within a single run to screenshot at two different stage
+colours, so a same-coordinates pair is not obtainable from one lap by
+construction, only across multiple laps of a run that survives that long
+(this one, like the first, ended - `ZONE SESSION COMPLETE` - after 6 zones
+and about 68 seconds, holding thrust with no steering).
+
+**Closest available match, by composition rather than by track coordinate**:
+the frame at t+28s (`ZONE 0`/`SUB-VENOM`, cyan) and the frame at t+72s (`ZONE
+5`/`FLASH`, purple track with yellow buildings) both frame a gently curving
+street lined with tall buildings, a palm-tree silhouette in the same screen
+corner, and the same HUD zone-ladder column on the left edge. Not claimed to
+be the same coordinate on the circuit - only the closest visual match this
+run's 25 frames offered, chosen honestly rather than by picking whichever
+pair looks most dramatic. It reads the same way as the original pair: track
+surface and buildings both shift from the stage-0 cyan family to the
+stage-5 purple/yellow family.
+
+**What would actually get a same-coordinates pair**: multiple full laps in
+one session (this build's uncontrolled straight-thrust driving doesn't survive
+that long), or two separate runs paused at a matched distance-travelled
+reading rather than a matched wall-clock time - untried, and not obviously
+worth the setup cost now that the recolour itself is no longer in question.
+
+## 2026-08-30, a nineteenth pass: **the reader of `0x00c81a5c` is located** - `Scene_PrepareFrame` itself, at `0x003aaf8c`
+
+Eighteen passes said "no reader located" and named what would overturn it.
+This does. The reader was invisible to every previous sweep for one reason,
+and it is a reason worth carrying: **every earlier scan looked for the field
+relative to the stage base** (`0x3aac(rX)`, off `iVar8 = 0x00c7dfb0`), because
+that is how the *writer* addresses it. The reader does not address it that way.
+Each of the three floats has **its own dedicated TOC pointer slot**, so the
+load is `lfs f0, 0x0(r9)` - displacement zero, base a per-field pointer. A
+displacement sweep cannot see it, a branch scan cannot see it, and an OPD-
+reference scan cannot see it.
+
+**And a fourth blindness, the one that most likely did the damage:
+Ghidra's own `get_xrefs_to` on `0x00c81a5c` is wrong here by construction.**
+Ghidra resolves every function's `d(r2)` against `0x008ad4d8`, so it reads
+`0x003aaf8c` as touching `0x008a72e0` and never associates that instruction
+with `0x00c81a5c` at all. Asking Ghidra for the xrefs - the natural first move,
+and the one this page's earlier passes describe making - returns a **guaranteed**
+false negative. This is exactly [memory.md](memory.md)'s documented failure mode
+("both false positives and false negatives, and the failure mode is a plausible
+wrong string rather than a visible error") landing on this thread; the miss was
+structural, not careless.
+
+### The three slots
+
+**TOC verified first**, per [memory.md](memory.md)'s rule for the overlap band:
+`Scene_PrepareFrame`'s OPD entry is `0x0088b9f0`, declaring TOC
+**`0x008bd3c4`** - so Ghidra's default (`0x008ad4d8`) is wrong for it and every
+displacement below is resolved against the function's own base. Two independent
+corroborations that this is a reading and not arithmetic that merely closes on
+itself: the ten slots below all land coherently inside `iVar8 + 0x35f0..0x3aac`,
+and the slot `0x008b71c4` computed for `lwz r17,-0x6200(r2)` was *separately*
+found by a byte search for the value it holds.
+
+The literal `0x00c81a5c` occurs exactly once in the whole file at a 4-byte
+boundary - `0x008b71cc` - inside a run of pointer slots that map one-for-one
+onto the region:
+
+| Slot | Displacement (TOC `0x008bd3c4`) | Value | = |
+| --- | --- | --- | --- |
+| `0x008b71c8` | `-0x61fc` | `0x00c815e0` | `iVar8 + 0x3630` |
+| `0x008b71cc` | `-0x61f8` | **`0x00c81a5c`** | **`iVar8 + 0x3aac`** |
+| `0x008b71d0` | `-0x61f4` | `0x00c815f0` | `iVar8 + 0x3640` |
+| `0x008b71d4` | `-0x61f0` | **`0x00c81a60`** | **`iVar8 + 0x3ab0`** |
+| `0x008b71d8` | `-0x61ec` | `0x00c81600` | `iVar8 + 0x3650` |
+| `0x008b71dc` | `-0x61e8` | **`0x00c81a64`** | **`iVar8 + 0x3ab4`** |
+| `0x008b71e0` | `-0x61e4` | `0x00c815d0` | `iVar8 + 0x3620` |
+| `0x008b71e4` | `-0x61e0` | `0x00c815b0` | `iVar8 + 0x3600` |
+| `0x008b71e8` | `-0x61dc` | `0x00c815c0` | `iVar8 + 0x3610` |
+| `0x008b71ec` | `-0x61d8` | `0x00c815a0` | `iVar8 + 0x35f0` |
+
+`+0x3aac`, `+0x3ab0` and `+0x3ab4` are exactly the three floats
+`Environment_UpdateStageBlend` writes at `0x003dc5c0`/`0x003dc5c8`/`0x003dc5d0`
+(and again at `0x003dc5f8`-`0x003dc600` on its other branch) - the
+**`Scene.Texture Colour`** cross-fade output the eighteenth pass proved is
+recomputed every frame.
+
+### The read
+
+At `0x003aaf8c`, inside `Scene_PrepareFrame` (`0x003aa888`-`0x003aed8f`):
+
+```text
+003aaf8c  lwz   r9,  -0x61f8(r2)      ; &Scene.Texture Colour .x  (0x00c81a5c)
+003aaf94  lwz   r11, -0x61f0(r2)      ; .y                        (0x00c81a60)
+003aaf98  lwz   r10, -0x61e8(r2)      ; .z                        (0x00c81a64)
+003aafa4  lfs   f0,  0x0(r9)          ; *** the read ***
+003aafa8  lfs   f13, 0x0(r11)
+003aafb4  lfs   f12, 0x0(r10)
+          stfs -> [sp+0x5c0] ; lvewx -> v10 / v11 / v12          ; scalar into a lane
+003aafd0  vperm / vspltw                                          ; splat across 4 lanes
+003aaff8  lvx   v13, 0, r10           ; the neighbouring float4s, 0x00c815a0..0x00c81650
+003ab008  vsel  v13, v13, v12, v6     ; merge the splatted component in
+003ab010  vsel  v0,  v0,  v10, v6
+003ab014  vsel  v1,  v1,  v11, v6
+003ab018  stvx  v13, r31, r0          ; r0  = 0x130   <- merged .z
+003ab040  stvx  v0,  r31, r28         ; r28 = 0x110   <- merged .x
+003ab044  stvx  v1,  r31, r27         ; r27 = 0x120   <- merged .y
+```
+
+**A correction to this section's first version, which named `+0x7c00`/`+0x7c10`
+as two of the three destinations.** They are not. The stores at `0x003ab02c`
+and `0x003ab034` do target those offsets, but they store `v10` and `v11`
+*after* `0x003ab020`-`0x003ab028` has reloaded those registers from
+`0x00c815b0`/`0x00c815c0` - unrelated vectors. The three registers actually
+carrying the merged `Scene.Texture Colour` are `v13`, `v0` and `v1`, and they go
+to `+0x130`, `+0x110` and `+0x120`, with `r27`/`r28` set to `0x120`/`0x110` back
+at `0x003aad64`/`0x003aad80`. The mistake was attributing the nearest `li`
+values to the wrong stores in an interleaved run - the same class of error as
+the sign trap, and caught the same way: by re-reading the instruction stream
+rather than the summary.
+
+So each scalar is splatted to a `float4`, `vsel`-merged into one lane of a
+neighbouring vector, and written into a large buffer at `r31`, at offsets
+**`+0x110`, `+0x120` and `+0x130`**.
+
+**`r31` is a fixed address, not a runtime pointer** - and this page said the
+opposite for one commit, so the correction is worth stating plainly. `r31` is
+loaded once, at `0x003aa98c`, by an instruction whose raw displacement field is
+`0x9d78`. That field is **signed**: `0x9d78` is `-0x6288`, not `+0x9d78`. Read
+as unsigned it points at `0x008c713c`, which holds `0` in the image and reads
+as "a runtime pointer"; read correctly it is the slot `0x008b713c`, which holds
+**`0x00c49000`** - a static, page-aligned address in the same neighbourhood as
+the `Scene.Texture Colour` slots themselves. *(A caution for the next reader of
+this binary: a raw 16-bit displacement above `0x7fff` is always negative, and
+mis-signing one produces a slot that exists, reads cleanly, and means nothing.)*
+
+So the three destinations are the **fixed addresses** `0x00c49110`,
+`0x00c49120` and `0x00c49130`, which makes them directly watchpointable with no
+runtime address mapping needed - the thing that made the earlier watchpoint
+proposals expensive.
+
+**Confidence 88 on the read itself.** The three slots resolve, against this
+function's own OPD-declared TOC, to exactly the three addresses the writer
+writes, and the writer is already confirmed. Nothing about that chain is
+inferred.
+
+**Confidence 55, and no name, on what the destination buffer is** - and a
+static attempt to close that, made 2026-08-30, **did not close it**. What the
+attempt did establish about `0x00c49000`:
+
+- It is touched from exactly **three** places in the image, found by scanning
+  for its two TOC slots (`0x008b713c`, module 2, disp `-0x6288`; `0x008a9800`,
+  module 1, disp `-0x3cd8`) rather than by `get_xrefs_to`: `Scene_PrepareFrame`
+  (29 loads), `FUN_006ce6e0` (2), and `FUN_00107200` (1, the only module-1
+  toucher).
+- It is a **structured block, not a flat array**. `Scene_PrepareFrame` takes
+  pointers into it at ~90 distinct offsets, and they are not scattered: there
+  is a run of small fields at `+0xc0`-`+0x200`, a dense run of `float4`s at
+  `+0x7ba0`-`+0x7d90` (where `Scene.Texture Colour` lands), and an array of
+  **nine sub-blocks at a stride of exactly `0xbe0`** - `+0xf80`, `+0x1b60`,
+  `+0x2740`, `+0x3320`, `+0x3f00`, `+0x4ae0`, `+0x56c0`, `+0x62a0`, `+0x6e80` -
+  each with the same internal shape (`base+N`, `base+N+0x40`, `base+N+0x50`,
+  `base+N+0x1b0` taken together).
+- **Neither toucher calls an RSX constant uploader.** `Rsx_UploadVertexConstants`
+  (`0x005c176c`) and `0x005c1754` are called nowhere in `Scene_PrepareFrame` or
+  `FUN_006ce6e0`, and neither function calls the parameter binders
+  (`0x005a3ef0`/`0x005a3d20`) either. So the hypothesis that the block is
+  handed straight to the shader-constant path is **not** supported: whatever
+  consumes it does so somewhere else.
+- `FUN_006ce6e0` **installs pointers into it** rather than reading it -
+  `addi r7, base, 0x7c00` at `0x006cf164` is stored to `*(obj+0xd8) + 0x198`,
+  with `base+0x7bc0` beside it. So sub-ranges of the block are handed to some
+  object as pointers, which is one more indirection to chase.
+- Neither `FUN_006ce6e0` nor `FUN_00107200` references a single string, so the
+  `.cpp`-filename route that named the memory layer is unavailable for both.
+
+#### The next indirection, read: the block is *registered*, not uploaded
+
+Following `*(obj+0xd8) + 0x198` turned out to answer the "why is there no RSX
+upload call" question, which is the part that had made the reading look wrong.
+
+`Scene_PrepareFrame` does not upload the block. It **installs pointers into it**,
+field by field, in a table hanging off `*(obj+0xd8)`, and sets a dirty flag after
+each one. The idiom at `0x003ab340`-`0x003ab38c` is the whole protocol:
+
+```text
+003ab344  lwz  r11, 0xd8(r10)
+003ab34c  stw  r4,  0x98(r11)        ; table[0x98]  = &block[...]
+003ab354  stw  r7,  0x9c(r9)         ; table[0x9c]  = &block[...]
+003ab35c  lwz  r0,  0x4(r10)
+003ab360  oris r0,  r0, 0xc          ; outer->0x4 |= 0x000c0000   (dirty)
+003ab36c  stw  r3,  0x198(r11)       ; table[0x198] = &block[0x7bf0]
+003ab374  stw  r7,  0x19c(r9)        ; table[0x19c] = ...
+003ab38c  stw  r29, 0x1b8(r11)       ; table[0x1b8] = &block[0x7c10]
+003ab430  stw  r23, 0xf8(r11)        ; table[0xf8]  = &block[0x110]   ***
+```
+
+`r23` was set at `0x003ab2cc` to `base + 0x110` - **the first of the three
+`Scene.Texture Colour` destinations**. (`r29` at `0x003ab2c8` is `base +
+0x7c10`, a different slice; the first version of this section wrongly treated
+that one as the tint's.) So the chain is complete end to end as a *data* path:
+`Environment_UpdateStageBlend` blends the stage colour into `0x00c81a5c`;
+`Scene_PrepareFrame` reads it, splats it, writes it to `0x00c49110`
+(`block + 0x110`); and `Scene_PrepareFrame` also installs `&block[0x110]` into
+`*(obj+0xd8) + 0xf8` and marks the object dirty.
+
+The same idiom appears at `0x003be24c`, `0x003bef24`, `0x0040e888` and four
+times in `FUN_006ce6e0`, always the same shape: a pointer into the block, into a
+fixed field of the `+0xd8` table, followed by the `|= 0xc0000`.
+
+**A table of "where this value lives" pointers, filled per frame and flagged
+dirty, is the shape of a lazily-uploaded parameter table** - and it is the same
+*concept* `Shader_InitParamEntry` implements on the shader side, whose entries
+carry a value pointer that is "`0` until a frame fills it"
+([renderer.md](renderer.md)). That is why no `Rsx_UploadVertexConstants` call
+appears in `Scene_PrepareFrame`: nothing is uploaded there, only registered, and
+the upload happens later wherever the dirty bits are honoured.
+
+**This raises the buffer-identity confidence from 55 to 65, not higher, and it
+is still unnamed.** What is now read: the block is addressed as a structured set
+of named slices, and those slices are published to a consumer through a
+dirty-flagged pointer table. What is *not* read: the identity of the object at
+`*(obj+0xd8)`, which consumer honours `0x000c0000`, and whether the table is the
+shader parameter table or a different one with the same protocol. The `+0x198`
+offset is far too common to chase by displacement (189 hits image-wide), so the
+productive route is the object, not the field.
+
+#### The object is found, and it bounds the consumer search (2026-08-31)
+
+The stalled step - "the object behind `*(obj+0xd8)` is unidentified, and in
+`Scene_PrepareFrame` it is the stack slot `0x90(r1)` with nothing writing it" -
+is resolved. The slot is filled through a **one-line setter**, which is why no
+`stw`/`std` to it exists:
+
+```text
+003ab088  addi r29, r1, 0x460            ; the object is a STACK STRUCT at sp+0x460
+003ab148  bl   0x005cc240                ; -> r30
+003ab160  bl   0x005d4868 (r3=r29, r4=r30)   ; its initialiser
+003ab16c  addi r3, r1, 0x90
+003ab170  bl   0x005d4958                ; { *r3 = r4; }  - caches &obj at 0x90(r1)
+```
+
+`FUN_005d4868` is the initialiser and it names the flags word:
+
+```c
+obj->0x004 = 0xf0;          // <- the word that later gets |= 0x000c0000
+obj->0x154 = arg;           // the FUN_005cc240 result
+obj->0x150 = 0;  obj->0x0b4 = obj->0x0b8 = obj->0x0e4 = -1;  obj->0x0e8 = 0;
+obj->0x134 .. obj->0x14c = 0;
+```
+
+**Two corrections to the earlier reading of this chain.** First, `obj+0xd8` is
+not an inherent sub-object: it is *assigned*, at `0x003ab2a4`, from
+`block[0x7c60]` - a runtime pointer that lives **inside the scene block itself**
+- alongside `obj->0xdc = 0x51` and `obj->0x4 |= 0x001c0000`. So the table that
+receives `&block[0x110]` and its siblings is `*(block + 0x7c60)`, one more
+indirection than this page previously said. Second, `obj` is **stack-allocated
+and dies when `Scene_PrepareFrame` returns**.
+
+**That second fact is the useful one, and it is what the whole search needed.**
+A dirty flag on a stack object cannot be honoured after the function returns, so
+**the consumer is inside `Scene_PrepareFrame`'s own call graph** - not somewhere
+in a 26,000-function image. The unbounded search that defeated the `0x198`, the
+dirty-bit and the `.cpp`-filename keys is now bounded by construction.
+
+**The concrete candidate** is `FUN_005d6e78` (OPD `0x008a0fd8`, TOC
+`0x008bd3c4`), called at `0x003ab284` as `FUN_005d6e78(obj, &block[0x7cb0])` -
+the only call in `Scene_PrepareFrame` that takes the object as its first
+argument. It is a large function; its own callees are `0x005bd0d8`,
+`0x005d8f68`, `0x005d8700` and `0x005d84d8`, none of them the RSX constant
+uploaders this page checked for earlier, though `0x005bd0d8` sits in the
+`0x005bd`/`0x005c1` band [renderer.md](renderer.md) ties to the RSX command
+emitters. Reading it is the next step and is now a bounded one.
+
+Confidence 85 on the object's shape and lifetime (read off the initialiser and
+the stack `addi` directly); 60 that `FUN_005d6e78` is the consumer rather than
+one of several - it is the best candidate, not a demonstrated one.
+
+#### The dirty-bit key does not converge either - the static route is exhausted
+
+Proposed as the narrow key and **run the same day; it fails, and how it fails is
+the useful part.** Scanning code only (below `0x750000`, so the `.rodata` inside
+the text segment cannot be mis-decoded as instructions):
+
+| Pattern | Hits |
+| --- | --- |
+| `oris rA,rS,0xc` - the flag being **set** | **212** across the render layer, 36 of them in the three block-touching functions |
+| `andis. ..., 0xc` / `0x8` / `0x4` - an immediate **test** | **0** |
+| `andi. ..., 0xc` / `0x8` / `0x4` - a post-shift test | **0** |
+| `rlwinm` extracting PPC bit 12 or 13 (`0x00080000` / `0x00040000`) | 76, **none** inside the three functions, and **none** preceded within six instructions by a `lwz rX, 0x4(rY)` |
+
+Two things follow. First, `|= 0x000c0000` on a `+0x4` word is a **generic
+dirty-marking convention across this render layer**, not a signature of this
+block - 212 setters make it useless as an identifier. Second, and decisively:
+**nothing in the executable tests those bits with an immediate.** The flag word
+is consumed through a mask held in a register or read from a table, so *no*
+immediate-keyed scan can find the consumer. That closes the immediate-based
+static route, rather than merely failing to find something with it.
+
+**So the static chain ends here, at a real boundary rather than at the end of a
+session's patience.** What is established, end to end and statically: the stage
+colour is blended into `0x00c81a5c`, read by `Scene_PrepareFrame`, written to
+`0x00c49110`, and that address is published into `*(obj+0xd8) + 0xf8` with a
+dirty flag set. What consumes it is reachable only by identifying the object -
+or by watching the memory.
+
+**Concrete next tests, in order of cost:** a **write** watchpoint on
+`0x00c49110` / `0x00c49120` / `0x00c49130` (all fixed addresses - no runtime
+mapping), with `0x00c49110` the most informative since that is the one whose
+address is published into the table; then a **read** watchpoint on
+`0x00c49110`, which names the consumer directly and is the one thing that would
+settle the buffer's identity outright.
+
+**A watchpoint caveat that applied for about a day, then was retired.** A run
+on 2026-08-30 armed the wrong two of these and got zero hits, which briefly
+looked like a `stvx`-coverage gap in the write-watchpoint hook. **Confirmed
+from source on 2026-08-31 that no such gap exists** - `STVX` expands to the
+same `vm::write<v128>()` template every scalar store already goes through -
+so a zero-hit result on these addresses is not explained by the store being
+vector-typed. Full account, including what the actual zero-hit result meant
+instead, is in
+[rpcs3-debugger.md](../../reverse-engineering/rpcs3-debugger.md)'s "not a
+gap, confirmed from source" section.
+
+*(An observation deliberately left as an observation: `g_FullscreenTintColour`
+at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
+(`+0x7d90`). It may be inside this block or merely adjacent to it; nothing
+established either way, and it changes none of the tint findings in
+[renderer.md](renderer.md), which rest on the address's own users.)*
+
+### The gate has an *else* branch, and it writes the same fields (2026-08-31)
+
+Found by chasing a live watchpoint result that neither the static reading nor
+the test's own design predicted, and it changes what "gated" means here.
+
+`0x003aaf88`'s `beq cr7, 0x003acb88` does **not** skip the write. It selects the
+**source**. The branch target is a mirror of the same code:
+
+```text
+003acb88  lvx   v1, r21, 0x4e0        ; source is r21/r22, not 0x00c81a5c
+003acba4  lfs   f0, 0x500(r22)
+          stfs -> [sp+0x5c0] ; lvewx ; vperm ; vspltw ; vsel        (same shape)
+003acbbc  stvx  v1, r31, r28          ; +0x110   <- same destination
+003acbe8  stvx  v1, r31, r27          ; +0x120   <- same destination
+003acbf0  stvx  ... +0x7bf0 / +0x7c00 / +0x7c10 / +0x7ba0
+003acc1c  b     0x003ab058            ; rejoins the main path *after* the tint stores
+```
+
+So `+0x110`, `+0x120`, `+0x7c00` and `+0x7c10` are written **every frame on
+either branch**; only the values differ. **`+0x130` is the exception**: the sole
+store to it in the whole function is `0x003ab018`, on the gate-**on** path. That
+makes `+0x130` the one field whose content discriminates between the branches.
+
+**This retires an assumption both this page and the watchpoint tests were
+carrying** - that a write to these addresses implies the `Scene.Texture Colour`
+path ran. It does not, for four of the five.
+
+**And it makes the live values diagnostic.** A 2026-08-30 read during a
+confirmed Zone race found `0x00c49110 = 0.0`, `0x00c49120 = 4.0`,
+`0x00c49130 = 0.0`. `+0x120` non-zero says *a* branch ran; `+0x130` at zero is
+what the **gate-off** branch leaves behind, since nothing on that branch writes
+it. Confidence 60, not higher, because `0.0` is also a legal blended value for a
+colour component - the reading is suggestive, not decisive, and one poll showing
+`+0x130` change would overturn it instantly.
+
+**The sharp test this enables, and it needs no watchpoint.** Poll `0x00c49130`
+once a second across a full Zone race. If it ever leaves `0.0` while `+0x110`
+and `+0x120` move, the gate opens and `Scene.Texture Colour` reaches the block.
+If it stays `0.0` for a whole race while the other two change, the gate is shut
+in practice and the entire `Scene.Texture Colour` path - loader, blend, read and
+all - is **inert in the shipped game**, which would be the largest single
+finding this thread could still produce. Either way the answer does not depend
+on watchpoint reliability, which is why it is the right next test rather than
+the read watchpoint.
+
+### It is gated on a byte
+
+The block is skipped entirely unless a flag is set:
+
+```text
+003aaea0  lwz   r17, -0x6200(r2)      ; r17 = 0x00d45f84
+003aaee8  lbz   r0,  0x0(r17)
+003aaef4  cmpwi cr7, r0, 0x0
+003aaf88  beq   cr7, 0x003acb88       ; skip the Scene.Texture Colour read
+```
+
+`0x00d45f84` is **not** Zone-specific on the evidence available: it has seven
+TOC slots across both modules and roughly forty users spread over the scene,
+render and front-end code, so it is a general scene-module global (plausibly a
+struct base whose byte 0 is the flag) rather than a mode switch. Whether the
+byte is set during a Zone race specifically is **unestablished** - do not read
+it as "Zone enables the tint". Confidence 30 on any interpretation of the flag;
+90 that the gate exists and has this shape.
+
+### What this changes
+
+The seventeenth pass's table row **"that output read by anything - no reader
+located"** is now answered: yes, in `Scene_PrepareFrame`, at `0x003aaf8c`. Taken
+with the parallel enumeration in [renderer.md](renderer.md) - which closes the
+whole post-process route, `FunkLayerColour2d_fp` included - the picture is
+consistent: HD's Zone recolour is fed **before** the resolve, through a
+per-frame parameter block, exactly where the differential-hue argument said it
+had to be.
+
+**Still not settled**: that the buffer is the shader constant block, what
+consumes `+0x130`/`+0x7c00`/`+0x7c10`, and whether the gate is on in a Zone
+race. The `0x00c81a5c` read watchpoint earlier passes proposed is now much less
+necessary for *finding* the reader and much more useful for confirming the gate
+- and a **write** watchpoint on `0x00c49130` would be the direct test of the
+buffer's role.
+
+## 2026-08-31: the read watchpoint fired, live, in a confirmed Zone race - the gate is open
+
+Closes the "whether the gate is on in a Zone race" item above, empirically
+rather than by further static reasoning. With `Z3`/`z3` support built and
+verified (`docs/reverse-engineering/rpcs3-debugger.md`, "`Z3` (read
+watchpoint) is fully verified end to end"): a `Z0` breakpoint on the reader
+instruction (`0x003aaf8c`) confirmed it now *executes at all* in a genuine,
+screenshot-checked Zone race (`RACE TYPE: ZONE`, `Zone_HUD.xml` in
+`TTY.log`) - it had not, in the earlier Arcade-mode attempt - and a `Z3`
+watch on `0x00c81a5c` fired within 5 seconds of arming it, log-confirmed
+with the correct PC (`RPCS3.log`'s own `Read watchpoint hit` line, not a
+stop-reply register dump).
+
+**This is now a fully live-confirmed chain, not a static one with play
+evidence bolted on**: the gate at `0x00d45f84` is open during a real Zone
+race, `Scene_PrepareFrame` genuinely reads `0x00c81a5c` when it is, and the
+whole path from `Environment_UpdateStageBlend`'s write through to this read
+is exercised in practice, not just reachable on paper. Confidence on "the
+gate is open in Zone" moves to 85 (one real, verified boot; not yet checked
+against a non-Zone race with the gate confirmed *shut* as the matching
+control, though the earlier Arcade attempt's "reader never executes" is
+already exactly that control, just recorded before this pass connected the
+two).
+
+**Still open**: the buffer identity (`0x00c49110`/`0x00c49120`/`0x00c49130`,
+confidence 65 per the render thread's own tracking) and what consumes it.
+That is now the only thing left between this chain and a real render-wiring
+decision - see the handover thread's own next steps.
+
+## 2026-08-31: `0x00c49130` moves, live, during real play - no watchpoint needed
+
+The polling test this page's own read-watchpoint pass proposed as a fallback
+("poll the memory once a second and watch for the value to change"), run for
+real: `0x00c49110`, `0x00c49120` and `0x00c49130` read once a second across
+75 seconds of a screenshot-confirmed Zone race, no `Z2`/`Z3` involved at all.
+
+**`0x00c49130` moves**, and moves the way a cross-fade weight moves, not the
+way noise would:
+
+```text
+t=40  x120=4.0                x130=0.0
+t=42  x120=2.83               x130=0.038
+t=43  x120=1.54               x130=0.080
+t=45  x120=1.0  (holds)       x130=0.098  (holds)
+t=57  x110=1.05 (starts)      x130=0.064
+t=59  x110=2.19               x130=0.026
+t=60  x110=3.0  (holds)       x130=0.0
+```
+
+Two back-to-back transitions, `x130` ramping up through one and back down
+through the next while `x120` and `x110` settle to new plateaus in turn -
+6 distinct values recorded for `x130` alone over the run, against a static
+`.bss`-zero image. **This is the buffer identity question, answered without
+a watchpoint**: `0x00c49130` is not a dead field that merely got written
+once at load - it actively carries a per-frame blended value during real
+play, exactly matching what `Environment_UpdateStageBlend` -> `0x00c81a5c`
+-> `Scene_PrepareFrame`'s read -> `+0x130` predicts. Confidence on the
+buffer identity moves from 65 to 82: live behaviour now matches the static
+prediction in both *shape* (a transition, not a step) and *timing*
+(coinciding with the neighbouring fields' own transitions), which a
+one-shot non-zero reading alone would not have shown.
+
+**What is still open**: this proves the block *receives* the value, not what
+*reads* it back out for rendering. `FUN_006ce6e0`'s installation of
+`&block[0x7c00]` into `*(obj+0xd8) + 0x1b8` with a dirty flag remains the
+best lead for that, and the object behind `*(obj+0xd8)` is still
+unidentified - the next real step, and the one that decides whether this can
+be wired into `oag_render` or needs a live read watchpoint on the consumer
+side after all.
+
+## 2026-08-31, a twentieth pass: `FUN_005d6e78` is ruled out, and a second live write-site for `0x00c49110` is found by literal search
+
+Two results, one negative and one new positive, from directly checking the
+nineteenth pass's own candidate rather than trusting the callee list handed
+down with it.
+
+### `FUN_005d6e78` is not the consumer - structurally, not just "not found"
+
+Its OPD (`0x008a0fd8` -> `{0x005d6e78, 0x008bd3c4}`, read directly) confirms
+this is the right function. Its full disassembly is six instructions, twice
+unrolled three times:
+
+```
+005d6e78  li   r11,0x50
+005d6e7c  lvx  v0,0,r4
+005d6e80  li   r0,0x10
+005d6e84  li   r9,0x60
+005d6e88  stvx v0,r3,r11
+005d6e8c  lvx  v0,r4,r0
+...  (four more lvx/stvx pairs, same shape)
+005d6ec8  lvx  v1,r4,r11
+005d6ecc  stvx v1,r3,r0
+005d6ed0  blr
+```
+
+Six `lvx`/`stvx` pairs, copying `r4[0x00..0x60)` to `r3[0x50..0xb0)` one
+quadword at a time, and `blr`. **No `bl` anywhere in the function** -
+`get_function_callees` independently returns empty. The callee list this
+thread was handed (`0x005bd0d8`, `0x005d8f68`, `0x005d8700`, `0x005d84d8`)
+does not match what is live in the project now; this is the same "a live
+Ghidra project's applied state is not assumed durable between sessions"
+trap the fifth pass already named, just biting the call graph instead of a
+rename this time. Whoever reads this next should not carry that callee list
+forward.
+
+The call site itself rules the function out a second, independent way.
+`Scene_PrepareFrame` calls it at `0x003ab284` with `r3` = `obj` (reloaded at
+`0x003ab274`, `lwz r3,0x90(r1)`) and `r4` = `r31+0x7cb0`
+(`addi r4,r31,0x7cb0`, `0x003ab27c`) - **before** `0x003ab278`
+(`lwz r29,0x7c60(r31)`) and `0x003ab2a4` (`stw r29,0xd8(r11)`), the two
+instructions that actually populate `obj+0xd8`. So even setting the
+disassembly aside, `*(obj+0xd8)` does not hold a valid value yet at the
+point `FUN_005d6e78` runs, and the function never reads `r3` (`obj`) at any
+offset regardless - it only ever writes through `r3+0x50..r3+0xa0`, from a
+source (`block+0x7cb0..+0x7d10`) that is itself outside the `+0x110`/`+0x120`/
+`+0x130` tint destinations and the `+0x7bf0`/`+0x7c00`/`+0x7c10`/`+0x7ba0`
+quartet the eighteenth/nineteenth passes already mapped. Confidence 92 that
+this specific function is not, and structurally cannot be, a reader of the
+dirty-flagged pointer table - it is an unrelated six-quadword copy helper
+that happens to be `Scene_PrepareFrame`'s own next call after the tint
+splat, nothing more.
+
+### The widened search the team lead flagged - applied, and it finds a second writer
+
+The block is static and long-lived, so a consumer is not bounded to
+`Scene_PrepareFrame`'s call graph the way the *dirty-flag protocol itself*
+is - only whoever must honour `*(obj+0xd8)`'s dirty bit is bounded that way.
+Searching the whole image for the three live tint addresses as **literal
+bytes**, the same technique that found `0x00c81a5c`'s own reader in the
+nineteenth pass:
+
+| address | `search_byte_patterns` hits |
+| --- | --- |
+| `0x00c49110` | exactly one: `0x008b7e5c` |
+| `0x00c49120` | none |
+| `0x00c49130` | none |
+
+Only `0x00c49110` has its own dedicated TOC slot anywhere in the image;
+`0x00c49120`/`0x00c49130` are not held as a literal by anything, so any
+reader of those two (if one exists) reaches them by displacement off some
+other base, not this route.
+
+`0x008b7e5c` is loaded (`lwz rX, -0x5568(r2)`) from five sites in four
+functions - each checked against its own OPD before being trusted, per this
+page's own standing trap:
+
+| function | OPD TOC | `-0x5568(TOC)` resolves to | verdict |
+| --- | --- | --- | --- |
+| `FUN_000b0bd0` | `0x008ad4d8` | `0x008a7f70` | **false lead** - wrong TOC, different global entirely |
+| `FUN_000b0c30` | `0x008ad4d8` | `0x008a7f70` | **false lead**, same reason |
+| `FUN_003ea368` (x2: `0x003eb544`, `0x003eb7f4`) | `0x008bd3c4` | `0x008b7e5c` | **genuine** |
+| `FUN_003eb890` (`0x003ec3c0`) | `0x008bd3c4` | `0x008b7e5c` | **genuine** |
+
+The two module-1 hits are exactly the same "byte pattern is TOC-blind" trap
+this page's own third section (`FUN_000b6b98`) already caught once before -
+recorded so the next search doesn't have to rediscover it a third time.
+
+### The genuine hits: a second, independent write of the live tint into the same `+0xd8`/`+0xf8` protocol
+
+`FUN_003ea368` (loops over a small dynamic entity list) and `FUN_003eb890`
+(the same body specialised to one entity, passed by index) are near-
+identical - same field offsets, same five hashed strings (`RigidBody`,
+`AbsorbFader`, `LeachFader`, `AbsorbScroller`, `LeachScroller`), same gate.
+The relevant fragment, identical in both (decompiled, TOC already verified
+for the load that matters):
+
+```c
+if ((*PTR_DAT_008b7e4c == '\0') &&
+    (*(int *)(PTR_g_GameState_008b7e50 + 0xe0) == 0xe)) {      // mode == Detonator
+  if ((entity->0xe4 & 0x2000) == 0) {
+    *(undefined **)(*(int *)(iVar16 + 0xd8) + 0xf8) = PTR_DAT_008b7e5c;  // = 0x00c49110
+    *(undefined4 *)(*(int *)(iVar16 + 0xd8) + 0xfc) = 1;
+    *(uint *)(iVar16 + 4) = *(uint *)(iVar16 + 4) | 0xc0000;             // dirty
+  } else {
+    *(undefined **)(*(int *)(iVar16 + 0xd8) + 0xf8) = puVar7 + 0x97650;  // a local static buffer instead
+    ...
+  }
+}
+_opd_FUN_005d4a08(*(undefined4 *)(entity + 300), *param_1);
+```
+
+`iVar16 = *param_1` - **a different object from `Scene_PrepareFrame`'s own
+stack `obj`** (that one is dead by the time this runs; nothing here claims
+otherwise), but the **same struct shape and protocol**: a `+0x4` dirty-flags
+word taking the identical `|= 0xc0000`, a `+0xd8` pointer-table field, an
+`+0xf8` slot. That is the useful part - it means this `+0xd8`/`+0xf8`
+convention is a **general parameter-table mechanism used by more than one
+subsystem**, not something `Scene_PrepareFrame` invented for its own use,
+and it is a second, independent confirmation (a writer, not the reader this
+page has spent nineteen passes hunting) that `0x00c49110` is treated
+image-wide as a live, reusable "current scene tint" value. `mode == 0xe`
+is Detonator, not Zone, per the tenth pass's own three-way-confirmed
+reading - so this particular write-site is Detonator-gated, and further
+gated on a per-entity flag (`+0xe4 & 0x4000`, `+0xe8 != 0`, `+0x140 != 0`)
+that only a small number of active entities carry, unlike
+`Scene_PrepareFrame`'s own unconditional per-frame write. Confidence 85 on
+the write itself (TOC-verified load, matching an already-established
+protocol exactly); deliberately no confidence claimed yet on what kind of
+entity this is - see below.
+
+**Reached, statically, by exactly one caller each**, both themselves
+uncalled by any direct `bl` in the image: `FUN_003ea368` <- `FUN_006cdfc0`
+(no static callers); `FUN_003eb890` has no static callers at all.
+`FUN_006cdfc0`'s own body is three calls -
+`FUN_003f0950(entity, ctx)`, `FUN_005c1d0c(entity->0x154, 0x1fec, 1)`, then
+`FUN_003ea368(entity)` - and that middle call reuses the exact same
+`FUN_005c1d0c(ctx, 0x1fec, ...)` idiom `Scene_PrepareFrame` itself issues at
+its own block-setup preamble (`0x003ab224`). That is a real structural echo
+between the two call sites, not a shared caller - consistent with, not an
+exception to, this project's own repeated finding that per-object-type
+update callbacks in this renderer are reached through indirect/virtual
+dispatch invisible to a static branch scan (`renderer.md`'s "no import
+census or call graph finds it" gap, and this page's own seven dead-vs-live
+getter split in the fifteenth pass).
+
+**Not established, and deliberately not guessed at**: what kind of entity
+`FUN_003ea368`/`FUN_003eb890` update. The five hashed strings and the
+Detonator gate are suggestive of a mine/absorb-type effect, and
+`renderer.md`'s own asset-importer census independently lists
+`ShipAbsorbNode` as a real HD-only scene-node class with no Pulse
+counterpart - but nothing this pass traced connects that importer class to
+these two functions structurally, so the two are named side by side and
+left unpaired, the same discipline `renderer.md` itself already applies to
+`ShipAbsorbNode`/`exitglow`. Confidence on any reading of these functions'
+own purpose is below 50; per this project's naming rule, neither is renamed.
+
+### `FUN_005d4a08` (`0x005d4a08`) - the most concrete remaining lead, not itself confirmed
+
+Called immediately after the `+0xf8` install, on both branches of the
+`entity->0xe4 & 0x2000` check, as `FUN_005d4a08(entity+300, iVar16)`. Its
+whole body:
+
+```c
+void _opd_FUN_005d4a08(int *param_1,int *param_2)
+{
+  int iVar1 = *param_1;
+  *param_2 = (int)(param_1 + 1);
+  while (iVar1 != 1) {
+    (*(code *)**(undefined4 **)(PTR_PTR_008bf21c + iVar1 * 4))(param_2);
+    int *piVar2 = (int *)*param_2;
+    *param_2 = (int)(piVar2 + 1);
+    iVar1 = *piVar2;
+  }
+}
+```
+
+A tag-dispatch interpreter: read a tag from the entity's own small compiled
+list, index a shared table by it, call through **two** levels of
+indirection, advance, repeat until tag `1`. This is the shape a consumer
+would take - it is handed exactly the context (`iVar16`) whose `+0xd8`
+table now points at the live tint - but it is not confirmed to reach a draw
+or an RSX write this pass. Two reasons it stops here rather than one line
+short of a finding:
+
+- `PTR_PTR_008bf21c`'s own entries are **not uniformly pointers**. Reading
+  the raw bytes at that address directly shows `0x3f000000`, `0xbf000000`,
+  `0x00000000`, `0x3f800000` sitting among what look like pointers - `0.5f`,
+  `-0.5f`, `0.0f`, `1.0f` as IEEE-754 literals, not addresses. So the table
+  is heterogeneous by tag, and the dispatcher's own `**` double-dereference
+  only makes sense for the entries that are genuinely pointers-to-pointers;
+  decoding which tag means what needs the tag values actually carried by a
+  real entity's compiled list, not read cold from this pass.
+- `PTR_PTR_008bf21c` sits at `PTR_DAT_008bf208 + 0x14` - i.e. **inside** the
+  address span of the still-unresolved numeric-type jump table the
+  `FwKeyedText_ParseEntry` section of this page already flagged ("values
+  2-8 go through a jump table at `PTR_DAT_008bf208`, not resolved this
+  pass"). Whether `FUN_005d4a08` shares that exact table with the
+  effectSettings text parser, or the two are coincidentally adjacent data,
+  is not established either way.
+
+`FUN_005d4a08` is called from six other places besides these two
+(`FUN_003e4ec8`, `FUN_003e9ea0`, `FUN_003ed148`, `FUN_003ed810`,
+`FUN_005d6e20` - all clustered in the same `0x003e4000`-`0x003ed000` and
+`0x005d6000` neighbourhoods as the functions already read on this page),
+consistent with it being a generic utility several per-entity-type update
+functions share, rather than something built specifically for this one
+write-site.
+
+### What this changes
+
+`FUN_005d6e78` is retired as a candidate, definitively rather than by
+exhaustion. In its place: a second, TOC-verified writer of the exact live
+tint address exists, reached through a completely different call path than
+`Scene_PrepareFrame`, using the same `+0xd8`/`+0xf8` protocol - real
+corroboration that the protocol is a general renderer mechanism rather than
+private to the scene-blend chain, found precisely by widening the search
+the way the team lead's caveat said to rather than continuing to assume the
+consumer sits inside `Scene_PrepareFrame`'s own call graph. The actual
+consumer - whoever executes the tag that reads `+0xf8` back out and turns
+it into a shader constant or vertex colour - is still not found, but the
+search is now bounded to one small, concrete artefact
+(`PTR_PTR_008bf21c`'s own entries, and one real entity's compiled list at
+`+300`/`+0x12c`) rather than an open-ended image-wide hunt.
+
+## 2026-08-31, a twenty-first pass: `PTR_PTR_008bf21c` decoded - `Render_SetClipPlanes` fully explained, `Render_RunCompiledOps` mapped, the tint consumer still not among its opcodes
+
+Continuing the twentieth pass's own next step at the team lead's request. Two
+results: a real error in that pass's own table reading is caught and fixed,
+and the correction turns into the clean explanation this whole thread was
+missing for what `FUN_005d6e78` actually is.
+
+### The error: a TOC slot is not the table, it is a pointer *to* the table
+
+The twentieth pass read the raw bytes at `PTR_PTR_008bf21c` (`0x008bf21c`)
+directly and found IEEE-754 floats mixed in among plausible-looking
+addresses, and concluded the table itself was heterogeneous. That reading
+missed one level of indirection. `RenderContext_RunCompiledOps`'s own
+disassembly (renamed `Render_RunCompiledOps` below) is unambiguous once
+looked at directly:
+
+```
+005d4a3c  lwz  r30, 0x1e58(r2)     ; r30 = the VALUE stored at TOC+0x1e58 (0x008bf21c)
+005d4a40  rlwinm r9, r3, 0x2,...   ; r9 = tag * 4
+005d4a4c  lwzx r11, r30, r9        ; r11 = *(r30 + tag*4)   <- the real table is at r30, not 0x008bf21c
+005d4a50  lwz  r0, 0x0(r11)        ; func   <- {func, toc} OPD descriptor
+005d4a58  lwz  r2, 0x4(r11)        ; toc
+005d4a5c  mtspr CTR, r0
+005d4a60  bctrl                    ; proper cross-module indirect call
+```
+
+`lwz rX, disp(r2)` **loads** the TOC slot's contents; it does not compute the
+slot's own address. `0x008bf21c` is a TOC slot holding a pointer, and that
+pointer - read directly, `0x00927518` - is where the real 16-entry table
+lives. The same mistake, caught the same way, applies to the twentieth
+pass's read of `PTR_DAT_008bf208`: that slot holds `0x005d27c8`, a self-
+relative jump table living inside `FwKeyedText_ParseEntry`'s own body (case
+targets are `0x005d27c8 + table[tag]`, confirmed directly from Ghidra's own
+decompile: `PTR_DAT_008bf208 + *(int*)(PTR_DAT_008bf208 + bVar1*4)`, where
+Ghidra's `PTR_DAT_...` reference already denotes the *loaded* pointer, not
+the slot's own address - the same convention that tripped this pass up
+manually). **The "shared table" hypothesis the twentieth pass raised is
+retracted**: `0x00927518` (16 real entries, TOC-verified, see below) and
+`0x005d27c8` (`FwKeyedText_ParseEntry`'s own switch table) are two
+completely separate tables at two unrelated addresses. Their TOC slots
+happen to sit 20 bytes apart in the same module's TOC - two ordinary,
+unrelated TOC entries, nothing more.
+
+### The real table, read from its real base
+
+`0x00927518`, 16 entries, each a pointer to an OPD descriptor (`{func, toc}`,
+every one TOC-verified `0x008bd3c4`, dereferenced and read, not assumed):
+
+| tag | target | role, read from the decompile |
+| ---: | --- | --- |
+| 0 | `FUN_005d5dd8` | no-op (`{ return; }`) |
+| 1 | *(null - never called, this is the loop terminator)* | |
+| 2 | `FUN_005d5e40` | reads one word, calls `FUN_005d6e20(cursor, word)` - invoke a named/indexed sub-list |
+| 3 | `FUN_005d5de0` | `*cursor = *(int*)*cursor` - follow a pointer embedded in the stream |
+| 4 | `FUN_005d6a68` | `*cursor = *cursor + *(int*)*cursor + 4` - skip a variable-length span by its own encoded length |
+| 5 | `FUN_005d69f0` | test one bit of a flag byte at `context+8`-relative; conditionally jump to an **absolute** offset read from the stream |
+| 6 | `FUN_005d6970` | the same bit test as tag 5; conditionally jump to a **cursor-relative** offset instead - the same primitive, two addressing modes |
+| 8 | `FUN_005d68d0` | reads 2 words, calls `FUN_005d74d0`, which writes them straight into `context+8`/`context+0xc` and flips two bits of `context+4` |
+| 9 | `FUN_005d6920` | reads 2 words, calls `FUN_005d7410` (not itself read this pass - same shape as tag 8's helper) |
+| 10 | `FUN_005d6820` | reads 3 words, calls `FUN_005d7430` (not read) |
+| 11 | `FUN_005d6878` | reads 3 words, calls `FUN_005d7480` (not read) |
+| 12 | `FUN_005d6758` | reads **24 words (six vec4)** into a stack buffer, then calls `Render_SetClipPlanes(cursor_ctx, &buffer)` |
+| 15 | `FUN_005d6660` | reads 3 words, calls `FUN_005d70c8(cursor_ctx, w0, w1, w2)` - a bitmask writer, below |
+
+(tags 7, 13, 14 not fetched this pass - the pattern is clear enough without
+them and nothing about the tint consumer hinges on the two remaining gaps.)
+
+### `Render_SetClipPlanes` (renamed from `FUN_005d6e78`) is fully explained, and it really is unrelated to the tint
+
+Tag 12's handler reads six vec4s **directly out of the compiled bytecode
+stream** and hands them to the exact function the twentieth pass ruled out
+as the tint consumer - `FUN_005d6e78(context, &six_vec4_buffer)` - the
+identical six-`lvx`/`stvx`-pair copy into `context+0x50..0xb0` that
+`Scene_PrepareFrame` itself calls with `block+0x7cb0` as the source. **This
+is a second, independent, structurally different call site for the same
+function**, and it settles what the function actually is: a generic
+`Render_SetClipPlanes(context, six_vec4s)` primitive, reused by at least two
+unrelated callers (`Scene_PrepareFrame`'s own scene setup, and this generic
+per-entity bytecode format's tag 12) to install six vectors into a fixed
+context slot. Named at confidence 65 (structural evidence is unambiguous;
+the "planes" reading, not just "six vec4 sink", comes from what consumes
+them next).
+
+### `Render_ClassifyAgainstPlanes` (renamed from `FUN_005bd0d8`) - this closes the loop
+
+This is the address the original brief flagged as sitting in `renderer.md`'s
+RSX-command-emitter band, unverified. It is not an RSX emitter. Decompiled
+directly, it is an unambiguous six-plane classifier: for each of the six
+`context+{0x00,0x10,0x20,0x30,0x40,0x50}` vec4s, it computes a dot-product-
+style `vectorMultiplyAddFloatingPoint` + horizontal-sum against an input
+vector, compares against a threshold global (`fRam008bead8`), and returns
+one of three codes - `0` (inside every plane), `1` (outside at least one),
+`2` (partially intersecting). That is a standard point/sphere-vs-six-planes
+test, consuming exactly the slot `Render_SetClipPlanes` fills. Named at
+confidence 65 for the same reason - the shape is unambiguous, the exact
+semantic ("view frustum" vs "a local bounding volume") is not independently
+confirmed by a string or a caller name.
+
+`Render_RunCompiledOps`'s own tag 15 (`FUN_005d6660` -> `FUN_005d70c8`)
+feeds `Render_ClassifyAgainstPlanes`'s three-way result into a per-bit
+set/clear on a byte array at `context+8` (the same field tag 8 writes) -
+i.e. **tag 15 is "classify N consecutive parts against the current planes
+and record each one's visibility as a bit"**, matching the earlier reading
+of `+0x50` as a "plane cache" exactly. `Render_RunCompiledOps` itself
+(renamed from `FUN_005d4a08`, confidence 58 - the dispatch mechanism is
+100% certain from the disassembly, the "compiled ops for a render context"
+characterization is inferred from what its opcodes touch) is a generic
+per-object setup interpreter: control flow (skip/branch, both absolute and
+cursor-relative), sub-list invocation, and writes into several fields of
+the same context struct (`+4` flags, `+8`/`+0xc` scratch, `+0x50` planes) -
+not a shader-parameter binder or a draw-call emitter itself.
+
+### What this means for the still-open tint consumer
+
+None of the eleven opcodes read this pass touches `context+0xd8` or
+`context+0xf8` at all - `Render_RunCompiledOps` configures culling state and
+control flow for a per-entity setup pass, a genuinely different concern
+from the `+0xd8` parameter table `FUN_003ea368`/`FUN_003eb890` write the
+live tint into. The two mechanisms coexist inside the same context struct
+without one obviously feeding the other from what has been read so far.
+**Still open, and narrower than before**: whatever reads `context+0xd8+0xf8`
+back out is not among tags 0, 2-6, 8-12 or 15 of this bytecode format;
+either it is one of the three unread tags (7, 13, 14), or - more likely
+given how generic every other opcode in this table turned out to be - the
+`+0xd8` table is consumed by something entirely outside this dispatcher,
+at whatever later step actually flushes the per-object draw state (the
+"lazily-uploaded parameter table" idiom this page's nineteenth pass already
+compared to `Shader_InitParamEntry`'s own value-pointer convention).
+
+Applied and saved live: `Render_SetClipPlanes` (65), `Render_ClassifyAgainstPlanes`
+(65), `Render_RunCompiledOps` (58); rows added to `names.tsv` citing this
+section.
 
 ## See also
 

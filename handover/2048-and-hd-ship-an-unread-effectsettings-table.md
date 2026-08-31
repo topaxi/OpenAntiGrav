@@ -234,6 +234,242 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-31, the object is found and the consumer search is now bounded.**
+  The stalled `0x90(r1)` step is resolved: the slot is filled through a one-line
+  setter (`FUN_005d4958`, `{ *r3 = r4; }`), which is why no `stw`/`std` to it
+  exists. The object is a **stack struct at `sp+0x460`** in `Scene_PrepareFrame`,
+  initialised by `FUN_005d4868` - which sets `obj->0x4 = 0xf0`, the very word
+  that later gets `|= 0x000c0000`.
+
+  **Two corrections**: `obj+0xd8` is not an inherent sub-object, it is assigned
+  at `0x003ab2a4` from `block[0x7c60]` (a runtime pointer stored inside the
+  scene block), so the pointer table is `*(block + 0x7c60)`, one indirection
+  further than recorded. And `obj` is **stack-allocated**, dying when
+  `Scene_PrepareFrame` returns.
+
+  **That second fact is what the search needed.** A dirty flag on a stack object
+  cannot be honoured after the function returns, so **the consumer is inside
+  `Scene_PrepareFrame`'s own call graph**, not somewhere in a 26,000-function
+  image. The unbounded search that defeated the `0x198`, dirty-bit and
+  `.cpp`-filename keys is now bounded by construction - that is the single
+  biggest change to this thread's tractability.
+
+  **2026-08-31, ruled out: `FUN_005d6e78` is ruled out, and a second writer of
+  the same tint is found instead.** Checked directly rather than trusted: its
+  disassembly is six `lvx`/`stvx` pairs and a `blr`, no `bl` anywhere, and it
+  never reads its first argument (`obj`) at all - it only writes `obj+0x50..
+  0xb0` from an unrelated source range. The callee list this candidate was
+  carried forward with (`0x005bd0d8` etc.) does not match what is live in the
+  project now, the same "state not durable between sessions" trap this thread
+  already named once for a rename, this time for a call graph. Ruling it out
+  is now confidence 92, not a guess.
+
+  **In its place**: widening the search to a literal-address scan for
+  `0x00c49110` (the technique that found `0x00c81a5c`'s own reader) finds a
+  genuine second, TOC-verified writer - `FUN_003ea368`/`FUN_003eb890`, reached
+  through a completely different call path than `Scene_PrepareFrame`, using
+  the identical `+0xd8`/`+0xf8` dirty-flagged protocol, gated on Detonator
+  mode (`g_GameState+0xe0 == 0xe`) and a per-entity flag. Real corroboration
+  that the protocol is a general renderer mechanism, not private to the scene
+  blend - but this is a writer, not the consumer search itself resolving.
+  `FUN_005d4a08`, called right after, is a tag-dispatch interpreter over the
+  entity's own compiled list and is the most concrete remaining lead, but its
+  dispatch table (`PTR_PTR_008bf21c`) mixes real pointers with inline float
+  constants and was not decoded this pass. Full detail, including why the
+  entity type itself is deliberately left unnamed (confidence <50), in
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+  twentieth pass.
+
+  **2026-08-31, twenty-first pass: the table read above was a misread - fixed,
+  and it explains `FUN_005d6e78` completely.** `PTR_PTR_008bf21c` is a TOC
+  slot, not the table; the real 16-entry table lives at the address that slot
+  holds (`0x00927518`), and every entry is a genuine pointer to a TOC-verified
+  OPD descriptor (no float constants mixed in after all - that reading missed
+  one level of indirection). Decoding it: `FUN_005d6e78` (now renamed
+  `Render_SetClipPlanes`, 65) turns out to be a generic "install six vec4s
+  into this render context's `+0x50` slot" primitive, called both by
+  `Scene_PrepareFrame` (with the scene block's planes) and by this dispatcher's
+  own tag 12 (with six vec4s read straight out of the compiled bytecode) -
+  fully explaining why it never touches `+0xd8`/`+0xf8`. `FUN_005bd0d8` (now
+  `Render_ClassifyAgainstPlanes`, 65) - the address the original brief tied to
+  "RSX command emitters" - is actually a six-plane point classifier
+  (inside/outside/intersecting), not an RSX emitter at all. `FUN_005d4a08`
+  (now `Render_RunCompiledOps`, 58) is a generic per-object setup interpreter:
+  control flow, sub-list calls, and culling/plane state - none of its eleven
+  read opcodes touch the `+0xd8`/`+0xf8` tint slot. **The tint consumer is
+  still open**, narrowed to: one of three unread opcodes (tags 7/13/14), or -
+  more likely given how generic everything else in this table is - something
+  entirely outside this dispatcher, at whatever step actually flushes the
+  lazily-filled parameter table. Full detail in the doc's twenty-first pass;
+  three renames applied and saved live, `names.tsv` updated.
+
+
+- **2026-08-31, where the static route stands on this thread, and what is left.**
+  The chain is read end to end as data: `zonemode.effectsettings` ->
+  `g_effect_settings_stages` -> `Environment_UpdateStageBlend` blends
+  `Scene.Texture Colour` into `0x00c81a5c` -> `Scene_PrepareFrame` reads it at
+  `0x003aaf8c`, splats and merges it -> `0x00c49110`/`0x00c49120`/`0x00c49130`
+  -> `&block[0x110]` published into `*(obj+0xd8) + 0xf8` with `*(outer+0x4) |=
+  0x000c0000`. Everything to that point is confidence 82-88.
+
+  **Three static keys have now been tried and each is exhausted**, so a fourth
+  attempt should not repeat them: the `0x198` field offset (189 image-wide hits,
+  will not converge); the `0x000c0000` dirty bit (212 setters, and **zero**
+  immediate tests of any kind, so the flag is consumed via a register- or
+  table-held mask); and the `.cpp`-filename route (neither `FUN_006ce6e0` nor
+  `FUN_00107200` references a single string).
+
+  **The one static route not yet tried** is the allocator tag: identify the
+  object behind `*(obj+0xd8)`, find where it is allocated, and read the
+  `__FILE__` pointer `FwMemAllocator_Allocate` is passed - the technique
+  `docs/ghidra/functions/ps3-hdfury-eu/memory.md` used to name the memory layer.
+  A first attempt stalled at the first step: in `Scene_PrepareFrame` the object
+  is the stack local `0x90(r1)`, which is **read** at `0x003ab198` and later but
+  has no `stw`/`std` writing it anywhere in the function, so it arrives by some
+  form this pass did not identify (a frame larger than it looks - the prologue
+  builds `0x680` via `li r0,0x680`, not a plain `stdu` - is the likeliest
+  explanation, making `0x90(r1)` an *incoming* slot rather than a local). That
+  is where the next static session should start, and it is a fresh dig rather
+  than a finish.
+
+  **But the read watchpoint is the better instrument and is now the bottleneck**,
+  blocked on vector load/store coverage in the patched RPCS3 - see
+  `docs/reverse-engineering/rpcs3-debugger.md`, "Z2 misses vector stores". Once
+  that lands: write watchpoints on `0x00c49110`/`0x00c49120`/`0x00c49130` to
+  confirm the block runs and the gate byte `0x00d45f84` is open in a Zone race,
+  then a **read** watchpoint on `0x00c49110`, which names the consumer and
+  settles the buffer's identity outright.
+
+
+- **2026-08-30, THE READER OF `0x00c81a5c` IS LOCATED.** Nineteen passes in,
+  the "no reader located" row is answered: `Scene_PrepareFrame` reads it
+  itself, at `0x003aaf8c`. Full evidence in
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`
+  ("a nineteenth pass").
+
+  **Why eighteen passes missed it, and this is the transferable lesson.**
+  Every earlier sweep looked for the field the way the *writer* addresses it -
+  `0x3aac(rX)` off the stage base `iVar8 = 0x00c7dfb0`. The reader does not
+  address it that way: each of the three floats has **its own dedicated TOC
+  pointer slot** (`0x008b71cc`/`0x008b71d4`/`0x008b71dc`), so the load is
+  `lfs f0, 0x0(r9)` with displacement zero. A displacement sweep, a branch
+  scan and an OPD-reference scan are all structurally blind to that. **When a
+  static search for a consumer of a fixed address comes back empty in this
+  binary, search for the address as a TOC-slot literal before concluding
+  anything** - that one check would have found this on pass two.
+
+  What the read does: splats each scalar to a `float4`, `vsel`-merges it into a
+  neighbouring vector, and stores into a large scene block at the **fixed**
+  address `0x00c49000`, offsets `+0x110`/`+0x120`/`+0x130` - i.e. the fixed
+  addresses **`0x00c49110`, `0x00c49120`, `0x00c49130`**. Confidence 88 on the
+  read.
+
+  **Second correction, 2026-08-31**: the first write-up named `+0x7c00`/`+0x7c10`
+  as two of the three destinations. Wrong - those stores carry `v10`/`v11`
+  *after* they have been reloaded from unrelated addresses; the merged tint is
+  in `v13`/`v0`/`v1`, going to `+0x130`/`+0x110`/`+0x120`. Mis-attributing the
+  nearest `li` value to the wrong store in an interleaved run is the same class
+  of error as the sign trap. It cost a real test: a watchpoint run armed
+  `0x00c50c00`/`0x00c50c10`, two addresses that were never destinations. The
+  published pointer is likewise `table+0xf8 = &block[0x110]` (at `0x003ab430`),
+  not `table+0x1b8`.
+
+  **Watchpoint caveat**: all three destinations are written by `stvx`, a vector
+  store. A write-watchpoint hook that covers only `stw`/`stfs` will report
+  nothing here however correct the address, so a zero-hit result proves nothing
+  about `Scene_PrepareFrame` until the hook is known to cover `stvx`.
+
+  **Correction, same day:** the first write-up said the destination was a
+  *runtime* buffer `*(0x008c713c)`. That was a sign error - the raw
+  displacement field `0x9d78` is **signed**, so it is `-0x6288` and the slot is
+  `0x008b713c` (holding `0x00c49000`), not `0x008c713c` (which holds 0 and
+  reads convincingly as an uninitialised pointer). Fixed in the doc. The
+  correction *helps*: the destinations are static, so a watchpoint on them
+  needs no runtime address mapping. **General trap for this binary: a raw 16-bit
+  displacement above `0x7fff` is negative, and mis-signing one yields a slot
+  that exists, reads cleanly, and means nothing.**
+
+  **The buffer's identity is still open at 55, and the static attempt to close
+  it came back ambiguous rather than empty.** `0x00c49000` is touched from
+  exactly three places (`Scene_PrepareFrame`, `FUN_006ce6e0`, `FUN_00107200`),
+  is a structured block (small fields at `+0xc0`-`+0x200`, a dense `float4` run
+  at `+0x7ba0`-`+0x7d90`, and nine sub-blocks at stride `0xbe0` from `+0xf80`),
+  and - importantly - **neither toucher calls an RSX constant uploader or a
+  parameter binder**, so it is not handed straight to the shader-constant path.
+  `FUN_006ce6e0` installs `base+0x7c00` as a pointer into `*(obj+0xd8)+0x198`;
+  neither it nor `FUN_00107200` references any string, so the `.cpp`-filename
+  route is unavailable for either.
+
+  **That indirection is now read, and it explains the missing upload call.**
+  `Scene_PrepareFrame` does not upload the block - it **registers** it, writing
+  pointers into a table hanging off `*(obj+0xd8)` field by field and setting
+  `*(outer+0x4) |= 0x000c0000` after each. At `0x003ab38c` it installs
+  `&block[0x7c10]` - one of the three `Scene.Texture Colour` destinations - into
+  `table+0x1b8`. So the data path is complete: stage colour -> `0x00c81a5c` ->
+  `0x00c50c10` -> published to a consumer through a dirty-flagged pointer table.
+  A table of "where this value lives" pointers, filled per frame and flagged
+  dirty, is the shape of a lazily-uploaded parameter table, and the same concept
+  `Shader_InitParamEntry` implements on the shader side. **Buffer identity 55 ->
+  65, still unnamed**: what consumer honours `0x000c0000`, and whether this is
+  *the* shader parameter table, are unread.
+
+  **The dirty-bit key was then run, and it fails - the static route is
+  exhausted.** Code-only scan (below `0x750000`, so `.rodata` in the text
+  segment is not mis-decoded): 212 `oris rA,rS,0xc` **setters** across the
+  render layer (36 in the three block-touching functions), and **zero**
+  `andis.`/`andi.` immediate tests of those bits anywhere; the 76 `rlwinm`
+  bit-12/13 extractions are all outside the three functions and none follows a
+  `lwz rX,0x4(rY)`. So `|= 0x000c0000` is a **generic** dirty convention, not a
+  signature of this block, and the flag is consumed through a register- or
+  table-held mask - meaning **no immediate-keyed scan can find the consumer**.
+  That is a boundary, not a shortfall: the remaining instrument is a watchpoint.
+  Best target is a **read** watchpoint on `0x00c50c10` (the address that gets
+  published), which names the consumer outright.
+
+  Gated on a byte at `0x00d45f84`, which is **not** established as Zone-specific
+  (seven TOC slots, ~40 users across the scene/render/front-end code). Do not
+  write "Zone enables it" anywhere on the strength of this.
+
+- **2026-08-30, `FunkLayerColour2d_fp` is a clean negative.** The one
+  post-chain program the input enumeration did not cover: its fragment program
+  is `MOV H0, f[TC0]` with zero parameters and zero samplers, its vertex
+  program declares only `colour`, and its single draw wrapper
+  (`FunkLayer_DrawColourQuad`, `0x003cbc58`) has eleven call sites that every
+  one of them feeds a **constant** - `Scene_PrepareFrame` passes a hard-coded
+  opaque red `(1,0,0,1)`, the other ten are the `FunkLayerCorruption` glitch
+  overlay. Note the argument is made on the *call sites*, not on the shader:
+  a flat quad under a multiply blend would be a legitimate full-screen tint, so
+  the shader's shape alone would not have settled it. Details in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+
+
+- **2026-08-30, the post-process route is closed - HD has no live whole-frame
+  grade.** The `fullscreenTintColour` lead in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` was chased to the end, and
+  the useful result is the *enumeration* rather than the one parameter: the
+  resolve pass's five full-screen colour inputs are now all accounted for and
+  none is fed from `g_effect_settings_stages`. `fullscreenTintColour` is bound
+  every frame with `(0,0,0,0)` (its global is cleared per frame and written
+  non-zero by nothing in the image); `saturation`/`finalScale`/`finalBias` are
+  photo mode's exposure controls and both float4s are built **grey**, so they
+  cannot express a hue; `colourScale` is bound every frame with `(1,1,1,1)`,
+  its three setters having no caller anywhere. Full evidence, with the
+  whole-image scans that make it an enumeration rather than a failed search, in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` ("The resolve's full-screen
+  colour inputs, enumerated") and cross-referenced from
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+
+  **What this means for this thread.** The eighteenth pass proved by play that
+  HD's Zone mode really does recolour scene and track, and listed three
+  plausible mechanisms: a post-process tint, a fog-driven material parameter, or
+  an indirect-call reader of `0x00c81a5c`. The first is now gone. It also means
+  **2048's composite-grade finding must not be carried across as a template for
+  HD** - the two engines differ here, and the recolour has to be happening
+  before the resolve. `FunkLayerColour2d_fp` (the post chain's flat-colour quad)
+  is the one program that could still paint a full screen by a route the
+  enumeration does not cover, and is unexamined.
+
+
 - **2026-08-28, a play-based lead pointing straight at this thread.** Fixing
   today's `ZoneCircuit::Separate` regression (HD's menu asking
   `catalogue::tracks_of_kind(xml, "Zone")` for zone circuits when HD's own
@@ -416,6 +652,15 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Next Steps
 
+- Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130` - the
+  `+0xd8`/`+0xf8` render-context table it is published into is now well
+  understood (see `Open`'s 2026-08-31 entries), but nothing that reads
+  `+0xf8` back out has been found yet. `Render_RunCompiledOps`'s own
+  dispatch table has three opcodes left unread (tags 7, 13, 14 of 16) - a
+  quick, bounded check before assuming the consumer sits outside this
+  dispatcher entirely, at whatever step flushes the lazily-filled parameter
+  table (the more likely case, given how generic every other opcode turned
+  out to be).
 - Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
   clamp-to-12 match confirms drives stage selection, but nothing this pass
   traced writes it. **Searched a third time, 2026-08-28, and still not
@@ -903,11 +1148,23 @@ evidence, including the byte-level trace of every function in this chain:
      offset sweep is not evidence of absence. The bounded next step is
      `FUN_003d0b98` read properly rather than sampled: it is HD's Speed Class
      HUD builder by its own node names, which is exactly what 2048's answer
-     turned out to be. **A write watchpoint is now worth the cost here**, and
-     unlike the `+0x00` hunt it is a live option: the patched RPCS3 build
-     exists (`just build-rpcs3-watchpoints`), the address is computable at
-     runtime from `0x008b7c00`, and one Zone race would settle both the
-     writer and whether the field ever leaves `0`.
+     turned out to be.
+
+     **2026-08-30, tried live, twice, with the actual patched build - zero
+     hits, and it's a stronger negative than it sounds.** A real `Z2` watch
+     on the live-resolved address caught nothing across 120s each on an
+     ordinary race *and* a genuine Zone race (reached this time by actually
+     driving `racebox_definition.xml`'s own `Mode` list to `Zone`, not
+     inferred from the fallback branch). A watchpoint fires on any write
+     regardless of value, so this means the address was never touched at
+     all in either window, not just "stayed at 1." Full transcript on
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eleventh-pass-a-live-write-watchpoint-on-craftarray0-0x640-armed-twice-zero-hits).
+     Not conclusive - 120s under a slowed interpreter may not be enough
+     in-game time or the right in-race event, and craft speed was never
+     checked alongside the target - but `FUN_003d0b98` read properly is
+     still the next concrete step, now with the exact live Zone-race
+     command sequence already scripted rather than needing to be solved
+     again.
   2. **What sets HD's `raceState->+0x7001`** - the latch Detonator's own
      increment is gated on, i.e. what *event* Detonator counts. Ten of the
      eleven instructions touching that offset are reads; the one write clears
@@ -922,3 +1179,380 @@ evidence, including the byte-level trace of every function in this chain:
      against 2048's or HD's executables. The ladder wired here is 2048's; the
      clock feeding it is not, and a 2048 race's escalation will only be
      correctly *paced* once that is read.
+
+  **2026-08-30, an eleventh pass, on a user observation from a live 2048 Zone
+  race: "it only changes the fog, it should affect all textures and such."**
+  Correct, and this pass establishes *why* rather than fixing it.
+
+  **Found: the schema registrar, on both titles.**
+  `Environment_RegisterStageSchema` - `0x003d0b98` on HD (confidence 85, the
+  ~24 KB neighbour this page ruled out twice as "just memsets") and
+  `0x8104714c` on 2048 (confidence 80, found from its own
+  `"Zone %s.Growing Texture.Colour"` / `"Zone %s.Fog.Environment Fog Colour"`
+  templates). For each stage it formats every key template against that
+  stage's name and hands the result plus a destination pointer to one of nine
+  typed registration helpers - the table `FwKeyedText_ParseEntry` later looks
+  a parsed key up in. **This confirms the 73-key vocabulary from code rather
+  than from position**, so `g_EffectSettingsSchemaKeyNames` moves 82 -> 90.
+
+  **Two corrections to this thread's own earlier claims.** The "73-entry
+  compile-time array" at `0x008b79cc` is not an array - it sits inside the
+  module's **TOC**, and the registrar loads each slot individually
+  (`get_xrefs_to` returns nothing and no word in the binary holds that
+  address, both checked). And `0x007b26c8` sits at `0x008b7afc`, not
+  `0x008b7af8`; `0x008b7af8` holds the mode-dispatch gate byte pointer.
+
+  **Not found: the key-to-offset table, and it would not have been enough
+  anyway.** HD's registrar keeps several base registers each advanced by
+  `0x250` per stage, so an offset is meaningless without its base - one
+  reading was withdrawn mid-pass for exactly that reason, recorded as a trap.
+  `run_script_inline` is refused on this bridge
+  (`GHIDRA_MCP_ALLOW_SCRIPTS` unset), so enumeration needs that variable set
+  or ~700 hand-zipped instructions, and it was not spent because the offsets
+  are HD's while the live trigger is 2048's.
+
+  **The real blocker, stated plainly**: an offset says where a parsed colour
+  lands in memory; it does not say what draws with it. `Colour 1..8.Colour`,
+  `Window Colour N.Gradient N` and `Track Paint.*` are indexed into the
+  circuit's own art and nothing recovered says which material index `3` is.
+  On 2048 specifically, fog really is the ceiling today: its per-stage blocks
+  author **no** `Lighting.*` keys, so `ZoneGrade::light` is a no-op on that
+  title by construction. Full write-up in
+  [effectsettings.md](../docs/formats/effectsettings.md)'s `## Open`.
+
+  **Next steps, in order of tractability:**
+
+  1. `Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` are
+     already parsed into `StagePalette` and need **no** binding - they are
+     unwired because this engine's sky is textured geometry with no colour
+     input. That is a seam to add on this side, not a fact to recover.
+  2. `"Debug.Reload Growing Textures"` (`0x81509e3c`, 2048) names a Growing
+     Texture subsystem with its own debug reload - a better handle on that
+     effect than anything the file side has offered.
+  3. The nine typed registration helpers HD's registrar calls would settle
+     the byte-versus-float storage question this thread has carried since the
+     render wiring landed.
+  4. The full key-to-offset enumeration, once `GHIDRA_MCP_ALLOW_SCRIPTS=1`
+     makes it a script rather than a hand-zip.
+
+  **2026-08-30, a twelfth pass: the 36-byte schema record is read, and the
+  byte-versus-float question is closed.** Took the previous pass's own
+  cheapest next step - read the typed registration helpers - and it settled
+  more than intended. **`FwKeyedText_AddSchemaEntry`** (`0x005d3680`,
+  confidence 85) is what all nine helpers wrap; it writes
+  `{type tag, type tag, u16 count, destination pointer, key name}` and
+  advances the registry by `0x24`, **independently confirming the 36-byte
+  stride** this thread previously had only from `FwKeyedText_ParseEntry`'s
+  loop bound. Three helpers read: the four `Detonator * Colour` keys
+  register with count `1` into consecutive **4-byte** slots, `Airbrake
+  Colour` with count `4` into a different region - **both storage domains
+  exist in one file**, so the byte/float straddle `cross_fade_rgba8` and
+  `fade_scalar` already implement is right rather than a hedge. It also
+  **refutes** the withdrawn "`+0x00` might be a Detonator colour" reading on
+  positive evidence: the cross-fade reads 16-byte fields, those colours are
+  4-byte, so `r21`'s array is not the stage struct.
+
+  **A correction to this thread's own previous next-step list**:
+  `"Debug.Reload Growing Textures"` is *not* a subsystem entry point - its
+  only reference is inside `Environment_RegisterStageSchema` itself, so it is
+  another registered schema key. It still implies a reload hook behind that
+  key's destination, but it is not the shortcut it was billed as.
+
+  **Also closed, from the lead's parallel RPCS3 run**: the write watchpoint on
+  `craftArray[0]->+0x640` catching nothing twice is a genuine test of the
+  fallback branch, not an accidental Detonator race - Zone's mode id is not
+  `0xe` (that is Detonator), so a Zone race reaches `+0x640` through
+  `Environment_UpdateStageBlend`'s "anything else" path by construction. Two
+  independent negatives now, static and runtime.
+
+  **2026-08-30, a thirteenth pass: HD's key-to-offset table is enumerated in
+  full.** `GHIDRA_MCP_ALLOW_SCRIPTS=1` went live, so the previous pass's
+  "bounded but unspent job" got spent with `run_script_inline`: a symbolic
+  `base + offset` walk of `Environment_RegisterStageSchema`'s loop,
+  resolving each key template against the function's own TOC. **51 per-stage
+  keys, confidence 88**, all landing in `g_effect_settings_stages`
+  (`0x00c7efb0`, newly named).
+
+  **It validates itself three ways** - the offsets fill the `0x250` stride
+  exactly (24 padding bytes), the only two overlaps are `Scene`/`Track.EQ
+  brightness` sitting in the fourth lane of their own `Texture Colour`, and
+  every 16-byte key uses a 16-byte helper while every 4-byte key uses a
+  4-byte one (confirming the previous pass's storage split across all nine
+  helpers by geometry rather than by reading three of them).
+
+  **It corrects a guess this thread has carried since the render wiring**:
+  the three cross-faded fields are `Scene.Texture Colour` (`+0x00`),
+  **`Scene.Base Colour Highlight`** (`+0x20` - the guess said `Near Colour`,
+  which is actually `+0x10`) and `Scene.Base Colour` (`+0x40`). Two of three
+  right. It also confirms the `Lighting.*` keys land where this project's
+  name-keyed reader assumes, which had been an assumption.
+
+  **2048's offsets are a recorded negative.** The same script recovers its
+  51 per-stage key names from the executable - the first time that
+  vocabulary has been read from code rather than from a shipped file - but
+  its destination column is wrong (Thumb reuses `r1` for both the key
+  template and the destination, and destinations come from precomputed stack
+  slots), so it is **not** published. It needs a tracker that models the
+  prologue's stack-slot fills.
+
+  **Still not wired, and the reason is unchanged**: `Scene.*`/`Track.*` turn
+  out to be two *named material groups* rather than indexed slots, which is
+  a far better binding prospect than 2048's `Colour 1..8` - but no consumer
+  of any offset was traced, and HD remains the title with no stage trigger.
+
+  **2026-08-30, a fourteenth pass: there is no shader-parameter path - the
+  stage table has a per-key getter API instead, and the `Scene`/`Track`
+  colours are dead code on it.** Pulled the `Shader_InitEngineParams` /
+  `ShaderRegistry_*` thread and it is genuinely cold: nothing downstream of
+  the effectSettings struct touches that infrastructure. What exists is
+  sixteen tiny getters at `0x003cd870`-`0x003ce120`, each reading one offset
+  of `g_effect_settings_stages` - and their offsets (`iVar8 + 0x1230`, etc.)
+  independently reproduce the previous pass's key-to-offset table from a
+  different function.
+
+  **Four keys reach a draw**, through TOC thunks: `Detonator Mine Colour`,
+  `Mine Electricity Colour`, `Bomb Inner`/`Outer Colour` and `Airbrake
+  Colour` (all five getters named, `names.tsv` updated). So the palette *is*
+  consumed at draw time on HD - **per effect**, each pulling its own key.
+  That is why no shader-parameter trail exists: the design never had one.
+
+  **Seven keys reach nothing**: `Scene.Base Colour`, `Scene.Base Colour
+  Highlight`, `Track.Texture Colour`, `Track.Base Colour`, `Track.Base
+  Colour Highlight` and both `EQ` tints have **no branch anywhere in the
+  image targeting their getters**. Confidence 85, and the method is why: a
+  first test (scanning for words holding each getter's OPD address) reported
+  "no hits" for the known-good controls too, so it was discarded as
+  non-discriminating; the kept test resolves every `bl`/`b` flow target in
+  the image plus the small TOC thunks, **with two positive controls in the
+  same scan**.
+
+  **What this means for "it should affect all textures"**: the mechanism the
+  search was aimed at is ruled out - there is no material-parameter upload to
+  redirect these colours into. It does **not** prove the offsets are unread:
+  `FUN_003ce2c0` reads struct offsets directly rather than through the
+  getters, and is the one remaining route by which `Scene.*`/`Track.*` could
+  reach a draw on HD. That is the next thing to read, and it needs the same
+  base-register tracking the registrar did.
+
+  **2026-08-30, a fifteenth pass, pushing `Scene.*`/`Track.*` on the user's
+  stated priority.** Three results.
+
+  **The blend runs inside the render path, confirmed rather than assumed.**
+  `Environment_UpdateStageBlend`'s only caller is `0x003aa888`, **renamed
+  `Scene_PrepareFrame`** (78) - its named callees are
+  `Scene_RefreshNodeMatrices`, four `Pvs_*`, three `Visibility_*` and
+  `GcmContext_Callback`, i.e. scene graph, visibility and the RSX command
+  context. Chain: `FUN_0067f078` -> `FUN_00757de0` (thunk) -> `FUN_003e26d0`
+  -> `Scene_PrepareFrame` -> the blend.
+
+  **`Scene.Texture Colour`'s output address is now concrete.** The fourth
+  pass said the blend "copies three RGBA-shaped fields into a small
+  blended-output area" without locating it. It reads
+  `g_effect_settings_stages[stage] + 0x00/0x04/0x08` for two stages and
+  writes the cross-fade to a fixed three-float global at **`0x00c81a5c`**
+  (`iVar8 + 0x3aac`), at `0x003dc5c0`-`0x003dc5d0`. Confidence 85. So the
+  consumer of `Scene.Texture Colour` is whatever reads `0x00c81a5c` - a far
+  better target than "somewhere in the struct".
+
+  **The last alternative route is closed.** The previous pass named
+  `FUN_003ce2c0` as "the one remaining way `Scene.*` could reach a draw". It
+  is not a route: the thunk-aware branch scan finds **no branch anywhere**
+  targeting it, only its OPD descriptor. Unreached, like the seven dead
+  getters.
+
+  **No reader for `0x00c81a5c` is located**, and a displacement sweep cannot
+  find one - it is base-blind, the trap this thread already recorded. Two
+  candidates that read all three slots as floats (`FUN_00661f00`,
+  `FUN_00661c64`) **both fail a base check** and are recorded as ruled out so
+  nobody re-derives them.
+
+  **Next step, and it is unusually cheap.** `0x00c81a5c` is a fixed address
+  with a **confirmed per-frame writer** inside `Scene_PrepareFrame` - unlike
+  `craftArray[n]->+0x640`, where two watchpoint runs caught nothing because
+  nothing may write it at all. A **read** watch on `0x00c81a5c` during any HD
+  race (the blend runs in every mode, not only Zone) names the `Scene.Texture
+  Colour` consumer directly, with a guaranteed-good control built in.
+
+  **2026-08-30, a sixteenth pass: the deciding read, and the answer is no.**
+  Base-aware trace of `FUN_003ce2c0` - the last candidate consumer for
+  `Scene.*`/`Track.*`: it loads `iVar8` once and **63** accesses resolve onto
+  it, all at `+0x84`, `+0x32bc`-`+0x3374` or `+0x6640`. **None in the
+  `+0x1000`-`+0x1250` stage-table window.** It does not read the per-stage
+  struct.
+
+  **That corrects this thread's own fourth pass**, which said this function
+  re-derives the blend with "the same `+0x1000`/`+0x1004` RGBA reads" - a
+  displacement read without its base, the trap this thread has now hit three
+  times. Scoped honestly: what is established is "no access *via `iVar8`*";
+  the tracker does not follow indexed forms or a pointer arriving as a
+  parameter. The conclusion does not rest on that anyway - it rests on
+  reachability, and nothing branches to this function.
+
+  **So HD's executable, as far as static analysis reaches, does not draw
+  track/scenery recolouring.** Every link of the chain is traced and the last
+  two are empty: the keys are authored, registered, parsed to known offsets
+  and `Scene.Texture Colour` really is cross-faded per frame into
+  `0x00c81a5c` inside `Scene_PrepareFrame` - but nothing located reads that
+  output, the seven `Scene`/`Track` getters have no callers, and the one
+  alternative reader is unreached and reads elsewhere. Four keys *do* reach a
+  draw (the Detonator mine/bomb colours and `Airbrake Colour`), so the
+  mechanism is real and exercised - just not for these groups.
+
+  **What would overturn it**: a reader reached by indirect call, or one taking
+  a stage pointer as an argument - neither visible to a static branch scan. A
+  **read watchpoint on `0x00c81a5c`** settles both in one run, with a
+  confirmed per-frame writer as its control.
+
+  **2026-08-30, a seventeenth pass: 2048 has a consumer, and it is a
+  full-screen composite shader.** HD's side closed as a negative; 2048's does
+  not, and the difference explains why HD's search kept coming up empty - the
+  two titles apply this table in structurally different places.
+
+  Chain, traced end to end: `Zone_UpdateStage` blends stage against stage+1
+  and hands the 16-byte result to **`Zone_SetBlendedStageColour`**
+  (`0x8103876e`, renamed, 85 - two stores and a return), which publishes it to
+  **`g_zone_blended_stage_colour`** (`0x816af070`, renamed, 85). That global is
+  **read** at `0x810394b2` by an 11,902-byte function calling **33 distinct
+  `SceGxm_*` entry points** - a GXM draw function. Its sibling writer
+  (`FUN_8103d2ae`) carries the shader-name table:
+  `wo_composite_zone_fp`/`_vp`, `wo_composite_zone_hdfury_fp`/`_vp`, plus
+  bloom, blur and the ordinary composite programs.
+
+  **So the original grades the whole frame in a composite pass**, not by
+  recolouring individual materials. Confidence 80. That reframes the user
+  observation this work started from: "it should affect all textures" is right
+  *because it is a screen-space grade*, and the "which material is `Colour 3`"
+  framing - the thing that made this look intractable - was the wrong
+  question. **A full-screen grade needs no per-material binding.** What it
+  needs is `wo_composite_zone_fp`'s own arithmetic, a shader this project has
+  not extracted.
+
+  **Also recovered, for 2048 only**: the cross-fade rate and direction.
+  `DAT_816c6bc8 = DAT_816c6bc4 * 0.0002` clamped to `1.0`, zero unless a
+  transition is running; the stage commits only once the transition timer
+  passes `5000.0`; and the blend runs current -> **next** (`stage + 1`,
+  clamped to `0xc`), not against the previous stage as HD's does. That
+  answers this thread's long-open weight question for this title, and is
+  explicitly **not** transferable to HD.
+
+  **Still not read**: 2048's key-to-offset table. The Thumb tracker was
+  replaced with the decompiler's own dataflow, which fixed the template
+  pairing and resolved the 16 non-stage globals plus two per-stage keys - but
+  the rest come back `expr:INDIRECT`, the decompiler modelling them as
+  call-clobber effects on stack-held pointers. Sharper obstacle than the
+  first attempt's naive tracking, and recorded rather than worked around: no
+  2048 offset table is published.
+
+  **Next step, and it is now a different kind of job**: extract
+  `wo_composite_zone_fp` from the disc and read what it does with the colour.
+  That is an asset-side task, not a decompile - and it is the thing standing
+  between this thread and a Zone race that grades the way the original does.
+
+  **2026-08-30, an eighteenth pass: the composite shader is read, and it
+  corrects the pass before it.** New format for this project - see
+  [gxp.md](../docs/formats/gxp.md).
+
+  **The shaders are in the executable, not on disc.** `data.psarc`'s full
+  18,430-entry directory has no shader entries; the shaders are **111 `GXP`
+  blobs embedded in `eboot.elf`** from file offset `0x515f70`. Header and the
+  16-byte `SceGxmProgramParameter` table are implemented against the
+  Vita3K-documented layout and **all 111 parse cleanly**, which is the check
+  that the reading is right. Confidence 88.
+
+  **Blob #77 (file `0x51eac8`) is the Zone composite** - the only one of the
+  111 declaring `zoneEdgeColour`, found by enumerating every uniform and
+  sampler name in all of them. Parameters: `bloomFactor[4]`,
+  `accumFactor[1]`, `screenTintColour[3]`, `zoneEdgeColour[3]`; samplers
+  `mainTex`, `alphaTex`, `bloomTex`.
+
+  **The correction**: the previous pass said 2048 "grades the whole frame".
+  Traced instruction by instruction, the Zone stage colour lands in
+  **`zoneEdgeColour`**, not in the frame-wide `screenTintColour` - which
+  takes a different global (`0x816af060`) whose writer is unchased. The pass
+  being full-screen stands; the stage colour being the frame's *tint* does
+  not, and should not be repeated. Confidence 85 (two copies of each uniform
+  name, cached resource indices matched at both bind and use site, the two
+  colours staged in the order they are consumed).
+
+  **Still unread: the USSE bytecode**, so `zoneEdgeColour`'s arithmetic is
+  unrecovered. Its name says *edge*, and an edge term is not a flat tint - so
+  wiring a full-screen tint off this would be an invention, and a more
+  tempting one now that the plumbing either side of the shader is fully
+  traced. **Nothing wired.**
+
+  **What would close it**: a USSE decoder (Vita3K has a recompiler; this
+  project has none), or observing the pass's output directly.
+
+  **2026-08-30, a nineteenth pass: HD's side gets its own "observing the
+  pass's output directly"** - a real Zone boot, driven to a confirmed race
+  (Mode list step 4 screenshot checked, per the eleventh pass's dropped-tap
+  trap), screenshotted at t+15s and t+60s while holding thrust. Track
+  surface, side barriers and a trackside building all shift colour between
+  the two shots (cyan -> purple-magenta / yellow) as the HUD's zone counter
+  advances - full write-up with the exact method in
+  [zone-effectsettings-loader.md's eighteenth pass](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eighteenth-pass-play-evidence-overturns-the-static-no-reader-located-conclusion---hds-zone-mode-does-recolour-the-scene).
+  Screenshots not committed, per leakage policy.
+
+  **This confirms the target behaviour on HD, not the mechanism.** It does
+  not identify a reader for `0x00c81a5c` or any other consumer - the
+  seventeenth pass's static "no reader located" table for HD stands
+  unchanged; this is independent play evidence that the behaviour exists
+  regardless. **Nothing wired** - per `CLAUDE.md`, confirming the effect is
+  real is not the same as having the real trigger to reproduce it with.
+
+  **Next, and it is the same read watchpoint the seventeenth pass already
+  named**: arm `Z2` (or, once available, `Z3` for a read) on `0x00c81a5c`
+  during a *confirmed* Zone race - the thing every static attempt on HD's
+  side has been missing so far is a verified-Zone run, not a longer window.
+
+  **2026-08-30, a twentieth pass: tried for a tighter pair, and found out why
+  one can't come from a single lap.** Zone here is one 6.536 km lap of a
+  real, non-repeating circuit (`LAPS CLEARED: 1` on the Results screen), not
+  a short loop - so there is no track segment a single run passes twice to
+  screenshot at two different colours. Picked the closest compositional
+  match available from a 25-frame burst instead (same curving street shape,
+  same palm-tree silhouette corner, same HUD ladder column - `ZONE 0` cyan
+  vs `ZONE 5` purple/yellow) and wrote up why that's the ceiling for this
+  method, not a same-coordinates pair. See
+  [zone-effectsettings-loader.md's matching section](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-closer-matched-screenshot-pair-and-why-one-lap-cant-do-better).
+  Also in this window, `hd-fullscreen-tint` closed the post-process-tint
+  candidate by enumeration (all five full-screen colour inputs to HD's
+  resolve pass traced and accounted for, none fed from the stage table) -
+  narrowing the remaining search to per-material/per-light and the one
+  post-chain program that enumeration doesn't cover (`FunkLayerColour2d_fp`).
+
+  **2026-08-31, a twenty-first pass: `Z3` (read watchpoint) built, and the
+  whole read side confirmed live.** A second RPCS3 patch,
+  `scripts/patches/rpcs3-gdb-read-watchpoints.patch`, extends the tracked
+  Z2 one with `Z3`/`z3` - hooked into `ppu_feed_data<T>()`, the one choke
+  point every PPU load (scalar and vector) passes through. Two false leads
+  chased and closed along the way, both source-verified rather than left as
+  hypotheses: a suspected "`Z2`/`Z3` miss vector stores" gap turned out not
+  to exist (`STVX`/`LVX` route through the identical hooked templates
+  scalar ops use), and a genuinely wrong stop-reply PC traced to
+  `is_debugger_present()`/`Assume External Debugger` gating per-instruction
+  PC tracking in RPCS3's own interpreter - a pre-existing RPCS3 property,
+  fixed by a config flag, not a patch bug.
+
+  With that settled, a `Z0` breakpoint confirmed `Scene_PrepareFrame`'s
+  reader (`0x003aaf8c`) now executes at all in a genuine, screenshot-checked
+  Zone race - it hadn't in an Arcade-mode control - and `Z3` on `0x00c81a5c`
+  fired within 5 seconds, log-confirmed with the correct PC. **The whole
+  chain - stage write, gate, read - is now live-exercised, not just
+  statically reachable.**
+
+  A follow-up, watchpoint-free poll of `0x00c49110`/`0x00c49120`/`0x00c49130`
+  (once a second, 75 seconds, real Zone race) then closed the buffer-identity
+  question too: `0x00c49130` moves through two full cross-fade transitions in
+  sync with its neighbours, live - not just non-zero once, but actively
+  carrying a per-frame blended value during real play. Buffer identity
+  confidence moves 65 -> 82.
+
+  **What is left, and it is now the last real gap**: who reads
+  `0x00c49110`/`0x00c49120`/`0x00c49130` back out for rendering.
+  `FUN_006ce6e0` installing `&block[0x7c00]` into `*(obj+0xd8) + 0x1b8` with
+  a dirty flag is the standing lead; the object behind `*(obj+0xd8)` is not
+  yet identified. That is what decides whether this is wireable into
+  `oag_render` or needs a live read watchpoint on the consumer side too.
+  Full write-up:
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-31-0x00c49130-moves-live-during-real-play---no-watchpoint-needed).

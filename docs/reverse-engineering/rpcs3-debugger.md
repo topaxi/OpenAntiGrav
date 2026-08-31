@@ -130,6 +130,43 @@ default highlighted row:
 a screen change - and so are *not* evidence either way about whether the d-pad
 arrives.
 
+### `Session.navigate()`'s taps have no confirmation, and a dropped one fails silently
+
+**2026-08-30, cost a wrong "genuine Zone race" claim before it was caught.**
+`navigate()` presses each button in a plan with a fixed settle
+(`self.tap(button, settle=1.2)`), unlike `walk_to_race()`'s own `cross` steps,
+which retry against `TTY.log` until the screen actually changes. Moving a
+carousel highlight produces no `TTY.log` line at all (see above), so there is
+nothing to confirm against - a tap sent while the previous one is still being
+processed is silently lost, and the plan's own `print("nav %s at %s" ...)`
+line fires whether or not the press actually landed. Four `right` presses
+meant to cycle Racebox's `Single Player` Mode list from its default to `Zone`
+landed on `Eliminator` (one entry short) in a live run, with nothing in the
+log to say so - only a screenshot after the fact caught it. **Verify with a
+screenshot before confirming a multi-step d-pad sequence, especially under a
+slower decoder** (interpreter mode makes a drop more likely, not less);
+counting `nav` log lines is not evidence the presses all landed.
+
+The same investigation measured Racebox's actual on-screen Mode order, which
+is not simply the XML's own declaration order by name - `racebox_definition.xml`
+names the fourth entry `Tournament`, but its displayed text is `ELIMINATOR`:
+
+| presses from default | shown |
+| --- | --- |
+| 0 | `Arcade` |
+| 1 | `Time Trial` |
+| 2 | `Speed Lap` |
+| 3 | `Eliminator` (XML idstring `Tournament`) |
+| 4 | `Zone` |
+
+**A working recipe, verified end to end since**: `Single Player`'s own entrance
+animation is still running when `press_once()` reports the screen name change
+(`TTY.log` names a transition at its start, not its end); the very first
+`right` tap fired immediately after arrival was silently eaten even with a
+longer inter-tap settle, twice in a row. Sleeping 3 seconds before the first
+tap, then four `right` taps at `settle=1.5` with a screenshot after each one
+(confirm step 4 reads `ZONE` before pressing `cross`), reliably lands on Zone.
+
 ## The GDB stub is real, and needs no special build
 
 `config.yml` ships `GDB Server: 127.0.0.1:2345` and the stub honours it with
@@ -277,6 +314,110 @@ returns `7f454c46020201 66...` - the decrypted EBOOT's ELF header - so every row
 in [`names.tsv`](../ghidra/functions/ps3-hdfury-eu/names.tsv) is usable as
 typed. The register dump's layout was settled the same way: LR at byte 532 lands
 at `0x00011114`, inside the code range, which no other split does.
+
+### `Z3` (read watchpoint) is fully verified end to end
+
+**2026-08-31**, extending the same build:
+[`scripts/patches/rpcs3-gdb-read-watchpoints.patch`](../../scripts/patches/rpcs3-gdb-read-watchpoints.patch)
+adds `Z3`/`z3`, tracked separately from the write patch (apply that one
+first - `just build-rpcs3-watchpoints` now applies both in sequence). Reads
+have no single per-width `vm::read<T>()` to hook the way writes have
+`vm::write<T>()` in `vm.h`; every scalar and vector PPU load instead funnels
+through `ppu_feed_data<T>()` in `PPUInterpreter.cpp` (confirmed by reading
+through its call sites, not assumed), which already had an existing
+`RPCS3_HAS_MEMORY_BREAKPOINTS`-gated `bp_read` check for the Qt debugger
+sitting right there for the new hook to sit beside. Same scope limitation as
+`Z2`/`Z0`: interpreter-only.
+
+Protocol level came first: `Z3,<addr>,<len>` and `z3,<addr>,<len>` both
+answer `OK` against a live session, parsing and registry bookkeeping
+matching `Z2`'s exactly. The first end-to-end attempt, on `0x00c81a5c`,
+found no trap in an Arcade race - root-caused (not guessed) to that
+address's own reader not executing outside Zone mode: a `Z0` breakpoint on
+the reader instruction itself, checked properly (resume-slice ->
+`pause()` -> walk every thread's PC via `wait_at()`, not `wait_for_stop()`,
+which can go silent on a parked thread the same way it does for `Z0` - see
+above), showed the reader never runs in Arcade, and a 120-second `Z3` watch
+cross-checked against `RPCS3.log`'s own `Read watchpoint hit` line (written
+synchronously regardless of whether a stop reply ever reaches a client)
+confirmed zero occurrences to match.
+
+**A rerun with a genuine, screenshot-confirmed Zone race (`RACE TYPE: ZONE`,
+`Zone_HUD.xml` in `TTY.log`) closed it the same day.** A `Z0` sanity check
+confirmed the reader instruction (`Scene_PrepareFrame`, `0x003aaf8c`) now
+executes at all - closing the mode-gating question outright - then `Z3`
+armed on `0x00c81a5c` fired within 5 seconds:
+
+```
+·S 0:01:14.616975 {PPU[0x1000000] Thread (main_thread) [0x003aaf8c]} GDB: Read watchpoint hit: 4 byte(s) at 0xc81a5c.
+```
+
+**That log line's PC is a second, independent way to get an accurate PC**,
+useful regardless of the `Assume External Debugger` finding below: it comes
+from the watch-check call site itself (`gdb_watch_check_read`/
+`gdb_watch_check_write` log their own `addr` argument, not `ppu.cia`), so it
+is correct even when a stop reply's register-dump PC is not. `Z3` is now
+proven at every layer: parse, arm, trap on a real guest read, remove.
+
+### `Z2`/`Z3` and vector stores: not a gap, confirmed from source - the real bug was PC reporting
+
+**2026-08-31. Closed, after two rounds of an apparent gap that turned out not
+to exist.** `STVX` (`PPUInterpreter.cpp:4577`) expands `PPU_WRITE(v128, ...)`
+to `vm::write<v128>(addr, value, &ppu)` - the identical generic template
+every scalar store already goes through. `LVX` (`:4252`) calls
+`ppu_feed_data<v128, Flags...>(ppu, addr)` - the same choke point `Z3` hooks
+for scalar reads (see above). Both confirmed by reading the handlers
+directly, not inferred. **`stvx`/`lvx` were never blind to either
+watchpoint.** (The one real, pre-existing gap is misaligned `STVLX`/`STVRX`
+partial stores, which go through a raw pointer loop instead of
+`vm::write<T>()` - symmetric between `Z2` and `Z3`, not new, and not what
+either run below hit.)
+
+That retires the whole "vector stores" hypothesis this section carried for a
+day. What actually happened across the two runs:
+
+| Run | Addresses armed | Result |
+| --- | --- | --- |
+| 1 | `0x00c50c00`, `0x00c50c10`, `0x00c49130` | zero hits over 90 s of a confirmed Zone race |
+| 2 | `0x00c49110`, `0x00c49120`, `0x00c49130` | a hit, reported PC `0x003aae80` |
+
+**Run 2's PC was never the trapping instruction, and now there's a
+mechanism, not just a puzzle.** `ppu.cia` (the interpreter's own idea of
+"current instruction address", what a stop reply's PC comes from) is only
+kept updated per-instruction when `is_debugger_present()` was true **at the
+moment that particular opcode's dispatch thunk was first JIT-built**
+(`PPUInterpreter.cpp` ~142/264, `Utilities/Thread.cpp:199`) - and that
+function checks for a *native* debugger attached to the RPCS3 process, or
+the `Assume External Debugger` config flag. **A GDB client on port 2345
+satisfies neither.** With both that flag and `PPU Debug` left at their
+shared-config defaults (`false`), `cia` never updates between branches - it
+sits wherever the last `bl`/`b` left it, which is exactly the "a `nop` right
+after an unrelated `bl`" symptom run 2 produced. **Fix: set `Assume External
+Debugger: true` in `config.yml` before booting** - it is baked into each
+opcode's dispatch thunk the first time that opcode executes, so it cannot be
+toggled mid-session. **Treat this the same as the `PPU Decoder` switch
+below**: a temporary, session-scoped change to the shared config, not a new
+permanent default - the flag's name suggests it may disable optimizations or
+affect thread-suspend heuristics, unconfirmed either way, so switch it back
+when a run doesn't need accurate stop-reply PCs.
+
+**Run 1's zero-hit result still isn't explained, but the space of
+explanations just got smaller.** With the hook itself cleared, the two live
+candidates are: the write that produced the observed non-zero values
+happened once, early (at load or scene-init), rather than every frame as the
+static trail assumed - so a 90-second window arming *after* that point would
+legitimately see nothing further; or the gate genuinely was shut for that
+particular run. Telling those apart needs no watchpoint at all: **poll the
+memory once a second across a race and watch for the value to change** -
+that is the test this thread ran next, see
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+
+**The rule that survives all of this:** a stop reply's PC is not trustworthy
+evidence of *where* a trap fired unless `Assume External Debugger` was set
+before boot - a watch or breakpoint can genuinely hit while still reporting
+a PC that looks unrelated. A zero-hit result is still worth double-checking
+against a poll-based test when the stakes are high, but not because of
+vector stores specifically - that possibility is closed.
 
 ### The stub answers nothing at all while the target runs
 
