@@ -3918,6 +3918,56 @@ in `names.tsv`, and no new function or datum crossed the threshold: the seven
 and the `Track` group is only 80 with two of seven rows read.
 
 
+### Addendum, verified independently: the writer's full destination map, and four slots nobody has claimed
+
+Checked from the raw disassembly rather than taken from the pass above, because
+the base register is the trap here. `Environment_UpdateStageBlend` computes
+`r30 = r26 - r27` at `0x003da5f0` - the `i*64 - i*8` stride-56 idiom, i.e. an
+**index**, not a base - and only later, at `0x003da780`, does
+`lwz r30, -0x5a84(r2)` reload it as the real base `0x00c7dfb0`
+(`scripts/ps3-toc.py resolve 0x003da540 -0x5A84`). Reading the stores against
+the first meaning of `r30` yields addresses that look plausible and are
+nonsense; every offset below is against the second.
+
+Pairing each `stvx vD, r30, rN` in `0x003daa00`-`0x003dab60` with the `li rN`
+that precedes it:
+
+| `li` value | offset | address | what |
+| ---: | --- | --- | --- |
+| 13616 | `0x3530` | `0x00c814e0` | the `Track.*` feed, seven vec4s at stride `0x10` |
+| 13632 | `0x3540` | `0x00c814f0` | |
+| 13648 | `0x3550` | `0x00c81500` | |
+| 13664 | `0x3560` | `0x00c81510` | |
+| 13680 | `0x3570` | `0x00c81520` | |
+| 13696 | `0x3580` | `0x00c81530` | |
+| 13712 | `0x3590` | `0x00c81540` | |
+| *(none)* | `0x35a0` | `0x00c81550` | **`zoneOrigin` - skipped, no store** |
+| 13744 | `0x35b0` | `0x00c81560` | **unattributed** |
+| 13760 | `0x35c0` | `0x00c81570` | **unattributed** |
+| 13776 | `0x35d0` | `0x00c81580` | **unattributed** |
+| 13792 | `0x35e0` | `0x00c81590` | **unattributed** |
+
+Two results and one lead:
+
+1. **The seven-vec4 `Track.*` feed is confirmed** at the addresses the pass
+   above gives, by an independent read.
+2. **`zoneOrigin` really is skipped.** There is no `li` of `13728`/`0x35a0`
+   anywhere in the run, so the one slot sitting inside the written range is
+   stepped over rather than merely unfound - which corroborates "no writer" from
+   the strongest side available to a static read: the function that writes its
+   neighbours declines to write it.
+3. **Four more vec4s are written immediately after the Track block and match
+   nothing published.** `0x00c81560`-`0x00c81590` are not in the parameter map
+   (`zoneAnisoPalette`/`zoneAnisoPaletteOuter` and `GradientColour0..3` are
+   *pointer arrays* at `0x00c81330`-`0x00c81350`, a different region). They are
+   deliberately left unnamed - four consecutive per-frame vec4s with no
+   consumer traced is a lead, not a finding.
+
+Also worth separating for the next reader: `stvx v1, r1, r0` at `0x003daa78`
+and `stvx v0, r1, r0` at `0x003dab00` are base **`r1`**, the stack - register
+spills in the middle of the same run, not global writes. A sweep that keys on
+the mnemonic alone counts them as destinations.
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
