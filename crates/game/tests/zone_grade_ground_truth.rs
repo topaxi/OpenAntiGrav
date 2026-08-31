@@ -83,11 +83,20 @@ fn an_hd_zone_race_loads_the_titles_own_stage_table() {
         .expect("HD ships /data/environments/zonemode.effectsettings");
     // Fifteen stages, `0` through `14` - `Start` to `Supersonic`.
     assert_eq!(grade.last_stage(), 14);
-    // And the race rests on the first of them, because nothing selects a
-    // stage: that is the open question, not an oversight. HD's own loader
-    // leaves `+0x00` at zero the same way.
-    assert_eq!(grade.blend().current, 0);
-    assert_eq!(grade.blend().requested, 0);
+    // **And the race opens on stage 1, not stage 0.** `Start` is the pre-race
+    // state: it authors a flat black `Track.Base Colour` where `Sub Venom`
+    // authors the cyan the original visibly shows at a start line. Opening on
+    // `Start` is what this port did until 2026-08-31, and it drew a black
+    // scene where the original draws cyan.
+    //
+    // This asserts the *opening* stage, which is inferred - see
+    // `race::load::environment::ZONE_OPENING_STAGE` for the three sources.
+    // What advances the stage during the race is still unrecovered on this
+    // title, so nothing here asserts movement.
+    assert_eq!(grade.blend().current, 1);
+    assert_eq!(grade.blend().requested, 1);
+    // Shown whole rather than fading up out of `Start`.
+    assert_eq!(grade.blend().weight, 1.0);
     assert!(
         loaded
             .report
@@ -155,6 +164,12 @@ fn two_stages_of_the_real_table_produce_two_different_fogs() {
     // says so rather than silently comparing two `None`s.
     let base = loaded.authored_fog.expect("a zone_N circuit fogs");
 
+    // Driven to `Start` explicitly: a race opens on stage 1 now, because
+    // `Start` is the pre-race state. It is still the stage that proves a
+    // zero-density stage leaves the circuit's own fog standing.
+    grade.request_stage(0);
+    grade.commit();
+    grade.set_weight(1.0);
     let start = grade.fog(Some(base)).expect("stage 0 leaves the circuit's");
     assert_eq!(
         start.colour, base.colour,
@@ -377,8 +392,13 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
     };
     let mut grade = loaded.zone_grade.expect("the table loads");
 
-    // Stage 0, `Start`, is where an HD Zone race rests: its own loader resets
-    // the stage to zero and its trigger is unrecovered.
+    // `Start` is driven to explicitly: a race no longer *opens* on it, because
+    // it is the pre-race state and the original visibly is not on it at a
+    // start line. It is still the stage worth asserting here - it is where the
+    // `Scene`/`Track` halves sit in opposite corners.
+    grade.request_stage(0);
+    grade.commit();
+    grade.set_weight(1.0);
     assert_eq!(grade.blend().current, 0);
     let start = grade.zone_uniform();
     // `"Texture U scale"=1.000000` / `"Texture V scale"=1.000000`, the only

@@ -405,6 +405,12 @@ fn zone_stage_art(
     art
 }
 
+/// The stage a Zone race opens on where the title's own ladder is unrecovered.
+///
+/// **Inferred, not measured** - see [`zone_grade`] for the three sources that
+/// converge on it. A recovered trigger would replace this, not adjust it.
+const ZONE_OPENING_STAGE: u32 = 1;
+
 pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
     race: &'static oag_title::RaceDefaults,
@@ -445,13 +451,38 @@ pub(super) fn zone_grade(
     };
     let mut grade =
         crate::race::zone_grade::ZoneGrade::new(name.clone(), table, race.zone_stages, art);
-    // The stage a race *starts* on, which is not stage `0` on a title with a
-    // recovered ladder: 2048's own threshold table matches zone `0` against its
-    // last record and shows stage `1` from the first frame, and HD's Detonator
-    // counter is likewise constructed holding `1`. Stage `0` (`Start`) is the
-    // pre-race state, not the opening lap's.
+    // The stage a race *starts* on, which is not stage `0`: **`Start` is the
+    // pre-race state, not the opening lap's.** Three converging sources, one of
+    // them a direct observation of the original:
+    //
+    // - 2048's own recovered threshold table matches zone `0` against its last
+    //   record and so shows stage `1` from the first frame.
+    // - HD's Detonator counter is likewise constructed holding `1`.
+    // - The original, played: a Zone race on Moa Therma is already showing
+    //   `Sub Venom`'s cyan at the start line. That stage authors
+    //   `Track.Base Colour` = `0.003922 0.847059 1.000000`; `Start` authors a
+    //   flat black, which is what this port drew before this and what the
+    //   maintainer reported as wrong.
+    //
+    // `show_zone` does this on a title whose ladder is recovered, and **is a
+    // no-op on one whose is not** - which is every title but 2048, HD
+    // included, so the comment above used to describe an intent this branch
+    // never carried out. The opening stage is applied explicitly for those.
+    //
+    // **This is the opening stage, not the trigger.** What *advances* the
+    // stage during an HD race is still unrecovered; see
+    // `crate::race::zone_grade`'s module docs.
     if let Some(grade) = grade.as_mut() {
-        grade.show_zone(0);
+        if grade.stage_for_zone(0).is_some() {
+            grade.show_zone(0);
+        } else {
+            grade.request_stage(ZONE_OPENING_STAGE);
+            grade.commit();
+            // `commit` zeroes the weight, verbatim as the traced store does,
+            // which would leave the opening stage showing `Start` underneath
+            // it. An opening stage is shown whole.
+            grade.set_weight(1.0);
+        }
     }
     // **The development override, applied after the title's own ladder.** It
     // exists because HD's stage trigger is unrecovered, so nothing else can put
