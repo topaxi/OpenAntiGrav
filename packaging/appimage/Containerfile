@@ -14,13 +14,20 @@
 
 FROM docker.io/library/debian:bookworm-slim
 
-# gcc is the linker driver rustc invokes; pkg-config, libudev-dev and
-# libasound2-dev are what `libudev-sys` and `alsa-sys` need to build against -
-# `gilrs` reads gamepads through the former, `cpal` plays audio through the
-# latter. Both are link-time only: the produced binary loads the host's own
-# libudev.so.1/libasound.so.2 at runtime (see docs/tools/packaging.md#what-is-bundled),
-# so this image never ships either. No other C dependency exists in the
-# workspace: the CHD reader, the AV1 decoder and wgpu are all Rust.
+# gcc is the linker driver rustc invokes; pkg-config, libudev-dev,
+# libasound2-dev and libpipewire-0.3-dev are what `libudev-sys`, `alsa-sys` and
+# `pipewire-sys`/`libspa-sys` need to build against - `gilrs` reads gamepads
+# through the first, and `cpal` plays audio through the other two (it prefers
+# PipeWire when the host runs it and falls back to ALSA when it does not, see
+# crates/audio/Cargo.toml). All three are link-time only: the produced binary
+# loads the host's own libudev.so.1/libasound.so.2/libpipewire-0.3.so.0 at
+# runtime (see docs/tools/packaging.md#what-is-bundled), so this image never
+# ships any of them. libclang-dev is the one build-time-only outlier:
+# `libspa-sys` generates its bindings with bindgen, which needs libclang to
+# parse SPA's headers. Bookworm's PipeWire is 0.3.65, and both sys crates ask
+# for `0.3`/`0.2`, so the frozen version is new enough. No other C dependency
+# exists in the workspace: the CHD reader, the AV1 decoder and wgpu are all
+# Rust.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -28,6 +35,8 @@ RUN apt-get update \
         gcc \
         libasound2-dev \
         libc6-dev \
+        libclang-dev \
+        libpipewire-0.3-dev \
         libudev-dev \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*

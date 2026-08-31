@@ -90,13 +90,17 @@ elif (( container )); then
         || die "--container needs podman or docker, and neither is installed. \
 Build natively instead and mind the glibc floor this script prints."
 
-    if ! "$engine" image exists "$CONTAINER_IMAGE" 2>/dev/null \
-        && ! "$engine" image inspect "$CONTAINER_IMAGE" >/dev/null 2>&1; then
-        echo "building $CONTAINER_IMAGE (once; ~1 GB, ~2 minutes)"
-        "$engine" build -t "$CONTAINER_IMAGE" \
-            -f "$project_root/packaging/appimage/Containerfile" \
-            "$project_root/packaging/appimage"
-    fi
+    # Built every time rather than only when the tag is missing. An existing
+    # image says nothing about *which* Containerfile produced it, and the
+    # failure that costs is a bad one: a dependency added to the Containerfile
+    # never reaches an image built before it, so the build keeps failing on a
+    # missing library the file plainly installs. Layer caching makes an
+    # unchanged Containerfile a sub-second no-op that touches no network.
+    echo "building $CONTAINER_IMAGE (cached unless the Containerfile changed;"
+    echo "the first build is ~1 GB and ~2 minutes)"
+    "$engine" build -t "$CONTAINER_IMAGE" \
+        -f "$project_root/packaging/appimage/Containerfile" \
+        "$project_root/packaging/appimage"
 
     # A separate CARGO_HOME and target directory, both under the gitignored
     # data/, so a container build neither shares nor invalidates the host's
@@ -183,13 +187,15 @@ echo "OK: the AppDir is the engine and nothing else"
 step "Runtime libraries"
 
 # Nothing is bundled on purpose. What the binary links is libc, libm, libgcc_s,
-# libudev and libasound, every one of which is either part of the base system
-# or, in libudev's and libasound's case, host-owned - the device manager and
-# the ALSA stack (mixer settings, PulseAudio/PipeWire's own ALSA plugin) -
-# and the AppImage excludelist names all of them for the same reason. Vulkan
-# and the windowing libraries are dlopen'd by wgpu and winit at runtime and
-# must come from the host, because a bundled loader cannot talk to the host's
-# graphics driver. See docs/tools/packaging.md.
+# libudev, libasound and libpipewire-0.3, every one of which is either part of
+# the base system or host-owned - the device manager, the ALSA stack (mixer
+# settings, PulseAudio/PipeWire's own ALSA plugin) and the PipeWire client
+# library, which has to be the one matching the running daemon. libpipewire is
+# a hard link-time dependency rather than a dlopen, so a host without PipeWire
+# installed cannot load this binary at all. Vulkan and the windowing libraries
+# are dlopen'd by wgpu and winit at runtime and must come from the host,
+# because a bundled loader cannot talk to the host's graphics driver. See
+# docs/tools/packaging.md.
 ldd "$app_dir/usr/bin/oag-game" | sed 's/^/  /'
 
 floor="$(objdump -T "$app_dir/usr/bin/oag-game" \

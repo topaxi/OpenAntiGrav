@@ -74,6 +74,7 @@ almost entirely static Rust:
 $ ldd target/release/oag-game
     linux-vdso.so.1
     libudev.so.1 => /usr/lib/libudev.so.1
+    libpipewire-0.3.so.0 => /usr/lib/libpipewire-0.3.so.0
     libasound.so.2 => /usr/lib/libasound.so.2
     libgcc_s.so.1 => /usr/lib/libgcc_s.so.1
     libm.so.6 => /usr/lib/libm.so.6
@@ -95,6 +96,19 @@ $ ldd target/release/oag-game
   only, for its headers and `alsa.pc` - `packaging/appimage/Containerfile`
   installs it for the `--container` build the same way it installs
   `libudev-dev`.
+- **`libpipewire-0.3.so.0`** is the PipeWire client library `cpal`'s PipeWire
+  host talks to the running daemon through (see `crates/audio/Cargo.toml` for
+  why that host is enabled). Host-owned for the same reason again: the client
+  library has to match the daemon it connects to. Unlike the two above, **this
+  one is a hard link-time dependency rather than a `dlopen`**, so the AppImage
+  does not start at all on a machine with no `libpipewire-0.3.so.0` - the
+  fallback to ALSA happens inside `cpal` at *device* selection, well after the
+  loader has already needed the library. SteamOS has PipeWire, as does every
+  current desktop distribution. Build time needs `libpipewire-0.3-dev`, and -
+  uniquely in this workspace - `libclang-dev` too, because `libspa-sys`
+  generates its bindings with bindgen. Bookworm's PipeWire is 0.3.65 against
+  the `0.3` the sys crates ask for, so the container's frozen version is new
+  enough.
 - **Vulkan and the windowing libraries are not linked at all.** `wgpu` loads
   `libvulkan.so.1` and `winit` loads `libwayland-client`/`libX11` with `dlopen`
   at runtime, so they come from the host - which is required, not merely
