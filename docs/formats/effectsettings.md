@@ -176,14 +176,22 @@ guessed. `oag_render::mesh_render::Zone` and `mesh.wgsl`'s `zone_surface`
 draw the part of the material variant those two feed:
 
 ```text
-zoneUV    = zoneColourTint.xy * (1 - meshUV)
-zoneCol   = zoneTex(zoneUV).rgb * zoneEffect.rgb
-blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
-surface   = albedo + zoneCol * (1 - blackMask)
+zoneUV  = zoneColourTint.xy * (1 - meshUV)
+rim     = 1 - dot(N, -V)
+surface = zoneTex(zoneUV).rgb * zoneEffect.rgb
+        + zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5
 ```
 
-which lands **only where the material's own diffuse is pure black** - the
-artists' own switch for what lights up in Zone mode.
+**The albedo is absent: the Zone variant replaces a circuit material's shading
+rather than tinting it.** This paragraph first said the opposite - that the
+recolour lands only where the diffuse is pure black - and that was an
+over-generalisation, corrected 2026-08-31 by a per-block census of every
+`.rcsmaterial` in `DATA00`. Of 20,092 fragment blocks naming a Zone parameter,
+the `blackMask` shape appears in **134**, all of them in `zone_1`..`zone_4`,
+HD's four Zone *arenas*; all twelve racing circuits carry the rim shape
+instead, in 19,958 blocks. The original reading came from an arena material.
+See [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md), whose
+own statement of the rule is being corrected on the same evidence.
 
 **Which of the two colour groups feeds it is not a free choice.** HD publishes
 these parameters twice, and the two publications are one routine with two
