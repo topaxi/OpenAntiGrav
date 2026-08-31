@@ -128,8 +128,21 @@ it whatever. So an HD Zone race opens on `Sub Venom` or later, which is
 independent evidence about the unrecovered trigger: **whatever drives it does
 not leave the grade where the loader put it.** The earlier note here that a
 start-line comparison would be inert because `Start` authors a black
-`Scene.Texture Colour` was wrong - it reasoned from the one key this port
-happens to draw.
+`Scene.Texture Colour` was wrong, and **wrong for a second reason found the
+same day**: the port was reading the wrong half of a pair. `Scene.*` and
+`Track.*` are not alternatives a consumer picks between - the texture set and
+the colour group are one choice, and the set this port binds is the `Track`
+one. `0 Start.Track.Texture Colour` is `9.000000 9.000000 9.000000`, the
+brightest multiplier in the whole table, where its `Scene` sibling is pure
+black. So the stage that reasoning called inert is the one the disc drives
+hardest.
+
+That the original is on stage 1 or later survives the correction, which is
+worth stating because the correction could have overturned it: `Start` authors
+black base colours in **both** groups, and the frame is strongly cyan.
+`Sub Venom` authors `0.003922 0.847059 1.000000` for `Base Colour` in both
+groups - the same cyan, from either half. The stage conclusion never depended
+on the pairing.
 
 **Second result, and it is the actionable one.** Ours draws the recovered
 textured rule faithfully - the cyan appears, and only where the material's
