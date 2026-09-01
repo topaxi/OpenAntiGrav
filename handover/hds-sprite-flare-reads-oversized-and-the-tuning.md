@@ -33,13 +33,44 @@ address order (`FUN_002a17e8`) turned out to be the engine-sound cue state
 machine, not a draw call. The function that actually turns `Flare Radius`
 into a world-space quad is still unlocated.
 
+**2026-09-01, a second session pushed further on this specifically and still
+did not find it - full account on engine-trail.md ("What two sessions'
+worth of reading could not settle").** A correction first: `+0xe4` is not
+radius storage, it is the exhaust intensity field - decompiling
+`EngineFlare_Update` in full (not done in the first pass) shows it ramped
+0.25/s up, 0.5/s down, clamped `[0, 1]`, the wrong range for a 2-3-unit
+radius. `Flare Size Clamp` and `Engine Flare Particles`
+(from the first session's read) are still unread past the tuning file.
+
+Then a live pass: `scripts/hd-flare-sprite-dump.py` dumps the whole
+`EngineFlare` object and flags every 4-byte word in RSX range
+(`0xC0000000..0xD0000000`), reasoning that the sprite's own vertex buffer
+would settle the true half-size independent of the still-open camera
+problem. It found six such pointers (`+0x70`/`0x74` a pair, `+0xb8` static,
+`+0x1f0`/`0x1f4` duplicated at `+0x230`/`0x234`, `+0x240` single) but every
+one reads back near-all-zero - not plausible vertex positions. Best
+reading: occlusion-query result buffers (double/triple-buffered for
+readback latency), matching the still-unread `Flare Occluder Radius`/
+`Flare Depth Bias`. `Billboard.cpp` (found via the `__FILE__` attribution
+trick) was also checked and ruled out - track sponsor signage, unrelated.
+Artefacts (the object dump, the six candidate buffers, the meta) are under
+`data/reference/hd-capture/flare-size/sprite-dump/`.
+
 ## Open
 
 - The consumer of `Flare Radius`/`Flare Radius Min`/`Max Radius Jitter` -
-  the function that builds the sprite's world-space quad - is unlocated.
-  Two candidates ruled out this session: `EngineFlare_PlaceShapes` and
-  `EngineFlare_Update` (neither reads `+0xe4`), and `FUN_002a17e8` (the
-  engine-sound state machine, not a draw call).
+  the function that builds the sprite's world-space quad - is unlocated
+  after both a static and a live pass. Ruled out: `EngineFlare_PlaceShapes`
+  and `_Update` (neither reads a radius-shaped field), `FUN_002a17e8` (the
+  engine-sound state machine), the six RSX pointers inside the
+  `EngineFlare` object itself (occlusion-query buffers, not vertex data),
+  and `Billboard.cpp` (track signage). Two untried angles: the sprite may
+  be owned by a separate manager `EngineFlare` calls into rather than
+  building geometry itself (the shape `TrailEffectManager` has for the
+  ribbon - worth searching for the same way, a TOC-neighbourhood sweep
+  rather than a struct dump); or scan the RSX pushbuffer directly for the
+  draw's own `NV4097` vertex-array command, which needs no CPU-side handle
+  to find.
 - `Flare Fadeout Dist`/`Range` (15.0/15.0): whether a near/far fade is what
   is missing, and if so its curve - linear, smoothstep, or something else -
   is unread. The leading candidate for the oversized-flare finding, but
@@ -68,11 +99,13 @@ into a world-space quad is still unlocated.
 
 ## Next Steps
 
-- Find the sprite's actual draw call, most likely by extending
-  `scripts/rpcs3-trail-dump.py`-style live dumping to the RSX vertex data
-  the flare quad submits (its four corners, world-space, independent of the
-  still-unsolved camera problem the capture harness carries) rather than
-  more static disassembly - three static leads dead-ended this session.
+- Find the sprite's actual draw call. Two sessions ruled out the obvious
+  places (both `EngineFlare` methods, the six RSX pointers the object
+  itself holds, `Billboard.cpp`) without finding it. Next: look for a
+  separate manager on `TrailEffectManager`'s pattern (a TOC-neighbourhood
+  sweep near `Engine_Flare_Rich.gtf`'s string, the way `Trails`'s block was
+  found), or scan the RSX pushbuffer for the draw's own vertex-array
+  command instead of chasing a CPU-side handle.
 - Once the consumer is read, either confirm and implement the
   `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
 - Separately assess the trail's own accuracy against the original, per the

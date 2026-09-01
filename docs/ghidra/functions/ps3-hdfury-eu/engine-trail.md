@@ -655,23 +655,59 @@ oversized-flare finding below**, on the same "hypothesis from the numbers,
 not a traced consumer" terms: a near/far fade starting at 15 world units and
 finishing at 30 would read as "small at ordinary chase distance" - which is
 what the original shows and this engine does not, since `hd::Sprite` applies
-no distance term at all. Three static reads this session could not settle it
-with: `EngineFlare_Init` (`0x002a1528`) writes two adjacent constants-table
+no distance term at all. What two sessions' worth of reading could not settle
+is which function actually builds the sprite's quad - what follows is what
+each ruled out. `EngineFlare_Init` (`0x002a1528`) writes two adjacent constants-table
 entries (index `0x1686`/`0x1687`) into `+0xe4`, `+0x144` and four identical
 `(u,v)` half-float pairs at `+0x280..+0x2b2` - the "four corner pairs" the
 sprite loads, confirmed to be **UV span defaults**, not positions, since all
-four pairs are identical at construction. `+0xe4` is never read inside
-`EngineFlare_PlaceShapes` (`0x002a1f00`) or `EngineFlare_Update`
-(`0x002a3100`) - grepped over both functions' full decompile, zero hits - so
-neither known per-frame method is what turns the tuning number into vertex
-offsets. The function immediately between `EngineFlare_Init` and
+four pairs are identical at construction.
+
+**Correction, same day: `+0xe4` is not the radius.** A first pass this
+session read `+0xe4` as "possibly the persistent radius storage" because
+`EngineFlare_Init` seeds it from the same constants-table index as `+0x144`;
+decompiling `EngineFlare_Update` (`0x002a3100`) in full settles it as the
+exhaust **intensity** field instead - the 0.25/s-rise, 0.5/s-fall ramp
+already named on this page, clamped to `[0, 1]` against `DAT_008b2ef0`/
+`DAT_008b2ef4`, which is the wrong range for a 2-3-unit radius. The
+constants-table index `0x1686`/`0x1687` Init reads for both `+0xe4` and
+`+0x144` is therefore not `Flare Radius` either - more likely a shared
+`0.0` sentinel several `Init` routines read off the table rather than
+embed as a literal, on the pattern this codebase's own PPC idiom already
+shows elsewhere. Neither `EngineFlare_PlaceShapes` (`0x002a1f00`) nor
+`EngineFlare_Update` reads `Flare Radius`'s storage back out under any
+offset checked; grepped both functions' full decompile for every plausible
+field. The function immediately between `EngineFlare_Init` and
 `EngineFlare_PlaceShapes` in address order, `FUN_002a17e8`
 (`0x002a17e8`-`0x002a1efb`), decompiles to the engine-sound state machine
 (idle/cruise/boost audio cue selection, keyed off `craft+0xe0`'s speed
-class) - not the sprite draw. **The function that turns `Flare Radius` into
-a world-space quad remains unlocated**, which is the same wall
+class) - not the sprite draw.
+
+**A second session went looking for the sprite's own vertex buffer live**
+(`scripts/hd-flare-sprite-dump.py`, reusing `rpcs3-trail-dump.py`'s
+craft-pointer route) rather than more static reading, on the reasoning that
+the corners are a world-space offset from the nozzle and so settle the
+question independent of the camera. It found six RSX-range pointers
+(`0xC0000000..0xD0000000`) inside the object, at `+0x70`/`+0x74` (a pair,
+changes every tick), `+0xb8` (static across two pauses), `+0x1f0`/`+0x1f4`
+(a pair, duplicated verbatim at `+0x230`/`+0x234`) and `+0x240` (single,
+changes every tick) - but every one of them reads back as near-all-zero
+32-bit words, not plausible vertex positions (the one non-zero exception, a
+repeating `~9.16e34` every fourth word, is a packed non-float value
+misread as one, not a position either). **The leading reading is that these
+are occlusion-query result buffers, double/triple-buffered for GPU
+readback latency**, not a vertex buffer - consistent with `Flare Occluder
+Radius` and `Flare Depth Bias` both being named-but-unread tunables that
+imply exactly this kind of query. `Billboard.cpp` (four functions found via
+the `__FILE__` attribution trick, one already named
+`Billboard_ConstructResource` on [billboards.md](billboards.md)) was also
+checked and ruled out - it is the **track sponsor-signage** system
+`<TrackStartup>` declares, unrelated to the ship's own effects.
+
+**The function that turns `Flare Radius` into a world-space quad remains
+unlocated** after both a static and a live pass. This is the same wall
 `engineflare_vp`/`fp` resolving through no registry read already put up two
-rows above; this session did not get further than confirming where it is
+rows above; two sessions did not get further than confirming where it is
 not.
 
 ### Checked: no separate trail for HD vs. Fury, and no zone-specific one
@@ -849,7 +885,20 @@ Open, in rough order of visible cost:
   against the original at ordinary chase distance - "All 41 rows" above has
   the evidence and the ruled-out causes; `Flare Fadeout Dist/Range` (15/15)
   is the leading candidate and still unread, so `hd::Sprite`'s radius is
-  unchanged rather than fitted to the screenshots.
+  unchanged rather than fitted to the screenshots. **A 2026-09-01 follow-up
+  spent a static and a live pass hunting the draw call specifically and did
+  not find it** - see "What two sessions' worth of reading could not settle"
+  above for the full account: `+0xe4` turned out to be intensity, not
+  radius storage (a correction to this page); neither
+  `EngineFlare_PlaceShapes` nor `_Update` reads any radius-shaped field back
+  out; live-dumped RSX pointers inside the object read as occlusion-query
+  buffers, not vertex data; and `Billboard.cpp` is the unrelated track-
+  signage system. Two candidates are now on the table for what to try next:
+  find the manager `EngineFlare` calls into rather than owning geometry
+  itself (the same shape `TrailEffectManager` has for the ribbon, and the
+  reason RSX pointers were being hunted *inside* the wrong object), or scan
+  the RSX pushbuffer directly for the `NV4097` vertex-array command this
+  draw issues, which needs no CPU-side handle at all.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
@@ -882,6 +931,12 @@ Open, in rough order of visible cost:
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-dump
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-early --early
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-params --params
+# the sprite flare's own object, hunting for its vertex buffer among the RSX
+# pointers it holds - see "the leading reading is that these are occlusion-
+# query result buffers" above:
+uv run --with evdev python3 scripts/hd-flare-sprite-dump.py /tmp/hd-flare-sprite-dump
+python3 scripts/ps3-toc.py attrib 0x0079bdd8   # who loads Engine_Flare_Rich.gtf
+python3 scripts/ps3-toc.py map | grep -i flare  # Billboard.cpp etc., ruled out
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
