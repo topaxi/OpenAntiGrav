@@ -95,3 +95,55 @@ fn craft_title_choices_adds_wipeout_hd_only_when_2048_is_present_and_hd_is_not()
         "no 2048 on this machine, so nothing to fall back to: {names:?}"
     );
 }
+
+/// `settle` keeps a stored value the list still offers - a saved pick
+/// survives a menu reopen, which is the whole reason the section is
+/// persisted.
+#[test]
+fn settle_keeps_a_value_the_list_still_offers() {
+    let offered = [
+        menu::Choice::plain("Wipeout Pulse"),
+        menu::Choice::plain("Wipeout Pure"),
+    ];
+    let mut stored = "Wipeout Pure".to_string();
+    settle(&mut stored, &offered);
+    assert_eq!(stored, "Wipeout Pure");
+}
+
+/// **The fresh-settings-file case.** `settings::Remix` defaults every field
+/// to empty, `Menu::supply` draws index 0 for it, and the setting has to
+/// follow or START races nothing at all.
+#[test]
+fn settle_takes_the_first_offer_for_an_empty_setting() {
+    let offered = [
+        menu::Choice::plain("Wipeout Pulse"),
+        menu::Choice::plain("Wipeout Pure"),
+    ];
+    let mut stored = String::new();
+    settle(&mut stored, &offered);
+    assert_eq!(
+        stored, "Wipeout Pulse",
+        "index 0 is what the row shows, so it is what the setting holds"
+    );
+}
+
+/// A saved pick whose title has since left the search path falls to the
+/// first one that has not - `Menu::supply`'s own rule for a row, applied to
+/// the setting behind it.
+#[test]
+fn settle_replaces_a_value_the_list_no_longer_offers() {
+    let offered = [menu::Choice::plain("Wipeout Pulse")];
+    let mut stored = "Wipeout 2048".to_string();
+    settle(&mut stored, &offered);
+    assert_eq!(stored, "Wipeout Pulse");
+}
+
+/// An empty list is "this team has no second directory at all", not "pick
+/// the first of none" - the row draws unusable and the setting holds
+/// nothing, which is what `combine_variant` reads as "no variant applies".
+#[test]
+fn settle_clears_against_an_empty_list() {
+    let mut stored = "_c1".to_string();
+    settle(&mut stored, &[]);
+    assert_eq!(stored, "");
+}

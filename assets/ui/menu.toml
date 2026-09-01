@@ -212,8 +212,9 @@ disabled_by = { setting = "race.mode", value = "zone" }
 # Most teams offer nothing here - `values_from = "remix_variant"` is supplied
 # empty for them, the same idiom MUSIC SOURCE uses on a machine with one
 # disc, which draws the row unusable rather than lying about having a choice.
-# Wipeout 2048's own five-team roster is the one today whose team needs a
-# second pick to reach a working file.
+# Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are the ones
+# today whose teams carry more than one selectable directory - and 2048
+# reships HD/Fury's twelve, so this row is what reaches them there too.
 [[page.entry]]
 kind = "choice"
 label = "VARIANT"

@@ -149,11 +149,13 @@ impl Session {
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Teams, &shell.teams);
         // Scoped to whichever team `race.team` already names, the same
-        // reason the CIRCUIT row above is seeded from `race.mode`.
-        model.supply(
-            menu::ValueSource::RaceVariant,
-            &variant_choices(shell.title, &self.settings.race.team),
-        );
+        // reason the CIRCUIT row above is seeded from `race.mode`, and
+        // settled against that list for the reason RACE REMIX's own rows are
+        // below - `race.variant` defaults to empty, which is a real value
+        // only on the titles whose first variant is the unsuffixed one.
+        let race_variants = variant_choices(shell.title, &self.settings.race.team);
+        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        model.supply(menu::ValueSource::RaceVariant, &race_variants);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,
@@ -198,37 +200,42 @@ impl Session {
         // Race Remix's own axis - every title this machine can currently open
         // a source for, surveyed once at `Session` construction. See the
         // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
-        // not HD's, so no synthetic entry applies here.
-        let titles: Vec<menu::Choice> = self
-            .titles
-            .iter()
-            .map(|candidate| menu::Choice::plain(candidate.title()))
-            .collect();
+        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
+        // see `Self::craft_title_choices`.
+        //
+        // **Settled, not merely supplied**, and outward-in: each row's stored
+        // setting is brought into step with the list it is about to be given
+        // before the row below it is resolved from that setting. See
+        // `remix_menu::settle`, which is what keeps a fresh settings file's
+        // empty `remix.*` from leaving every row showing one thing and
+        // `self.settings` holding another.
+        let (titles, craft_titles) = self.settle_remix_titles();
         model.supply(menu::ValueSource::Titles, &titles);
-        // CRAFT TITLE's own row - see `Self::craft_title_choices`.
-        model.supply(menu::ValueSource::CraftTitles, &self.craft_title_choices());
+        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
         // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
-        // already name, the same reason the CIRCUIT row above is seeded from
+        // now name, the same reason the CIRCUIT row above is seeded from
         // `race.mode` rather than left empty until MODE is next touched: a
         // menu reopened on a saved pick should show that pick's own list from
-        // the first frame. Both are `None` and supply nothing when nothing is
-        // saved yet, or when the saved title's source is no longer on this
-        // machine's search path - see `Self::remix_catalogue_for`/
-        // `Self::remix_craft_catalogue`.
+        // the first frame. Both are `None` and supply nothing when the named
+        // title's source is no longer on this machine's search path, or will
+        // not open - see `Self::remix_catalogue_for`/
+        // `Self::remix_craft_catalogue`. Nothing is settled in that case
+        // either: an unreadable source is not evidence that a saved pick is
+        // wrong, and clearing it would lose it.
         if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) {
-            model.supply(
-                menu::ValueSource::RemixTracks,
-                &remix_menu::remix_track_choices(&catalogue),
-            );
+            let tracks = remix_menu::remix_track_choices(&catalogue);
+            remix_menu::settle(&mut self.settings.remix.track, &tracks);
+            model.supply(menu::ValueSource::RemixTracks, &tracks);
         }
         if let Some(catalogue) = self.remix_craft_catalogue() {
+            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
             model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
         }
+        // Last, because it is scoped to the team the line above just settled.
         if let Some(title) = self.craft_title() {
-            model.supply(
-                menu::ValueSource::RemixVariant,
-                &variant_choices(title, &self.settings.remix.team),
-            );
+            let variants = variant_choices(title, &self.settings.remix.team);
+            remix_menu::settle(&mut self.settings.remix.variant, &variants);
+            model.supply(menu::ValueSource::RemixVariant, &variants);
         }
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
@@ -464,6 +471,7 @@ impl Session {
     pub(crate) fn resupply_race_variant(&mut self) {
         let Some(shell) = &self.shell else { return };
         let choices = variant_choices(shell.title, &self.settings.race.team);
+        remix_menu::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
         }

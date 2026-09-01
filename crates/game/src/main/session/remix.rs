@@ -18,6 +18,34 @@ use crate::stage::Stage;
 use super::Session;
 use super::menus::{combine_variant, variant_choices};
 
+/// Brings a stored `remix.*` setting into step with the list its row is
+/// about to be given, by **`Menu::supply`'s own rule**: keep the stored value
+/// when the new list still offers it, take the first one otherwise, and hold
+/// nothing at all when the list is empty.
+///
+/// **Without this the page is dead on a fresh settings file.**
+/// `settings::Remix` defaults every field to the empty string, `Menu::seed`
+/// can only move a row to a value the row's own list carries, and `supply`
+/// resets an unmatched row to index 0 - so the row showed the first title
+/// while `self.settings` still held `""`, `Session::remix_catalogue_for`
+/// answered `None` for a title of that name, TRACK/TEAM/VARIANT were never
+/// supplied at all, and START reported "no track title chosen yet" and did
+/// nothing. Applying `supply`'s rule to the setting too is what makes the row
+/// and the setting agree by construction rather than by a second seed.
+///
+/// The same staleness the ordinary RACE page's own CIRCUIT row documents -
+/// see `Session::resupply_tracks_for_mode` - reached one row further here,
+/// because a remix's whole page is scoped to a title the settings file may
+/// name before the row it feeds has any list at all.
+pub(super) fn settle(stored: &mut String, offered: &[menu::Choice]) {
+    if !offered.iter().any(|choice| choice.value == *stored) {
+        *stored = offered
+            .first()
+            .map(|choice| choice.value.clone())
+            .unwrap_or_default();
+    }
+}
+
 /// A remix catalogue's tracks, in the shape `Menu::supply` wants - the same
 /// `(Track, label)` -> `Choice::labelled` mapping [`Session::open_menus`]
 /// applies to a booted title's own `Shell::tracks`, pulled out because the
@@ -110,11 +138,10 @@ impl Session {
         let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) else {
             return;
         };
+        let tracks = remix_track_choices(&catalogue);
+        settle(&mut self.settings.remix.track, &tracks);
         if let Stage::Menu(stage) = &mut self.stage {
-            stage.menu.supply(
-                menu::ValueSource::RemixTracks,
-                &remix_track_choices(&catalogue),
-            );
+            stage.menu.supply(menu::ValueSource::RemixTracks, &tracks);
         }
     }
 
@@ -126,6 +153,7 @@ impl Session {
         let Some(catalogue) = self.remix_craft_catalogue() else {
             return;
         };
+        settle(&mut self.settings.remix.team, &catalogue.teams);
         if let Stage::Menu(stage) = &mut self.stage {
             stage
                 .menu
@@ -137,6 +165,30 @@ impl Session {
     /// comment for the rule.
     pub(super) fn craft_title_choices(&self) -> Vec<menu::Choice> {
         craft_title_choices(&self.titles)
+    }
+
+    /// Settles TRACK TITLE and CRAFT TITLE against the titles this machine
+    /// can actually open, and hands back the two lists so the caller does not
+    /// build them twice - [`settle`]'s own rule, at the outermost level.
+    ///
+    /// **Run before anything scoped under them.** A remix's page is a chain -
+    /// a title decides its catalogue and the catalogue decides the
+    /// TRACK/TEAM under it - so settling inward-out would settle a row
+    /// against the list the title it no longer names would have given.
+    ///
+    /// No archive is opened here: both rows are answered from the survey
+    /// [`Session::titles`] already holds, which is why this is the one step
+    /// that is free to run on every menu-open.
+    pub(super) fn settle_remix_titles(&mut self) -> (Vec<menu::Choice>, Vec<menu::Choice>) {
+        let titles: Vec<menu::Choice> = self
+            .titles
+            .iter()
+            .map(|candidate| menu::Choice::plain(candidate.title()))
+            .collect();
+        settle(&mut self.settings.remix.track_title, &titles);
+        let craft_titles = self.craft_title_choices();
+        settle(&mut self.settings.remix.craft_title, &craft_titles);
+        (titles, craft_titles)
     }
 
     /// Which real candidate backs `remix.craft_title` -
@@ -205,6 +257,7 @@ impl Session {
             return;
         };
         let choices = variant_choices(title, &self.settings.remix.team);
+        settle(&mut self.settings.remix.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RemixVariant, &choices);
         }

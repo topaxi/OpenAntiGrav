@@ -105,26 +105,35 @@ impl Default for Race {
 /// see [`crate::launcher::distinct_titles`].
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Remix {
-    /// Which title the track loads from, or empty before a pick.
+    /// Which title the track loads from.
+    ///
+    /// Empty only until the menus first open: `session::remix_menu::settle`
+    /// brings every field of this section into step with the list its row is
+    /// given, so what is stored here and what the row shows agree from the
+    /// first frame rather than after the player has nudged each one.
     #[serde(default)]
     pub track_title: String,
     /// Which circuit, by the id `track_title`'s own plugin definition gives
     /// it - [`Race::track`]'s rule, scoped to a different title.
     #[serde(default)]
     pub track: String,
-    /// Which title the craft, HUD and grid roster load from, or empty before
-    /// a pick.
+    /// Which title the craft, HUD and grid roster load from, settled on the
+    /// same terms as [`Self::track_title`].
     #[serde(default)]
     pub craft_title: String,
     /// Which team, by the id `craft_title`'s own plugin definition gives it -
     /// [`Race::team`]'s rule, scoped to a different title.
     #[serde(default)]
     pub team: String,
-    /// Which numbered variant of `team`, as a plain digit (`"1"`..), or empty
-    /// when `team` offers none - see
-    /// [`oag_title::RaceDefaults::team_variants`]. Empty is not "the first
-    /// variant"; it is "this team has no second level at all", which is
-    /// every team but Wipeout 2048's own five.
+    /// Which variant of `team`, as a plain digit or the raw suffix its own
+    /// directory uses (`"1"`, `"_c1"`), or empty when `team` offers none -
+    /// [`Race::variant`]'s rule, scoped to a different title.
+    ///
+    /// Empty is not "the first variant"; it is "this team has no second
+    /// directory at all", which is every team but Wipeout 2048's five and
+    /// Wipeout HD/Fury's twelve - the latter reachable here through
+    /// [`oag_title::RaceDefaults::guest_roster`] as well, since 2048 reships
+    /// them.
     #[serde(default)]
     pub variant: String,
 }
