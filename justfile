@@ -159,23 +159,13 @@ hash-images:
 # `.rcsmodel`'s geometry and `.gtf` (HD's own PS3 texture container) are both
 # read - see docs/formats/hd-status.md.
 #
-# `remix` boots normally and prints the walk to the RACE REMIX page, the
-# interactive menu ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md))
-# adds beside RACE - track from one title, craft from another, picked live:
-#
-#     just play remix
-#
-# **This is not a shortcut into a race** - there is no flag that seeds the
-# windowed session onto one interactive menu page and skips the walk to it,
-# the way `--menu-page` does for a *non-interactive* screenshot. It boots
-# Pulse's own front end and prints the walk to RACE REMIX: START at the
-# title screen, Down once to REMIX, then confirm. Every title this machine
-# can open a source for shows up as a TRACK TITLE/CRAFT TITLE row on that
-# page regardless of which one booted - `Session.titles` surveys the whole
-# search path, not just the source named here.
-#
-# For the *backend* with no menu at all - what this recipe used to do -
-# `--race --craft-source <source>` on any other keyword still works, e.g.
+# RACE REMIX itself - track from one title, craft from another, picked live
+# ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)) -
+# is not a `play` keyword: it needs no source of its own, only a normal boot
+# with more than one title's disc on the search path. `just play` (any
+# keyword) reaches it the same way a player would - START at the title
+# screen, then down to REMIX. The backend alone, no menu, is
+# `--race --craft-source <source>` on any keyword, e.g.
 # `just play 2048 --race --craft-source data/images/pure-psp-eu.chd`.
 #
 # A bare flag (`--ticks 5`) still gets the EU default; anything
@@ -247,17 +237,6 @@ play *ARGS:
                 exit 1
             fi
             args=("$img" "${args[@]:1}")
-            ;;
-        remix)
-            # Named explicitly rather than left out, so a machine with more
-            # than one title's disc present boots straight into Pulse's own
-            # front end instead of the disc chooser (`just launch`) - which
-            # is a different screen with a different job, see its own doc
-            # comment above `launch`. Every other title on the search path
-            # still shows up on the RACE REMIX page regardless.
-            echo "Booting Pulse's front end. At the title screen: START," >&2
-            echo "then Down to REMIX, then confirm." >&2
-            args=("data/images/pulse-psp-eu.chd" "${args[@]:1}")
             ;;
     esac
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"
