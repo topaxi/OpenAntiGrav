@@ -137,10 +137,14 @@ pub(super) fn draw(
             wrap_width: None,
         });
 
-        // The underline mark, selected entry only. Its own colour is
-        // measured rather than assumed: the one capture with a visible mark
-        // shows it in the label's own white, not the tab's `HD_Blue`.
-        if selected {
+        // The underline mark, selected entry only, and only alongside its
+        // own tab fill: the mark reads as underlining the tab, so on a title
+        // with no frame colours to fill the tab with, drawing the mark alone
+        // would be a floating dash under nothing rather than the absence
+        // `super::read_frame` already chose. Its own colour is measured
+        // rather than assumed: the one capture with a visible mark shows it
+        // in the label's own white, not the tab's `HD_Blue`.
+        if selected && fill.is_some() {
             out.push(Draw::Fill {
                 rect: [
                     x,

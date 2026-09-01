@@ -198,13 +198,16 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     assert_eq!(inks, 3, "three unselected tabs: {tabs:?}");
 }
 
-/// A frame with neither colour draws no tabs at all, and the labels and the
-/// underline still draw - the same "skip rather than invent" rule a mark
-/// with no placement already follows, applied to the fill that has a title
-/// package field behind it and not to the one measured directly off a
-/// capture.
+/// A frame with neither colour draws no tabs and no underline - only the
+/// labels still draw. The underline is gated on the tab fill rather than on
+/// selection alone: a mark reading as "underlining the tab" with no tab
+/// under it would be a floating dash on nothing, not the absence
+/// `super::read_frame` already chose for the fill itself. Text is
+/// unconditional, the same "skip rather than invent" rule a mark with no
+/// placement already follows, applied here to marks with a title-package
+/// field behind them and not to the one drawn regardless.
 #[test]
-fn with_no_frame_colours_the_tabs_are_skipped_but_the_text_and_underline_still_draw() {
+fn with_no_frame_colours_nothing_but_the_text_draws() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
     let skin = hd_skin();
@@ -219,15 +222,9 @@ fn with_no_frame_colours_the_tabs_are_skipped_but_the_text_and_underline_still_d
     .flatten();
 
     let tabs = fills(&list);
-    assert_eq!(
-        tabs.len(),
-        1,
-        "no ink or accent, so no tab fills - only the underline: {tabs:?}"
-    );
-    assert_eq!(
-        tabs[0].1,
-        skin.normal(),
-        "the underline's own colour needs neither: {tabs:?}"
+    assert!(
+        tabs.is_empty(),
+        "no ink or accent, so no tab fill and no underline either: {tabs:?}"
     );
     let rows: Vec<_> = labels(&list)
         .into_iter()

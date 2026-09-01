@@ -73,12 +73,35 @@ const STRIP_GAP: f32 = 24.0;
 ///
 /// **Deliberately not modelled**: the tab's top-right corner is chamfered,
 /// `17` wide by `7` tall in the same capture - cut, not rounded, and small
-/// against the tab's own `188`-`232` width. Landed as a plain rectangle
-/// instead of the true shape because reproducing the cut needs a shear this
-/// build's `Draw`/`Quad` pipeline does not have (`rect` plus a whole-quad
-/// `rotation` only - see `crates/game/src/ui.wgsl`), which is a render
-/// primitive change and a session of its own. See
+/// against the tab's own `188`-`232` width, with the left edge staying
+/// vertical throughout. Landed as a plain rectangle instead of the true shape
+/// because reproducing the cut needs a primitive this build does not have:
+/// **not a shear** (a shear moves both right corners and turns the whole
+/// rectangle into a parallelogram, which is not this shape) but an
+/// independent offset on the one top-right corner alone, which is a render
+/// primitive change and a session of its own. `rect` plus a whole-quad
+/// `rotation` (see `crates/game/src/ui.wgsl`) is what exists today, and
+/// neither draws a per-corner cut. See
 /// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
+///
+/// **[`UNDERLINE_OFFSET_Y`] alone does not use [`STRIP_GAP`]'s ruler.** The
+/// ruler converts a raw capture pixel into this build's own unit by holding
+/// the tab-to-tab gap fixed, which says nothing about how big this build
+/// draws the label itself - that is [`Skin::row_scale`], derived
+/// independently, from the title's own font metadata rather than from
+/// anything in this capture. The two disagreed by about half: the ruler's
+/// raw offset (`21`px, label top to underline top) converts to `56`, but
+/// that assumes text fills as much of the tab as it does in the capture
+/// (cap height a third of tab height), and at this build's actual
+/// `row_scale()` it fills a twentieth, so `56` sat the mark two-thirds of
+/// the way down empty tab, not tight under the label the way the capture
+/// shows it. Rendered and re-measured instead
+/// (`--menu-page main --screenshot`, RACE's own baseline to underline top
+/// against RACE's own tab height) until that one ratio - baseline-to-mark
+/// over tab height, `20%` in the capture - matched; `28` is where it lands
+/// for this build's own font at this build's own `TAB_HEIGHT`. Tied to both
+/// of those, so it is the one number here that would need re-checking by
+/// eye if either changed, not just re-converted through the ruler.
 const TAB_LEFT_PAD: f32 = 16.0;
 /// See [`TAB_LEFT_PAD`].
 const TAB_TOP_PAD: f32 = 13.0;
@@ -89,8 +112,9 @@ const UNDERLINE_WIDTH: f32 = 35.0;
 /// See [`TAB_LEFT_PAD`].
 const UNDERLINE_HEIGHT: f32 = 13.0;
 /// How far below the label's own `y` the underline mark starts. See
-/// [`TAB_LEFT_PAD`].
-const UNDERLINE_OFFSET_Y: f32 = 56.0;
+/// [`TAB_LEFT_PAD`], and its own paragraph on why this one number is
+/// re-measured against this build's own render rather than ruler-converted.
+const UNDERLINE_OFFSET_Y: f32 = 28.0;
 
 /// Where the rows start for a title whose own menu definitions are unread.
 ///

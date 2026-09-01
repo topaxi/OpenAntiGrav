@@ -974,11 +974,14 @@ the capture's own pixels to the byte. The tab's *shape* is not: nothing on
 disc states one at all, and what shipped is a plain rectangle sized from
 `measure(label)` plus a left/top pad, at **confidence 55** - the real tab's
 top-right corner is chamfered, `17`x`7` pixels in a `1278`-wide capture
-against a `188`-`232`-pixel-wide tab, and reproducing that cut needs a shear
-this build's `Draw`/`Quad` pipeline does not have (a whole-quad `rotation`
-only, see `crates/game/src/ui.wgsl`) - deferred rather than approximated
-further, with the raw measurements left in `crates/game/src/menu/skin.rs`'s
-own doc comment for whoever adds it. `crates/game/src/menu/strip.rs`,
+against a `188`-`232`-pixel-wide tab, left edge vertical throughout, and
+reproducing that cut needs a primitive this build's `Draw`/`Quad` pipeline
+does not have. **Not a shear** - a shear moves both right corners into a
+parallelogram, which is the wrong shape - but an offset on the one top-right
+corner alone (a whole-quad `rotation` only exists today, see
+`crates/game/src/ui.wgsl`) - deferred rather than approximated further, with
+the raw measurements left in `crates/game/src/menu/skin.rs`'s own doc comment
+for whoever adds it. `crates/game/src/menu/strip.rs`,
 `crates/game/src/menu/frame.rs`, `crates/game/src/menu/skin.rs`.
 
 **No carousel, confirmed rather than assumed.** Stepping the highlight to
