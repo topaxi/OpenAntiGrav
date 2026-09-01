@@ -653,7 +653,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 | `menu_font` | **no** | `None` | 90 | No `Menu` slot in any language plugin. |
 | `text` | yes | `0xFFFFFFFF` | 92 | `TextColor`, all six - one of the globals the FE style does *not* move. |
 | `title` | yes | `0xFF646464` | 90 | `TitleColor`, all six - but see the caveat. |
-| `selected` | measured field | `None` | - | No capture - and the authored `highlightColor` is `HD_Blue`, whose value is the style. |
+| `selected` | measured field | same as `text` | 88 | Capture (2026-09-01): text does not brighten on selection at all - the highlight is a background tab colour (`HD_Blue`) and an underline mark, not this field. See below. |
 | `transition_secs` | yes | `0.5` | 70 | Dominant `<LeftLayer transition=>`; see the warning. |
 | `strip` | yes | `(160, 125, 0xff705070)` | 92 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml`. |
 
@@ -906,6 +906,96 @@ and the frame's three widgets carry that same global, so "the title is the
 colour of the rules" is read off the disc, and taking it from the marks makes it
 resolve to whichever archive was served instead of being pinned to one.
 
+### The FE Style switch is live, works, and is not an archive swap - confirmed by capture
+
+**2026-09-01, `scripts/rpcs3-drive.py`, RPCS3 booted the real disc.** The
+previous section's open question - "what is not read is the code that chooses"
+- is now answered for the practical case: **"Menu Style" (the on-disc label
+for `OPT_FE_STYLE`) is a real, working, in-game setting**, reached from `Main
+Menu` -> `OPTIONS` -> `GAME`, the last row of a nine-row list. Selecting it
+repaints the whole `Game Options` screen from the Fury palette (black field,
+`0xff969696` grey, `0xffac0717` red) to the HD one (white field, `0xff646464`
+grey, `0xff8ac0ca` teal) in the same frame the value changes - no reload, no
+loading screen. `global="FE Style" save="true"` is not decorative either: a
+completely fresh boot, no navigation at all, came back with `Main Menu` itself
+in the HD palette, so the choice is a persisted profile value the front end
+reads on every screen it draws, not a per-session toggle. **Confidence 90** -
+a runtime capture showing the exact behaviour claimed, on the one binary this
+project has; the two-archive reading from the previous section corroborates it
+independently. Screenshots (gitignored, not committed - `data/reference/` on
+the machine that captured them):
+`hd-main-menu-screenshot/00.png` and `hd-menu-highlight-shift/00-campaign.png`
+are the same screen, Fury and HD side by side.
+
+**What this also settles: `additional_definition.xml` is not served from
+`DATA00`, and not from `DATA02` either.** `DATA00` carries no copy of the file
+at all (`mainmenu_definition.xml` and `Skin.xml` are the only two front-end
+XMLs it ships), and `DATA02`'s copy declares five rows under `Settings` -
+`Camera`, `Safe Area Setting`, `Multiplayer Tags`, `Ghost Ship Visible`,
+`Pilot Assist` - with no `HUD Style` and no `FE Style` at all. The live
+`Game Options` screen has nine, in this exact order: `Camera`, `Screen Size`,
+`Multiplayer Tags`, `Ghost Ships Visible`, `Pilot Assist - Player 1`,
+`Pilot Assist - Player 2`, `HUD Style`, `HUD Effects`, `Menu Style` - which is
+`DATA06`'s copy, field for field (`CameraP1`, `Safe Area Setting`,
+`Multiplayer Tags`, `GhostOption`, `Pilot Assist`, `Pilot Assist 2`,
+`HUD Style`, `HUD Effects`, `FE Style`, in that order; `CameraP2` sits between
+the two camera rows with `StartEnabled="false"` and does not show). So **the
+served front end is not one archive** - `DATA00` overrides the root screens
+(`mainmenu_definition.xml`, `Skin.xml`) and `DATA06` supplies files `DATA00`
+does not carry at all, `additional_definition.xml` among them. Which rule
+picks `DATA06` over `DATA02` for this one file, and whether it is the same
+rule that picks `DATA00` for the root, is still open - what changed is that
+"the archive" is now known to be a *per-file* question, not a single answer
+that resolves everything downstream of it.
+
+**`MenuSkin::selected` is resolved, and it is not what the field was for.**
+The capture shows unselected and selected entries in the *identical* white
+`TextColor` - "CAMPAIGN" (selected) and "RACEBOX" (not) read as the same
+white, at the same weight, in both the Fury and the HD shot. What changes is
+the entry's own background: a right-slanted parallelogram tab, filled
+`HD_Grey` when unselected and `HD_Blue` when selected (red on Fury, teal on
+HD - exactly the archive's own value, matching the 25 `highlightColor`
+attributes already read as `HD_Blue`), plus a short underline mark under the
+selected label alone. **So brightening the text was the wrong mechanism**:
+`Skin::selected()` should read the same as `Skin::normal()` (both `TextColor`,
+unconditionally), and the highlight belongs on a background shape `strip::draw`
+does not draw at all today - open implementation work, not yet done.
+**Confidence 88**: read directly off two captures, not inferred; short of the
+top band only because it is one binary's one screen kind, not corroborated
+against a second widget instance with a different anchor.
+
+**No carousel, confirmed rather than assumed.** Stepping the highlight to
+`RECORDS` - the last of the five main-menu entries - leaves it sitting at its
+own natural position at the right end of the strip; nothing re-centres it and
+nothing scrolls. That is the reading `strip::draw` already implements, now
+with a capture behind it instead of only the widget's own silence on the
+question. **Confidence 90.**
+
+**The menu backdrop's mechanism gets one more anchor, and one caution.**
+`renderer.md`'s shader-registry census (a fixed cost of reading the whole
+`EBOOT.elf`, not new work for this) names nine `FEBackgroundAnim*` programs,
+two of them `FEBackgroundAnimFuryWave` and `FEBackgroundAnimFuryBlend` -
+sharing the `<BackgroundAnim>` widget's own name and, in two of the nine,
+naming Fury specifically. The Fury-style capture shows a dense, animated
+red-and-gold particle/ember field with no discernible mesh silhouette in it
+anywhere; two captures a boot apart differ in exact shape, so it is animated
+rather than a static image, consistent with a real-time render. **The HD-style
+capture shows nothing at all** - a flat white field, no particle motion,
+nothing where the Fury capture is busy. Read together with the shader names,
+the more precise hypothesis is that `FrontEndScene_HD_ATG.vex`/`.rcsmodel`
+supply geometry a **style-specific shader** draws (a `*Wave`/`*Blend` pair for
+Fury, something else or nothing for HD) rather than one mesh rendered the same
+way regardless of style - which the previous confidence-88 reading, written
+before either style had been seen running, could not have distinguished from
+"the scene simply is not authored for HD." **Still open**: which of the seven
+non-Fury `FEBackgroundAnim*` names (if any) HD's style resolves to, and
+whether HD genuinely draws nothing or draws something this capture's settle
+time was too short to catch mid-transition (`Skin.xml`'s
+`<ScreenSetting name="Main Menu" ... blur="0">` at least says HD's own author
+also thought the Main Menu screen ought to be sharp, for what that is worth).
+Neither this build nor `oag-render` draws any of it today - open
+implementation work, not yet done.
+
 ### `menu_font` is `None`, and that is a measurement
 
 Pulse's rows say `font="menu"`, which its language plugins resolve to a face
@@ -1107,7 +1197,10 @@ a camera pose and per-screen blur**, not a video - and `.vex` is the format
 [hd-status](hd-status.md) already reads byte-swapped, with the caveat that its
 mesh batches have moved to `.rcsmodel`. **Confidence 88**: the widget, the
 attributes and both files are all present and consistent; nothing shows the
-engine drawing it.
+engine drawing it. A live capture now confirms *something* real-time and
+animated draws there on the Fury style and nothing does on the HD style - see
+"The FE Style switch is live, works, and is not an archive swap" below, which
+also refines what that something more likely is.
 
 The only `.bik` files on the disc that are not per-track previews or UI icons
 are the two Studio Liverpool logos. There is nothing a `menu_backdrop` could
