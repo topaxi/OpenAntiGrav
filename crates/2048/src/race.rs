@@ -62,6 +62,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // a named file its loader picks by a mode gate; nothing equivalent has been
     // read here.
     zone_sky: None,
+    team_variants: Some(&TEAM_VARIANTS),
 };
 
 /// Wipeout 2048's zone-number to speed-class ladder, read out of the
@@ -218,6 +219,48 @@ pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
 /// independent naming schemes on the disc agree on the set and the order, and
 /// nothing has been watched running.
 pub const SHIP_TYPES: [&str; 4] = ["fighter", "agility", "speed", "prototype"];
+
+/// The five native teams, spelled exactly as `Data\Plugins\teams\Definition.xml`
+/// declares their `PI_Team` `location` - which is not [`SHIP_DIR`]'s own
+/// lowercase folder names (`feisar2048` against `Feisar2048`). Both spellings
+/// resolve against the manifest, which case-folds, the same way
+/// [`oag_title::RaceDefaults::team`]'s own doc comment records for HD's
+/// `assegai`/`Assegai`. Kept in the plugin's own case here because this is
+/// matched against `crate::catalogue::teams`' output, which reads the
+/// plugin.
+pub const NATIVE_TEAMS: [&str; 5] = [
+    "AG_Systems2048",
+    "Auricom2048",
+    "Feisar2048",
+    "Piranha2048",
+    "Qirex2048",
+];
+
+/// [`oag_title::RaceDefaults::team_variants`] for 2048's native roster - not
+/// its HD-derived one, which carries none. See [`SHIP_TYPES`] and
+/// [`NATIVE_TEAMS`].
+pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &NATIVE_TEAMS,
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "1",
+            label: SHIP_TYPES[0],
+        },
+        oag_title::TeamVariant {
+            suffix: "2",
+            label: SHIP_TYPES[1],
+        },
+        oag_title::TeamVariant {
+            suffix: "3",
+            label: SHIP_TYPES[2],
+        },
+        oag_title::TeamVariant {
+            suffix: "4",
+            label: SHIP_TYPES[3],
+        },
+    ],
+    join: oag_title::VariantJoin::Subdirectory,
+};
 
 /// The circuit a race loads when the caller names none.
 ///

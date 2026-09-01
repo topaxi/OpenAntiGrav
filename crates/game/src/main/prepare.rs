@@ -175,7 +175,7 @@ impl Pending {
         let music_discs = self.music_discs(source);
         let options = self.boot_options(source);
 
-        let (mut boot_shell, archives) = boot::load_shell(&options)?;
+        let (mut boot_shell, archives, title) = boot::load_shell(&options)?;
         // Drained rather than iterated: `boot::assemble` appends its own lines
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds
@@ -205,6 +205,7 @@ impl Pending {
         // which are shipped content and only ever live in memory.
         let shell = Shell {
             definition: self.definition.clone(),
+            title,
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),

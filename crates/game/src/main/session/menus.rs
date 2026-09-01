@@ -62,6 +62,60 @@ fn remix_track_choices(catalogue: &remix::Catalogue) -> Vec<menu::Choice> {
         .collect()
 }
 
+/// `title`'s own [`oag_title::RaceDefaults::team_variants`], scoped to
+/// `team` - the VARIANT row's supply, on both the RACE page and RACE REMIX.
+/// Empty when `title` names no such axis, or `team` is not one of the teams
+/// it applies to - the same idiom [`menu::ValueSource::MusicSources`] uses
+/// for a choice that cannot be made.
+fn variant_choices(title: &'static oag_title::Title, team: &str) -> Vec<menu::Choice> {
+    let Some(team_variants) = title.race.team_variants else {
+        return Vec::new();
+    };
+    if !team_variants.teams.contains(&team) {
+        return Vec::new();
+    }
+    team_variants
+        .variants
+        .iter()
+        .map(|variant| menu::Choice::labelled(variant.suffix, variant.label))
+        .collect()
+}
+
+/// Combines `team` with whichever variant `stored` names, for launching -
+/// `title`'s own [`oag_title::RaceDefaults::team_variants`] rule, or `team`
+/// unchanged when it names no team this axis applies to. The second value is
+/// a warning to log when `stored` no longer matches one of `team`'s own
+/// variants and the first one offered was raced instead - `Menu::supply`
+/// resets what the row *shows* without touching what `self.settings` holds
+/// until the player next moves it, so `stored` can be stale the moment
+/// `team` changes underneath it, the same way an unrecognised
+/// `race.track`/`race.team` already can be.
+fn combine_variant(
+    title: &'static oag_title::Title,
+    team: &str,
+    stored: &str,
+) -> (String, Option<String>) {
+    let Some(team_variants) = title.race.team_variants else {
+        return (team.to_string(), None);
+    };
+    if !team_variants.teams.contains(&team) {
+        return (team.to_string(), None);
+    }
+    let (suffix, warning) = match team_variants.variants.iter().find(|v| v.suffix == stored) {
+        Some(variant) => (variant.suffix, None),
+        None => (
+            team_variants
+                .variants
+                .first()
+                .map_or("", |variant| variant.suffix),
+            Some(format!(
+                "{team} does not offer variant {stored:?}; racing the first one it does offer"
+            )),
+        ),
+    };
+    (team_variants.join.combine(team, suffix), warning)
+}
+
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
     ///
@@ -112,6 +166,12 @@ impl Session {
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Teams, &shell.teams);
+        // Scoped to whichever team `race.team` already names, the same
+        // reason the CIRCUIT row above is seeded from `race.mode`.
+        model.supply(
+            menu::ValueSource::RaceVariant,
+            &variant_choices(shell.title, &self.settings.race.team),
+        );
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,
@@ -177,6 +237,12 @@ impl Session {
         }
         if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.craft_title) {
             model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
+        }
+        if let Some(title) = self.craft_title() {
+            model.supply(
+                menu::ValueSource::RemixVariant,
+                &variant_choices(title, &self.settings.remix.team),
+            );
         }
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
@@ -458,6 +524,45 @@ impl Session {
         }
     }
 
+    /// Which title `remix.craft_title` currently names, from the same
+    /// survey the picker itself offers - cheap, unlike
+    /// [`Self::remix_catalogue_for`], since a [`crate::launcher::Candidate`]
+    /// already carries its title and this does not need to open anything.
+    fn craft_title(&self) -> Option<&'static oag_title::Title> {
+        self.titles
+            .iter()
+            .find(|candidate| candidate.title() == self.settings.remix.craft_title)
+            .and_then(|candidate| match &candidate.state {
+                oag_game::launcher::State::Playable(title) => Some(*title),
+                oag_game::launcher::State::Unavailable(_) => None,
+            })
+    }
+
+    /// Re-supplies the RACE page's own VARIANT row from the booted title's
+    /// [`oag_title::RaceDefaults::team_variants`], scoped to whichever team
+    /// `race.team` currently names. A no-op when the menus are not open or
+    /// nothing has loaded a shell yet - see [`Self::resupply_tracks_for_mode`].
+    pub(crate) fn resupply_race_variant(&mut self) {
+        let Some(shell) = &self.shell else { return };
+        let choices = variant_choices(shell.title, &self.settings.race.team);
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
+        }
+    }
+
+    /// [`Self::resupply_race_variant`]'s sibling for RACE REMIX's craft-side
+    /// TEAM row, scoped to `remix.craft_title` and `remix.team` instead of
+    /// the booted title.
+    pub(crate) fn resupply_remix_variant(&mut self) {
+        let Some(title) = self.craft_title() else {
+            return;
+        };
+        let choices = variant_choices(title, &self.settings.remix.team);
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu.supply(menu::ValueSource::RemixVariant, &choices);
+        }
+    }
+
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
         match event {
@@ -532,12 +637,22 @@ impl Session {
                 // that happens, so without this check the menu would show one
                 // team and the race would attempt another - failing at the
                 // archive with a message naming a team that is not on screen.
-                match self
-                    .shell
-                    .as_ref()
-                    .and_then(|shell| shell.team(&self.settings.race.team))
-                {
-                    Some(team) => race_options.team = Some(team.to_string()),
+                // `team` and `title` together, in the same call: VARIANT
+                // combines with whichever title's own axis this is.
+                let resolved_team = self.shell.as_ref().and_then(|shell| {
+                    shell
+                        .team(&self.settings.race.team)
+                        .map(|team| (shell.title, team.to_string()))
+                });
+                match resolved_team {
+                    Some((title, team)) => {
+                        let (combined, warning) =
+                            combine_variant(title, &team, &self.settings.race.variant);
+                        if let Some(warning) = warning {
+                            warn!("{warning}");
+                        }
+                        race_options.team = Some(combined);
+                    }
                     None => warn!(
                         "this source does not offer team {:?}, racing as {} instead",
                         self.settings.race.team,
@@ -662,10 +777,46 @@ impl Session {
                     Err(e) => warn!("{}: {e:#}", track_candidate.source),
                 }
 
+                // The team's own title, for VARIANT to combine against -
+                // whichever title actually supplied the craft: the picked
+                // one, or the track's when craft follows it unpicked.
+                let variant_title = if craft_source.is_some() {
+                    self.craft_title()
+                } else {
+                    match &track_candidate.state {
+                        oag_game::launcher::State::Playable(title) => Some(*title),
+                        oag_game::launcher::State::Unavailable(_) => None,
+                    }
+                };
                 let craft_catalogue_source = craft_source.unwrap_or(track_candidate.source);
                 match remix::catalogue(&craft_catalogue_source) {
                     Ok(catalogue) => match catalogue.team(&self.settings.remix.team) {
-                        Some(team) => race_options.team = Some(team.to_string()),
+                        Some(team) => {
+                            let team = team.to_string();
+                            race_options.team = Some(match variant_title {
+                                Some(title) => {
+                                    let (combined, warning) =
+                                        combine_variant(title, &team, &self.settings.remix.variant);
+                                    if let Some(warning) = warning {
+                                        warn!("{warning}");
+                                    }
+                                    combined
+                                }
+                                // No title to check `team_variants` against - racing the
+                                // bare id, which fails the same way this crate's own
+                                // original bug report did if `team` is one that needs a
+                                // second directory. Warned rather than silent, so a
+                                // dead-end team picker names itself instead of surfacing
+                                // as `race::load`'s own "no entry at ..." error.
+                                None => {
+                                    warn!(
+                                        "{team}: could not resolve its own title, so no \
+                                         VARIANT was applied; this fails if {team} needs one"
+                                    );
+                                    team
+                                }
+                            });
+                        }
                         None => warn!(
                             "this craft title does not offer team {:?}, racing as its own \
                              default instead",

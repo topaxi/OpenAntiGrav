@@ -188,6 +188,82 @@ pub struct RaceDefaults {
     /// `None` for a title with no such swap located, which is every title but
     /// HD/Fury.
     pub zone_sky: Option<&'static str>,
+    /// Team ids that carry more than one selectable directory, and what each
+    /// one is called and how it combines with the team's own id. See
+    /// [`TeamVariants`].
+    ///
+    /// `None` on Pulse and Pure, neither of which authors a second directory
+    /// for any team. Wipeout 2048's own five-team roster - not its
+    /// HD-derived one, which [`Self::handling_dir`]'s own doc comment already
+    /// separates out - and Wipeout HD/Fury's twelve are the two measured
+    /// shapes; see [`VariantJoin`] for why they combine differently rather
+    /// than sharing one join rule.
+    pub team_variants: Option<&'static TeamVariants>,
+}
+
+/// A team that carries more than one selectable directory - see
+/// [`RaceDefaults::team_variants`].
+///
+/// **Two measured shapes, not one imagined in advance**: 2048's own roster
+/// (a *numbered* level - fighter/agility/speed/prototype under
+/// `<team>\<1..4>`) and HD/Fury's twelve (a *suffixed* one - classic HD,
+/// Fury's concept reskin and Fury's nitro reskin as `<team>`, `<team>_c1`,
+/// `<team>_n1`). [`VariantJoin`] is what keeps the second measurement from
+/// forcing the first title's shape onto it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TeamVariants {
+    /// The base team ids this applies to - every other team on the title
+    /// resolves with no second directory at all.
+    pub teams: &'static [&'static str],
+    /// Every selectable directory, in document order - what to append to a
+    /// team's own id, and what to call the result to a player.
+    pub variants: &'static [TeamVariant],
+    /// How a variant's suffix combines with a team's own id. See
+    /// [`VariantJoin`].
+    pub join: VariantJoin,
+}
+
+/// One of a team's selectable directories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TeamVariant {
+    /// What [`VariantJoin`] appends to the team's own id. Empty for "the
+    /// team's own directory, unsuffixed" - HD/Fury's classic skin is exactly
+    /// that, not a fourth thing beside the two reskins.
+    pub suffix: &'static str,
+    /// What to call it to a player.
+    pub label: &'static str,
+}
+
+/// How [`TeamVariant::suffix`] combines with a team's own id.
+///
+/// A join rule rather than a single format string because the two titles
+/// measured disagree about more than the labels: 2048's numbered level is a
+/// **new path segment** (`feisar2048\3`, the id two levels deep, recovered
+/// and named in `oag_2048::race`'s own docs); HD/Fury's reskin is a
+/// **suffix on the same segment** (`auricom_c1`, one directory, a longer
+/// name). Folding both into one join would make one of the two titles the
+/// example the type was designed from - the same failure [ADR-0009] names.
+///
+/// [ADR-0009]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0009-multi-game-fanout.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VariantJoin {
+    /// `<team>\<suffix>` - 2048's native roster.
+    Subdirectory,
+    /// `<team><suffix>` - HD/Fury's roster, `suffix` already carrying
+    /// whatever separator it needs (`_c1`, not `c1`).
+    Suffix,
+}
+
+impl VariantJoin {
+    /// Combines a team's own id with one of its variants.
+    #[must_use]
+    pub fn combine(self, team: &str, suffix: &str) -> String {
+        match self {
+            Self::Subdirectory if suffix.is_empty() => team.to_string(),
+            Self::Subdirectory => format!(r"{team}\{suffix}"),
+            Self::Suffix => format!("{team}{suffix}"),
+        }
+    }
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by

@@ -323,6 +323,13 @@ pub(crate) struct Shell {
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
     pub(crate) menu_skin: &'static oag_title::MenuSkin,
+    /// Which title this is, carried the same way `menu_skin` is - from
+    /// `boot::Shell::title`, not re-derived. Lets the RACE page's own
+    /// VARIANT row ask this title's own
+    /// [`oag_title::RaceDefaults::team_variants`] for whichever team
+    /// `race.team` names, the same question RACE REMIX's craft-side VARIANT
+    /// row asks of a *picked* title instead of the booted one.
+    pub(crate) title: &'static oag_title::Title,
     /// The grid that skin's numbers are in, and the one the rows are drawn in.
     ///
     /// Carried beside the skin for the reason the skin is carried at all: it is

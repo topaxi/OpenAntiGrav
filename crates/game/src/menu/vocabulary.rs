@@ -140,6 +140,19 @@ pub enum ValueSource {
     RemixTracks,
     /// [`Self::RemixTracks`]' sibling for `CRAFT TITLE`'s roster.
     RemixTeams,
+    /// Which of the *booted* title's own teams `race.team` names carries more
+    /// than one selectable directory - Wipeout 2048's own five and Wipeout
+    /// HD/Fury's twelve, both today. See
+    /// [`oag_title::RaceDefaults::team_variants`].
+    ///
+    /// Supplied empty for a team with nothing to pick, the same idiom
+    /// [`Self::MusicSources`] uses - a row with nothing to offer draws
+    /// unusable rather than lying about having a choice.
+    RaceVariant,
+    /// [`Self::RaceVariant`]'s sibling for RACE REMIX's craft-side `TEAM` -
+    /// scoped to whichever title `CRAFT TITLE` picked rather than to the
+    /// title this process booted from.
+    RemixVariant,
 }
 
 impl ValueSource {
@@ -158,6 +171,8 @@ impl ValueSource {
             Self::Titles => "titles",
             Self::RemixTracks => "remix_tracks",
             Self::RemixTeams => "remix_teams",
+            Self::RaceVariant => "race_variant",
+            Self::RemixVariant => "remix_variant",
         }
     }
 
@@ -176,6 +191,8 @@ impl ValueSource {
             "titles" => Some(Self::Titles),
             "remix_tracks" => Some(Self::RemixTracks),
             "remix_teams" => Some(Self::RemixTeams),
+            "race_variant" => Some(Self::RaceVariant),
+            "remix_variant" => Some(Self::RemixVariant),
             _ => None,
         }
     }

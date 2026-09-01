@@ -157,6 +157,7 @@ impl Session {
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
         self.shell = Some(Shell {
             definition: pending.definition.clone(),
+            title,
             // 2048 is `oag_title::ZoneCircuit::SameCircuit` - a Zone race
             // runs whichever circuit is already picked, so the CIRCUIT row
             // offers the same list under either mode. See

@@ -523,29 +523,44 @@ roster half:
   above already named ("One `ship_dir` string cannot address both of 2048's
   trees"), now confirmed for every one of the 12, not just asserted for one.
 
-**What would actually fix it, not attempted this session:** `oag_title::RaceDefaults`
-carries exactly one `ship_dir`/`handling_dir` pair per title, which is the
-right shape for every title but this one - 2048 needs the choice to be a
-property of *which team*, not of the title alone. That is real, deliberate
-type design (`RaceDefaults` is shared vocabulary across four titles;
-widening it changes what every other title package fills in too) and a
-decision about what the catalogue should *offer* for the 5 native teams -
-one row defaulting to the known-working variant (matching `DEFAULT_TEAM`'s
-own `3`), four rows (one per named variant: fighter/agility/speed/prototype),
-or something else - rather than a one-line patch. Left for whoever picks this
-up next; the probe is the reproducer to build the fix against.
+**What would actually fix it:** `oag_title::RaceDefaults` carried exactly one
+`ship_dir`/`handling_dir` pair per title, which was the right shape for every
+title but this one - 2048 needs the choice to be a property of *which team*,
+not of the title alone.
 
-**In the meantime, Race Remix works correctly with 2048 as the TRACK
-TITLE** (proven end to end, `race_remix_ground_truth.rs`) - only 2048 as the
-**craft** title is affected, and the failure is the honest kind this project
-prefers: a named missing entry, not an invented one.
+**2026-09-01, later: the 5 native teams are fixed.** `oag_title::TeamVariants`
+(`crates/title/src/race.rs`) is the type design this needed: a `RaceDefaults`
+carries an optional list of teams that offer more than one selectable
+directory, plus how a variant's suffix joins with the team's own id -
+measured on two different shapes rather than designed from one, since 2048's
+own five (`feisar2048\3`, a numbered *subdirectory*) and HD/Fury's twelve
+(`Auricom_c1`, a *suffix* on the same segment) disagree about more than the
+label. A VARIANT row now appears on both the RACE and RACE REMIX pages
+whenever the picked team is one `team_variants` names, defaulting to the
+first variant offered. Entry resolution for all 20 native combinations
+(5 teams x 4 ship types) is confirmed by
+`crates/game/examples/team_variants_probe.rs`; a full race actually loading
+on a combined id neither title's own `DEFAULT_TEAM` reaches - HD's
+`Assegai_c1`, 2048's `Auricom2048\1` - is pinned in
+`race_remix_ground_truth::a_team_variant_races_on_both_join_shapes`. **Only
+through the menu path**: `race::load` itself has no notion of `team_variants`
+- `combine_variant` lives in `session/menus.rs` and runs before `race_options.team`
+is set, so `--race --team Auricom2048` still fails exactly as before; a
+`--team` CLI user must spell the combined id (`Auricom2048\1`) directly. See
+`race-remix-backend-lands-menu-wiring-is-next.md`.
+
+**Still open: the 12 HD-derived teams.** These need
+[`HD_SHIP_DIR`](../crates/2048/src/race.rs) instead of
+[`HANDLING_DIR`](../crates/2048/src/race.rs) entirely - a different tree, not
+a missing subdirectory level - which `TeamVariants` does not address and
+nothing has wired yet. Picking one of the 12 as CRAFT TITLE in Race Remix
+still fails the same way it did before this fix.
 
 ## Open
 
-- **2048's 17 catalogue-offered teams do not resolve through the generic
-  team-loading path** (`race::load`, and now Race Remix's own team picker) -
-  see the dated section directly above for the full finding and the fix this
-  needs.
+- **12 of 2048's 17 catalogue-offered teams still do not resolve** - the
+  HD-derived roster, which needs `HD_SHIP_DIR` rather than `HANDLING_DIR`.
+  The other 5 (the native roster) are fixed - see the dated section above.
 - Section B's vertex declaration is found and its offsets are cross-checked
   (see "What is left" above). `normal`'s type (5) and `Uv1`'s (8) are both
   decoded now - confidence 96 each, see the 2026-08-27 section above - but

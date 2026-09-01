@@ -392,8 +392,14 @@ impl Session {
                 self.resupply_tracks_for_mode();
             }
             "race.class" => self.settings.race.class = text,
-            "race.team" => self.settings.race.team = text,
+            // VARIANT's own list depends on which team this names - the
+            // same reason `race.mode` above resupplies CIRCUIT.
+            "race.team" => {
+                self.settings.race.team = text;
+                self.resupply_race_variant();
+            }
             "race.track" => self.settings.race.track = text,
+            "race.variant" => self.settings.race.variant = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
             // The two title rows resupply their scoped TRACK/TEAM the same
             // way `race.mode` resupplies the ordinary TRACK row above -
@@ -406,9 +412,16 @@ impl Session {
             "remix.craft_title" => {
                 self.settings.remix.craft_title = text;
                 self.resupply_remix_teams();
+                // VARIANT depends on the team, which just moved to whichever
+                // this craft title's roster offers first.
+                self.resupply_remix_variant();
             }
             "remix.track" => self.settings.remix.track = text,
-            "remix.team" => self.settings.remix.team = text,
+            "remix.team" => {
+                self.settings.remix.team = text;
+                self.resupply_remix_variant();
+            }
+            "remix.variant" => self.settings.remix.variant = text,
             "language" => self.settings.language = Some(text),
             other => {
                 warn!("nothing applies {other}");

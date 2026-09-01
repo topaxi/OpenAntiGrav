@@ -119,6 +119,18 @@ setting = "race.team"
 values_from = "teams"
 disabled_by = { setting = "race.mode", value = "zone" }
 
+# Most teams offer nothing here - `values_from = "race_variant"` is supplied
+# empty for them, the same idiom MUSIC SOURCE uses on a machine with one
+# disc, which draws the row unusable rather than lying about having a
+# choice. Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are
+# the ones today whose teams carry more than one selectable directory.
+[[page.entry]]
+kind = "choice"
+label = "VARIANT"
+setting = "race.variant"
+values_from = "race_variant"
+disabled_by = { setting = "race.mode", value = "zone" }
+
 # The circuits come from the source, not from this file, and so do their names:
 # `values_from = "tracks"` reads `Data\Plugins\PI001\Definition.xml` for what
 # is raceable and the language's own string table for what to call it. That is
@@ -195,6 +207,18 @@ kind = "choice"
 label = "TEAM"
 setting = "remix.team"
 values_from = "remix_teams"
+disabled_by = { setting = "race.mode", value = "zone" }
+
+# Most teams offer nothing here - `values_from = "remix_variant"` is supplied
+# empty for them, the same idiom MUSIC SOURCE uses on a machine with one
+# disc, which draws the row unusable rather than lying about having a choice.
+# Wipeout 2048's own five-team roster is the one today whose team needs a
+# second pick to reach a working file.
+[[page.entry]]
+kind = "choice"
+label = "VARIANT"
+setting = "remix.variant"
+values_from = "remix_variant"
 disabled_by = { setting = "race.mode", value = "zone" }
 
 [[page.entry]]

@@ -28,6 +28,7 @@
 //!    cannot open.
 
 use oag_game::{race, remix};
+use oag_physics::SpeedClass;
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
@@ -202,6 +203,54 @@ fn a_2048_track_races_with_a_pure_craft() {
         "expected a Pure-shaped HUD entry name; was {:#?}",
         loaded.report
     );
+}
+
+/// **A team the VARIANT row can pick actually races**, on both join shapes -
+/// not just that its handling-stats entry resolves (`team_variants_probe`
+/// checks that alone), but that the whole race loads: the model, the livery,
+/// the HUD too, since a combined id feeds all of them through the same
+/// `dir\team\file` join `oag_formats::handling::entry_name_in` and
+/// `race/assets.rs::ship_entry_name` both use. Neither of these two ids is
+/// `DEFAULT_TEAM` for its title - HD's is plain `assegai`, no suffix; 2048's
+/// is `feisar2048\3` already, a different team and variant than either
+/// picked here - so this is coverage `--race`'s own default boot never gave.
+#[test]
+#[ignore = "needs a disc image / the extracted Vita package in data/"]
+fn a_team_variant_races_on_both_join_shapes() {
+    if let Some(image) = image("data/images/hdfury-ps3-eu-dec.iso") {
+        let loaded = load(race::Options {
+            source: image.display().to_string(),
+            team: Some("Assegai_c1".to_string()),
+            class: SpeedClass::Venom,
+            opponents: false,
+            ..race::Options::default()
+        });
+        assert!(
+            loaded.liveries[0].hull.indices.len() > 3,
+            "HD's Assegai_c1 (Fury Concept) decoded to no hull geometry"
+        );
+    }
+
+    let track_source = root().join("data/extracted/vita/PCSF00007");
+    if track_source.join("base/PSP2/data.psarc").exists() {
+        let loaded = load(race::Options {
+            source: track_source.display().to_string(),
+            team: Some(r"Auricom2048\1".to_string()),
+            class: SpeedClass::Venom,
+            opponents: false,
+            ..race::Options::default()
+        });
+        assert!(
+            loaded.liveries[0].hull.indices.len() > 3,
+            r"2048's Auricom2048\1 (fighter) decoded to no hull geometry"
+        );
+    } else {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but the 2048 package is not extracted"
+        );
+        println!("skipping 2048 half: package not extracted under data/extracted/vita/");
+    }
 }
 
 /// `remix::catalogue` - the RACE REMIX page's own reader - offers HD's real

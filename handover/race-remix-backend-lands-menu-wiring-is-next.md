@@ -221,8 +221,17 @@ inside the session:
    on plurality, so this clarifies rather than supersedes it) and
    `docs/overview/roadmap.md`'s M8 section carries a "What Race Remix does
    today" line and subsection alongside Pure/HD/2048's own.
-6. **2048 as CRAFT TITLE** - tracked in the other thread, not here; this
-   thread's own scope is the menu/backend, not 2048's roster addressing.
+6. ~~2048 as CRAFT TITLE.~~ **Partly fixed, through the menu only.**
+   `oag_title::RaceDefaults::team_variants` plus a VARIANT row on both the
+   RACE and RACE REMIX pages (menu.toml, `session/menus.rs`) fixes the
+   native 5-team roster from the menu - a full race loads on a combined id
+   neither title's `DEFAULT_TEAM` reaches, pinned in
+   `race_remix_ground_truth::a_team_variant_races_on_both_join_shapes`.
+   `race::load` itself still knows nothing of `team_variants` - `--race
+   --team Auricom2048` fails exactly as before; a CLI user must spell the
+   combined id (`Auricom2048\1`) directly. The 12 HD-derived teams still
+   fail either way (a different tree, `HD_SHIP_DIR` vs `HANDLING_DIR`, that
+   `team_variants` does not address); tracked in the other thread.
 
 Items 2 and 4 are documented, deliberate scope cuts, not defects. Nothing
 in this thread is blocking; it can close once item 2 is either confirmed as

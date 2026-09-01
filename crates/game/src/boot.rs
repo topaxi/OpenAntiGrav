@@ -254,7 +254,7 @@ impl Steps {
 /// it can put the loading screen up between them. See [`Shell`] for why the
 /// line falls where it does.
 pub fn load(options: &Options) -> Result<Boot> {
-    let (mut shell, archives) = load_shell(options)?;
+    let (mut shell, archives, _title) = load_shell(options)?;
     // A throwaway tally: this caller is the one that blocks, so there is nothing
     // on screen to read it.
     let media = load_media(
@@ -429,14 +429,15 @@ impl std::fmt::Debug for Media {
 }
 
 /// Opens the source and loads everything that is not a movie.
-///
-/// Returns the archives alongside, still open, for [`load_media`] to take.
+/// Returns the archives alongside, still open, and the title, both for later.
 ///
 /// # Errors
 ///
 /// A source whose archives will not open, or which carries no front-end XML.
 /// Everything else degrades into a report line.
-pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
+pub fn load_shell(
+    options: &Options,
+) -> Result<(Shell, oag_assets::Archives, &'static oag_title::Title)> {
     let mut report = Vec::new();
     let mut steps = Steps::new();
     let (packs, pure_packs, problems) =
@@ -448,12 +449,10 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
         .with_context(|| format!("opening the archives in {}", options.source))?;
     // Which title this is was settled by the serial, here, and everything below
     // asks `profile` rather than asking the XML again. See ADR-0023.
-    //
     // **A title with no recovered front end is still refused by name**, and no
     // title is in that state today. What used to be refused here as well was a
     // front end whose *chain* was only declared - Wipeout HD's - and that is now
     // expressed rather than withheld: see `oag_title::Provenance` and ADR-0025.
-    // Substituting a sibling title's chain would still be wrong, and is still not done.
     let front_end = title.front_end.ok_or_else(|| {
         anyhow::anyhow!(
             "{}'s front end is not recovered, so there is no sequence to walk: \
@@ -671,6 +670,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
             report,
         },
         archives,
+        title,
     ))
 }
 
