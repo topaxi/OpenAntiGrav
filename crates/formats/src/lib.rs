@@ -56,6 +56,7 @@ pub mod pob;
 pub mod ps2_music;
 pub mod ps2_texture;
 pub mod psarc;
+pub mod pure_dlc;
 mod pvrtc;
 pub mod pvs;
 pub mod rcsmaterial;
