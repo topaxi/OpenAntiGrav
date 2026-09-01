@@ -1,0 +1,220 @@
+# Pure's rocket and ship-collision effects: which trigger fires what
+
+Reads Pure's own trigger code for the three effects
+[`pure-status.md`](../../../formats/pure-status.md) already showed decode and
+play off Pulse's recovered triggers, and answers the open question of what
+Pure's rocket does on a track hit, since `WO_ROCKET_EXPLO_TRACK` does not
+exist on this disc under any name (see that page).
+
+| | |
+| --- | --- |
+| **Binary** | `PSP_GAME/SYSDIR/BOOT.BIN` (Pure, PSP), image base `0x08804000` |
+| **Related** | [`psp-pulse-usa/rocket-visuals.md`](../psp-pulse-usa/rocket-visuals.md) (the Pulse counterpart every reading here is checked against), [`psp-pulse-usa/contact-response.md`](../psp-pulse-usa/contact-response.md) (`ShipCollisionFx_Trigger`'s Pulse original), [`psp-pure-eu/string-anchors.md`](../psp-pure-eu/string-anchors.md) (the import trap worked below) |
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0885ee0c` | `Rocket_Init` | 76 |
+| `0x088561f0` | `Rocket_SpawnCraftExplosion` | 78 |
+| `0x0885f28c` | `Rocket_Update` | 80 |
+| `0x0888e340` | `ShipCollisionFx_Trigger` | 82 |
+
+## The import trap applies here too, and the workaround is the same
+
+`get_xrefs_to` on every `WO_ROCKET_*`/`WO_SHIP_COLL_*` string in this binary
+reports "No references found", exactly the symptom
+[`psp-pure-eu/string-anchors.md`](../psp-pure-eu/string-anchors.md) documents:
+Pure was imported at base `0`, so the loader's PSP relocations were a no-op
+against `.rel.text`, and rebasing the database afterwards moved the data
+listing without ever revisiting the `lui`/`addiu` pairs that build a string's
+address in code. That page marked `psp-pure-usa` as "untested, almost
+certainly the same relocation shape" - confirmed here: `get_xrefs_to` on this
+binary's own `Data\XML\HandlingStats.xml` also returns nothing, and the
+`off = A - 0x08804000` / split-into-`lui`+`addiu` technique that page
+describes finds the one real reference
+(`FUN_088990f4`, `_addiu a1,a1,-0x3bb0`) exactly where it predicts.
+
+**One addition to that page's method, learned here**: the `addiu` half of a
+string-loading pair is very often in a `jal`'s delay slot, and
+`search_instructions`' `mnemonic` field for a delay-slot instruction is
+`_addiu`, not `addiu` (the same underscore `disassemble_function` prints).
+Filtering by `mnemonic: "addiu"` alone silently misses these; search by
+`operand_pattern` only, mnemonic empty, to catch both.
+
+**The `jal` call-target wart layers on top of the string wart.**
+`get_function_callers` returns nothing for any of the four functions below,
+for the same reason `psp-pulse-usa/billboards.md` recorded for `jal`: targets
+print as unrelocated pseudo-addresses (`jal 0x0006de1c`, not
+`jal 0x0886de1c`), so Ghidra's own call-graph is built against the wrong
+address and finds nothing at the real one. Finding a caller means the same
+`off + 0x08804000` arithmetic against a `jal`'s printed operand, searched with
+`mnemonic: "jal"` and the pseudo-target's hex tail as `operand_pattern`. This
+is how the 26 call sites of the shared spawn helper below were found; it did
+**not** turn up a caller for any of the four renamed functions themselves, so
+none of the four has a verified call site - the reason each stays inside the
+70-84 decompilation-only band regardless of how clean its own body reads.
+
+## One generic spawn helper, 26 call sites, shared with everything else
+
+`0x0886de1c` (printed as `func_0x0006de1c` throughout, per the `jal` wart
+above) is Pure's counterpart of Pulse's `Psys_Spawn_q` (`0x08915484`): second
+argument a name pointer, third a four-character tag, little-endian, called
+from a small allocate-tag-init-call sequence (`func_0x00090f34` /
+`func_0x00090cf4` / `func_0x0008facc`) identical at every site. **26 call
+sites total** (`search_instructions jal, operand_pattern "6de1c"`), so it is
+not rocket- or collision-specific; the four sites below are the ones this page
+identifies by name.
+
+## `Rocket_Init` (`0x0885ee0c`) fires `WO_ROCKET_FLARE`
+
+One call: `func_0x0006de1c(node, 0x244a2c, 0x4c464f52, &carried_matrix, 0, 0)`
+at `0x0885f138`/`0x0885f13c`. `0x244a2c + 0x08804000 = 0x08a48a2c`, the bare
+name `WO_ROCKET_FLARE`; `0x4c464f52` as bytes is `52 4f 46 4c` = **`ROFL`**,
+Pulse's own tag for the same effect
+([`rocket-visuals.md`](../psp-pulse-usa/rocket-visuals.md)). The surrounding
+body builds a `0x1d0`-ish node from four `vmov.q`-copied matrix rows and a
+rolloff-shaped scale (`vrcp.s` against `0x40666666` = `3.6f`), matching the
+shape of Pulse's `Rocket_Init` closely enough to carry its name, but the body
+is heavy PSP-vector code this pass did not fully unpick term-by-term - hence
+76 rather than higher.
+
+## `Rocket_SpawnCraftExplosion` (`0x088561f0`) fires `WO_ROCKET_EXPLO`
+
+One call: `func_0x0006de1c(node, 0x244310, 0x58454f52, ...)` at
+`0x088562e8`-`0x088562f4`. `0x244310 + 0x08804000 = 0x08a48310`, the bare name
+`WO_ROCKET_EXPLO`; `0x58454f52` as bytes is `52 4f 45 58` = **`ROEX`**, again
+Pulse's own tag for the craft-hit explosion. Scored 78, the same confidence
+Pulse's own `Rocket_SpawnCraftExplosion_q` carries for an identical
+name+tag-only reading with no verified caller.
+
+## `Rocket_Update` (`0x0885f28c`) does **not** fire `WO_ROCKET_EXPLO_TRACK` - it fires `WO_TRACK_ROCK_DEBRIS`
+
+This is the answer to the open question
+[`pure-status.md`](../../../formats/pure-status.md#pures-particle-systems-decode-unchanged)
+records - whether Pure spells the track-hit effect differently or ships none
+at all. The function:
+
+- Integrates `param_2+0x50` (age) by `dt` (`param_1`), first instruction.
+- Runs a swept query twice through `func_0x00020a9c`, matching the shape of
+  Pulse's two `func_0x0002d98c` calls (surface probe, flight sweep).
+- On no hit, subtracts `param_1 * 50.0` from the velocity's Y - **the exact
+  same fall constant** Pulse's `Rocket_Update` uses.
+- On a hit, one branch (`local_4b8 == 1`, gated on
+  `*(int *)(*(int *)(param_3 + local_4c0*0xc + 0x2454) + 0x6c) == 0`,
+  structurally the track-vs-craft test) spawns an effect **twice**, once per
+  detonating code path, each with its own tag:
+
+  ```c
+  func_0x0006de1c(iVar25, 0x244a48, 0x42444f52, &local_490, 0, 0);  // tag "RODB"
+  func_0x0006de1c(iVar25, 0x244a48, 0x32444f52, &local_400, 0, 0);  // tag "ROD2"
+  ```
+
+  **Both branches spawn the same name**, `0x244a48 + 0x08804000 = 0x08a48a48`.
+  Reading memory there directly (not inferring from the constant):
+
+  ```
+  0x08a48a2c  "WO_ROCKET_FLARE\0"
+  0x08a48a3c  "~ROCKETTVL\0\0"
+  0x08a48a48  "WO_TRACK_ROCK_DEBRIS\0\0\0\0"
+  0x08a48a60  "WeaponCommon..."
+  ```
+
+  So the name is **`WO_TRACK_ROCK_DEBRIS`**, not `WO_ROCKET_EXPLO_TRACK`.
+  Verified byte-identical on both pressings: the same four strings in the
+  same order sit at the same offsets on `psp-pure-eu` (`0x08a4732c` there).
+- Also carries the speed conversion `fVar27 / 3.6` immediately before scaling
+  velocity by it - the exact divisor
+  [`rocket-visuals.md`](../psp-pulse-usa/rocket-visuals.md) established for
+  Pulse's authored-speeds-are-km/h finding.
+
+**`ROD2` is Pulse's own tag for `WO_ROCKET_EXPLO_TRACK`.** Reused here for a
+different resource name entirely - the tag is a short internal label for
+"the rocket's second detonation call site", not a name for the asset it
+happens to carry. `RODB` is presumably "rocket detonate, branch B" by the
+same pattern; no direct evidence names it further.
+
+**`WO_TRACK_ROCK_DEBRIS.POB` exists on Pure's disc, and it decodes.** It
+resolves in `PSP_GAME/USRDIR/Data.wad` at the WAD name hash `0x7fe66b3f`
+(entry 595 of 841, computed per
+[`wad.md`](../../../formats/wad.md#the-name-hash) and checked directly against
+the archive listing - not inferred from the string being present), and the
+unmodified `.pob` parser reads it as 3 emitters: a one-tick root named
+`WO_TRACK_ROCK_DEBRIS` itself (8 additive streaks), a peer root `ROCK_DEBRIS`
+(16 alpha-over billboard chunks whose particles each spawn a `trail` child),
+and that `trail` child (a fading billboard, longer and more spread-out
+lifetime than its parent). The root record naming itself
+`WO_TRACK_ROCK_DEBRIS` corroborates the hash hit independently of the WAD
+lookup - per [`pob.md`](../../../formats/pob.md), the root's own name is the
+resource's own, so the payload agrees with the directory rather than some
+unrelated blob happening to hash to `0x7fe66b3f`. Reads as a sensible
+debris-impact shape next to this effect's siblings. Until now this name was
+catalogued in
+[`pob.md`](../../../formats/pob.md#flag-0x1-is-this-effect-loops---2026-08-12)
+as **PS2-only within Pulse** (absent from Pulse's own PSP `Data.wad`, present
+in `WADS2.WAD`); that finding is about Pulse's two platforms and stands
+unchanged, but it did not anticipate the name shipping on a different title's
+PSP disc as its rocket's own track-hit effect - confirmed absent from Pulse's
+own PSP `Data.wad` by the same hash, so this is a second, independent
+appearance of the name, not the same file already covered by the earlier
+count.
+
+Scored 80: four independent structural invariants match Pulse's
+`Rocket_Update` exactly (dt integration first, two-sweep collision shape, the
+`50.0` fall constant, the `/3.6` speed conversion), and the two spawn calls
+themselves are unambiguous disassembly, not decompiler guesswork - but no
+caller is verified (the `jal` wart above) and the surrounding vector code is
+only partially read, so it stays short of the runtime-verified 88 Pulse's own
+`Rocket_Update` earned.
+
+## `ShipCollisionFx_Trigger` (`0x0888e340`) matches Pulse's function of the same name almost exactly
+
+Pulse's own `ShipCollisionFx_Trigger` (`0x089246b4`,
+[`contact-response.md`](../psp-pulse-usa/contact-response.md)) takes
+`(intensity, instance, kind, damaged)` and branches `kind`/`damaged` across
+four spark variants. Pure's function takes the same four-argument shape
+(`float, int, int, char`) and, reading its three `func_0x0006de1c` calls
+directly:
+
+| Pure branch | Name (verified by reading memory) | Tag |
+| --- | --- | --- |
+| `param_3 == 1`, returns immediately | `WO_WEAPON_ABSORB` (`0x08a4e76c`) | `0x4f534241` = **`ABSO`** |
+| gate passes, `param_4 == 0` | `WO_SHIP_COLL_SPARK_NODAMAGE` (`0x08a4e7a8`) | `0x444e5053` = **`SPND`** |
+| gate passes, `param_4 != 0` | `WO_SHIP_COLL_SPARK_DAMAGE` (`0x08a4e78c`) | `0x44415053` = **`SPAD`** |
+
+This is Pulse's structure exactly: `kind==2`/`param_3==1` is the shield-absorb
+case and bypasses the cooldown-gated path entirely (an early `return` here,
+matching Pulse's documented cooldown-bypass for the absorb kind), and the
+damaged/not-damaged split under the gate reproduces Pulse's
+`WO_SHIP_COLL_SPARK_DAMAGE`/`_NODAMAGE` choice verbatim, tag shorthand and
+all (`SPAD`/`SPND` reading as "SPArk Damage"/"SPark NoDamage"). Pure's version
+has no third `kind` value visible here, so whether Pure ships an equivalent to
+Pulse's `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` branch (`kind==1`) is not settled by
+this function alone - it may live in a fourth branch this reading did not
+need, or Pure's Leach Beam may not share this trigger.
+
+Scored 82: three literal strings pin the variant selection unambiguously (not
+inferred, read directly from memory), and the structural agreement with an
+independently-recovered Pulse function of the same shape is exactly the kind
+of second-binary corroboration the confidence rubric weighs above a second
+reading of the same file - short of a runtime trace, which neither binary has
+for this function, so it does not clear the rubric's 85+ band.
+
+## What is not verified
+
+- **No call site for any of the four functions above**, blocked on the `jal`
+  relocation wart - see the trap section.
+- **Pure's Leach Beam trigger**, if it exists and if it shares
+  `ShipCollisionFx_Trigger` at all.
+- **Runtime verification.** Nothing here has a PPSSPP leg; every score is
+  capped by the decompilation-only ceiling for exactly that reason.
+- **The `func_0x00020a9c` / `func_0x0013492c` / `func_0x00090f34` family**
+  read only by their call shape, not decompiled for their own sake.
+
+## History
+
+- **2026-09-01.** Written answering
+  `pures-particle-effects-decode-and-play-and-two.md`'s "no Pure trigger has
+  been read" and "does `WO_ROCKET_EXPLO_TRACK` spell differently" questions.
+  Both rocket explosions and the collision spark's trigger turned out to be
+  readable directly, once the string- and `jal`-relocation traps documented
+  on `psp-pure-eu` were worked the same way here; the track-hit effect turned
+  out to be a different resource entirely, not a spelling variant.

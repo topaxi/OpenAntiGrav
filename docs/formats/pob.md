@@ -743,7 +743,13 @@ against every one, with no code changes:
   `WO_SHIP_COLL_SPARK_TRAIL` and `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` (three of
   PSP's 35) are absent from `WADS2.WAD` - not checked against the smaller
   `WADSP.WAD` or `PRERACE.WAD` yet, so "absent from this archive" rather
-  than "absent from the disc" is the honest claim.
+  than "absent from the disc" is the honest claim. **"PS2-only" here is a
+  Pulse-vs-Pulse statement and does not generalise across titles**:
+  `WO_TRACK_ROCK_DEBRIS` also ships in Wipeout Pure's PSP `Data.wad`, absent
+  from Pulse's own PSP corpus, as the name Pure's rocket plays on a track hit
+  - see [`pure-status.md`](pure-status.md#pures-particle-systems-decode-unchanged)
+  and
+  [`rocket-and-collision-fx.md`](../ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md).
 
 Per the rubric, **"a second binary is worth more than a second reading of
 the first."** This is a second, independent binary agreeing on every

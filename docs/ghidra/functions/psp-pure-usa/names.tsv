@@ -30,3 +30,10 @@
 0x0892f1f0	function	Ship_UpdateEngine	62	corroboration.md
 0x0892cba0	function	Ship_ApplyQuadraticDrag	60	corroboration.md
 0x0892cc2c	function	Ship_ApplyAngularDamping	60	corroboration.md
+
+# String-anchored, not fuzzy-matched: read directly off the .pob effect
+# names and tags each function spawns. See rocket-and-collision-fx.md.
+0x0885ee0c	function	Rocket_Init	76	rocket-and-collision-fx.md
+0x088561f0	function	Rocket_SpawnCraftExplosion	78	rocket-and-collision-fx.md
+0x0885f28c	function	Rocket_Update	80	rocket-and-collision-fx.md
+0x0888e340	function	ShipCollisionFx_Trigger	82	rocket-and-collision-fx.md
