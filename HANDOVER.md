@@ -380,7 +380,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Pure's string tables are not read, and its front-end font is absent](handover/pures-string-tables-are-not-read-and-its.md)
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
-- [Pure's PSN DLC packs are genuinely encrypted, unlike Pulse's](handover/pures-dlc-packs-are-genuinely-encrypted.md)
+- [Pure's DLC trailer key and TEST.bin, still unknown](handover/pure-dlc-trailer-key-and-testbin-unknowns.md)
 - [A model built from several small pieces sharing one atlas](handover/a-model-built-from-several-small-pieces-sharing.md)
 - [Which movie cut plays, and what plays the three 260-frame reels](handover/which-movie-cut-plays-and-what-plays-the.md)
 - [The PS2 PAL/NTSC selector's ultimate trigger](handover/the-ps2-pal-ntsc-selectors-ultimate-trigger.md)

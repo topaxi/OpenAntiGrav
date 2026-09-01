@@ -1,10 +1,9 @@
-# Vita key material
+# Vita and PSP key material
 
 This file itself is tracked (`!/data/**/README.md` in the repo root `.gitignore`,
-technique only, no secrets); `vita-zrif.tsv` below, with the actual zRIF/klicensee
-values, stays gitignored under `/data/*`. Exists purely so a re-decrypt of
-`data/extracted/vita/` doesn't need a fresh trip to nopaystation.com or the F00D
-service every time.
+technique only, no secrets); the actual key tables below stay gitignored under
+`/data/*`. Exists purely so a re-decrypt doesn't need a fresh trip to the same
+external source every time.
 
 ## `vita-zrif.tsv`
 
@@ -49,3 +48,27 @@ against a large TSV was unreliable for picking out one specific row.
 
 Not yet repopulated in this checkout - see the open handover thread. Only needed for the
 PFS layer (`psvpfsparser -f00d_url`/`-f00d_cache`), not for the klicensee above.
+
+## `pure-dlc-keys.txt`
+
+One 128-bit key per Wipeout Pure DLC content ID, all three regions (EU `UCES00001D*`,
+JP `UCJS10007D*`, US `UCUS98612D*`). Unlike the Vita material above, **this is not a
+per-console secret** - PSP disc-bound "Type D" content like Pure's uses a fixed,
+publicly-known key per pack rather than an account- or console-derived one, which is
+exactly why `pi.wad` decrypts identically for anyone with the file, no license
+service involved.
+
+Source: Thomas Perl's [`wipeout-pure-dlc2dlc`](https://gitlab.com/thp/wipeout-pure-dlc2dlc)
+(ISC license), `keys.txt` as of its 2021-05-30 release, fetched verbatim 2026-09-01.
+That tool exists to convert a DLC pack between regions for real hardware; this project
+only needs its key table and its `crypt_with_key`/`xtea8` algorithm (documented in
+[`docs/formats/dlc-pack.md`](../../docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table)),
+not the region-conversion feature itself.
+
+**Verified against this project's own copy of all seven EU packs in `data/dlc/`, not
+just cited**: for each, XORing the documented XTEA-8 keystream (keyed by the row
+matching that pack's own content ID, which `PARAM.sfo`'s `TITLE` field names) over
+every byte but the last 256 turns it into a file `oag-wad` parses unmodified - real
+entry counts, real LZSS/zlib payloads, no format-specific decoder needed. The last 256
+bytes are a per-region signature this project's decoder never reads; see the doc page
+for what it is and why it is out of scope.

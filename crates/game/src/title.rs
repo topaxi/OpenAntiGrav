@@ -40,16 +40,18 @@ pub struct Opened {
 /// reported as Pulse's error, since Pulse is what a caller with no better
 /// information should be told about.
 ///
-/// **Packs are not mounted behind a Pure source.** Nothing under
-/// [ADR-0022](../../../docs/architecture/adr/0022-title-packages.md)
-/// describes a Pure pack yet, and mounting Pulse's own DLC behind a
-/// different title would be silently wrong rather than merely incomplete -
-/// so `packs` is dropped, not carried through, when the fallback fires.
+/// **`packs` and `pure_packs` are two different lists, not a title guess.**
+/// [`crate::dlc::packs`] and [`crate::dlc::pure_packs`] discover them
+/// separately, from the same `data/dlc` folder - see those functions' docs
+/// for why one shared list would leak a pack into the wrong title. `packs`
+/// mounts behind Pulse; `pure_packs` mounts behind Pure only when the
+/// fallback below actually fires, so a Pulse source never even asks Pure's
+/// own list to exist.
 ///
 /// # Errors
 ///
-/// Propagates [`oag_pulse::open_with_packs`] and [`oag_pure::open`].
-pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
+/// Propagates [`oag_pulse::open_with_packs`] and [`oag_pure::open_with_packs`].
+pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Opened> {
     // **Tried before Pulse, and by a different test.** Pure is reached by
     // Pulse's deny-list naming it, because the two ship archives under identical
     // names; HD shares no archive name with either, so there is nothing for a
@@ -79,11 +81,12 @@ pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
     }
 
     match oag_pulse::open_with_packs(source, packs) {
-        Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => oag_pure::open(source)
-            .map(|archives| Opened {
+        Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => {
+            oag_pure::open_with_packs(source, pure_packs).map(|archives| Opened {
                 archives,
                 title: oag_pure::TITLE,
-            }),
+            })
+        }
         other => other.map(|archives| Opened {
             archives,
             title: oag_pulse::TITLE,
@@ -109,7 +112,7 @@ pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
 /// answers this and reading it alone is far cheaper than mounting anything.
 #[must_use]
 pub fn identify(source: &str) -> Option<&'static Title> {
-    open_source(source, Vec::new())
+    open_source(source, Vec::new(), Vec::new())
         .ok()
         .map(|opened| opened.title)
 }
@@ -129,7 +132,7 @@ mod tests {
     /// module existing.
     #[test]
     fn a_source_that_is_neither_titles_error_is_pulses() {
-        let error = open_source("does/not/exist.chd", Vec::new()).unwrap_err();
+        let error = open_source("does/not/exist.chd", Vec::new(), Vec::new()).unwrap_err();
         assert!(!matches!(error, Error::WrongTitle { .. }), "{error}");
     }
 }

@@ -87,18 +87,22 @@ fn cache() -> PathBuf {
     workspace("data/cache/dlc")
 }
 
-/// Every pack under `data/dlc`, unzipped into the cache if it is still a zip.
+/// Every Pulse pack under `data/dlc`, unzipped into the cache if it is still a
+/// zip. `dlc::packs`, not `dlc::pure_packs` - the two discover from separate
+/// cache subtrees (see `crates/game/src/dlc.rs`'s module docs), which is what
+/// keeps this list Pulse's own even though `data/dlc/` also holds seven
+/// Wipeout Pure packs and whatever else a maintainer has downloaded.
 ///
-/// **Problems are printed, not asserted on.** That directory also holds seven
-/// Wipeout Pure packs, whose payload is encrypted and is nobody's pack here,
-/// plus whatever else a maintainer has downloaded. Failing a Pulse test because
-/// an unrelated zip would not open would send someone chasing a Pulse
-/// regression that does not exist - and the production path treats exactly the
-/// same condition as skip-and-report. What these tests assert is that the four
-/// Pulse packs are found, which is a statement about what *is* there.
+/// **Problems are printed, not asserted on.** An unrelated zip failing to
+/// open (empty keys here mean Pure's packs are among those, whether or not
+/// this checkout has sourced its own key table) would send someone chasing a
+/// Pulse regression that does not exist - and the production path treats
+/// exactly the same condition as skip-and-report. What these tests assert is
+/// that the four Pulse packs are found, which is a statement about what *is*
+/// there.
 fn packs() -> Option<Vec<oag_assets::dlc::Pack>> {
     let root = dlc_root()?;
-    let (packs, problems) = dlc::packs(&[root], &cache());
+    let (packs, problems) = dlc::packs(&[root], &cache(), &[]);
     for problem in &problems {
         println!("skipped: {problem}");
     }
@@ -201,7 +205,7 @@ fn european_packs_mount_against_the_american_disc() {
         return;
     };
 
-    let (packs, _) = dlc::packs(&[root], &cache());
+    let (packs, _) = dlc::packs(&[root], &cache(), &[]);
     let mut archives = oag_pulse::open_with_packs(&image, packs).expect("mounting the packs");
 
     let base = oag_pulse::open(&image).expect("the disc alone");
@@ -324,7 +328,7 @@ fn mounting_packs_leaves_the_disc_s_own_entries_alone() {
     };
 
     let mut base = oag_pulse::open(&image).expect("the disc alone");
-    let (packs, _) = dlc::packs(&[root], &cache());
+    let (packs, _) = dlc::packs(&[root], &cache(), &[]);
     let mut mounted = oag_pulse::open_with_packs(&image, packs).expect("mounting the packs");
 
     let name = oag_pulse::names::GAME_PLUGIN_DEFINITION;

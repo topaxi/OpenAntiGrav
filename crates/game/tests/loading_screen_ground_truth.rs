@@ -60,8 +60,9 @@ fn image(name: &str) -> Option<PathBuf> {
 /// The chosen language's table **and** the entry it came from, which is what
 /// `Assets::load` needs to reach the other copies of it.
 fn table_and_entries(source: &Path) -> (StringTable, Option<String>) {
-    let opened = oag_game::title::open_source(&source.display().to_string(), Vec::new())
-        .expect("the source opens");
+    let opened =
+        oag_game::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+            .expect("the source opens");
     let mut archives = opened.archives;
     let mut report = Vec::new();
     let plugins: &[&str] = opened.title.front_end.map_or(&[], |fe| fe.language_plugins);

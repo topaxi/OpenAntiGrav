@@ -364,7 +364,7 @@ impl MusicDiscs {
 /// disagree with itself between the survey and the search. `None` for every
 /// source that will not open as any title this build knows.
 fn identify(source: &str) -> Option<(&'static oag_title::Title, oag_assets::Layout)> {
-    let opened = crate::title::open_source(source, Vec::new()).ok()?;
+    let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
     Some((opened.title, opened.archives.layout))
 }
 

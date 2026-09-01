@@ -97,7 +97,7 @@ fn open_archived(source: &str) -> Option<(&'static Title, Archives)> {
     // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
     // path, so a directory somebody extracted with `oag-unpack` answers the
     // same as a disc image does.
-    let opened = crate::title::open_source(source, Vec::new()).ok()?;
+    let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
     matches!(
         opened.archives.layout.platform,
         Platform::Psp | Platform::Ps3

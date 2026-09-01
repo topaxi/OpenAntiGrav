@@ -85,6 +85,8 @@ another. Those are dropped at boot with a note rather than offered and then
 failing.
 
 **What this does not do:** it does not make Pulse packs work with *Pure*, whose
-downloadable content is genuinely encrypted and remains unread, and it does not
-claim to know how the original itself decided a pack was usable. No runtime
-trace of that decision was observed.
+downloadable content is a different mounting path entirely - genuinely
+encrypted, decrypted with an externally-sourced key rather than read as
+plaintext (see [ADR-0033](0033-external-key-material-for-decryption.md)) - and
+it does not claim to know how the original itself decided a pack was usable.
+No runtime trace of that decision was observed.

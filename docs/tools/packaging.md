@@ -336,6 +336,19 @@ own `extracted/vita` subdirectory; and `~/.local/share/oag/extracted/vita`.
 checkout's `data/extracted/vita` to the last of those on the remote, so a Deck
 deploy finds it the same way it finds `data/images`.
 
+Wipeout Pure's PSN DLC packs need a key table to decrypt (see
+[ADR-0033](../architecture/adr/0033-external-key-material-for-decryption.md)),
+which is never in this repository and follows its own three-candidate search,
+`default_pure_dlc_keys_path()` in
+[`crates/game/src/dlc.rs`](../../crates/game/src/dlc.rs): a `keys/`
+directory beside whichever of `dlc_search_path()`'s locations holds the
+candidate - `data/keys/pure-dlc-keys.txt` under the current directory, beside
+the AppImage, or `~/.local/share/oag/keys/pure-dlc-keys.txt`. A missing file
+is not an error; Pure's packs are found and simply fail to decrypt, reported
+the same way an unrelated zip is. `scripts/deploy-to-deck.sh` syncs the one
+file (not the whole `data/keys/` directory, which also holds the unrelated
+Vita zRIF table) to the last of those three on the remote.
+
 The movie cache follows the same reasoning: `data/cache/movies` in a checkout
 (recognised by a `data/` directory existing), and `~/.cache/oag/movies`
 otherwise, rather than scattering a cache through whatever folder the AppImage
@@ -389,10 +402,14 @@ Two structural points, because both are easy to get wrong later:
 
 `just deploy-deck` (`scripts/deploy-to-deck.sh`) automates the copy: it builds
 `just appimage-portable`, then rsyncs (falling back to `scp` if the remote has
-no rsync) the AppImage onto the Deck's `~/Desktop` and whatever's under
-`data/images/`/`data/dlc/` onto `<XDG_DATA_HOME>/oag/{images,dlc}` there - the
-same places [`crates/game/src/source.rs`](../../crates/game/src/source.rs)
-already searches, so nothing needs setting on the Deck side to find them.
+no rsync) the AppImage onto the Deck's `~/Desktop`, whatever's under
+`data/images/`/`data/dlc/`/`data/extracted/vita/` onto
+`<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita}` there, and, if present,
+`data/keys/pure-dlc-keys.txt` onto `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
+- the same places
+[`crates/game/src/source.rs`](../../crates/game/src/source.rs) and
+[`crates/game/src/dlc.rs`](../../crates/game/src/dlc.rs) already search, so
+nothing needs setting on the Deck side to find them.
 
 ```sh
 just deploy-deck                    # deck@steamdeck, or $OAG_DECK_HOST

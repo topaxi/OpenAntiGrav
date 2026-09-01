@@ -789,8 +789,8 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
     for (name, team, craft) in cases {
         let Some(path) = image(name) else { continue };
         let source = path.display().to_string();
-        let archives =
-            oag_game::title::open_source(&source, Vec::new()).expect("opening the source");
+        let archives = oag_game::title::open_source(&source, Vec::new(), Vec::new())
+            .expect("opening the source");
 
         let racing = race::ship_entry_name(craft, team, oag_race::Mode::TimeTrial);
         let zoning = race::ship_entry_name(craft, team, oag_race::Mode::Zone);
@@ -855,8 +855,8 @@ fn every_titles_zone_handling_is_one_classless_block() {
     for (name, directory) in cases {
         let Some(path) = image(name) else { continue };
         let source = path.display().to_string();
-        let mut opened =
-            oag_game::title::open_source(&source, Vec::new()).expect("opening the source");
+        let mut opened = oag_game::title::open_source(&source, Vec::new(), Vec::new())
+            .expect("opening the source");
         let entry = oag_formats::handling::entry_name(directory);
         let blob = opened
             .archives

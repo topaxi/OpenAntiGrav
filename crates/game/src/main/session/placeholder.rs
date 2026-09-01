@@ -63,9 +63,11 @@ impl Session {
             return Err(windowed_error);
         };
 
-        let (packs, problems) =
-            oag_game::dlc::packs(&pending.dlc, &oag_game::boot::default_dlc_cache_dir());
-        let opened = match oag_game::title::open_source(source, packs) {
+        let (packs, pure_packs, problems) = oag_game::dlc::packs_from_defaults(
+            &pending.dlc,
+            &oag_game::boot::default_dlc_cache_dir(),
+        );
+        let opened = match oag_game::title::open_source(source, packs, pure_packs) {
             Ok(opened) => opened,
             Err(e) => {
                 self.pending = Some(pending);
@@ -316,7 +318,8 @@ mod tests {
     fn twenty_forty_eights_own_roster_and_circuits_both_read() {
         let Some(package) = package() else { return };
         let opened =
-            oag_game::title::open_source(&package.display().to_string(), Vec::new()).unwrap();
+            oag_game::title::open_source(&package.display().to_string(), Vec::new(), Vec::new())
+                .unwrap();
         assert_eq!(opened.title.name, "Wipeout 2048");
         assert!(opened.title.front_end.is_none());
 

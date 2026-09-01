@@ -62,7 +62,7 @@ fn image(name: &str) -> Option<PathBuf> {
 /// exactly as `race::load` does. Hard-coding Pulse's here would make the HD leg
 /// below test the wrong paths and pass for the wrong reason.
 fn banks(image: &Path, zone: bool) -> Banks {
-    let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new())
+    let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
         .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
@@ -250,8 +250,8 @@ fn wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues() {
         println!("skipping: {} not present", path.display());
         return;
     }
-    let opened =
-        oag_game::title::open_source(&path.display().to_string(), Vec::new()).expect("opening HD");
+    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+        .expect("opening HD");
     let mut archives = opened.archives;
     let announcer = oag_game::audio::sfx::ClassAnnouncer::load(
         &mut archives,

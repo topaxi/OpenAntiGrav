@@ -36,15 +36,20 @@ pub enum Remix {
 
 impl Remix {
     /// Opens `source` for the track, and `craft_source` for the craft when it
-    /// names something other than `source`. `packs` mounts behind `source`
-    /// only - a remix does not widen what a DLC pack may be mounted behind,
-    /// on the same terms [`crate::title::open_source`] already applies to an
-    /// ordinary race.
-    pub fn open(source: &str, craft_source: Option<&str>, packs: Vec<Pack>) -> Result<Self> {
-        let track = crate::title::open_source(source, packs)?;
+    /// names something other than `source`. `packs`/`pure_packs` mount
+    /// behind `source` only - a remix does not widen what a DLC pack may be
+    /// mounted behind, on the same terms [`crate::title::open_source`]
+    /// already applies to an ordinary race.
+    pub fn open(
+        source: &str,
+        craft_source: Option<&str>,
+        packs: Vec<Pack>,
+        pure_packs: Vec<Pack>,
+    ) -> Result<Self> {
+        let track = crate::title::open_source(source, packs, pure_packs)?;
         match craft_source {
             Some(craft_source) if craft_source != source => {
-                let craft = crate::title::open_source(craft_source, Vec::new())?;
+                let craft = crate::title::open_source(craft_source, Vec::new(), Vec::new())?;
                 Ok(Self::Split { track, craft })
             }
             _ => Ok(Self::Single(track)),
@@ -147,7 +152,7 @@ impl Catalogue {
 /// Propagates a source this build cannot open and a plugin definition that
 /// will not read or parse.
 pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
-    let opened = crate::title::open_source(source, Vec::new())
+    let opened = crate::title::open_source(source, Vec::new(), Vec::new())
         .with_context(|| format!("opening {source}"))?;
     let title = opened.title;
     let mut archives = opened.archives;

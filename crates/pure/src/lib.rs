@@ -320,6 +320,22 @@ pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
 }
 
+/// [`open`], with `packs` mounted behind the disc - see
+/// [`Archives::open_with_packs`] for the search order and why the disc wins a
+/// collision. The mount itself is title-agnostic (see
+/// [ADR-0021](../../../docs/architecture/adr/0021-region-independent-dlc.md)),
+/// so this is the same call `oag_pulse::open_with_packs` makes, against this
+/// title's own [`TITLE`] - what makes it Pure's is that `packs` came from
+/// Pure's own DLC, decrypted per
+/// `docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table`.
+///
+/// # Errors
+///
+/// Propagates [`Archives::open_with_packs`].
+pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Result<Archives> {
+    Archives::open_with_packs(source, TITLE, packs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

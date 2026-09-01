@@ -439,11 +439,12 @@ impl std::fmt::Debug for Media {
 pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let mut report = Vec::new();
     let mut steps = Steps::new();
-    let (packs, problems) = crate::dlc::packs(&options.dlc, &default_dlc_cache_dir());
+    let (packs, pure_packs, problems) =
+        crate::dlc::packs_from_defaults(&options.dlc, &default_dlc_cache_dir());
     let crate::title::Opened {
         mut archives,
         title,
-    } = open_source(&options.source, packs)
+    } = open_source(&options.source, packs, pure_packs)
         .with_context(|| format!("opening the archives in {}", options.source))?;
     // Which title this is was settled by the serial, here, and everything below
     // asks `profile` rather than asking the XML again. See ADR-0023.
@@ -452,8 +453,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // title is in that state today. What used to be refused here as well was a
     // front end whose *chain* was only declared - Wipeout HD's - and that is now
     // expressed rather than withheld: see `oag_title::Provenance` and ADR-0025.
-    // Substituting a sibling title's chain would still be wrong, and is still
-    // not done.
+    // Substituting a sibling title's chain would still be wrong, and is still not done.
     let front_end = title.front_end.ok_or_else(|| {
         anyhow::anyhow!(
             "{}'s front end is not recovered, so there is no sequence to walk: \

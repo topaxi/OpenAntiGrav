@@ -424,23 +424,26 @@ see [below](#one-pure-file-has-no-class-blocks-at-all).
 
 ### `Van_Uber` is Pure content, not a Pure *team* on this disc
 
-**Confidence: 94** that it is absent from the base disc; unread beyond that.
-`Van_Uber` is not among the eleven `<PI_Team>` entries above, and
-`Data\Ships\Van_Uber\Ship.vex` does not resolve by name-hash against either
-Pure disc's `Data.wad` (hash `3a30c448`, checked on both USA and EU) - the
-same absence `dlc-pack.md` and `exhaust.md` have recorded since 2026-08-09,
-just without checking it against this page's own roster until now.
+**Confidence: 94.** `Van_Uber` is not among the eleven `<PI_Team>` entries
+above, and `Data\Ships\Van_Uber\Ship.vex` does not resolve by name-hash
+against either Pure disc's `Data.wad` (hash `3a30c448`, checked on both USA
+and EU) - the same absence `dlc-pack.md` and `exhaust.md` have recorded since
+2026-08-09, just without checking it against this page's own roster until now.
 
 That does not make it a Pulse or Fusion name adrift in this project's docs:
 `data/dlc/` holds seven Wipeout Pure PSN packs, unlike Pulse's four - `A7`,
 `Delta Pack`, `Gamma Pack 1`, `GamesRadar Pack`, `Oblivion`, `Omega Pack`,
-`Voice of Cod` - and each one's `pi.wad` is genuinely high-entropy (8.0000
-bits/byte) and unread; see [dlc-pack.md](dlc-pack.md#not-read-yet) and
-`data/README.md`. External sources (Wipeout Central's wiki, not project
-evidence - `pi.wad` doesn't parse, so nothing here confirms it) place a team
-called Van-Über in the Gamma pack specifically. Worth recording as a
-plausible destination for future decryption work, not as a claim this
-project has verified.
+`Voice of Cod`. **Confirmed, not just likely**: the Gamma pack's `pi.wad`
+decrypts (see
+[dlc-pack.md](dlc-pack.md#pures-packs-decrypt-with-an-external-key-table) for
+the algorithm and key table) and its manifest declares
+`<PI_Team name="Vanuber" ... location="Data\Ships\Vanuber">` - no underscore,
+the id `race::ship_entry_name` actually composes a path from, unlike the
+underscored `Van_Uber` spelling every external source and this project's own
+earlier name-hash checks used. `Data\Ships\Vanuber\Ship.vex` (`9e62d495`) and
+`\handlingstats.xml` (`7e135ec1`) both hash-match real entries in the
+decrypted pack, so the team is fully simulatable, the same as Pulse's four DLC
+teams.
 
 Recorded from
 [`crates/pure/tests/handling_schema_ground_truth.rs`](../../crates/pure/tests/handling_schema_ground_truth.rs),

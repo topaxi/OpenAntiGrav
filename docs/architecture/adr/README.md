@@ -43,6 +43,7 @@ out to be wrong.
 | [0030](0030-velocity-buffer-motion-blur.md) | The velocity buffer lands - measured per-draw motion replaces camera reprojection and the focus mask | Accepted; supersedes [ADR-0028](0028-camera-motion-blur-first.md)'s technique and [ADR-0029](0029-primer-capture-and-craft-focus-mask.md)'s mask |
 | [0031](0031-wait-briefly-for-the-mixer-lock.md) | The audio callback waits out a held mixer lock, and ramps the buffer it still loses | Superseded by [ADR-0032](0032-render-ahead-into-a-ring.md); its ramps stand |
 | [0032](0032-render-ahead-into-a-ring.md) | A thread renders ahead into a lock-free ring and the callback only copies out | Accepted; supersedes [ADR-0031](0031-wait-briefly-for-the-mixer-lock.md) and [ADR-0018](0018-audio-mixer-architecture.md)'s `Output` shape |
+| [0033](0033-external-key-material-for-decryption.md) | External key material lives under `data/keys/`, gitignored, and its absence is never an error | Accepted |
 
 ## Format
 

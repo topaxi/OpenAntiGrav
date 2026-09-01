@@ -200,7 +200,7 @@ impl Assets {
         // through `oag_pulse::open` comes back `WrongTitle`, which reads as "you
         // pointed at the wrong disc" when the truth is "this title ships no
         // loading screen".
-        let opened = match crate::title::open_source(source, Vec::new()) {
+        let opened = match crate::title::open_source(source, Vec::new(), Vec::new()) {
             Ok(opened) => opened,
             Err(e) => {
                 notes.push(format!("no loading screen assets from {source}: {e}"));
