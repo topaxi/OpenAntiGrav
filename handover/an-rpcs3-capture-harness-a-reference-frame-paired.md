@@ -5,6 +5,7 @@
 ## Open
 
 - `viewProj` is not located yet; four places are ruled out (EBOOT data/BSS, `RenderManager`, `Render_FrameContextPtr`'s target, 1 MB of heap at `0x30000000`).
+- **Confirmed 2026-09-01**: `data/reference/hd-capture/talons/00.json`'s recorded pose is exactly the degenerate case this row's last sentence warns about - `eye`/`forward`/`right`/`up` components are ~1e-38 denormals, `fov_y_deg` is 92.9 and `aspect` 1.9, none of it plausible. Checked while looking for a pixel-for-pixel reference for [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md); did not chase further, since locating `viewProj` is this thread's job, not that one's.
 - The camera is the one piece not working end to end in the capture harness.
 - The hypothesis that the matrix goes straight into the pushbuffer (`NV4097_SET_TRANSFORM_CONSTANT_LOAD`) with no CPU-side copy is untested.
 

@@ -53,6 +53,7 @@ fn vertex(position: [f32; 3], lit: f32) -> GpuVertex {
         // material's own declaration in the original too - a program fed
         // neither a constant ambient nor a directional light.
         slots: slots::DEFAULT | slots::EMISSIVE,
+        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
     }
 }
 
@@ -82,6 +83,7 @@ fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
         textures: vec![Some(albedo)],
         lightmaps: vec![None],
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
         vertex_colour_is_light: false,
         flame: None,
@@ -316,6 +318,7 @@ fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
         xform: 0,
         sun_mask: 1.0,
         slots: slots::DEFAULT,
+        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
     };
     Model {
         vertices: vec![

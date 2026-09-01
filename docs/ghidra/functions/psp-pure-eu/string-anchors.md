@@ -300,6 +300,14 @@ physics come first and the browser is explicitly low priority:
    were imported is the obvious first thing to try.
 4. The `Data\XML\*.xml` loaders remain unfound; see the note above that their
    referencing code may not be disassembled into functions yet.
-5. `psp-pure-usa` is the same vintage and almost certainly has the same
-   relocation shape; its [corroboration.md](../psp-pure-usa/corroboration.md)
-   has not been checked against this finding.
+5. **Confirmed 2026-09-01: `psp-pure-usa` has the identical relocation shape.**
+   `get_xrefs_to` on its own `Data\XML\HandlingStats.xml` also returns
+   nothing, and the same `off = A - 0x08804000` / `lui`+`addiu` split finds the
+   one real reference exactly where predicted. One addition to the method: the
+   `addiu` half is often in a `jal`'s delay slot, and `search_instructions`'
+   `mnemonic` field for it is `_addiu`, not `addiu` - filter by
+   `operand_pattern` alone, not by mnemonic, or delay-slot hits are silently
+   missed. The same wart extends to `jal` call targets too (unrelocated
+   pseudo-addresses, so `get_function_callers` also returns nothing); worked
+   around the same way in
+   [`psp-pure-usa/rocket-and-collision-fx.md`](../psp-pure-usa/rocket-and-collision-fx.md).

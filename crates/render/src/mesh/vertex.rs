@@ -102,7 +102,25 @@ pub struct GpuVertex {
     /// uniform and a second bind group, and a chunk's vertices are emitted
     /// together anyway - the same argument [`Self::anim`] makes.
     pub slots: u32,
+    /// The exponent `mesh.wgsl`'s specular term raises `N.H` to.
+    ///
+    /// **Resolved per material where it can be, off the material's own
+    /// fragment microcode** -
+    /// `oag_formats::rcsmaterial::fragment::Program::specular_exponent` -
+    /// rather than shared. `32.0` is only the *fallback*: for a non-HD
+    /// title, which never varies this field at all; for an HD material the
+    /// decoder could not resolve to a value; and for a resolved literal
+    /// `0.0`, which reads as `SpecularPower` patched at draw time rather
+    /// than a real shininess (`pow(x, 0) = 1` is not a plausible one) - see
+    /// that method's own doc comment for the disc-wide evidence. `32.0`
+    /// stays a defensible middle value in all three cases: the commonest of
+    /// the disc's own round numbers, not this project's invention.
+    pub specular_exponent: f32,
 }
+
+/// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,
+/// and every HD material the decoder could not resolve to a real value.
+pub const DEFAULT_SPECULAR_EXPONENT: f32 = 32.0;
 
 /// How [`GpuVertex::slots`] packs a material's texture roles.
 ///

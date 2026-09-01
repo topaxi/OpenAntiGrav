@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "ghidra-mcp": {
-      "command": "bridge-mcp-ghidra"
+      "command": "bridge-mcp-ghidra",
+      "env": {
+        "GHIDRA_MCP_ALLOW_SCRIPTS": "1"
+      }
     }
   }
 }

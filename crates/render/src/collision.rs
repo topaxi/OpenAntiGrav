@@ -283,6 +283,7 @@ pub fn build_model(
         textures: Vec::new(),
         lightmaps: Vec::new(),
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
@@ -383,6 +384,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         xform: 0,
         sun_mask: 1.0,
         slots: crate::mesh::slots::DEFAULT,
+        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
     }
 }
 

@@ -164,6 +164,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         textures: Vec::new(),
         lightmaps: Vec::new(),
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
@@ -232,6 +233,7 @@ fn strip(
             xform: 0,
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
+            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -244,6 +246,7 @@ fn strip(
             xform: 0,
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
+            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
         });
     }
     for i in 0..samples.len() as u32 - 1 {
