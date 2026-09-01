@@ -76,6 +76,9 @@ const TITLE: &Title = &Title {
         zone_stages: None,
         zone_stage_textures: None,
         zone_sky: None,
+        // Unread here too: nothing in this crate resolves a team's variant.
+        team_variants: None,
+        guest_roster: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this
@@ -103,6 +106,7 @@ const TITLE: &Title = &Title {
     // times: an archive is found by name, and what is inside one is nothing
     // this crate looks at.
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
+    track_plugin_definition: None,
     // This crate opens archives; nothing here draws a loading screen.
     loading: None,
     music: None,

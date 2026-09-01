@@ -60,6 +60,7 @@ pub mod pilots;
 pub mod placeholder;
 pub mod prefetch;
 pub mod race;
+pub mod remix;
 pub mod render;
 pub mod scoreboard;
 pub mod screen;

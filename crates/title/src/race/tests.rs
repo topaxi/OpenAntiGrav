@@ -279,3 +279,134 @@ fn a_zone_palette_resolves_per_title_or_per_circuit() {
         "a name with no directory has no sibling to name"
     );
 }
+
+const NATIVE: TeamVariants = TeamVariants {
+    teams: &["Feisar2048"],
+    variants: &[
+        TeamVariant {
+            suffix: "1",
+            label: "fighter",
+        },
+        TeamVariant {
+            suffix: "3",
+            label: "speed",
+        },
+    ],
+    join: VariantJoin::Subdirectory,
+};
+
+const GUEST: TeamVariants = TeamVariants {
+    teams: &["Assegai"],
+    variants: &[
+        TeamVariant {
+            suffix: "",
+            label: "HD",
+        },
+        TeamVariant {
+            suffix: "_c1",
+            label: "Fury Concept",
+        },
+    ],
+    join: VariantJoin::Suffix,
+};
+
+const GUEST_ROSTER: GuestRoster = GuestRoster {
+    dir: r"Data\art\published\hdships",
+    variants: &GUEST,
+};
+
+const SOUNDS: SoundBanks = SoundBanks {
+    hud: "hud.bnk",
+    ship: "ship.bnk",
+    ship_zone: "ship.bnk",
+    weapons: "weapons.bnk",
+    speech: "speech.bnk",
+};
+
+/// A fixture with both a native `team_variants` table and a `guest_roster` -
+/// 2048's own shape, the only title that carries both at once.
+const DEFAULTS: RaceDefaults = RaceDefaults {
+    track: "track.vex",
+    team: r"Feisar2048\3",
+    ship_dir: r"Data\art\published\Ships",
+    handling_dir: r"Data\HandlingStats",
+    zone: ZoneCircuit::Prefixed("zone_"),
+    zone_craft: ZoneCraft::PlayerShip,
+    sounds: &SOUNDS,
+    zone_announcer: None,
+    zone_class_announcer: None,
+    zone_palette: None,
+    zone_stages: None,
+    zone_stage_textures: None,
+    zone_sky: None,
+    team_variants: Some(&NATIVE),
+    guest_roster: Some(&GUEST_ROSTER),
+};
+
+/// A combined id is recognised exactly when it is one of the table's own
+/// team-and-suffix pairs, on both join shapes.
+#[test]
+fn recognizes_matches_exactly_the_tables_own_combined_ids() {
+    assert!(NATIVE.recognizes(r"Feisar2048\1"));
+    assert!(NATIVE.recognizes(r"Feisar2048\3"));
+    assert!(
+        !NATIVE.recognizes(r"Feisar2048\2"),
+        "not one of this table's own suffixes"
+    );
+    assert!(
+        !NATIVE.recognizes("Feisar2048"),
+        "the bare id is not a combined one"
+    );
+    assert!(
+        !NATIVE.recognizes("Qirex2048\\1"),
+        "not one of this table's own teams"
+    );
+
+    assert!(GUEST.recognizes("Assegai"));
+    assert!(GUEST.recognizes("Assegai_c1"));
+    assert!(
+        !GUEST.recognizes("Assegai_n1"),
+        "not one of this table's own suffixes"
+    );
+}
+
+/// A bare team id resolves against the title's own `team_variants` first,
+/// then `guest_roster`, and `None` when neither names it.
+#[test]
+fn team_variants_for_resolves_native_and_guest_teams_and_nothing_else() {
+    assert_eq!(DEFAULTS.team_variants_for("Feisar2048"), Some(&NATIVE));
+    assert_eq!(DEFAULTS.team_variants_for("Assegai"), Some(&GUEST));
+    assert_eq!(
+        DEFAULTS.team_variants_for("Triakis"),
+        None,
+        "not on either table"
+    );
+}
+
+/// An already-combined guest id resolves under the guest roster's own
+/// directory; a native or unrecognised one falls back to the title's own.
+#[test]
+fn ships_for_and_handling_dir_for_route_a_combined_guest_id_to_the_guest_directory() {
+    assert_eq!(DEFAULTS.ships_for("Assegai_c1").dir, GUEST_ROSTER.dir);
+    assert_eq!(DEFAULTS.handling_dir_for("Assegai_c1"), GUEST_ROSTER.dir);
+
+    assert_eq!(DEFAULTS.ships_for(r"Feisar2048\3").dir, DEFAULTS.ship_dir);
+    assert_eq!(
+        DEFAULTS.handling_dir_for(r"Feisar2048\3"),
+        DEFAULTS.handling_dir
+    );
+
+    assert_eq!(DEFAULTS.ships_for("Triakis").dir, DEFAULTS.ship_dir);
+    assert_eq!(DEFAULTS.handling_dir_for("Triakis"), DEFAULTS.handling_dir);
+}
+
+/// A title with no `guest_roster` at all - every title but 2048 - degrades
+/// `ships_for`/`handling_dir_for` to exactly [`RaceDefaults::ship_dir`]/
+/// [`RaceDefaults::handling_dir`], for any id.
+#[test]
+fn with_no_guest_roster_the_for_methods_are_the_plain_fields() {
+    let mut solo = DEFAULTS;
+    solo.guest_roster = None;
+    assert_eq!(solo.ships_for("Assegai_c1").dir, solo.ship_dir);
+    assert_eq!(solo.handling_dir_for("Assegai_c1"), solo.handling_dir);
+}

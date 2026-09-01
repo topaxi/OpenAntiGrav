@@ -51,6 +51,57 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: Some(ZONE_STAGES),
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
+    team_variants: Some(&TEAM_VARIANTS),
+    guest_roster: None,
+};
+
+/// The twelve teams a Wipeout HD/Fury race can pick, spelled the way
+/// `Data\Plugins\PI001\Definition.xml`'s own `PI_Team` locations do -
+/// confirmed against the manifest, case-folded the same way
+/// [`DEFAULT_TEAM`]'s own lowercase spelling is.
+pub const TEAMS: [&str; 12] = [
+    "AG_Systems",
+    "Assegai",
+    "Auricom",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Harimau",
+    "Icaras",
+    "Mirage",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// Every one of [`TEAMS`] ships three directories, not one - confirmed
+/// against the manifest for all twelve:
+/// `crates/game/examples/hd_fury_variant_probe.rs`. The unsuffixed one is
+/// the classic HD hull; `_c1` and `_n1` are Fury's two reskins - "the
+/// concept skin" and "the nitro one" respectively, in the words
+/// `race/load.rs`'s own `hd_trail_red` already used for the flag that reads
+/// these exact suffixes to decide a craft's trail colour.
+///
+/// **Not `detonator`** - a thirteenth directory beside these thirty-six,
+/// and Detonator mode's own craft rather than a variant of any of the
+/// twelve; excluded from [`TEAMS`] and from this table both.
+pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &TEAMS,
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "",
+            label: "HD",
+        },
+        oag_title::TeamVariant {
+            suffix: "_c1",
+            label: "Fury Concept",
+        },
+        oag_title::TeamVariant {
+            suffix: "_n1",
+            label: "Fury Nitro",
+        },
+    ],
+    join: oag_title::VariantJoin::Suffix,
 };
 
 /// Wipeout HD/Fury's zone-number to speed-class ladder, read out of the

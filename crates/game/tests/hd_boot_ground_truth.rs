@@ -65,7 +65,9 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
         refresh_video: false,
         prefer_av1_cache: false,
     };
-    boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025")
+    let (shell, archives, _title) =
+        boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025");
+    (shell, archives)
 }
 
 /// The front end opens at all, which it did not before ADR-0025.

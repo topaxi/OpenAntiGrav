@@ -56,6 +56,7 @@ pub const TITLE: &Title = &Title {
     // disc - see `oag_pulse`'s note for the literal it was read from.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
+    track_plugin_definition: None,
     // **`None`, and it is a measurement.** Neither
     // `Data\Plugins\loading\Definition.xml` nor
     // `Data\Defaults\Loading\LoadingPulseOverlay.mip` is in any of Pure's

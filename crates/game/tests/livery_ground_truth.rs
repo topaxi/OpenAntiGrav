@@ -273,7 +273,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
     let liveries = oag_game::livery::load(
         &mut archives,
         &teams,
-        oag_hd::TITLE.race.ships(),
+        oag_hd::TITLE.race,
         oag_race::Mode::SingleRace,
         oag_hd::TITLE.flare,
         oag_render::mesh::Lod::default(),

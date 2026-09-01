@@ -50,8 +50,8 @@ pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
 pub use race::{
-    RaceDefaults, SoundBanks, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft,
-    ZonePalette, ZoneStageTextures, ZoneStages,
+    GuestRoster, RaceDefaults, SoundBanks, TeamVariant, TeamVariants, VariantJoin, ZoneAnnouncer,
+    ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages,
 };
 
 /// One title's release-level facts.
@@ -135,6 +135,16 @@ pub struct Title {
     /// on a title whose music is unlocated and `tracks` is `None` on Pulse,
     /// so routing this through it could not answer for Pulse at all.
     pub plugin_definition: &'static str,
+    /// Where `PI_Track` lives, when it is not [`Self::plugin_definition`].
+    ///
+    /// **`None` on every title but one.** Pulse, Pure and Wipeout HD each ship
+    /// one file carrying all three node kinds, which is what makes
+    /// [`Self::plugin_definition`] a single field for them; Wipeout 2048 splits
+    /// into three, one file per kind, so its `plugin_definition` names the
+    /// *team* one (a race needs a roster before it needs a circuit list) and a
+    /// caller after `PI_Track` has nowhere else to read from `plugin_definition`
+    /// alone. `None` means "the same file", never "no circuits".
+    pub track_plugin_definition: Option<&'static str>,
     /// What this title puts on screen while it loads, or `None` when it puts up
     /// nothing of its own.
     ///

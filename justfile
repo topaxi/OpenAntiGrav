@@ -123,10 +123,11 @@ hash-images:
 #
 # `--race` is required and the recipe does not add it: `oag_2048::TITLE` carries
 # `front_end: None`, so a boot with no `--race` has no menu to open and reports
-# exactly that. Expect the same honest half-picture an HD race gives, for the
-# same reason - 2048 keeps its render geometry in `.rcsmodel`, which nothing
-# here decodes, so the circuit comes up as the derived ribbon and the craft do
-# not draw. The spline, the simulation and the collision are what this proves.
+# exactly that. The circuit and the craft both draw now - `.rcsmodel`'s
+# normal, diffuse UV, material table and per-submesh binding are all read, and
+# `PVRTII4BPP` (almost every 2048 texture's pixel format) decodes - see
+# docs/formats/2048-status.md. Still missing: `.envsettings` (lighting/fog/
+# bloom fall back to the stand-in rig) and `track.pvs` (every chunk draws).
 #
 # `hd`/`fury`/`hd-ps3-eu` swaps in Wipeout HD / Fury:
 #
@@ -154,10 +155,18 @@ hash-images:
 # **`--race` still skips straight to one**, verified on this disc: Talon's Junction with
 # Assegai, which is `oag_hd::race::DEFAULTS` and the same circuit as Pulse's
 # `16_Track` in the same coordinates, so an HD run is directly comparable with
-# an existing Pulse capture. Expect an honest half-picture rather than a
-# finished frame - HD keeps its render geometry in `.rcsmodel`, which nothing
-# here decodes, so the ships do not draw and the circuit comes up as the derived
-# ribbon. The simulation, the spline, the collision and the pads are all real.
+# an existing Pulse capture. The circuit and the ships both draw, textured -
+# `.rcsmodel`'s geometry and `.gtf` (HD's own PS3 texture container) are both
+# read - see docs/formats/hd-status.md.
+#
+# RACE REMIX itself - track from one title, craft from another, picked live
+# ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)) -
+# is not a `play` keyword: it needs no source of its own, only a normal boot
+# with more than one title's disc on the search path. `just play` (any
+# keyword) reaches it the same way a player would - START at the title
+# screen, then down to REMIX. The backend alone, no menu, is
+# `--race --craft-source <source>` on any keyword, e.g.
+# `just play 2048 --race --craft-source data/images/pure-psp-eu.chd`.
 #
 # A bare flag (`--ticks 5`) still gets the EU default; anything
 # else (a path or `image:entry` spec) is passed straight through unchanged,

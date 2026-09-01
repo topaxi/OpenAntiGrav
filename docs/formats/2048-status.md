@@ -32,7 +32,7 @@ copies of 2,284 shared textures).
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
 | [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table and the per-submesh material binding** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured. `tangent`'s type nibble and section B's wider object graph are still unread. |
-| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` holds one name, so this build reads the teams one and sees no circuit or soundtrack list. |
+| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` names the teams one; `oag_title::Title::track_plugin_definition` is the axis that reaches the circuits one - `None` on every other title, `Some` here. The soundtrack list still has no equivalent axis and this build sees none. |
 
 ## What changed, and what state each is in
 
@@ -117,18 +117,17 @@ the start line and runs the simulation. What it does **not** do, and why:
 
 `oag_title::RaceDefaults::ship_dir`. Pulse, Pure and Wipeout HD all keep their
 rosters at `Data\Ships\<Team>\`, and `oag_title::race`'s own docs argued that
-made it shared vocabulary rather than a title fact. 2048 disagrees: its fourteen
+made it shared vocabulary rather than a title fact. 2048 disagrees: its twelve
 HD-derived teams are at `Data\art\published\hdships\<Team>\`, carrying the same
 file set under the same names. That is the third-title disagreement
 [ADR-0022](../architecture/adr/0022-title-packages.md) asks for.
 
-**Its own five teams are what this build actually races**, and getting there
-needed a *second* axis. `ag_systems2048`, `auricom2048`, `feisar2048`,
-`piranha2048` and `qirex2048` keep their models under
-`Data\art\published\Ships\<team>\<1..4>\` and their tuning under
-`Data\HandlingStats\<team>\<1..4>\` - two trees, where the HD-derived roster
-keeps both together. So `RaceDefaults` carries `ship_dir` *and* `handling_dir`,
-and the team id is two levels (`feisar2048\3`).
+**Its own five teams needed a *second* axis besides `ship_dir`.**
+`ag_systems2048`, `auricom2048`, `feisar2048`, `piranha2048` and `qirex2048`
+keep their models under `Data\art\published\Ships\<team>\<1..4>\` and their
+tuning under `Data\HandlingStats\<team>\<1..4>\` - two trees, where the
+HD-derived roster keeps both together. So `RaceDefaults` carries `ship_dir`
+*and* `handling_dir`, and the team id is two levels (`feisar2048\3`).
 
 **The numbered level is the four craft each team flies**, and the disc names
 them: `qirex2048\1\Textures_1\Qirex_Fighter_Livery.gxt`, then `_Agility_`,
@@ -136,7 +135,10 @@ them: `qirex2048\1\Textures_1\Qirex_Fighter_Livery.gxt`, then `_Agility_`,
 `locked_Feisar2048_speed.gxt` and its three siblings. Feisar spells the first
 `Combat` where Qirex spells it `Fighter`. Confidence 90.
 
-**What it costs is the HD-derived roster**: one `ship_dir` string cannot address
-both trees, so `Data\art\published\hdships\` is not reachable as a default on
-this title while the native one is. Every file is there; reaching it needs the
-axis to become per-team, which no second title has asked for.
+**The HD-derived roster is reachable too, through a third axis.** One
+`ship_dir` string cannot address both trees, so `oag_title::GuestRoster`
+(`RaceDefaults::guest_roster`) is a *second* roster a title can carry beside
+its own, naming a directory of its own and the twelve team ids and `_c1`/`_n1`
+suffixes that resolve under it - `RaceDefaults::ships_for`/`handling_dir_for`
+route an already-combined id (`Assegai_c1`) to whichever tree it belongs to.
+See [ADR-0035](../architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md).

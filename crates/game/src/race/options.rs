@@ -11,6 +11,15 @@ use super::*;
 pub struct Options {
     /// A disc image, or a directory extracted with `oag-unpack`.
     pub source: String,
+    /// Where the craft, HUD and grid roster load from, or `None` for
+    /// `source` - today's behaviour, unchanged.
+    ///
+    /// **The one thing a Race Remix adds.** `source` still supplies the track
+    /// and everything that goes with it - collision, environment, pads,
+    /// weapon tuning; `craft_source`, when it names a different release,
+    /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
+    /// [`crate::remix::Remix`].
+    pub craft_source: Option<String>,
     /// Directories to look in for [downloadable content](crate::dlc), mounted
     /// behind `source`'s own archives.
     ///
@@ -198,6 +207,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             source: crate::source::DEFAULT_IMAGE.to_string(),
+            craft_source: None,
             difficulty: oag_ai::Difficulty::default(),
             // Empty rather than the search path: a default that read the
             // filesystem would make two runs of the same test differ by what

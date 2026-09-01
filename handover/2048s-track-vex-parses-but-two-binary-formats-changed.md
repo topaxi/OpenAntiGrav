@@ -488,6 +488,80 @@ loudly. Ghidra RE this session named the two loaders themselves
 but not enough of either's interior, or the `WO Track` point tail, to write a
 parser change yet - see What's New above and Next Steps below.
 
+## 2026-09-01: Race Remix's live team picker is the first thing to ever ask for a 2048 team by name, and none of the 17 it offers resolve
+
+Found while a human tested Race Remix (`handover/race-remix-backend-lands-menu-wiring-is-next.md`)
+interactively for the first time, with 2048 as the CRAFT TITLE: picking any
+team failed to load, `cannot start a race: reading Data\HandlingStats\Auricom2048\handlingstats.xml
+... has no entry at Data\HandlingStats\Auricom2048\handlingstats.xml`. Not a
+Race Remix bug - `race::load` resolves a team the same way for every title,
+`handling::entry_name_in(craft_title.race.handling_dir, &team)`, and that is
+exactly what every other title's own RACE page already does. What changed is
+reachability: 2048 has no front end, so before Race Remix the only team
+`race::load` was ever asked for on this title was the hardcoded
+`oag_2048::race::DEFAULT_TEAM` (`feisar2048\3`, `--race` with no `--team`) -
+nothing before now ever tried a second one.
+
+**The reproducer**, `crates/game/examples/remix_2048_roster_probe.rs`: of the
+17 teams `crate::catalogue::teams` reads off 2048's plugin definition, **0
+resolve** against `craft_title.race.handling_dir` joined directly with the id
+- the same join that works for every other title. Two different reasons, by
+roster half:
+
+- **The 5 native teams** (`Feisar2048`, `Qirex2048`, `Piranha2048`,
+  `AG_Systems2048`, `Auricom2048`) need a *second* path level this session's
+  own earlier finding already named but did not wire anywhere reachable: "the
+  team id is two levels (`feisar2048\3`)". The plugin definition's own
+  `PI_Team` declares only the base name: `crate::catalogue::teams` has no way
+  to produce `feisar2048\3` from it, because nothing in the definition states
+  which of the four numbered variants a bare pick should mean. All 20
+  (5 teams x 4 variants) resolve fine once the number is supplied by hand -
+  confirmed variant by variant in the probe.
+- **The 12 HD-derived teams** (`Feisar`, `Qirex`, `Assegai`, `Auricom`, ...)
+  need [`HD_SHIP_DIR`](../crates/2048/src/race.rs) instead of
+  [`HANDLING_DIR`](../crates/2048/src/race.rs) - the tree "What is left"
+  above already named ("One `ship_dir` string cannot address both of 2048's
+  trees"), now confirmed for every one of the 12, not just asserted for one.
+
+**What would actually fix it:** `oag_title::RaceDefaults` carried exactly one
+`ship_dir`/`handling_dir` pair per title, which was the right shape for every
+title but this one - 2048 needs the choice to be a property of *which team*,
+not of the title alone.
+
+**2026-09-01, later: the 5 native teams are fixed.** `oag_title::TeamVariants`
+(`crates/title/src/race.rs`) is the type design this needed: a `RaceDefaults`
+carries an optional list of teams that offer more than one selectable
+directory, plus how a variant's suffix joins with the team's own id -
+measured on two different shapes rather than designed from one, since 2048's
+own five (`feisar2048\3`, a numbered *subdirectory*) and HD/Fury's twelve
+(`Auricom_c1`, a *suffix* on the same segment) disagree about more than the
+label. A VARIANT row now appears on both the RACE and RACE REMIX pages
+whenever the picked team is one `team_variants` names, defaulting to the
+first variant offered. Entry resolution for all 20 native combinations
+(5 teams x 4 ship types) is confirmed by
+`crates/game/examples/team_variants_probe.rs`; a full race actually loading
+on a combined id neither title's own `DEFAULT_TEAM` reaches - HD's
+`Assegai_c1`, 2048's `Auricom2048\1` - is pinned in
+`race_remix_ground_truth::a_team_variant_races_on_both_join_shapes`. **Only
+through the menu path**: `race::load` itself has no notion of `team_variants`
+- `combine_variant` lives in `session/menus.rs` and runs before `race_options.team`
+is set, so `--race --team Auricom2048` still fails exactly as before; a
+`--team` CLI user must spell the combined id (`Auricom2048\1`) directly. See
+`race-remix-backend-lands-menu-wiring-is-next.md`.
+
+**2026-09-01, later still: the 12 HD-derived teams are fixed too.**
+`oag_title::GuestRoster` (`crates/title/src/race/variants.rs`) is the sibling
+type `TeamVariants` needed for this - a *different* directory question, not
+a suffix-join one, since HD_SHIP_DIR serves both the ship model and the
+tuning in one tree where the native five split across two. `2048`'s own
+`GUEST_TEAM_VARIANTS`/`GUEST_ROSTER` wire it; a full race loads on any of
+the twelve, pinned in
+`race_remix_ground_truth::a_guest_team_races_standalone_on_2048_without_a_craft_split`.
+Race Remix additionally folds these twelve into "Wipeout HD"'s own CRAFT
+TITLE entry rather than showing them under 2048 - see
+`race-remix-backend-lands-menu-wiring-is-next.md` and
+[ADR-0035](../docs/architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md).
+
 ## Open
 
 - Section B's vertex declaration is found and its offsets are cross-checked
@@ -539,8 +613,12 @@ parser change yet - see What's New above and Next Steps below.
   `RcsModel_Load`'s section-size arithmetic was only checked on `altima`. The
   k-d tree half of this is now closed: all 26 files decode with every byte
   accounted for.
-- The native roster's numbered subdirectories (`ag_systems2048/1..4`) and their
-  relationship to speed class or ship variant.
+- ~~The native roster's numbered subdirectories (`ag_systems2048/1..4`) and
+  their relationship to speed class or ship variant.~~ Recovered further up
+  this thread ("RaceDefaults needed a second directory"): fighter, agility,
+  speed, prototype, in that order - what remained open was making that
+  reachable through the generic catalogue/team-loading path, which the
+  2026-09-01 section above is the fuller finding for.
 - Whether the patch PSARCs (`data1.psarc`/`data2.psarc`) touch any of `altima`,
   `AG_Systems` or the global handling file at all - not checked, since base
   alone was sufficient for everything above.

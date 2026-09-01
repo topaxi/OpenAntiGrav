@@ -86,7 +86,9 @@ pub struct ShipPaths {
 }
 
 mod announcer;
+mod variants;
 pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
+pub use variants::{GuestRoster, TeamVariant, TeamVariants, VariantJoin};
 
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +190,23 @@ pub struct RaceDefaults {
     /// `None` for a title with no such swap located, which is every title but
     /// HD/Fury.
     pub zone_sky: Option<&'static str>,
+    /// Team ids that carry more than one selectable directory, and what each
+    /// one is called and how it combines with the team's own id. See
+    /// [`TeamVariants`].
+    ///
+    /// `None` on Pulse and Pure, neither of which authors a second directory
+    /// for any team. Wipeout 2048's own five-team roster - not its
+    /// HD-derived one, which [`Self::handling_dir`]'s own doc comment already
+    /// separates out - and Wipeout HD/Fury's twelve are the two measured
+    /// shapes; see [`VariantJoin`] for why they combine differently rather
+    /// than sharing one join rule.
+    pub team_variants: Option<&'static TeamVariants>,
+    /// A second roster this title carries besides its own, reusing another
+    /// title's team identities verbatim. See [`GuestRoster`].
+    ///
+    /// `None` on every title but Wipeout 2048, whose twelve HD-derived teams
+    /// are the one measured case.
+    pub guest_roster: Option<&'static GuestRoster>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by
@@ -403,6 +422,10 @@ impl ZonePalette {
 
 impl RaceDefaults {
     /// Where this title keeps the models a craft is made of, as one value.
+    ///
+    /// See `variants.rs`, split out under this crate's 1,000-line ceiling,
+    /// for the per-team siblings this has: [`Self::team_variants_for`],
+    /// [`Self::ships_for`], [`Self::handling_dir_for`].
     #[must_use]
     pub fn ships(&self) -> ShipPaths {
         ShipPaths {

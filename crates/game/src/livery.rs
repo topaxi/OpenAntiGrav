@@ -151,7 +151,7 @@ pub fn teams_for_slots(player: &str, available: &[String], slots: usize) -> Vec<
 pub fn load(
     archives: &mut oag_assets::Archives,
     teams: &[String],
-    ships: oag_title::race::ShipPaths,
+    race: &oag_title::RaceDefaults,
     mode: Mode,
     flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
@@ -181,7 +181,15 @@ pub fn load(
             continue;
         }
 
-        match one(archives, team, ships, mode, flare, lod, report) {
+        match one(
+            archives,
+            team,
+            race.ships_for(team),
+            mode,
+            flare,
+            lod,
+            report,
+        ) {
             Ok(livery) => out.push(livery),
             Err(error) if slot == 0 => return Err(error),
             Err(error) => {

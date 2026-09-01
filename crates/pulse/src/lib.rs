@@ -53,6 +53,7 @@ pub const TITLE: &Title = &Title {
     // differs from the noise map's; the WAD hash is case-insensitive.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
+    track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what

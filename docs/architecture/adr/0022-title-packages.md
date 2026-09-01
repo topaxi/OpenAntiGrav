@@ -10,6 +10,12 @@ items 1, 2 and 4 stand unchanged.
 an engine-side type in `oag-title`. Item 4 continues to govern every other
 presentation axis it names.
 
+**Item 3's "once" is clarified, not weakened, by
+[ADR-0034](0034-a-race-may-open-two-titles-at-once.md)**: it was always a rule
+against dispatch, not against count, and ADR-0034 is where that reading is
+made explicit for a feature (Race Remix) that holds two title packages live at
+once with no dispatch through either.
+
 ## Context
 
 ADR-0009 item 3 refused a game abstraction "until a second title's real shape

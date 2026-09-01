@@ -88,6 +88,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stage_textures: None,
     // `None` for the same reason as Pulse's.
     zone_sky: None,
+    // Pure authors one roster and no numbered variant of anything in it.
+    team_variants: None,
+    guest_roster: None,
 };
 
 /// Pure's Zone milestone announcer.

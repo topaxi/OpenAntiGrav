@@ -104,6 +104,10 @@ impl Pending {
     pub(crate) fn race_options(&self, source: &str, opponent_teams: Vec<String>) -> race::Options {
         race::Options {
             source: source.to_string(),
+            // `None` outside a Race Remix - the ordinary CLI/menu route names
+            // one source, and `race::load` treats that as "craft comes from
+            // the same place as the track". See `race::Options::craft_source`.
+            craft_source: self.cli.craft_source.clone(),
             dlc: self.dlc.clone(),
             // Passed straight through, `None` included: `race::load` resolves an
             // unnamed circuit from the title it opened, which is the only place
@@ -171,7 +175,7 @@ impl Pending {
         let music_discs = self.music_discs(source);
         let options = self.boot_options(source);
 
-        let (mut boot_shell, archives) = boot::load_shell(&options)?;
+        let (mut boot_shell, archives, title) = boot::load_shell(&options)?;
         // Drained rather than iterated: `boot::assemble` appends its own lines
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds
@@ -201,6 +205,7 @@ impl Pending {
         // which are shipped content and only ever live in memory.
         let shell = Shell {
             definition: self.definition.clone(),
+            title,
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),

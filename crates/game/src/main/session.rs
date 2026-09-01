@@ -27,6 +27,11 @@ mod load;
 pub(crate) mod menus;
 #[path = "session/placeholder.rs"]
 mod placeholder;
+// Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
+// unaliased throughout `session::menus`, and a sibling module of the same
+// name would shadow it at every one of those call sites.
+#[path = "session/remix.rs"]
+mod remix_menu;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
@@ -158,6 +163,18 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// Every title this machine can currently open a source for, one row per
+    /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
+    /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's
+    /// name back into a source path.
+    ///
+    /// Surveyed once here rather than reused from whatever decided the disc
+    /// chooser in `main.rs`: the two run in different processes' worth of
+    /// state (this is `App`/`Session`, the chooser's own decision is local to
+    /// `main.rs`) and threading one through costs more than a second survey,
+    /// which happens once per windowed boot, not per frame. See
+    /// `oag_game::launcher::{survey, distinct_titles}`.
+    pub(crate) titles: Vec<oag_game::launcher::Candidate>,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///
     /// The boot's own screen used to consume these on the way past, which was
@@ -311,6 +328,13 @@ pub(crate) struct Shell {
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
     pub(crate) menu_skin: &'static oag_title::MenuSkin,
+    /// Which title this is, carried the same way `menu_skin` is - from
+    /// `boot::Shell::title`, not re-derived. Lets the RACE page's own
+    /// VARIANT row ask this title's own
+    /// [`oag_title::RaceDefaults::team_variants`] for whichever team
+    /// `race.team` names, the same question RACE REMIX's craft-side VARIANT
+    /// row asks of a *picked* title instead of the booted one.
+    pub(crate) title: &'static oag_title::Title,
     /// The grid that skin's numbers are in, and the one the rows are drawn in.
     ///
     /// Carried beside the skin for the reason the skin is carried at all: it is

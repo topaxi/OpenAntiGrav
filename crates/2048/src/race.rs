@@ -62,6 +62,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // a named file its loader picks by a mode gate; nothing equivalent has been
     // read here.
     zone_sky: None,
+    team_variants: Some(&TEAM_VARIANTS),
+    guest_roster: Some(&GUEST_ROSTER),
 };
 
 /// Wipeout 2048's zone-number to speed-class ladder, read out of the
@@ -191,16 +193,16 @@ pub const HANDLING_DIR: &str = r"Data\HandlingStats";
 /// **What it costs is the HD-derived roster** - see [`HD_SHIP_DIR`].
 pub const SHIP_DIR: &str = r"Data\art\published\Ships";
 
-/// Where 2048's **HD-derived** fourteen teams keep both their models and their
+/// Where 2048's **HD-derived** twelve teams keep both their models and their
 /// tuning, the way every other title keeps a roster.
 ///
-/// Not [`SHIP_DIR`], and that is the limitation worth naming rather than
-/// hiding: [`oag_title::RaceDefaults::ship_dir`] holds one string, this title
-/// ships two rosters in two trees, and this build races the native one. Every
-/// file is here - `Ship.vex`, `ship.rcsmodel`, `handlingstats.xml`,
-/// `Engineflare.vex`, four LODs - for all fourteen teams and their `_c1`/`_n1`
-/// Fury variants. Reaching them needs the axis to become per-team rather than
-/// per-title, which is a change no second title has yet asked for.
+/// Not [`SHIP_DIR`] - a second tree, reached per-team through
+/// [`GUEST_ROSTER`] rather than through [`oag_title::RaceDefaults::ship_dir`],
+/// which holds one string and cannot address both of this title's rosters at
+/// once. Every file is here - `Ship.vex`, `ship.rcsmodel`,
+/// `handlingstats.xml`, `Engineflare.vex`, four LODs - for all twelve teams
+/// and their `_c1`/`_n1` Fury variants; see [`GUEST_TEAM_VARIANTS`] for the
+/// twelve spelled out and confirmed against the manifest.
 pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
 
 /// What the numbered directory under a native team selects: **the four craft
@@ -218,6 +220,106 @@ pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
 /// independent naming schemes on the disc agree on the set and the order, and
 /// nothing has been watched running.
 pub const SHIP_TYPES: [&str; 4] = ["fighter", "agility", "speed", "prototype"];
+
+/// The five native teams, spelled exactly as `Data\Plugins\teams\Definition.xml`
+/// declares their `PI_Team` `location` - which is not [`SHIP_DIR`]'s own
+/// lowercase folder names (`feisar2048` against `Feisar2048`). Both spellings
+/// resolve against the manifest, which case-folds, the same way
+/// [`oag_title::RaceDefaults::team`]'s own doc comment records for HD's
+/// `assegai`/`Assegai`. Kept in the plugin's own case here because this is
+/// matched against `crate::catalogue::teams`' output, which reads the
+/// plugin.
+pub const NATIVE_TEAMS: [&str; 5] = [
+    "AG_Systems2048",
+    "Auricom2048",
+    "Feisar2048",
+    "Piranha2048",
+    "Qirex2048",
+];
+
+/// [`oag_title::RaceDefaults::team_variants`] for 2048's native roster - not
+/// its HD-derived one, which carries none. See [`SHIP_TYPES`] and
+/// [`NATIVE_TEAMS`].
+pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &NATIVE_TEAMS,
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "1",
+            label: SHIP_TYPES[0],
+        },
+        oag_title::TeamVariant {
+            suffix: "2",
+            label: SHIP_TYPES[1],
+        },
+        oag_title::TeamVariant {
+            suffix: "3",
+            label: SHIP_TYPES[2],
+        },
+        oag_title::TeamVariant {
+            suffix: "4",
+            label: SHIP_TYPES[3],
+        },
+    ],
+    join: oag_title::VariantJoin::Subdirectory,
+};
+
+/// The twelve teams 2048 reships from Wipeout HD/Fury's own roster,
+/// spelled exactly as `Data\Plugins\teams\Definition.xml` declares their
+/// `PI_Team` `location` - which is the same spelling
+/// [`oag_hd::race::TEAMS`](https://github.com/topaxi/OpenAntiGrav/blob/main/crates/hd/src/race.rs)
+/// carries, confirmed against 2048's own manifest rather than assumed from
+/// the name. **Not fourteen** - an earlier doc comment on this file
+/// overcounted before all twelve were confirmed one by one; `detonator`,
+/// which sits alongside them under [`HD_SHIP_DIR`], is Detonator mode's own
+/// craft, not a thirteenth team.
+pub const GUEST_TEAMS: [&str; 12] = [
+    "AG_Systems",
+    "Assegai",
+    "Auricom",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Harimau",
+    "Icaras",
+    "Mirage",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// [`oag_title::GuestRoster::variants`] for 2048's own copy of Wipeout
+/// HD/Fury's roster - **duplicated rather than borrowed**: this crate does
+/// not depend on `oag-hd`, so this is 2048's own measurement of the same
+/// suffix scheme, not a reference to `oag_hd::race::TEAM_VARIANTS`. Confirmed
+/// to resolve identically under [`HD_SHIP_DIR`]:
+/// `crates/game/examples/hd_fury_variant_probe.rs`'s sibling reproducer,
+/// `team_variants_probe.rs`, covers this title too.
+pub const GUEST_TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &GUEST_TEAMS,
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "",
+            label: "HD",
+        },
+        oag_title::TeamVariant {
+            suffix: "_c1",
+            label: "Fury Concept",
+        },
+        oag_title::TeamVariant {
+            suffix: "_n1",
+            label: "Fury Nitro",
+        },
+    ],
+    join: oag_title::VariantJoin::Suffix,
+};
+
+/// [`oag_title::RaceDefaults::guest_roster`] for this title: the twelve
+/// HD-derived teams, under [`HD_SHIP_DIR`], on [`GUEST_TEAM_VARIANTS`]' own
+/// terms.
+pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
+    dir: HD_SHIP_DIR,
+    variants: &GUEST_TEAM_VARIANTS,
+};
 
 /// The circuit a race loads when the caller names none.
 ///

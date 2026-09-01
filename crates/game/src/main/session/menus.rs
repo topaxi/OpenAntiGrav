@@ -13,7 +13,7 @@ use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
-use super::Session;
+use super::{Session, remix_menu};
 
 /// Which picture [`Session::open_menus`] should seed the new renderer's
 /// planes with.
@@ -47,6 +47,55 @@ pub(crate) fn backdrop_seed(
         index: held.index,
         picture: held.picture.clone(),
     })
+}
+
+/// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to
+/// `team` - the VARIANT row's supply, on both the RACE page and RACE REMIX.
+/// Empty when `team` names no such axis, or a team `team_variants_for`
+/// recognises through neither its own table nor a guest roster - the same
+/// idiom [`menu::ValueSource::MusicSources`] uses for a choice that cannot
+/// be made.
+pub(super) fn variant_choices(title: &'static oag_title::Title, team: &str) -> Vec<menu::Choice> {
+    let Some(team_variants) = title.race.team_variants_for(team) else {
+        return Vec::new();
+    };
+    team_variants
+        .variants
+        .iter()
+        .map(|variant| menu::Choice::labelled(variant.suffix, variant.label))
+        .collect()
+}
+
+/// Combines `team` with whichever variant `stored` names, for launching -
+/// `title`'s own [`oag_title::RaceDefaults::team_variants_for`] rule, or
+/// `team` unchanged when it names no team this axis applies to. The second
+/// value is a warning to log when `stored` no longer matches one of `team`'s
+/// own variants and the first one offered was raced instead - `Menu::supply`
+/// resets what the row *shows* without touching what `self.settings` holds
+/// until the player next moves it, so `stored` can be stale the moment
+/// `team` changes underneath it, the same way an unrecognised
+/// `race.track`/`race.team` already can be.
+pub(super) fn combine_variant(
+    title: &'static oag_title::Title,
+    team: &str,
+    stored: &str,
+) -> (String, Option<String>) {
+    let Some(team_variants) = title.race.team_variants_for(team) else {
+        return (team.to_string(), None);
+    };
+    let (suffix, warning) = match team_variants.variants.iter().find(|v| v.suffix == stored) {
+        Some(variant) => (variant.suffix, None),
+        None => (
+            team_variants
+                .variants
+                .first()
+                .map_or("", |variant| variant.suffix),
+            Some(format!(
+                "{team} does not offer variant {stored:?}; racing the first one it does offer"
+            )),
+        ),
+    };
+    (team_variants.join.combine(team, suffix), warning)
 }
 
 impl Session {
@@ -99,6 +148,14 @@ impl Session {
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Teams, &shell.teams);
+        // Scoped to whichever team `race.team` already names, the same
+        // reason the CIRCUIT row above is seeded from `race.mode`, and
+        // settled against that list for the reason RACE REMIX's own rows are
+        // below - `race.variant` defaults to empty, which is a real value
+        // only on the titles whose first variant is the unsuffixed one.
+        let race_variants = variant_choices(shell.title, &self.settings.race.team);
+        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        model.supply(menu::ValueSource::RaceVariant, &race_variants);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,
@@ -140,6 +197,46 @@ impl Session {
         // with one value draws the setting as the fact it is. Empty on a source
         // whose title authors no loading screen at all, which greys it out.
         model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
+        // Race Remix's own axis - every title this machine can currently open
+        // a source for, surveyed once at `Session` construction. See the
+        // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
+        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
+        // see `Self::craft_title_choices`.
+        //
+        // **Settled, not merely supplied**, and outward-in: each row's stored
+        // setting is brought into step with the list it is about to be given
+        // before the row below it is resolved from that setting. See
+        // `remix_menu::settle`, which is what keeps a fresh settings file's
+        // empty `remix.*` from leaving every row showing one thing and
+        // `self.settings` holding another.
+        let (titles, craft_titles) = self.settle_remix_titles();
+        model.supply(menu::ValueSource::Titles, &titles);
+        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
+        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
+        // now name, the same reason the CIRCUIT row above is seeded from
+        // `race.mode` rather than left empty until MODE is next touched: a
+        // menu reopened on a saved pick should show that pick's own list from
+        // the first frame. Both are `None` and supply nothing when the named
+        // title's source is no longer on this machine's search path, or will
+        // not open - see `Self::remix_catalogue_for`/
+        // `Self::remix_craft_catalogue`. Nothing is settled in that case
+        // either: an unreadable source is not evidence that a saved pick is
+        // wrong, and clearing it would lose it.
+        if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) {
+            let tracks = remix_menu::remix_track_choices(&catalogue);
+            remix_menu::settle(&mut self.settings.remix.track, &tracks);
+            model.supply(menu::ValueSource::RemixTracks, &tracks);
+        }
+        if let Some(catalogue) = self.remix_craft_catalogue() {
+            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
+            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
+        }
+        // Last, because it is scoped to the team the line above just settled.
+        if let Some(title) = self.craft_title() {
+            let variants = variant_choices(title, &self.settings.remix.team);
+            remix_menu::settle(&mut self.settings.remix.variant, &variants);
+            model.supply(menu::ValueSource::RemixVariant, &variants);
+        }
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
@@ -367,6 +464,19 @@ impl Session {
         }
     }
 
+    /// Re-supplies the RACE page's own VARIANT row from the booted title's
+    /// [`oag_title::RaceDefaults::team_variants`], scoped to whichever team
+    /// `race.team` currently names. A no-op when the menus are not open or
+    /// nothing has loaded a shell yet - see [`Self::resupply_tracks_for_mode`].
+    pub(crate) fn resupply_race_variant(&mut self) {
+        let Some(shell) = &self.shell else { return };
+        let choices = variant_choices(shell.title, &self.settings.race.team);
+        remix_menu::settle(&mut self.settings.race.variant, &choices);
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
+        }
+    }
+
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
         match event {
@@ -441,12 +551,22 @@ impl Session {
                 // that happens, so without this check the menu would show one
                 // team and the race would attempt another - failing at the
                 // archive with a message naming a team that is not on screen.
-                match self
-                    .shell
-                    .as_ref()
-                    .and_then(|shell| shell.team(&self.settings.race.team))
-                {
-                    Some(team) => race_options.team = Some(team.to_string()),
+                // `team` and `title` together, in the same call: VARIANT
+                // combines with whichever title's own axis this is.
+                let resolved_team = self.shell.as_ref().and_then(|shell| {
+                    shell
+                        .team(&self.settings.race.team)
+                        .map(|team| (shell.title, team.to_string()))
+                });
+                match resolved_team {
+                    Some((title, team)) => {
+                        let (combined, warning) =
+                            combine_variant(title, &team, &self.settings.race.variant);
+                        if let Some(warning) = warning {
+                            warn!("{warning}");
+                        }
+                        race_options.team = Some(combined);
+                    }
                     None => warn!(
                         "this source does not offer team {:?}, racing as {} instead",
                         self.settings.race.team,
@@ -485,6 +605,13 @@ impl Session {
                     Err(e) => error!("cannot start a race: {e:#}"),
                 }
             }
+            // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
+            // own doc comment for why it is not a second meaning for
+            // `LaunchRace` above. `Self::launch_remix` builds `race::Options`
+            // the same way that one does, plus the two source fields neither
+            // the CLI's `--race` route nor the ordinary RACE page ever has to
+            // resolve.
+            menu::MenuEvent::Fired(menu::Action::LaunchRemix) => self.launch_remix(),
             // QUIT always quits, parked race or not - it is a row a player
             // chose deliberately, not a fall-through.
             menu::MenuEvent::Fired(menu::Action::Quit) => {

@@ -34,8 +34,10 @@ use oag_render::mesh::Lod;
 use oag_render::mesh_render::Anisotropy;
 
 mod controls;
+mod race;
 
 pub use controls::{Controls, TriggerSensitivity};
+pub use race::{Race, Remix};
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
 /// does not own. Named the same as `Display`/`FromStr` already spell it in
@@ -79,6 +81,8 @@ pub struct Settings {
     #[serde(default)]
     pub race: Race,
     #[serde(default)]
+    pub remix: Remix,
+    #[serde(default)]
     pub controls: Controls,
     #[serde(default)]
     pub ai: Ai,
@@ -92,76 +96,6 @@ pub struct Settings {
     /// English only. `--pick-language` shows the picker regardless.
     #[serde(default)]
     pub language: Option<String>,
-}
-
-/// What the Race page of the menus last chose.
-///
-/// Persisted for the same reason `source.image` is: a player who always races
-/// one team on one circuit should not have to say so twice. These are archive
-/// path components and speed-class names, **not display names** - the words the
-/// original shows a player for a circuit are content this project does not ship.
-/// See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-///
-/// The command line still wins for the run it is given on, and `--race` skips
-/// the menus entirely, so these are what the menus set rather than a second
-/// place to configure a race from.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Race {
-    /// Which mode's rules run: `time_trial`, `speed_lap` or `zone`.
-    ///
-    /// One of `oag_race::Mode::ALL`'s tokens. A file carrying anything else
-    /// leaves the mode at the default rather than failing the boot, the same way
-    /// an unknown speed class does.
-    #[serde(default = "default_mode")]
-    pub mode: String,
-    /// Speed class: `venom`, `flash`, `rapier` or `phantom`.
-    #[serde(default = "default_class")]
-    pub class: String,
-    /// Team id, as the source's own plugin definition spells it.
-    ///
-    /// **Not `oag_pulse::race::TEAMS`**, which is Pulse's base eight and was what this
-    /// said while a stand-in in `boot::load_teams` could still put that list in
-    /// front of a player on any source. The roster is the disc's now, so what
-    /// is storable here is whatever that disc declares - twelve on the PS2
-    /// pressing and on Wipeout HD, nine on Pure.
-    #[serde(default = "default_team")]
-    pub team: String,
-    /// Which circuit, by the id its own plugin definition gives it.
-    ///
-    /// **A race, not a directory.** `16_Track` and `32_Track` are two entries
-    /// and one folder, the second being the first driven the other way, so this
-    /// is not a path component and must not be turned into one here - only the
-    /// source can say which `.vex` an id loads. See [`crate::catalogue`].
-    #[serde(default = "default_track")]
-    pub track: String,
-}
-
-/// Time trial: the mode the RACE page opens on, and the one the reference
-/// captures under `data/traces/` were taken in.
-fn default_mode() -> String {
-    oag_race::Mode::TimeTrial.name().to_string()
-}
-fn default_class() -> String {
-    "venom".to_string()
-}
-fn default_team() -> String {
-    crate::race::DEFAULT_TEAM.to_string()
-}
-/// The circuit the reference scenario is on, so the default run is the one
-/// every capture under `data/traces/` was taken against.
-fn default_track() -> String {
-    "16_Track".to_string()
-}
-
-impl Default for Race {
-    fn default() -> Self {
-        Self {
-            mode: default_mode(),
-            class: default_class(),
-            team: default_team(),
-            track: default_track(),
-        }
-    }
 }
 
 /// What the opponents are like.
@@ -917,7 +851,13 @@ pub fn menu_seeds(
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),
+        ("race.variant", text(&settings.race.variant)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
+        ("remix.track_title", text(&settings.remix.track_title)),
+        ("remix.track", text(&settings.remix.track)),
+        ("remix.craft_title", text(&settings.remix.craft_title)),
+        ("remix.team", text(&settings.remix.team)),
+        ("remix.variant", text(&settings.remix.variant)),
     ];
     if let Some(language) = &settings.language {
         out.push(("language", text(language)));

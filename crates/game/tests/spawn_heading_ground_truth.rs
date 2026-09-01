@@ -250,7 +250,7 @@ fn every_other_source_is_swept_and_only_the_ps2_carries_a_stale_slot() {
     for (name, count, known_stale) in SOURCES {
         let Some(image) = image(name) else { continue };
 
-        let (shell, _) = oag_game::boot::load_shell(&oag_game::boot::Options {
+        let (shell, _, _) = oag_game::boot::load_shell(&oag_game::boot::Options {
             source: image.display().to_string(),
             language: None,
             dlc: Vec::new(),
