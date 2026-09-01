@@ -155,7 +155,14 @@ gap the repository recorded in four places - `HANDOVER.md`, the
 not resolve by name", and three of which concluded `Auricom`/`Harimau`/`Icaras`
 were **PS2-only**. They are not: they are PSP downloadable content, and the PS2
 release simply bundles what the PSP sold separately. Of the original five,
-`Van_Uber` alone is still unaccounted for, and it is a *Pure* team.
+`Van_Uber` alone is still unaccounted for, and it is a *Pure* team - not on
+Pure's base disc (its `Data\Plugins\PI001\Definition.xml` names eleven
+`<PI_Team>` entries and `Van_Uber` isn't one; see
+[pure-status.md](pure-status.md#van_uber-is-pure-content-not-a-pure-team-on-this-disc)),
+but PSN downloadable content for Pure exactly as `Auricom`/`Harimau`/`Icaras`/
+`Mantis` were for Pulse. The pack is likely `data/dlc/WipEout Pure - Gamma
+Pack 1 (Europe) (DLC).zip`'s `pi.wad`, still unread - see
+[below](#not-read-yet).
 
 The ids are also the leaf of each `location`, for every team on both discs and
 in every pack - which is why `race::ship_entry_name` can go on composing a path
@@ -233,7 +240,14 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
   produced them.
 - **Wipeout Pure's packs**, which are a different problem: their payload
   measures 8.0000 bits/byte and `oag-wad` rejects it outright. See
-  `data/README.md` and [Pure status](pure-status.md).
+  `data/README.md` and [Pure status](pure-status.md). Seven are in
+  `data/dlc/`, one per pack (`A7`, `Delta Pack`, `Gamma Pack 1`,
+  `GamesRadar Pack`, `Oblivion`, `Omega Pack`, `Voice of Cod`), each a
+  `PARAM.sfo` + `pi.wad` pair rather than Pulse's four-archive shape. This is
+  very likely where `Van_Uber` lives - external sources (not project
+  evidence, since `pi.wad` doesn't parse) place a team by that name in the
+  Gamma pack specifically - but nothing here has decrypted a single byte to
+  check.
 
 ## Reading one
 

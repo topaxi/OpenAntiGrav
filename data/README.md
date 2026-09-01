@@ -231,5 +231,10 @@ Pulse's DLC, this has not been reverse-engineered - nothing here established
 whether Pure's NpDrm usage matches Pulse's (single-argument
 `sceNpDrmEdataSetupKey`, no per-title key) or differs; Pure is a different
 executable and was not checked. `PARAM.sfo` is Sony's standard, unencrypted
-metadata format (same `\0PSF` magic as the disc's own `PARAM.SFO`). No
-decryption attempted.
+metadata format (same `\0PSF` magic as the disc's own `PARAM.SFO`) - the Gamma
+pack's names itself `TITLE=Gamma Pack`, `SAVEDATA_TITLE=Wipeout Pure`. No
+decryption attempted. This is very likely where the `Van_Uber` name
+(unaccounted for on both Pulse and Pure's own base-disc rosters) belongs -
+see [pure-status.md](../docs/formats/pure-status.md#van_uber-is-pure-content-not-a-pure-team)
+- but that is external corroboration, not something read from `pi.wad`
+itself.

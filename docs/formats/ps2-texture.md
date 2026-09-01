@@ -356,7 +356,9 @@ with *exactly* as many entries as the model has `Texture` nodes. Eleven
 independent hits at delta -1 rules out coincidence - a wrong or accidental
 adjacency would show some teams fitting and their neighbours not, not all
 eleven fitting exactly. `Mirage` and `Van_Uber` were not found under those
-names in `WADS2.WAD` and are not covered.
+names in `WADS2.WAD` and are not covered. `Mirage` was later found under the
+folder `Mantis`; `Van_Uber` is Pure DLC, not on any disc this project reads -
+see [pure-status.md](pure-status.md#van_uber-is-pure-content-not-a-pure-team-on-this-disc).
 
 **This is not a ship-specific finding after all - it also holds for tracks,
 checked separately.** The naive version of this rule - pairing by directory

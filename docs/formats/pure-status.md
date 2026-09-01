@@ -422,7 +422,25 @@ recalled. Pure's own `Data\Plugins\PI001\Definition.xml` declares eleven
 are `Zone`, `Medievil` and `Zone_01`, the last of which is not a team at all -
 see [below](#one-pure-file-has-no-class-blocks-at-all).
 
-### The whole element diff, in one pass
+### `Van_Uber` is Pure content, not a Pure *team* on this disc
+
+**Confidence: 94** that it is absent from the base disc; unread beyond that.
+`Van_Uber` is not among the eleven `<PI_Team>` entries above, and
+`Data\Ships\Van_Uber\Ship.vex` does not resolve by name-hash against either
+Pure disc's `Data.wad` (hash `3a30c448`, checked on both USA and EU) - the
+same absence `dlc-pack.md` and `exhaust.md` have recorded since 2026-08-09,
+just without checking it against this page's own roster until now.
+
+That does not make it a Pulse or Fusion name adrift in this project's docs:
+`data/dlc/` holds seven Wipeout Pure PSN packs, unlike Pulse's four - `A7`,
+`Delta Pack`, `Gamma Pack 1`, `GamesRadar Pack`, `Oblivion`, `Omega Pack`,
+`Voice of Cod` - and each one's `pi.wad` is genuinely high-entropy (8.0000
+bits/byte) and unread; see [dlc-pack.md](dlc-pack.md#not-read-yet) and
+`data/README.md`. External sources (Wipeout Central's wiki, not project
+evidence - `pi.wad` doesn't parse, so nothing here confirms it) place a team
+called Van-Über in the Gamma pack specifically. Worth recording as a
+plausible destination for future decryption work, not as a claim this
+project has verified.
 
 Recorded from
 [`crates/pure/tests/handling_schema_ground_truth.rs`](../../crates/pure/tests/handling_schema_ground_truth.rs),

@@ -1305,7 +1305,12 @@ open name-mining gap. Both readings are now retired:
   PS2-*only*. See [the pack format](../../../formats/dlc-pack.md).
 - `Mirage` never resolved because it is a **display name**: the folder is
   `Mantis`. The disc's own string table maps one to the other.
-- `Van_Uber` is a *Pure* team and was never a Pulse candidate.
+- `Van_Uber` was never a Pulse candidate: Pulse PS2's own twelve-team roster
+  (`54748/WADS2.WAD`'s `Definition.xml`) doesn't carry it either. It is Pure
+  content, but not on Pure's base disc - its own eleven-team roster doesn't
+  carry it either, and it is very likely one of Pure's seven still-encrypted
+  PSN packs. See
+  [pure-status.md](../../../formats/pure-status.md#van_uber-is-pure-content-not-a-pure-team-on-this-disc).
 
 So the split above is eight of **twelve**, not eight of thirteen;
 `docs/formats/handling-stats.md` counts the same eight on the disc
