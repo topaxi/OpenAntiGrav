@@ -407,6 +407,18 @@ Open item below.
   `oag_audio::spectrum` supplies its own and labels them as its own.
 - **What `lfs f0,0x4(r4)` is** - the fixed per-frame gain the original
   applies to every band before the hold. This port applies none.
+- **Unverified lead: the band index may be read through a mip-blurred
+  sample.** `mesh.wgsl`'s `zone_glow` fetches the band from
+  `textureSample(zone_tex, zone_nearest_sampler, ...)` - implicit LOD, on a
+  mip-mapped stage texture - so a grazing floor view can select a lower mip
+  whose alpha is an *average* of neighbouring texels, i.e. a band id that
+  belongs to neither. The original's `...Nearest` clone exists precisely to
+  stop interpolation across band boundaries
+  ([zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)),
+  which is an argument that the mip chain wants excluding too. Nobody has
+  confirmed the sampler state the original patches into the clone, and
+  nothing was changed on a suspicion; `textureSampleLevel(..., 0.0)` is the
+  experiment if a floor ever reads as the wrong band at distance.
 
 ## Next Steps
 
