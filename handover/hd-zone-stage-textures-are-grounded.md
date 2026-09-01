@@ -415,6 +415,24 @@ Open item below.
   permanently. What *would* still move it: finding where `+0x614`/`+0x618`
   are allocated and what they are handed to - see
   [zone-visualiser.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md).
+  The init chain is now mapped three levels deep (`SoundSystem_Init` ->
+  cellAudio port setup -> MultiStream bus setup) and the allocation is in
+  none of them, which narrows where to look rather than lifting the negative.
+- **Whether the sixteen are frequency bands or per-channel levels.**
+  Confidence 75 on frequency, from three indirect corroborations - two
+  unrelated consumers draw them as ten-segment bars, there is a 32-entry
+  sibling array, and the shipped art tags sixteen regions. Against it: the
+  source indexes *two blocks of eight*, and eight is this title's 7.1 channel
+  count, with the two block pointers sitting immediately before the speaker
+  direction table. Nothing this project draws changes either way; the reading
+  in the docs and in `oag_audio::spectrum` says 75 rather than pretending.
+  A watchpoint during a race with one speaker driven settles it in one read.
+- **A second visualiser exists and is unported.** `FUN_003ce2c0` calls the
+  same band getter with the same ten-segment bar loop, instruction for
+  instruction. Which screen it serves is unread; the front end's own
+  `"Music Pulse Base"`/`"Music Pulse factor"`/`waveTexture` strings are the
+  obvious candidate, and if it is the menu background then this project's
+  `zone::write_vis` is already most of the port.
 - **What `lfs f0,0x4(r4)` is** - the fixed per-frame gain the original
   applies to every band before the hold. This port applies none.
 - **Unverified lead: the band index may be read through a mip-blurred

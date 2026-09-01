@@ -201,3 +201,6 @@
 0x00304320	function	SoundSystem_UpdateMeters	76	zone-visualiser.md
 0x00308f00	function	SoundSystem_Shutdown	88	zone-visualiser.md
 0x00309230	function	SoundSystem_AudioThread	86	zone-visualiser.md
+0x0030ac48	function	SoundSystem_Init	84	zone-visualiser.md
+0x00307620	function	SoundSystem_OpenAudioPort	86	zone-visualiser.md
+0x0030a668	function	SoundSystem_StartMultiStream	80	zone-visualiser.md

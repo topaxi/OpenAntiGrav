@@ -54,6 +54,14 @@ use std::sync::Mutex;
 /// ten-texel band stride that writer lays down. See
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
 ///
+/// **That the sixteen are *frequency* bands is confidence 75, not 86.** The
+/// count and the layout are solid; what the original measures per entry is
+/// read from two consumers drawing them as an equaliser, a 32-entry sibling
+/// array, and the shipped art's sixteen tagged regions - not from the
+/// producer, which is unfound. The source indexes two blocks of eight, and
+/// eight is also this title's speaker count, so a per-channel reading is not
+/// excluded. Same page.
+///
 /// **The band *frequencies* are still this project's own choice** - see
 /// [`band_frequencies`], and permanently rather than pending a read: the
 /// original's per-band magnitudes come from filter records no PPU code in

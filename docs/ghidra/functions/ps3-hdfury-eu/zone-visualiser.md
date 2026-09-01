@@ -267,6 +267,9 @@ original carries all of it or none.
 | `0x00304320` | function | `SoundSystem_UpdateMeters` | 76 |
 | `0x00308f00` | function | `SoundSystem_Shutdown` | 88 |
 | `0x00309230` | function | `SoundSystem_AudioThread` | 86 |
+| `0x0030ac48` | function | `SoundSystem_Init` | 84 |
+| `0x00307620` | function | `SoundSystem_OpenAudioPort` | 86 |
+| `0x0030a668` | function | `SoundSystem_StartMultiStream` | 80 |
 | `0x00b6cc90` | data | `g_sound_system` | 80 |
 
 `g_sound_system` is named from `FUN_00304be8`'s `"Stereo"`/`"Surround"`
@@ -313,6 +316,74 @@ that no PPU code here writes them, which is the part that bounds the work.
 The practical consequence: `oag_audio::spectrum::band_frequencies` is this
 project's own choice **permanently**, not a placeholder waiting on a read, and
 should stay labelled that way.
+
+## The init chain, mapped - and the buffers are not allocated in it
+
+Followed the remaining thread. `SoundSystem_Init` (`0x0030ac48`) runs three
+things before it creates the thread, and none of them allocates the band
+blocks:
+
+| address | what it does | evidence |
+| --- | --- | --- |
+| `0x00307620` | opens the console's audio output and port | `cellAudioOutGetSoundAvailability`, `cellAudioOutConfigure`, `cellAudioInit`, `cellAudioPortOpen`, `cellAudioPortStart` |
+| `0x0030a668` | starts MultiStream and opens its buses | eight `FUN_00679ab8(0x8000n)` calls, then the `sys_ppu_thread_create` in the caller |
+| `0x003093a8` | configures bus `0x80007`'s eight channels | an eight-iteration setup loop per channel |
+
+So the allocation is further in still. This bounds the earlier negative
+rather than lifting it.
+
+### A correction: `+0x620`..`+0x69c` is the 7.1 speaker layout, not a filter bank
+
+Worth recording because it was one step from being written down as the
+filter-coefficient table it looks like. `SoundSystem_Init` fills eight
+four-float groups there from a TOC table, and the values are **angles**:
+
+| TOC | value |
+| --- | ---: |
+| `+0x77d0` | `0x3c8efa34` = **π/180** |
+| `+0x77d4`, `+0x77d8` | `-30.0`, `+30.0` |
+| `+0x77dc`, `+0x77e0` | `-110.0`, `+110.0` |
+| `+0x77e4`, `+0x77e8` | `-145.0`, `+145.0` |
+
+Times π/180 into a sin/cos pair, stored as `[cos, 0, -sin, 0]` per speaker.
+`0`, `±30`, `±110`, `±145` is the standard 7.1 layout, so this is the
+**positional-audio speaker table**, confidence 86. It has nothing to do with
+the visualiser; it is recorded here because it sits four bytes past the band
+pointers and is the obvious wrong reading of them.
+
+### A second consumer draws the identical bar layout
+
+`FUN_003ce2c0` calls `SoundSystem_GetBandLevel_Stub` at `0x003cea1c`, and the
+loop around it is the **same shape instruction for instruction** as
+`Environment_UpdateStageBlend`'s: ten pointers advanced by `0x28` each
+iteration, the band index in `r3`, the returned float scaled by
+`lfs f0,0x4(r4)`, and the same peak-hold compare against a held value. Only
+two `bl` sites in the whole image reach that stub, and this is the other one.
+
+**Two unrelated consumers drawing sixteen values as ten-segment bars is
+independent corroboration that the array is an equaliser feed**, and it says
+the bar layout is the engine's standard way of drawing one rather than
+anything Zone-specific. `FUN_003ce2c0` has no `bl` caller either, so it is
+reached through a pointer like its sibling; which screen it serves is
+unread, though the front end's own `"Music Pulse Base"` / `"Music Pulse
+factor"` / `waveTexture` string cluster is the obvious candidate.
+
+### The one reading that is not settled
+
+`SoundSystem_UpdateBandLevels` sources band `b` from
+`(b & 7) * 48 + block[b >> 3]` - **two blocks of eight**, and those two
+pointers sit immediately before the eight speaker vectors above. So `8` might
+be the 7.1 channel count rather than a grouping of sixteen bands, which would
+make the array per-channel rather than per-frequency.
+
+Weighed the other way, and why this page still reads it as sixteen frequency
+bands: two independent consumers draw it as an equaliser; there is a
+**32**-entry sibling array with its own getter, which is a coarse/fine
+spectrum pair and not a channel count; and the shipped `zoneModeTrack*.gtf`
+alpha tags exactly sixteen ten-texel regions. Confidence **75** on "frequency
+bands" specifically, against the **86** the layout and the level curve carry.
+Recorded rather than dismissed: a watchpoint on the array during a race with
+one speaker driven would settle it in one reading.
 
 ## Still open
 
