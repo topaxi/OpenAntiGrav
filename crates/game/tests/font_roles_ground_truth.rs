@@ -98,7 +98,7 @@ fn images() -> Vec<(&'static str, PathBuf, Family)> {
 /// The language plugins one source carries, and its archives.
 fn languages_of(image: &Path) -> (oag_assets::Archives, Vec<Language>) {
     let mut report = Vec::new();
-    let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new())
+    let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
         .expect("opening the source");
     // The plugin list is the title's own - numbered on the PSP discs, named on
     // Wipeout HD - so it is taken from the source that was just identified

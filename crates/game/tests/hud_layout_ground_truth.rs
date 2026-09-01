@@ -583,9 +583,10 @@ fn the_layouts_name_at_most_one_texture() {
             println!("skipping: {} not present", full.display());
             continue;
         }
-        let mut archives = oag_game::title::open_source(&full.display().to_string(), Vec::new())
-            .expect("opening the source")
-            .archives;
+        let mut archives =
+            oag_game::title::open_source(&full.display().to_string(), Vec::new(), Vec::new())
+                .expect("opening the source")
+                .archives;
 
         for &(entry, ..) in EXPECTED {
             let Ok(blob) = archives.read_name(entry) else {

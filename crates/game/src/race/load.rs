@@ -32,17 +32,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Downloadable content is mounted behind them. A pack is not tied to the
     // release it was sold for here, so this is the same call whichever image
-    // `source` names - see `docs/formats/dlc-pack.md`. **A Pure source mounts no
-    // packs at all**, which `crate::title::open_source` decides rather than this
-    // call site; see its own docs for why silently mounting Pulse's DLC behind a
-    // different title would be worse than mounting none.
-    let (packs, problems) = crate::dlc::packs(&options.dlc, &crate::boot::default_dlc_cache_dir());
+    // `source` names - see `docs/formats/dlc-pack.md`. **Which of the two lists
+    // actually gets mounted** is `crate::title::open_source`'s decision, not this
+    // call site's - see [`crate::dlc::pure_packs`] for why a Pure source needs
+    // its own list rather than reusing Pulse's.
+    let (packs, pure_packs, problems) =
+        crate::dlc::packs_from_defaults(&options.dlc, &crate::boot::default_dlc_cache_dir());
     // **Opened as whichever title the source turned out to be**, the same way the
     // boot path already does it. This used to be `oag_pulse::open_with_packs`
     // outright, which refused a Pure disc by name (`WrongTitle`) - so `--race`
     // and the menus' own `Launch Game` could not reach a second title at all,
     // however much of the rest of the path was ready for one.
-    let opened = crate::title::open_source(&options.source, packs)?;
+    let opened = crate::title::open_source(&options.source, packs, pure_packs)?;
     let title = opened.title;
     let mut archives = opened.archives;
     report.push(format!("racing on {}", title.name));
