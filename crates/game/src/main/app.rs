@@ -8,7 +8,9 @@ use log::{error, info};
 use oag_core::{TickClock, TickRate};
 
 use oag_game::render::Renderer;
-use oag_game::{audio, boot, display, launcher, loading, perf, prefetch, race, settings, upscale};
+use oag_game::{
+    audio, boot, display, launcher, loading, perf, prefetch, race, settings, source, upscale,
+};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
@@ -264,6 +266,9 @@ impl App {
             races_launched: 0,
             settings: self.settings.clone(),
             shell: self.shell.clone(),
+            // Race Remix's title pickers - see the field's own doc comment
+            // for why this is a fresh survey rather than the chooser's.
+            titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),
             // Moved rather than cloned: `Assets` owns a decoded glow strip and
             // a full-screen backdrop, and `App` has no use for either once the
             // window it opened has them. What is left behind is the drawable

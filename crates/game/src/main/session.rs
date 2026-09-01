@@ -158,6 +158,18 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// Every title this machine can currently open a source for, one row per
+    /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
+    /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's
+    /// name back into a source path.
+    ///
+    /// Surveyed once here rather than reused from whatever decided the disc
+    /// chooser in `main.rs`: the two run in different processes' worth of
+    /// state (this is `App`/`Session`, the chooser's own decision is local to
+    /// `main.rs`) and threading one through costs more than a second survey,
+    /// which happens once per windowed boot, not per frame. See
+    /// `oag_game::launcher::{survey, distinct_titles}`.
+    pub(crate) titles: Vec<oag_game::launcher::Candidate>,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///
     /// The boot's own screen used to consume these on the way past, which was

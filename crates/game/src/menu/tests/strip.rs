@@ -64,7 +64,7 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
         .into_iter()
         .filter(|(_, _, _, text)| text != menu.page().title.as_str())
         .collect();
-    assert_eq!(rows.len(), 3, "RACE, OPTIONS and QUIT: {rows:?}");
+    assert_eq!(rows.len(), 4, "RACE, REMIX, OPTIONS and QUIT: {rows:?}");
     for (_, y, _, text) in &rows {
         assert!(
             (y - 125.0).abs() < f32::EPSILON,
@@ -132,8 +132,8 @@ fn an_unselected_entry_takes_the_widgets_colour_rather_than_textcolor() {
         .collect();
     assert_eq!(
         unselected.len(),
-        2,
-        "one of three is selected: {unselected:?}"
+        3,
+        "one of four is selected: {unselected:?}"
     );
     for (_, _, color, text) in unselected {
         assert_eq!(color, authored, "{text} is drawn in the widget's colour");
@@ -155,6 +155,8 @@ fn an_unselected_entry_takes_the_widgets_colour_rather_than_textcolor() {
 fn a_page_with_a_value_column_stays_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
+    // RACE, REMIX, OPTIONS - two steps down past the entry Race Remix added.
+    press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options", "the page with the choice on it");
@@ -195,7 +197,7 @@ fn a_title_that_authors_no_strip_draws_a_column() {
         .into_iter()
         .filter(|(_, _, _, text)| text != menu.page().title.as_str())
         .collect();
-    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows.len(), 4, "{rows:?}");
     for pair in rows.windows(2) {
         assert!(pair[1].1 > pair[0].1, "the rows step down: {rows:?}");
     }
@@ -212,7 +214,7 @@ fn right_and_left_step_a_strip() {
     press(&mut menu, &[Button::Left]);
     assert_eq!(menu.selected(), 0, "and left moves back");
     press(&mut menu, &[Button::Left]);
-    assert_eq!(menu.selected(), 2, "wrapping the way up and down do");
+    assert_eq!(menu.selected(), 3, "wrapping the way up and down do");
 }
 
 /// Right and left are left to the values on a column, which is every page a
@@ -232,6 +234,7 @@ fn right_and_left_do_not_step_a_column() {
     // the flag says what the disc draws, `suits` says which pages.
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
+    press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options");

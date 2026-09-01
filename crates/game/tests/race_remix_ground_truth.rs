@@ -23,8 +23,11 @@
 //! 2. **A genuine remix.** Wipeout 2048's own circuit with Wipeout Pure's
 //!    craft: the track loads off 2048, the grid and the HUD off Pure. This is
 //!    the spec's own example (see `race_remix_prompt.md`, not committed).
+//! 3. **The RACE REMIX menu page's own data source**, `remix::catalogue`,
+//!    independent of the menus themselves - which need a window this suite
+//!    cannot open.
 
-use oag_game::race;
+use oag_game::{race, remix};
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
@@ -198,5 +201,46 @@ fn a_2048_track_races_with_a_pure_craft() {
             .any(|line| line.starts_with("HUD ") && line.contains("_HUD.xml")),
         "expected a Pure-shaped HUD entry name; was {:#?}",
         loaded.report
+    );
+}
+
+/// `remix::catalogue` - the RACE REMIX page's own reader - offers HD's real
+/// circuits and roster, independent of the menu machinery that calls it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
+    let Some(image) = image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let catalogue = remix::catalogue(&image.display().to_string())
+        .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", image.display()));
+
+    assert!(!catalogue.tracks.is_empty(), "HD declares circuits");
+    assert!(!catalogue.teams.is_empty(), "HD declares a roster");
+    // `Track::id` is the plugin's own race id (`16_Track`-shaped), not the
+    // archive path `oag_hd::race::DEFAULT_TRACK` names - `Catalogue::track`
+    // is exercised by id via whichever the disc's own first entry is
+    // instead.
+    let (first_track, _) = &catalogue.tracks[0];
+    assert!(
+        catalogue.track(&first_track.id).is_some(),
+        "the catalogue should find its own first circuit by id"
+    );
+    // Same reasoning as the track above: `oag_hd::race::DEFAULT_TEAM` is
+    // lowercased for archive lookups, which a PSARC case-folds onto anyway -
+    // the plugin definition's own spelling, which is what `Team::id` reads,
+    // need not agree. See `oag_title::RaceDefaults::team`'s own doc comment.
+    assert!(
+        catalogue.team(&catalogue.teams[0].value).is_some(),
+        "the catalogue should find its own first team by id"
+    );
+    // Labels are the string table where it has one, never the bare id when
+    // the table names something different - the same rule `Team::label`
+    // documents. A team's label falling back to its id is not itself wrong
+    // (a title can genuinely leave one out), but every label should at least
+    // be non-empty.
+    assert!(
+        catalogue.teams.iter().all(|team| !team.label.is_empty()),
+        "every team choice should carry a label"
     );
 }

@@ -395,6 +395,20 @@ impl Session {
             "race.team" => self.settings.race.team = text,
             "race.track" => self.settings.race.track = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
+            // The two title rows resupply their scoped TRACK/TEAM the same
+            // way `race.mode` resupplies the ordinary TRACK row above -
+            // `Menu::supply` only runs at menu-open, and nothing else tells
+            // RemixTracks/RemixTeams that the title underneath them moved.
+            "remix.track_title" => {
+                self.settings.remix.track_title = text;
+                self.resupply_remix_tracks();
+            }
+            "remix.craft_title" => {
+                self.settings.remix.craft_title = text;
+                self.resupply_remix_teams();
+            }
+            "remix.track" => self.settings.remix.track = text,
+            "remix.team" => self.settings.remix.team = text,
             "language" => self.settings.language = Some(text),
             other => {
                 warn!("nothing applies {other}");

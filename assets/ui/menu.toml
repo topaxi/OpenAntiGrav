@@ -10,7 +10,7 @@
 # row that does nothing when pressed:
 #
 #   - every `target` names a page in this file;
-#   - every `action` is one the game handles: launch_race, quit;
+#   - every `action` is one the game handles: launch_race, launch_remix, quit;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #
@@ -38,6 +38,20 @@ title = "OPENANTIGRAV"
 kind = "submenu"
 label = "RACE"
 target = "race"
+
+# **Shown unconditionally, not gated on "more than one title available".**
+# The menu definition has no way to ask that question - `disabled_by` only
+# ever reads another row's own held value (`Menu::held`), never an
+# externally-seeded fact, and it refuses to apply to anything but a `choice`
+# or a `toggle` in the first place, which a `submenu` entry is neither. With
+# one title on this machine, TRACK TITLE and CRAFT TITLE on the `remix` page
+# each offer exactly one row and the page degrades to an ordinary custom
+# race - nothing broken, nothing misleading, the same page doing less. See
+# `handover/race-remix-backend-lands-menu-wiring-is-next.md`.
+[[page.entry]]
+kind = "submenu"
+label = "REMIX"
+target = "remix"
 
 [[page.entry]]
 kind = "submenu"
@@ -120,6 +134,73 @@ values_from = "tracks"
 kind = "action"
 label = "START"
 action = "launch_race"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "remix"
+title = "RACE REMIX"
+
+# Mode, speed class and AI difficulty are title-agnostic and shared with the
+# ordinary RACE page verbatim - same settings keys, same values, same
+# `disabled_by`. Nothing about racing a mixed grid changes what a mode, a
+# class or a difficulty means.
+[[page.entry]]
+kind = "choice"
+label = "MODE"
+setting = "race.mode"
+values_from = "race_modes"
+
+[[page.entry]]
+kind = "choice"
+label = "SPEED CLASS"
+setting = "race.class"
+values = ["venom", "flash", "rapier", "phantom"]
+
+[[page.entry]]
+kind = "choice"
+label = "AI DIFFICULTY"
+setting = "ai.difficulty"
+values = ["novice", "skilled", "elite", "ace"]
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
+
+# Title first, then a title-scoped list, on both halves - the shape the
+# feature's own request asked for. TRACK TITLE and CRAFT TITLE are the same
+# `values_from` (every title this machine can open a source for); TRACK and
+# TEAM are resupplied every time the title above them changes, which is what
+# makes them different rows from the ordinary RACE page's `tracks`/`teams`
+# rather than the same ones reused.
+[[page.entry]]
+kind = "choice"
+label = "TRACK TITLE"
+setting = "remix.track_title"
+values_from = "titles"
+
+[[page.entry]]
+kind = "choice"
+label = "TRACK"
+setting = "remix.track"
+values_from = "remix_tracks"
+
+[[page.entry]]
+kind = "choice"
+label = "CRAFT TITLE"
+setting = "remix.craft_title"
+values_from = "titles"
+
+[[page.entry]]
+kind = "choice"
+label = "TEAM"
+setting = "remix.team"
+values_from = "remix_teams"
+disabled_by = { setting = "race.mode", value = "zone" }
+
+[[page.entry]]
+kind = "action"
+label = "START"
+action = "launch_remix"
 
 [[page.entry]]
 kind = "back"

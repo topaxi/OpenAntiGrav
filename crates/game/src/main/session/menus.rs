@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, settings};
+use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, remix, settings};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;
@@ -47,6 +47,19 @@ pub(crate) fn backdrop_seed(
         index: held.index,
         picture: held.picture.clone(),
     })
+}
+
+/// A remix catalogue's tracks, in the shape `Menu::supply` wants - the same
+/// `(Track, label)` -> `Choice::labelled` mapping [`Session::open_menus`]
+/// applies to a booted title's own `Shell::tracks`, pulled out because the
+/// RACE REMIX page needs it at two call sites and `Session::open_menus`'s
+/// own list is a different, already-in-scope local of the same shape.
+fn remix_track_choices(catalogue: &remix::Catalogue) -> Vec<menu::Choice> {
+    catalogue
+        .tracks
+        .iter()
+        .map(|(track, name)| menu::Choice::labelled(&track.id, name))
+        .collect()
 }
 
 impl Session {
@@ -140,6 +153,31 @@ impl Session {
         // with one value draws the setting as the fact it is. Empty on a source
         // whose title authors no loading screen at all, which greys it out.
         model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
+        // Race Remix's own axis - every title this machine can currently open
+        // a source for, surveyed once at `Session` construction. See the
+        // field's own doc comment.
+        let titles: Vec<menu::Choice> = self
+            .titles
+            .iter()
+            .map(|candidate| menu::Choice::plain(candidate.title()))
+            .collect();
+        model.supply(menu::ValueSource::Titles, &titles);
+        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
+        // already name, the same reason the CIRCUIT row above is seeded from
+        // `race.mode` rather than left empty until MODE is next touched: a
+        // menu reopened on a saved pick should show that pick's own list from
+        // the first frame. Both are `None` and supply nothing when nothing is
+        // saved yet, or when the saved title's source is no longer on this
+        // machine's search path - see `Self::remix_catalogue_for`.
+        if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) {
+            model.supply(
+                menu::ValueSource::RemixTracks,
+                &remix_track_choices(&catalogue),
+            );
+        }
+        if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.craft_title) {
+            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
+        }
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
@@ -367,6 +405,59 @@ impl Session {
         }
     }
 
+    /// The circuits and roster whichever title `title_setting` currently
+    /// names, if this machine can still open it.
+    ///
+    /// `None` covers three real states rather than one: the setting is empty
+    /// (nothing picked yet), it names a title `Self::titles` no longer has
+    /// (the disc left the search path since it was saved), or opening the
+    /// title failed once it was tried - the last of which is reported, the
+    /// first two are not, since an unpicked or since-removed title is not a
+    /// fault. `crate::remix::catalogue` does the actual open; this only finds
+    /// which source to hand it.
+    fn remix_catalogue_for(&self, title_setting: &str) -> Option<remix::Catalogue> {
+        let candidate = self
+            .titles
+            .iter()
+            .find(|candidate| candidate.title() == title_setting)?;
+        match remix::catalogue(&candidate.source) {
+            Ok(catalogue) => Some(catalogue),
+            Err(e) => {
+                warn!("{}: {e:#}", candidate.source);
+                None
+            }
+        }
+    }
+
+    /// Re-supplies the RACE REMIX page's TRACK row from whichever title
+    /// `remix.track_title` currently names - the `remix.track_title`-changed
+    /// counterpart to [`Self::resupply_tracks_for_mode`]. A no-op when the
+    /// menus are not open or [`Self::remix_catalogue_for`] found nothing.
+    pub(crate) fn resupply_remix_tracks(&mut self) {
+        let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) else {
+            return;
+        };
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu.supply(
+                menu::ValueSource::RemixTracks,
+                &remix_track_choices(&catalogue),
+            );
+        }
+    }
+
+    /// [`Self::resupply_remix_tracks`]' sibling for TEAM, scoped to
+    /// `remix.craft_title` instead.
+    pub(crate) fn resupply_remix_teams(&mut self) {
+        let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.craft_title) else {
+            return;
+        };
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage
+                .menu
+                .supply(menu::ValueSource::RemixTeams, &catalogue.teams);
+        }
+    }
+
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
         match event {
@@ -483,6 +574,118 @@ impl Session {
                     // lets the player pick something else, where a vanished
                     // window would just look like a crash.
                     Err(e) => error!("cannot start a race: {e:#}"),
+                }
+            }
+            // The RACE REMIX page's own launch - see `Action::LaunchRemix`'s
+            // own doc comment for why it is not a second meaning for
+            // `LaunchRace` above. Builds `race::Options` the same way that
+            // one does, plus the two source fields neither the CLI's
+            // `--race` route nor the ordinary RACE page ever has to resolve.
+            menu::MenuEvent::Fired(menu::Action::LaunchRemix) => {
+                let Some(mut race_options) = self.race_options.take() else {
+                    warn!("no disc image has been chosen yet, so there is nothing to race");
+                    return;
+                };
+                if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
+                    race_options.mode = mode;
+                }
+                if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
+                    race_options.class = class;
+                }
+                if let Some(difficulty) =
+                    oag_ai::Difficulty::from_name(&self.settings.ai.difficulty)
+                {
+                    race_options.difficulty = difficulty;
+                }
+
+                let track_title = self.settings.remix.track_title.clone();
+                let Some(track_candidate) = self
+                    .titles
+                    .iter()
+                    .find(|candidate| candidate.title() == track_title)
+                    .cloned()
+                else {
+                    warn!("no track title chosen yet, so there is nothing to remix");
+                    self.race_options = Some(race_options);
+                    return;
+                };
+                race_options.source = track_candidate.source.clone();
+
+                // An unpicked CRAFT TITLE means "the same as the track's",
+                // on the same terms `race::Options::craft_source: None`
+                // does - not a separate source opened redundantly. A picked
+                // one this machine can no longer find (its disc left the
+                // search path since it was saved) falls back the same way,
+                // reported rather than silent.
+                let craft_title = self.settings.remix.craft_title.clone();
+                let craft_source = if craft_title.is_empty() {
+                    None
+                } else {
+                    match self
+                        .titles
+                        .iter()
+                        .find(|candidate| candidate.title() == craft_title)
+                    {
+                        Some(candidate) => Some(candidate.source.clone()),
+                        None => {
+                            warn!(
+                                "{craft_title} is not a title this machine can currently \
+                                 open; racing craft from {track_title} instead"
+                            );
+                            None
+                        }
+                    }
+                };
+                race_options.craft_source = craft_source.clone();
+
+                match remix::catalogue(&track_candidate.source) {
+                    Ok(catalogue) => {
+                        let chosen = catalogue
+                            .track(&self.settings.remix.track)
+                            .or_else(|| {
+                                warn!(
+                                    "{track_title} does not offer {:?}; racing the first \
+                                     circuit it does offer, which is what the menu shows",
+                                    self.settings.remix.track
+                                );
+                                catalogue.tracks.first().map(|(track, _)| track)
+                            })
+                            .map(catalogue::Track::entry_name);
+                        match chosen {
+                            Some(entry) => race_options.track = Some(entry),
+                            None => warn!(
+                                "{track_title} offers no circuit at all; racing whatever \
+                                 was already selected"
+                            ),
+                        }
+                    }
+                    Err(e) => warn!("{}: {e:#}", track_candidate.source),
+                }
+
+                let craft_catalogue_source = craft_source.unwrap_or(track_candidate.source);
+                match remix::catalogue(&craft_catalogue_source) {
+                    Ok(catalogue) => match catalogue.team(&self.settings.remix.team) {
+                        Some(team) => race_options.team = Some(team.to_string()),
+                        None => warn!(
+                            "this craft title does not offer team {:?}, racing as its own \
+                             default instead",
+                            self.settings.remix.team
+                        ),
+                    },
+                    Err(e) => warn!("{craft_catalogue_source}: {e:#}"),
+                }
+
+                info!(
+                    "remixing {}",
+                    race_options
+                        .track
+                        .as_deref()
+                        .unwrap_or("this source's own default circuit")
+                );
+                self.race_options = Some(race_options);
+                match self.launch_race() {
+                    Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
+                    Err(e) => error!("cannot start a remix race: {e:#}"),
                 }
             }
             // QUIT always quits, parked race or not - it is a row a player

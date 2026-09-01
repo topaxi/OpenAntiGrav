@@ -120,6 +120,22 @@ pub fn survey(paths: &[PathBuf]) -> Vec<Candidate> {
     paths.iter().map(|path| examine(path)).collect()
 }
 
+/// Every playable candidate, one per distinct title.
+///
+/// Race Remix's own reader of a survey: it wants "which titles can this
+/// machine race today", not "which files are on the search path" - two
+/// pressings of the same title (a US and an EU disc) are one row, the first
+/// one found. Order is `rows`' own, so the same "known names first" rule
+/// [`survey`] documents decides which pressing wins.
+#[must_use]
+pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
+    let mut seen = std::collections::HashSet::new();
+    rows.iter()
+        .filter(|row| row.is_playable() && seen.insert(row.title().to_string()))
+        .cloned()
+        .collect()
+}
+
 /// One candidate, opened.
 fn examine(path: &Path) -> Candidate {
     let source = path.to_string_lossy().into_owned();

@@ -79,6 +79,8 @@ pub struct Settings {
     #[serde(default)]
     pub race: Race,
     #[serde(default)]
+    pub remix: Remix,
+    #[serde(default)]
     pub controls: Controls,
     #[serde(default)]
     pub ai: Ai,
@@ -162,6 +164,40 @@ impl Default for Race {
             track: default_track(),
         }
     }
+}
+
+/// What the RACE REMIX page last chose.
+///
+/// The same shape [`Race`] is, and stores the same *kind* of thing - archive
+/// path components, not display names - for the same reason. Separate fields
+/// rather than reusing [`Race::track`]/[`Race::team`]: a remix's TRACK/TEAM
+/// rows are scoped to whichever title `track_title`/`craft_title` currently
+/// name, which is not always the title this process booted from, so sharing
+/// a setting with the ordinary RACE page would let the two pages clobber
+/// each other's last pick.
+///
+/// `track_title`/`craft_title` store a title's own [`oag_title::Title::name`],
+/// there being no shorter machine id since a title package is chosen once at
+/// boot and never carries one. Two pressings of the same title (a US and an
+/// EU disc) are one row on the picker, so this cannot name *which* pressing;
+/// see [`crate::launcher::distinct_titles`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Remix {
+    /// Which title the track loads from, or empty before a pick.
+    #[serde(default)]
+    pub track_title: String,
+    /// Which circuit, by the id `track_title`'s own plugin definition gives
+    /// it - [`Race::track`]'s rule, scoped to a different title.
+    #[serde(default)]
+    pub track: String,
+    /// Which title the craft, HUD and grid roster load from, or empty before
+    /// a pick.
+    #[serde(default)]
+    pub craft_title: String,
+    /// Which team, by the id `craft_title`'s own plugin definition gives it -
+    /// [`Race::team`]'s rule, scoped to a different title.
+    #[serde(default)]
+    pub team: String,
 }
 
 /// What the opponents are like.
@@ -918,6 +954,10 @@ pub fn menu_seeds(
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
+        ("remix.track_title", text(&settings.remix.track_title)),
+        ("remix.track", text(&settings.remix.track)),
+        ("remix.craft_title", text(&settings.remix.craft_title)),
+        ("remix.team", text(&settings.remix.team)),
     ];
     if let Some(language) = &settings.language {
         out.push(("language", text(language)));
