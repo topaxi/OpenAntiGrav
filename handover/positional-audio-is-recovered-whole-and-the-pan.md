@@ -4,24 +4,32 @@
 cross-title scan and every confidence are on
 [positional-audio.md](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md),
 which is the durable record; this row is what is not there. **The cheapest
-upgrade this project had open is done**: a live Pulse USA capture
-(`scripts/psp-watch-soundemitter.py`, swapping one execution breakpoint
-between `SoundEmitter_ComputeVolumeAndAngle`'s entry and return address, since
-PPSSPP v1.20.4 only ever fires the most-recently-armed one) reproduced the
-recovered volume/angle law exactly on **1,610/1,610 live hits**. Confidences
-moved **85-88 -> 90-94** across the emitter chain; see the doc's own
+upgrade this project had open is done, and so is its own follow-up**: a live
+Pulse USA capture (`scripts/psp-watch-soundemitter.py`, swapping one execution
+breakpoint between `SoundEmitter_ComputeVolumeAndAngle`'s entry and return
+address, since PPSSPP v1.20.4 only ever fires the most-recently-armed one)
+reproduced the recovered volume/angle law exactly on **2,910/2,910 live
+hits**, across two sessions. Confidences moved **85-88 -> 90-94** across the
+emitter chain; see the doc's own
 [runtime-verification section](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#runtime-verification-2026-09-01)
 for the per-claim breakdown. **Two things fell out for free**: the doppler
 scale `inst[0x0c]`, previously read as a field and never as a value, read
 exactly `0.0005` on every hit (against the engine note only - not yet checked
 against other cues); and the cone-enabled flag read `False` on all 1,610
-samples, real negative evidence rather than "not looked at". **What the
-capture did not reach**: the `d > radius` zero-volume gate branch itself never
-fired live - the emitter's queued request stopped appearing before `d/radius`
-crossed `1.0`, consistent with the existing "out of range is a latched state"
-reading but not a direct read of that branch - and the doppler `1536` unit is
-still unrecovered. **Three things landed as side effects in the 2026-08-24
-pass and are still easy to lose**: [camera.md](../docs/ghidra/functions/psp-pulse-usa/camera.md)'s
+samples of the first session, real negative evidence rather than "not looked
+at". **The `d > radius` zero-volume gate branch never fired live even once,
+deliberately targeting an emitter that sat queued and out of range for over a
+minute - and that turned out not to be a sampling gap.** Decompiling
+`SoundManager_Update`'s full per-emitter dispatch found the actual gate one
+level up: `SoundEmitter_ServiceRequests` (newly named, `0x089394dc`) refuses
+to call into `SoundInstance_UpdateSpatial` at all once an emitter's
+out-of-range latch is set, and `SoundEmitter_Update` sets that latch in the
+same tick distance first reaches radius, before the dispatcher runs - so
+`SoundEmitter_ComputeVolumeAndAngle`'s own `d > radius` line is provably
+unreachable, not merely unobserved. See
+["The zero-volume gate is dead code"](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#the-zero-volume-gate-is-dead-code-2026-09-01).
+**Three things landed as side effects in the 2026-08-24 pass and are still
+easy to lose**: [camera.md](../docs/ghidra/functions/psp-pulse-usa/camera.md)'s
 transposition finding moved **80 -> 88** (a second subsystem assumes both
 halves); [pads.md](../docs/ghidra/functions/psp-pulse-usa/pads.md)'s
 `racer+0x368` = "the local player" moved **45 -> 60** on a fourth and fifth
@@ -40,8 +48,8 @@ fourteen emitter construction sites.
 - How `SCES_547.48` (PS2) pans is unknown - no byte-order/scale/step variant matched across 8 scales x 3 steps x 2 orders
 - `.vex` classes `sound`, `soundcone`, `speaker`, the emitter cone's trigger, the doppler term's unit, and ten of fourteen emitter construction sites are all still unplaced
 - `racer+0x368` = "the local player" is unconfirmed on its fourth and fifth (still unnamed) use sites
-- The `d > radius` zero-volume gate branch was never caught firing live, and the doppler `1536` unit is still unrecovered - both need more than a register read (see the doc's runtime-verification section for what each would take)
+- The doppler `1536` unit is still unrecovered - needs an audible reference, not a register read
 
 ## Next Steps
 
-- Catch the gate branch itself: `scripts/psp-drive.py place` a second craft's emitter straight past its radius (rather than driving there, which lets the queued request drop first) and rerun `psp-watch-soundemitter.py` - the one regime 2026-09-01's capture missed
+- None scoped on this thread right now; every next step it named is either done (the runtime verification, the gate branch) or needs a different kind of evidence than a breakpoint (the doppler unit needs to be heard, the PS2 pan and the ten construction sites need a fresh sweep angle, not a rerun of this one)

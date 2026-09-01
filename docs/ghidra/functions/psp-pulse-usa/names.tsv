@@ -582,6 +582,8 @@
 0x08859cd4	function	Entity_GetPosition	90	contact-response.md
 0x089391c4	function	SoundEmitter_Init	90	positional-audio.md
 0x08939720	function	SoundEmitter_Update	90	positional-audio.md
+0x089394dc	function	SoundEmitter_ServiceRequests	85	positional-audio.md
+0x08939b84	function	SoundInstance_StillPlaying	80	positional-audio.md
 0x08939c00	function	SoundEmitter_ComputeVolumeAndAngle	90	positional-audio.md
 0x08939e58	function	SoundInstance_UpdateSpatial	86	positional-audio.md
 0x0893a2b0	function	SoundManager_Update	88	positional-audio.md

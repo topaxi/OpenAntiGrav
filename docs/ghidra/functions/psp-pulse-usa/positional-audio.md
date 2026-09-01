@@ -11,8 +11,8 @@ when it said "only the player's craft is audible here".
 **Everything below is static reading of `psp-pulse-usa`'s `BOOT.BIN`, except the
 pan table, which is read out of five shipped executables and matches a closed
 form exactly.** The law itself is now runtime-verified - see
-["Runtime verification"](#runtime-verification-2026-09-01) below - 1,610 live
-samples, 1,610 exact matches on both outputs.
+["Runtime verification"](#runtime-verification-2026-09-01) below - 2,910 live
+samples across two sessions, 2,910 exact matches on both outputs.
 
 ## Read this before trusting an address on this page
 
@@ -27,16 +27,23 @@ tool in the bridge, so callers here were found with
 
 | Address | Name | Confidence |
 | --- | --- | --- |
-| `0x089391c4` | `SoundEmitter_Init` | 85 |
-| `0x08939720` | `SoundEmitter_Update` | 84 |
-| `0x08939c00` | `SoundEmitter_ComputeVolumeAndAngle` | 85 |
-| `0x08939e58` | `SoundInstance_UpdateSpatial` | 82 |
-| `0x0893a2b0` | `SoundManager_Update` | 84 |
+| `0x089391c4` | `SoundEmitter_Init` | 90 |
+| `0x08939720` | `SoundEmitter_Update` | 90 |
+| `0x08939b84` | `SoundInstance_StillPlaying` | 80 |
+| `0x08939c00` | `SoundEmitter_ComputeVolumeAndAngle` | 90 |
+| `0x08939e58` | `SoundInstance_UpdateSpatial` | 86 |
+| `0x089394dc` | `SoundEmitter_ServiceRequests` | 85 |
+| `0x0893a2b0` | `SoundManager_Update` | 88 |
 | `0x0893a5ec` | `SoundManager_LinkEmitter` | 85 |
-| `0x0893a7e8` | `SoundManager_BuildVolumeCurve` | 88 |
-| `0x0893a87c` | `SoundManager_VolumeCurve` | 88 |
+| `0x0893a7e8` | `SoundManager_BuildVolumeCurve` | 94 |
+| `0x0893a87c` | `SoundManager_VolumeCurve` | 94 |
 | `0x08995a9c` | `Scream_PanVolumePair` | 85 |
 | `0x08ac4a2c` | `g_scream_pan_table` (data) | 94 |
+
+(`SoundInstance_StillPlaying` and `SoundEmitter_ServiceRequests` were found
+2026-09-01 chasing why the zero-volume gate never fired live - see
+["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01)
+below.)
 
 `Sound_Play` (`0x089392b0`) and `Scream_PlaySoundByName` (`0x08991b20`) were
 already named by [`sound.md`](sound.md); this page settles two of their
@@ -49,12 +56,16 @@ SoundManager_Update  (once per frame)
   |
   +- copies the listener frame off the active camera object (DAT_08ab10b0)
   +- for each emitter in the manager's list:
-       SoundEmitter_Update            distance, direction, cone angle, doppler delta
-       then, per queued request:
-         SoundInstance_UpdateSpatial
-           SoundEmitter_ComputeVolumeAndAngle   -> volume 0..1024, angle 0..359
-           Scream_SetSoundPan / Volume / Pitch  (or Scream_PlaySoundByName on the first frame)
-             ...
+       SoundEmitter_Update            distance, direction, cone angle, doppler delta,
+                                       and the +0x5c bit 0 in-range/out-of-range latch
+       if queued request count == 0: idle cleanup
+       else: SoundEmitter_ServiceRequests, per queued request:
+         if emitter+0x5c bit 0 is set (out of range): skip this request entirely
+         else, if SoundInstance_StillPlaying:
+           SoundInstance_UpdateSpatial
+             SoundEmitter_ComputeVolumeAndAngle   -> volume 0..1024, angle 0..359
+             Scream_SetSoundPan / Volume / Pitch  (or Scream_PlaySoundByName on the first frame)
+               ...
              Scream_PanVolumePair               -> the two hardware volumes
 ```
 
@@ -226,8 +237,8 @@ c     = clamp(dot(normalize(e[0x10].xyz), right), -1, 1)
 angle = degrees(acosf(c)) - 90
 if angle < 0: angle += 360                         ; 0..359
 
-volume = d > e[0x38] ? 0
-       : (int)( curve(atten * request_volume) * 1024.0 )
+volume = d > e[0x38] ? 0    ; DEAD CODE - see below, the caller never reaches
+       : (int)( curve(atten * request_volume) * 1024.0 )  ; this function with d >= e[0x38]
 ```
 
 Three things worth saying plainly:
@@ -236,8 +247,12 @@ Three things worth saying plainly:
   matters.** `atten * 1.25` clamped at `1.0` means an emitter is at *full*
   volume out to `0.2 * radius` and then falls linearly to nothing at `radius`.
   For a craft that is full volume within **40 units** and silent past **200**.
-- **Beyond the radius the sound is not merely quiet, it is gated off**, by a
-  separate `d > radius` test rather than by the attenuation reaching zero. And
+- **Beyond the radius the sound is not merely quiet, it is gated off** - but
+  not, it turns out, by this function's own `d > radius` line. That line is
+  provably unreachable; see
+  ["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01).
+  The actual gate is one level up, in `SoundEmitter_ServiceRequests`, which
+  refuses to call into this function at all once `+0x5c` bit 0 latches. And
   `Sound_Play` itself refuses to *start* a cue on an emitter whose `+0x5c` bit 0
   is latched, unless its sixth argument forces it. Out of range is a state, not
   a volume.
@@ -389,12 +404,75 @@ script above). Coverage was two of the three attenuation regimes: 283 hits
 with `d < 0.2·radius` (clamped to full volume) and 1,327 with
 `0.2·radius <= d < radius` (the linear ramp), `d/radius` up to `0.9994`. The
 third regime - `d >= radius`, the separate zero-volume gate - was **not**
-directly caught: the emitter's queued request stopped appearing before `d/r`
-reached `1.0`, consistent with this page's existing reading that a craft going
-out of range is a *state* (`+0x5c` bit 0 latches, `Sound_Play` then refuses to
-start further cues on it) rather than the attenuation simply reaching zero -
-corroborating, but not a direct read of the `if (radius < d) volume = 0`
-branch.
+directly caught in **2,910 live hits total across two sessions**, including
+one that deliberately targeted an emitter already reading `distance = 1009`,
+`radius = 50`, queued-request-count `1` for over a minute of real time
+without ever firing. That is not a sampling gap - see below, it cannot fire.
+
+### The zero-volume gate is dead code, 2026-09-01
+
+Chasing why a persistently-queued, persistently-out-of-range emitter never
+once reached `SoundEmitter_ComputeVolumeAndAngle`'s own `if (radius < d)
+volume = 0` line led to `SoundManager_Update`'s full per-emitter dispatch,
+previously not decompiled on this page:
+
+```c
+// SoundManager_Update (0x0893a2b0), the per-emitter loop, addresses relocated
+SoundEmitter_Update(emitter);                      // 0x00135720 + base = 0x08939720
+if (emitter->queued_count == 0) { /* idle cleanup */ }
+else SoundEmitter_ServiceRequests(mgr_dt, emitter); // 0x001354dc + base = 0x089394dc
+```
+
+`SoundEmitter_ServiceRequests` (`0x089394dc`) walks the emitter's queued
+request list and, for each request still in the "keep" state, gates the
+actual spatial update on the exact same flag `SoundEmitter_Update` just set
+or cleared **one call earlier in the same tick**:
+
+```c
+if ((emitter->flags_0x5c & 1) == 0) {          // NOT out-of-range-latched
+    if (SoundInstance_StillPlaying(request))    // 0x08939b84
+        SoundInstance_UpdateSpatial(mgr_dt, request);  // 0x00135e58 + base = 0x08939e58
+    // else: unlink and free the finished request
+}
+// if the latch IS set: nothing happens to this request at all - not even reaped
+```
+
+Both nested call targets resolve, after adding the image base, to addresses
+this page had already named independently (`SoundInstance_UpdateSpatial` at
+`0x08939e58`, and `SoundEmitter_Update` itself, called immediately before this
+dispatcher, at `0x08939720`) - two exact matches, not a guess.
+
+**`SoundEmitter_Update`'s own latch write happens before this gate is
+checked, in the same frame:**
+
+```c
+if (!cone_enabled) {
+    if ((flags_0x5c & 1) == 0) {              // currently in range
+        if (radius <= distance) { flags_0x5c |= 1; edge_0x69 = 1; }   // -> latch NOW
+    } else if (distance < radius) {
+        flags_0x5c &= ~1; edge_0x68 = 1;                              // back in range
+    }
+}
+```
+
+So on the very tick `distance` first reaches `radius`, the latch is set
+**before** `SoundEmitter_ServiceRequests` runs for that emitter this same
+frame - there is no one-tick window where `SoundInstance_UpdateSpatial`, and
+therefore `SoundEmitter_ComputeVolumeAndAngle`, gets called with `d >= radius`.
+The latch also **clears** the moment `distance < radius` again, so a craft
+re-entering range resumes normally - it is a live gate, not a one-way trap -
+but the specific `if (radius < d) volume = 0` line inside
+`SoundEmitter_ComputeVolumeAndAngle` is unreachable through this call chain in
+every state the latch can be in. `SoundEmitter_ComputeVolumeAndAngle` has no
+other caller on this page's own call graph.
+
+**This resolves the open question rather than leaving it open**: the earlier
+framing ("not yet observed, corroborating but not direct") undersold it. The
+2,910-hit live capture matches what static reading now proves: the branch
+cannot fire, so no capture will ever catch it firing. What *does* gate an
+out-of-range emitter to silence is `SoundEmitter_ServiceRequests` refusing to
+call into it at all - one level up from where this page originally placed the
+gate.
 
 **Two things fell out for free.** `inst[0x0c]`, the per-instance doppler
 scale documented as "read as a field, never as a value", read as exactly
@@ -411,18 +489,17 @@ trigger this capture never exercised.
 | --- | --- | --- |
 | The pan table is `floor(16383 * cos/sin(i/2 deg))` | **94** | 360 exact values in five executables; the rubric caps data agreement at 94 |
 | Linear falloff and the `1.25` clamp | **92** | runtime-exact on 1,610/1,610 live hits across the clamped and ramp regimes |
-| The `d > radius` zero-volume gate | 84 | still decompilation only - the branch itself was never observed firing live (see above) |
+| Actual out-of-range gating is `SoundEmitter_ServiceRequests` refusing the call, not `d > radius` inside `ComputeVolumeAndAngle` | **90** | full call-chain decompilation, two independent exact address matches, and 2,910/2,910 live hits consistent with "cannot fire" |
 | Emitter record layout | **90** | three functions agree, `Craft_Construct_q` matches camera.md's struct, and every field this page reads off it reproduced the game's own output live |
 | Listener is the camera, columns are the world axes | **92** | camera.md measured it live from the other side, and the recovered angle law reproduced the game's own output exactly using this axis assignment |
 | Volume curve `pow(v, 1/1.7)` over 256 steps | **94** | fingerprinted directly off live memory: gamma exactly `1.7`, table max deviation `~8e-8` (float32 precision), and it reproduced 1,610/1,610 exact volumes |
 | Doppler `-(dd/dt) * scale * 1536` | 78 | the `1536` unit is still unrecovered; the per-instance scale is now a read value (`0.0005`) rather than an unread field, not yet a confirmed unit |
 | The teleport guard is `|old - new| < 24` | 84 | untouched by this capture - different function |
 
-**The cheapest upgrade this page named is done.** What is left in the same
-shape: catching the `d > radius` gate branch itself (needs an emitter to stay
-queued while crossing out of range, or a `psp-drive.py place` teleport past
-the radius rather than driving there), and the doppler unit (needs an audible
-reference, not a register read).
+**The cheapest upgrade this page named is done, and so is its own follow-up
+question.** What is left in the same shape: the doppler unit (needs an
+audible reference, not a register read), and EU cross-verification of the
+code (below).
 
 ## Cross-title: four of six discs carry the same table, and the PS2 does not
 
@@ -471,7 +548,8 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 - **The `a > 179` sign bookkeeping**, unexercised on this path.
 - **EU cross-verification of the code.** The table is confirmed in
   `psp-pulse-eu`; none of the functions is.
-- **The `d > radius` zero-volume gate branch itself**, and the doppler `1536`
-  unit, are the two claims 2026-09-01's live capture did not reach - see
-  ["Runtime verification"](#runtime-verification-2026-09-01) for why and what
-  would close each.
+- **The doppler `1536` unit** is the one claim 2026-09-01's live capture did
+  not reach - needs an audible reference, not a register read. (The
+  `d > radius` zero-volume branch is no longer on this list: it is closed,
+  provably dead code - see
+  ["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01).)
