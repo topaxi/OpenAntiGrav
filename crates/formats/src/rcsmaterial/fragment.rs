@@ -355,22 +355,29 @@ impl Program {
     /// page's disc sweep shows is only the commonest of six values (`5`,
     /// `10`, `32`, `26.156`, `40`, `300`).
     ///
-    /// **Two filters, neither optional, because the bare `LG2`/`MUL`/`EX2`
+    /// **Three filters, none optional, because the bare `LG2`/`MUL`/`EX2`
     /// shape alone is not specific to specular at all.** Measured disc-wide
     /// while building this method: the identical three instructions raise a
     /// texture sample to a power on `track_surface`'s own lightmap curve
     /// (`pow(lightmap.rgb, k)`, `renderer.md`'s block #9), compute `exp(x)`
-    /// by an unrelated `log2(e)` constant on other materials, and raise
-    /// several other quantities to a power that reachability alone does not
-    /// separate from a real specular term - excluding only Zone-declaring
-    /// blocks left thousands of chains a reachability filter could not
-    /// distinguish from the roughly 1,800 the disc sweep this method
-    /// reproduces actually found. So:
+    /// off a saturated dot product by the unrelated `log2(e)` constant, and
+    /// raise several other quantities to a power that reachability alone
+    /// does not separate from a real specular term - excluding only
+    /// Zone-declaring blocks left thousands of chains a reachability filter
+    /// could not distinguish from the roughly 1,800 the disc sweep this
+    /// method reproduces actually found. So:
     ///
     /// - [`Self::lg2_reads_a_saturated_dot`] requires the `LG2` to read a
     ///   register a saturated `DP3` most recently wrote - the `N.H`/`N.L`
     ///   idiom every specular and sun-diffuse read in `renderer.md` shares,
     ///   which a texture-fed power curve does not.
+    /// - The exponent literal is rejected when it is `log2(e)` (within
+    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, and `mesh.wgsl`'s own fog
+    ///   curve names this exact constant for this exact reason ("a MUL by
+    ///   log2(e) into EX2_SAT"). A saturated dot product raised through
+    ///   `exp()` rather than `pow()` - a Fresnel-style falloff, say - shares
+    ///   both other gates without being this idiom, and `1.4427` is not a
+    ///   shininess.
     /// - [`Self::reaches_output`] requires the chain's result to survive to
     ///   the last instruction that writes a colour channel - the same
     ///   instruction [`Self::taint`]'s own `last` picks out, for the same
@@ -381,17 +388,27 @@ impl Program {
     /// Chains are tried **last first**: the specular term is characteristically
     /// added after the diffuse sum (`renderer.md`'s own block reads all place
     /// it after the `N.L` term), so the chain closest to the end is the
-    /// likeliest candidate, and the first one found passing both filters wins.
+    /// likeliest candidate, and the first one found passing every filter wins.
     ///
-    /// `None` when no such chain passes both filters - every unlit and
+    /// `None` when no such chain passes every filter - every unlit and
     /// emissive program, and any block this pattern does not fit.
+    ///
+    /// **A literal `0.0` is not filtered here and is a real answer this
+    /// method can return.** `pow(x, 0) = 1` is not a plausible authored
+    /// shininess, and a disc-wide sweep found it the single largest bucket
+    /// (573 of ~1,050 non-Zone chains) - the strongest candidate for
+    /// `SpecularPower` patched at draw time rather than baked in the file,
+    /// matching this page's own RGBE and sun-direction readings of other
+    /// "patched at draw time" constants. Deciding whether to trust a literal
+    /// zero is a caller's policy, not this method's: it reports what the file
+    /// says, faithfully, and `0.0` is what the file says there.
     ///
     /// Confidence 80, inherited from the disc sweep this reproduces: the
     /// pattern is instruction shape, not block meaning, so a non-specular
     /// power fed by a saturated dot product and reaching the output - a
-    /// Fresnel-style term, say - would read as this method's answer too.
-    /// Not observed on the materials read by hand so far, but not ruled out
-    /// either.
+    /// Fresnel-style term using an actual power rather than `exp()`, say -
+    /// would read as this method's answer too. Not observed on the materials
+    /// read by hand so far, but not ruled out either.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
         for i in (0..self.instructions.len()).rev() {
@@ -430,7 +447,19 @@ impl Program {
                     .into_iter()
                     .find(|v| *v != 0.0)
                     .unwrap_or(exponent[0]);
-                return Some(value);
+                // **A third false-positive class, found on a disc-wide sweep
+                // and not a guess: `LG2` / `MUL log2(e)` / `EX2` is not this
+                // idiom at all.** `EX2(log2(e) * LG2(x)) = exp(x)`, and
+                // `mesh.wgsl`'s own fog curve names exactly this constant for
+                // exactly this reason ("a MUL by log2(e) into EX2_SAT"). A
+                // saturated dot product raised through `exp()` instead of
+                // `pow()` is a Fresnel-style falloff sharing the specular
+                // idiom's two gates without being it, not a shininess of
+                // `1.4427`. Skip and keep looking, rather than returning a
+                // value that is not the exponent this method promises.
+                if (value - std::f32::consts::LOG2_E).abs() > 1e-3 {
+                    return Some(value);
+                }
             }
         }
         None

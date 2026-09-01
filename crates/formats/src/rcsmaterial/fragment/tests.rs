@@ -672,3 +672,51 @@ fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
         "the LG2 reads a texture sample, not a saturated DP3 - not the N.H idiom"
     );
 }
+
+/// **`exp(N.H)` is not `pow(N.H, e)`, even fed by a saturated dot and
+/// reaching the output too** - a disc-wide sweep found materials computing
+/// `exp(x) = exp2(log2(e) * log2(x))` off exactly this shape, and the
+/// constant's exact identity is the tell: `mesh.wgsl`'s own fog curve names
+/// `log2(e)` for the identical reason.
+#[test]
+fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {
+    let mut instructions = pow_chain(1, std::f32::consts::LOG2_E, 0xf);
+    let mut mad = insn(0x04);
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(
+        program.specular_exponent(),
+        None,
+        "log2(e) marks exp(N.H), not a specular pow"
+    );
+}
+
+/// The `log2(e)` exclusion is a value check, not a blanket rejection of
+/// anything nearby - a real specular exponent that happens to be close is
+/// still returned.
+#[test]
+fn a_pow_chain_whose_exponent_is_merely_close_to_log2_e_is_still_returned() {
+    let mut instructions = pow_chain(1, 1.5, 0xf);
+    let mut mad = insn(0x04);
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(1.5));
+}
