@@ -67,6 +67,17 @@ struct Block {
     black_mask: bool,
     /// The block samples at least one `zoneTex*`.
     samples_zone_texture: bool,
+    /// The block declares `zoneTexVis` **and** its code fetches from that
+    /// unit - so it draws the audio-spectrum glow rather than merely naming
+    /// the lookup.
+    samples_vis: bool,
+    /// Every *negative* literal a saturating `ADD` in this block carries.
+    ///
+    /// The visualiser glow opens with `saturate(N.y - t)`, so `-t` is here.
+    /// See [`the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere`]
+    /// for why this is a list rather than one value: the assertion is that a
+    /// visualiser block carries exactly one, from a two-element set.
+    negative_saturating_literals: Vec<f32>,
 }
 
 /// Every fragment block on one archive that names a Zone parameter or sampler.
@@ -84,6 +95,7 @@ fn zone_blocks(archive: &str) -> Vec<Block> {
         .collect();
 
     let base_inner = name_hash("zoneBaseInner");
+    let vis = name_hash("zoneTexVis");
     let aniso_power = name_hash("zoneAnisoPower");
     let aniso_palette = [
         name_hash("zoneAnisoPalette"),
@@ -165,12 +177,24 @@ fn zone_blocks(archive: &str) -> Vec<Block> {
                         .is_some_and(|c| c.iter().any(|v| (*v - want).abs() < 1e-3))
                 })
             };
+            let mut negative_saturating_literals: Vec<f32> = program
+                .instructions
+                .iter()
+                .filter(|i| i.saturate && i.name() == Some("ADD"))
+                .filter_map(|i| i.constant)
+                .flatten()
+                .filter(|v| *v < 0.0)
+                .collect();
+            negative_saturating_literals.sort_by(|a, b| a.total_cmp(b));
+            negative_saturating_literals.dedup();
             out.push(Block {
                 path: path.clone(),
                 shape,
                 rim_exponents: literals(10.0) && literals(5.0),
                 black_mask: literals(100_000.0),
                 samples_zone_texture: sampled(&zone_textures),
+                samples_vis: sampled(&[vis]),
+                negative_saturating_literals,
             });
         }
     }
@@ -390,4 +414,103 @@ fn no_ship_or_weapon_material_compiles_a_zone_variant() {
         }
     }
     assert!(seen > 0, "no Zone block found at all; the sweep is broken");
+}
+
+/// **The audio-spectrum glow is gated to up-facing surfaces on every material
+/// on the disc, and the threshold takes exactly two values.**
+///
+/// `zone-shader.md` reads the glow as `saturate(N.y - 0.5) * (1 -
+/// windowDepth) * E.w * zoneTexVis[band].rgb`, from two materials. The
+/// `saturate(N.y - 0.5)` half is what makes the visualiser a *floor* display,
+/// which is how the microcode independently produced the maintainer's own
+/// play observation - and it is also the part that could not explain the
+/// other half of that observation, the billboards. So the obvious hypothesis
+/// was a second glow shape hiding in a billboard material. **There is no
+/// second shape.** Every one of the 18,050 blocks that actually fetches
+/// `zoneTexVis` carries exactly one negative saturating `ADD` literal, and it
+/// is `-0.5` in 16,834 of them and `-1` in the other 1,216 - including all 64
+/// blocks of `billboarddiffuse`, all 56 of `cf_billboard1` and all 212 of
+/// `nr_crowd_bustle`.
+///
+/// **`-1` reads as the same gate turned off**, at confidence 70 rather than
+/// the count's own: `saturate(N.y - 1)` is zero for every unit normal, so
+/// those blocks multiply the lookup by zero. That rests on the register
+/// feeding the `ADD` being a normalised `N.y`, decoded through an opcode
+/// (`0x3b`) `oag_formats::rcsmaterial::fragment` does not name - read as a
+/// normalise from its pairing with a `DP3` of a vector against itself, twice
+/// in the same block. What is *measured* here, and what this asserts, is the
+/// two-value threshold set; the "turned off" reading is the interpretation.
+///
+/// The other half of the answer is geometry rather than microcode - see
+/// `rcsmodel_material_ground_truth.rs`'s
+/// `billboard_geometry_is_mixed_where_crowd_and_banner_geometry_is_not`.
+#[test]
+#[ignore]
+fn the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere() {
+    let Some(_) = image() else {
+        return;
+    };
+    let blocks: Vec<Block> = ALL_ARCHIVES.iter().flat_map(|a| zone_blocks(a)).collect();
+    let vis: Vec<&Block> = blocks.iter().filter(|b| b.samples_vis).collect();
+
+    let mut half = 0usize;
+    let mut one = 0usize;
+    for block in &vis {
+        match block.negative_saturating_literals.as_slice() {
+            [v] if (*v + 0.5).abs() < 1e-6 => half += 1,
+            [v] if (*v + 1.0).abs() < 1e-6 => one += 1,
+            other => panic!(
+                "{} fetches zoneTexVis with saturating-ADD literals {other:?}; \
+                 the up-gate is supposed to be one of exactly two thresholds",
+                block.path
+            ),
+        }
+    }
+    assert_eq!(
+        (vis.len(), half, one),
+        (18_050, 16_834, 1_216),
+        "the visualiser gate census moved"
+    );
+}
+
+/// **Every billboard, crowd, screen and scanline material carries the up-gate
+/// too**, which is the specific refutation of "the billboard half must be a
+/// second fragment block with a different gate".
+///
+/// Kept apart from the count above because it is the claim a reader of
+/// `hd-zone-stage-textures-are-grounded.md`'s Open item needs, and it is
+/// named by material family rather than by a total: a regression that dropped
+/// one family out of the sweep would leave the count assertion to catch it by
+/// arithmetic alone, which is not the same as naming it.
+#[test]
+#[ignore]
+fn no_billboard_or_crowd_material_compiles_an_ungated_visualiser() {
+    let Some(_) = image() else {
+        return;
+    };
+    const FAMILIES: [&str; 5] = ["billboard", "crowd", "banner", "screen", "scanline"];
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for block in ALL_ARCHIVES.iter().flat_map(|a| zone_blocks(a)) {
+        if !block.samples_vis {
+            continue;
+        }
+        let leaf = block.path.rsplit('/').next().unwrap_or_default();
+        let Some(family) = FAMILIES.iter().find(|f| leaf.contains(*f)) else {
+            continue;
+        };
+        assert_eq!(
+            block.negative_saturating_literals.len(),
+            1,
+            "{} draws the visualiser with no single up-gate threshold",
+            block.path
+        );
+        *seen.entry(family).or_default() += 1;
+    }
+    for family in FAMILIES {
+        assert!(
+            seen.get(family).is_some_and(|n| *n > 0),
+            "no material named *{family}* draws the visualiser at all; the \
+             sweep is not finding the family it is supposed to refute"
+        );
+    }
 }

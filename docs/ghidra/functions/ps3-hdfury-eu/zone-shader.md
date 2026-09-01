@@ -194,6 +194,68 @@ That is the microcode independently producing the maintainer's own play
 observation - *the floor* displays the equaliser - from a direction this
 session did not go looking for it.
 
+### The gate is universal, and the threshold takes exactly two values
+
+Read from two materials above, and **counted over all of them** on
+2026-09-01, by the same per-block census the retraction below rests on.
+Every fragment block on the disc that *fetches* `zoneTexVis` - 18,050 of them
+- carries exactly one negative literal on a saturating `ADD`:
+
+| threshold | blocks |
+| --- | ---: |
+| `saturate(N.y - 0.5)` | **16,834** |
+| `saturate(N.y - 1.0)` | 1,216 |
+| anything else | **0** |
+
+Confidence **88** on the count, which is mechanical
+(`crates/formats/tests/zone_shader_census_ground_truth.rs`'s
+`the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere`, re-derived
+off `hdfury-ps3-eu-dec.iso` on every `just test-data`).
+
+**`1.0` reads as the same gate authored off** - `saturate(N.y - 1)` is zero
+for every unit normal, so those blocks multiply the lookup by zero -
+confidence **70**, not 88: it depends on the register feeding the `ADD` being
+a normalised `N.y`, which arrives through fragment opcode `0x3b`, an opcode
+this project's decoder does not name. It is read as a normalise from its
+pairing with a `DP3` of a vector against itself, twice in the same block
+(`01_vineta_k/materials/diffuse_normal_specular.rcsmaterial` block 27).
+
+**What this settles**: there is no second, billboard-specific glow shape.
+`billboarddiffuse` (64 blocks), `cf_billboard1` (56), `cf_vex_billboard`
+(56), `nr_crowd_bustle` (212), `ns_adbanner` (16), `scanlinebillboard` (28)
+and every other `*billboard*`, `*crowd*`, `*banner*`, `*screen*` and
+`*scanline*` material on the disc compiles the same up-gate as the track
+surface does. The maintainer's play observation names the floors **and** the
+billboards, and the hypothesis that the billboard half must be a second
+fragment block with a different gate is refuted here.
+
+### So whether a billboard lights up is a *geometry* fact, and the meshes say "partly"
+
+`N` is the authored vertex normal in the mesh's own space, passed through
+untouched - `billboarddiffuse`'s vertex program writes `MOV o[TC1].xyz,
+v[1].xyzx`, and the fragment program normalises that same register and dots
+it against the directional light's direction, so `N.y` is world up rather
+than a view- or tangent-space quantity. Histogramming the shipped
+`.rcsmodel` normals per material (`rcsmodel_vertex_ground_truth.rs`'s
+`billboard_geometry_is_mixed_where_crowd_and_banner_geometry_is_not`):
+
+| material | vertices | `N.y > 0.5` |
+| --- | ---: | ---: |
+| `track_surface` | 227,528 | 80.2% |
+| `track_coloured_specular` | 63,664 | 82.4% |
+| `wes_billboardholographicscanlines` | 3,648 | 32.7% |
+| `billboarddiffuse` | 1,168 | 27.2% |
+| `cf_billboard1` | 27,576 | 20.9% |
+| `nr_crowd_bustle` | 831,952 | **0.0%** |
+| `cf_cheap_crowd` | 239,664 | **0.0%** |
+| `ns_adbanner` | 352 | **0.0%** |
+
+So the recovered rule does light a fifth to a third of a billboard mesh - the
+up-facing parts of it - and cannot light the crowds or the flat banners at
+all. Confidence **85**; the test asserts the *ordering* rather than the
+percentages, because a change to the normal unpacking would move the latter
+and not the former.
+
 ## `zoneBase*` is **not** a separate family - retracted, and the count says so
 
 **The first version of this section said `zoneBase<I|O>` and

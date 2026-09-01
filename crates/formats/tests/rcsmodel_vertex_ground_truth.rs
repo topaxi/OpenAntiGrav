@@ -15,7 +15,7 @@
 //! against something the `.rcsmodel` does not state** - the box the `.vex`
 //! authors, or the geometry the triangles imply.
 //!
-//! Five claims:
+//! Six claims:
 //!
 //! 1. **The recovered stride fills the authored box.** Both how it is found and
 //!    the only check that it was found rightly.
@@ -27,6 +27,9 @@
 //! 5. **What a vertex carries follows the stride**, not the `83 XX` descriptor
 //!    byte. A negative result: the byte was the obvious candidate for naming
 //!    the field set and it names nothing.
+//! 6. **Whether a surface shows HD/Fury's Zone audio-spectrum visualiser is
+//!    decided by its own authored vertex normal** - and the billboard family
+//!    is mixed where the crowds and the flat banners are not.
 
 mod rcsmodel_common;
 
@@ -663,4 +666,149 @@ fn the_declaration_says_where_a_texture_coordinate_is_and_it_is_rarely_last() {
          {was_implausible} for the last-four-bytes reading - under a threefold improvement, so \
          the declaration is not carrying its weight"
     );
+}
+
+/// Claim 6: **whether a surface shows Wipeout HD's Zone audio-spectrum
+/// visualiser is decided by its own authored vertex normal**, and the
+/// billboard family is genuinely mixed where the crowd and banner families
+/// are not.
+///
+/// The glow is `saturate(N.y - 0.5) * ... * zoneTexVis[band].rgb` and the
+/// gate is universal - `zone_shader_census_ground_truth.rs`'s
+/// `the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere` counts it
+/// on every one of the disc's 18,050 visualiser blocks, with no
+/// billboard-specific shape anywhere. So "does a billboard light up" is not a
+/// shader question at all; it is a question about the shipped meshes, and
+/// this is where it gets answered.
+///
+/// `N` is the authored vertex normal in the mesh's own space, passed through
+/// untouched: `billboarddiffuse`'s vertex program writes `MOV o[TC1].xyz,
+/// v[1].xyzx`, and the fragment program normalises that same register and
+/// dots it against the directional light's direction - so `N.y` is world up,
+/// not a view- or tangent-space quantity, and a camera-facing billboard would
+/// still be reading its authored normal.
+///
+/// **The result refutes the assumption that stood in for this measurement.**
+/// `hd-zone-stage-textures-are-grounded.md` carried "a vertical billboard's
+/// normal has `N.y ~ 0`, which zeroes the term outright" as the reason the
+/// maintainer's play observation - floors *and* billboards - could not be the
+/// recovered rule. Measured, the three `*billboard*` materials run 21-33% of
+/// their vertices above the gate, against 0.0% for `nr_crowd_bustle`,
+/// `cf_cheap_crowd` and `ns_adbanner`, and 80%+ for the track surfaces. So
+/// the recovered rule does light part of a billboard mesh; it is the crowds
+/// and the flat banners it cannot reach.
+///
+/// The assertion is the *ordering*, not the percentages: a parser fix moves
+/// the latter and would not move the former.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn billboard_geometry_is_mixed_where_crowd_and_banner_geometry_is_not() {
+    /// Which materials sit either side of the two claims, by leaf name.
+    const UPWARD: [&str; 2] = ["track_surface", "track_coloured_specular"];
+    const FLAT: [&str; 3] = ["nr_crowd_bustle", "cf_cheap_crowd", "ns_adbanner"];
+    const MIXED: [&str; 3] = [
+        "billboarddiffuse",
+        "cf_billboard1",
+        "wes_billboardholographicscanlines",
+    ];
+
+    let Some(image) = image() else {
+        return;
+    };
+    // (vertices, vertices whose authored normal passes `N.y > 0.5`)
+    let mut tally: std::collections::BTreeMap<&str, (usize, usize)> =
+        std::collections::BTreeMap::new();
+    for archive in ["DATA00", "DATA01", "DATA02", "DATA03"] {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let Ok(mut open) = oag_assets::psarc::Archive::open(&spec) else {
+            continue;
+        };
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel") && p.contains("/environments/"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(bytes) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = rcsmodel::Model::parse(&bytes) else {
+                continue;
+            };
+            for mesh in &model.meshes {
+                for surface in mesh.surfaces() {
+                    let Some(material) = model.material_of(surface) else {
+                        continue;
+                    };
+                    let leaf = material
+                        .name
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or_default()
+                        .trim_end_matches(".rcsmaterial");
+                    let Some(named) = UPWARD
+                        .iter()
+                        .chain(&FLAT)
+                        .chain(&MIXED)
+                        .find(|n| **n == leaf)
+                    else {
+                        continue;
+                    };
+                    let Some(stride) = surface.declared_stride() else {
+                        continue;
+                    };
+                    for submesh in &surface.submeshes {
+                        let Ok(normals) = surface.normals(&bytes, submesh, stride) else {
+                            continue;
+                        };
+                        let entry = tally.entry(named).or_default();
+                        entry.0 += normals.len();
+                        entry.1 += normals.iter().filter(|n| n[1] > 0.5).count();
+                    }
+                }
+            }
+        }
+    }
+
+    let share = |name: &str| -> f64 {
+        let (vertices, up) = tally
+            .get(name)
+            .copied()
+            .unwrap_or_else(|| panic!("no geometry found for {name}; the sweep is broken"));
+        assert!(vertices > 300, "{name} has only {vertices} vertices");
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a vertex count, compared as a ratio"
+        )]
+        let share = up as f64 / vertices as f64;
+        share
+    };
+
+    for name in UPWARD {
+        assert!(
+            share(name) > 0.5,
+            "{name} is a track surface and should be majority up-facing, at {:.3}",
+            share(name)
+        );
+    }
+    for name in FLAT {
+        assert!(
+            share(name) < 0.01,
+            "{name} is crowd or banner geometry and should be effectively \
+             vertical, at {:.3}",
+            share(name)
+        );
+    }
+    // The claim that closes the question: neither of the above. If a billboard
+    // family ever measured at zero, the Open item's original assumption would
+    // have been right after all and this is what would say so.
+    for name in MIXED {
+        let share = share(name);
+        assert!(
+            (0.05..0.5).contains(&share),
+            "{name} is supposed to be mixed - part of the mesh up-facing, most \
+             of it not - and measured {share:.3}"
+        );
+    }
 }

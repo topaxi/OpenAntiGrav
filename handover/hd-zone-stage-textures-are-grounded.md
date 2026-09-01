@@ -289,6 +289,65 @@ palette ladder this thread reads and the speed-class ladder the HUD shows are th
 same index - which is also why the HUD's class name and the circuit's grade can
 no longer disagree.
 
+## 2026-09-01: the visualiser's reach is measured, and the billboard question closes on geometry rather than on a second shader
+
+The wiring itself was already complete and is confirmed end to end this pass:
+`oag_audio::spectrum::Analyzer::process` (render-ahead thread) ->
+`Output::spectrum()` -> `race::scene::frame::Scene::render`'s `zone_spectrum`
+-> `Drawable::write_zone_vis` -> `oag_render::mesh_render::zone::write_vis` ->
+bind group 2 bindings 4/5 -> `mesh.wgsl`'s `zone_glow`, which applies the
+recovered term on **both** shading paths and carries the `(1 - windowDepth)`
+factor. Nothing in the chain was missing. What was missing was knowing **how
+far the term reaches**, and that is now measured rather than assumed.
+
+**The gate is universal.** All 18,050 fragment blocks on the disc that fetch
+`zoneTexVis` carry exactly one negative saturating-`ADD` literal: `-0.5` in
+16,834 and `-1` in 1,216, and nothing else. That includes every
+`*billboard*`, `*crowd*`, `*banner*`, `*screen*` and `*scanline*` material.
+So the "second fragment block with a different gate" fork of the old Open
+item is refuted by count, not by argument. `-1` reads as the same gate
+authored off (`saturate(N.y - 1)` is zero for a unit normal) at confidence
+70, held apart from the count's own 88 because it leans on an unnamed
+fragment opcode - see
+[zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)'s new
+section for the reasoning and its limit.
+
+**The normal-space fork is refuted too.** `billboarddiffuse`'s vertex program
+writes `MOV o[TC1].xyz, v[1].xyzx` - the authored vertex normal, untouched -
+and the fragment program normalises that same register and dots it against
+the directional light's direction. `N.y` is world up.
+
+**And the premise the old item rested on is wrong.** "A vertical billboard's
+normal has `N.y ~ 0`" was never measured. Measured, the billboard family is
+*mixed*: `wes_billboardholographicscanlines` 32.7%, `billboarddiffuse` 27.2%
+and `cf_billboard1` 20.9% of vertices above the gate, against 0.0% for
+`nr_crowd_bustle`, `cf_cheap_crowd` and `ns_adbanner`, and 80%+ for the track
+surfaces. **So this port already draws part of the billboard half** - the
+up-facing panels, canopies and angled screens - and what it cannot draw is
+the crowds and the flat advertising faces. Both censuses are assertions, not
+reports: `zone_shader_census_ground_truth.rs`'s
+`the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere` and
+`no_billboard_or_crowd_material_compiles_an_ungated_visualiser`, and
+`rcsmodel_vertex_ground_truth.rs`'s
+`billboard_geometry_is_mixed_where_crowd_and_banner_geometry_is_not`.
+
+**Nothing was changed in the renderer, deliberately.** The obvious "fix" -
+widening the gate to `abs(N.y)` or a smoothstep so billboards light up - is
+exactly the plausible-looking stand-in `CLAUDE.md` forbids, and the disc says
+in 18,050 places that the original does not do it.
+
+**One quantitative consequence of the unrecovered band mapping, now concrete
+rather than theoretical.** `write_vis` spreads 32 bands linearly across all
+256 texels, and the band index is the stage texture's own alpha.
+`zonemodetrack9` and `10` occupy alphas `{31..40}`, which land at positions
+`3.77` to `4.86` of 31 - **bands 3 to 5, about 140-165 Hz**. On those two
+stages this build's floor therefore shows three adjacent low-mid bins moving
+together, not a spectrum, where `zonemodetrack6`/`7`'s `{1..162}` spans bands
+0-20 and does read as one. That is arithmetic off the measured alpha
+histogram rather than a rendering observation, and it is a property of the
+*invented* uniform spread rather than of anything recovered - see the last
+Open item below.
+
 ## Open
 
 - ~~What the Zone shader does with the six-plus Zone parameters.~~ **Read**,
@@ -318,20 +377,25 @@ no longer disagree.
   limitation; confidence only 60 that they hold texture pointers at all.
 - Whether `zoneMode*.gtf` being fifteen identical blanks is what shipped or an
   authoring leftover. The bytes say identical; nothing says intended.
-- **The recovered glow gate produces the floor half of the maintainer's own
-  observation and cannot produce the billboard half.** The play report
-  (`docs/formats/effectsettings.md`, confidence 90) is explicit: "the floor
-  textures **and the billboards**" carry the animation. The rule this
-  session drew from the microcode gates the glow on `saturate(N.y - 0.5)` -
-  a vertical billboard's normal has `N.y ~ 0`, which zeroes the term outright.
-  So either the billboard half is a second mechanism this session's reading
-  of the shader did not reach (a different fragment block, a different
-  gate), or `N.y` is being read off the wrong space for a billboard's own
-  geometry (world vs. some local frame the microcode might normalise
-  differently there) - both open, neither chased. Recorded rather than
-  quietly absorbed into "the visualiser is done": what ships today is the
-  floor only, checked against real disc data with `--zone-spectrum-test`
-  (`crates/game/src/race/capture.rs`'s own doc comment on the flag).
+- ~~**The recovered glow gate produces the floor half of the maintainer's own
+  observation and cannot produce the billboard half.**~~ **Measured
+  2026-09-01, and both forks this item named are refuted - see the section
+  below.** The gate is universal and the answer is geometry: the recovered
+  rule lights the up-facing fifth to third of a billboard mesh and cannot
+  light the crowds or the flat banners. What remains open is narrower and is
+  restated as its own item below.
+- **What lights HD's crowds and flat banners in a Zone race is still
+  unexplained.** They measure 0.0% above the `N.y > 0.5` gate, so the
+  visualiser glow reaches none of them, and on a racing circuit the surface
+  equation drops the albedo entirely - which is why the original's crowds
+  and advertising vanish into cyan rather than staying coloured. Whether
+  they carry any *animation* at all, as opposed to a flat recoloured
+  surface, is not established either way: the maintainer's report names "the
+  billboards" without separating the up-facing panels (which this port now
+  draws) from the vertical ones. **The next move is a question to the
+  maintainer, not a sweep** - do the vertical advertising faces pulse with
+  the music, or only the angled screens and the floor? A sweep cannot answer
+  it; the microcode has already been counted exhaustively.
 - **The index-to-frequency correspondence inside `zoneTexVis` is
   unrecovered, so this build's 256-texel strip is a uniform spread of
   `oag_audio::spectrum::BANDS` (32) bands, not a verified reproduction of
