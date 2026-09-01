@@ -183,7 +183,18 @@ ship-free render, a vertex dump, or - for anything about an object's size on
 screen - **the background of the same frame**, which no mesh scale can move.
 Six days went into a craft-specific error that did not exist because the one
 free control nobody ran was the one that decides between "our model is wrong"
-and "our camera is wrong".
+and "our camera is wrong". **The same rule, on a live debugger this time
+(2026-09-01)**: a paused-GDB read of a PS3 shader engine-parameter slot came
+back `(0,0,0,0)` on all 15 tries across three boots, which reads exactly like
+"the value is zero" and would have shipped as a refutation of an open question
+- until the same pause instants were made to also read a neighbouring slot
+that *must* hold a real, per-frame-changing camera position if the read
+mechanism works at all. It did, every time, which is what turned the null
+from "nothing here" into "this specific slot is dead, and the mechanism
+around it is not" - a materially different, narrower claim. A zero from one
+address is not evidence until something that cannot legitimately be zero is
+read in the same breath. See
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#a-controlled-live-read-the-engine-param-tables-fogcolour-slot-is-dead-in-gameplay-but-that-doesnt-answer-unscaled-2026-09-01).
 
 **The ramped columns (`craft+0x2c0`-`0x2c8`) lag the frame that used them by one
 tick** - the original ramps and consumes in one call, and a capture samples at

@@ -1083,6 +1083,202 @@ slot number cross-checked eight ways already on this page. Confidence on
 "unscaled" itself is unmoved at 60; this narrows the address to look at, not
 the answer.
 
+### The "two addresses" lead is refuted - they read a different global, not `0x008b7f04` (2026-09-01)
+
+**`0x0067f030` and `0x0067f1b8` do not touch `0x008b7f04`.** The paragraph
+above assumed their `lwz rX,-0x54c0(r2)` resolves "against this exact TOC" -
+i.e. the same one as `Shader_InitEngineParams`'s own `-0x54c0(r2)`,
+`0x008bd3c4` - without reading either function's actual TOC off its `.opd`
+entry. Doing that now: each function has exactly one `.opd` entry
+(`get_xrefs_to` on both still finds nothing but that single self-reference,
+reconfirming the "no static caller" finding stands), and the entry itself -
+read as raw bytes, `{code address, TOC}` - is `0x008AD4D8` for both
+(`0x00873b70` for `0x0067f030`, `0x00873b98` for `0x0067f1b8`; both sit in a
+contiguous run of ten near-identical `.opd` entries, `0x0067AED0` through
+`0x000B1878`, that all share this same `0x008AD4D8` TOC - a normal
+one-module-shares-one-TOC pattern). `Shader_InitEngineParams`'s own `.opd`
+(`0x0088c770`, read the same way) carries TOC `0x008BD3C4`, confirmed to
+match the doc's citation. **The two TOCs differ** (`0x008AD4D8` vs
+`0x008BD3C4`), and PPC ELF's `-0x54c0(r2)` is TOC-relative: under
+`0x008AD4D8` it resolves to static storage `0x008A8018`, not `0x008B7F04` -
+arithmetic anyone can redo (`toc - 0x54c0`), not a judgement call, so this
+correction is confidence 95, not a competing guess. The original
+`search_byte_patterns` hit matched the instruction's *bytes* (opcode plus the
+`-0x54c0` immediate), which are TOC-independent by construction; nothing in
+that search actually checked which TOC each hit resolves against, so "against
+this exact TOC" in the paragraph above was asserted, not verified.
+
+**What `0x0067f030`/`0x0067f1b8` actually construct is a different,
+unidentified object.** `0x008A8018` currently holds `0x008630F0`, a pointer
+into a large repeating data block (`0x00863080`-ish onward) inside the same
+`0x00862000`-`0x00869000` address range this project already uses for C++
+vtables (`collision.md`, `race-manager.md`, `physics.md`). Most words in that
+block repeat a shared default OPD (`0x00885A80`, itself referenced from ~90
+other tables in the same range - a common "default slot" stub), with
+occasional rows overriding one or two slots with a class-specific OPD; the
+two functions' own OPDs (`0x00873B98`/`0x00873B70`) appear together at one
+such row (`0x00863120`/`0x00863124`). Whether that block is a genuine vtable,
+a class-registration list, or something else, and what reads it, is
+**unconfirmed** - no `lis`/`addis` load of `0x008630f0`, `0x00863120` or
+`0x008A8018` exists anywhere in the image (checked via `search_instructions`
+on the resolved literals), and the one function found reading the
+neighbouring TOC slot on the same TOC (`0x0067f028`, a one-line getter for
+`-0x54c8(r2)`; its caller `FUN_003f0950`, found via `get_xrefs_to` on
+`0x008a8010`) is unrelated - it reads a sun-direction normalisation constant
+pair (`PTR_DAT_008b7efc`/`PTR_DAT_008b7f00` under *its own*, different TOC)
+and contains no `mtctr`/`bctrl` at all. **This is a second, independent point
+where static analysis runs out**, on ground that turns out not to be the
+fogColour chain.
+
+**Consequence for the Next Steps below:** finding what calls `0x0067f030`/
+`0x0067f1b8` would not answer whether `fogColour` is unscaled, because they
+never read `0x008b7f04`. The right search is TOC-scoped, not byte-scoped: a
+`-0x54c0(r2)` `lwz` inside a function whose *own* `.opd` TOC is `0x008bd3c4`
+- not a `search_byte_patterns` hit on the instruction bytes alone. That
+search is run below.
+
+### The TOC-scoped search: all 81 engine parameters named, the real getter found, still no writer (2026-09-01)
+
+**The corrected search.** `search_instructions` for the literal `lwz
+rX,-0x54c0(r2)` finds it in **eight** places program-wide (not the two the
+byte-pattern search found before - that one was scoped to *an* instance, not
+*this* one), and reading each hit's own `.opd` TOC word narrows them to the
+ones that actually run under `0x008bd3c4`: `Shader_InitEngineParams` itself,
+plus three others - `0x003f0ff8`, `0x003f1010`, `0x003f1028` - all three
+`.opd`-adjacent to `Shader_InitEngineParams`'s own (`0x0088c750`-`0x0088c770`,
+one module). The other two hits (`0x000b2af0`, `0x000b43b0`) carry TOC
+`0x008AD4D8` - the same wrong TOC as the refuted pair above, unrelated by the
+same reasoning.
+
+**`Shader_InitEngineParams` decompiled in full names every one of the 81
+entries**, confirming the existing cross-checked reading at first-party
+strength: entry 7 (`+0x40e0`) is built from `Crc32_HashString(PTR_s_fogColour_008b7f8c)`
+- the literal string `"fogColour"` on the disc, not an inference. The
+sequence, `+0x4000` to `+0x4a00` in `0x20` steps: `(unnamed, PTR_DAT_008b7f70)`,
+`viewProj`, `(unnamed, PTR_DAT_008b7f78)`, `world`, `eyePositionWorldSpace`,
+`positionBias`, `positionScale`, **`fogColour`**, `paraboloidReflectionTex`,
+`paraboloidIblTex`, `constantAmbientColour`, `falseLightDirectionPower`,
+`prelitScaleSpecular`, `prelitBias`, `directionalLight0DirectionWorldS[pace]`,
+`directionalLight0Colour`, `directionalLight0Proj`, `directionalLight0ShadowTex`,
+`directionalLight0LightmapTex`, `pointLight0PositionWorldSpace`,
+`pointLight0Colour`, `pointLight0Falloff`, `textureSpot0PositionWorldSpace`,
+`textureSpot0Proj`, `textureSpot0Tex`, `textureSpot0ShadowTex`,
+`textureSpot0Colour`, `textureSpot0Falloff`, `textureSpot1*` (same six
+fields), `textureSpot2*` (same six), `shadowMatrix`, `shadowMapTex`,
+`shadowMapTexSize`, `quakePointA`, `quakePointB`, `quakeOffset`,
+`quakeTrackUpNormal`, `distortion`, `refractProject`, `reflectProject`,
+`screenSpaceRefractionTex`, `screenSpaceReflectionTex`, `zoneColourTint`,
+`zoneEffectInner`, `zoneEffectOuter`, `zoneBaseInner`, `zoneBaseOuter`,
+`zoneBaseAltInner`, `zoneBaseAltOuter`, `zoneOrigin`, `zoneTexInner`,
+`zoneTexOuter`, `zoneTexInnerNearest`, `zoneTexOuterNearest`, `zoneTexVis`,
+`zoneAnisoPalette`, `zoneAnisoPaletteOuter`, `zoneAnisoPower`,
+`GradientColour`, `GradientColour1`, `GradientColour2`, `GradientColour3`,
+`iblScalePower`, `ambientShadowMatrix`, `ambientShadowBlendFactor`,
+`ambientShadowTex`, `globalAlphaScaler`, `auroraBrightness`, `auroraOffset`,
+`auroraColour`, `engineTrail`, then the eight technique hashes
+(`+0x4a20`-`0x4a3c`) already read. This is a byproduct worth having on its
+own - the first two entries are unnamed strings this session did not chase
+(`PTR_DAT_008b7f70`/`PTR_DAT_008b7f78`; likely `technique` and one more,
+unread).
+
+**`0x003f1010`, renamed `Shader_GetEngineParamTable`** (confidence 85):
+`return g_ShaderEngineParamBase + 0x4000;` - a one-line accessor for exactly
+the 81-entry table's base, nothing else. **`0x003f0ff8`, renamed
+`Shader_GetVariantHash`** (confidence 80): `return *(g_ShaderEngineParamBase
++ index*4);`, a flat word-indexed read over the *first* `0x4000` bytes of the
+same allocation - i.e. a different table sharing the base pointer, not the
+81-entry one. Its known callers (`FUN_003ea368`, `FUN_003eb890`, seven more,
+all `Render_RunCompiledOps`-adjacent material-effect code) pass a
+runtime-computed OR'd flags value, never a fixed index, so this reads a
+shader-**variant** selector, not an engine parameter - a real function, just
+not on the fogColour path. **`0x003f1028`, renamed
+`Shader_BuildVariantHashTable`** (confidence 78): fills `0x1000` (4096)
+consecutive words at `g_ShaderEngineParamBase` with `~Crc32_HashString` of
+permuted technique/feature-name fragments (`HalfBright`, `ShadowMap`,
+`ZoneMode`, `FalseLight`, `ZoneTrans`, `NoAlbedo`, `IleLightmap`/`IleVertex`/
+`Ambient`, `Spot0`-`Spot3`) - the table `Shader_GetVariantHash` reads. So the
+single allocation at `g_ShaderEngineParamBase` (`0x008b7f04`'s pointee) is
+two tables back to back: `0x0000`-`0x3fff` the 4096-entry variant-hash cache,
+`0x4000`-`0x4a3c` the 81-entry (+8 technique-hash) engine parameter table -
+which is why `Shader_GetVariantHash`'s callers looked like a lead and
+weren't; they are reading the neighbouring table through the same base
+pointer.
+
+**`Shader_GetEngineParamTable` has no static caller either** - `get_xrefs_to`
+and `get_function_callers` both find nothing for it, not even a trampoline
+(checked directly against its `.opd` slot, `0x0088c758`, the way
+`Material_SetInstanceParamPointer`'s cross-TOC trampoline was found before -
+here there isn't one). This is the same "reached through a computed/indirect
+call" wall as the refuted pair, except this time on the function that
+actually is on the fogColour path, confirmed by name and by TOC. Two
+independent sessions have now exhausted the static leads this thread named
+(the byte-scoped search, then the TOC-scoped one); **the rpcs3 live-read
+alternative in Next Steps is the remaining path**, not a fallback of last
+resort.
+
+### A controlled live read: the engine-param table's fogColour slot is dead in gameplay, but that doesn't answer "unscaled" (2026-09-01)
+
+**What was actually read, stated up front so the boundary is clear**: this is
+a live read of `Shader_GetEngineParamTable`'s `fogColour` slot
+(`0x008b7f04`'s pointee `+0x40f8`, the value pointer) and of the settings
+singleton's `Fog.Fog Density` (`0x008b6fb4`'s pointee `+0x500`). **It is not**
+a read of the compiled/patched microcode constant slot the Next Steps
+alternative named (the fslot-offset direct patch `scripts/ps3-microcode.py`'s
+docstring describes) - that target is still unread.
+
+**Method: `scripts/rpcs3-drive.py capture --region`**, walking `<addr
+chain>:<len>` expressions (`@` dereferences) against a live, paused GDB
+session - see its own docstring for the chain grammar. Three boots on
+Talon's Junction (its own `track.envsettings` authors `"Fog.Fog
+Density"=0.001000`, confirmed by re-reading the file, not assumed): 11
+screenshot-confirmed in-race reads across the first two (3 interior in run 1;
+4 more - one confirmed exterior, per `04.png` - in run 2, whose remaining 3
+landed after a wall collision put the run on the Results screen, screenshot
+`07.png` confirmed, so not counted as in-race), plus a third, **controlled**
+run of 4.
+
+**The measurement (confidence ~90 on the read itself)**: `fogColour`'s value
+pointer resolves to a stable, non-null address (`0x00aed480`, identical
+across all three boots) whose 16 bytes read `(0, 0, 0, 0)` on **every one**
+of the 15 reads, in-race and out. The struct base itself cross-checks clean
+- `0x00d3e220` this run, whose first word reads a `~crc32`-shaped value,
+exactly what `Shader_BuildVariantHashTable` fills at offset 0 of the same
+allocation, confirming the chain arithmetic independently of the fogColour
+question.
+
+**Why this isn't just an absent reading: the third run controls for it.**
+A bare zero from one slot proves nothing on its own - the mechanism could be
+unbuilt this frame, the pause could have landed outside any render pass, or
+the chain could be silently wrong. So the same pause instants also read
+`viewProj` (slot 1, `+0x4038`, a `mat4`) and `eyePositionWorldSpace` (slot 4,
+`+0x4098`), two slots that **must** hold a real, per-frame-changing camera
+if the mechanism is live at all. Both did, every time - real eye coordinates
+that move race to race (`[1.5, -46.9, -176.9]`, `[563.6, -17.0, -5.5]`,
+`[442.5, -3.9, 269.9]`, `[28.0, -46.8, 149.6]`) and a real, non-degenerate
+view-projection row alongside them. **The engine-parameter mechanism is
+therefore confirmed live and correctly wired at the exact instants
+`fogColour` reads zero.** That is what makes the null worth publishing
+rather than a boot that happened not to catch anything.
+
+**What this does and does not settle - three possibilities survive, not
+one.** It retires *this table* as fogColour's live source in normal race
+gameplay on this circuit, but does not distinguish:
+
+1. fog reaches the shader via the fslot-offset direct patch instead, bypassing this table entirely;
+2. fog is not enabled at all in this race type/configuration, and both routes would read empty here regardless;
+3. the slot is vestigial - declared by `Shader_InitEngineParams`, never filled by anything at runtime.
+
+A grep of this page and the handover thread for what the 2026-08-18 reference
+frame showed about visible fog came up silent - it records the render being
+*judged* against that frame, not whether haze was visible in it - so
+possibility 2 is not ruled out either. **The "unscaled" confidence stays at
+60**, unmoved: the question "is `fogColour.w` `Fog.Fog Density` unscaled"
+cannot be answered by reading a slot that does not carry the value in the
+first place. What this retires is the *approach* the last two sessions took
+(find `+0x40f8`'s writer), not the question - the next lead is the
+fslot-offset direct patch mechanism, unread, or a live read of the compiled
+microcode constant itself.
+
 ### The registry is resolved: every post program's block is addressable
 
 Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
