@@ -604,7 +604,7 @@ fn zone_spectrum(options: &CaptureOptions, audio: &crate::audio::Audio) -> [f32;
         std::array::from_fn(|i| {
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "oag_audio::BANDS is 32; no precision lost casting a band index"
+                reason = "oag_audio::BANDS is 16; no precision lost casting a band index"
             )]
             let t = i as f32 / (oag_audio::BANDS - 1) as f32;
             t

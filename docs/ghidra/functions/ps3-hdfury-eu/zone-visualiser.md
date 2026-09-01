@@ -90,7 +90,25 @@ Every constant is a float the function loads from its own TOC, resolved with
 | `+0x7840` | `0.9` | the floor's ceiling, as a fraction of the peak |
 | `+0x7844` | `1.0e-8` | the minimum span that counts as a signal |
 
-Confidence **84**. **This is the part a port could not have guessed**: it is
+Confidence **86**, and the **order** above is read at instruction level
+(`0x00308010`-`0x00308124`), not taken from the decompiler - which matters
+here more than usual, because a float loop with aliased temporaries is
+exactly where a decompile reorders stores and the order is what a port
+encodes. Each step is a named instruction pair:
+
+| step | instructions |
+| --- | --- |
+| decay only a positive peak | `fcmpu f13,f9` / `ble 0x003080d8` |
+| `peak += (peak-floor) * dt * -0.2`, floored at 0 | `fmadds f0,f0,f7,f13` / `fsel f0,f13,f9,f0` |
+| `ceiling = peak * 0.9` | `fmuls f12,f11,f6` |
+| floor snaps down when it exceeds the ceiling | `bgt 0x00308010` / `stfs f12,0x0(r10)` |
+| else rises, capped at the ceiling | `fmadds f13,f13,f31,f0` / `fsel f0,f0,f13,f12` |
+| `peak = max(peak, raw)` | `fcmpu f10,f11` / `stfs f10,0x0(r8)` |
+| `floor = min(floor, raw)` | `fcmpu f13,f10` / `stfs f10,0x0(r10)` |
+| span against `1e-8`, else store `0.0` | `fcmpu f0,f5` / `ble 0x00308108` / `stfs f9,0x0(r9)` |
+| `clamp(ratio, 0, 1)` | `fsel f0,f0,f9,f13` / `fsel f12,f12,f0,f8` |
+
+**This is the part a port could not have guessed**: it is
 not a decibel curve at all. A band is measured against **its own** recent
 floor and peak, so every band fills its meter on its own material - a
 bassline and a hi-hat both read across the full range - and a band with
@@ -245,7 +263,7 @@ original carries all of it or none.
 | `0x00304530` | function | `SoundSystem_GetBandLevel` | 85 |
 | `0x0067a7b8` | function | `SoundSystem_GetBandLevel_Stub` | 85 |
 | `0x00304558` | function | `SoundSystem_GetBandLevel32` | 84 |
-| `0x00307e78` | function | `SoundSystem_UpdateBandLevels` | 84 |
+| `0x00307e78` | function | `SoundSystem_UpdateBandLevels` | 86 |
 | `0x00304320` | function | `SoundSystem_UpdateMeters` | 76 |
 | `0x00308f00` | function | `SoundSystem_Shutdown` | 88 |
 | `0x00309230` | function | `SoundSystem_AudioThread` | 86 |
