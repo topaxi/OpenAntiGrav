@@ -107,7 +107,8 @@ register it.
 | `Craft_Construct_q` `0x088417d0` | **every racing craft** |
 | `ExhaustFlare_Init` `0x0890570c` | the `~ENGINE` note, one per craft |
 | `Missile_Init` `0x0885a898`, `Rocket_Init` `0x0885d118` | projectiles |
-| ten more, all unnamed | not investigated |
+| `Mine_Init` `0x08859c68` | already named, not previously cross-referenced here |
+| nine more, all unnamed | `0x08858410` and `0x088584b8` (same function, two sites), `0x0885bdc8`, `0x08863298`, `0x08873e70`, `0x08875390`, `0x08877560`, `0x0891d924`, `0x08925a84` - none has a static caller (all 8 owning functions show zero xrefs, consistent with a class/table dispatch this codebase uses elsewhere). One lead, not yet confidence 50: the owner of `0x08858410`/`0x088584b8` frees its own emitter immediately after one `Sound_Play` call each, at `+0x38` radius `300.0`, and the sound-descriptor pointer for the first branch resolves to the string `CANNONEXPLWALL` - suggestive of a shared weapon-impact-effects pool rather than per-projectile construction, but the second branch's descriptor did not resolve as cleanly and this was not chased further. |
 
 `Craft_Construct_q` is the one that matters most here, and it is four
 instructions:
@@ -530,8 +531,12 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
 ## Not determined
 
-- **Ten of the fourteen emitter construction sites.** Only craft, engine flare,
-  missile and rocket were identified.
+- **Nine of the fourteen emitter construction sites** (2026-09-01: `Mine_Init`
+  turned out to already be named, just not cross-referenced here, so the
+  count moved from ten). Only craft, engine flare, missile, rocket and mine
+  are identified; the remaining nine have no static caller each (indirect/
+  table dispatch), and one - see the site table above - has a weapon-impact
+  lead (`CANNONEXPLWALL`) that was not chased to a confident name.
 - **Which class sets `+0x4c`.** The cone is implemented and defaulted off;
   2026-09-01's live capture read it `False` on all 1,610 samples (real
   negative evidence, not just "not looked at" - see
