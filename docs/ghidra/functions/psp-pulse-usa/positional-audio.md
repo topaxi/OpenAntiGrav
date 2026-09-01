@@ -10,7 +10,9 @@ when it said "only the player's craft is audible here".
 
 **Everything below is static reading of `psp-pulse-usa`'s `BOOT.BIN`, except the
 pan table, which is read out of five shipped executables and matches a closed
-form exactly.** Nothing here is runtime-verified.
+form exactly.** The law itself is now runtime-verified - see
+["Runtime verification"](#runtime-verification-2026-09-01) below - 1,610 live
+samples, 1,610 exact matches on both outputs.
 
 ## Read this before trusting an address on this page
 
@@ -141,6 +143,19 @@ negates `+0x70` to get a world-space eye, and - see below - it reads the world
 right axis as `(m[0][0], m[1][0], m[2][0])`, the first **column**. A second
 subsystem written by different people, agreeing on both halves, is worth more
 than re-reading the camera code. Treat camera.md's finding as corroborated.
+
+**The manager is reached through a global pointer, not held at a fixed
+address itself** - the same "pointer at a fixed address" shape as
+`G_STATE_MACHINE` (`scripts/ppsspp_debugger.py`) and the active-camera global
+above. The decompiler renders it as `_DAT_002bde10`, one of this import's
+unrelocated data-global constants (see the warning at the top of this page);
+adding the image base gives `0x08ac1e10`, but that address holds a *pointer*
+to the manager (confirmed in disassembly: `lui s4,0x2c` / `lw a0,-0x21f0(s4)`
+loads the pointer, then `addiu a0,a0,0x40` indexes into what it points at) -
+dereference it to get `mgr`. Runtime-confirmed 2026-09-01: `*0x08ac1e10` read
+live as `0x08fb65f0`, a plausible heap pointer, and `mgr+0x168`/`mgr+0x16c`
+off that address held exactly the gamma and volume-curve table this page
+already read statically.
 
 Other manager fields this page needs:
 
@@ -353,21 +368,61 @@ player actually hears from the field. If a live capture ever shows rivals
 audible further out than this, the radius or the `1.25` is where to look
 first - both are read off one function and neither has been seen running.
 
+## Runtime verification, 2026-09-01
+
+**Nothing about this page was runtime-verified before this pass.** A live
+Pulse USA session (`PPSSPPSDL` under Xvfb, SINGLE RACE, a full grid, player
+held at full throttle to spread the field) was driven with
+`scripts/psp-watch-soundemitter.py`, which arms one execution breakpoint at a
+time - `SoundEmitter_ComputeVolumeAndAngle`'s entry, then its return address,
+swapped back and forth, because **v1.20.4 only ever fires the
+most-recently-armed execution breakpoint** and the function's two out-params
+are stack slots in its caller that go stale once something else runs. At
+entry it reads the emitter and manager fields the law consumes; at return it
+reads the actual `volume`/`angle` the game computed; a Python reimplementation
+of the closed form (float32 throughout) computes what it should have
+produced.
+
+**1,610 live hits, across five capture runs, 1,610 exact matches on both
+outputs** (`/tmp/soundemitter*.csv`, not committed - regenerate with the
+script above). Coverage was two of the three attenuation regimes: 283 hits
+with `d < 0.2·radius` (clamped to full volume) and 1,327 with
+`0.2·radius <= d < radius` (the linear ramp), `d/radius` up to `0.9994`. The
+third regime - `d >= radius`, the separate zero-volume gate - was **not**
+directly caught: the emitter's queued request stopped appearing before `d/r`
+reached `1.0`, consistent with this page's existing reading that a craft going
+out of range is a *state* (`+0x5c` bit 0 latches, `Sound_Play` then refuses to
+start further cues on it) rather than the attenuation simply reaching zero -
+corroborating, but not a direct read of the `if (radius < d) volume = 0`
+branch.
+
+**Two things fell out for free.** `inst[0x0c]`, the per-instance doppler
+scale documented as "read as a field, never as a value", read as exactly
+`0.0005` on every one of the 1,610 hits (all against the engine note, the only
+cue that was continuously queued in this capture - not yet checked against a
+collision or pickup cue). And `e[0x4c]`, the cone-enabled flag, read `False`
+on all 1,610 - real negative evidence (not just "not looked at") that nothing
+in a normal race turns the cone on, though it does not rule out a `.vex`
+trigger this capture never exercised.
+
 ## Confidence, and what would raise it
 
 | Claim | Score | Why not higher |
 | --- | --- | --- |
 | The pan table is `floor(16383 * cos/sin(i/2 deg))` | **94** | 360 exact values in five executables; the rubric caps data agreement at 94 |
-| Linear falloff, the `1.25`, the radius gate | 84 | decompilation only |
-| Emitter record layout | 85 | three functions agree, plus `Craft_Construct_q` matching a struct camera.md recovered separately |
-| Listener is the camera, columns are the world axes | 88 | camera.md measured it live from the other side |
-| Volume curve `pow(v, 1/1.7)` over 256 steps | 88 | the loop is explicit; the gamma is a constructor literal |
-| Doppler `-(dd/dt) * scale * 1536` | 78 | the unit is unrecovered |
-| The teleport guard is `|old - new| < 24` | 84 | disassembly is unambiguous; the decompiler is not |
+| Linear falloff and the `1.25` clamp | **92** | runtime-exact on 1,610/1,610 live hits across the clamped and ramp regimes |
+| The `d > radius` zero-volume gate | 84 | still decompilation only - the branch itself was never observed firing live (see above) |
+| Emitter record layout | **90** | three functions agree, `Craft_Construct_q` matches camera.md's struct, and every field this page reads off it reproduced the game's own output live |
+| Listener is the camera, columns are the world axes | **92** | camera.md measured it live from the other side, and the recovered angle law reproduced the game's own output exactly using this axis assignment |
+| Volume curve `pow(v, 1/1.7)` over 256 steps | **94** | fingerprinted directly off live memory: gamma exactly `1.7`, table max deviation `~8e-8` (float32 precision), and it reproduced 1,610/1,610 exact volumes |
+| Doppler `-(dd/dt) * scale * 1536` | 78 | the `1536` unit is still unrecovered; the per-instance scale is now a read value (`0.0005`) rather than an unread field, not yet a confirmed unit |
+| The teleport guard is `|old - new| < 24` | 84 | untouched by this capture - different function |
 
-**A single PPSSPP breakpoint on `SoundEmitter_ComputeVolumeAndAngle` with two
-craft at a known separation would take most of these to 90.** That is the
-cheapest available upgrade and it has not been done.
+**The cheapest upgrade this page named is done.** What is left in the same
+shape: catching the `d > radius` gate branch itself (needs an emitter to stay
+queued while crossing out of range, or a `psp-drive.py place` teleport past
+the radius rather than driving there), and the doppler unit (needs an audible
+reference, not a register read).
 
 ## Cross-title: four of six discs carry the same table, and the PS2 does not
 
@@ -400,17 +455,23 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
 - **Ten of the fourteen emitter construction sites.** Only craft, engine flare,
   missile and rocket were identified.
-- **Which class sets `+0x4c`.** The cone is implemented and defaulted off, and
-  nothing on this page found the code that turns it on. The `.vex` classes
-  `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc` are the obvious
-  suspects and were not looked at - see the
-  [class table](../../../formats/vex.md).
-- **`inst[0x0c]`, the per-instance doppler scale.** Read as a field, never as a
-  value; no construction site was traced.
+- **Which class sets `+0x4c`.** The cone is implemented and defaulted off;
+  2026-09-01's live capture read it `False` on all 1,610 samples (real
+  negative evidence, not just "not looked at" - see
+  ["Runtime verification"](#runtime-verification-2026-09-01)), but never
+  exercised a `.vex` `soundcone` `0x3e9` in the field, so which class turns it
+  on is still open - see the [class table](../../../formats/vex.md).
+- **`inst[0x0c]`, the per-instance doppler scale, read `0.0005` live on every
+  sample** (2026-09-01) - but only against the engine note, the only
+  continuously-queued cue in that capture, and no construction site was
+  traced, so a collision or pickup cue may carry a different value.
 - **The mode mask.** `SoundInstance_UpdateSpatial`'s call passes `10`, which
   squares two of the four gain terms in `Scream_PanVolumePair`. Which two are
   which is read; *why* those two is not.
 - **The `a > 179` sign bookkeeping**, unexercised on this path.
 - **EU cross-verification of the code.** The table is confirmed in
   `psp-pulse-eu`; none of the functions is.
-- **Nothing here is runtime-verified.**
+- **The `d > radius` zero-volume gate branch itself**, and the doppler `1536`
+  unit, are the two claims 2026-09-01's live capture did not reach - see
+  ["Runtime verification"](#runtime-verification-2026-09-01) for why and what
+  would close each.
