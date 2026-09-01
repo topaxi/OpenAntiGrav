@@ -4,11 +4,24 @@
 
 ## Open
 
-- The PS2 pressing's `WADS2.WAD`, `PRERACE.WAD`, `PS2MUSIC.WAD` were not swept for a `HorizMenu` copy
 - The `selected` colour is a measured field with no HD capture to verify it
 - Whether the original centres the selection (no carousel) is unverified
 
 ## Next Steps
 
-- Sweep the PS2 pressing's `WADS2.WAD`, `PRERACE.WAD`, `PS2MUSIC.WAD` for a `HorizMenu` copy
 - Get a capture to check whether the original centres the selection and to verify the `selected` colour
+
+## Resolved
+
+- 2026-09-01: swept the PS2 pressing's remaining three archives.
+  `WADS2.WAD` (7,200 files, extracted via `oag-wad`): 33 hold `Menu`, **0** hold
+  `HorizMenu`. `PRERACE.WAD` and `PS2MUSIC.WAD` are not `fexml` archives at all -
+  both are `oag_formats::ps2_music`-shaped raw-PCM containers (`{hash, size,
+  offset}` directory entries, confirmed against `PRERACE.WAD`'s own header: 32
+  entries, first payload offset lands exactly at `4 + 32*12 = 388`) - so neither
+  can hold an XML widget by format; a raw byte scan still confirms 0 hits for
+  `Menu` or `HorizMenu` in either. `None` for Pulse's main menu now covers every
+  archive on every Pulse pressing. The user separately confirmed from playing
+  the games: Pulse has no horizontal main menu, only HD and Omega do - consistent
+  with this measurement. Doc tables updated:
+  `crates/title/src/menu.rs` and `docs/formats/hd-frontend.md`.

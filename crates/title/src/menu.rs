@@ -61,7 +61,7 @@ pub type Argb = u32;
 /// | --- | --- | ---: | ---: | ---: |
 /// | `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
 /// | `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
-/// | `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+/// | `pulse-ps2-eu.chd` | `WADSP.WAD`, `WADS2.WAD` | 7,393 | 76 | **0** |
 /// | `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
 /// | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 ///
@@ -74,10 +74,13 @@ pub type Argb = u32;
 /// The census is a string search on purpose: the PSP dialect shortens element
 /// names per file and writes the full name into that file's own `<code>`
 /// dictionary, so a `HorizMenu` anywhere would put the literal `HorizMenu` in
-/// the blob that used it. See `oag_formats::fexml`. **What it does not cover**
-/// is the PS2 pressing's other three archives - `WADS2.WAD`, `PRERACE.WAD` and
-/// `PS2MUSIC.WAD` - which were not swept; `WADSP.WAD` is where that disc's front
-/// end is.
+/// the blob that used it. See `oag_formats::fexml`. **The PS2 pressing's other
+/// two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are swept too** (2026-09-01),
+/// with zero hits for `Menu` or `HorizMenu` either, but not because the
+/// vocabulary is absent: both are `oag_formats::ps2_music`-shaped raw-PCM
+/// containers, not `oag_formats::fexml` at all, so neither can hold an XML
+/// widget by format. `WADSP.WAD`/`WADS2.WAD` are the whole of that disc's
+/// front end.
 ///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq)]

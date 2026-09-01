@@ -746,15 +746,17 @@ assumed - every blob of the named archives was extracted and searched, and the
 | --- | --- | ---: | ---: | ---: |
 | `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
 | `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
-| `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+| `pulse-ps2-eu.chd` | `WADSP.WAD`, `WADS2.WAD` | 7,393 | 76 | **0** |
 | `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
 | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 
 A string search finds a shortened element because the PSP dialect writes the
 full name into each file's own `<code>` dictionary - see `oag_formats::fexml`.
-The PS2 pressing's other three archives (`WADS2.WAD`, `PRERACE.WAD`,
-`PS2MUSIC.WAD`) were **not** swept; `WADSP.WAD` is where that disc's front end
-is.
+The PS2 pressing's other two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are
+swept too (2026-09-01) and also come back **0** for both columns - but not
+because the vocabulary is absent from them. Both are `oag_formats::ps2_music`-
+shaped raw-PCM containers, not `fexml`, so neither can hold an XML widget by
+format at all. `WADSP.WAD`/`WADS2.WAD` are the whole of that disc's front end.
 
 Within HD it is an idiom rather than one screen's exception: eight files carry
 ten `<HorizMenu>` widgets against seventeen vertical `<Menu>`, all ten at
