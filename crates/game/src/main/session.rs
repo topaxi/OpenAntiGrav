@@ -132,6 +132,14 @@ pub(crate) struct Session {
     /// persisted into a settings file would keep answering it long after the
     /// question was closed.
     pub(crate) pvs_culling: Option<bool>,
+    /// The Zone visualiser's per-band peak-hold.
+    ///
+    /// On the session rather than on the race stage because it is ballistics
+    /// over time: a hold rebuilt when a stage is is a hold that restarts from
+    /// silence, and the original keeps its own sixteen floats in a struct
+    /// that outlives a frame. See
+    /// `oag_render::mesh_render::zone::Hold` for the recovered rule.
+    pub(crate) zone_hold: oag_render::mesh_render::zone::Hold,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
     /// On the session rather than on a stage because it outlives them: a race

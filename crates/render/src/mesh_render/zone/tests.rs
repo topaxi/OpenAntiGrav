@@ -1,81 +1,99 @@
 use super::*;
 
-/// When the caller already hands over one value per texel, interpolation
-/// must be the identity - no blur introduced where none is asked for.
+/// The segment count is the original's `min(10, trunc(level * 11.0))`, and
+/// the boundaries are what a `10.0` scale would get wrong.
 #[test]
-fn as_many_bands_as_texels_is_the_identity() {
-    let bands: Vec<f32> = (0..VIS_WIDTH).map(|i| i as f32 / 255.0).collect();
-    let got = levels(&bands);
-    for (texel, (&want, &got)) in bands.iter().zip(got.iter()).enumerate() {
-        assert!(
-            (want - got).abs() < 1e-6,
-            "texel {texel}: got {got}, want {want}"
-        );
-    }
-}
-
-/// **The regression this file exists to catch.** A shipped stage texture
-/// samples a narrow, arbitrary window of indices - `zone-shader.md` measures
-/// `zonemodetrack9`/`10` at exactly `31..=40` - and a caller with far fewer
-/// bands than 256 must still show *some* variation across that window, not
-/// one repeated value. A block-repeat mapping (`texel * bands.len() /
-/// VIS_WIDTH`) fails this: with `oag_audio::spectrum::BANDS` bands, texels
-/// 31..=40 all land in the same one or two blocks.
-#[test]
-fn a_narrow_disc_chosen_window_is_not_one_repeated_value() {
-    const BANDS: usize = 32;
-    // A monotonic ramp, so any real variation across the window is visible
-    // and not a coincidence of a flat input. With a full 0..1 ramp over
-    // `BANDS` bands, linear interpolation puts texels 31..=40 at band-space
-    // positions ~3.77..~4.87 (`texel / (VIS_WIDTH - 1) * (BANDS - 1)`), a
-    // true span of ~0.035 - the threshold below is set just under that, so
-    // this still fails loudly if the mapping regresses to block-repeat
-    // (which would give exactly 0.0 here) rather than passing on a margin
-    // wide enough to hide a real bug.
-    let bands: Vec<f32> = (0..BANDS).map(|i| i as f32 / (BANDS - 1) as f32).collect();
-    let got = levels(&bands);
-    let window = &got[31..=40];
-    let (min, max) = window
-        .iter()
-        .fold((f32::MAX, f32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
-    assert!(
-        max - min > 0.03,
-        "texels 31..=40 span only {:?} (min {min}, max {max}) - the shipped \
-         zonemodetrack9/10 window would read as one flat colour",
-        max - min
+fn a_bars_segment_count_is_the_recovered_eleven_step_conversion() {
+    assert_eq!(segments(0.0), 0);
+    assert_eq!(segments(-1.0), 0, "a negative level lights nothing");
+    assert_eq!(
+        segments(f32::NAN),
+        0,
+        "NaN lights nothing rather than panics"
     );
+    // `1/11` is the first step: just under it lights nothing, just over it
+    // lights one. A `* 10.0` conversion would put this boundary at `0.1`.
+    assert_eq!(segments(0.09), 0);
+    assert_eq!(segments(0.10), 1);
+    assert_eq!(segments(0.5), 5);
+    // The tenth segment lights from `10/11` on, not only at `1.0` - the
+    // whole reason the original scales by eleven and clamps.
+    assert_eq!(segments(0.91), 10);
+    assert_eq!(segments(1.0), SEGMENTS, "a full level lights every segment");
+    assert_eq!(segments(4.0), SEGMENTS, "and an over-range one no more");
 }
 
-/// The strip's own two ends land exactly on the spectrum's own two ends,
-/// whatever the band count - the boundary the interpolation must not miss.
+/// **The peak-hold's recovered ballistics**: instant attack, a linear
+/// [`Hold::DECAY`] per frame, clamped at zero.
 #[test]
-fn the_first_and_last_texel_match_the_first_and_last_band() {
-    for band_count in [1, 2, 8, 32, 256] {
-        // Kept inside `0.0..=1.0`, the range `levels` documents and clamps
-        // to - unclamped test data would silently exercise the clamp
-        // instead of the interpolation this test means to check.
-        let bands: Vec<f32> = (0..band_count)
-            .map(|i| i as f32 / (band_count - 1).max(1) as f32)
-            .collect();
-        let got = levels(&bands);
-        assert_eq!(got[0], bands[0], "band count {band_count}: first texel");
-        assert_eq!(
-            got[VIS_WIDTH as usize - 1],
-            bands[band_count - 1],
-            "band count {band_count}: last texel"
-        );
+fn the_hold_rises_at_once_and_falls_by_a_tenth_a_frame() {
+    let mut hold = Hold::default();
+    assert_eq!(hold.advance(&[1.0, 0.0]), &[1.0, 0.0]);
+    // Falling: one linear decay step, not a multiplicative fade.
+    let fallen = hold.advance(&[0.0, 0.0])[0];
+    assert!((fallen - 0.9).abs() < 1e-6, "got {fallen}");
+    // Rising again takes the new value whole rather than easing towards it.
+    assert_eq!(hold.advance(&[1.0, 0.0])[0], 1.0);
+    // And it never falls below zero however long it falls.
+    for _ in 0..40 {
+        hold.advance(&[0.0, 0.0]);
     }
+    assert_eq!(hold.advance(&[0.0, 0.0]), &[0.0, 0.0]);
 }
 
-/// A single band has nothing to interpolate between and must not panic -
-/// the whole strip reads that one value.
+/// **The assertion that ties the recovered layout to the shipped art.**
+/// `zone-shader.md` histogrammed `zonemodetrack9`/`10`'s alpha at exactly
+/// `{31..40}` before this layout was read out of the executable, and
+/// `31..=40` is band 3's ten segments under the recovered stride. A
+/// regression to any other stride stops those ten texels being one band's
+/// bar, which is what made the effect invisible before.
 #[test]
-fn a_single_band_fills_the_whole_strip() {
-    let got = levels(&[0.75]);
-    assert!(
-        got.iter().all(|&v| v == 0.75),
-        "every texel should read the one band's own value"
+fn band_three_is_the_ten_texels_the_shipped_stage_texture_tags() {
+    let mut bands = vec![0.0f32; 16];
+    bands[3] = 0.5;
+    let pixels = vis_pixels(&bands, Some([10, 20, 30]));
+    for (offset, texel) in pixels[31..=40].iter().enumerate() {
+        let want = if offset < 5 {
+            [10, 20, 30, 255]
+        } else {
+            [0; 4]
+        };
+        assert_eq!(*texel, want, "texel {}", 31 + offset);
+    }
+    // And band 3 lit nothing outside its own bar.
+    assert_eq!(pixels[30], [0; 4], "band 2's last segment");
+    assert_eq!(pixels[41], [0; 4], "band 4's first segment");
+}
+
+/// Texel 0 is never written, and each band's smooth slot sits one texel apart
+/// from [`SMOOTH_BASE`] - the second half of the recovered layout.
+#[test]
+fn the_smooth_half_is_one_texel_a_band_after_the_bars() {
+    let mut bands = vec![0.0f32; 16];
+    bands[0] = 1.0;
+    bands[15] = 1.0;
+    let pixels = vis_pixels(&bands, Some([200, 100, 50]));
+    assert_eq!(
+        pixels[0], [0; 4],
+        "texel 0 is the original's untouched slot"
     );
+    assert_eq!(pixels[SMOOTH_BASE], [200, 100, 50, 255]);
+    assert_eq!(pixels[SMOOTH_BASE + 15], [200, 100, 50, 255]);
+    assert_eq!(pixels[SMOOTH_BASE + 7], [0, 0, 0, 255], "a silent band");
+    // Sixteen bands of bars end at texel 160, immediately before the smooth
+    // half - the arithmetic that makes 161 the right base.
+    assert_eq!(1 + SEGMENTS * 16, SMOOTH_BASE);
+}
+
+/// A lit segment carries the **whole** tint, not a fraction of it - the
+/// difference between bars and the faint wash the invented mapping this
+/// replaced produced, and what makes the effect visible at all.
+#[test]
+fn a_lit_segment_is_the_full_tint_and_an_unlit_one_is_transparent_black() {
+    let pixels = vis_pixels(&[0.2], Some([255, 128, 64]));
+    assert_eq!(pixels[1], [255, 128, 64, 255], "segment 1 at level 2");
+    assert_eq!(pixels[2], [255, 128, 64, 255], "segment 2 at level 2");
+    assert_eq!(pixels[3], [0; 4], "segment 3 is dark, not dim");
 }
 
 /// [`write_vis`] blanks the texture - not a stale or invented colour - when

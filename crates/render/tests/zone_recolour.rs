@@ -355,8 +355,13 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
     // nearest-sampling convention cannot land it in a neighbour.
     let stage = texture("zone stage", [200, 200, 200, 128]);
 
-    let mut bands = [0.0f32; 256];
-    bands[128] = 1.0;
+    // Texel 128 is band 12's eighth segment under the recovered layout
+    // (`128 = 1 + 10 * 12 + 7`), so band 12 at full level lights it - see
+    // `oag_render::mesh_render::zone::write_vis`. Under the invented
+    // one-band-per-texel spread this replaced, the same texel was band 128
+    // of 256; the layout moved, what the shader does with the texel did not.
+    let mut bands = [0.0f32; 16];
+    bands[12] = 1.0;
 
     let mut scene = Scene::off();
     // Off, so `shaded.rgb` unconditionally takes the gamma/stand-in path -

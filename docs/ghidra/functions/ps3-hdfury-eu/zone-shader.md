@@ -127,6 +127,17 @@ a band index and cannot be a gradient** - a smooth ramp gives a broad
 continuous distribution, not discrete plateaus at consecutive integers.
 `track14`'s 4-wide groups on a stride of 10 is a *grid* of tagged regions.
 
+**2026-09-01: every row of this table now has a meaning, and it is the same
+one.** The per-frame writer is read
+([zone-visualiser.md](zone-visualiser.md)): `zoneTexVis` holds **sixteen
+ten-segment bar meters**, band `b` at texels `1 + 10b`..`10 + 10b`, with a
+smooth slot each at `161 + b`. So `track9`/`10`'s `{31..40}` is band 3's bar,
+`track14`'s "groups of 4 on a stride of 10" is four segments of every band -
+the stride *is* the band stride - `track6`/`7`'s `{1..162}` is every bar plus
+the first two smooth slots, and `track8`'s `169` is band 8's smooth slot
+(`161 + 8`). Four histograms, measured here before that layout was read, all
+four landing on it. This is the strongest corroboration either page carries.
+
 The arithmetic closes: alpha `i` becomes texture coordinate `i/255`, which on a
 **256**-wide LUT lands on texel `round(256*i/255) == i` for every `i`. 256
 alpha values, 256 entries, index-preserving - a coincidence in a colour-ramp

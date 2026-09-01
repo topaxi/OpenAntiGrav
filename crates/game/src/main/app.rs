@@ -257,6 +257,7 @@ impl App {
             autopilot: self.autopilot,
             anim_seconds: self.anim_seconds,
             pvs_culling: self.pvs_culling,
+            zone_hold: oag_render::mesh_render::zone::Hold::default(),
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,

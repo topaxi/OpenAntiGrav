@@ -24,6 +24,24 @@ use crate::mesh::ModelTexture;
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`.
 pub const VIS_WIDTH: u32 = 256;
 
+/// How many texels one band's bar meter occupies, and therefore the stride
+/// from one band's bar to the next.
+///
+/// **Recovered**, from `Environment_UpdateStageBlend`'s own pointer set: it
+/// holds ten pointers into the pixel buffer, at texels `1` through `10`, and
+/// advances every one of them by `0x28` bytes - ten texels - per band. See
+/// [`write_vis`] and
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
+pub const SEGMENTS: usize = 10;
+
+/// Where the smooth half of the lookup begins: one texel per band, after the
+/// bars.
+///
+/// **Recovered**: the eleventh pointer the same function holds is `r9 +
+/// 0x284`, texel `161`, and it advances by one texel per band rather than
+/// ten. `161 = 1 + 10 * 16`, immediately past the sixteenth bar.
+pub const SMOOTH_BASE: usize = 161;
+
 /// The five layout entries the Zone half of bind group 2 adds: the stage
 /// texture and its sampler at bindings 1-2, a nearest-filtered clone of the
 /// same stage texture at binding 3 (the visualiser's own band index is read
@@ -185,68 +203,96 @@ pub(super) fn resources(
     }
 }
 
+/// The visualiser's per-band peak-hold, which the original keeps in its own
+/// environment struct and this keeps beside the texture it feeds.
+///
+/// **Recovered ballistics**, read off `Environment_UpdateStageBlend` at
+/// instruction level: a band's held level takes a rising sample immediately
+/// and falls by [`Self::DECAY`] per *frame* otherwise, clamped at zero -
+///
+/// ```text
+/// if new >= held { held = new } else { held = max(held - 0.1, 0.0) }
+/// ```
+///
+/// The original stores `held` as a sixteen-float array at `+0x32f8` of the
+/// same struct that holds the `zoneTexVis` wrapper, and the raw sample beside
+/// it at `+0x32b8`. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
+///
+/// **Per frame, not per second.** The original's caller is
+/// `Scene_PrepareFrame`, so the fall rate is frame-rate dependent in the
+/// original too; converting it to a per-second rate would be a change, not a
+/// port, and is deliberately not done here.
+#[derive(Debug, Default)]
+pub struct Hold {
+    held: Vec<f32>,
+}
+
+impl Hold {
+    /// How much a band's held level falls in one frame it is not rising.
+    ///
+    /// `0x3dcccccd`, the float this function loads from its own TOC at
+    /// `-0x5a7c(r2)`.
+    pub const DECAY: f32 = 0.1;
+
+    /// Folds one frame's `bands` in and returns the held levels.
+    pub fn advance(&mut self, bands: &[f32]) -> &[f32] {
+        self.held.resize(bands.len(), 0.0);
+        for (held, &new) in self.held.iter_mut().zip(bands) {
+            *held = if new >= *held {
+                new
+            } else {
+                (*held - Self::DECAY).max(0.0)
+            };
+        }
+        &self.held
+    }
+}
+
 /// Rewrites the visualiser lookup from `bands` levels, each `0.0..=1.0`,
 /// tinted by `tint` - or blanks it when `tint` is `None`, which is what a
 /// stage that authors no `EQ colour tint` gets: a missing input draws
 /// nothing, not an invented white.
 ///
-/// **Not the original's own mechanism** - see `mesh.wgsl`'s `zone_glow` and
-/// `docs/formats/effectsettings.md`'s "EQ keys are an audio spectrum" finding
-/// for why: HD/Fury's own `zoneTexVis` is zero-filled at load and confirmed
-/// rewritten every frame by `Environment_UpdateStageBlend`
-/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
-/// twenty-sixth pass) - but the value it writes is untraced past a float
-/// compared against the recovered stage ladder, so whether it is
-/// audio-reactive is still open, and transcribing it would be game content
-/// this project may not carry regardless. This is a genuine spectrum of the
-/// audio this project's own mixer is producing, computed in
-/// `oag_audio::spectrum` and handed in here as plain numbers - the same seam
-/// `Fog`/`Light` cross from `oag-game` into this crate already.
+/// # This is the original's own layout, recovered
 ///
-/// # Why every texel is interpolated, not block-repeated
+/// It used to be an invention: `bands` spread linearly across all 256
+/// texels, on the grounds that HD/Fury's per-frame write was untraced past
+/// the float it converts. It is traced now
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`), the invention
+/// was wrong in a way that made the effect invisible, and what replaces it is
+/// read off the executable:
 ///
-/// **A shipped stage texture samples only a narrow, arbitrary window of the
-/// 256 indices, and different stages use different windows.**
-/// `zone-shader.md`'s own alpha histogram measures `zonemodetrack9`/`10` at
-/// exactly `{31..40}`, `track14` at a wider spread, `track6`/`7` at
-/// `{1..162}` - and the disc's own live per-frame writer
-/// (`zone-effectsettings-loader.md`'s twenty-sixth pass) touches texels
-/// `1`-`10` and `161`, the same shape: a handful of *consecutive* low
-/// indices. Stretching `bands.len()` values across 256 texels in fixed-size
-/// blocks (`VIS_WIDTH / bands.len()` texels per band) would put several
-/// consecutive shipped indices inside the *same* block, so a ten-wide window
-/// like `track9`'s reads one repeated colour - a flash, not a spectrum. This
-/// linearly interpolates `bands` across the *whole* 256-wide strip instead,
-/// so every texel differs a little from its neighbour and any narrow,
-/// disc-chosen window still shows genuine variation. `bands.len()` need not
-/// be [`VIS_WIDTH`] either way.
+/// ```text
+/// texel 0                     never written
+/// texels 1 + 10b ..= 10 + 10b band b's bar: segment s is lit when s <= level
+/// texel  161 + b              band b's smooth level, the tint scaled by it
+/// ```
 ///
-/// **This does not weaken the point-sampling the shader depends on.** The
-/// interpolation happens once, here, when the 256 texel *values* are
-/// authored; `zone_glow` still reads exactly one of them, through a
-/// nearest-filtered sampler, with no runtime blending between texels. See
-/// `zone-shader.md`'s own reasoning for why the lookup wants a discrete
-/// answer per index - that is about how a coordinate is *sampled*, not about
-/// whether the values behind it may vary smoothly.
+/// with `level = min(10, trunc(held * 11.0))` and a lit segment carrying the
+/// **whole** tint rather than a fraction of it - the original stores one
+/// packed colour word into each lit segment and zero into each unlit one, so
+/// a bar is a bar and not a gradient. `11.0` and `255.0` are the two floats
+/// the function loads from its own TOC (`0x41300000`, `0x437f0000`).
+///
+/// **The shipped art is the independent confirmation, and it is exact.**
+/// `zone-shader.md`'s alpha histogram of the stage textures measures
+/// `zonemodetrack9`/`10` at exactly `{31..40}` - which is band 3's ten
+/// segments, `1 + 10*3` through `10 + 10*3` - `track14` at "groups of 4 on a
+/// stride of 10", the band stride itself, and `track6`/`7` at `{1..162}`,
+/// every bar plus the first two smooth slots. Three histograms measured
+/// before this layout was read, all three landing on it.
+///
+/// `bands.len()` need not be sixteen; a shorter slice simply leaves the
+/// higher bars dark, and anything past texel [`VIS_WIDTH`] is dropped.
 pub fn write_vis(
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
     bands: &[f32],
     tint: Option<[u8; 3]>,
 ) {
-    let mut pixels = vec![0u8; (VIS_WIDTH * 4) as usize];
-    if let Some(tint) = tint.filter(|_| !bands.is_empty()) {
-        for (pixel, level) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(levels(bands)) {
-            pixel[0] = (f32::from(tint[0]) * level).round() as u8;
-            pixel[1] = (f32::from(tint[1]) * level).round() as u8;
-            pixel[2] = (f32::from(tint[2]) * level).round() as u8;
-            pixel[3] = 255;
-        }
-    }
-    // Alpha stays `0` in the blanked case too - `pixels` is zero-initialised
-    // and nothing above touches it when `tint` is `None` or `bands` is
-    // empty, which is the explicit "draw nothing" this function promises
-    // rather than leaving whatever the texture held from a previous frame.
+    let pixels = vis_pixels(bands, tint);
+    let pixels: &[u8] = pixels.as_flattened();
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
             texture,
@@ -254,7 +300,7 @@ pub fn write_vis(
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
-        &pixels,
+        pixels,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(VIS_WIDTH * 4),
@@ -268,26 +314,75 @@ pub fn write_vis(
     );
 }
 
-/// [`VIS_WIDTH`] levels, `bands` linearly interpolated across the whole
-/// strip - the pure arithmetic half of [`write_vis`], split out so it is
-/// testable without a GPU, the same reason
+/// The 256 RGBA texels [`write_vis`] uploads - its whole arithmetic, split
+/// out so it is testable without a GPU, the same reason
 /// `mesh_render::uniforms::view_projection` is split from
 /// `mesh_render::uniforms::write_uniforms`.
 ///
-/// `bands` must be non-empty; [`write_vis`] is what handles the empty case.
-fn levels(bands: &[f32]) -> [f32; VIS_WIDTH as usize] {
-    let last = bands.len() - 1;
-    std::array::from_fn(|texel| {
+/// Every texel this frame does not light stays `0`, alpha included: the
+/// original writes a literal zero word into each unlit segment (`r15`, set
+/// by `li r15,0`), and that is also the explicit "draw nothing" a `None`
+/// tint or an empty `bands` gets, rather than leaving whatever the texture
+/// held from a previous frame.
+fn vis_pixels(bands: &[f32], tint: Option<[u8; 3]>) -> [[u8; 4]; VIS_WIDTH as usize] {
+    let mut texels = [[0u8; 4]; VIS_WIDTH as usize];
+    let Some(tint) = tint.filter(|_| !bands.is_empty()) else {
+        return texels;
+    };
+    let lit = [tint[0], tint[1], tint[2], 255];
+    let scaled = |channel: u8, by: f32| {
         #[expect(
-            clippy::cast_precision_loss,
-            reason = "VIS_WIDTH and bands.len() are both far under f32's exact-integer range"
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "`by` is clamped to 0.0..=1.0 and the channel is a u8"
         )]
-        let position = texel as f32 / (VIS_WIDTH - 1) as f32 * last as f32;
-        let low = position.floor() as usize;
-        let high = (low + 1).min(last);
-        let frac = position - position.floor();
-        (bands[low] * (1.0 - frac) + bands[high] * frac).clamp(0.0, 1.0)
-    })
+        let out = (f32::from(channel) * by).round() as u8;
+        out
+    };
+    for (band, &level) in bands.iter().enumerate() {
+        for step in 0..segments(level) {
+            if let Some(texel) = texels.get_mut(1 + SEGMENTS * band + step) {
+                *texel = lit;
+            }
+        }
+        // The smooth half: the same tint scaled by the level rather than
+        // quantised to a segment. The original builds it by multiplying each
+        // 0-255 colour component by the 0-255 level and keeping the high
+        // byte, which is this to within a rounding step.
+        if let Some(texel) = texels.get_mut(SMOOTH_BASE + band) {
+            let by = level.clamp(0.0, 1.0);
+            *texel = [
+                scaled(tint[0], by),
+                scaled(tint[1], by),
+                scaled(tint[2], by),
+                255,
+            ];
+        }
+    }
+    texels
+}
+
+/// How many of a bar's [`SEGMENTS`] a level lights: `min(10, trunc(level *
+/// 11.0))`.
+///
+/// **`11.0`, not `10.0`, and the truncation is the original's.** It converts
+/// with `fctiwz` - round toward zero - and then clamps at ten, so a full
+/// level lands on ten lit segments while every value below `10/11` shares the
+/// remaining nine evenly. Scaling by `10.0` instead would light the tenth
+/// segment only at exactly `1.0`.
+fn segments(level: f32) -> usize {
+    // `matches!` on the ordering rather than `!(level > 0.0)`: a NaN level
+    // must light nothing, and clippy will not take the negated comparison.
+    if !matches!(level.partial_cmp(&0.0), Some(std::cmp::Ordering::Greater)) {
+        return 0;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "guarded above zero and clamped to SEGMENTS immediately below"
+    )]
+    let steps = (level * 11.0) as usize;
+    steps.min(SEGMENTS)
 }
 
 #[cfg(test)]

@@ -1,0 +1,203 @@
+# Zone's audio-spectrum visualiser: sixteen bands, ten segments each
+
+**The open question this page closes**: whether HD/Fury's per-frame
+`zoneTexVis` write is audio-reactive, or a stage-progress fraction.
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md)'s twenty-sixth
+pass found the writer and left the value untraced at confidence 74. It is
+audio, and the layout it writes is a bank of **sixteen ten-segment bar
+meters**.
+
+The maintainer's own play report - "in a Zone race the floor textures and the
+billboards carry an audio-spectrum animation driven by the music"
+([effectsettings.md](../../../formats/effectsettings.md)) - is now met by a
+decompiled dispatch rather than by inference from key names.
+
+## The band source: `SoundSystem_GetBandLevel`
+
+`Environment_UpdateStageBlend` (`0x003da540`) calls `0x0067a7b8` once per
+band, with the band index in `r3` and a float back in `f1`. That address is a
+TOC-switching stub (`std r2,0x28(r1)` / `subis` / `addi` / `b`) whose real
+target is **`0x00304530`**:
+
+```c
+double SoundSystem_GetBandLevel(uint band)
+{
+  if (0xf < band) {
+    return (double)DAT_008b4c7c;          // 0.0
+  }
+  return (double)*(float *)(PTR_DAT_008b4c5c + band * 4 + 0x24);
+}
+```
+
+**Sixteen bands**, `0..=15`, clamped, returning `0.0` past the end.
+`PTR_DAT_008b4c5c` reads `0x00b6cc90`, so the array is sixteen floats at
+`0x00b6ccb4`.
+
+**That object is the sound system, not the renderer.** `FUN_00304be8`, in the
+same module, branches on `PTR_DAT_008b4c5c[0xe8] == 2` to pick between the
+literals `"Stereo"` and `"Surround"`. A struct whose `+0xe8` selects a speaker
+layout is an audio object; a stage-progress counter is not. Confidence **85**
+on "this getter returns an audio measurement". What *fills* `+0x24`..`+0x60`
+is **not** traced - `get_xrefs_to` is blind to the TOC-relative loads this
+binary uses ([memory.md](memory.md)), and no writer was found in this pass.
+So the *source* of a band's number is unrecovered; that it is sixteen bands
+published by the sound system is not.
+
+## The layout: bars at 1-160, a smooth slot each at 161-176
+
+Read at instruction level from `0x003dba04`, where the function loads the
+`zoneTexVis` wrapper (`lwz r10,0x32b0(r30)`) and its pixel buffer
+(`lwz r9,0x10(r10)`). Eleven pointers are set up:
+
+| register | init | texel |
+| --- | --- | ---: |
+| `r16` | `r9 + 0x4` | 1 |
+| `r29` | `r9 + 0x8` | 2 |
+| `r28` | `r9 + 0xc` | 3 |
+| `r27` | `r9 + 0x10` | 4 |
+| `r24` | `r9 + 0x14` | 5 |
+| `r23` | `r9 + 0x18` | 6 |
+| `r22` | `r9 + 0x1c` | 7 |
+| `r21` | `r9 + 0x20` | 8 |
+| `r20` | `r9 + 0x24` | 9 |
+| `r19` | `r9 + 0x28` | 10 |
+| `r18` | `r9 + 0x284` | **161** |
+
+The first ten advance by `0x28` - **ten texels** - per loop iteration
+(`0x003dbba4`-`0x003dbbc8`); `r18` advances by `0x4`, one texel
+(`0x003dbb9c`). The loop counter `r31` runs to `0xf`
+(`cmpwi cr7,r31,0xf` at `0x003dbb90`), so sixteen iterations. Therefore:
+
+```text
+texel 0                       never written (the load-time zero-fill stands)
+texels 1 + 10b ..= 10 + 10b   band b's ten-segment bar
+texel  161 + b                band b's smooth slot
+```
+
+and `161 = 1 + 10 * 16` exactly - the smooth block begins where the
+sixteenth bar ends. Confidence **88**.
+
+### The bar is binary, not a gradient
+
+`0x003dbaa0` onwards is a ladder: compare the level against `1`, store `r17`
+into texel 1, branch out if `level <= 1`; compare against `2`, store `r17`
+into texel 2, branch out; ... through segment 10. The exit targets
+(`0x003dbc30` onwards) store `r15` into every *remaining* segment, and
+`r15` is set by `li r15,0` at `0x003dba30`. So **a lit segment carries the
+whole colour word and an unlit one carries `0x00000000`** - the alpha byte
+included.
+
+`r17` is assembled at `0x003db8f8` (`or r17,r0,r10`) out of four `fctiwz`-
+converted colour components, in the same packing idiom the rest of the
+function uses. Which authored colour it is was not traced; this project binds
+the stage's own `EQ colour tint` there, at the confidence
+`zone_grade::ZoneGrade::eq_tint` already records.
+
+### The level: `min(10, trunc(held * 11.0))`
+
+At `0x003dba74`-`0x003dba94`:
+
+```text
+f0 = held * f30 ; fctiwz ; stfiwx -> r0
+if r0 > 10 { r0 = 10 }
+```
+
+`f30` is `lfs f30,-0x5a48(r2)` -> `0x008b797c` -> `0x41300000` = **11.0**.
+`fctiwz` rounds toward zero, so the first segment lights at `1/11` and the
+tenth from `10/11` on. A `10.0` scale would light the tenth only at exactly
+`1.0`; the disc chose eleven and a clamp.
+
+### The smooth slot: the tint scaled 0-255 by the level
+
+At `0x003dbb28`/`0x003dbc70` the same held value is multiplied by
+`f31 = lfs -0x5a44(r2)` -> `0x008b7980` -> `0x437f0000` = **255.0**, converted
+and clamped to `[0, 255]`. `0x003dbb50`-`0x003dbb88` then multiplies each of
+four 0-255 colour components by that value and keeps the high byte of each
+product (`mullw` + `rlwinm` per lane), OR-ing them into one packed word
+stored at texel `161 + b`. That is the tint scaled smoothly by the level,
+beside the quantised bar.
+
+### The ballistics: instant attack, `0.1` linear decay per frame
+
+At `0x003dbbe4`-`0x003dbc24`:
+
+```text
+f1   = SoundSystem_GetBandLevel(b) * gain
+f13  = held[b]                       ; at r30 + 0x32f8 + 4b
+raw[b] = f1                          ; at r30 + 0x32b8 + 4b
+if f1 >= f13 { held[b] = f1; draw the bar }
+else {
+  if held[b] > 0.0 { held[b] -= 0.1 }
+  if held[b] < 0.0 { held[b] = 0.0; clear the bar }
+}
+```
+
+The decay is `lfs f0,-0x5a7c(r2)` -> `0x008b7948` -> `0x3dcccccd` = **0.1**,
+and the floor is `lfs f12,-0x5a4c(r2)` -> `0x008b7978` -> `0.0`. The caller
+is `Scene_PrepareFrame`, so this is **per rendered frame** and frame-rate
+dependent in the original.
+
+`gain` is `lfs f0,0x4(r4)` where `r4` is a base fixed across all sixteen
+bands, computed at `0x003dba08`-`0x003dba38` off a TOC pointer. **Not
+identified** - do not read it as `EQ brightness` without tracing it; that
+key already has a located consumer elsewhere.
+
+## The shipped art confirms the stride, three times over
+
+This is the strongest evidence on the page, because every number in it was
+measured **before** the layout above was read, and recorded in
+[zone-shader.md](zone-shader.md)'s own alpha histogram of the fifteen
+`zoneModeTrack*.gtf`:
+
+| file | alpha plateaus | under this layout |
+| --- | --- | --- |
+| `zonemodetrack9`/`10` | `31, 32, ..., 40` | **band 3's ten segments**, `1+10*3` .. `10+10*3` |
+| `zonemodetrack14` | groups of 4 on a **stride of 10** | four segments of each band; 10 is the band stride |
+| `zonemodetrack6`/`7` | `1, 2, ..., 162` | every bar (1-160) plus the first two smooth slots |
+| `zonemodetrack8` | `26, 35, 46, 55, 66, 75, 86, 90, 169, 255` | one segment from each of bands 2-8, plus band 8's smooth slot at `169 = 161+8` |
+
+Ten consecutive integers starting at 31 is not something a wrong reading of a
+loop stride produces, and `track14`'s stride of 10 is the band stride stated
+by the art itself. Confidence **90** on the layout once the art is admitted
+as evidence, against the 88 the disassembly alone carries.
+
+It also explains, exactly, why this project's own visualiser was invisible
+before: it spread 32 bands linearly over 256 texels, so a surface authored to
+show band 3's ten-segment bar instead sampled a near-constant interpolation
+of bands 3-5, and every texel carried a *fraction* of the tint where the
+original carries all of it or none.
+
+## Names applied
+
+| address | kind | name | confidence |
+| --- | --- | --- | ---: |
+| `0x00304530` | function | `SoundSystem_GetBandLevel` | 85 |
+| `0x0067a7b8` | function | `SoundSystem_GetBandLevel_Stub` | 85 |
+| `0x00b6cc90` | data | `g_sound_system` | 80 |
+
+`g_sound_system` is named from `FUN_00304be8`'s `"Stereo"`/`"Surround"`
+branch on `+0xe8` and nothing else, which is why it sits at 80 rather than
+with the getter.
+
+## Still open
+
+- **What writes `g_sound_system + 0x24`..`+0x60`.** The sixteen band levels
+  are read here and filled somewhere unfound; `get_xrefs_to` is blind to
+  this binary's TOC-relative loads, so a byte-pattern or symbolic sweep of
+  the audio module is what would close it. Until then the *analysis* behind
+  a band - its centre frequency, its window, its magnitude curve - is
+  unrecovered, and this project's own `oag_audio::spectrum` supplies its own
+  and says so.
+- **What `lfs f0,0x4(r4)` is**, the fixed per-frame gain applied to every
+  band before the hold.
+- **Which authored colour `r17` carries.** Assembled at `0x003db8f8` from
+  four converted floats; the `EQ colour tint` reading is a name match, not a
+  trace.
+
+## See also
+
+- [zone-shader.md](zone-shader.md) - what the fragment microcode does with
+  `zoneTexVis`, and the alpha histogram this page leans on
+- [zone-effectsettings-loader.md](zone-effectsettings-loader.md) - the
+  twenty-sixth pass, which found the writer and left this question open
+- `docs/formats/effectsettings.md` - the `EQ` key cluster and the play report

@@ -10,19 +10,20 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md` and
 //! `docs/formats/effectsettings.md#the-eq-keys-are-an-audio-spectrum-observed-in-play`.
 //!
-//! **What is not recovered, and is not invented here**: the original's own
-//! `zoneTexVis` is confirmed zero-filled at load and rewritten every frame by
-//! `Environment_UpdateStageBlend`
-//! (`docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
-//! twenty-sixth pass) - not a static ramp, contrary to an earlier reading
-//! this project corrected - but *what* it writes is untraced past a float
-//! compared against the recovered stage ladder, so whether that float is
-//! itself audio-reactive is still open (needs an RPCS3 watchpoint on the
-//! value the comparison reads, still outstanding). So this is not a port of
-//! the original's mechanism; it is a **real** spectrum, computed from the
-//! samples this project's own mixer is actually producing, which is the
-//! honest reading of "audio data feeds the shader" when the original's own
-//! feed is unread. See
+//! **The original's own feed is recovered, and it is audio.** This module
+//! used to carry a paragraph saying the opposite - that whether HD's
+//! per-frame `zoneTexVis` write was audio-reactive was open, and that this
+//! was therefore not a port of the original's mechanism. It is now read:
+//! `Environment_UpdateStageBlend` calls a sound-system getter once per band
+//! per frame and lays the result out as sixteen ten-segment bar meters, and
+//! this crate supplies exactly what that getter supplies -
+//! [`BANDS`] levels in `0.0..=1.0`. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
+//!
+//! What stays this project's own: the band centre frequencies, the
+//! magnitude-to-level curve, and the analyser's ballistics. The disc says how
+//! many bands there are and what is done with them, not how a band is
+//! measured. See
 //! [ADR-0018](../../../docs/architecture/adr/0018-audio-mixer-architecture.md)
 //! for why this lives here rather than in the mixer's own per-tick output:
 //! a visualiser is analysis *of* the signal, not a cue the simulation
@@ -44,13 +45,19 @@ use std::sync::Mutex;
 
 /// How many frequency bands the visualiser reads.
 ///
-/// Not a measurement of anything on the disc - the original's own band count
-/// is unrecovered (see this module's own top). Chosen as a plain, round
-/// number of bands wide enough to read as a spectrum and narrow enough that a
-/// [`BANDS`]-wide bar chart is legible stretched across a 256-entry lookup
-/// (`oag_render::mesh_render::zone` expands each band across
-/// `256 / BANDS` texels).
-pub const BANDS: usize = 32;
+/// **Sixteen is recovered from the disc, not chosen.** HD/Fury's own
+/// per-frame `zoneTexVis` writer loops a band index `0..=15` and reads each
+/// band through a sound-system getter that clamps the index to `15` and
+/// returns a default past it - `SoundSystem_GetBandLevel` (`0x00304530`),
+/// `*(float *)(g_sound_system + 0x24 + band * 4)`. Corroborated from the
+/// shipped art: every `zoneModeTrack*.gtf`'s alpha plateaus land on the
+/// ten-texel band stride that writer lays down. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
+///
+/// **The band *frequencies* are still this project's own choice** - see
+/// [`band_frequencies`]. Nothing on the disc says what the original's
+/// sixteen bands are centred on.
+pub const BANDS: usize = 16;
 
 /// The band centre frequencies, in Hz, geometrically spaced from 80 Hz to
 /// 8,000 Hz - the range a small on-screen equaliser reads as "bass to
@@ -63,7 +70,7 @@ fn band_frequencies() -> [f32; BANDS] {
     std::array::from_fn(|i| {
         #[expect(
             clippy::cast_precision_loss,
-            reason = "BANDS is 32; no precision lost casting a band index"
+            reason = "BANDS is 16; no precision lost casting a band index"
         )]
         let t = i as f32 / (BANDS - 1) as f32;
         LOW * (ratio * t).exp()

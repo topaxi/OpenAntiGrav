@@ -536,8 +536,13 @@ impl Session {
                 let start = timing_first_race_frame.then(std::time::Instant::now);
                 // The Zone visualiser's own input - see
                 // `oag_audio::spectrum` and `race::scene::frame::Scene::render`'s
-                // own doc comment on this parameter.
-                let zone_spectrum = self.audio.output().spectrum().levels();
+                // own doc comment on this parameter. Through the recovered
+                // peak-hold on the way, which is the original's own
+                // per-frame ballistics and belongs on this side of the seam
+                // for the same reason its state does: it is one hold for the
+                // frame, not one per drawable that reads it.
+                let spectrum = self.audio.output().spectrum().levels();
+                let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

@@ -353,18 +353,13 @@ Open item below.
 - ~~What the Zone shader does with the six-plus Zone parameters.~~ **Read**,
   see [zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)
   and the visualiser glow section above.
-- **Whether `Environment_UpdateStageBlend`'s per-frame `zoneTexVis` write is
-  itself audio-reactive**, or a plain stage-progress fraction - the open half
-  of the "static vs per-frame" question this thread used to carry whole. The
-  writer and its call path are both found statically
-  ([zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
-  twenty-sixth pass); closing this needs an RPCS3 watchpoint on the float `f1`
-  the threshold comparisons there read from, which nothing in this session
-  attempted (see `CLAUDE.md` on why: interpreter-only patched build, no
-  working GUI in this sandbox, and it needs a Zone race driven to a real
-  stage). This project's own visualiser does not need the answer - it draws a
-  genuine spectrum regardless - but the answer would settle whether the two
-  pictures are meant to look the same.
+- ~~**Whether `Environment_UpdateStageBlend`'s per-frame `zoneTexVis` write is
+  itself audio-reactive**, or a plain stage-progress fraction.~~ **Answered
+  2026-09-01, statically, with no watchpoint needed** - it is audio. `f1` is
+  the return of a sound-system getter called once per band; see
+  [zone-visualiser.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md)
+  and the section above. What is still unfound is one step further back: what
+  *fills* the sixteen band floats at `g_sound_system + 0x24`.
 - What writes the eight colour vec4s at `0x00c81460`/`0x00c81470`-`0x00c814d0`,
   `zoneColourTint`'s own value among them. Nothing stores there by
   displacement off the loader's base, so the writer is almost certainly
@@ -396,22 +391,22 @@ Open item below.
   maintainer, not a sweep** - do the vertical advertising faces pulse with
   the music, or only the angled screens and the floor? A sweep cannot answer
   it; the microcode has already been counted exhaustively.
-- **The index-to-frequency correspondence inside `zoneTexVis` is
-  unrecovered, so this build's 256-texel strip is a uniform spread of
-  `oag_audio::spectrum::BANDS` (32) bands, not a verified reproduction of
-  whatever the original's per-frame write actually encodes there.** The
-  disc's own live writer (`Environment_UpdateStageBlend`, see above) only
-  ever touches texels 1-10 and 161 - a narrow, specific set the original
-  chose deliberately. If that choice means "these ten indices are ten
-  consecutive band ids" rather than "a window into a much wider strip," a
-  faithful port would want a handful of bands spread across exactly those
-  texels, not 32 bands spread across all 256 with texels 1-10 landing on
-  the lowest two bins (~80-93 Hz) by construction. Nobody has recovered
-  which it is. `write_vis`'s linear interpolation
-  (`crates/render/src/mesh_render/zone.rs`) was built to stop a narrow
-  window reading as one flat block (see its regression test), not as a
-  claim about the true mapping - flag this before treating any window's
-  shape as meaningful evidence of the original's spectrum layout.
+- ~~**The index-to-frequency correspondence inside `zoneTexVis` is
+  unrecovered, so this build's 256-texel strip is a uniform spread of 32
+  bands.**~~ **Recovered and replaced 2026-09-01.** The layout is sixteen
+  ten-segment bar meters; the uniform spread was the invention that made the
+  effect invisible. The reading in this item - "only ever touches texels 1-10
+  and 161" - was the twenty-sixth pass seeing **one band's** pointers before
+  the `0x28` advance, and it was the clue: those are band 0's ten segments
+  and the smooth block's base.
+- **What fills `g_sound_system + 0x24`..`+0x60`, the sixteen band floats.**
+  The visualiser reads them through `SoundSystem_GetBandLevel`; nothing was
+  found writing them, and `get_xrefs_to` is blind to this binary's
+  TOC-relative loads. Until that lands, *how a band is measured* - centre
+  frequency, window, magnitude curve - is unrecovered, and
+  `oag_audio::spectrum` supplies its own and labels them as its own.
+- **What `lfs f0,0x4(r4)` is** - the fixed per-frame gain the original
+  applies to every band before the hold. This port applies none.
 
 ## Next Steps
 
