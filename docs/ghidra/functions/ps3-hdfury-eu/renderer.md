@@ -1083,6 +1083,60 @@ slot number cross-checked eight ways already on this page. Confidence on
 "unscaled" itself is unmoved at 60; this narrows the address to look at, not
 the answer.
 
+### The "two addresses" lead is refuted - they read a different global, not `0x008b7f04` (2026-09-01)
+
+**`0x0067f030` and `0x0067f1b8` do not touch `0x008b7f04`.** The paragraph
+above assumed their `lwz rX,-0x54c0(r2)` resolves "against this exact TOC" -
+i.e. the same one as `Shader_InitEngineParams`'s own `-0x54c0(r2)`,
+`0x008bd3c4` - without reading either function's actual TOC off its `.opd`
+entry. Doing that now: each function has exactly one `.opd` entry
+(`get_xrefs_to` on both still finds nothing but that single self-reference,
+reconfirming the "no static caller" finding stands), and the entry itself -
+read as raw bytes, `{code address, TOC}` - is `0x008AD4D8` for both
+(`0x00873b70` for `0x0067f030`, `0x00873b98` for `0x0067f1b8`; both sit in a
+contiguous run of ten near-identical `.opd` entries, `0x0067AED0` through
+`0x000B1878`, that all share this same `0x008AD4D8` TOC - a normal
+one-module-shares-one-TOC pattern). `Shader_InitEngineParams`'s own `.opd`
+(`0x0088c770`, read the same way) carries TOC `0x008BD3C4`, confirmed to
+match the doc's citation. **The two TOCs differ** (`0x008AD4D8` vs
+`0x008BD3C4`), and PPC ELF's `-0x54c0(r2)` is TOC-relative: under
+`0x008AD4D8` it resolves to static storage `0x008A8018`, not `0x008B7F04` -
+arithmetic anyone can redo (`toc - 0x54c0`), not a judgement call, so this
+correction is confidence 95, not a competing guess. The original
+`search_byte_patterns` hit matched the instruction's *bytes* (opcode plus the
+`-0x54c0` immediate), which are TOC-independent by construction; nothing in
+that search actually checked which TOC each hit resolves against, so "against
+this exact TOC" in the paragraph above was asserted, not verified.
+
+**What `0x0067f030`/`0x0067f1b8` actually construct is a different,
+unidentified object.** `0x008A8018` currently holds `0x008630F0`, a pointer
+into a large repeating data block (`0x00863080`-ish onward) inside the same
+`0x00862000`-`0x00869000` address range this project already uses for C++
+vtables (`collision.md`, `race-manager.md`, `physics.md`). Most words in that
+block repeat a shared default OPD (`0x00885A80`, itself referenced from ~90
+other tables in the same range - a common "default slot" stub), with
+occasional rows overriding one or two slots with a class-specific OPD; the
+two functions' own OPDs (`0x00873B98`/`0x00873B70`) appear together at one
+such row (`0x00863120`/`0x00863124`). Whether that block is a genuine vtable,
+a class-registration list, or something else, and what reads it, is
+**unconfirmed** - no `lis`/`addis` load of `0x008630f0`, `0x00863120` or
+`0x008A8018` exists anywhere in the image (checked via `search_instructions`
+on the resolved literals), and the one function found reading the
+neighbouring TOC slot on the same TOC (`0x0067f028`, a one-line getter for
+`-0x54c8(r2)`; its caller `FUN_003f0950`, found via `get_xrefs_to` on
+`0x008a8010`) is unrelated - it reads a sun-direction normalisation constant
+pair (`PTR_DAT_008b7efc`/`PTR_DAT_008b7f00` under *its own*, different TOC)
+and contains no `mtctr`/`bctrl` at all. **This is a second, independent point
+where static analysis runs out**, on ground that turns out not to be the
+fogColour chain.
+
+**Consequence for the Next Steps below:** finding what calls `0x0067f030`/
+`0x0067f1b8` would not answer whether `fogColour` is unscaled, because they
+never read `0x008b7f04`. The right search is TOC-scoped, not byte-scoped: a
+`-0x54c0(r2)` `lwz` inside a function whose *own* `.opd` TOC is `0x008bd3c4`
+- not a `search_byte_patterns` hit on the instruction bytes alone. That
+search was not run this session.
+
 ### The registry is resolved: every post program's block is addressable
 
 Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
