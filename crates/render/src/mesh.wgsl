@@ -259,6 +259,9 @@ struct VertexInput {
     // microcode; `slots::DEFAULT` is the first texture's colour and the first
     // texture's alpha, which is what every title but Wipeout HD carries.
     @location(9) slots: u32,
+    // This material's specular exponent, resolved per material - see
+    // `oag_render::mesh::vertex::GpuVertex::specular_exponent`.
+    @location(10) specular_exponent: f32,
 };
 
 struct VertexOutput {
@@ -284,6 +287,9 @@ struct VertexOutput {
     // perspective-correct.
     @location(9) cur_clip: vec4<f32>,
     @location(10) prev_clip: vec4<f32>,
+    // Flat for the same reason `slots` is: a property of the material, not
+    // of the vertex.
+    @location(11) @interpolate(flat) specular_exponent: f32,
 };
 
 @vertex
@@ -327,6 +333,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.view_depth = out.clip.w;
     out.sun_mask = in.sun_mask;
     out.slots = in.slots;
+    out.specular_exponent = in.specular_exponent;
     out.cur_clip = out.clip;
     out.prev_clip = uniforms.prev_mvp * placed;
     return out;
@@ -706,18 +713,19 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let zone_glow_term =
         zone_glow(n, in.clip.z, in.texcoord) * scene.zone.enabled;
 
-    // The read specular term: half-vector against the sun, and the exponent
-    // is a **stand-in**. It is an inline constant of each fragment program,
-    // not a shared one: sweeping every material on the disc for the literal a
-    // saturated dot is multiplied by between its `LG2` and its `EX2` gives 5
-    // on 759 blocks, 10 on 704, 32 on 295, and a tail of 26.156, 40 (the
-    // ships) and 300. 32 is the commonest round value and holds the place
-    // until the pipeline can pick one per material. Gated by `mask` above -
-    // the same sun-occlusion scalar the diffuse term reads, exactly where the
-    // disc's own microcode gates its specular by it too - and by the diffuse
-    // texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
-    // everywhere, which is full gloss, as the original samples it too). Zero
-    // whenever the authored rig is off: the stand-in never had one.
+    // The read specular term: half-vector against the sun, raised to
+    // `in.specular_exponent` - each material's own inline constant, decoded
+    // off its fragment microcode by
+    // `oag_formats::rcsmaterial::fragment::Program::specular_exponent`
+    // rather than shared, per `oag_render::mesh::vertex::GpuVertex::specular_exponent`.
+    // `32.0` remains only the *fallback*, for a material the decoder could
+    // not resolve - see that field for what a resolved value means and what
+    // it does not. Gated by `mask` above - the same sun-occlusion scalar the
+    // diffuse term reads, exactly where the disc's own microcode gates its
+    // specular by it too - and by the diffuse texture's alpha (gloss lives
+    // there; a DXT1 diffuse has alpha 1 everywhere, which is full gloss, as
+    // the original samples it too). Zero whenever the authored rig is off:
+    // the stand-in never had one.
     let to_eye = normalize(scene.fog.camera - in.world);
     let half_vector = to_eye + scene.light.direction;
     let ndh = clamp(
@@ -726,7 +734,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         1.0,
     );
     let specular = scene.light.sun
-        * (pow(ndh, 32.0) * ndl * mask * texel.a * scene.light.specular_scale
+        * (pow(ndh, in.specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
             * scene.light.enabled * in.lit * select(1.0, 0.0, emissive));
 
     // The authored path shades in linear light, as the RSX does: the samples

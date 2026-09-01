@@ -527,3 +527,196 @@ fn a_later_fetch_clobbers_the_register_it_writes() {
         "unit 0's fetch took H1 over before the add"
     );
 }
+
+/// Builds a saturated `DP3` feeding `LG2` / `MUL {exponent}` / `EX2` into
+/// register `reg` - the `N.H` idiom `renderer.md` reads under every
+/// specular term, `pow(N.H, exponent)`.
+///
+/// `mask` is applied to all four instructions, not only `EX2` - real
+/// shipped microcode threads a scalar through one lane throughout a chain
+/// like this, and giving the others the default full mask would make them
+/// count as colour writes in their own right whenever `mask` picks a
+/// non-colour lane, which is not what a scalar `pow` computation is.
+fn pow_chain(reg_index: u8, exponent: f32, mask: u8) -> Vec<Instruction> {
+    let mut dot = insn(0x05); // DP3, arity 2 - N.H, saturated
+    dot.dst = reg_index;
+    dot.mask = mask;
+    dot.saturate = true;
+
+    let mut lg2 = insn(0x1d); // LG2, arity 1
+    lg2.dst = reg_index;
+    lg2.mask = mask;
+    lg2.sources = [reg(reg_index, false), Source::Input, Source::Input];
+
+    let mut mul = insn(0x02); // MUL, arity 2
+    mul.dst = reg_index;
+    mul.mask = mask;
+    mul.sources = [reg(reg_index, false), Source::Constant, Source::Input];
+    mul.constant = Some([exponent, 0.0, 0.0, 0.0]);
+
+    let mut ex2 = insn(0x1c); // EX2, arity 1
+    ex2.dst = reg_index;
+    ex2.mask = mask;
+    ex2.sources = [reg(reg_index, false), Source::Input, Source::Input];
+
+    vec![dot, lg2, mul, ex2]
+}
+
+/// The ship's own reading: `pow(N.H, 40)` (`@0x40 LG2 / @0x43 MUL by 40 /
+/// @0x46 EX2`, `renderer.md`'s "Ships have no Lambert diffuse either"),
+/// multiplied into the register the program's final `MAD` writes as colour.
+#[test]
+fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
+    let mut instructions = pow_chain(1, 40.0, 0xf);
+    let mut mad = insn(0x04); // MAD H0.xyz, spec, N.L, prelit - the colour, END
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(40.0));
+}
+
+/// A `pow` chain whose result nothing ever reads again is dead code, not the
+/// specular term - `None`, not a guess.
+#[test]
+fn a_pow_chain_never_read_again_returns_none() {
+    let program = Program {
+        declared: Declared::default(),
+        instructions: pow_chain(1, 40.0, 0xf),
+    };
+    assert_eq!(program.specular_exponent(), None);
+}
+
+/// **The instruction shape alone is not enough - only the chain reaching the
+/// output is returned**, even when a dead `pow` chain sits later in the
+/// stream and would otherwise be found first by the last-first search. This
+/// is the Zone `rim^10`/`rim^5` case in miniature: the identical
+/// `LG2`/`MUL`/`EX2` shape, on a register nothing downstream reads.
+#[test]
+fn a_dead_pow_chain_after_the_real_one_does_not_win() {
+    let mut instructions = pow_chain(1, 40.0, 0xf);
+    let mut mad = insn(0x04); // the real colour write, reading register 1
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    instructions.push(mad);
+    // A second, unrelated chain afterward - e.g. a rim term folded only into
+    // alpha, so it never touches a colour channel and never overwrites what
+    // the real chain already wrote.
+    instructions.extend(pow_chain(2, 10.0, 0b1000));
+    let mut end = insn(0x01); // MOV H0.w, {const}, END - alpha only
+    end.dst = 0;
+    end.dst_half = true;
+    end.mask = 0b1000;
+    end.sources = [Source::Constant, Source::Input, Source::Input];
+    end.constant = Some([1.0, 0.0, 0.0, 0.0]);
+    end.end = true;
+    instructions.push(end);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(40.0));
+}
+
+/// **A texture-fed `pow` is not a specular term, even though it reaches the
+/// output too** - `track_surface`'s own lightmap curve,
+/// `pow(lightmap.rgb, k)` (`renderer.md`'s block #9), is exactly this
+/// shape: the identical `LG2`/`MUL`/`EX2` instructions, fed by a `TEX`
+/// result rather than a saturated dot product.
+#[test]
+fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
+    let mut tex = insn(0x17); // TEX H1, f[TC4] unit0 - the lightmap
+    tex.dst = 1;
+    tex.mask = 0xf;
+
+    let mut lg2 = insn(0x1d);
+    lg2.dst = 1;
+    lg2.mask = 0xf;
+    lg2.sources = [reg(1, false), Source::Input, Source::Input];
+
+    let mut mul = insn(0x02);
+    mul.dst = 1;
+    mul.mask = 0xf;
+    mul.sources = [reg(1, false), Source::Constant, Source::Input];
+    mul.constant = Some([2.0, 0.0, 0.0, 0.0]);
+
+    let mut ex2 = insn(0x1c);
+    ex2.dst = 1;
+    ex2.mask = 0xf;
+    ex2.sources = [reg(1, false), Source::Input, Source::Input];
+
+    let mut mad = insn(0x04); // + f[TC1], the colour, END
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions: vec![tex, lg2, mul, ex2, mad],
+    };
+    assert_eq!(
+        program.specular_exponent(),
+        None,
+        "the LG2 reads a texture sample, not a saturated DP3 - not the N.H idiom"
+    );
+}
+
+/// **`exp(N.H)` is not `pow(N.H, e)`, even fed by a saturated dot and
+/// reaching the output too** - a disc-wide sweep found materials computing
+/// `exp(x) = exp2(log2(e) * log2(x))` off exactly this shape, and the
+/// constant's exact identity is the tell: `mesh.wgsl`'s own fog curve names
+/// `log2(e)` for the identical reason.
+#[test]
+fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {
+    let mut instructions = pow_chain(1, std::f32::consts::LOG2_E, 0xf);
+    let mut mad = insn(0x04);
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(
+        program.specular_exponent(),
+        None,
+        "log2(e) marks exp(N.H), not a specular pow"
+    );
+}
+
+/// The `log2(e)` exclusion is a value check, not a blanket rejection of
+/// anything nearby - a real specular exponent that happens to be close is
+/// still returned.
+#[test]
+fn a_pow_chain_whose_exponent_is_merely_close_to_log2_e_is_still_returned() {
+    let mut instructions = pow_chain(1, 1.5, 0xf);
+    let mut mad = insn(0x04);
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(1.5));
+}

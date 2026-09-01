@@ -377,12 +377,13 @@ pub(super) fn roles(
     picks: &[Pick],
     seconds: &[Option<Arc<ModelTexture>>],
     textures: Textures<'_>,
-) -> Vec<u32> {
+) -> Roles {
     use crate::mesh::slots;
     use rcsmaterial::fragment::{Program, Texel};
 
     let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
     let mut out = Vec::with_capacity(model.materials.len());
+    let mut specular_exponent = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
         let mut packed = slots::DEFAULT;
         if material.lightmap_entry().is_some() {
@@ -398,6 +399,21 @@ pub(super) fn roles(
         let program = variant
             .zip(blob.as_deref())
             .and_then(|(variant, blob)| Program::parse(blob, variant.fragment.offset));
+        // **Trusts the decoder's answer except a literal `0.0`.**
+        // `Program::specular_exponent`'s own doc comment carries the
+        // disc-wide evidence that a resolved `0.0` reads as `SpecularPower`
+        // patched at draw time rather than a real value - `pow(x, 0) = 1` is
+        // not a plausible authored shininess - so that one answer is not
+        // trusted; every other resolved value is wired exactly as read.
+        // `crate::mesh::DEFAULT_SPECULAR_EXPONENT` covers both that case and
+        // a material the decoder could not resolve at all.
+        specular_exponent.push(
+            program
+                .as_ref()
+                .and_then(rcsmaterial::fragment::Program::specular_exponent)
+                .filter(|value| *value != 0.0)
+                .unwrap_or(crate::mesh::DEFAULT_SPECULAR_EXPONENT),
+        );
         let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
             rcsmaterial::Declared::parse(blob, variant.fragment.offset)
         });
@@ -463,7 +479,21 @@ pub(super) fn roles(
         }
         out.push(packed);
     }
-    out
+    Roles {
+        packed: out,
+        specular_exponent,
+    }
+}
+
+/// What [`roles`] resolves per material slot, in material-table order:
+/// [`roles`]'s own bit-packed word, and the specular exponent read off the
+/// same resolved fragment program - kept together because both come out of
+/// one pass over one parsed [`rcsmaterial::fragment::Program`] per material,
+/// and a second pass to re-decode it for the exponent alone would parse
+/// every material's microcode twice for no reason.
+pub(super) struct Roles {
+    pub(super) packed: Vec<u32>,
+    pub(super) specular_exponent: Vec<f32>,
 }
 
 /// Which texture unit each of a material's two `.gtf` slots reaches, read from

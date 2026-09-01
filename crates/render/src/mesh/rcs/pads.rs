@@ -61,6 +61,7 @@ pub(super) fn skeleton(label: &str, out: &Model) -> Model {
         textures: out.textures.clone(),
         lightmaps: out.lightmaps.clone(),
         material_slots: out.material_slots.clone(),
+        material_specular_exponent: out.material_specular_exponent.clone(),
         material_variants: out.material_variants.clone(),
         // **Carried because `material_slots` is.** A slot's word holds its
         // index into this table in its high half, so copying the roles without

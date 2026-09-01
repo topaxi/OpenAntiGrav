@@ -6,9 +6,69 @@
 
 - No per-material lighting branch exists: `mesh.wgsl` has one lit path for all HD geometry, and 53 of 57 ship meshes fall to `albedo * ambient` (dark hull)
 - Two general classification rules (SHO-declared families, `output_lit_by` dataflow) were tried and rejected as classifiers
-- Specular exponent is a labelled stand-in at 32; the disc actually uses 5, 10, 32, 26.156, 40 and 300
+- Specular exponent is **wired per material now, 2026-09-01 - see below.** `mesh.wgsl`'s shared `32` remains only the fallback, for a literal `0.0` (patched at draw time) or a material the decoder could not resolve.
 - Tangent frame, a paraboloid reflection map, and shadow maps are still missing inputs
+- Checking the Lambert sun diffuse fix against RPCS3 pixel-for-pixel is blocked on [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)'s own open item: `viewProj` is not located yet, so the capture harness has no working camera. Not this thread's dependency to close.
+- The `0.0` bucket (573 of ~1,050 non-Zone chains, the largest) falls back to the shared `32` rather than resolving to a real value - closing it needs the `patch fslot` to `const@slot` decoder `rcsmaterial.md` already flags as owed.
+- `200`/`250`/`260`/`35` are wired as read (confidence 80, same as `32`/`40`/`300`) but not independently confirmed the way the ship's `40` is - tracing each chain's `DP3`'s other operand would tell a real half-vector specular term from a Fresnel/falloff curve sharing the same idiom, and is the one thing that could still retract a wired value rather than just add confidence to it.
+
+**2026-09-01: wired.** `fragment::Program::specular_exponent()` reimplements
+the sweep (`crates/formats/src/rcsmaterial/fragment.rs`), gated on a
+saturated-dot-fed `LG2`, on the chain reaching the program's output, and -
+found while validating the disc-wide numbers - on the exponent literal not
+being `log2(e)` (the `exp(x)` idiom sharing the same three instructions,
+matched exactly rather than by magnitude). A disc-wide re-sweep with all
+three gates does not reproduce the six originally published counts and says
+why not: `5`/`10` turn out to be entirely Zone's `rim^10`/`rim^5` (nothing
+survives excluding Zone-declaring blocks), and the largest surviving bucket
+(`0`, 573 blocks) reads as `SpecularPower` patched at draw time rather than a
+real value - `pow(x, 0) = 1` is not a plausible authored shininess. Full
+numbers and reasoning in
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), the
+paragraph after the original sweep.
+
+**`mesh::rcs::skin::roles` now calls `specular_exponent()` per material slot
+and `mesh.wgsl` reads `in.specular_exponent` instead of a literal `32.0`** -
+`GpuVertex::specular_exponent`, threaded through `Surface` exactly as
+`slots`/`roles` already are. Every resolved non-zero value is wired as read,
+following CLAUDE.md's "recovered and faithful values/wiring is always
+preferred" rather than held back a second time for an uncertainty (some of
+`200`/`250`/`260`/`35` might be a Fresnel term, not a shininess) already
+priced into the confidence-80 label. A literal `0.0` and an unresolved
+material both fall back to the shared `32` stand-in
+(`mesh::DEFAULT_SPECULAR_EXPONENT`).
+
+**Verified against real disc data two ways, and a screenshot is the weaker
+of the two here.** Building every `.rcsmodel`/`.vex` pair on the disc through
+the real `mesh::rcs::build` path (643 checked) finds exactly **two** with a
+resolved exponent other than `32.0`: `tech_de_ra/track.vex` and its reversed
+twin, each carrying one material -
+`materials/adverts/nr_greyscale2colour.rcsmaterial` - at `300.0`, on 2 chunk
+surfaces. Talon's Junction and the `assegai` ship (`ship.vex`) both resolve
+**every** material slot to exactly `32.0`, so a same-camera before/after
+screenshot of either is pixel-identical - not because the wiring is inert
+(the numeric check above proves it threads a real value through end to end),
+but because `32.0` is genuinely the disc's own commonest value and the
+fallback happens to equal it on both assets checked visually. A screenshot of
+`tech_de_ra`'s advert billboard would show a real difference and was tried,
+not found: `--race --track /data/environments/tech_de_ra/track.vex` at the
+start line does not frame it, and `oag-view --mesh ... --only
+nr_greyscale2colour` matches nothing - `--only` filters on node name or
+texture label, neither of which is the material name, and `--draws` finds no
+`greyscale`/`advert` string either, so the 2 chunk surfaces this material
+covers may not be reachable from this circuit's node tree at all (the
+"unresolved node phenomenon" `rcsmodel_ground_truth.rs` already tracks
+disc-wide). Not chased further - a two-chunk advert billboard is not worth
+the node-tree archaeology this would take. An isolated 40.0-vs-32.0 shader
+literal on the ship's hull
+(not the real per-material path, a scoped one-line experiment made and
+reverted the same session) did show a real, if subtle, difference - 0.06 % of
+a frame's pixels (732 of 1,175,040, 1440x816), concentrated on
+specular-highlight edges - which is the shape a correct wiring's visible
+effect should have when it does land on a non-default value.
 
 ## Next Steps
 
-- Check the Lambert sun diffuse fix against RPCS3 pixel-for-pixel (not yet done)
+- Check the Lambert sun diffuse fix against RPCS3 pixel-for-pixel - blocked, see Open above; pick up [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md) first
+- Decode the `patch fslot` to `const@slot` table (`rcsmaterial.md`, already flagged as owed) to close the `0`-bucket theory directly and let those materials resolve to a real value instead of the `32` fallback
+- Trace what each surviving chain's `DP3`'s other operand is, to independently confirm `200`/`250`/`260`/`35` (or retract them) the way the ship's `40` already is

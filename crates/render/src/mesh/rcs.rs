@@ -239,7 +239,13 @@ pub fn build_scene(
                 report.no_stride += 1;
                 continue;
             };
-            let surface = surface(&model, mesh, &target.textures, &target.material_slots);
+            let surface = surface(
+                &model,
+                mesh,
+                &target.textures,
+                &target.material_slots,
+                &target.material_specular_exponent,
+            );
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));
@@ -337,12 +343,18 @@ fn surface(
     mesh: &rcsmodel::Mesh,
     skin: &[Option<std::sync::Arc<ModelTexture>>],
     material_slots: &[u32],
+    material_specular_exponent: &[f32],
 ) -> Surface {
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
     // `DEFAULT` for a slot with no reading, which is what every title but HD
     // has and what an HD material whose microcode did not trace answers.
     let roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
+    // Same fallback rule, same reason - see `mesh::vertex::GpuVertex::specular_exponent`.
+    let specular_exponent = material_specular_exponent
+        .get(slot)
+        .copied()
+        .unwrap_or(crate::mesh::DEFAULT_SPECULAR_EXPONENT);
     let material = model.material_of(mesh);
     let blend = match material.map(rcsmodel::Material::blend) {
         // Only a painted surface can be blended - see above.
@@ -360,6 +372,7 @@ fn surface(
         blend,
         cutout,
         roles,
+        specular_exponent,
     }
 }
 
@@ -437,6 +450,9 @@ struct Surface {
     /// What the material's own microcode says its two texture units are for,
     /// packed as [`slots`] and handed to every vertex this surface emits.
     roles: u32,
+    /// This material's specular exponent, handed to every vertex this
+    /// surface emits - see `mesh::vertex::GpuVertex::specular_exponent`.
+    specular_exponent: f32,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -579,6 +595,7 @@ fn emit(
             // `mesh.wgsl` multiplies this by the lightmap's own alpha, so
             // `1.0` here leaves that gate untouched.
             sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
+            specular_exponent: surface.specular_exponent,
         });
     }
     let centre = centre / points.len() as f32;
@@ -715,7 +732,10 @@ fn build_with_options(
     let picks = picks(&model, &material_variants, textures);
     let (skins, seconds) = skin(&model, &picks, textures, &mut report);
     // After the variants, because the roles are read off the resolved one.
-    let mut material_slots = roles(&model, &material_variants, &picks, &seconds, textures);
+    let skin::Roles {
+        packed: mut material_slots,
+        specular_exponent: material_specular_exponent,
+    } = roles(&model, &material_variants, &picks, &seconds, textures);
     // **The coordinate's orientation, off the resolved *vertex* block** rather
     // than the fragment one the roles come from, and folded into the same word
     // because it is the same kind of statement: what this material's own
@@ -753,6 +773,7 @@ fn build_with_options(
     out.alpha_test_ref = cutout::reference(&model, &mut report);
     out.material_variants = material_variants;
     out.material_slots = material_slots;
+    out.material_specular_exponent = material_specular_exponent;
 
     for (index, node) in nodes
         .iter()
@@ -807,7 +828,13 @@ fn build_with_options(
                 continue;
             };
 
-            let surface = surface(&model, mesh, &out.textures, &out.material_slots);
+            let surface = surface(
+                &model,
+                mesh,
+                &out.textures,
+                &out.material_slots,
+                &out.material_specular_exponent,
+            );
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));

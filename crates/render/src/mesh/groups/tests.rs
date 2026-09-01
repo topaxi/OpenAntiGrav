@@ -65,6 +65,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
             xform: 0,
             sun_mask: 1.0,
             slots: 0,
+            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
         }));
         model.indices.extend(start..start + 3);
         model.draws.push(DrawCall {

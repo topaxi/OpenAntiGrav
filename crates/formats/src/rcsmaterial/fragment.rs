@@ -342,6 +342,187 @@ impl Program {
         self.taint(false)
     }
 
+    /// The literal exponent of a `pow(N.H, e) = exp2(e * log2(N.H))` chain -
+    /// a saturated `DP3` feeding `LG2` then a `MUL` by a constant then
+    /// `EX2` - when that chain's result reaches the program's output
+    /// colour.
+    ///
+    /// This is the specular term's exponent on every lit material read so
+    /// far: `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have
+    /// no Lambert diffuse either" reads the ship's own `pow(N.H, 40)` this
+    /// way (`@0x40 LG2 / @0x43 MUL by 40 / @0x46 EX2`), and `mesh.wgsl`
+    /// hard-codes the same idiom's exponent at a shared `32` - which the same
+    /// page's disc sweep shows is only the commonest of six values (`5`,
+    /// `10`, `32`, `26.156`, `40`, `300`).
+    ///
+    /// **Three filters, none optional, because the bare `LG2`/`MUL`/`EX2`
+    /// shape alone is not specific to specular at all.** Measured disc-wide
+    /// while building this method: the identical three instructions raise a
+    /// texture sample to a power on `track_surface`'s own lightmap curve
+    /// (`pow(lightmap.rgb, k)`, `renderer.md`'s block #9), compute `exp(x)`
+    /// off a saturated dot product by the unrelated `log2(e)` constant, and
+    /// raise several other quantities to a power that reachability alone
+    /// does not separate from a real specular term - excluding only
+    /// Zone-declaring blocks left thousands of chains a reachability filter
+    /// could not distinguish from the roughly 1,800 the disc sweep this
+    /// method reproduces actually found. So:
+    ///
+    /// - [`Self::lg2_reads_a_saturated_dot`] requires the `LG2` to read a
+    ///   register a saturated `DP3` most recently wrote - the `N.H`/`N.L`
+    ///   idiom every specular and sun-diffuse read in `renderer.md` shares,
+    ///   which a texture-fed power curve does not.
+    /// - The exponent literal is rejected when it is `log2(e)` (within
+    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, and `mesh.wgsl`'s own fog
+    ///   curve names this exact constant for this exact reason ("a MUL by
+    ///   log2(e) into EX2_SAT"). A saturated dot product raised through
+    ///   `exp()` rather than `pow()` - a Fresnel-style falloff, say - shares
+    ///   both other gates without being this idiom, and `1.4427` is not a
+    ///   shininess.
+    /// - [`Self::reaches_output`] requires the chain's result to survive to
+    ///   the last instruction that writes a colour channel - the same
+    ///   instruction [`Self::taint`]'s own `last` picks out, for the same
+    ///   reason: most lit programs end `MOV H0.w, {const}`, alpha from a
+    ///   constant, and stopping at the final instruction would miss a
+    ///   colour written earlier and never touched again.
+    ///
+    /// Chains are tried **last first**: the specular term is characteristically
+    /// added after the diffuse sum (`renderer.md`'s own block reads all place
+    /// it after the `N.L` term), so the chain closest to the end is the
+    /// likeliest candidate, and the first one found passing every filter wins.
+    ///
+    /// `None` when no such chain passes every filter - every unlit and
+    /// emissive program, and any block this pattern does not fit.
+    ///
+    /// **A literal `0.0` is not filtered here and is a real answer this
+    /// method can return.** `pow(x, 0) = 1` is not a plausible authored
+    /// shininess, and a disc-wide sweep found it the single largest bucket
+    /// (573 of ~1,050 non-Zone chains) - the strongest candidate for
+    /// `SpecularPower` patched at draw time rather than baked in the file,
+    /// matching this page's own RGBE and sun-direction readings of other
+    /// "patched at draw time" constants. Deciding whether to trust a literal
+    /// zero is a caller's policy, not this method's: it reports what the file
+    /// says, faithfully, and `0.0` is what the file says there.
+    ///
+    /// Confidence 80, inherited from the disc sweep this reproduces: the
+    /// pattern is instruction shape, not block meaning, so a non-specular
+    /// power fed by a saturated dot product and reaching the output - a
+    /// Fresnel-style term using an actual power rather than `exp()`, say -
+    /// would read as this method's answer too. Not observed on the materials
+    /// read by hand so far, but not ruled out either.
+    #[must_use]
+    pub fn specular_exponent(&self) -> Option<f32> {
+        for i in (0..self.instructions.len()).rev() {
+            if self.instructions[i].name() != Some("LG2") || !self.lg2_reads_a_saturated_dot(i) {
+                continue;
+            }
+            let lg2_dst = (self.instructions[i].dst, self.instructions[i].dst_half);
+            let Some(mul_i) = self.instructions[i + 1..].iter().position(|insn| {
+                insn.name() == Some("MUL")
+                    && insn.constant.is_some()
+                    && insn
+                        .operands()
+                        .any(|s| matches!(s, Source::Register { index, half } if (index, half) == lg2_dst))
+            }) else {
+                continue;
+            };
+            let mul_i = i + 1 + mul_i;
+            let mul = &self.instructions[mul_i];
+            let exponent = mul
+                .constant
+                .expect("checked by the position() predicate above");
+            let mul_dst = (mul.dst, mul.dst_half);
+            let Some(ex2_i) = self.instructions[mul_i + 1..].iter().position(|insn| {
+                insn.name() == Some("EX2")
+                    && insn
+                        .operands()
+                        .any(|s| matches!(s, Source::Register { index, half } if (index, half) == mul_dst))
+            }) else {
+                continue;
+            };
+            let ex2_i = mul_i + 1 + ex2_i;
+            if self.reaches_output(ex2_i) {
+                // The scalar rides in whichever lane the `MUL` actually
+                // reads; the others are the constant slot's unused padding.
+                let value = exponent
+                    .into_iter()
+                    .find(|v| *v != 0.0)
+                    .unwrap_or(exponent[0]);
+                // **A third false-positive class, found on a disc-wide sweep
+                // and not a guess: `LG2` / `MUL log2(e)` / `EX2` is not this
+                // idiom at all.** `EX2(log2(e) * LG2(x)) = exp(x)`, and
+                // `mesh.wgsl`'s own fog curve names exactly this constant for
+                // exactly this reason ("a MUL by log2(e) into EX2_SAT"). A
+                // saturated dot product raised through `exp()` instead of
+                // `pow()` is a Fresnel-style falloff sharing the specular
+                // idiom's two gates without being it, not a shininess of
+                // `1.4427`. Skip and keep looking, rather than returning a
+                // value that is not the exponent this method promises.
+                if (value - std::f32::consts::LOG2_E).abs() > 1e-3 {
+                    return Some(value);
+                }
+            }
+        }
+        None
+    }
+
+    /// Whether the `LG2` at `at` reads a register a saturated `DP3` most
+    /// recently wrote - the `N.H`/`N.L` idiom `renderer.md` reads under
+    /// every specular and sun-diffuse term, and the discriminator a bare
+    /// `LG2`/`MUL`/`EX2` instruction shape does not carry on its own: see
+    /// [`Self::specular_exponent`]'s own doc comment for what this excludes
+    /// and why it has to.
+    ///
+    /// `false` when the `LG2`'s own operand is not a register (an
+    /// interpolator or an inline constant cannot be a saturated dot
+    /// product's result) or when nothing before it in the program wrote
+    /// that register at all.
+    fn lg2_reads_a_saturated_dot(&self, at: usize) -> bool {
+        let Some(Source::Register { index, half }) = self.instructions[at].operands().next() else {
+            return false;
+        };
+        self.instructions[..at]
+            .iter()
+            .rev()
+            .find(|insn| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))
+            .is_some_and(|insn| insn.name() == Some("DP3") && insn.saturate)
+    }
+
+    /// Whether the value the instruction at `from` writes survives, by
+    /// register identity, to the last instruction that writes a colour
+    /// channel - [`Self::taint`]'s own definition of "the output", seeded
+    /// on one register instead of on an interpolator.
+    ///
+    /// Half and full registers are merged into one file here, the same
+    /// simplification [`Self::taint`] makes and for the same reason: this is
+    /// a yes/no reachability question, where merging two registers can only
+    /// widen what is found reachable, never narrow it - a safe
+    /// over-approximation. [`Self::output_texels`] keeps them apart because
+    /// that question extracts a specific channel rather than asking whether
+    /// one is reached at all.
+    fn reaches_output(&self, from: usize) -> bool {
+        let seed = &self.instructions[from];
+        let mut tainted: [[bool; 4]; 64] = [[false; 4]; 64];
+        for (channel, slot) in tainted[usize::from(seed.dst) & 63].iter_mut().enumerate() {
+            *slot = seed.mask & (1 << channel) != 0;
+        }
+        let mut reaches = false;
+        for insn in &self.instructions[from + 1..] {
+            let from_tainted = insn.operands().any(|s| {
+                matches!(s, Source::Register { index, .. } if tainted[usize::from(index) & 63].iter().any(|b| *b))
+            });
+            let dst = usize::from(insn.dst) & 63;
+            for (channel, slot) in tainted[dst].iter_mut().enumerate() {
+                if insn.mask & (1 << channel) != 0 {
+                    *slot = from_tainted;
+                }
+            }
+            if insn.mask & 0b0111 != 0 {
+                reaches = from_tainted;
+            }
+        }
+        reaches
+    }
+
     fn taint(&self, through_textures: bool) -> u16 {
         // `tainted[reg]` is a bit per channel per interpolator, flattened: the
         // register file is small and 16 interpolators fit a `u16` each.

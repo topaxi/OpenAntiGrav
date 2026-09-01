@@ -1658,6 +1658,87 @@ stays as the stand-in, now labelled as one. Confidence 80 - the sweep keys on
 an instruction pattern rather than on each block's meaning, so some of the 5s
 and 10s may be another `pow`.
 
+**Reimplemented and disc-verified (2026-09-01), and the ambiguity above is
+worse than "some of the 5s and 10s".** `fragment::Program::specular_exponent`
+ports the sweep: an `LG2`/`MUL`/`EX2` chain whose `LG2` reads a register a
+saturated `DP3` most recently wrote (the `N.H`/`N.L` idiom every specular and
+sun-diffuse read on this page shares), returned only when the chain's result
+reaches the program's output colour (the same "last colour write" rule
+[`output_lit_by`'s `taint`](../../../../crates/formats/src/rcsmaterial/fragment.rs)
+already uses). Verified against the ship's own worked example
+(`pow(N.H, 40)`, `@0x40`/`@0x43`/`@0x46` above) and against a synthetic case
+built from `track_surface`'s own lightmap curve, which the bare instruction
+shape alone does not exclude (see below) - both pass as unit tests.
+
+**A disc-wide sweep with both gates does not reproduce the six counts
+above, and the gap is now understood well enough to say why, not just that
+it fails.** Population, excluding Zone-declaring blocks:
+
+```text
+0          573 blocks   35     4
+1.4426949   19          200    8
+250         4           260    24
+300         10          32     409
+40          2
+```
+
+Three findings, not one:
+
+1. **The `0` bucket - the largest - is very likely the "patched at draw
+   time" case this page's own RGBE and sun-direction readings already
+   established** (`c[464]`/`c[463]` above): a material that *declares*
+   `SpecularPower` (`0x81e0e773`, first named on this page) but leaves its
+   file-static literal at `0.0`, patched to a real value at export or draw
+   time. `pow(x, 0) = 1` is not a plausible authored shininess, so these 573
+   blocks are the strongest candidates for "the exponent is not in the file
+   at all" rather than for a fifth real value. Unverified beyond the
+   plausibility of the theory - closing it needs the `patch fslot` to
+   `const@slot` decoder `rcsmaterial.md` already flags as owed, not a guess
+   dressed as a finding.
+2. **`5` and `10` do not survive excluding Zone at all** - every occurrence
+   of either literal in a saturated-dot-fed, output-reaching chain is on a
+   Zone-declaring block, i.e. the rim exponents. That means the published
+   `5`/`10` counts either did not exclude Zone, or were reading a different,
+   narrower population than "every material" states - either way, "5 and 10
+   are specular values" does not hold up against this reimplementation.
+3. **`1.4426949`, `200`, `250`, `260` and `35` are new, and none of them is a
+   plausible shininess.** `1.4426949` is `log2(e)`, the idiom for computing
+   `exp(x) = exp2(x * log2(e))` rather than `pow(x, e)` - a real, different
+   use of the identical three instructions that the saturated-dot gate does
+   not exclude, because an `exp()` curve can just as well be fed by a
+   saturated dot product (a falloff, not a power). `200`/`250`/`260`/`35`
+   read as further instances of the same problem: a Fresnel-style or
+   falloff term sharing the specular idiom's shape and its `N`-something
+   operand, not a shininess value in that range.
+
+**Net at that point: `32`, `40` and `300` were the only values this
+reimplementation still found plausible as real specular exponents**
+(`26.156` did not recur in this sweep at all - a scope difference from the
+earlier one, not investigated further).
+
+**Wired 2026-09-01.** `1.4426949` (`log2(e)`) turned out not to need a
+policy decision at all: it is a *misclassification*, not an ambiguous real
+value - the identical instruction shape computing `exp(x)` rather than
+`pow(x, e)` - and `Program::specular_exponent` now excludes it structurally
+(a third gate, matching the constant exactly rather than filtering by
+magnitude; see its own doc comment). That leaves `200`/`250`/`260`/`35`
+genuinely unresolved as "confirmed real" versus "another pow sharing the
+idiom's shape", exactly as `32`/`40`/`300` were - and per this project's own
+rule, a confidence-80 reading that has survived every discriminator found so
+far is wired as read, not held back a second time for an uncertainty already
+priced into that number. `mesh::rcs::skin::roles` now calls
+`specular_exponent()` per material slot, trusting every answer **except a
+literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
+that specific value keeps reading as `SpecularPower` patched at draw time
+(finding 1 above) rather than as a sixth real constant - so `0.0` and every
+material the decoder could not resolve at all fall back to the shared `32`
+stand-in (`mesh::vertex::GpuVertex::specular_exponent`,
+`mesh::DEFAULT_SPECULAR_EXPONENT`), and every other resolved value is
+carried straight into `mesh.wgsl`'s `pow(ndh, in.specular_exponent)`. The
+`patch fslot` to `const@slot` decoder would still let the `0.0` bucket close
+outright rather than fall back - that is the next step this leaves open, not
+a reason to hold up the read the disc already gives for the rest.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
