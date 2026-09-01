@@ -72,40 +72,87 @@ pub(super) fn suits(page: &Page) -> bool {
 /// renderer and the layout belongs here, so neither has to hold the other. A
 /// column never needed it - rows start at one x - and a strip cannot be laid out
 /// without it.
+///
+/// `frame` supplies the two colours a capture settled: [`super::Frame::ink`]
+/// (`HD_Grey`) for an unselected tab and [`super::Frame::tab_selected`]
+/// (`HD_Blue`) for the selected one. A colour that is `None` - a title with no
+/// frame at all, or a served archive whose globals do not carry the name -
+/// skips its own fill rather than inventing one, the same rule
+/// [`super::read_frame`] already applies to a mark whose texture did not
+/// decode.
 pub(super) fn draw(
     menu: &Menu,
     skin: &Skin,
     strip: Strip,
     measure: &dyn Fn(&str) -> f32,
+    frame: &super::Frame,
 ) -> Vec<Draw> {
     let scale = skin.row_scale();
     let gap = skin.strip_gap();
+    let (tab_left_pad, tab_top_pad) = skin.tab_pad();
+    let tab_height = skin.tab_height();
+    let (underline_width, underline_height, underline_offset_y) = skin.underline();
 
     let mut out = Vec::new();
     let mut x = strip.x;
     for (index, entry) in menu.page().entries.iter().enumerate() {
         let label = entry.label();
+        let selected = index == menu.selected();
+        let width = measure(label) * scale;
+
+        // The tab behind the label. **Approximated**: the real one has its
+        // top-right corner chamfered, which this build's `Draw`/`Quad`
+        // pipeline cannot draw without a new primitive - see `Skin`'s
+        // `TAB_LEFT_PAD` doc for the measurement this rectangle is standing
+        // in for and the confidence it carries.
+        let fill = if selected {
+            frame.tab_selected
+        } else {
+            frame.ink
+        };
+        if let Some(color) = fill {
+            out.push(Draw::Fill {
+                rect: [
+                    x - tab_left_pad,
+                    strip.y - tab_top_pad,
+                    tab_left_pad + width,
+                    tab_height,
+                ],
+                color,
+            });
+        }
+
         out.push(Draw::Text {
             x,
             y: strip.y,
             scale,
-            // The same two states a row has, and the same reasoning: the
-            // original brightens the selected entry rather than putting a bar
-            // behind it. What "brightened" is on this title is unmeasured, so
-            // `Skin::selected` supplies this build's white - see its docs. The
-            // unselected colour is the widget's own and is not this build's
-            // choice at all.
-            color: if index == menu.selected() {
-                skin.selected()
-            } else {
-                strip.color
-            },
+            // Every entry is this same colour, selected or not - a 2026-09-01
+            // capture found no text brightening at all, only the tab fill
+            // above changing. See `Strip::color`'s own doc for the reading
+            // this replaced.
+            color: skin.normal(),
             border: None,
             align: Align::Left,
             text: label.to_string(),
             wrap_width: None,
         });
-        x += measure(label) * scale + gap;
+
+        // The underline mark, selected entry only. Its own colour is
+        // measured rather than assumed: the one capture with a visible mark
+        // shows it in the label's own white, not the tab's `HD_Blue`.
+        if selected {
+            out.push(Draw::Fill {
+                rect: [
+                    x,
+                    strip.y + underline_offset_y,
+                    underline_width,
+                    underline_height,
+                ],
+                color: skin.normal(),
+            });
+        }
+
+        x += width + gap;
     }
     out
 }

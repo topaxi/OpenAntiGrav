@@ -635,6 +635,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         x: 160.0,
         y: 125.0,
         color: 0xFF70_5070,
+        // Confirmed live, 2026-09-01 - see "The FE Style switch is live"
+        // below.
+        selected_fill: Some("HD_Blue"),
     }),
 };
 ```
@@ -653,9 +656,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 | `menu_font` | **no** | `None` | 90 | No `Menu` slot in any language plugin. |
 | `text` | yes | `0xFFFFFFFF` | 92 | `TextColor`, all six - one of the globals the FE style does *not* move. |
 | `title` | yes | `0xFF646464` | 90 | `TitleColor`, all six - but see the caveat. |
-| `selected` | measured field | same as `text` | 88 | Capture (2026-09-01): text does not brighten on selection at all - the highlight is a background tab colour (`HD_Blue`) and an underline mark, not this field. See below. |
+| `selected` | measured field | `None`, unchanged | 88 | Capture (2026-09-01): text does not brighten on selection at all on the strip idiom, so `strip::draw` no longer reads this field for a strip's text - see below. Still `None` in the title package; `rows::draw` (both PSP titles) still reads it and is untouched. |
 | `transition_secs` | yes | `0.5` | 70 | Dominant `<LeftLayer transition=>`; see the warning. |
-| `strip` | yes | `(160, 125, 0xff705070)` | 92 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml`. |
+| `strip` | yes | `(160, 125, 0xff705070, Some("HD_Blue"))` | 92 / 90 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml` (92); `selected_fill`'s name is the same capture as `selected` above (90). |
 
 ### `first_row_y` is absent, and why
 
@@ -948,21 +951,35 @@ rule that picks `DATA00` for the root, is still open - what changed is that
 "the archive" is now known to be a *per-file* question, not a single answer
 that resolves everything downstream of it.
 
-**`MenuSkin::selected` is resolved, and it is not what the field was for.**
-The capture shows unselected and selected entries in the *identical* white
-`TextColor` - "CAMPAIGN" (selected) and "RACEBOX" (not) read as the same
-white, at the same weight, in both the Fury and the HD shot. What changes is
-the entry's own background: a right-slanted parallelogram tab, filled
-`HD_Grey` when unselected and `HD_Blue` when selected (red on Fury, teal on
-HD - exactly the archive's own value, matching the 25 `highlightColor`
-attributes already read as `HD_Blue`), plus a short underline mark under the
-selected label alone. **So brightening the text was the wrong mechanism**:
-`Skin::selected()` should read the same as `Skin::normal()` (both `TextColor`,
-unconditionally), and the highlight belongs on a background shape `strip::draw`
-does not draw at all today - open implementation work, not yet done.
-**Confidence 88**: read directly off two captures, not inferred; short of the
-top band only because it is one binary's one screen kind, not corroborated
-against a second widget instance with a different anchor.
+**`MenuSkin::selected` is resolved, and it is not what the field was for -
+and this is now implemented, not just documented.** The capture shows
+unselected and selected entries in the *identical* white `TextColor` -
+"CAMPAIGN" (selected) and "RACEBOX" (not) read as the same white, at the same
+weight, in both the Fury and the HD shot. What changes is the entry's own
+background: a tab, filled `HD_Grey` when unselected and `HD_Blue` when
+selected (red on Fury, teal on HD - exactly the archive's own value, matching
+the 25 `highlightColor` attributes already read as `HD_Blue`), plus a short
+underline mark under the selected label alone, in the label's own white
+rather than either fill colour. **So brightening the text was the wrong
+mechanism**: `strip::draw` no longer reads `Skin::selected()` for a strip's
+text at all - every entry draws in `Skin::normal()` - and the highlight moved
+entirely onto a new background fill. `Skin::selected()` itself is untouched:
+`rows::draw` (both PSP titles) still reads it, and nothing here says whether
+its own "brighten toward white" reading is right for a column, only that it
+is wrong for a strip. **Confidence 88** for the finding; the fill and
+underline colours (`HD_Grey`/`HD_Blue`, read live off the served archive's
+own globals - `oag_title::MenuStrip::selected_fill`, resolved the same way
+`crate::loading`'s own palette is) are **confirmed exact reads**, matched to
+the capture's own pixels to the byte. The tab's *shape* is not: nothing on
+disc states one at all, and what shipped is a plain rectangle sized from
+`measure(label)` plus a left/top pad, at **confidence 55** - the real tab's
+top-right corner is chamfered, `17`x`7` pixels in a `1278`-wide capture
+against a `188`-`232`-pixel-wide tab, and reproducing that cut needs a shear
+this build's `Draw`/`Quad` pipeline does not have (a whole-quad `rotation`
+only, see `crates/game/src/ui.wgsl`) - deferred rather than approximated
+further, with the raw measurements left in `crates/game/src/menu/skin.rs`'s
+own doc comment for whoever adds it. `crates/game/src/menu/strip.rs`,
+`crates/game/src/menu/frame.rs`, `crates/game/src/menu/skin.rs`.
 
 **No carousel, confirmed rather than assumed.** Stepping the highlight to
 `RECORDS` - the last of the five main-menu entries - leaves it sitting at its

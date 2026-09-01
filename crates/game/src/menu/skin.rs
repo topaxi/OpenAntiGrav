@@ -49,6 +49,49 @@ const OUR_LEADING: f32 = 6.0;
 /// one ends and the next begins.
 const STRIP_GAP: f32 = 24.0;
 
+/// A strip entry's own background tab, and the mark under a selected one -
+/// both **ours**, and both approximated rather than authored.
+///
+/// Nothing on disc states any of this: a `<HorizMenu>` gives a position and a
+/// colour and nothing about a tab shape at all - see [`Strip::color`]. A
+/// 2026-09-01 RPCS3 capture (`data/reference/hd-menu-highlight-shift/00-campaign.png`,
+/// 1278x718, HD style) is what these six numbers come from, converted into
+/// this build's own 480x272 the same way [`STRIP_GAP`] is: against that
+/// capture's own tab-to-tab gap (9px), which stands in for [`STRIP_GAP`]
+/// itself since nothing disc-authored is in the same image to calibrate
+/// against. **Confidence 55** - one capture, one entry measured twice
+/// (`CAMPAIGN` and `RACEBOX` agreed to the pixel), and a ruler that is this
+/// build's own chosen constant rather than the disc's.
+///
+/// Raw pixel measurements, for whoever revisits this: tab `188x38` (`RACEBOX`)
+/// and `232x38` (`CAMPAIGN`), left padding before the label `6`, top padding
+/// above it `5`, right padding **`~0`** (a tab's flat width is its label's own
+/// measured width plus the left padding and nothing past it - the chamfer
+/// below eats what would otherwise be a right pad). Underline `13x5`, `8`
+/// below the label's own cap-height baseline, starting flush with the
+/// label's own left edge. Font metrics: cap height `14`.
+///
+/// **Deliberately not modelled**: the tab's top-right corner is chamfered,
+/// `17` wide by `7` tall in the same capture - cut, not rounded, and small
+/// against the tab's own `188`-`232` width. Landed as a plain rectangle
+/// instead of the true shape because reproducing the cut needs a shear this
+/// build's `Draw`/`Quad` pipeline does not have (`rect` plus a whole-quad
+/// `rotation` only - see `crates/game/src/ui.wgsl`), which is a render
+/// primitive change and a session of its own. See
+/// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
+const TAB_LEFT_PAD: f32 = 16.0;
+/// See [`TAB_LEFT_PAD`].
+const TAB_TOP_PAD: f32 = 13.0;
+/// See [`TAB_LEFT_PAD`].
+const TAB_HEIGHT: f32 = 101.0;
+/// See [`TAB_LEFT_PAD`].
+const UNDERLINE_WIDTH: f32 = 35.0;
+/// See [`TAB_LEFT_PAD`].
+const UNDERLINE_HEIGHT: f32 = 13.0;
+/// How far below the label's own `y` the underline mark starts. See
+/// [`TAB_LEFT_PAD`].
+const UNDERLINE_OFFSET_Y: f32 = 56.0;
+
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
 /// **Ours**, and derived rather than a constant: a title can state where its
@@ -180,8 +223,8 @@ impl Skin {
         self.skin.strip.map(|strip| Strip {
             x: strip.x * self.from_theirs.0,
             y: strip.y * self.from_theirs.1,
-            // The widget's own colour, not `TextColor`: HD authors
-            // `0xff705070` here against a white `TextColor`.
+            // The widget's own colour - see `Strip::color`'s own doc for what
+            // this is not, corrected 2026-09-01 by a capture.
             color: argb(strip.color),
         })
     }
@@ -191,6 +234,33 @@ impl Skin {
     #[must_use]
     pub(super) fn strip_gap(&self) -> f32 {
         STRIP_GAP * self.from_ours.0
+    }
+
+    /// A strip entry's own tab: how far its fill extends left of the label and
+    /// above it, and how tall it stands. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_pad(&self) -> (f32, f32) {
+        (
+            TAB_LEFT_PAD * self.from_ours.0,
+            TAB_TOP_PAD * self.from_ours.1,
+        )
+    }
+
+    /// A strip entry's own tab height. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_height(&self) -> f32 {
+        TAB_HEIGHT * self.from_ours.1
+    }
+
+    /// The selected entry's underline mark: its own size, and how far below
+    /// the label's `y` it starts. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn underline(&self) -> (f32, f32, f32) {
+        (
+            UNDERLINE_WIDTH * self.from_ours.0,
+            UNDERLINE_HEIGHT * self.from_ours.1,
+            UNDERLINE_OFFSET_Y * self.from_ours.1,
+        )
     }
 
     /// The right-hand edge a row's value is anchored to. Ours; see
@@ -344,8 +414,16 @@ pub struct Strip {
     pub x: f32,
     /// Top of the entries' line box. Authored.
     pub y: f32,
-    /// What an unselected entry is drawn in. Authored, and **not**
-    /// [`Skin::normal`].
+    /// The widget's own colour. Authored, and **not what an entry's text is
+    /// drawn in.**
+    ///
+    /// It was read that way until a 2026-09-01 capture: every entry, selected
+    /// or not, is the same white [`Skin::normal`] (`FEGlobals->TextColor`),
+    /// and what this widget's own colour is *for* is still open - it names
+    /// neither the text nor either style's tab fill (`HD_Grey`/`HD_Blue`, see
+    /// [`super::Frame::ink`] and [`super::Frame::tab_selected`]). Kept because
+    /// it is still what the widget authors, not because anything still reads
+    /// it for text or fill.
     pub color: [f32; 4],
 }
 

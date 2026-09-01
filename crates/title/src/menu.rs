@@ -100,11 +100,33 @@ pub struct MenuStrip {
     pub y: f32,
     /// The entries' own colour. Authored, the widget's own `color`.
     ///
-    /// **Not [`MenuSkin::text`], and the two really do differ**: Wipeout HD's
-    /// `FEGlobals->TextColor` is `0xFFFFFFFF` while its `<HorizMenu>` widgets
-    /// say `0xff705070`. A strip drawn in `TextColor` would be drawing a colour
-    /// its own widget overrides.
+    /// **Not what a strip's text is drawn in - a 2026-09-01 capture settled
+    /// that.** The reasoning once here was that this must override
+    /// [`MenuSkin::text`], since a widget declaring its own colour would
+    /// otherwise be pointless - plausible, and wrong: an RPCS3 capture of the
+    /// real menu shows every entry, selected or not, in the same white
+    /// `FEGlobals->TextColor`, not in this widget's `0xff705070`. What that
+    /// literal *is* for is still open - it names neither the text nor either
+    /// style's tab fill (`HD_Grey`/`HD_Blue`, see [`Self::selected_fill`]) - and
+    /// the field stays because it is still what the widget authors, just no
+    /// longer read as the text colour. See `docs/formats/hd-frontend.md`.
     pub color: Argb,
+    /// The name of the global a *selected* entry's own tab fills with, when
+    /// the disc states one. `None` on a title with no strip at all.
+    ///
+    /// A name, not a colour, for the reason [`crate::loading::Palette`] is:
+    /// the value is the FE style rather than a fixed table.
+    /// `FEGlobals->HD_Blue` is `0xffac0717` (Fury, red) on `DATA00` and
+    /// `0xff8ac0ca` (HD, teal) on `DATA06` - a colour recorded here would pin
+    /// one archive's look into a build that has to draw both. The unselected
+    /// fill needs no equivalent field: it is `FEGlobals->HD_Grey`, which
+    /// `oag_game::menu::frame::Frame::ink` already resolves per served
+    /// archive off the frame screen's own marks. Both fills are **confirmed
+    /// exact reads**, not approximations: a 2026-09-01 capture's own pixels
+    /// are `HD_Grey`/`HD_Blue` to the byte on the served archive. The tab's
+    /// *shape* is a separate, much rougher measurement - see
+    /// `docs/formats/hd-frontend.md`.
+    pub selected_fill: Option<&'static str>,
 }
 
 /// One title's menu presentation.

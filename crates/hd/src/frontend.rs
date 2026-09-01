@@ -173,6 +173,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         x: 160.0,
         y: 125.0,
         color: 0xFF70_5070,
+        // Confirmed live, 2026-09-01: `Additional -> Settings`'s own "Menu
+        // Style" row switches this exact global on screen, in the same frame
+        // the value changes. See `docs/formats/hd-frontend.md`.
+        selected_fill: Some("HD_Blue"),
     }),
 };
 

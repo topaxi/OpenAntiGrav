@@ -638,9 +638,15 @@ pub fn load_shell(
     // style, black and red in `DATA00` against white and teal in `DATA06`. A
     // menu that looks like the wrong game is then a line in the boot report
     // rather than a mystery. See [`crate::menu::frame`].
-    let frame = crate::menu::read_frame(&screens, &sprites, space, front_end.menu_frame);
+    let frame = crate::menu::read_frame(
+        &screens,
+        &sprites,
+        space,
+        front_end.menu_frame,
+        front_end.menu.strip.and_then(|strip| strip.selected_fill),
+    );
     if let Some(name) = front_end.menu_frame {
-        report.push(format!("menu frame {name}: {}", describe_frame(&frame)));
+        report.push(format!("menu frame {name}: {}", frame.describe()));
     }
     report.push(steps.describe("the boot's first half"));
 
@@ -1416,32 +1422,6 @@ fn load_second_movie(
 /// [`oag_assets::Archives::read_name`], which searches the *bulk* archive
 /// first because that is the right default for a race: same size is not same
 /// bytes, and a front-end image should come off the front end's own archive.
-/// One line saying what a title's menu frame came out as.
-///
-/// The colour is the point: it is the only thing in the frame that a *different
-/// archive* would have made different, so a report that names it is what tells
-/// a reader which FE style they are looking at without opening the disc.
-fn describe_frame(frame: &crate::menu::Frame) -> String {
-    let hex = |color: [f32; 4]| {
-        let byte = |channel: f32| (channel.clamp(0.0, 1.0) * 255.0).round() as u8;
-        format!(
-            "#{:02x}{:02x}{:02x}",
-            byte(color[0]),
-            byte(color[1]),
-            byte(color[2])
-        )
-    };
-    let clear = match &frame.clear {
-        Some(crate::frontend::Draw::Fill { color, .. }) => format!("clears to {}", hex(*color)),
-        _ => "no clear".to_string(),
-    };
-    let ink = frame.ink.map_or_else(
-        || String::from("no single ink"),
-        |ink| format!("ink {}", hex(ink)),
-    );
-    format!("{clear}, {} mark(s), {ink}", frame.marks.len())
-}
-
 fn load_sprites(
     archives: &mut oag_assets::Archives,
     screens: &Screens,

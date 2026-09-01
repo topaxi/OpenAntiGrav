@@ -27,7 +27,7 @@
 //! textures did not decode is a missing rule rather than a wrong one.
 
 use crate::frontend::{Draw, Space};
-use crate::screen::{Screens, argb_to_rgba};
+use crate::screen::{Screens, argb_to_rgba, parse_argb};
 use crate::sprite::Sheet;
 
 /// One title's menu frame, split by what may come between the two halves.
@@ -60,6 +60,18 @@ pub struct Frame {
     /// keeps whatever it would have used. No title but HD has a frame at all
     /// today, so "they all agree" has one case behind it.
     pub ink: Option<[f32; 4]>,
+    /// A selected strip entry's own tab fill, resolved off this screen's
+    /// globals - [`oag_title::MenuStrip::selected_fill`]'s name, looked up the
+    /// same way `crate::loading`'s own palette resolves its four names.
+    ///
+    /// **Not derived from a mark**, unlike [`Self::ink`]: no widget on `FE
+    /// Screen` references `HD_Blue`, so there is nothing to read consensus
+    /// off. The global is read by the name the title package supplies
+    /// instead, which is why this needs that name passed in rather than
+    /// discovering it the way `ink` does. `None` when the title names no
+    /// strip, or names one whose global this screen's globals table does not
+    /// carry.
+    pub tab_selected: Option<[f32; 4]>,
 }
 
 impl Frame {
@@ -67,6 +79,43 @@ impl Frame {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.clear.is_none() && self.marks.is_empty()
+    }
+
+    /// One line saying what this frame came out as.
+    ///
+    /// The colours are the point: they are the only things in the frame that
+    /// a *different* archive would have made different, so a report that
+    /// names them is what tells a reader which FE style they are looking at
+    /// without opening the disc. Moved here from `boot.rs`, 2026-09-01, where
+    /// it was the only piece of that file talking about a type it does not
+    /// own.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let hex = |color: [f32; 4]| {
+            let byte = |channel: f32| (channel.clamp(0.0, 1.0) * 255.0).round() as u8;
+            format!(
+                "#{:02x}{:02x}{:02x}",
+                byte(color[0]),
+                byte(color[1]),
+                byte(color[2])
+            )
+        };
+        let clear = match &self.clear {
+            Some(Draw::Fill { color, .. }) => format!("clears to {}", hex(*color)),
+            _ => "no clear".to_string(),
+        };
+        let ink = self.ink.map_or_else(
+            || String::from("no single ink"),
+            |ink| format!("ink {}", hex(ink)),
+        );
+        let tab_selected = self.tab_selected.map_or_else(
+            || String::from("no strip highlight"),
+            |color| format!("strip highlight {}", hex(color)),
+        );
+        format!(
+            "{clear}, {} mark(s), {ink}, {tab_selected}",
+            self.marks.len()
+        )
     }
 }
 
@@ -76,10 +125,29 @@ impl Frame {
 /// parsed front end has no screen by that name, or when the screen authors
 /// neither a clear nor an image - three different absences that all mean the
 /// same thing to a caller: draw the menus on what the pass cleared to.
+///
+/// `selected_fill` is [`oag_title::MenuStrip::selected_fill`]'s own name -
+/// `None` on a title with no strip - looked up in `screens`' globals
+/// directly rather than off this screen's marks, since it is resolved
+/// independently of whether a frame screen exists at all.
 #[must_use]
-pub fn read(screens: &Screens, sprites: &Sheet, space: Space, name: Option<&str>) -> Frame {
+pub fn read(
+    screens: &Screens,
+    sprites: &Sheet,
+    space: Space,
+    name: Option<&str>,
+    selected_fill: Option<&str>,
+) -> Frame {
+    let tab_selected = selected_fill
+        .and_then(|global| screens.globals.get(global))
+        .and_then(|value| parse_argb(value))
+        .map(argb_to_rgba);
+
     let Some(screen) = name.and_then(|name| screens.by_name(name)) else {
-        return Frame::default();
+        return Frame {
+            tab_selected,
+            ..Frame::default()
+        };
     };
 
     let clear = screen.clear.map(|argb| Draw::Fill {
@@ -140,5 +208,10 @@ pub fn read(screens: &Screens, sprites: &Sheet, space: Space, name: Option<&str>
         .filter(|_| !marks.is_empty())
         .map(argb_to_rgba);
 
-    Frame { clear, marks, ink }
+    Frame {
+        clear,
+        marks,
+        ink,
+        tab_selected,
+    }
 }

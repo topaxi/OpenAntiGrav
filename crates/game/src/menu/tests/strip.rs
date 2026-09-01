@@ -104,13 +104,107 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
     );
 }
 
-/// A strip entry is drawn in the widget's colour, not in `FEGlobals->TextColor`.
+/// Every fill in draw order, as `(rect, colour)` - a strip entry's own tab
+/// and, on the selected one, its underline mark.
+fn fills(list: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
+    list.iter()
+        .filter_map(|draw| match draw {
+            Draw::Fill { rect, color } => Some((*rect, *color)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A frame carrying the two colours a real boot resolves off `HD_Grey` and
+/// `HD_Blue` - arbitrary numbers here, chosen only to be distinct from each
+/// other and from `skin.normal()`'s white.
+fn frame_with_fills() -> Frame {
+    Frame {
+        ink: Some([0.4, 0.4, 0.4, 1.0]),
+        tab_selected: Some([0.54, 0.75, 0.79, 1.0]),
+        ..Frame::default()
+    }
+}
+
+/// Every strip entry is the same text colour, selected or not.
 ///
-/// The two differ on this disc - `0xff705070` against a white `TextColor` - so
-/// this is the assertion that catches a strip wired to `Skin::normal`, which
-/// would look plausible and be wrong.
+/// **Corrected 2026-09-01, by a capture.** This test used to assert the
+/// opposite - that an unselected entry takes the widget's own literal colour
+/// (`0xff705070`) rather than `FEGlobals->TextColor` - on the reasoning that a
+/// widget declaring its own colour must be overriding the global one.
+/// Plausible, and wrong: an RPCS3 capture of the real menu shows every entry,
+/// selected or not, in the same white `TextColor`. What `0xff705070` is for
+/// is still open; it is not this. See `docs/formats/hd-frontend.md`.
 #[test]
-fn an_unselected_entry_takes_the_widgets_colour_rather_than_textcolor() {
+fn every_entry_is_the_same_text_colour_selected_or_not() {
+    let mut menu = Menu::new(built_in());
+    menu.set_strip_layout(true);
+    let skin = hd_skin();
+    let list = draw_list(
+        &menu,
+        &skin,
+        &no_bindings,
+        &measure,
+        None,
+        &frame_with_fills(),
+    )
+    .flatten();
+
+    let rows: Vec<_> = labels(&list)
+        .into_iter()
+        .filter(|(_, y, _, _)| (y - 125.0).abs() < f32::EPSILON)
+        .collect();
+    assert_eq!(rows.len(), 4, "RACE, REMIX, OPTIONS and QUIT: {rows:?}");
+    for (_, _, color, text) in &rows {
+        assert_eq!(*color, skin.normal(), "{text} should be skin.normal()");
+    }
+
+    // And the widget's own colour is still what `Skin::strip` reads - it is
+    // this test's job to prove nothing reaches for it as text, not that the
+    // field is gone.
+    let authored = skin.strip().expect("HD authors a strip").color;
+    assert!(
+        rows.iter().all(|(_, _, color, _)| *color != authored),
+        "nothing here should still be drawn in the widget's own colour"
+    );
+}
+
+/// A selected entry's tab is the frame's accent; every other entry's is its
+/// ink - the two colours a 2026-09-01 capture confirmed are exact reads of
+/// `HD_Blue` and `HD_Grey` on the served archive.
+#[test]
+fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
+    let mut menu = Menu::new(built_in());
+    menu.set_strip_layout(true);
+    let skin = hd_skin();
+    let frame = frame_with_fills();
+    let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame).flatten();
+
+    // Four entries: one selected tab, three unselected, plus the underline.
+    let tabs = fills(&list);
+    assert_eq!(tabs.len(), 5, "four tabs and one underline: {tabs:?}");
+    let accents = tabs
+        .iter()
+        .filter(|(_, color)| *color == frame.tab_selected.unwrap())
+        .count();
+    let inks = tabs
+        .iter()
+        .filter(|(_, color)| *color == frame.ink.unwrap())
+        .count();
+    // The underline is drawn in `skin.normal()`, not either fill colour, so
+    // it counts toward neither bucket and the two sum to four rather than
+    // five.
+    assert_eq!(accents, 1, "one selected tab: {tabs:?}");
+    assert_eq!(inks, 3, "three unselected tabs: {tabs:?}");
+}
+
+/// A frame with neither colour draws no tabs at all, and the labels and the
+/// underline still draw - the same "skip rather than invent" rule a mark
+/// with no placement already follows, applied to the fill that has a title
+/// package field behind it and not to the one measured directly off a
+/// capture.
+#[test]
+fn with_no_frame_colours_the_tabs_are_skipped_but_the_text_and_underline_still_draw() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
     let skin = hd_skin();
@@ -124,25 +218,22 @@ fn an_unselected_entry_takes_the_widgets_colour_rather_than_textcolor() {
     )
     .flatten();
 
-    let authored = skin.strip().expect("HD authors a strip").color;
-    let unselected: Vec<_> = labels(&list)
+    let tabs = fills(&list);
+    assert_eq!(
+        tabs.len(),
+        1,
+        "no ink or accent, so no tab fills - only the underline: {tabs:?}"
+    );
+    assert_eq!(
+        tabs[0].1,
+        skin.normal(),
+        "the underline's own colour needs neither: {tabs:?}"
+    );
+    let rows: Vec<_> = labels(&list)
         .into_iter()
         .filter(|(_, y, _, _)| (y - 125.0).abs() < f32::EPSILON)
-        .filter(|(_, _, color, _)| *color != skin.selected())
         .collect();
-    assert_eq!(
-        unselected.len(),
-        3,
-        "one of four is selected: {unselected:?}"
-    );
-    for (_, _, color, text) in unselected {
-        assert_eq!(color, authored, "{text} is drawn in the widget's colour");
-    }
-    assert_ne!(
-        authored,
-        skin.normal(),
-        "if these ever agree, this test stops proving anything"
-    );
+    assert_eq!(rows.len(), 4, "the text draws regardless: {rows:?}");
 }
 
 /// A page with a value column stays a column, on a strip title too.
