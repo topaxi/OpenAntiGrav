@@ -159,6 +159,22 @@ hash-images:
 # `.rcsmodel`'s geometry and `.gtf` (HD's own PS3 texture container) are both
 # read - see docs/formats/hd-status.md.
 #
+# `remix` skips straight into a Race Remix - a track from one title racing
+# with a craft from another:
+#
+#     just play remix
+#
+# Wipeout 2048's own Altima circuit with Wipeout Pure's craft, HUD and grid
+# roster - `race::Options.craft_source`
+# ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md))
+# doing the same job `--source` does for the track, and `--race` for the
+# same reason `2048` above needs it: neither 2048 nor Pure's own front end is
+# what this keyword is demonstrating. Anything passed after `remix` still
+# reaches the binary, so `just play remix --craft-source data/images/hdfury-ps3-eu-dec.iso`
+# swaps the craft's title without touching the track - clap takes the last
+# `--craft-source`, the same override rule every other passthrough flag here
+# already follows.
+#
 # A bare flag (`--ticks 5`) still gets the EU default; anything
 # else (a path or `image:entry` spec) is passed straight through unchanged,
 # so `just play data/images/foo.chd --ticks 5` still works.
@@ -228,6 +244,30 @@ play *ARGS:
                 exit 1
             fi
             args=("$img" "${args[@]:1}")
+            ;;
+        remix)
+            track_src="data/extracted/vita/PCSF00007"
+            craft_src="data/images/pure-psp-eu.chd"
+            # Same missing-data message the `2048` case above gives, for the
+            # same reason: this is the track source here too.
+            if [ ! -f "$track_src/base/PSP2/data.psarc" ]; then
+                echo "$track_src/base/PSP2/data.psarc is missing." >&2
+                if [ -f "data/images/2048-vita-eu.pkg" ]; then
+                    echo "The package is there but not extracted. Decrypt and" >&2
+                    echo "unpack it into $track_src/base first - see" >&2
+                    echo "docs/formats/2048-status.md and data/README.md." >&2
+                else
+                    echo "No 2048 package at all under data/images/; this recipe" >&2
+                    echo "reads your own copy and none is shipped. See data/README.md." >&2
+                fi
+                exit 1
+            fi
+            if [ ! -f "$craft_src" ]; then
+                echo "$craft_src is missing; this recipe reads your own copy and" >&2
+                echo "none is shipped. See data/README.md." >&2
+                exit 1
+            fi
+            args=("$track_src" "--craft-source" "$craft_src" "--race" "${args[@]:1}")
             ;;
     esac
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"
