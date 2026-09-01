@@ -27,6 +27,11 @@ mod load;
 pub(crate) mod menus;
 #[path = "session/placeholder.rs"]
 mod placeholder;
+// Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
+// unaliased throughout `session::menus`, and a sibling module of the same
+// name would shadow it at every one of those call sites.
+#[path = "session/remix.rs"]
+mod remix_menu;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {

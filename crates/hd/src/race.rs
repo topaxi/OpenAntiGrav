@@ -52,6 +52,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
+    guest_roster: None,
 };
 
 /// The twelve teams a Wipeout HD/Fury race can pick, spelled the way

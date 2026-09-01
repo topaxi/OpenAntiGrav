@@ -549,18 +549,21 @@ is set, so `--race --team Auricom2048` still fails exactly as before; a
 `--team` CLI user must spell the combined id (`Auricom2048\1`) directly. See
 `race-remix-backend-lands-menu-wiring-is-next.md`.
 
-**Still open: the 12 HD-derived teams.** These need
-[`HD_SHIP_DIR`](../crates/2048/src/race.rs) instead of
-[`HANDLING_DIR`](../crates/2048/src/race.rs) entirely - a different tree, not
-a missing subdirectory level - which `TeamVariants` does not address and
-nothing has wired yet. Picking one of the 12 as CRAFT TITLE in Race Remix
-still fails the same way it did before this fix.
+**2026-09-01, later still: the 12 HD-derived teams are fixed too.**
+`oag_title::GuestRoster` (`crates/title/src/race/variants.rs`) is the sibling
+type `TeamVariants` needed for this - a *different* directory question, not
+a suffix-join one, since HD_SHIP_DIR serves both the ship model and the
+tuning in one tree where the native five split across two. `2048`'s own
+`GUEST_TEAM_VARIANTS`/`GUEST_ROSTER` wire it; a full race loads on any of
+the twelve, pinned in
+`race_remix_ground_truth::a_guest_team_races_standalone_on_2048_without_a_craft_split`.
+Race Remix additionally folds these twelve into "Wipeout HD"'s own CRAFT
+TITLE entry rather than showing them under 2048 - see
+`race-remix-backend-lands-menu-wiring-is-next.md` and
+[ADR-0035](../docs/architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md).
 
 ## Open
 
-- **12 of 2048's 17 catalogue-offered teams still do not resolve** - the
-  HD-derived roster, which needs `HD_SHIP_DIR` rather than `HANDLING_DIR`.
-  The other 5 (the native roster) are fixed - see the dated section above.
 - Section B's vertex declaration is found and its offsets are cross-checked
   (see "What is left" above). `normal`'s type (5) and `Uv1`'s (8) are both
   decoded now - confidence 96 each, see the 2026-08-27 section above - but

@@ -90,6 +90,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_sky: None,
     // Pure authors one roster and no numbered variant of anything in it.
     team_variants: None,
+    guest_roster: None,
 };
 
 /// Pure's Zone milestone announcer.

@@ -1486,8 +1486,7 @@ per-submesh material binding, all closed 2026-08-27 - plus `PVRTII4BPP`,
 almost every 2048 texture's pixel format, closed the same day. The result
 paints 2,782 of the circuit's 2,800 draws and all 16 of the craft's. See
 [2048-status](../formats/2048-status.md) for the full evidence and what is
-still open (`tangent`'s type nibble, `.envsettings`, `track.pvs`'s header,
-the HD-derived roster's `ship_dir` addressing).
+still open (`tangent`'s type nibble, `.envsettings`, `track.pvs`'s header).
 
 ### What Race Remix does today
 

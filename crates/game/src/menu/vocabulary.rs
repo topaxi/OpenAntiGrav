@@ -131,9 +131,15 @@ pub enum ValueSource {
     /// [`crate::catalogue`].
     Teams,
     /// Every title this machine can currently open a source for, deduplicated
-    /// by title. Race Remix's own axis: which title a TRACK or a CRAFT
-    /// picker below is scoped to - see [`crate::launcher::distinct_titles`].
+    /// by title. `TRACK TITLE`'s own axis - see
+    /// [`crate::launcher::distinct_titles`].
     Titles,
+    /// [`Self::Titles`]' sibling for `CRAFT TITLE`, not the same list: it
+    /// also offers "Wipeout HD" when this machine has Wipeout 2048 but no
+    /// real HD source, since 2048 reships HD/Fury's own roster under a tree
+    /// of its own - see `oag_title::RaceDefaults::guest_roster` and
+    /// `session::menus::Session::craft_title_choices`.
+    CraftTitles,
     /// The circuits the *currently chosen* `TRACK TITLE` offers - unlike
     /// [`Self::Tracks`], resupplied every time `remix.track_title` changes
     /// rather than fixed for the session.
@@ -169,6 +175,7 @@ impl ValueSource {
             Self::FrontEndStyles => "front_end_styles",
             Self::Teams => "teams",
             Self::Titles => "titles",
+            Self::CraftTitles => "craft_titles",
             Self::RemixTracks => "remix_tracks",
             Self::RemixTeams => "remix_teams",
             Self::RaceVariant => "race_variant",
@@ -189,6 +196,7 @@ impl ValueSource {
             "front_end_styles" => Some(Self::FrontEndStyles),
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
+            "craft_titles" => Some(Self::CraftTitles),
             "remix_tracks" => Some(Self::RemixTracks),
             "remix_teams" => Some(Self::RemixTeams),
             "race_variant" => Some(Self::RaceVariant),

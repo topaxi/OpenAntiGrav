@@ -86,7 +86,9 @@ pub struct ShipPaths {
 }
 
 mod announcer;
+mod variants;
 pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
+pub use variants::{GuestRoster, TeamVariant, TeamVariants, VariantJoin};
 
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,71 +201,12 @@ pub struct RaceDefaults {
     /// shapes; see [`VariantJoin`] for why they combine differently rather
     /// than sharing one join rule.
     pub team_variants: Option<&'static TeamVariants>,
-}
-
-/// A team that carries more than one selectable directory - see
-/// [`RaceDefaults::team_variants`].
-///
-/// **Two measured shapes, not one imagined in advance**: 2048's own roster
-/// (a *numbered* level - fighter/agility/speed/prototype under
-/// `<team>\<1..4>`) and HD/Fury's twelve (a *suffixed* one - classic HD,
-/// Fury's concept reskin and Fury's nitro reskin as `<team>`, `<team>_c1`,
-/// `<team>_n1`). [`VariantJoin`] is what keeps the second measurement from
-/// forcing the first title's shape onto it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TeamVariants {
-    /// The base team ids this applies to - every other team on the title
-    /// resolves with no second directory at all.
-    pub teams: &'static [&'static str],
-    /// Every selectable directory, in document order - what to append to a
-    /// team's own id, and what to call the result to a player.
-    pub variants: &'static [TeamVariant],
-    /// How a variant's suffix combines with a team's own id. See
-    /// [`VariantJoin`].
-    pub join: VariantJoin,
-}
-
-/// One of a team's selectable directories.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TeamVariant {
-    /// What [`VariantJoin`] appends to the team's own id. Empty for "the
-    /// team's own directory, unsuffixed" - HD/Fury's classic skin is exactly
-    /// that, not a fourth thing beside the two reskins.
-    pub suffix: &'static str,
-    /// What to call it to a player.
-    pub label: &'static str,
-}
-
-/// How [`TeamVariant::suffix`] combines with a team's own id.
-///
-/// A join rule rather than a single format string because the two titles
-/// measured disagree about more than the labels: 2048's numbered level is a
-/// **new path segment** (`feisar2048\3`, the id two levels deep, recovered
-/// and named in `oag_2048::race`'s own docs); HD/Fury's reskin is a
-/// **suffix on the same segment** (`auricom_c1`, one directory, a longer
-/// name). Folding both into one join would make one of the two titles the
-/// example the type was designed from - the same failure [ADR-0009] names.
-///
-/// [ADR-0009]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0009-multi-game-fanout.md
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VariantJoin {
-    /// `<team>\<suffix>` - 2048's native roster.
-    Subdirectory,
-    /// `<team><suffix>` - HD/Fury's roster, `suffix` already carrying
-    /// whatever separator it needs (`_c1`, not `c1`).
-    Suffix,
-}
-
-impl VariantJoin {
-    /// Combines a team's own id with one of its variants.
-    #[must_use]
-    pub fn combine(self, team: &str, suffix: &str) -> String {
-        match self {
-            Self::Subdirectory if suffix.is_empty() => team.to_string(),
-            Self::Subdirectory => format!(r"{team}\{suffix}"),
-            Self::Suffix => format!("{team}{suffix}"),
-        }
-    }
+    /// A second roster this title carries besides its own, reusing another
+    /// title's team identities verbatim. See [`GuestRoster`].
+    ///
+    /// `None` on every title but Wipeout 2048, whose twelve HD-derived teams
+    /// are the one measured case.
+    pub guest_roster: Option<&'static GuestRoster>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by
@@ -479,6 +422,10 @@ impl ZonePalette {
 
 impl RaceDefaults {
     /// Where this title keeps the models a craft is made of, as one value.
+    ///
+    /// See `variants.rs`, split out under this crate's 1,000-line ceiling,
+    /// for the per-team siblings this has: [`Self::team_variants_for`],
+    /// [`Self::ships_for`], [`Self::handling_dir_for`].
     #[must_use]
     pub fn ships(&self) -> ShipPaths {
         ShipPaths {

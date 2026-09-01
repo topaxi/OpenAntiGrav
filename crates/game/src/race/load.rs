@@ -242,7 +242,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let stats_name = handling::entry_name_in(craft_title.race.handling_dir, &team);
+    let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
     let stats_blob = read(craft_of(&mut craft, &mut archives), &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
@@ -411,7 +411,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let liveries = livery::load(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
-        craft_title.race.ships(),
+        craft_title.race,
         options.mode,
         craft_title.flare,
         options.lod,

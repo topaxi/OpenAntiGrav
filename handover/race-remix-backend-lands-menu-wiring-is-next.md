@@ -224,6 +224,52 @@ all found by id; pinned in
 DLC-added twelve (HD circuits reshipped, see `oag_2048::lib`'s own doc) are
 not checked by this test - base alone was sufficient to prove the axis.
 
+## 2026-09-01, later still: 2048's reused HD/Fury roster folded into "Wipeout HD"
+
+User feedback on the fix directly above: "the 2048 craft selection lists
+2048 and HD/Fury crafts, the HD/Fury crafts should either be tucked into the
+HD/Fury selection (deduplicated, but offered either when HD/Fury is present
+or the 2048 DLCs) and their variant should work too of course." Corrected in
+the same turn: the twelve HD-named teams ship in 2048's **base** package, not
+its DLC packs - having 2048 at all means having them.
+
+Two independent pieces, planned via `EnterPlanMode` and approved before
+either landed - see [ADR-0035](../docs/architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md)
+for the full reasoning:
+
+- **The twelve now resolve at all.** `oag_title::RaceDefaults` had one
+  `ship_dir`/`handling_dir` pair per title; 2048's pointed at its native
+  tree only, so every one of the twelve failed to load regardless of which
+  menu offered it. Fixed with `oag_title::GuestRoster` (a sibling type to
+  `TeamVariants`, not a fold into it - the two answer different questions,
+  see the ADR) and three new `RaceDefaults` methods
+  (`team_variants_for`/`ships_for`/`handling_dir_for`) that route an
+  already-combined id to the guest directory when it recognises one.
+  General infrastructure, not Race Remix-specific: `--race --source <2048>
+  --team Assegai_c1` works standalone, pinned in
+  `race_remix_ground_truth::a_guest_team_races_standalone_on_2048_without_a_craft_split`.
+- **The picker fold.** `Session::craft_backing` resolves CRAFT TITLE's
+  "Wipeout HD" pick to a real HD source when this machine has one, to
+  Wipeout 2048's own package otherwise - a real disc always wins, matching
+  `Archives::open_with_packs`'s own "the disc always wins a collision"
+  precedent. 2048's own CRAFT TITLE list now shows only its five native
+  teams; the twelve reused ones show only under "Wipeout HD", never both.
+  `variant_choices`/`combine_variant` (shared with the ordinary RACE page)
+  switched to `team_variants_for` so a guest team's VARIANT row resolves the
+  same three suffixes whichever source backs it. Confined to Race Remix's
+  CRAFT TITLE/TEAM/VARIANT rows by explicit user instruction mid-thread -
+  a direct launch or the ordinary RACE page is untouched.
+
+`session/menus.rs` and `crates/title/src/race.rs` both crossed 1,000 lines
+adding this; split into `session/remix.rs` (module name `remix_menu` -
+`oag_game::remix` was already imported unaliased throughout `menus.rs`) and
+`crates/title/src/race/variants.rs` respectively, both moves with no
+behaviour change beyond what this section describes. `resolve_craft_backing`/
+`craft_title_choices` are free functions over `&[Candidate]` rather than
+`Session` methods reading `self.titles` directly, specifically so they are
+unit-testable against hand-built candidates with no live window - see
+`session/remix/tests.rs`.
+
 ## Open
 
 1. ~~Interactive verification.~~ **Done** - see the section above. Two real
@@ -250,17 +296,19 @@ not checked by this test - base alone was sufficient to prove the axis.
    on plurality, so this clarifies rather than supersedes it) and
    `docs/overview/roadmap.md`'s M8 section carries a "What Race Remix does
    today" line and subsection alongside Pure/HD/2048's own.
-6. ~~2048 as CRAFT TITLE.~~ **Partly fixed, through the menu only.**
-   `oag_title::RaceDefaults::team_variants` plus a VARIANT row on both the
-   RACE and RACE REMIX pages (menu.toml, `session/menus.rs`) fixes the
-   native 5-team roster from the menu - a full race loads on a combined id
+6. ~~2048 as CRAFT TITLE.~~ **Fixed, both halves - through the menu, not
+   through `race::load` itself.** `oag_title::RaceDefaults::team_variants`/
+   `guest_roster` plus a VARIANT row on both the RACE and RACE REMIX pages
+   fix both rosters from the menu - a full race loads on a combined id
    neither title's `DEFAULT_TEAM` reaches, pinned in
-   `race_remix_ground_truth::a_team_variant_races_on_both_join_shapes`.
-   `race::load` itself still knows nothing of `team_variants` - `--race
-   --team Auricom2048` fails exactly as before; a CLI user must spell the
-   combined id (`Auricom2048\1`) directly. The 12 HD-derived teams still
-   fail either way (a different tree, `HD_SHIP_DIR` vs `HANDLING_DIR`, that
-   `team_variants` does not address); tracked in the other thread.
+   `race_remix_ground_truth::a_team_variant_races_on_both_join_shapes` (native)
+   and `::a_guest_team_races_standalone_on_2048_without_a_craft_split` (guest).
+   The twelve HD-derived teams are additionally folded into "Wipeout HD"'s
+   own CRAFT TITLE entry rather than shown flat under 2048 - see the dated
+   section above and [ADR-0035](../docs/architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md).
+   `race::load` itself still knows nothing of either axis - `--race --team
+   Auricom2048` fails exactly as before; a CLI user must spell the combined
+   id (`Auricom2048\1`, `Assegai_c1`) directly.
 
 Items 2 and 4 are documented, deliberate scope cuts, not defects. Nothing
 in this thread is blocking; it can close once item 2 is either confirmed as

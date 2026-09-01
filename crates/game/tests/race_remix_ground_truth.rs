@@ -253,6 +253,46 @@ fn a_team_variant_races_on_both_join_shapes() {
     }
 }
 
+/// **2048's own copy of Wipeout HD/Fury's roster races, standalone.** No
+/// Race Remix craft split here - `source` alone is 2048's package, exactly
+/// what `--race --source <2048> --team Assegai_c1` does, which is the
+/// `oag_title::RaceDefaults::guest_roster` axis this build did not carry
+/// before: 2048 has one `ship_dir`/`handling_dir` pair, pointed at its own
+/// native roster's tree, and these twelve teams live in a second tree,
+/// `oag_2048::race::HD_SHIP_DIR`, entirely.
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita/"]
+fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
+    let source = root().join("data/extracted/vita/PCSF00007");
+    if !source.join("base/PSP2/data.psarc").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but the 2048 package is not extracted"
+        );
+        println!("skipping: 2048 package not extracted under data/extracted/vita/");
+        return;
+    }
+    let loaded = load(race::Options {
+        source: source.display().to_string(),
+        team: Some("Triakis_n1".to_string()),
+        class: SpeedClass::Venom,
+        opponents: false,
+        ..race::Options::default()
+    });
+    assert!(
+        loaded.liveries[0].hull.indices.len() > 3,
+        "2048's own Triakis_n1 (Fury Nitro) decoded to no hull geometry"
+    );
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line == "racing on Wipeout 2048"),
+        "expected 2048's own title in the report, not a Race Remix craft split; was {:#?}",
+        loaded.report
+    );
+}
+
 /// `remix::catalogue` - the RACE REMIX page's own reader - offers HD's real
 /// circuits and roster, independent of the menu machinery that calls it.
 #[test]

@@ -200,7 +200,7 @@ values_from = "remix_tracks"
 kind = "choice"
 label = "CRAFT TITLE"
 setting = "remix.craft_title"
-values_from = "titles"
+values_from = "craft_titles"
 
 [[page.entry]]
 kind = "choice"

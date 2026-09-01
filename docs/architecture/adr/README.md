@@ -45,6 +45,7 @@ out to be wrong.
 | [0032](0032-render-ahead-into-a-ring.md) | A thread renders ahead into a lock-free ring and the callback only copies out | Accepted; supersedes [ADR-0031](0031-wait-briefly-for-the-mixer-lock.md) and [ADR-0018](0018-audio-mixer-architecture.md)'s `Output` shape |
 | [0033](0033-external-key-material-for-decryption.md) | External key material lives under `data/keys/`, gitignored, and its absence is never an error | Accepted |
 | [0034](0034-a-race-may-open-two-titles-at-once.md) | A race may open two titles at once; nothing dispatches through either | Accepted; clarifies [ADR-0022](0022-title-packages.md) |
+| [0035](0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md) | A Race Remix craft pick may fall back to a title that reships the same roster | Accepted |
 
 ## Format
 
