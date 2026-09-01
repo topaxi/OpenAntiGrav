@@ -1168,11 +1168,16 @@ paths.
 - [ ] Networking
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
 - [ ] Wipeout Pure: its own physics, HUD, boost plume, Zone mode, reset volumes
-- [~] Wipeout HD / Fury - **a circuit draws** (2026-08-17). Its disc opens, its
-      archives read, and `oag-view --track` renders Talon's Junction's spline
-      straight off the PS3 disc. See [hd-status](../formats/hd-status.md) and
-      the section below
-- [ ] Wipeout 2048
+- [~] Wipeout HD / Fury - **a race drives and draws textured** (2026-08-18).
+      Its disc opens, its archives read, and `--race` drives Talon's Junction
+      on its own collision soup with an eight-team grid, geometry and `.gtf`
+      textures painted on both craft and circuit. See
+      [hd-status](../formats/hd-status.md) and the section below
+- [~] Wipeout 2048 - **a race drives and draws textured** (2026-08-31). Its
+      Vita package opens, `just play 2048 --race` drives Altima on its own
+      collision, and craft and circuit both paint (2,782 of 2,800 circuit
+      draws, all 16 craft draws). See [2048-status](../formats/2048-status.md)
+      and the section below
 - [ ] Omega Collection, if feasible
 
 Release order, because each title is the closest relative of the one before it.
@@ -1455,6 +1460,28 @@ What this does **not** touch is the per-team paint: each `PI_Team` declares six
 `detonator`) naming a `texturelocation`, and nothing collects or draws them -
 the same gap the Pulse roadmap item above records. Nor is `Unlock` read on any
 title, so everything declared is offered.
+
+#### Textures land, the same day
+
+`.gtf` (7,333 files, the PS3's own texture container) is read: a material
+names its `.gtf` at `+0x58`, and the alpha in that texture is where every
+see-through surface's coverage comes from. Together with the material table's
+state word, that is a textured, blended HD circuit - see
+[hd-status.md](../formats/hd-status.md#what-is-genuinely-new).
+
+### What 2048 does today
+
+`just play 2048 --race` drives Altima off the Vita package's own collision
+soup, textured. Getting there needed three binary formats that changed
+underneath HD's own asset tree - the `WO Track` spline (version `0x107`,
+control point shrunk to 96 bytes), a `track_col.col` collision container of
+its own, and `.rcsmodel`'s normal, diffuse UV, material table and
+per-submesh material binding, all closed 2026-08-27 - plus `PVRTII4BPP`,
+almost every 2048 texture's pixel format, closed the same day. The result
+paints 2,782 of the circuit's 2,800 draws and all 16 of the craft's. See
+[2048-status](../formats/2048-status.md) for the full evidence and what is
+still open (`tangent`'s type nibble, `.envsettings`, `track.pvs`'s header,
+the HD-derived roster's `ship_dir` addressing).
 
 ---
 

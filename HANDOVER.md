@@ -273,6 +273,7 @@ keeps the mechanism documented for a need heading-pinning cannot reach.
 
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
+- [Race Remix's backend lands - two sources, one race; the menu wiring (title pickers, launch action) is next](handover/race-remix-backend-lands-menu-wiring-is-next.md)
 - [HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read](handover/hds-sprite-flare-reads-oversized-and-the-tuning.md)
 - [HD's glow draws, and the coordinate it samples on is the one thing not read](handover/hds-glow-draws-and-the-coordinate-it-samples.md)
 - [2048's four Vita eboots are decrypted and imported; loose ends from getting there](handover/2048s-vita-eboots-are-imported-re-not-started.md)

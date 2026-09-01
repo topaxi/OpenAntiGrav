@@ -390,6 +390,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) race: bool,
 
+    /// A second disc image or extracted directory the craft, HUD and grid
+    /// roster load from instead of `source` - a Race Remix from the command
+    /// line. Left out, the craft comes from `source` like every other race.
+    /// See `oag_game::remix::Remix`.
+    #[arg(long)]
+    pub(crate) craft_source: Option<String>,
+
     /// The track's `.vex` entry name, for either way into a race. The same name
     /// on both **Pulse** releases, PSP and PS2.
     ///

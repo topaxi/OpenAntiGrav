@@ -11,7 +11,9 @@ mod audio;
 mod cameras;
 mod environment;
 mod geometry;
+mod roster;
 mod surfaces;
+use crate::remix::craft_of;
 use environment::hd_sky_model;
 
 /// Loads a track, a ship and its handling out of a disc image.
@@ -42,10 +44,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // outright, which refused a Pure disc by name (`WrongTitle`) - so `--race`
     // and the menus' own `Launch Game` could not reach a second title at all,
     // however much of the rest of the path was ready for one.
-    let opened = crate::title::open_source(&options.source, packs)?;
-    let title = opened.title;
+    //
+    // **Two sources when `craft_source` names a Race Remix** - see
+    // `crate::remix::Remix`. `archives`/`title` stay the track's; a
+    // craft-governed load reads `craft_title` and `craft_of(&mut
+    // craft, &mut archives)` instead.
+    let remix = crate::remix::Remix::open(&options.source, options.craft_source.as_deref(), packs)?;
+    let (opened, craft_opened, title, craft_title) = remix.into_parts();
     let mut archives = opened.archives;
+    let mut craft = craft_opened.map(|opened| opened.archives);
     report.push(format!("racing on {}", title.name));
+    if craft.is_some() {
+        report.push(format!("craft from {}", craft_title.name));
+    }
     report.push(archives.layout.describe());
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
@@ -213,20 +224,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // **The team this source spells that way**, resolved here for the same
     // reason the circuit above is: this is the first point the title is known.
-    // See [`Options::team`].
+    // Craft content, so it follows `craft_title` - see [`Options::team`].
     let team = match &options.team {
         Some(asked) => asked.clone(),
         None => {
             report.push(format!(
                 "no team named: {}'s own default, {}",
-                title.name, title.race.team
+                craft_title.name, craft_title.race.team
             ));
-            title.race.team.to_string()
+            craft_title.race.team.to_string()
         }
     };
 
-    let stats_name = handling::entry_name_in(title.race.handling_dir, &team);
-    let stats_blob = read(&mut archives, &stats_name)?;
+    let stats_name = handling::entry_name_in(craft_title.race.handling_dir, &team);
+    let stats_blob = read(craft_of(&mut craft, &mut archives), &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
     // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in
@@ -373,60 +384,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let (chase, chase_close, internal) =
         cameras::resolve(&stats, &stats_name, options, &handling, &team, &mut report);
 
-    // One hull, plume and nozzle per grid slot, each off its own team's
-    // directory - see `crate::livery`, which also records what is recovered
-    // here (the paths) and what is this project's (which team flies which
-    // slot). Slot 0 is the player's.
-    // Which teams the field may fly. The caller's list wins, because only the
-    // caller can know about mounted DLC packs - the front end passes the whole
-    // catalogue. When it is empty the disc's own plugin definition is read
-    // here instead, which is what makes `--race`, a capture and a test field a
-    // varied grid rather than eight identical ships; an entry point that
-    // forgot to pass the list is exactly how this was first found.
-    //
-    // **The definition is the title's own**, and reaching for Pulse's constant
-    // regardless of title is one of the two ways this same grid went uniform on
-    // an HD source: HD names its game plugin where the PSP titles number it, so
-    // the read missed. See `oag_title::Title::plugin_definition`.
-    //
-    // **The other way was `fexml::expand` rather than `fexml::text`**, and it
-    // is the trap that page already records for the PS2 in-race HUD: shortening
-    // is per *file*, not per platform, and HD's definition is plain `<?xml`.
-    // `expand` refuses a file with no `<code>` dictionary, so a perfectly good
-    // document came back as `NoDictionary` and the roster was empty again -
-    // with the path already fixed. `text` decides from the blob.
-    //
-    // Both failures used to read out as `0 team(s)`, which is why the reason is
-    // reported now: an empty roster and an unreadable one are the same grid and
-    // very different bugs.
-    let available: Vec<String> = if options.opponent_teams.is_empty() {
-        let definition = title.plugin_definition;
-        let declared = archives
-            .read_name(definition)
-            .map_err(|error| error.to_string())
-            .and_then(|blob| oag_formats::fexml::text(&blob).map_err(|error| error.to_string()))
-            .map(|xml| crate::catalogue::teams(&xml));
-        let declared = match declared {
-            Ok(declared) => {
-                report.push(format!(
-                    "{definition}: {} team(s) for the grid, read here because the caller \
-                     passed none",
-                    declared.len()
-                ));
-                declared
-            }
-            Err(error) => {
-                report.push(format!(
-                    "{definition}: {error} - no team declared, so the whole grid wears the \
-                     player's hull"
-                ));
-                Vec::new()
-            }
-        };
-        declared.into_iter().map(|team| team.id).collect()
-    } else {
-        options.opponent_teams.clone()
-    };
+    // The grid's roster - see `roster::available`.
+    let available = roster::available(
+        craft_of(&mut craft, &mut archives),
+        craft_title,
+        &options.opponent_teams,
+        &mut report,
+    );
     let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
     // HD's red-trail flag, from each slot's ship directory: the runtime sets
     // it by the model-variant name (`concept1`/`nitro`/`detonator`/
@@ -439,11 +403,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         if fury { 1.0 } else { 0.0 }
     });
     let liveries = livery::load(
-        &mut archives,
+        craft_of(&mut craft, &mut archives),
         &slot_teams,
-        title.race.ships(),
+        craft_title.race.ships(),
         options.mode,
-        title.flare,
+        craft_title.flare,
         options.lod,
         &mut report,
     )?;
@@ -481,8 +445,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
-    // game. The shell beside it *is* per team and loads with the livery.
-    let shield_cockpit = crate::livery::cockpit_shield(&mut archives, options.lod, &mut report);
+    // game. The shell beside it *is* per team and loads with the livery above.
+    let shield_cockpit = crate::livery::cockpit_shield(
+        craft_of(&mut craft, &mut archives),
+        options.lod,
+        &mut report,
+    );
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
@@ -835,10 +803,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         audio::banks_and_announcers(&mut archives, title.race, options.mode, &mut report);
 
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
-    // one, HD authors a template whose material names its own. See
-    // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
-    let (noise, trail_blend, trail_shape) =
-        assets::trail_texture(&mut archives, title, &mut report);
+    // one, HD authors a template whose material names its own - craft content,
+    // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
+    let (noise, trail_blend, trail_shape) = assets::trail_texture(
+        craft_of(&mut craft, &mut archives),
+        craft_title,
+        &mut report,
+    );
     if trail_shape.is_some() {
         report.push(
             "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
@@ -867,21 +838,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
 
     // The flare is a title axis too, and a second one rather than a variant of
-    // the ribbon's: Pulse and Pure name a sprite texture, HD authors a per-team
-    // model. See `oag_title::flare::Flare` and `assets::flare_texture`.
-    let flare = assets::flare_texture(&mut archives, title, &mut report);
+    // the ribbon's: Pulse and Pure name a sprite texture, HD authors a
+    // per-team model - craft content too. See `oag_title::flare::Flare`.
+    let flare = assets::flare_texture(
+        craft_of(&mut craft, &mut archives),
+        craft_title,
+        &mut report,
+    );
 
-    // The plugin list is the title's, and an empty one is a real answer rather
-    // than a missing case: a title whose front end is unrecovered has no
-    // declared languages, so the HUD draws its captions as their own `idstring`
-    // keys and says so, which is what it already did for a source whose plugins
-    // would not parse.
-    let language_plugins = title
+    // The plugin list is the craft's title's, and an empty one is a real
+    // answer rather than a missing case: a title whose front end is
+    // unrecovered has no declared languages, so the HUD draws its captions as
+    // their own `idstring` keys and says so, which is what it already did for
+    // a source whose plugins would not parse.
+    let language_plugins = craft_title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
+    // **The HUD follows the craft**, art included - `load_hud` reads its
+    // atlas, font and sight art out of whichever `Archives` it is given.
     let hud = load_hud(
-        &mut archives,
-        title,
+        craft_of(&mut craft, &mut archives),
+        craft_title,
         options.mode,
         language_plugins,
         &mut report,

@@ -1,12 +1,13 @@
 //! Which Studio Liverpool title a source is, when it might be more than one.
 //!
-//! Everywhere else in this crate names `oag_pulse::TITLE` outright, because
-//! everywhere else is gameplay this engine actually plays - a race, the
-//! loading screen into one, the music-disc pairing - and Pulse is the only
-//! title that gets there. The boot sequence is the one exception: a player
-//! can point `--source` at any disc they own, and a Wipeout Pure one should
-//! show *its own* intro and menu rather than a named refusal, even though
-//! nothing past the menu (a race, DLC) plays it yet. See roadmap M8.
+//! **Every title this crate opens now reaches a race.** Pulse and Pure both
+//! do it through their own boot chain, START at `Title Screen` and out;
+//! Wipeout HD/Fury and Wipeout 2048 do it through `--race` alone, because
+//! neither has a wired front end yet (`Title::front_end` is `None`, so
+//! `load_shell` refuses them by name and points at `--race`). See roadmap M8
+//! for the dates each one landed. DLC packs remain Pulse-only - `open_source`
+//! drops `packs` rather than mounting Pulse's own DLC behind a different
+//! title, since no other title's pack format is described yet.
 
 use oag_assets::{Archives, Error, Result, dlc::Pack};
 use oag_title::Title;
