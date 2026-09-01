@@ -86,7 +86,12 @@ pub enum Compression {
     ///
     /// Used by the PS2 archives.
     Lzss,
-    /// zlib. Supported by the game but not seen in any shipped archive.
+    /// zlib.
+    ///
+    /// Not seen in any of Pure or Pulse's own **base disc** archives, but
+    /// real in shipped data: 187 of 192 entries in Pure's Gamma DLC pack, and
+    /// most entries in its other six PSN packs, are zlib rather than LZSS.
+    /// See `docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table`.
     Zlib,
 }
 
@@ -436,6 +441,22 @@ impl Directory {
 pub fn align_up(value: u64) -> u64 {
     let a = u64::from(BLOB_ALIGNMENT);
     value.div_ceil(a) * a
+}
+
+/// Inflates a [`Compression::Zlib`] blob.
+///
+/// A thin wrapper over `miniz_oxide`, the crate's one third-party dependency
+/// (see the crate docs) - kept here so a caller reaches it through this
+/// module like every other kind of compression, rather than depending on
+/// `miniz_oxide` directly. The error is a message rather than a typed error:
+/// `miniz_oxide`'s own error carries no more than its `Debug` output already
+/// says.
+///
+/// # Errors
+///
+/// `input` is not a valid zlib stream.
+pub fn decompress_zlib(input: &[u8]) -> std::result::Result<Vec<u8>, String> {
+    miniz_oxide::inflate::decompress_to_vec_zlib(input).map_err(|e| format!("{e:?}"))
 }
 
 /// Reflected CRC-32 polynomial, as used by the game's table builder.

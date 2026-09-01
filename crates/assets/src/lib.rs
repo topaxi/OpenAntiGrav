@@ -213,33 +213,20 @@ pub enum Error {
         wanted: &'static str,
     },
 
-    /// A blob is stored with a compression this build cannot undo.
-    ///
-    /// Zlib appears in the game but in no shipped archive, so there is nothing
-    /// to validate an implementation against. Refusing beats guessing.
-    #[error("{archive} entry {index} uses {compression}, which is not supported")]
-    UnsupportedCompression {
-        /// Which archive.
-        archive: String,
-        /// Which entry.
-        index: usize,
-        /// The compression named.
-        compression: String,
-    },
-
     /// A ranged read asked for the middle of a compressed blob.
     ///
-    /// Not the same complaint as
-    /// [`UnsupportedCompression`](Error::UnsupportedCompression): LZSS is
-    /// decodable here, it just is not *seekable*. Back-references reach into
-    /// the ring buffer the earlier bytes filled, so byte 300 MiB of an LZSS
-    /// stream cannot be produced without decoding the 300 MiB before it, and
-    /// the whole point of [`Archive::read_range`] is not doing that. Falling
-    /// back to a full read the way [`Archive::peek`] does would silently turn
-    /// a bounded read into an unbounded one, so the caller is told instead and
-    /// can reach for [`Archive::read`] knowingly. The message does not suggest
-    /// `read()` by name, because it is also raised for zlib, which `read()`
-    /// refuses too.
+    /// Raised for both LZSS and zlib, and for the same reason: [`decompress`]
+    /// (LZSS) and `miniz_oxide` (zlib) are decodable here, they are just not
+    /// *seekable*. LZSS's back-references reach into the ring buffer the
+    /// earlier bytes filled and zlib's deflate stream reaches into its own
+    /// sliding window, so byte 300 MiB of either cannot be produced without
+    /// decoding the 300 MiB before it, and the whole point of
+    /// [`Archive::read_range`] is not doing that. Falling back to a full read
+    /// the way [`Archive::peek`] does would silently turn a bounded read into
+    /// an unbounded one, so the caller is told instead and can reach for
+    /// [`Archive::read`] knowingly.
+    ///
+    /// [`decompress`]: oag_formats::lzss::decompress
     #[error(
         "{archive} entry {index} is stored {compression}-compressed, so it cannot be read at an offset; read the whole entry instead"
     )]
