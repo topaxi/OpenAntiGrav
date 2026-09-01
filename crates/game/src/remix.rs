@@ -158,10 +158,19 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
     let mut report = Vec::new();
 
     let definition = title.plugin_definition;
-    let blob = archives
-        .read_name(definition)
-        .with_context(|| format!("reading {definition} out of {source}"))?;
-    let xml = oag_formats::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))?;
+    let team_xml = plugin_xml(&mut archives, source, definition)?;
+
+    // **Wipeout 2048 alone splits `PI_Track` into its own file** -
+    // `title.plugin_definition` names the teams one; see
+    // `oag_title::Title::track_plugin_definition`'s own doc comment for why
+    // one field is not enough there. `None` on every other title, so this is
+    // the same read twice on Pulse/Pure/HD, not a second archive open.
+    let track_definition = title.track_plugin_definition.unwrap_or(definition);
+    let track_xml = if track_definition == definition {
+        team_xml.clone()
+    } else {
+        plugin_xml(&mut archives, source, track_definition)?
+    };
 
     let language_plugins = title
         .front_end
@@ -170,7 +179,7 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
     let language = crate::boot::chosen_language(&languages, None);
     let strings = crate::boot::load_strings(&mut archives, &languages, None, &mut report);
 
-    let track_list = crate::catalogue::tracks(&xml);
+    let track_list = crate::catalogue::tracks(&track_xml);
     let circuit_names = crate::boot::roster::load_circuit_names(
         &mut archives,
         language,
@@ -185,9 +194,22 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
             (track.clone(), label)
         })
         .collect();
-    let teams = crate::catalogue::teams(&xml)
+    let teams = crate::catalogue::teams(&team_xml)
         .iter()
         .map(|team| menu::Choice::labelled(&team.id, team.label(&strings)))
         .collect();
     Ok(Catalogue { tracks, teams })
+}
+
+/// Reads and parses one plugin definition, named in every error so a bad path
+/// says which of the (possibly two) files it was.
+fn plugin_xml(
+    archives: &mut oag_assets::Archives,
+    source: &str,
+    definition: &str,
+) -> anyhow::Result<String> {
+    let blob = archives
+        .read_name(definition)
+        .with_context(|| format!("reading {definition} out of {source}"))?;
+    oag_formats::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))
 }

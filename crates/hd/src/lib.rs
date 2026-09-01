@@ -110,6 +110,7 @@ pub const TITLE: &Title = &Title {
     // `PI_Track` nodes beside the `PI_Music` ones. See
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
+    track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`

@@ -32,7 +32,7 @@ copies of 2,284 shared textures).
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
 | [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table and the per-submesh material binding** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured. `tangent`'s type nibble and section B's wider object graph are still unread. |
-| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` holds one name, so this build reads the teams one and sees no circuit or soundtrack list. |
+| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` names the teams one; `oag_title::Title::track_plugin_definition` is the axis that reaches the circuits one - `None` on every other title, `Some` here. The soundtrack list still has no equivalent axis and this build sees none. |
 
 ## What changed, and what state each is in
 

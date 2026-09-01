@@ -70,6 +70,7 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Unread,
     flare: &oag_title::flare::Flare::Unread,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
+    track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
     music: None,
     // **2048's own tables, beside the HD-derived ones.** The archive carries
@@ -96,15 +97,14 @@ pub mod names {
     ///
     /// [`oag_title::Title::plugin_definition`] holds one name, so this holds
     /// the teams one - the roster is what a race needs before it can fly
-    /// anything, and the circuit a race opens comes from
-    /// [`race::DEFAULT_TRACK`] rather than from a list. **The consequence is
-    /// that this build sees no circuit list and no soundtrack list on this
-    /// title**, which is a real limitation and is why the field is not enough
-    /// here; see `docs/formats/2048-status.md`.
+    /// anything. The circuit list is [`oag_title::Title::track_plugin_definition`],
+    /// [`TRACK_PLUGIN_DEFINITION`] below; the soundtrack list has no
+    /// equivalent axis yet and this build still sees none, see
+    /// `docs/formats/2048-status.md`.
     pub const TEAM_PLUGIN_DEFINITION: &str = r"Data\Plugins\teams\Definition.xml";
 
-    /// The circuits plugin, unread by [`oag_title::Title::plugin_definition`]
-    /// and recorded so the split above is not rediscovered.
+    /// The circuits plugin - [`oag_title::Title::track_plugin_definition`],
+    /// read where [`oag_title::Title::plugin_definition`] cannot reach it.
     pub const TRACK_PLUGIN_DEFINITION: &str = r"Data\Plugins\tracks\Definition.xml";
 
     /// The soundtrack plugin, on the same terms as [`TRACK_PLUGIN_DEFINITION`].

@@ -322,3 +322,48 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
         catalogue.tracks
     );
 }
+
+/// **The regression this test exists for**: picking Wipeout 2048 as TRACK
+/// TITLE in Race Remix showed no circuits at all. Root cause -
+/// `oag_title::Title::plugin_definition` is 2048's *team* plugin
+/// (`Data\Plugins\teams\Definition.xml`, by design: a race needs a roster
+/// before it needs a circuit list, see the field's own doc comment) and
+/// `remix::catalogue` read `PI_Track` nodes off that same file - which has
+/// none, since 2048 splits into three plugin files where every other title
+/// ships one. Fixed by `oag_title::Title::track_plugin_definition`, `None`
+/// everywhere the two agree, `Some` naming 2048's own tracks plugin.
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita/"]
+fn the_catalogue_offers_2048s_own_track_list() {
+    let source = root().join("data/extracted/vita/PCSF00007");
+    if !source.join("base/PSP2/data.psarc").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but the 2048 package is not extracted"
+        );
+        println!("skipping: 2048 package not extracted under data/extracted/vita/");
+        return;
+    }
+    let catalogue = remix::catalogue(&source.display().to_string())
+        .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
+
+    // The ten circuits the base package ships - see
+    // `crates/game/examples/team_variants_probe.rs`'s sibling reproducer for
+    // this fix, and `oag_2048::race::DEFAULT_TRACK` for `altima`, the one
+    // every other 2048 test already exercises.
+    assert_eq!(
+        catalogue.tracks.len(),
+        10,
+        "2048's base package declares ten circuits; was {:#?}",
+        catalogue.tracks
+    );
+    assert!(
+        catalogue.track("altima").is_some(),
+        "the catalogue should find 2048's default circuit by id; was {:#?}",
+        catalogue.tracks
+    );
+    // The roster is unaffected by this fix - still read off `plugin_definition`,
+    // never off `track_plugin_definition` - so this is the regression check for
+    // the split itself: fixing tracks must not silently break teams.
+    assert!(!catalogue.teams.is_empty(), "2048 still declares a roster");
+}

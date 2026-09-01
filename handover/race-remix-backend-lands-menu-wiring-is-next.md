@@ -192,8 +192,37 @@ inside the session:
   Remix bug and not fixed here: it needs actual RE/type-design work. See
   [the 2048 handover thread](2048s-track-vex-parses-but-two-binary-formats-changed.md#2026-09-01-race-remixs-live-team-picker-is-the-first-thing-to-ever-ask-for-a-2048-team-by-name-and-none-of-the-17-it-offers-resolve)
   for the full finding. **Workaround: use 2048 only as the TRACK title in
-  Race Remix for now** - proven working end to end - and pick Pulse, Pure or
-  HD as the craft title.
+  Race Remix for now** - proven working end to end at the loader - and pick
+  Pulse, Pure or HD as the craft title.
+
+## 2026-09-01, later still: picking 2048 as TRACK TITLE showed no circuits
+
+A fourth real finding from the same round of interactive testing, and the
+"proven working end to end" note directly above was true of `race::load`
+alone, not of the menu a player actually sees - the gap this closes.
+
+`remix::catalogue` (the RACE REMIX page's own reader, see the section above)
+read `PI_Track` nodes off `oag_title::Title::plugin_definition` - the file
+every other title's roster *and* circuit list share. Wipeout 2048 splits
+into three plugin files where every other title ships one (see
+`oag_2048::names`'s own module doc), and `plugin_definition` was pointed at
+the *teams* one, by design: a race needs a roster before it needs a circuit
+list. Nothing named where the circuits one was, so the catalogue's `PI_Track`
+read found nothing on 2048's own plugin file and the TRACK row came back
+empty - not a missing feature, a title fact with nowhere to be recorded.
+
+Fixed with a new axis, `oag_title::Title::track_plugin_definition: Option<&str>` -
+`None` on Pulse/Pure/HD, where `plugin_definition` already answers for
+tracks too; `Some(oag_2048::names::TRACK_PLUGIN_DEFINITION)` on 2048.
+`remix::catalogue` reads teams off `plugin_definition` and tracks off
+`track_plugin_definition.unwrap_or(plugin_definition)`, so it is one extra
+archive read only on the one title that needs it. Confirmed against the
+extracted package: the base game declares ten circuits (`square`, `park`,
+`tower`, `mall`, `bridge`, `arena`, `subway`, `cathedral`, `sol`, `altima`),
+all found by id; pinned in
+`race_remix_ground_truth::the_catalogue_offers_2048s_own_track_list`. The
+DLC-added twelve (HD circuits reshipped, see `oag_2048::lib`'s own doc) are
+not checked by this test - base alone was sufficient to prove the axis.
 
 ## Open
 
