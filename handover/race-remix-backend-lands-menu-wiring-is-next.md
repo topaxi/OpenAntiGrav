@@ -184,16 +184,22 @@ regression from this thread.
    `Session.titles`'s doc comment for the reasoning and the cost (one extra
    survey per windowed boot, not per frame). Worth revisiting if it turns out
    to matter in practice.
-5. **Docs (Phase 3):** a roadmap line, and a short ADR recording "more than
-   one `Title`/`Archives` alive at once is fine, dispatch through one is
-   still not" as an explicit precedent - ADR-0022 didn't rule on plurality
-   either way, so this would document a load-bearing reading rather than
-   supersede anything. Not written yet.
+5. ~~Docs (Phase 3): a roadmap line, and a short ADR.~~ **Done.**
+   [ADR-0034](../docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)
+   records "more than one `Title`/`Archives` alive at once is fine, dispatch
+   through one is still not" as an explicit precedent (ADR-0022 never ruled
+   on plurality, so this clarifies rather than supersedes it) and
+   `docs/overview/roadmap.md`'s M8 section carries a "What Race Remix does
+   today" line and subsection alongside Pure/HD/2048's own.
+
+Only item 1 remains open. Items 2-4 are documented, deliberate scope cuts,
+not defects - reopen this thread (or a new one citing it) only if one of
+them needs revisiting rather than confirming.
 
 ## Next Steps
 
-1. Get this in front of a real display (item 1 above) before calling the
-   feature done - it is the one thing nothing in this session's environment
-   could check.
-2. Decide items 2-3 above, or leave them as documented scope cuts.
-3. Write the Phase 3 docs (item 5) once the interactive check closes item 1.
+1. Get this in front of a real display (item 1 above) before closing this
+   thread - it is the one thing nothing in this session's environment could
+   check: reach REMIX from the main menu, confirm the title pickers scroll,
+   TRACK/TEAM resupply when a title changes, and START launches a real mixed
+   race.
