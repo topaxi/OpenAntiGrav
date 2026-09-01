@@ -42,6 +42,7 @@ use std::path::{Path, PathBuf};
 use oag_disc::DiscImage;
 use oag_formats::handling::{self, SpeedClass};
 use oag_formats::wad::{self, Compression, Directory};
+use oag_pulse::race::TEAMS;
 
 /// Where each release keeps the archive holding the ship data.
 ///
@@ -94,7 +95,7 @@ fn ship_blobs(image_name: &str, archive_path: &str) -> Option<Vec<(String, Vec<u
     let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
 
     let mut out = Vec::new();
-    for team in handling::TEAMS {
+    for team in TEAMS {
         let name = handling::entry_name(team);
         let hash = wad::hash_name(&name);
         // All eight are required, not a floor: the interesting half of the claim
@@ -194,11 +195,7 @@ fn check_every_team(blobs: &[(String, Vec<u8>)]) {
         }
     }
 
-    assert_eq!(
-        blobs.len(),
-        handling::TEAMS.len(),
-        "every team must have been read"
-    );
+    assert_eq!(blobs.len(), TEAMS.len(), "every team must have been read");
     println!("{} teams, {} parameter sets", blobs.len(), blobs.len() * 4);
 }
 

@@ -110,7 +110,9 @@ which the Units section below does not yet cover.
 The entry point is `handling::from_blob`, which takes an archive blob and does
 whatever that blob needs: PSP's is [shortened](fexml.md) and gets expanded, PS2's
 is plain text and does not. `handling::parse` takes text that is already expanded.
-`handling::TEAMS` and `handling::entry_name` build the eight archive names.
+`oag_pulse::race::TEAMS` and `handling::entry_name` build the eight base-disc
+archive names; `oag_pulse::race::DLC_TEAMS` names the four the downloadable
+packs add.
 
 Two decisions are worth stating, because both are load-bearing:
 

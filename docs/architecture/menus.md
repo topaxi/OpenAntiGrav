@@ -72,7 +72,7 @@ the release rather than of this project:
 | --- | --- |
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
-| TEAM | `oag_formats::handling::TEAMS`, pinned to the eight shipped `handlingstats.xml` files by a test |
+| TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / UPSCALER / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
@@ -191,10 +191,14 @@ time:
 Three more tests pin the asset against the code's own lists, which is the class
 of mistake the format check cannot see:
 
-- The TEAM row must *be* `handling::TEAMS`, and every anisotropy value must
-  parse as `Anisotropy`. Both would otherwise fail deep inside an archive lookup
-  at race load, with a message about a missing WAD entry rather than about a
-  menu.
+- The TEAM row must carry no spelled-out `values` at all - the roster is what
+  the open source offers plus what a mounted pack adds, and no list in this
+  repository can know either, so `values_from` is the only legal source for
+  it - and every CLASS value must parse as `oag_physics::SpeedClass`. A
+  spelled team would fail deep inside an archive lookup at race load, with a
+  message about a missing WAD entry rather than about a menu; see
+  `the_race_page_offers_only_teams_and_classes_the_game_accepts` in
+  [`crates/game/src/menu/tests/definition.rs`](../../crates/game/src/menu/tests/definition.rs).
 - Every value on DISPLAY and GRAPHICS must parse, and each list must *be* its
   type's own `ALL`/`OFFERED`. A value that does not parse is ignored at runtime
   with a message on stderr, which a player meets as "this row does nothing".

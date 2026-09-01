@@ -74,7 +74,9 @@
 //! describes the schema only. The names of the fields are a description of the
 //! format; the numbers are the game's design data and are read at runtime from
 //! the player's own disc. The unit-test fixtures use obviously invented values
-//! for the same reason.
+//! for the same reason. **Pulse's own eight-team roster used to sit here
+//! too**, an ADR-0022 title fact rather than a format one, and moved to
+//! `oag_pulse::race::TEAMS` on 2026-09-01.
 //!
 //! See `docs/formats/handling-stats.md` for the evidence and the confidence
 //! scores, and `oag_physics::Handling` for the subset the force law consumes.
@@ -82,22 +84,6 @@
 use std::fmt;
 
 use crate::fexml::{self, Node};
-
-/// The eight playable teams, one `handlingstats.xml` each.
-///
-/// All eight files were located by hashing candidate names built from this list;
-/// none of them appears as a string in the executable, because the loader builds
-/// the path from a template. See `docs/formats/fexml.md`.
-pub const TEAMS: [&str; 8] = [
-    "AG_Systems",
-    "Assegai",
-    "EGX",
-    "Feisar",
-    "Goteki",
-    "Piranha",
-    "Qirex",
-    "Triakis",
-];
 
 /// The four speed classes, in the order the XML lists them.
 ///

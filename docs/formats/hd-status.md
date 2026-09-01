@@ -658,9 +658,11 @@ causes produce that picture and neither raised an error:
    already record for the PS2 in-race HUD.
 
 The front end had the same first cause with a different ending: `load_teams`
-falls back to `oag_formats::handling::TEAMS` when nothing is declared, so HD's
-menus offered **eight** teams off a list this project holds rather than twelve
-off the disc.
+used to fall back to `oag_formats::handling::TEAMS` (moved to
+`oag_pulse::race::TEAMS`, 2026-09-01) when nothing was declared, so HD's
+menus offered **eight** teams off a list this project held rather than twelve
+off the disc. The fallback is gone, not moved - see
+`roster_declared_ground_truth.rs`.
 
 Both report the reason now rather than an empty count.
 

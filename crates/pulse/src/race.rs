@@ -127,6 +127,40 @@ pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 /// directly comparable without passing `--team`/`--class` every time.
 pub const DEFAULT_TEAM: &str = "Assegai";
 
+/// The eight teams the base disc ships, one `handlingstats.xml` and one ship
+/// directory each. **Not the whole roster** - see [`DLC_TEAMS`].
+///
+/// **Moved from `oag_formats::handling::TEAMS`, 2026-09-01.** A format crate
+/// describing a game's own roster by name was the ADR-0022 smell
+/// `handover/raceable-composes-a-pulse-path-on-every-source.md` named and
+/// never acted on; `oag_hd::names::TEAMS` already keeps HD's roster the same
+/// way this keeps Pulse's. All eight files were located by hashing candidate
+/// names built from this list; none of them appears as a string in the
+/// executable, because the loader builds the path from a template. See
+/// `docs/formats/fexml.md`.
+pub const TEAMS: [&str; 8] = [
+    "AG_Systems",
+    "Assegai",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// The four teams Pulse's downloadable packs add, by **id** - the folder
+/// under `Data\Ships\`, not the display name a player reads.
+///
+/// **Confidence 94.** `Mantis` is the id the Mirage pack's own manifest, the
+/// PS2 disc and the PSP string tables all agree on; `Mirage` is shipped text
+/// and was never a folder. See
+/// [`docs/formats/dlc-pack.md`](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/dlc-pack.md#the-roster-and-the-name-that-hid-it).
+/// Each of the four ships in its own pack, so which of these resolve on a
+/// given source depends on which packs are mounted - unlike [`TEAMS`], none
+/// of these is guaranteed present.
+pub const DLC_TEAMS: [&str; 4] = ["Auricom", "Harimau", "Icaras", "Mantis"];
+
 /// The shell a fired Shield pickup draws around the craft, when no team's own
 /// is on the source.
 ///

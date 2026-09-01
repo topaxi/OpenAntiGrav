@@ -119,7 +119,7 @@ pub struct Race {
     pub class: String,
     /// Team id, as the source's own plugin definition spells it.
     ///
-    /// **Not `handling::TEAMS`**, which is Pulse's eight and was what this
+    /// **Not `oag_pulse::race::TEAMS`**, which is Pulse's base eight and was what this
     /// said while a stand-in in `boot::load_teams` could still put that list in
     /// front of a player on any source. The roster is the disc's now, so what
     /// is storable here is whatever that disc declares - twelve on the PS2

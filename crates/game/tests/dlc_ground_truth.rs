@@ -34,15 +34,11 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::{boot, catalogue, dlc, race};
+use oag_pulse::race::DLC_TEAMS as PACK_TEAMS;
 
 /// The American disc, on purpose. Mounting European packs on it is the whole
 /// point of the test.
 const IMAGE: &str = "pulse-psp-usa.chd";
-
-/// The four teams the Pulse packs add, by **id** - the folder under
-/// `Data\Ships\`, which is not always the name the game shows. `Mantis` is the
-/// team the packaging calls Mirage; see `docs/formats/dlc-pack.md`.
-const PACK_TEAMS: [&str; 4] = ["Auricom", "Harimau", "Icaras", "Mantis"];
 
 /// What the disc alone offers, so the numbers below are a difference rather
 /// than a magic constant.

@@ -34,7 +34,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::handling::TEAMS;
+use oag_pulse::race::TEAMS;
 use oag_render::mesh;
 
 /// The archive entry name for a team's ship model, assembled the way

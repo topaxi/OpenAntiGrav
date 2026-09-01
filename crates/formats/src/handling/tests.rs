@@ -521,7 +521,6 @@ fn speed_class_names_round_trip_and_index_their_own_slot() {
 #[test]
 fn entry_names_are_built_the_way_the_loader_builds_them() {
     assert_eq!(entry_name("Feisar"), r"Data\Ships\Feisar\handlingstats.xml");
-    assert_eq!(TEAMS.len(), 8);
 }
 
 /// A `<Global>` document with `classes` as its `<GlobalClass>` names, in the

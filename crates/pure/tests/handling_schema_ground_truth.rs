@@ -71,7 +71,7 @@ fn both_images() -> Option<(String, String)> {
 /// Read off the disc rather than hard-coded, because a hard-coded roster is the
 /// thing this whole file exists to stop: a list written from memory cannot
 /// surface a ship directory nobody thought of, and `Zone_01` is exactly that
-/// case. `oag_formats::handling::TEAMS` is Pulse's list and does not apply here.
+/// case. `oag_pulse::race::TEAMS` is Pulse's list and does not apply here.
 fn ship_directories(archives: &mut oag_assets::Archives, definition: &str) -> Vec<String> {
     let blob = archives
         .read_name(definition)
@@ -357,9 +357,9 @@ fn pures_handling_schema_differs_from_pulses_in_exactly_these_ways() {
 
     assert_eq!(
         pulse_files,
-        oag_formats::handling::TEAMS.len(),
-        "Pulse's roster is eight teams, and `handling::TEAMS` is the list this \
-         walk should have rediscovered"
+        oag_pulse::race::TEAMS.len(),
+        "Pulse's base roster is eight teams, and `race::TEAMS` is the list \
+         this walk should have rediscovered"
     );
     assert!(
         pure_files > pulse_files,
