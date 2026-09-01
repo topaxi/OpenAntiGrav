@@ -399,12 +399,22 @@ Open item below.
   and 161" - was the twenty-sixth pass seeing **one band's** pointers before
   the `0x28` advance, and it was the clue: those are band 0's ten segments
   and the smooth block's base.
-- **What fills `g_sound_system + 0x24`..`+0x60`, the sixteen band floats.**
-  The visualiser reads them through `SoundSystem_GetBandLevel`; nothing was
-  found writing them, and `get_xrefs_to` is blind to this binary's
-  TOC-relative loads. Until that lands, *how a band is measured* - centre
-  frequency, window, magnitude curve - is unrecovered, and
-  `oag_audio::spectrum` supplies its own and labels them as its own.
+- ~~**What fills `g_sound_system + 0x24`..`+0x60`, the sixteen band floats.**~~
+  **Found and ported 2026-09-01**: `SoundSystem_UpdateBandLevels`
+  (`0x00307e78`), an auto-ranging normaliser - each band against its own
+  decaying peak and rising floor, six constants read off the TOC. It replaced
+  this project's invented `-40 dB` log curve and the analyser-side fade that
+  went with it. `get_field_access_context` on the array's own address is what
+  found it after a `stfsx` sweep of the module came back empty; record that
+  technique, it is the one that works on this binary.
+- **The band centre frequencies are not in the executable, and that is now
+  the answer rather than a gap.** Four sweeps put the magnitudes in filter
+  records no PPU code writes, on an engine (SCREAM/MultiStream, named by its
+  own error strings) whose analysis is not in the image. So
+  `oag_audio::spectrum::band_frequencies` stays this project's own
+  permanently. What *would* still move it: finding where `+0x614`/`+0x618`
+  are allocated and what they are handed to - see
+  [zone-visualiser.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md).
 - **What `lfs f0,0x4(r4)` is** - the fixed per-frame gain the original
   applies to every band before the hold. This port applies none.
 - **Unverified lead: the band index may be read through a mip-blurred

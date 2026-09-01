@@ -247,6 +247,8 @@ original carries all of it or none.
 | `0x00304558` | function | `SoundSystem_GetBandLevel32` | 84 |
 | `0x00307e78` | function | `SoundSystem_UpdateBandLevels` | 84 |
 | `0x00304320` | function | `SoundSystem_UpdateMeters` | 76 |
+| `0x00308f00` | function | `SoundSystem_Shutdown` | 88 |
+| `0x00309230` | function | `SoundSystem_AudioThread` | 86 |
 | `0x00b6cc90` | data | `g_sound_system` | 80 |
 
 `g_sound_system` is named from `FUN_00304be8`'s `"Stereo"`/`"Surround"`
@@ -259,18 +261,53 @@ with their own decay) and from its object, not from a caller - it has **no**
 `bl` or branch anywhere in the image, so it is reached through a function
 pointer and its role as a callback is inferred.
 
+## The band *magnitudes* are not produced by PPU code in this executable
+
+Chased in the same pass, and this is a negative worth as much as the
+positives, because it says where to stop. `SoundSystem_UpdateBandLevels`
+reads its raw magnitude from
+`(b & 7) * 48 + *(int *)(g_sound_system + 0x614 + (b >> 3) * 4)` - two
+pointers, eight 48-byte records each. Four independent sweeps:
+
+1. **`get_field_access_context` on `+0x614`, `+0x618` and `+0x61c`.** Between
+   them the *entire image* touches those three pointers in exactly two
+   places: `SoundSystem_Shutdown`'s free, and
+   `SoundSystem_UpdateBandLevels`'s read. (`+0x61c` has a third, a master
+   level read at `0x00304cc8`.) No allocation, no fill.
+2. **`stw` at displacement `0x614`** program-wide: ten hits, one in this
+   module and it is the shutdown's zeroing.
+3. **`stfsx` program-wide**: 130 hits, **none** anywhere in the audio module.
+4. **The audio thread's own body.** `SoundSystem_AudioThread`
+   (`0x00309230`), the entry `sys_ppu_thread_create` is given under the name
+   `"Audio MS Update Thread"`, loops on one call - `0x003084c0` - and that
+   function is MultiStream bus and volume work end to end. No band analysis
+   in it.
+
+**The audio engine is Sony's SCREAM on MultiStream**, named outright by two
+error strings (`cellScreamStartSoundSystem`) beside the game's own
+`SoundSystem.cpp`. So the most likely reading is that the per-band magnitudes
+are produced by the middleware or an SPU job into buffers the game allocates
+and hands over, in which case **the sixteen bands' centre frequencies are not
+in this executable at all**. Confidence **60** on that explanation - it is
+inference from four absences, not a positive trace - but confidence **85**
+that no PPU code here writes them, which is the part that bounds the work.
+
+The practical consequence: `oag_audio::spectrum::band_frequencies` is this
+project's own choice **permanently**, not a placeholder waiting on a read, and
+should stay labelled that way.
+
 ## Still open
 
-- **What updates the per-band filter states** at
-  `*(int *)(g_sound_system + 0x614)` and `+0x618` - two blocks of eight
-  48-byte records whose offset `0` is the magnitude
-  `SoundSystem_UpdateBandLevels` normalises. This is the last step between
-  here and the *whole* chain, and it is what would say what the sixteen
-  bands' centre frequencies are. Neither the `stfsx` sweep nor
-  `get_field_access_context` was pointed at it in this pass; the latter is
-  the tool that worked for the array itself and is the obvious next move.
+- **Where `+0x614`/`+0x618` are allocated and to whom they are handed.**
+  `SoundSystem_Shutdown` frees them, so something allocates them; neither
+  field context nor a displacement search finds it, and it is not in the
+  thread-creating init (`0x0030ac48`, 285 instructions, no `0x61x`
+  displacement anywhere). It is reached through a register chain. Finding
+  the call it is passed to would settle the middleware reading above one way
+  or the other.
 - **What fills the triple-buffered 32-float block** at `+0x494`, behind the
-  mutex - the producer side of the cross-thread handoff, likely an SPU job.
+  mutex - the producer side of the cross-thread handoff, and the same
+  question in its second form.
 - **What `lfs f0,0x4(r4)` is**, the fixed per-frame gain applied to every
   band before the hold.
 - **Which authored colour `r17` carries.** Assembled at `0x003db8f8` from

@@ -55,8 +55,11 @@ use std::sync::Mutex;
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
 ///
 /// **The band *frequencies* are still this project's own choice** - see
-/// [`band_frequencies`]. Nothing on the disc says what the original's
-/// sixteen bands are centred on.
+/// [`band_frequencies`], and permanently rather than pending a read: the
+/// original's per-band magnitudes come from filter records no PPU code in
+/// that executable writes, on an engine (Sony's SCREAM, on MultiStream) whose
+/// own analysis is not in the image. Four sweeps establishing that are in the
+/// same page.
 pub const BANDS: usize = 16;
 
 /// The band centre frequencies, in Hz, geometrically spaced from 80 Hz to

@@ -199,3 +199,5 @@
 0x00304558	function	SoundSystem_GetBandLevel32	84	zone-visualiser.md
 0x00307e78	function	SoundSystem_UpdateBandLevels	84	zone-visualiser.md
 0x00304320	function	SoundSystem_UpdateMeters	76	zone-visualiser.md
+0x00308f00	function	SoundSystem_Shutdown	88	zone-visualiser.md
+0x00309230	function	SoundSystem_AudioThread	86	zone-visualiser.md
