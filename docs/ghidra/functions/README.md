@@ -25,23 +25,25 @@ fuzzy matching (`find_similar_functions_fuzzy`), verified per function with
 | [`psp-pure-usa/`](psp-pure-usa/) | `BOOT.BIN` from Pure PSP (UCUS-98612), format ancestor only |
 | [`psp-pure-eu/`](psp-pure-eu/) | `BOOT.BIN` from Pure PSP EU (UCES-00001), format ancestor only |
 
-One more is neither a target nor corroboration, but a **lineage probe** on
+Two more are neither a target nor corroboration, but a **lineage probe** on
 different hardware:
 
 | Directory | Binary |
 | --- | --- |
 | [`ps3-hdfury-eu/`](ps3-hdfury-eu/) | `EBOOT.elf` from Wipeout HD Fury (BCES-00664) - the *decrypted* form of the disc's `EBOOT.BIN`, the only entry here that is not the file the disc ships |
+| [`vita-2048-eu-v104/`](vita-2048-eu-v104/) | `eboot.elf` from WipEout 2048 (PCSF00007), EU, patch v1.04 - **confirmed** to share `ps3-hdfury-eu`'s own source tree (literal `.cpp`/`.h` debug-tag strings match by path, not just basename), not a fresh build off the Pulse lineage. See [`vita-2048-eu-v104/README.md`](vita-2048-eu-v104/README.md). |
 
 ## Index
 
 Maintained as pages are added, sorted by subsystem.
 
-The PS3 pages are not in the table below, which is a PSP-versus-PS2 comparison
-and has no column that would mean anything for a third platform on different
-hardware. They are listed in
-[`ps3-hdfury-eu/README.md`](ps3-hdfury-eu/README.md), and cover the framework
-memory layer, the collision narrowphase, the `RaceManager` and `ModeManager`
-hierarchies, and the race HUD.
+The PS3 and Vita pages are not in the table below, which is a PSP-versus-PS2
+comparison and has no column that would mean anything for a third or fourth
+platform. They are listed in
+[`ps3-hdfury-eu/README.md`](ps3-hdfury-eu/README.md) (framework memory layer,
+collision narrowphase, `RaceManager`/`ModeManager` hierarchies, race HUD) and
+[`vita-2048-eu-v104/README.md`](vita-2048-eu-v104/README.md) (boot chain,
+track/collision loaders, zone audio and environment fallback).
 
 | Subsystem | PSP (`BOOT.BIN`) | PS2 (`SCES_547.48`) |
 | --- | --- | --- |

@@ -51,12 +51,17 @@ Evidence, in call order as decompiled:
 Not runtime-verified (no Vita debugger harness in this project yet), so this
 stays below the 95+ band regardless of how unambiguous the decompilation is.
 
-**Worth following up**: the window/session title this sets is `"WIPEOUT_HD"`,
-not `"WIPEOUT_2048"` or similar - on a Vita build. 2048 ships HD/Fury content
-as DLC (the store listings for both are real), so this may be the same
-`ps3-hdfury-eu` codebase retargeted for Vita rather than a fresh build off the
-PSP/PS2 Pulse lineage. Unconfirmed hypothesis, not yet checked against
-`docs/ghidra/functions/ps3-hdfury-eu/`.
+**Confirmed 2026-09-01**: the window/session title this sets is `"WIPEOUT_HD"`,
+not `"WIPEOUT_2048"` or similar - on a Vita build. That was the first data
+point; checked properly against `ps3-hdfury-eu/EBOOT.elf` by comparing literal
+debug-tag and asset-path strings (`search_strings`, language-independent since
+PS3 is PowerPC64 and Vita is ARM Thumb-2). `GameRoot_Construct`'s own
+`"Game/GameRoot.cpp"` tag below, `TrailEffectManager.cpp`,
+`enginetrail_bluered_triangle.vex`, `engineflare.vex` and 15 of 16
+`RaceManager.cpp` per-mode variants all match `ps3-hdfury-eu` by path suffix.
+**2048 is HD/Fury's own codebase retargeted for Vita, not a fresh build off
+the PSP/PS2 Pulse lineage.** Full evidence table in
+[`README.md`](README.md#the-lineage-question-is-answered-confirmed).
 
 ## `GameRoot_Construct` - `0x81000032`
 

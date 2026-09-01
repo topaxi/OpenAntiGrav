@@ -40,6 +40,13 @@ rather than in the closed `DFEngine.sprx`; the C++ base class stores its own
 **the renderer is in `EBOOT.elf` too** - it drives libgcm itself and imports one
 single symbol from `DFEngine.sprx`. See [renderer.md](renderer.md).
 
+**A second lineage question, this binary as the *known* side of the
+comparison rather than the unknown one, is also answered.** WipEout 2048
+(Vita) turns out to be this codebase retargeted, not a fresh Pulse-lineage
+build - confirmed by literal `.cpp`/asset-path string matches against
+`vita-2048-eu-v104`. See
+[`vita-2048-eu-v104/README.md`](../vita-2048-eu-v104/README.md#the-lineage-question-is-answered-confirmed).
+
 Two structural facts to expect, both different from every other binary here:
 
 - **PPC64 with an OPD.** A function pointer is a descriptor pair
