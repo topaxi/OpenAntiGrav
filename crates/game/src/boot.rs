@@ -1714,7 +1714,7 @@ pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 mod fonts;
 mod movies;
-mod roster;
+pub(crate) mod roster;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font};

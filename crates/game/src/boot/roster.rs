@@ -230,7 +230,11 @@ fn raceable(
 /// end up in two different languages. `strings` is that language's served
 /// table, for the fallback and for the reverse marker - see
 /// [`crate::catalogue::label`].
-pub(super) fn load_circuit_names(
+///
+/// `pub(crate)` rather than `pub(super)`: `crate::remix::catalogue` reuses it
+/// too, for the same reason the front end does - a track's real name is
+/// never simply `strings.get(&track.id)`, on Wipeout HD least of all.
+pub(crate) fn load_circuit_names(
     archives: &mut oag_assets::Archives,
     language: Option<&crate::language::Language>,
     strings: &crate::language::StringTable,

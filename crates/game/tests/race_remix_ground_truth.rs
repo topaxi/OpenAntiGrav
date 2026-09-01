@@ -243,4 +243,33 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
         catalogue.teams.iter().all(|team| !team.label.is_empty()),
         "every team choice should carry a label"
     );
+    // **The regression this test exists for.** HD's own string table is not
+    // keyed by a track's plugin id (`01_Track`), so a direct
+    // `strings.get(&track.id)` resolves nothing and every label fell back to
+    // the raw id on this page until `crate::boot::load_circuit_names` was
+    // wired into `remix::catalogue` - see its own doc comment. Talon's
+    // Junction is this project's reference circuit and is always present.
+    let talons_junction = catalogue
+        .tracks
+        .iter()
+        .find(|(track, _)| track.id == "17_Track")
+        .unwrap_or_else(|| {
+            panic!(
+                "HD's circuit list has no 17_Track; was {:#?}",
+                catalogue.tracks
+            )
+        });
+    assert_eq!(
+        talons_junction.1.to_uppercase(),
+        "TALON'S JUNCTION",
+        "17_Track's label should be its real name, not the id"
+    );
+    assert!(
+        catalogue
+            .tracks
+            .iter()
+            .all(|(track, label)| label != &track.id),
+        "no track's label should be its own bare id; was {:#?}",
+        catalogue.tracks
+    );
 }

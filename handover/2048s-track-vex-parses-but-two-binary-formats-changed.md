@@ -488,8 +488,64 @@ loudly. Ghidra RE this session named the two loaders themselves
 but not enough of either's interior, or the `WO Track` point tail, to write a
 parser change yet - see What's New above and Next Steps below.
 
+## 2026-09-01: Race Remix's live team picker is the first thing to ever ask for a 2048 team by name, and none of the 17 it offers resolve
+
+Found while a human tested Race Remix (`handover/race-remix-backend-lands-menu-wiring-is-next.md`)
+interactively for the first time, with 2048 as the CRAFT TITLE: picking any
+team failed to load, `cannot start a race: reading Data\HandlingStats\Auricom2048\handlingstats.xml
+... has no entry at Data\HandlingStats\Auricom2048\handlingstats.xml`. Not a
+Race Remix bug - `race::load` resolves a team the same way for every title,
+`handling::entry_name_in(craft_title.race.handling_dir, &team)`, and that is
+exactly what every other title's own RACE page already does. What changed is
+reachability: 2048 has no front end, so before Race Remix the only team
+`race::load` was ever asked for on this title was the hardcoded
+`oag_2048::race::DEFAULT_TEAM` (`feisar2048\3`, `--race` with no `--team`) -
+nothing before now ever tried a second one.
+
+**The reproducer**, `crates/game/examples/remix_2048_roster_probe.rs`: of the
+17 teams `crate::catalogue::teams` reads off 2048's plugin definition, **0
+resolve** against `craft_title.race.handling_dir` joined directly with the id
+- the same join that works for every other title. Two different reasons, by
+roster half:
+
+- **The 5 native teams** (`Feisar2048`, `Qirex2048`, `Piranha2048`,
+  `AG_Systems2048`, `Auricom2048`) need a *second* path level this session's
+  own earlier finding already named but did not wire anywhere reachable: "the
+  team id is two levels (`feisar2048\3`)". The plugin definition's own
+  `PI_Team` declares only the base name: `crate::catalogue::teams` has no way
+  to produce `feisar2048\3` from it, because nothing in the definition states
+  which of the four numbered variants a bare pick should mean. All 20
+  (5 teams x 4 variants) resolve fine once the number is supplied by hand -
+  confirmed variant by variant in the probe.
+- **The 12 HD-derived teams** (`Feisar`, `Qirex`, `Assegai`, `Auricom`, ...)
+  need [`HD_SHIP_DIR`](../crates/2048/src/race.rs) instead of
+  [`HANDLING_DIR`](../crates/2048/src/race.rs) - the tree "What is left"
+  above already named ("One `ship_dir` string cannot address both of 2048's
+  trees"), now confirmed for every one of the 12, not just asserted for one.
+
+**What would actually fix it, not attempted this session:** `oag_title::RaceDefaults`
+carries exactly one `ship_dir`/`handling_dir` pair per title, which is the
+right shape for every title but this one - 2048 needs the choice to be a
+property of *which team*, not of the title alone. That is real, deliberate
+type design (`RaceDefaults` is shared vocabulary across four titles;
+widening it changes what every other title package fills in too) and a
+decision about what the catalogue should *offer* for the 5 native teams -
+one row defaulting to the known-working variant (matching `DEFAULT_TEAM`'s
+own `3`), four rows (one per named variant: fighter/agility/speed/prototype),
+or something else - rather than a one-line patch. Left for whoever picks this
+up next; the probe is the reproducer to build the fix against.
+
+**In the meantime, Race Remix works correctly with 2048 as the TRACK
+TITLE** (proven end to end, `race_remix_ground_truth.rs`) - only 2048 as the
+**craft** title is affected, and the failure is the honest kind this project
+prefers: a named missing entry, not an invented one.
+
 ## Open
 
+- **2048's 17 catalogue-offered teams do not resolve through the generic
+  team-loading path** (`race::load`, and now Race Remix's own team picker) -
+  see the dated section directly above for the full finding and the fix this
+  needs.
 - Section B's vertex declaration is found and its offsets are cross-checked
   (see "What is left" above). `normal`'s type (5) and `Uv1`'s (8) are both
   decoded now - confidence 96 each, see the 2026-08-27 section above - but
@@ -539,8 +595,12 @@ parser change yet - see What's New above and Next Steps below.
   `RcsModel_Load`'s section-size arithmetic was only checked on `altima`. The
   k-d tree half of this is now closed: all 26 files decode with every byte
   accounted for.
-- The native roster's numbered subdirectories (`ag_systems2048/1..4`) and their
-  relationship to speed class or ship variant.
+- ~~The native roster's numbered subdirectories (`ag_systems2048/1..4`) and
+  their relationship to speed class or ship variant.~~ Recovered further up
+  this thread ("RaceDefaults needed a second directory"): fighter, agility,
+  speed, prototype, in that order - what remained open was making that
+  reachable through the generic catalogue/team-loading path, which the
+  2026-09-01 section above is the fuller finding for.
 - Whether the patch PSARCs (`data1.psarc`/`data2.psarc`) touch any of `altima`,
   `AG_Systems` or the global handling file at all - not checked, since base
   alone was sufficient for everything above.

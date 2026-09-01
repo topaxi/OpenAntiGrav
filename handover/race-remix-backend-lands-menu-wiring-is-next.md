@@ -161,24 +161,54 @@ and `::european_packs_mount_against_the_american_disc` both fail because
 hardcoded expectation (4 teams) - an environment/test-data mismatch, not a
 regression from this thread.
 
+## 2026-09-01, later: a human tested it interactively, and found two real bugs
+
+Item 1 below is closed by this. Two findings, both from an actual player on
+an actual display - exactly what this thread flagged as unverifiable from
+inside the session:
+
+- **`just play remix`'s first version never opened a menu at all.** It kept
+  `--race`, which skips the front end entirely, so the recipe raced 2048 and
+  Pure and exited without ever giving anyone a chance to see the RACE REMIX
+  page. Fixed: it now boots normally and prints the walk to it (START, Down,
+  confirm), since no flag seeds a *live* window onto one interactive menu
+  page - `--menu-page` only does that for the non-interactive `--screenshot`
+  capture path.
+- **HD's track labels on the REMIX page read as raw ids (`01_Track`), not
+  names.** Item 3 below undersold this - it isn't only reversed-circuit
+  disambiguation that was missing, it's that `strings.get(&track.id)`
+  resolves *nothing* on HD (confirmed: 1,602-entry string table, direct
+  lookup by track id returns `None` for all 28 circuits) because a circuit's
+  real name lives at a string-table key the id does not predict. Fixed by
+  wiring `crate::boot::load_circuit_names` (made `pub(crate)`, was
+  `pub(super)`) and `crate::catalogue::label` into `remix::catalogue`
+  properly, the same machinery the ordinary RACE page's `Shell` already
+  uses. Verified: all 28 HD circuits now show real names
+  (`TALON'S JUNCTION`, `TALON'S JUNCTION REVERSE`, ...), reproducer
+  `crates/game/examples/remix_hd_track_labels_probe.rs`, regression pinned in
+  `race_remix_ground_truth.rs`.
+- **2048 as the CRAFT title fails for every team the picker offers** -
+  discovered testing the same session, a third real finding, but not a Race
+  Remix bug and not fixed here: it needs actual RE/type-design work. See
+  [the 2048 handover thread](2048s-track-vex-parses-but-two-binary-formats-changed.md#2026-09-01-race-remixs-live-team-picker-is-the-first-thing-to-ever-ask-for-a-2048-team-by-name-and-none-of-the-17-it-offers-resolve)
+  for the full finding. **Workaround: use 2048 only as the TRACK title in
+  Race Remix for now** - proven working end to end - and pick Pulse, Pure or
+  HD as the craft title.
+
 ## Open
 
-1. **Interactive verification** - see "Not verified" above. Whoever next has
-   a real display should run `just play` (with more than one title's disc on
-   the search path), reach REMIX from the main menu, and confirm the title
-   pickers scroll, TRACK/TEAM resupply when a title changes, and START
-   launches a real mixed race.
+1. ~~Interactive verification.~~ **Done** - see the section above. Two real
+   bugs found and fixed; a third (2048-as-craft) found, diagnosed and
+   tracked in the other thread, not fixed here.
 2. **HUD-follows-craft is "by default" in the spec**, which implies
    overridable. This build hardwires it (HUD always follows the craft title,
    no separate picker) - an explicit scope cut carried from Phase 1, not
-   revisited in Phase 2. Confirm that is still acceptable, or add the
-   override as its own small page entry.
-3. **Track/team labels are string-table-only**, with no
-   `crate::catalogue::label` disambiguation - a title whose reversed circuit
-   would otherwise share a name with its forward twin shows the same label
-   twice on the REMIX page (never on the ordinary RACE page, which still
-   uses the full disambiguation). See `remix::catalogue`'s own doc comment.
-   Minor, and only reachable on a title with that specific naming collision.
+   revisited since. Confirm that is still acceptable, or add the override as
+   its own small page entry.
+3. ~~Track/team labels are string-table-only, with no `crate::catalogue::label`
+   disambiguation.~~ **Fixed** - see the section above; this undersold the
+   actual bug (no label resolved at all on HD, not merely un-disambiguated
+   reversed circuits).
 4. **The session-construction survey is a second one**, not threaded through
    from whichever decided the disc chooser in `main.rs` - see
    `Session.titles`'s doc comment for the reasoning and the cost (one extra
@@ -191,15 +221,15 @@ regression from this thread.
    on plurality, so this clarifies rather than supersedes it) and
    `docs/overview/roadmap.md`'s M8 section carries a "What Race Remix does
    today" line and subsection alongside Pure/HD/2048's own.
+6. **2048 as CRAFT TITLE** - tracked in the other thread, not here; this
+   thread's own scope is the menu/backend, not 2048's roster addressing.
 
-Only item 1 remains open. Items 2-4 are documented, deliberate scope cuts,
-not defects - reopen this thread (or a new one citing it) only if one of
-them needs revisiting rather than confirming.
+Items 2 and 4 are documented, deliberate scope cuts, not defects. Nothing
+in this thread is blocking; it can close once item 2 is either confirmed as
+staying a cut or given its own follow-up thread.
 
 ## Next Steps
 
-1. Get this in front of a real display (item 1 above) before closing this
-   thread - it is the one thing nothing in this session's environment could
-   check: reach REMIX from the main menu, confirm the title pickers scroll,
-   TRACK/TEAM resupply when a title changes, and START launches a real mixed
-   race.
+1. Decide item 2 (HUD override) - confirm the cut or scope the override.
+2. If item 4 (double survey) ever shows up in a profile or a bug report,
+   revisit threading the boot-time survey through instead of a second one.

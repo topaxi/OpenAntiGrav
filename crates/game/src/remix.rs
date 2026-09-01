@@ -132,20 +132,19 @@ impl Catalogue {
 }
 
 /// Opens `source` far enough to answer "what can this title race": its
-/// plugin definition and one language's string table for labels, nothing
-/// else - not a full menu shell, which additionally builds a font atlas, a
-/// sprite sheet and a menu frame off that title's own front end. A remix
-/// picker draws in the *booted* title's chrome regardless of which title
-/// TRACK TITLE or CRAFT TITLE names, so none of that is needed here.
+/// plugin definition, one language's string table and its circuit names,
+/// nothing else - not a full menu shell, which additionally builds a font
+/// atlas, a sprite sheet and a menu frame off that title's own front end. A
+/// remix picker draws in the *booted* title's chrome regardless of which
+/// title TRACK TITLE or CRAFT TITLE names, so none of that is needed here.
 ///
-/// **Labelled by the string table alone, with no [`crate::catalogue::label`]
-/// disambiguation** - that function additionally needs a title's
-/// `CircuitNames` (parsed from its front-end XML, which a remix picker has
-/// no other reason to read), to tell a reversed circuit from its forward
-/// twin when the two would otherwise share a name. A v1 simplification: a
-/// title whose reversed circuits are not already distinctly named shows the
-/// same label twice on this page, which is a real but minor degradation
-/// against the ordinary RACE page's TRACK row.
+/// **A track's real name is never simply `strings.get(&track.id)`.**
+/// `crate::boot::roster::load_circuit_names` exists precisely because a circuit's
+/// name lives in its own column of the string table, at a key the id does
+/// not predict - on Wipeout HD least of all, where a direct lookup by id
+/// resolves nothing and every track fell back to its raw id (`01_Track`) on
+/// this page until this was wired in. See [`crate::catalogue::label`], which
+/// also settles a reversed circuit against its forward twin.
 ///
 /// # Errors
 ///
@@ -168,13 +167,22 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let languages = crate::boot::load_languages(&mut archives, language_plugins, &mut report);
+    let language = crate::boot::chosen_language(&languages, None);
     let strings = crate::boot::load_strings(&mut archives, &languages, None, &mut report);
 
-    let tracks = crate::catalogue::tracks(&xml)
-        .into_iter()
+    let track_list = crate::catalogue::tracks(&xml);
+    let circuit_names = crate::boot::roster::load_circuit_names(
+        &mut archives,
+        language,
+        &strings,
+        &track_list,
+        &mut report,
+    );
+    let tracks = track_list
+        .iter()
         .map(|track| {
-            let label = strings.get_or_id(&track.id).to_string();
-            (track, label)
+            let label = crate::catalogue::label(track, &circuit_names, &strings, &track_list);
+            (track.clone(), label)
         })
         .collect();
     let teams = crate::catalogue::teams(&xml)
