@@ -30,16 +30,44 @@ resolves - so either the lookup folds case somewhere, or HD's declared locations
 carry the spelling that matches. Nobody has established which, and "it works" is
 not the same finding as "it is right".
 
+## Resolved: why HD resolves through a Pulse-spelled template
+
+**Confidence 100 - it is case folding in the container layer, not a matching
+spelling in HD's declared locations.** Both container kinds fold case and
+path-separator before ever comparing a name:
+
+- `Psarc::index_of_path` (`crates/assets/src/psarc.rs:122`) normalises both
+  the query and every stored path through `normalise` (`crates/assets/src/psarc.rs:175`):
+  strip a leading `/`, fold `\` to `/`, lowercase. Pinned by
+  `psarc::tests::a_path_matches_however_the_caller_spells_it`.
+- `Wad::hash_name` (`crates/formats/src/wad.rs:464`) does the identical fold
+  - `\` to `/`, `A..=Z` to lowercase - before hashing, pinned by its own
+  doctest (`hash_name(r"Data\FE\Images\hex_bg.mip")` ==
+  `hash_name(r"DATA\FE\IMAGES\HEX_BG.MIP")`).
+
+Both existed from each container's original implementation commit
+(`297d13dd` for PSARC), not added to accommodate the roster - so `raceable`
+resolving HD's lowercase ship folders against Pulse's capitalised
+`Data\Ships\{team}\...` template is the container search working as designed
+on every source, not a coincidence specific to HD's own spelling. This
+answers the question the previous pass left indistinguishable from green
+tests: `Archives::locate` never sees a case mismatch to begin with, because
+neither container it delegates to (`Container::contains`,
+`crates/assets/src/container.rs:100`) does either.
+
+This also weakens the second Open item below: there is no case-based reason
+to split `Data\Ships\{team}\...` into a per-title axis, since the fold
+absorbs any spelling difference a fourth title could introduce. It does not
+settle whether a *non-case* difference (a genuinely different path shape, not
+just capitalisation) would still need one.
+
 ## Open
 
-- Why HD resolves through a Pulse-spelled template at all, given its own roster
-  is lowercase. Case folding in `Archives::locate`, or the declared location
-  already carrying the right spelling - the two are indistinguishable from the
-  green tests.
 - Whether `Data\Ships\{team}\...` is a per-title axis in waiting, the way
   `FrontEnd::root` and `Title::plugin_definition` turned out to be. Three titles
   agreeing is the ADR-0022 bar for *not* splitting it yet; a fourth is what
-  would settle it.
+  would settle it. Case is no longer the reason it might need to split (see
+  above) - only a structural path difference would be.
 - `oag_formats::handling::TEAMS` still lives in `oag-formats`, a format crate,
   while being Pulse's roster. Five test files consume it as exactly that and it
   is not wrong, but a title's data in a format crate is the ADR-0022 smell that
@@ -47,7 +75,10 @@ not the same finding as "it is right".
 
 ## Next Steps
 
-- Establish which of the two explanations makes HD resolve - read
-  `oag_assets::Archives::locate` for case handling first, since that is a
-  question about this repository rather than about a disc, and it decides
-  whether the rest of this thread is a real axis or a coincidence.
+- No open next step on the case-folding question - it is answered.
+- The two Open items above are both ADR-0022-shaped design calls (move
+  `handling::TEAMS` out of `oag-formats`, and whether to split the ship-path
+  template into a title axis) rather than something a fourth disc measurement
+  would resolve on its own. Revisit either the next time a fourth title's
+  roster is added, since that is what would supply the missing data point for
+  both.
