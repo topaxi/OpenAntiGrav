@@ -611,6 +611,155 @@ XY 1.0/1.5 and Z 0.25/1.5 the flame's throttle scales, and
 `crates/game/tests/hd_engine_flare_ground_truth.rs` pins
 `oag_render::exhaust::hd`'s constants against the file itself.
 
+### All 41 rows, read 2026-09-01
+
+The 13 rows above and the sprite's 9 (`the sprite flare draws` below) account
+for 22 of the file's 41 lines. The rest, read in full for the first time -
+`just psarc cat ...:DATA02.PSARC /data/ships/shipeffectstweaks.txt`, no
+decryption step beyond the disc's own layer-1 key:
+
+| Key | Value | Where it went |
+| --- | ---: | --- |
+| `Spikes Thrust Max Scale` | 1.5 | unread - the five spike shapes' own throttle scale, separate from `EF_Main`'s |
+| `Spikes Boost Max Scale` | 2.0 | unread - the spikes' boost scale |
+| `Engine Flare Particles Min Alpha` | 0.25 | unread - see below |
+| `Enable Engine Flare Particles` | 1 | unread - see below |
+| `Shockwave Cycle Speed` | 0.01 | unread, no shockwave node identified yet |
+| `Flare Highlight Power` | 32.0 | unread - a specular-looking exponent, not `flame_test.rcsmaterial`'s own `power1` (10.0, already read on engine-flare.md) |
+| `Flare Highlight Boost` | 1.0 | unread, paired with the above |
+| `Flare Fadeout Dist` | 15.0 | unread - see below |
+| `Flare Fadeout Range` | 15.0 | unread - see below |
+| `Flare Occluder Radius` | 1.0 | unread (already named on hd.rs's `Sprite` doc) |
+| `Flare Size Clamp` | 50.0 | unread, newly named - see below |
+| `Flare Depth Bias` | -0.46 | unread (already named on hd.rs's `Sprite` doc) |
+
+**`Engine Flare Particles` is a third component, not a variant of the two
+already drawn.** The flare is a `.rcsmodel` (the always-on flame, read on
+engine-flare.md), a sprite (`Engine_Flare_Rich.gtf`, read below), and now a
+named-but-unlocated particle emitter - `Enable Engine Flare Particles` gates
+it and `Min Alpha` bounds it, the same shape `Enable Flare Sprite` and
+`Flare Opacity Max` take for the sprite. No `.pob` or emitter table has been
+matched to it; the small bright dashes visible trailing under the nozzle in
+`data/reference/hd-capture/flare-size/original-rpcs3.png` are the leading
+candidate for what this draws; this project has nothing playing there yet.
+
+**`Flare Size Clamp` (50.0) is new: no code or doc named it before this
+session.** Against a base `Flare Radius` of 3.0 the two numbers are over an
+order of magnitude apart, which is consistent with the clamp bounding
+something other than the sprite's raw world-space half-size (a projected or
+screen-relative size, most likely) - but that reading is a hypothesis from
+the numbers alone, not a traced consumer, and nothing here acts on it.
+
+**`Flare Fadeout Dist`/`Range` (15.0/15.0) is the leading candidate for the
+oversized-flare finding below**, on the same "hypothesis from the numbers,
+not a traced consumer" terms: a near/far fade starting at 15 world units and
+finishing at 30 would read as "small at ordinary chase distance" - which is
+what the original shows and this engine does not, since `hd::Sprite` applies
+no distance term at all. What two sessions' worth of reading could not settle
+is which function actually builds the sprite's quad - what follows is what
+each ruled out. `EngineFlare_Init` (`0x002a1528`) writes two adjacent constants-table
+entries (index `0x1686`/`0x1687`) into `+0xe4`, `+0x144` and four identical
+`(u,v)` half-float pairs at `+0x280..+0x2b2` - the "four corner pairs" the
+sprite loads, confirmed to be **UV span defaults**, not positions, since all
+four pairs are identical at construction.
+
+**Correction, same day: `+0xe4` is not the radius.** A first pass this
+session read `+0xe4` as "possibly the persistent radius storage" because
+`EngineFlare_Init` seeds it from the same constants-table index as `+0x144`;
+decompiling `EngineFlare_Update` (`0x002a3100`) in full settles it as the
+exhaust **intensity** field instead - the 0.25/s-rise, 0.5/s-fall ramp
+already named on this page, clamped to `[0, 1]` against `DAT_008b2ef0`/
+`DAT_008b2ef4`, which is the wrong range for a 2-3-unit radius. The
+constants-table index `0x1686`/`0x1687` Init reads for both `+0xe4` and
+`+0x144` is therefore not `Flare Radius` either - more likely a shared
+`0.0` sentinel several `Init` routines read off the table rather than
+embed as a literal, on the pattern this codebase's own PPC idiom already
+shows elsewhere. Neither `EngineFlare_PlaceShapes` (`0x002a1f00`) nor
+`EngineFlare_Update` reads `Flare Radius`'s storage back out under any
+offset checked; grepped both functions' full decompile for every plausible
+field. The function immediately between `EngineFlare_Init` and
+`EngineFlare_PlaceShapes` in address order, `FUN_002a17e8`
+(`0x002a17e8`-`0x002a1efb`), decompiles to the engine-sound state machine
+(idle/cruise/boost audio cue selection, keyed off `craft+0xe0`'s speed
+class) - not the sprite draw.
+
+**A second session went looking for the sprite's own vertex buffer live**
+(`scripts/hd-flare-sprite-dump.py`, reusing `rpcs3-trail-dump.py`'s
+craft-pointer route) rather than more static reading, on the reasoning that
+the corners are a world-space offset from the nozzle and so settle the
+question independent of the camera. It found six RSX-range pointers
+(`0xC0000000..0xD0000000`) inside the object, at `+0x70`/`+0x74` (a pair,
+changes every tick), `+0xb8` (static across two pauses), `+0x1f0`/`+0x1f4`
+(a pair, duplicated verbatim at `+0x230`/`+0x234`) and `+0x240` (single,
+changes every tick) - but every one of them reads back as near-all-zero
+32-bit words, not plausible vertex positions (the one non-zero exception, a
+repeating `~9.16e34` every fourth word, is a packed non-float value
+misread as one, not a position either). **The leading reading is that these
+are occlusion-query result buffers, double/triple-buffered for GPU
+readback latency**, not a vertex buffer - consistent with `Flare Occluder
+Radius` and `Flare Depth Bias` both being named-but-unread tunables that
+imply exactly this kind of query. `Billboard.cpp` (four functions found via
+the `__FILE__` attribution trick, one already named
+`Billboard_ConstructResource` on [billboards.md](billboards.md)) was also
+checked and ruled out - it is the **track sponsor-signage** system
+`<TrackStartup>` declares, unrelated to the ship's own effects.
+
+**The function that turns `Flare Radius` into a world-space quad remains
+unlocated** after both a static and a live pass. This is the same wall
+`engineflare_vp`/`fp` resolving through no registry read already put up two
+rows above; two sessions did not get further than confirming where it is
+not.
+
+### Checked: no separate trail for HD vs. Fury, and no zone-specific one
+
+The user's report also suspected the trail itself, and named two possible
+splits: a different trail between classic HD and Fury, and a Zone-race-
+specific one. Both checked and refuted, disc-wide:
+
+- **No second trail asset exists.** All seven `DATA0N.PSARC` archives list
+  exactly one live trail stem, `enginetrail_bluered_triangle` (`DATA06`),
+  plus the dead `enginetrail_triangle` (`DATA02`, already established as
+  unreferenced by the executable). No `zone`- or `fury`-prefixed trail file
+  exists anywhere on the disc - `grep -i "zone\|fury"` over every archive's
+  trail-matching entries comes back empty. HD and Fury share the one asset;
+  what differs is the `engineTrail` colour-mix parameter (`0xbb48e390`) the
+  Fury-skin byte patches, already read and implemented.
+- **The trail's own material declares no Zone parameter.** HD's Zone-mode
+  environment recolour is a live, separate, unsolved thread
+  ([zone-effectsettings-loader.md](zone-effectsettings-loader.md)) with its
+  own 16-name parameter block (`zoneColourTint`, `zoneEffectInner/Outer`,
+  `zoneBaseInner/Outer`, `zoneBaseAltInner/Outer`, `zoneOrigin`,
+  `zoneTexInner/Outer` and their `Nearest` pairs, `zoneTexVis`,
+  `zoneAnisoPalette(Outer)`, `zoneAnisoPower`) whose hashes are already
+  known (renderer.md). Both `hd_enginetrail_bluered.rcsmaterial` and
+  `flame_test.rcsmaterial`'s raw bytes were checked against all 16 hashes,
+  little- and big-endian: zero hits in either. So if a Zone race's exhaust
+  genuinely reads different on the original, it is not this material
+  sampling zone state directly - consistent with renderer.md's own finding
+  that the Zone recolour is track/scenery-side and still unlocated, not
+  something to re-derive here. `oag_render`'s exhaust pipeline
+  (`exhaust.rs`/`.wgsl`) carries no zone awareness at all, same as the disc
+  material it reproduces - not a gap against this material, though it would
+  need one if the still-open Zone mechanism turns out to reach ships too.
+
+**The finding this session is confident of, screenshot to screenshot: this
+engine's sprite flare is drawn much larger, relative to the hull, than the
+original's.** `data/reference/hd-capture/flare-size/` holds the pair -
+`original-rpcs3.png` (`scripts/rpcs3-drive.py race --drive 15 --shots`, a
+driven Talon's Junction lap at 154 km/h) against `ours.png` (`just play hd
+--race --press cross --ticks 300`, same track, comparable chase distance and
+craft framing). The original's core is a compact glow tucked at each nozzle,
+narrower than the hull; this engine's is one white disc that spans past both
+nozzles and reads as roughly the width of the hull itself. **Ruled out as the
+cause**: a second locator - `crates/game/src/livery.rs`'s `engine_flare`
+already establishes every checked team's hull authors exactly one `Engine
+Flare` node, so the single-sprite-per-craft shape in
+`Race::hd_sprite_quad` matches the disc's own locator count and is not
+collapsing two nozzles into one. The constants themselves are also not the
+cause: `the_sprite_flares_constants_are_the_discs_own` pins `SPRITE_RADIUS`
+(3.0), `SPRITE_RADIUS_MIN` (2.0) and `SPRITE_RADIUS_JITTER` (0.5) against
+this same file, byte for byte.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -
@@ -730,7 +879,29 @@ Open, in rough order of visible cost:
   real, and it is most of the "solid core" the exhaust reads as in the
   original. Still unread and undrawn: its spin, chromatic dispersion,
   `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
-  (`engineflare_vp/fp`) resolves through no registry read so far.
+  (`engineflare_vp/fp`) resolves through no registry read so far. **And a
+  2026-09-01 screenshot comparison confirms this matters**: drawn at the
+  literal 3.0/2.0/0.5 with no distance term, the sprite is visibly oversized
+  against the original at ordinary chase distance - "All 41 rows" above has
+  the evidence and the ruled-out causes; `Flare Fadeout Dist/Range` (15/15)
+  is the leading candidate and still unread, so `hd::Sprite`'s radius is
+  unchanged rather than fitted to the screenshots. **A 2026-09-01 follow-up
+  spent a static and a live pass hunting the draw call specifically and did
+  not find it** - see "What two sessions' worth of reading could not settle"
+  above for the full account: `+0xe4` turned out to be intensity, not
+  radius storage (a correction to this page); neither
+  `EngineFlare_PlaceShapes` nor `_Update` reads any radius-shaped field back
+  out; live-dumped RSX pointers inside the object read as occlusion-query
+  buffers, not vertex data; and `Billboard.cpp` is the unrelated track-
+  signage system. Two candidates are now on the table for what to try next:
+  find the manager `EngineFlare` calls into rather than owning geometry
+  itself (the same shape `TrailEffectManager` has for the ribbon, and the
+  reason RSX pointers were being hunted *inside* the wrong object), or scan
+  the RSX pushbuffer directly for the `NV4097` vertex-array command this
+  draw issues, which needs no CPU-side handle at all.
+- `Flare Size Clamp` (50.0) and `Engine Flare Particles`
+  (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
+  "All 41 rows" above - and neither is read past the tuning file.
 - (Closed 2026-08-24, both halves.) The splatted seconds clock **is** the
   flame surface's `time`: it is written into engine parameter entry 0, which is
   named `time` in the table `Shader_InitEngineParams` builds - see
@@ -760,6 +931,12 @@ Open, in rough order of visible cost:
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-dump
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-early --early
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-params --params
+# the sprite flare's own object, hunting for its vertex buffer among the RSX
+# pointers it holds - see "the leading reading is that these are occlusion-
+# query result buffers" above:
+uv run --with evdev python3 scripts/hd-flare-sprite-dump.py /tmp/hd-flare-sprite-dump
+python3 scripts/ps3-toc.py attrib 0x0079bdd8   # who loads Engine_Flare_Rich.gtf
+python3 scripts/ps3-toc.py map | grep -i flare  # Billboard.cpp etc., ruled out
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
