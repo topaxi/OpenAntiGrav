@@ -107,34 +107,91 @@ fn goertzel_magnitude(samples: &[f32], sample_rate: f32, target_hz: f32) -> f32 
     (q1 * q1 + q2 * q2 - q1 * q2 * coeff).max(0.0).sqrt()
 }
 
-/// Converts a raw Goertzel magnitude into a `0.0..=1.0` display level.
+/// Converts a raw Goertzel magnitude into this band's own amplitude.
 ///
-/// **Normalised by chunk size first.** A Goertzel term's magnitude at
-/// resonance scales with `samples.len() / 2` for a sinusoid of a given
-/// amplitude, so dividing that out turns "the raw DFT term" into "roughly
-/// this band's own amplitude, 0 to 1 for full scale" - independent of how
-/// many samples one chunk holds, and the step that matters for *contrast*
-/// between bands: skipping it leaves every band's own leakage
-/// floor (a rectangular window's sidelobes decay slowly) sitting within a
-/// few dB of a real tone's peak, which is exactly the failure this file's own
-/// tests caught - every band from a single test tone clipped to `1.0`, tied,
-/// and the tie-break picked the wrong one.
+/// **Normalised by chunk size.** A Goertzel term's magnitude at resonance
+/// scales with `samples.len() / 2` for a sinusoid of a given amplitude, so
+/// dividing that out turns "the raw DFT term" into "roughly this band's own
+/// amplitude, 0 to 1 for full scale" - independent of how many samples one
+/// chunk holds, and the step that matters for *contrast* between bands:
+/// skipping it leaves every band's own leakage floor (a rectangular window's
+/// sidelobes decay slowly) sitting within a few dB of a real tone's peak,
+/// which is exactly the failure this file's own tests caught - every band
+/// from a single test tone clipped to `1.0`, tied, and the tie-break picked
+/// the wrong one.
 ///
-/// Log-compressed after that, because ear and eye alike read loudness
-/// logarithmically and a linear amplitude would leave every band but the
-/// loudest looking dark. `FLOOR_DB` is a chosen dynamic range for a legible
-/// display, **not a measurement of anything on the disc or in this crate's
-/// own mixer** - there is no authored calibration to read.
-fn display_level(magnitude: f32, samples: usize) -> f32 {
-    const FLOOR_DB: f32 = -40.0;
+/// **This used to log-compress against a chosen `-40 dB` floor**, which was
+/// an invention. [`Range`] replaces it with the original's own curve, which
+/// needs an amplitude rather than a decibel: see that type.
+fn band_amplitude(magnitude: f32, samples: usize) -> f32 {
     #[expect(
         clippy::cast_precision_loss,
         reason = "a chunk is a few hundred to a few thousand samples"
     )]
     let scale = (samples as f32 / 2.0).max(1.0);
-    let amplitude = (magnitude / scale).max(1e-6);
-    let db = 20.0 * amplitude.log10();
-    ((db - FLOOR_DB) / -FLOOR_DB).clamp(0.0, 1.0)
+    magnitude / scale
+}
+
+/// One band's auto-ranging normaliser: where this band's amplitude sits
+/// between its own recent floor and its own recent peak, `0.0..=1.0`.
+///
+/// **Recovered**, from HD/Fury's own sixteen-band analysis loop at
+/// `0x00307e78` - the function that fills the array
+/// `SoundSystem_GetBandLevel` reads. Every constant below is a float that
+/// loop loads from its own TOC; see
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
+///
+/// **Why an original would do this rather than compress logarithmically.** A
+/// fixed floor - the `-40 dB` this replaced - leaves a quiet band pinned at
+/// the bottom of its bar all race, because it measures the band against
+/// *full scale*. This measures each band against **its own** recent range, so
+/// a bassline and a hi-hat both fill their meters, and a band with nothing in
+/// it collapses to a span of nothing and reads zero rather than reading
+/// noise. That is what makes sixteen bars all move.
+#[derive(Debug, Default, Clone, Copy)]
+struct Range {
+    peak: f32,
+    floor: f32,
+}
+
+impl Range {
+    /// How fast the peak falls back towards the floor, per second.
+    /// `0xbe4ccccd`; the original stores it negative and adds.
+    const PEAK_FALL: f32 = -0.2;
+    /// How fast the floor rises towards the peak, per second. `0x3e4ccccd`.
+    const FLOOR_RISE: f32 = 0.2;
+    /// The floor may never exceed this fraction of the peak. `0x3f666666`.
+    const FLOOR_CEILING: f32 = 0.9;
+    /// A span at or under this reads as silence rather than as a level.
+    /// `0x322bcc77` - small enough that it only catches a genuinely empty
+    /// band, not a quiet one.
+    const MIN_SPAN: f32 = 1.0e-8;
+
+    /// Folds one chunk's `amplitude` in over `dt` seconds and returns the
+    /// level, in the original's own order of operations: decay, then track,
+    /// then let the current sample push either end outwards.
+    fn level(&mut self, amplitude: f32, dt: f32) -> f32 {
+        if self.peak > 0.0 {
+            self.peak = (self.peak + (self.peak - self.floor) * dt * Self::PEAK_FALL).max(0.0);
+        }
+        let ceiling = self.peak * Self::FLOOR_CEILING;
+        self.floor = if ceiling < self.floor {
+            ceiling
+        } else {
+            (self.floor + (self.peak - self.floor) * dt * Self::FLOOR_RISE).min(ceiling)
+        };
+        // The current sample owns both ends: it raises the peak at once and
+        // drops the floor at once, so an attack is never smeared and a gap
+        // never reads as a level.
+        self.peak = self.peak.max(amplitude);
+        self.floor = self.floor.min(amplitude);
+        let span = self.peak - self.floor;
+        if span <= Self::MIN_SPAN {
+            0.0
+        } else {
+            ((amplitude - self.floor) / span).clamp(0.0, 1.0)
+        }
+    }
 }
 
 /// Runs the per-band Goertzel transform over one rendered chunk and holds a
@@ -146,25 +203,28 @@ fn display_level(magnitude: f32, samples: usize) -> f32 {
 #[derive(Debug)]
 pub(crate) struct Analyzer {
     frequencies: [f32; BANDS],
-    levels: [f32; BANDS],
+    ranges: [Range; BANDS],
 }
 
 impl Analyzer {
     pub(crate) fn new() -> Self {
         Self {
             frequencies: band_frequencies(),
-            levels: [0.0; BANDS],
+            ranges: [Range::default(); BANDS],
         }
     }
 
-    /// Folds one chunk of interleaved stereo samples in, and returns the
-    /// updated levels.
+    /// Folds one chunk of interleaved stereo samples in, and returns this
+    /// chunk's levels.
     ///
-    /// **Attack is instant, decay is not** - the same shape a real spectrum
-    /// analyser's ballistics take, and without it a 512-frame (about 10 ms)
-    /// update period reads as flicker rather than as motion. `0.75` decays a
-    /// band to under 5% of a peak in about 200 ms at this chunk rate, fast
-    /// enough to track a beat and slow enough not to strobe.
+    /// **No decay here.** An earlier version held each band against a `0.75`
+    /// per-chunk fade, on the reasoning that a 512-frame update period would
+    /// otherwise flicker. That was an invention in the wrong place: the
+    /// original's sound system publishes an *instantaneous* normalised level
+    /// (see [`Range`]) and the ballistics live one layer out, in the
+    /// visualiser's own per-frame peak-hold -
+    /// `oag_render::mesh_render::zone::Hold`, itself recovered. Holding here
+    /// too would smear the attack the hold is supposed to catch.
     pub(crate) fn process(&mut self, stereo: &[f32], sample_rate: u32) -> [f32; BANDS] {
         #[expect(
             clippy::cast_precision_loss,
@@ -180,12 +240,25 @@ impl Analyzer {
             .iter()
             .map(|frame| (frame[0] + frame[1]) * 0.5)
             .collect();
-        const DECAY: f32 = 0.75;
+        // How long this chunk covers, which is what the recovered peak and
+        // floor rates are per: the original takes its own `dt` as an
+        // argument. Deriving it here rather than taking it keeps the caller
+        // from having to agree with the mixer about chunk sizes.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a chunk is a few hundred to a few thousand frames"
+        )]
+        let dt = if rate > 0.0 {
+            mono.len() as f32 / rate
+        } else {
+            0.0
+        };
+        let mut levels = [0.0f32; BANDS];
         for (band, &frequency) in self.frequencies.iter().enumerate() {
-            let level = display_level(goertzel_magnitude(&mono, rate, frequency), mono.len());
-            self.levels[band] = level.max(self.levels[band] * DECAY);
+            let amplitude = band_amplitude(goertzel_magnitude(&mono, rate, frequency), mono.len());
+            levels[band] = self.ranges[band].level(amplitude, dt);
         }
-        self.levels
+        levels
     }
 }
 

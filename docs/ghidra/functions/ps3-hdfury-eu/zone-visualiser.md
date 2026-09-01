@@ -36,12 +36,83 @@ double SoundSystem_GetBandLevel(uint band)
 **That object is the sound system, not the renderer.** `FUN_00304be8`, in the
 same module, branches on `PTR_DAT_008b4c5c[0xe8] == 2` to pick between the
 literals `"Stereo"` and `"Surround"`. A struct whose `+0xe8` selects a speaker
-layout is an audio object; a stage-progress counter is not. Confidence **85**
-on "this getter returns an audio measurement". What *fills* `+0x24`..`+0x60`
-is **not** traced - `get_xrefs_to` is blind to the TOC-relative loads this
-binary uses ([memory.md](memory.md)), and no writer was found in this pass.
-So the *source* of a band's number is unrecovered; that it is sixteen bands
-published by the sound system is not.
+layout is an audio object; a stage-progress counter is not. Confidence **85**.
+
+**There are two band arrays, and the layout closes on itself.**
+`SoundSystem_GetBandLevel32` (`0x00304558`) is the same shape with the index
+clamped to `0x1f` and the base at `+0x64`:
+
+| offset | size | what |
+| --- | ---: | --- |
+| `+0x00`..`+0x23` | 36 B | meters, written by `SoundSystem_UpdateMeters` (`0x00304320`) |
+| `+0x24`..`+0x63` | **16 floats** | band levels, what the Zone visualiser reads |
+| `+0x64`..`+0xe3` | **32 floats** | band levels at twice the resolution |
+| `+0xe8` | 1 B | speaker mode, `2` = stereo |
+
+Thirty-two floats from `+0x64` end at `+0xe3`, immediately before `+0xe4` -
+the arrays tile the struct exactly, which is the check that says the second
+getter's `100` is a base and not a coincidence. Confidence **86**.
+
+## What fills the sixteen bands: an auto-ranging normaliser
+
+`FUN_00307e78`. Found through `get_field_access_context` on
+`0x00b6cc90 + 36`, after a `stfsx` sweep of the whole audio module came back
+**empty** - there is no indexed float store there, and `get_xrefs_to` is blind
+to this binary's TOC-relative loads ([memory.md](memory.md)), so neither of
+the two obvious routes finds it. Its first loop runs sixteen times over
+`puVar10 + 0x24`, and per band:
+
+```text
+raw   = |source[b]|
+peak  = peak[b]                     ; puVar10 + 0xe6c + 4b
+floor = floor[b]                    ; puVar10 + 0xe2c + 4b
+
+if peak > 0:  peak = max(peak + (peak - floor) * dt * -0.2, 0)
+ceiling = peak * 0.9
+floor   = (ceiling < floor) ? ceiling
+                            : min(floor + (peak - floor) * dt * 0.2, ceiling)
+peak    = max(peak, raw)            ; the current sample owns both ends,
+floor   = min(floor, raw)           ; instantly, in both directions
+
+band[b] = (peak - floor <= 1e-8) ? 0
+                                 : clamp((raw - floor) / (peak - floor), 0, 1)
+```
+
+Every constant is a float the function loads from its own TOC, resolved with
+`scripts/ps3-toc.py`:
+
+| TOC | value | role |
+| --- | --- | --- |
+| `+0x77a4` | `0.0` | the low clamp, and `SoundSystem_GetBandLevel`'s own out-of-range default |
+| `+0x77a8` | `1.0` | the high clamp |
+| `+0x783c` | `-0.2` | peak fall per second |
+| `+0x7794` | `0.2` | floor rise per second |
+| `+0x7840` | `0.9` | the floor's ceiling, as a fraction of the peak |
+| `+0x7844` | `1.0e-8` | the minimum span that counts as a signal |
+
+Confidence **84**. **This is the part a port could not have guessed**: it is
+not a decibel curve at all. A band is measured against **its own** recent
+floor and peak, so every band fills its meter on its own material - a
+bassline and a hi-hat both read across the full range - and a band with
+nothing in it collapses to no span and reads zero rather than reading its own
+noise floor. A fixed dB floor, which is what this project had invented, pins
+a quiet band at the bottom of its bar for a whole race.
+
+**One step further back is still unrecovered.** `raw` is read at
+`(b & 7) * 48 + *(int *)(puVar10 + (b >> 3) * 4 + 0x614)` - two pointers, each
+to eight 48-byte records, the band magnitude at offset `0`. What updates
+those filter states was not traced. So *how a band is measured* - its centre
+frequency, its filter, its window - remains unread, and this project supplies
+its own and says so.
+
+**The 32-band array is filled in the same function's second loop**, from a
+triple-buffered block at `+0x494 + ring * 0x80` (32 floats each,
+`ring = *(int *)(puVar10 + 0x490)`, cycling 0-2) under a mutex pair
+(`FUN_006766f8`/`FUN_006770a8`) - which is the cross-thread handoff from
+whatever produces the analysis. It is normalised by a whole-block gain rather
+than per band. Nothing in this project reads it; recorded because it is the
+same data at a second resolution and would be the thing to port if the front
+end's `waveTexture` turns out to want it.
 
 ## The layout: bars at 1-160, a smooth slot each at 161-176
 
@@ -173,21 +244,33 @@ original carries all of it or none.
 | --- | --- | --- | ---: |
 | `0x00304530` | function | `SoundSystem_GetBandLevel` | 85 |
 | `0x0067a7b8` | function | `SoundSystem_GetBandLevel_Stub` | 85 |
+| `0x00304558` | function | `SoundSystem_GetBandLevel32` | 84 |
+| `0x00307e78` | function | `SoundSystem_UpdateBandLevels` | 84 |
+| `0x00304320` | function | `SoundSystem_UpdateMeters` | 76 |
 | `0x00b6cc90` | data | `g_sound_system` | 80 |
 
 `g_sound_system` is named from `FUN_00304be8`'s `"Stereo"`/`"Surround"`
 branch on `+0xe8` and nothing else, which is why it sits at 80 rather than
 with the getter.
 
+`SoundSystem_UpdateMeters` sits at 76 rather than with the rest: it is named
+from what it writes (`+0x00`..`+0x20`, a pair of smoothed left/right levels
+with their own decay) and from its object, not from a caller - it has **no**
+`bl` or branch anywhere in the image, so it is reached through a function
+pointer and its role as a callback is inferred.
+
 ## Still open
 
-- **What writes `g_sound_system + 0x24`..`+0x60`.** The sixteen band levels
-  are read here and filled somewhere unfound; `get_xrefs_to` is blind to
-  this binary's TOC-relative loads, so a byte-pattern or symbolic sweep of
-  the audio module is what would close it. Until then the *analysis* behind
-  a band - its centre frequency, its window, its magnitude curve - is
-  unrecovered, and this project's own `oag_audio::spectrum` supplies its own
-  and says so.
+- **What updates the per-band filter states** at
+  `*(int *)(g_sound_system + 0x614)` and `+0x618` - two blocks of eight
+  48-byte records whose offset `0` is the magnitude
+  `SoundSystem_UpdateBandLevels` normalises. This is the last step between
+  here and the *whole* chain, and it is what would say what the sixteen
+  bands' centre frequencies are. Neither the `stfsx` sweep nor
+  `get_field_access_context` was pointed at it in this pass; the latter is
+  the tool that worked for the array itself and is the obvious next move.
+- **What fills the triple-buffered 32-float block** at `+0x494`, behind the
+  mutex - the producer side of the cross-thread handoff, likely an SPU job.
 - **What `lfs f0,0x4(r4)` is**, the fixed per-frame gain applied to every
   band before the hold.
 - **Which authored colour `r17` carries.** Assembled at `0x003db8f8` from
