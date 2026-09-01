@@ -28,15 +28,20 @@ same tick distance first reaches radius, before the dispatcher runs - so
 `SoundEmitter_ComputeVolumeAndAngle`'s own `d > radius` line is provably
 unreachable, not merely unobserved. See
 ["The zero-volume gate is dead code"](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#the-zero-volume-gate-is-dead-code-2026-09-01).
-**Three things landed as side effects in the 2026-08-24 pass and are still
-easy to lose**: [camera.md](../docs/ghidra/functions/psp-pulse-usa/camera.md)'s
+**Four things landed as side effects and are easy to lose**: [camera.md](../docs/ghidra/functions/psp-pulse-usa/camera.md)'s
 transposition finding moved **80 -> 88** (a second subsystem assumes both
 halves); [pads.md](../docs/ghidra/functions/psp-pulse-usa/pads.md)'s
-`racer+0x368` = "the local player" moved **45 -> 60** on a fourth and fifth
-use, still unnamed, with `oag_game::audio::sfx::Placement::CraftUnlessPlayer`
-and `OPPONENT_ENGINE_SCALE` the only two lines that move if it is wrong; and
-exhaust.md's "world position at `+0x50`" was **wrong** and is corrected to a
-scene-node pointer. **The PS2 has no such table in either byte order**, and a
+`racer+0x368` moved **45 -> 60 -> 85 and is now named `controller_class`**
+(2026-09-01: found the write site, `Craft_Construct_q`'s own second argument,
+then cross-checked live against all eight racers in a single race - `0` on
+the human-controlled craft, `2` on all seven AI, no other value seen), with
+`oag_game::audio::sfx::Placement::CraftUnlessPlayer` now confirmed rather than
+merely uncontradicted; exhaust.md's "world position at `+0x50`" was **wrong**
+and is corrected to a scene-node pointer; and reaching craft fields from a
+`Ship_UpdateCraft` breakpoint needs a dereference through `+0x1c4` first (the
+"craft" this page and camera.md mean is that entity, not `Ship_UpdateCraft`'s
+own `a0`) - already documented in `scripts/psp_trace_fields.py`, mis-applied
+once this session before the fix. **The PS2 has no such table in either byte order**, and a
 follow-up scan over 8 scales x 3 steps x 2 orders found no variant, so how
 `SCES_547.48` pans is unknown - the one clearly-shaped open question here.
 **Still unplaced**: the `.vex` classes `sound` `0x3e1`, `soundcone` `0x3e9` and
@@ -47,7 +52,6 @@ fourteen emitter construction sites.
 
 - How `SCES_547.48` (PS2) pans is unknown - no byte-order/scale/step variant matched across 8 scales x 3 steps x 2 orders
 - `.vex` classes `sound`, `soundcone`, `speaker`, the emitter cone's trigger, the doppler term's unit, and ten of fourteen emitter construction sites are all still unplaced
-- `racer+0x368` = "the local player" is unconfirmed on its fourth and fifth (still unnamed) use sites
 - The doppler `1536` unit is still unrecovered - needs an audible reference, not a register read
 
 ## Next Steps

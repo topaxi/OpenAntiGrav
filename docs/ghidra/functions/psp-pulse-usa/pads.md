@@ -501,6 +501,23 @@ it stays unnamed. See [positional-audio.md](positional-audio.md), and
 `oag_game::audio::sfx::Placement::CraftUnlessPlayer`, which is the one line that
 moves if this turns out to mean something else.
 
+**2026-09-01: the write site, and it settles this.** `Craft_Construct_q`
+(`0x08840c74`) writes `*(craft + 0x368) = param_2` unconditionally at
+construction - `param_2` also drives three other branches in the same
+function (`param_2 < 1`, `< 2`, `< 4`), so it is the constructor's own
+"controller class" argument, not something inferred from later behaviour. A
+live single-race capture read it off all eight racers by the correct path
+(`Ship_UpdateCraft`'s `a0` dereferenced through `+0x1c4` to the entity
+`racer+0x368` actually lives on - reading `a0+0x368` directly, without that
+step, returns an unrelated field and was the first, wrong attempt here):
+**the human-controlled craft read `0`, and all seven AI opponents read `2`,**
+with no other value seen. That is the write site plus a clean 8-for-8 live
+read, well past the naming threshold - confidence **85**. Named
+`controller_class` (`crates`' side has no reader yet); `0` and `2` are the
+only values confirmed live, so whatever `1` and `3` select (multiplayer? a
+second local pad?) is still open, and `oag_game::audio::sfx::Placement::CraftUnlessPlayer`'s
+`== 0` check is confirmed rather than merely uncontradicted.
+
 **`DAT_08b31048 != 2` is not the Zone check.** This project already identifies
 `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` as the Zone-mode selector
 ([zone-mode.md](zone-mode.md)). Here the same pair is tested against **2**,
