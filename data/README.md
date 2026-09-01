@@ -222,19 +222,21 @@ team as `Mantis`, which is the folder its ship is under.
 **Wipeout Pure EU** (per-pack folders like `UCES00001DDELTAPAK/`, seven
 packs: A7, Delta, Gamma 1, GamesRadar, Oblivion, Omega, Voice of Cod): each
 holds `ICON0.png`, `PARAM.sfo`, `PIC1.png`, a 16-byte `TEST.bin`, and the
-actual payload, `pi.wad`. **`pi.wad` genuinely is encrypted or otherwise
-unstructured** - measured entropy 8.0000 bits/byte across the whole file (a
-plain WAD, by contrast, sits well below that; Pulse's `PACKn.edat` above does
-too), no recognisable magic, no readable strings anywhere sampled, and
-`oag-wad` refuses it outright (`unknown WAD version 2858143392`). Unlike
-Pulse's DLC, this has not been reverse-engineered - nothing here established
-whether Pure's NpDrm usage matches Pulse's (single-argument
-`sceNpDrmEdataSetupKey`, no per-title key) or differs; Pure is a different
-executable and was not checked. `PARAM.sfo` is Sony's standard, unencrypted
-metadata format (same `\0PSF` magic as the disc's own `PARAM.SFO`) - the Gamma
-pack's names itself `TITLE=Gamma Pack`, `SAVEDATA_TITLE=Wipeout Pure`. No
-decryption attempted. This is very likely where the `Van_Uber` name
-(unaccounted for on both Pulse and Pure's own base-disc rosters) belongs -
-see [pure-status.md](../docs/formats/pure-status.md#van_uber-is-pure-content-not-a-pure-team)
-- but that is external corroboration, not something read from `pi.wad`
-itself.
+actual payload, `pi.wad`. `pi.wad` measures 8.0000 bits/byte across its whole
+length (a plain WAD sits well below that; Pulse's `PACKn.edat` above does
+too), and `oag-wad` refuses the raw file outright - but **it decrypts**.
+Neither `BOOT.BIN` nor Pure's bundled PRXs import any NpDrm or hashing
+function in either region (checked directly, unlike Pulse's single-argument
+`sceNpDrmEdataSetupKey`, no per-title key), because the game hand-rolls its
+own 8-round XTEA in application code; the per-pack keys are public, from an
+external tool, and kept at
+[`data/keys/pure-dlc-keys.txt`](keys/README.md#pure-dlc-keystxt). Decrypting
+each of the seven packs with its own key turns `pi.wad` into a file
+`oag-wad` parses unmodified, and the Gamma pack's manifest confirms
+`Van_Uber` is Pure DLC, shipped as team id `Vanuber` (no underscore) - see
+[dlc-pack.md](../docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table)
+for the algorithm and the verification. `PARAM.sfo` is Sony's standard,
+unencrypted metadata format (same `\0PSF` magic as the disc's own
+`PARAM.SFO`) - the Gamma pack names itself `TITLE=Gamma Pack`,
+`SAVEDATA_TITLE=Wipeout Pure`. Not yet wired into `oag_assets::dlc` - see the
+open handover thread.
