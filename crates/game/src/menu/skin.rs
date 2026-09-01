@@ -38,11 +38,15 @@ const OUR_LEADING: f32 = 6.0;
 /// The gap between two entries of a horizontal strip, **written in 480x272**
 /// and read through [`Skin::strip_gap`].
 ///
-/// **Ours, and it has to be**: a `<HorizMenu>` states a position and a colour
-/// and nothing about spacing - no `gap`, no second anchor to derive one from,
-/// and no capture of the original's own strip exists to measure one off. So an
-/// entry is advanced past by its own measured width plus this, which is the one
-/// rule that cannot put two labels on top of each other whatever they say.
+/// **Ours** in the sense that a `<HorizMenu>` states a position and a colour
+/// and nothing about spacing at all - no `gap`, no second anchor to derive one
+/// from. A 2026-09-01 capture measures what the real strip actually does,
+/// though - see the tab group below, which this value now shares a ruler
+/// with: `9`px in that capture, `3.4` converted. Left at its earlier, larger,
+/// invented `24` regardless - changing a *spacing* rule on a geometry
+/// correction is a second claim, not this one, and 24 still reads as clearly
+/// separated entries rather than the near-touching tabs the capture shows.
+/// Revisit together with the chamfer, not before.
 ///
 /// Deliberately larger than [`OUR_LEADING`]: entries sit side by side with no
 /// column edge to separate them, so the gap is the only thing that says where
@@ -55,21 +59,36 @@ const STRIP_GAP: f32 = 24.0;
 /// Nothing on disc states any of this: a `<HorizMenu>` gives a position and a
 /// colour and nothing about a tab shape at all - see [`Strip::color`]. A
 /// 2026-09-01 RPCS3 capture (`data/reference/hd-menu-highlight-shift/00-campaign.png`,
-/// 1278x718, HD style) is what these six numbers come from, converted into
-/// this build's own 480x272 the same way [`STRIP_GAP`] is: against that
-/// capture's own tab-to-tab gap (9px), which stands in for [`STRIP_GAP`]
-/// itself since nothing disc-authored is in the same image to calibrate
-/// against. **Confidence 55** - one capture, one entry measured twice
-/// (`CAMPAIGN` and `RACEBOX` agreed to the pixel), and a ruler that is this
-/// build's own chosen constant rather than the disc's.
+/// 1278x718, HD style) is what these six numbers come from.
+///
+/// **The ruler is the capture's own resolution against HD's own grid**
+/// (`oag_hd::frontend::MENU_SKIN.space`, confidence 95, `1920x1080`), not
+/// [`STRIP_GAP`]: `480 / 1278 = 0.3756`
+/// ours-units per capture pixel - the capture is a downscaled photo of HD's
+/// own 1920-wide grid, and this build's own figures are written in the PSP's
+/// 480-wide one, so a raw pixel crosses both scalings on its way in. **A first
+/// version of this group used `24 / 9 = 2.667` instead** - `STRIP_GAP`'s own
+/// invented value divided by the capture's tab-to-tab gap, on the reasoning
+/// that the capture's gap stood in for `STRIP_GAP` since nothing else in the
+/// same image could calibrate against. It cannot: `STRIP_GAP` is invented, not
+/// measured, so dividing by it computes the ratio between two unrelated
+/// numbers, not a scale. It produced a tab seven times too tall (`101` where
+/// `14.3` renders right) and every other number in the group proportionately
+/// wrong with it - self-consistent, since everything went through the same
+/// wrong ruler, and wrong regardless, since a render is what caught it: the
+/// oversized tab was tall enough to clip the screen title above it, in a
+/// region the ruler mistake never touched. Confirmed by re-rendering at the
+/// corrected ruler and matching the capture's own proportions again.
+/// **Confidence 55** - one capture, one entry measured twice (`CAMPAIGN` and
+/// `RACEBOX` agreed to the pixel).
 ///
 /// Raw pixel measurements, for whoever revisits this: tab `188x38` (`RACEBOX`)
 /// and `232x38` (`CAMPAIGN`), left padding before the label `6`, top padding
 /// above it `5`, right padding **`~0`** (a tab's flat width is its label's own
 /// measured width plus the left padding and nothing past it - the chamfer
-/// below eats what would otherwise be a right pad). Underline `13x5`, `8`
-/// below the label's own cap-height baseline, starting flush with the
-/// label's own left edge. Font metrics: cap height `14`.
+/// below eats what would otherwise be a right pad). Underline `13x5`, `21`
+/// below the label's own top (`8` below its cap-height baseline, cap height
+/// `14`), starting flush with the label's own left edge.
 ///
 /// **Deliberately not modelled**: the tab's top-right corner is chamfered,
 /// `17` wide by `7` tall in the same capture - cut, not rounded, and small
@@ -83,38 +102,35 @@ const STRIP_GAP: f32 = 24.0;
 /// `rotation` (see `crates/game/src/ui.wgsl`) is what exists today, and
 /// neither draws a per-corner cut. See
 /// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
-///
-/// **[`UNDERLINE_OFFSET_Y`] alone does not use [`STRIP_GAP`]'s ruler.** The
-/// ruler converts a raw capture pixel into this build's own unit by holding
-/// the tab-to-tab gap fixed, which says nothing about how big this build
-/// draws the label itself - that is [`Skin::row_scale`], derived
-/// independently, from the title's own font metadata rather than from
-/// anything in this capture. The two disagreed by about half: the ruler's
-/// raw offset (`21`px, label top to underline top) converts to `56`, but
-/// that assumes text fills as much of the tab as it does in the capture
-/// (cap height a third of tab height), and at this build's actual
-/// `row_scale()` it fills a twentieth, so `56` sat the mark two-thirds of
-/// the way down empty tab, not tight under the label the way the capture
-/// shows it. Rendered and re-measured instead
-/// (`--menu-page main --screenshot`, RACE's own baseline to underline top
-/// against RACE's own tab height) until that one ratio - baseline-to-mark
-/// over tab height, `20%` in the capture - matched; `28` is where it lands
-/// for this build's own font at this build's own `TAB_HEIGHT`. Tied to both
-/// of those, so it is the one number here that would need re-checking by
-/// eye if either changed, not just re-converted through the ruler.
-const TAB_LEFT_PAD: f32 = 16.0;
+const TAB_LEFT_PAD: f32 = 2.3;
 /// See [`TAB_LEFT_PAD`].
-const TAB_TOP_PAD: f32 = 13.0;
+const TAB_TOP_PAD: f32 = 1.9;
 /// See [`TAB_LEFT_PAD`].
-const TAB_HEIGHT: f32 = 101.0;
+const TAB_HEIGHT: f32 = 14.3;
 /// See [`TAB_LEFT_PAD`].
-const UNDERLINE_WIDTH: f32 = 35.0;
+const UNDERLINE_WIDTH: f32 = 4.9;
 /// See [`TAB_LEFT_PAD`].
-const UNDERLINE_HEIGHT: f32 = 13.0;
+const UNDERLINE_HEIGHT: f32 = 1.9;
 /// How far below the label's own `y` the underline mark starts. See
-/// [`TAB_LEFT_PAD`], and its own paragraph on why this one number is
-/// re-measured against this build's own render rather than ruler-converted.
-const UNDERLINE_OFFSET_Y: f32 = 28.0;
+/// [`TAB_LEFT_PAD`] for the group; this one number needed a further, small,
+/// eyeballed correction on top of the ruler's `7.9` (`21` raw px `* 0.3756`).
+/// The ruler assumes the label's own `y` sits at the glyph's cap top, true in
+/// the capture (its top padding was measured as tab-top-to-cap-top directly)
+/// but not in this build's own render - **confirmed, not just inferred from
+/// the mismatch**: a one-off print of `push_text`'s own `rect` for `R` in
+/// `RACE` gave `y=125, h=32` against a measured cap top at row 134 and
+/// baseline at row 156, so the glyph's cell reserves about 9px above the cap
+/// that carries no ink, and 1px below the baseline. `Cell::height` comes
+/// straight off each glyph's own `.fnt` metrics
+/// ([`crate::font::Atlas::from_font`]), so this is the disc's own font
+/// keeping every glyph's box tall enough for the face's ascenders and
+/// descenders, not padding this build added - `R`, `A`, `C` and `E` all
+/// report the same `32`, despite none of the four having either. At `7.9`
+/// the mark sat inside the label's own ink instead of below it - visible
+/// immediately on `--menu-page main --screenshot`, not a subtle miss. `9.0`
+/// is checked by eye against that render: clear of the label, inside the
+/// tab.
+const UNDERLINE_OFFSET_Y: f32 = 9.0;
 
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
