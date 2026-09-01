@@ -370,22 +370,49 @@ kinds of fact:
   all: that name resolves on neither pressing and the engine already reports it
   and draws nothing. `WO_ROCKET_EXPLO_TRACK` is genuinely Pure-shaped - present
   on Pulse, absent on Pure - and Pure ships no such effect under any name
-  rather than spelling it differently. Confidence **78**: `strings` on Pure's
-  `BOOT.BIN`, both the USA and EU pressings, lists `WO_ROCKET_EXPLO` and
-  `WO_ROCKET_FLARE` as literal `Data\Psys\...POB` paths and every sibling
-  explosion effect (`WO_MISSILE_EXPLO`, `WO_DISRUPTOR_EXPLO`, `WO_MINE_EXPLO`,
-  ...) the same way, but never a track-hit variant; six plausible alternate
-  spellings (`WO_ROCKET_EXPLOTRACK`, `WO_ROCKET_TRACK_EXPLO`,
-  `WO_ROCKET_EXPLO_TRACKHIT`, `WO_ROCKET_TRACKHIT`, `WO_ROCKET_HIT_TRACK`, and
-  the exact Pulse spelling itself) all miss against Pure USA's `Data.wad`
-  directory by hash. Capped short of the 85+ band because this is a string
-  search corroborated on two pressings, not a runtime trace or a decompiled
-  read of Pure's own rocket-hit code - a name assembled at runtime from a
-  template rather than stored whole would not show up this way, though no
-  sibling `.pob` name in this table is templated either. The likely reading:
-  Pure's rocket does not draw a separate effect when it hits track geometry,
-  it draws `WO_ROCKET_EXPLO` (or nothing) either way - still unconfirmed
-  without reading Pure's own rocket-collision code.
+  rather than spelling it differently. Confidence **78** for the absence
+  itself: `strings` on Pure's `BOOT.BIN`, both the USA and EU pressings, lists
+  `WO_ROCKET_EXPLO` and `WO_ROCKET_FLARE` as literal `Data\Psys\...POB` paths
+  and every sibling explosion effect (`WO_MISSILE_EXPLO`, `WO_DISRUPTOR_EXPLO`,
+  `WO_MINE_EXPLO`, ...) the same way, but never a track-hit variant; six
+  plausible alternate spellings all miss against Pure USA's `Data.wad`
+  directory by hash.
+
+**What Pure's rocket actually draws on a track hit, read directly rather than
+guessed at: `WO_TRACK_ROCK_DEBRIS`, not `WO_ROCKET_EXPLO_TRACK` and not
+`WO_ROCKET_EXPLO` either.** `Rocket_Update` (`0x0885f28c`,
+[`rocket-and-collision-fx.md`](../ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md))
+spawns it from both of its detonation branches, under two different internal
+tags (`RODB`, `ROD2`) but the identical resource name, read straight out of
+memory rather than inferred from the hashed constant. It parses cleanly
+through the unmodified `.pob` decoder - 3 emitters, a root burst of 8
+additive streaks plus a 16-particle billboard root whose particles each spawn
+a fading `trail` child - which also identifies one of the two extra `SYSP`
+entries the row above counts (37 against Pulse's 35): confirmed present in
+Pure's `Data.wad` and confirmed **absent** from Pulse's own PSP `Data.wad` by
+the same hash, so this is not the same name silently already covered by the
+count elsewhere.
+
+This means `docs/formats/pob.md`'s existing table - which lists
+`WO_TRACK_ROCK_DEBRIS` as one of nine names present only in Pulse's PS2
+archive - is still correct as a Pulse-vs-Pulse (PSP vs PS2) statement, but
+does not generalise across titles: the name also ships in Pure's PSP corpus,
+under a use this reading now names. Confidence **80** for the trigger read,
+**92** for the decode (an unmodified parser, unmodified codepath, matching the
+confidence already established for this section) - see
+[`rocket-and-collision-fx.md`](../ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md)
+for the full reasoning, including why the score stays short of runtime-verified.
+
+**Two of the three effects' Pure triggers are now read, not borrowed.** The
+same page reads `Rocket_Init` (fires `WO_ROCKET_FLARE`, tag `ROFL`),
+`Rocket_SpawnCraftExplosion` (fires `WO_ROCKET_EXPLO`, tag `ROEX`) and
+`ShipCollisionFx_Trigger` (fires `WO_SHIP_COLL_SPARK_DAMAGE`/`_NODAMAGE`/
+`WO_WEAPON_ABSORB` by the same `kind`/`damaged` branching Pulse's function of
+the same name uses) directly in Pure's own executable, all via the string-
+and `jal`-relocation workaround `psp-pure-eu/string-anchors.md` established.
+What remains unread is *whoever calls* these four functions - the `jal`
+wart breaks call-graph lookups the same way it breaks the string lookups, so
+each stays a name-and-tag match rather than a fully call-graph-verified one.
 
 What is **not** established is any *trigger* on Pure. These play because the
 engine fires them from its own recovered Pulse triggers; nothing has read Pure's
