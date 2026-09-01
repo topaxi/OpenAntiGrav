@@ -78,8 +78,9 @@
 //! disc missed - so a team that is on the PS2 disc and in a PSP pack looked
 //! absent from both.
 //!
-//! `Van_Uber` is the one name still unaccounted for, and it is a *Pure* team
-//! rather than a Pulse one - see `docs/formats/pure-status.md`.
+//! `Van_Uber` is the one name that was unaccounted for here, and it is a
+//! *Pure* team rather than a Pulse one, confirmed inside Pure's Gamma Pack as
+//! team id `Vanuber` (no underscore) - see `docs/formats/dlc-pack.md`.
 //!
 //! The PSP tests here assert only what a bare disc offers: the eight teams'
 //! plume shape, and the four DLC teams' absence *from the disc itself*, by
