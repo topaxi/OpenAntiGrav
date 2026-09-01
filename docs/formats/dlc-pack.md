@@ -155,14 +155,15 @@ gap the repository recorded in four places - `HANDOVER.md`, the
 not resolve by name", and three of which concluded `Auricom`/`Harimau`/`Icaras`
 were **PS2-only**. They are not: they are PSP downloadable content, and the PS2
 release simply bundles what the PSP sold separately. Of the original five,
-`Van_Uber` alone is still unaccounted for, and it is a *Pure* team - not on
-Pure's base disc (its `Data\Plugins\PI001\Definition.xml` names eleven
+`Van_Uber` alone was unaccounted for on this disc, and it is a *Pure* team -
+not on Pure's base disc (its `Data\Plugins\PI001\Definition.xml` names eleven
 `<PI_Team>` entries and `Van_Uber` isn't one; see
 [pure-status.md](pure-status.md#van_uber-is-pure-content-not-a-pure-team-on-this-disc)),
 but PSN downloadable content for Pure exactly as `Auricom`/`Harimau`/`Icaras`/
-`Mantis` were for Pulse. The pack is likely `data/dlc/WipEout Pure - Gamma
-Pack 1 (Europe) (DLC).zip`'s `pi.wad`, still unread - see
-[below](#not-read-yet).
+`Mantis` were for Pulse. **Confirmed, not just likely**: it is
+`data/dlc/WipEout Pure - Gamma Pack 1 (Europe) (DLC).zip`'s `pi.wad`, and its
+own folder id has the same underscore-dropped shape as `Mirage`/`Mantis` - see
+[below](#pures-packs-decrypt-with-an-external-key-table).
 
 The ids are also the leaf of each `location`, for every team on both discs and
 in every pack - which is why `race::ship_entry_name` can go on composing a path
@@ -238,16 +239,106 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
   hull.
 - **`PARAM.pbp`**, and the `.edat` files' relationship to the PSN download that
   produced them.
-- **Wipeout Pure's packs**, which are a different problem: their payload
-  measures 8.0000 bits/byte and `oag-wad` rejects it outright. See
-  `data/README.md` and [Pure status](pure-status.md). Seven are in
-  `data/dlc/`, one per pack (`A7`, `Delta Pack`, `Gamma Pack 1`,
-  `GamesRadar Pack`, `Oblivion`, `Omega Pack`, `Voice of Cod`), each a
-  `PARAM.sfo` + `pi.wad` pair rather than Pulse's four-archive shape. This is
-  very likely where `Van_Uber` lives - external sources (not project
-  evidence, since `pi.wad` doesn't parse) place a team by that name in the
-  Gamma pack specifically - but nothing here has decrypted a single byte to
-  check.
+
+## Pure's packs decrypt with an external key table
+
+**Confidence: 94.** Wipeout Pure's seven PSN packs (`A7`, `Delta Pack`, `Gamma
+Pack 1`, `GamesRadar Pack`, `Oblivion`, `Omega Pack`, `Voice of Cod`, in
+`data/dlc/`) are packaged nothing like Pulse's: one `PARAM.sfo` + `pi.wad` pair
+per pack rather than four WAD-shaped `.edat` files, and `pi.wad` measures
+8.0000 bits/byte across its whole length - genuinely encrypted, not a
+plaintext archive under a misleading extension the way Pulse's is.
+
+**`pi.wad` is a specially-crafted PSP savedata file, not an NpDrm `.edat`.**
+Neither `BOOT.BIN` nor any of Pure's 26 bundled PRXs imports a single NpDrm
+function in either region (checked directly: `scripts/resolve-psp-imports.py
+--modules` reports 33 modules / 278 stubs for `BOOT.BIN`, identical in both
+regions, none of them `sceNp` or `scePspNpDrm_user` - where Pulse's carries
+both). Nor does either import any hashing or KIRK-wrapper primitive
+(`sceKernelUtils*`, `sceChnnlsv`, `sceUtilsBufferCopyWithRange`) that a
+standard PGD decrypt would need. That absence is not a dead end here, it is
+corroborating evidence for the actual mechanism: the game implements its own
+encryption in plain application code, which needs no OS crypto import at all.
+
+The scheme, algorithm and per-pack keys are public, from Thomas Perl's
+[`wipeout-pure-dlc2dlc`](https://gitlab.com/thp/wipeout-pure-dlc2dlc) (a region
+conversion tool for real hardware, ISC license), fetched 2026-09-01 and kept at
+[`data/keys/pure-dlc-keys.txt`](../../data/keys/README.md#pure-dlc-keystxt):
+
+- **Layout**: `pi.wad` is a plain [WAD archive](wad.md) payload followed by a
+  256-byte per-**region** signature trailer (checksums plus, per that tool's
+  own comment, an encrypted key - not chased further, see below). The payload
+  is everything but the last 256 bytes.
+- **Cipher**: 8-round XTEA, keyed per-**pack** (one 128-bit key per content ID,
+  in `pure-dlc-keys.txt`), used as a stream cipher - `crypt_with_key` derives
+  an 8-byte keystream block per 8-byte-aligned file offset by XTEA-encrypting
+  `(0x12345678, offset / 8)` with the pack's key, and XORs it over the payload.
+  This is symmetric: the same operation encrypts and decrypts.
+- **Key selection is by trial, not by name, deliberately**: a pack's content
+  ID (e.g. `UCES00001DGAMMAPAK`, read straight out of its own `PARAM.sfo`
+  `TITLE` field) is the right key to try, but the **zip's own folder name is
+  not reliable** - the Gamma pack's zip unpacks to a folder called
+  `UCES00001DGAMMAPACK`, one letter off from the `GAMMAPAK` content ID both
+  `PARAM.sfo` and the key table use. The upstream tool sidesteps this by
+  trying every key against the first 8 bytes and keeping whichever produces
+  `version == 1`; this project's checks below did the same.
+
+**Verified against all seven shipped EU packs, not just cited**: for each,
+trial-decrypting the first 8 bytes against every row in the key table finds
+exactly one match, and decrypting the whole payload with that key under
+8-round XTEA turns it into a file `oag-wad` parses completely unmodified - a
+real `version == 1` header, a self-consistent entry count and offset chain,
+real LZSS/zlib payloads:
+
+| Pack | Content ID | Entries | Unpacked |
+| --- | --- | --- | --- |
+| A7 | `UCES00001DA7MUSIC` | 18 | 11 MiB |
+| Delta Pack | `UCES00001DDELTAPAK` | 216 | 41 MiB |
+| Gamma Pack 1 | `UCES00001DGAMMAPAK` | 192 | 46 MiB |
+| GamesRadar Pack | `UCES00001DGAMESRADAR` | 13 | 156 KiB |
+| Oblivion | `UCES00001DOBLIVION` | 14 | 7.5 MiB |
+| Omega Pack | `UCES00001DOMEGAPAK` + `UCES00001DOMEGAPAKS` (two packs, one zip) | 147 + 38 | 43 MiB + 791 KiB |
+| Voice of Cod | `UCES00001DVOCMUSIC` | 10 | 5.0 MiB |
+
+That is an exact arithmetic invariant (the version-field magic, plus a
+self-consistent entry table walked by the disc's own unmodified parser) across
+seven distinct real files, each keyed differently - the top of the **85-94**
+band. It does not reach 95: nothing here is a runtime trace of the actual PSP
+running this code, only agreement between a cited external algorithm and this
+project's own shipped data.
+
+**This resolves `Van_Uber`.** The decrypted Gamma pack's entry 0 (the manifest,
+same pattern as Pulse's `PACKn.edat`) declares `<PI_Team name="Vanuber">`
+with `location="Data\Ships\Vanuber"` - **no underscore**, the same
+folder-versus-display-name shape as `Mirage`/`Mantis` above, which is exactly
+why the underscored `Van_Uber` spelling used everywhere external never
+resolved by name-hash. `Data\Ships\Vanuber\Ship.vex` and
+`\handlingstats.xml` both hash-match real entries in the pack (`9e62d495` at
+entry 139, `7e135ec1` at entry 89), so the team is fully simulatable the same
+way Pulse's four DLC teams are - see
+[pure-status.md](pure-status.md#van_uber-is-pure-content-not-a-pure-team-on-this-disc).
+
+**Two things this page does not answer, on purpose:**
+
+- **The 256-byte trailer.** `keys.txt`'s own header comment says it is
+  "encrypted with a region-specific key embedded in BOOT.BIN," which would be
+  a *different* key from the per-pack ones above. A direct byte-pattern search
+  for that per-pack key, the XTEA delta `0x9e3779b9` and the `0x12345678`
+  constant in both `BOOT.BIN`s came back empty (`0x12345678` matched once, but
+  a 4-byte generic constant like that is not meaningful evidence on its own).
+  MIPS commonly synthesises a 32-bit constant from two 16-bit immediates
+  (`lui`/`ori` or `lui`/`addiu`) rather than storing it as data, so a
+  contiguous-byte search cannot rule the routine out - not chased further.
+  Decryption does not need this trailer at all: `oag-wad` never reads it.
+- **`TEST.bin`.** 16 bytes, unread beyond its size and high-entropy-looking
+  content. The upstream tool never touches it and every pack above decrypts
+  correctly without it, so it is not load-bearing for reading a pack's
+  content - but its actual purpose (most likely something the real PSP's
+  savedata-signature check needs, since `pi.wad` is packaged as savedata) is
+  still unknown.
+
+**Not yet done**: wiring this into `oag_assets::dlc`/`oag_game::dlc` so Pure's
+packs mount the way Pulse's do. See the open handover thread.
 
 ## Reading one
 
