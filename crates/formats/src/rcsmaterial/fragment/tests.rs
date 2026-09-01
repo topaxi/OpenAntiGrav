@@ -528,18 +528,25 @@ fn a_later_fetch_clobbers_the_register_it_writes() {
     );
 }
 
-/// Builds an `LG2` / `MUL {exponent}` / `EX2` chain into register `reg`, the
-/// idiom `renderer.md` reads as `pow(x, exponent)`.
+/// Builds a saturated `DP3` feeding `LG2` / `MUL {exponent}` / `EX2` into
+/// register `reg` - the `N.H` idiom `renderer.md` reads under every
+/// specular term, `pow(N.H, exponent)`.
 ///
-/// `mask` is applied to all three instructions, not only `EX2` - real
+/// `mask` is applied to all four instructions, not only `EX2` - real
 /// shipped microcode threads a scalar through one lane throughout a chain
-/// like this, and giving `LG2`/`MUL` the default full mask would make them
+/// like this, and giving the others the default full mask would make them
 /// count as colour writes in their own right whenever `mask` picks a
 /// non-colour lane, which is not what a scalar `pow` computation is.
 fn pow_chain(reg_index: u8, exponent: f32, mask: u8) -> Vec<Instruction> {
+    let mut dot = insn(0x05); // DP3, arity 2 - N.H, saturated
+    dot.dst = reg_index;
+    dot.mask = mask;
+    dot.saturate = true;
+
     let mut lg2 = insn(0x1d); // LG2, arity 1
     lg2.dst = reg_index;
     lg2.mask = mask;
+    lg2.sources = [reg(reg_index, false), Source::Input, Source::Input];
 
     let mut mul = insn(0x02); // MUL, arity 2
     mul.dst = reg_index;
@@ -552,7 +559,7 @@ fn pow_chain(reg_index: u8, exponent: f32, mask: u8) -> Vec<Instruction> {
     ex2.mask = mask;
     ex2.sources = [reg(reg_index, false), Source::Input, Source::Input];
 
-    vec![lg2, mul, ex2]
+    vec![dot, lg2, mul, ex2]
 }
 
 /// The ship's own reading: `pow(N.H, 40)` (`@0x40 LG2 / @0x43 MUL by 40 /
@@ -619,4 +626,49 @@ fn a_dead_pow_chain_after_the_real_one_does_not_win() {
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(40.0));
+}
+
+/// **A texture-fed `pow` is not a specular term, even though it reaches the
+/// output too** - `track_surface`'s own lightmap curve,
+/// `pow(lightmap.rgb, k)` (`renderer.md`'s block #9), is exactly this
+/// shape: the identical `LG2`/`MUL`/`EX2` instructions, fed by a `TEX`
+/// result rather than a saturated dot product.
+#[test]
+fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
+    let mut tex = insn(0x17); // TEX H1, f[TC4] unit0 - the lightmap
+    tex.dst = 1;
+    tex.mask = 0xf;
+
+    let mut lg2 = insn(0x1d);
+    lg2.dst = 1;
+    lg2.mask = 0xf;
+    lg2.sources = [reg(1, false), Source::Input, Source::Input];
+
+    let mut mul = insn(0x02);
+    mul.dst = 1;
+    mul.mask = 0xf;
+    mul.sources = [reg(1, false), Source::Constant, Source::Input];
+    mul.constant = Some([2.0, 0.0, 0.0, 0.0]);
+
+    let mut ex2 = insn(0x1c);
+    ex2.dst = 1;
+    ex2.mask = 0xf;
+    ex2.sources = [reg(1, false), Source::Input, Source::Input];
+
+    let mut mad = insn(0x04); // + f[TC1], the colour, END
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions: vec![tex, lg2, mul, ex2, mad],
+    };
+    assert_eq!(
+        program.specular_exponent(),
+        None,
+        "the LG2 reads a texture sample, not a saturated DP3 - not the N.H idiom"
+    );
 }

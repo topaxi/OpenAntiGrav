@@ -342,9 +342,10 @@ impl Program {
         self.taint(false)
     }
 
-    /// The literal exponent of a `pow(x, e) = exp2(e * log2(x))` chain -
-    /// `LG2` then a `MUL` by a constant then `EX2` - when that chain's
-    /// result reaches the program's output colour.
+    /// The literal exponent of a `pow(N.H, e) = exp2(e * log2(N.H))` chain -
+    /// a saturated `DP3` feeding `LG2` then a `MUL` by a constant then
+    /// `EX2` - when that chain's result reaches the program's output
+    /// colour.
     ///
     /// This is the specular term's exponent on every lit material read so
     /// far: `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have
@@ -354,35 +355,47 @@ impl Program {
     /// page's disc sweep shows is only the commonest of six values (`5`,
     /// `10`, `32`, `26.156`, `40`, `300`).
     ///
-    /// **Reaching the output is the whole filter, not the instruction shape
-    /// alone.** The identical `LG2`/`MUL`/`EX2` idiom also raises other
-    /// quantities to a power - Wipeout HD's Zone shape's `rim^10`/`rim^5`
-    /// terms are the same three instructions around an unrelated dot
-    /// product, and are not this method's business. A chain is only
-    /// returned once [`Self::reaches_output`] confirms its result survives
-    /// to the last instruction to write a colour channel - the same
-    /// instruction [`Self::taint`]'s own `last` picks out, for the same
-    /// reason: most lit programs end `MOV H0.w, {const}`, alpha from a
-    /// constant, and stopping at the final instruction would miss a colour
-    /// written earlier and never touched again.
+    /// **Two filters, neither optional, because the bare `LG2`/`MUL`/`EX2`
+    /// shape alone is not specific to specular at all.** Measured disc-wide
+    /// while building this method: the identical three instructions raise a
+    /// texture sample to a power on `track_surface`'s own lightmap curve
+    /// (`pow(lightmap.rgb, k)`, `renderer.md`'s block #9), compute `exp(x)`
+    /// by an unrelated `log2(e)` constant on other materials, and raise
+    /// several other quantities to a power that reachability alone does not
+    /// separate from a real specular term - excluding only Zone-declaring
+    /// blocks left thousands of chains a reachability filter could not
+    /// distinguish from the roughly 1,800 the disc sweep this method
+    /// reproduces actually found. So:
+    ///
+    /// - [`Self::lg2_reads_a_saturated_dot`] requires the `LG2` to read a
+    ///   register a saturated `DP3` most recently wrote - the `N.H`/`N.L`
+    ///   idiom every specular and sun-diffuse read in `renderer.md` shares,
+    ///   which a texture-fed power curve does not.
+    /// - [`Self::reaches_output`] requires the chain's result to survive to
+    ///   the last instruction that writes a colour channel - the same
+    ///   instruction [`Self::taint`]'s own `last` picks out, for the same
+    ///   reason: most lit programs end `MOV H0.w, {const}`, alpha from a
+    ///   constant, and stopping at the final instruction would miss a
+    ///   colour written earlier and never touched again.
     ///
     /// Chains are tried **last first**: the specular term is characteristically
     /// added after the diffuse sum (`renderer.md`'s own block reads all place
     /// it after the `N.L` term), so the chain closest to the end is the
-    /// likeliest candidate, and the first one found reaching the output wins.
+    /// likeliest candidate, and the first one found passing both filters wins.
     ///
-    /// `None` when no such chain reaches the output at all - every unlit and
+    /// `None` when no such chain passes both filters - every unlit and
     /// emissive program, and any block this pattern does not fit.
     ///
     /// Confidence 80, inherited from the disc sweep this reproduces: the
     /// pattern is instruction shape, not block meaning, so a non-specular
-    /// power that happens to be the one reaching the output would read as
-    /// this method's answer too. Not observed on the materials read by hand
-    /// so far, but not ruled out either.
+    /// power fed by a saturated dot product and reaching the output - a
+    /// Fresnel-style term, say - would read as this method's answer too.
+    /// Not observed on the materials read by hand so far, but not ruled out
+    /// either.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
         for i in (0..self.instructions.len()).rev() {
-            if self.instructions[i].name() != Some("LG2") {
+            if self.instructions[i].name() != Some("LG2") || !self.lg2_reads_a_saturated_dot(i) {
                 continue;
             }
             let lg2_dst = (self.instructions[i].dst, self.instructions[i].dst_half);
@@ -421,6 +434,28 @@ impl Program {
             }
         }
         None
+    }
+
+    /// Whether the `LG2` at `at` reads a register a saturated `DP3` most
+    /// recently wrote - the `N.H`/`N.L` idiom `renderer.md` reads under
+    /// every specular and sun-diffuse term, and the discriminator a bare
+    /// `LG2`/`MUL`/`EX2` instruction shape does not carry on its own: see
+    /// [`Self::specular_exponent`]'s own doc comment for what this excludes
+    /// and why it has to.
+    ///
+    /// `false` when the `LG2`'s own operand is not a register (an
+    /// interpolator or an inline constant cannot be a saturated dot
+    /// product's result) or when nothing before it in the program wrote
+    /// that register at all.
+    fn lg2_reads_a_saturated_dot(&self, at: usize) -> bool {
+        let Some(Source::Register { index, half }) = self.instructions[at].operands().next() else {
+            return false;
+        };
+        self.instructions[..at]
+            .iter()
+            .rev()
+            .find(|insn| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))
+            .is_some_and(|insn| insn.name() == Some("DP3") && insn.saturate)
     }
 
     /// Whether the value the instruction at `from` writes survives, by
