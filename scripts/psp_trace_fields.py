@@ -99,10 +99,16 @@ ENTITY_OWNER = 0x94
 # camera.md and projection-vs-the-original.md, but never yet sampled through
 # an actual impact, and camera.md is explicit that no writer for it has been
 # found at all.
+# `Craft_Construct_q` (`0x08840c74`) writes its own second argument here
+# verbatim - docs/ghidra/functions/psp-pulse-usa/pads.md, confidence 85. A
+# 2026-09-01 live capture read `0` on the human-controlled craft and `2` on
+# all seven AI opponents in a single race, with no other value seen; what `1`
+# and `3` select is unconfirmed (multiplayer? a second local pad?).
 ENTITY_FIELDS = [
     ("shield", 0x88),
     ("fov_intercept", 0x7C),
     ("fov_additive", 0x790),
+    ("controller_class", 0x368),
     ("ss_tap_window_l", 0x89C),
     ("ss_tap_window_r", 0x8A0),
     ("ss_shift_l", 0x8A4),

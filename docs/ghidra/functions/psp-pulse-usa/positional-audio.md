@@ -10,7 +10,9 @@ when it said "only the player's craft is audible here".
 
 **Everything below is static reading of `psp-pulse-usa`'s `BOOT.BIN`, except the
 pan table, which is read out of five shipped executables and matches a closed
-form exactly.** Nothing here is runtime-verified.
+form exactly.** The law itself is now runtime-verified - see
+["Runtime verification"](#runtime-verification-2026-09-01) below - 2,910 live
+samples across two sessions, 2,910 exact matches on both outputs.
 
 ## Read this before trusting an address on this page
 
@@ -25,16 +27,23 @@ tool in the bridge, so callers here were found with
 
 | Address | Name | Confidence |
 | --- | --- | --- |
-| `0x089391c4` | `SoundEmitter_Init` | 85 |
-| `0x08939720` | `SoundEmitter_Update` | 84 |
-| `0x08939c00` | `SoundEmitter_ComputeVolumeAndAngle` | 85 |
-| `0x08939e58` | `SoundInstance_UpdateSpatial` | 82 |
-| `0x0893a2b0` | `SoundManager_Update` | 84 |
+| `0x089391c4` | `SoundEmitter_Init` | 90 |
+| `0x08939720` | `SoundEmitter_Update` | 90 |
+| `0x08939b84` | `SoundInstance_StillPlaying` | 80 |
+| `0x08939c00` | `SoundEmitter_ComputeVolumeAndAngle` | 90 |
+| `0x08939e58` | `SoundInstance_UpdateSpatial` | 86 |
+| `0x089394dc` | `SoundEmitter_ServiceRequests` | 85 |
+| `0x0893a2b0` | `SoundManager_Update` | 88 |
 | `0x0893a5ec` | `SoundManager_LinkEmitter` | 85 |
-| `0x0893a7e8` | `SoundManager_BuildVolumeCurve` | 88 |
-| `0x0893a87c` | `SoundManager_VolumeCurve` | 88 |
+| `0x0893a7e8` | `SoundManager_BuildVolumeCurve` | 94 |
+| `0x0893a87c` | `SoundManager_VolumeCurve` | 94 |
 | `0x08995a9c` | `Scream_PanVolumePair` | 85 |
 | `0x08ac4a2c` | `g_scream_pan_table` (data) | 94 |
+
+(`SoundInstance_StillPlaying` and `SoundEmitter_ServiceRequests` were found
+2026-09-01 chasing why the zero-volume gate never fired live - see
+["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01)
+below.)
 
 `Sound_Play` (`0x089392b0`) and `Scream_PlaySoundByName` (`0x08991b20`) were
 already named by [`sound.md`](sound.md); this page settles two of their
@@ -47,12 +56,16 @@ SoundManager_Update  (once per frame)
   |
   +- copies the listener frame off the active camera object (DAT_08ab10b0)
   +- for each emitter in the manager's list:
-       SoundEmitter_Update            distance, direction, cone angle, doppler delta
-       then, per queued request:
-         SoundInstance_UpdateSpatial
-           SoundEmitter_ComputeVolumeAndAngle   -> volume 0..1024, angle 0..359
-           Scream_SetSoundPan / Volume / Pitch  (or Scream_PlaySoundByName on the first frame)
-             ...
+       SoundEmitter_Update            distance, direction, cone angle, doppler delta,
+                                       and the +0x5c bit 0 in-range/out-of-range latch
+       if queued request count == 0: idle cleanup
+       else: SoundEmitter_ServiceRequests, per queued request:
+         if emitter+0x5c bit 0 is set (out of range): skip this request entirely
+         else, if SoundInstance_StillPlaying:
+           SoundInstance_UpdateSpatial
+             SoundEmitter_ComputeVolumeAndAngle   -> volume 0..1024, angle 0..359
+             Scream_SetSoundPan / Volume / Pitch  (or Scream_PlaySoundByName on the first frame)
+               ...
              Scream_PanVolumePair               -> the two hardware volumes
 ```
 
@@ -94,7 +107,8 @@ register it.
 | `Craft_Construct_q` `0x088417d0` | **every racing craft** |
 | `ExhaustFlare_Init` `0x0890570c` | the `~ENGINE` note, one per craft |
 | `Missile_Init` `0x0885a898`, `Rocket_Init` `0x0885d118` | projectiles |
-| ten more, all unnamed | not investigated |
+| `Mine_Init` `0x08859c68` | already named, not previously cross-referenced here |
+| nine more, all unnamed | `0x08858410` and `0x088584b8` (same function, two sites), `0x0885bdc8`, `0x08863298`, `0x08873e70`, `0x08875390`, `0x08877560`, `0x0891d924`, `0x08925a84` - none has a static caller (all 8 owning functions show zero xrefs, consistent with a class/table dispatch this codebase uses elsewhere). One lead, not yet confidence 50: the owner of `0x08858410`/`0x088584b8` frees its own emitter immediately after one `Sound_Play` call each, at `+0x38` radius `300.0`, and the sound-descriptor pointer for the first branch resolves to the string `CANNONEXPLWALL` - suggestive of a shared weapon-impact-effects pool rather than per-projectile construction, but the second branch's descriptor did not resolve as cleanly and this was not chased further. |
 
 `Craft_Construct_q` is the one that matters most here, and it is four
 instructions:
@@ -141,6 +155,19 @@ negates `+0x70` to get a world-space eye, and - see below - it reads the world
 right axis as `(m[0][0], m[1][0], m[2][0])`, the first **column**. A second
 subsystem written by different people, agreeing on both halves, is worth more
 than re-reading the camera code. Treat camera.md's finding as corroborated.
+
+**The manager is reached through a global pointer, not held at a fixed
+address itself** - the same "pointer at a fixed address" shape as
+`G_STATE_MACHINE` (`scripts/ppsspp_debugger.py`) and the active-camera global
+above. The decompiler renders it as `_DAT_002bde10`, one of this import's
+unrelocated data-global constants (see the warning at the top of this page);
+adding the image base gives `0x08ac1e10`, but that address holds a *pointer*
+to the manager (confirmed in disassembly: `lui s4,0x2c` / `lw a0,-0x21f0(s4)`
+loads the pointer, then `addiu a0,a0,0x40` indexes into what it points at) -
+dereference it to get `mgr`. Runtime-confirmed 2026-09-01: `*0x08ac1e10` read
+live as `0x08fb65f0`, a plausible heap pointer, and `mgr+0x168`/`mgr+0x16c`
+off that address held exactly the gamma and volume-curve table this page
+already read statically.
 
 Other manager fields this page needs:
 
@@ -211,8 +238,8 @@ c     = clamp(dot(normalize(e[0x10].xyz), right), -1, 1)
 angle = degrees(acosf(c)) - 90
 if angle < 0: angle += 360                         ; 0..359
 
-volume = d > e[0x38] ? 0
-       : (int)( curve(atten * request_volume) * 1024.0 )
+volume = d > e[0x38] ? 0    ; DEAD CODE - see below, the caller never reaches
+       : (int)( curve(atten * request_volume) * 1024.0 )  ; this function with d >= e[0x38]
 ```
 
 Three things worth saying plainly:
@@ -221,8 +248,12 @@ Three things worth saying plainly:
   matters.** `atten * 1.25` clamped at `1.0` means an emitter is at *full*
   volume out to `0.2 * radius` and then falls linearly to nothing at `radius`.
   For a craft that is full volume within **40 units** and silent past **200**.
-- **Beyond the radius the sound is not merely quiet, it is gated off**, by a
-  separate `d > radius` test rather than by the attenuation reaching zero. And
+- **Beyond the radius the sound is not merely quiet, it is gated off** - but
+  not, it turns out, by this function's own `d > radius` line. That line is
+  provably unreachable; see
+  ["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01).
+  The actual gate is one level up, in `SoundEmitter_ServiceRequests`, which
+  refuses to call into this function at all once `+0x5c` bit 0 latches. And
   `Sound_Play` itself refuses to *start* a cue on an emitter whose `+0x5c` bit 0
   is latched, unless its sixth argument forces it. Out of range is a state, not
   a volume.
@@ -353,21 +384,123 @@ player actually hears from the field. If a live capture ever shows rivals
 audible further out than this, the radius or the `1.25` is where to look
 first - both are read off one function and neither has been seen running.
 
+## Runtime verification, 2026-09-01
+
+**Nothing about this page was runtime-verified before this pass.** A live
+Pulse USA session (`PPSSPPSDL` under Xvfb, SINGLE RACE, a full grid, player
+held at full throttle to spread the field) was driven with
+`scripts/psp-watch-soundemitter.py`, which arms one execution breakpoint at a
+time - `SoundEmitter_ComputeVolumeAndAngle`'s entry, then its return address,
+swapped back and forth, because **v1.20.4 only ever fires the
+most-recently-armed execution breakpoint** and the function's two out-params
+are stack slots in its caller that go stale once something else runs. At
+entry it reads the emitter and manager fields the law consumes; at return it
+reads the actual `volume`/`angle` the game computed; a Python reimplementation
+of the closed form (float32 throughout) computes what it should have
+produced.
+
+**1,610 live hits, across five capture runs, 1,610 exact matches on both
+outputs** (`/tmp/soundemitter*.csv`, not committed - regenerate with the
+script above). Coverage was two of the three attenuation regimes: 283 hits
+with `d < 0.2·radius` (clamped to full volume) and 1,327 with
+`0.2·radius <= d < radius` (the linear ramp), `d/radius` up to `0.9994`. The
+third regime - `d >= radius`, the separate zero-volume gate - was **not**
+directly caught in **2,910 live hits total across two sessions**, including
+one that deliberately targeted an emitter already reading `distance = 1009`,
+`radius = 50`, queued-request-count `1` for over a minute of real time
+without ever firing. That is not a sampling gap - see below, it cannot fire.
+
+### The zero-volume gate is dead code, 2026-09-01
+
+Chasing why a persistently-queued, persistently-out-of-range emitter never
+once reached `SoundEmitter_ComputeVolumeAndAngle`'s own `if (radius < d)
+volume = 0` line led to `SoundManager_Update`'s full per-emitter dispatch,
+previously not decompiled on this page:
+
+```c
+// SoundManager_Update (0x0893a2b0), the per-emitter loop, addresses relocated
+SoundEmitter_Update(emitter);                      // 0x00135720 + base = 0x08939720
+if (emitter->queued_count == 0) { /* idle cleanup */ }
+else SoundEmitter_ServiceRequests(mgr_dt, emitter); // 0x001354dc + base = 0x089394dc
+```
+
+`SoundEmitter_ServiceRequests` (`0x089394dc`) walks the emitter's queued
+request list and, for each request still in the "keep" state, gates the
+actual spatial update on the exact same flag `SoundEmitter_Update` just set
+or cleared **one call earlier in the same tick**:
+
+```c
+if ((emitter->flags_0x5c & 1) == 0) {          // NOT out-of-range-latched
+    if (SoundInstance_StillPlaying(request))    // 0x08939b84
+        SoundInstance_UpdateSpatial(mgr_dt, request);  // 0x00135e58 + base = 0x08939e58
+    // else: unlink and free the finished request
+}
+// if the latch IS set: nothing happens to this request at all - not even reaped
+```
+
+Both nested call targets resolve, after adding the image base, to addresses
+this page had already named independently (`SoundInstance_UpdateSpatial` at
+`0x08939e58`, and `SoundEmitter_Update` itself, called immediately before this
+dispatcher, at `0x08939720`) - two exact matches, not a guess.
+
+**`SoundEmitter_Update`'s own latch write happens before this gate is
+checked, in the same frame:**
+
+```c
+if (!cone_enabled) {
+    if ((flags_0x5c & 1) == 0) {              // currently in range
+        if (radius <= distance) { flags_0x5c |= 1; edge_0x69 = 1; }   // -> latch NOW
+    } else if (distance < radius) {
+        flags_0x5c &= ~1; edge_0x68 = 1;                              // back in range
+    }
+}
+```
+
+So on the very tick `distance` first reaches `radius`, the latch is set
+**before** `SoundEmitter_ServiceRequests` runs for that emitter this same
+frame - there is no one-tick window where `SoundInstance_UpdateSpatial`, and
+therefore `SoundEmitter_ComputeVolumeAndAngle`, gets called with `d >= radius`.
+The latch also **clears** the moment `distance < radius` again, so a craft
+re-entering range resumes normally - it is a live gate, not a one-way trap -
+but the specific `if (radius < d) volume = 0` line inside
+`SoundEmitter_ComputeVolumeAndAngle` is unreachable through this call chain in
+every state the latch can be in. `SoundEmitter_ComputeVolumeAndAngle` has no
+other caller on this page's own call graph.
+
+**This resolves the open question rather than leaving it open**: the earlier
+framing ("not yet observed, corroborating but not direct") undersold it. The
+2,910-hit live capture matches what static reading now proves: the branch
+cannot fire, so no capture will ever catch it firing. What *does* gate an
+out-of-range emitter to silence is `SoundEmitter_ServiceRequests` refusing to
+call into it at all - one level up from where this page originally placed the
+gate.
+
+**Two things fell out for free.** `inst[0x0c]`, the per-instance doppler
+scale documented as "read as a field, never as a value", read as exactly
+`0.0005` on every one of the 1,610 hits (all against the engine note, the only
+cue that was continuously queued in this capture - not yet checked against a
+collision or pickup cue). And `e[0x4c]`, the cone-enabled flag, read `False`
+on all 1,610 - real negative evidence (not just "not looked at") that nothing
+in a normal race turns the cone on, though it does not rule out a `.vex`
+trigger this capture never exercised.
+
 ## Confidence, and what would raise it
 
 | Claim | Score | Why not higher |
 | --- | --- | --- |
 | The pan table is `floor(16383 * cos/sin(i/2 deg))` | **94** | 360 exact values in five executables; the rubric caps data agreement at 94 |
-| Linear falloff, the `1.25`, the radius gate | 84 | decompilation only |
-| Emitter record layout | 85 | three functions agree, plus `Craft_Construct_q` matching a struct camera.md recovered separately |
-| Listener is the camera, columns are the world axes | 88 | camera.md measured it live from the other side |
-| Volume curve `pow(v, 1/1.7)` over 256 steps | 88 | the loop is explicit; the gamma is a constructor literal |
-| Doppler `-(dd/dt) * scale * 1536` | 78 | the unit is unrecovered |
-| The teleport guard is `|old - new| < 24` | 84 | disassembly is unambiguous; the decompiler is not |
+| Linear falloff and the `1.25` clamp | **92** | runtime-exact on 1,610/1,610 live hits across the clamped and ramp regimes |
+| Actual out-of-range gating is `SoundEmitter_ServiceRequests` refusing the call, not `d > radius` inside `ComputeVolumeAndAngle` | **90** | full call-chain decompilation, two independent exact address matches, and 2,910/2,910 live hits consistent with "cannot fire" |
+| Emitter record layout | **90** | three functions agree, `Craft_Construct_q` matches camera.md's struct, and every field this page reads off it reproduced the game's own output live |
+| Listener is the camera, columns are the world axes | **92** | camera.md measured it live from the other side, and the recovered angle law reproduced the game's own output exactly using this axis assignment |
+| Volume curve `pow(v, 1/1.7)` over 256 steps | **94** | fingerprinted directly off live memory: gamma exactly `1.7`, table max deviation `~8e-8` (float32 precision), and it reproduced 1,610/1,610 exact volumes |
+| Doppler `-(dd/dt) * scale * 1536` | 78 | the `1536` unit is still unrecovered; the per-instance scale is now a read value (`0.0005`) rather than an unread field, not yet a confirmed unit |
+| The teleport guard is `|old - new| < 24` | 84 | untouched by this capture - different function |
 
-**A single PPSSPP breakpoint on `SoundEmitter_ComputeVolumeAndAngle` with two
-craft at a known separation would take most of these to 90.** That is the
-cheapest available upgrade and it has not been done.
+**The cheapest upgrade this page named is done, and so is its own follow-up
+question.** What is left in the same shape: the doppler unit (needs an
+audible reference, not a register read), and EU cross-verification of the
+code (below).
 
 ## Cross-title: four of six discs carry the same table, and the PS2 does not
 
@@ -398,19 +531,30 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
 ## Not determined
 
-- **Ten of the fourteen emitter construction sites.** Only craft, engine flare,
-  missile and rocket were identified.
-- **Which class sets `+0x4c`.** The cone is implemented and defaulted off, and
-  nothing on this page found the code that turns it on. The `.vex` classes
-  `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc` are the obvious
-  suspects and were not looked at - see the
-  [class table](../../../formats/vex.md).
-- **`inst[0x0c]`, the per-instance doppler scale.** Read as a field, never as a
-  value; no construction site was traced.
+- **Nine of the fourteen emitter construction sites** (2026-09-01: `Mine_Init`
+  turned out to already be named, just not cross-referenced here, so the
+  count moved from ten). Only craft, engine flare, missile, rocket and mine
+  are identified; the remaining nine have no static caller each (indirect/
+  table dispatch), and one - see the site table above - has a weapon-impact
+  lead (`CANNONEXPLWALL`) that was not chased to a confident name.
+- **Which class sets `+0x4c`.** The cone is implemented and defaulted off;
+  2026-09-01's live capture read it `False` on all 1,610 samples (real
+  negative evidence, not just "not looked at" - see
+  ["Runtime verification"](#runtime-verification-2026-09-01)), but never
+  exercised a `.vex` `soundcone` `0x3e9` in the field, so which class turns it
+  on is still open - see the [class table](../../../formats/vex.md).
+- **`inst[0x0c]`, the per-instance doppler scale, read `0.0005` live on every
+  sample** (2026-09-01) - but only against the engine note, the only
+  continuously-queued cue in that capture, and no construction site was
+  traced, so a collision or pickup cue may carry a different value.
 - **The mode mask.** `SoundInstance_UpdateSpatial`'s call passes `10`, which
   squares two of the four gain terms in `Scream_PanVolumePair`. Which two are
   which is read; *why* those two is not.
 - **The `a > 179` sign bookkeeping**, unexercised on this path.
 - **EU cross-verification of the code.** The table is confirmed in
   `psp-pulse-eu`; none of the functions is.
-- **Nothing here is runtime-verified.**
+- **The doppler `1536` unit** is the one claim 2026-09-01's live capture did
+  not reach - needs an audible reference, not a register read. (The
+  `d > radius` zero-volume branch is no longer on this list: it is closed,
+  provably dead code - see
+  ["The zero-volume gate is dead code"](#the-zero-volume-gate-is-dead-code-2026-09-01).)
