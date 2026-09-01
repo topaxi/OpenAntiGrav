@@ -342,6 +342,123 @@ impl Program {
         self.taint(false)
     }
 
+    /// The literal exponent of a `pow(x, e) = exp2(e * log2(x))` chain -
+    /// `LG2` then a `MUL` by a constant then `EX2` - when that chain's
+    /// result reaches the program's output colour.
+    ///
+    /// This is the specular term's exponent on every lit material read so
+    /// far: `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have
+    /// no Lambert diffuse either" reads the ship's own `pow(N.H, 40)` this
+    /// way (`@0x40 LG2 / @0x43 MUL by 40 / @0x46 EX2`), and `mesh.wgsl`
+    /// hard-codes the same idiom's exponent at a shared `32` - which the same
+    /// page's disc sweep shows is only the commonest of six values (`5`,
+    /// `10`, `32`, `26.156`, `40`, `300`).
+    ///
+    /// **Reaching the output is the whole filter, not the instruction shape
+    /// alone.** The identical `LG2`/`MUL`/`EX2` idiom also raises other
+    /// quantities to a power - Wipeout HD's Zone shape's `rim^10`/`rim^5`
+    /// terms are the same three instructions around an unrelated dot
+    /// product, and are not this method's business. A chain is only
+    /// returned once [`Self::reaches_output`] confirms its result survives
+    /// to the last instruction to write a colour channel - the same
+    /// instruction [`Self::taint`]'s own `last` picks out, for the same
+    /// reason: most lit programs end `MOV H0.w, {const}`, alpha from a
+    /// constant, and stopping at the final instruction would miss a colour
+    /// written earlier and never touched again.
+    ///
+    /// Chains are tried **last first**: the specular term is characteristically
+    /// added after the diffuse sum (`renderer.md`'s own block reads all place
+    /// it after the `N.L` term), so the chain closest to the end is the
+    /// likeliest candidate, and the first one found reaching the output wins.
+    ///
+    /// `None` when no such chain reaches the output at all - every unlit and
+    /// emissive program, and any block this pattern does not fit.
+    ///
+    /// Confidence 80, inherited from the disc sweep this reproduces: the
+    /// pattern is instruction shape, not block meaning, so a non-specular
+    /// power that happens to be the one reaching the output would read as
+    /// this method's answer too. Not observed on the materials read by hand
+    /// so far, but not ruled out either.
+    #[must_use]
+    pub fn specular_exponent(&self) -> Option<f32> {
+        for i in (0..self.instructions.len()).rev() {
+            if self.instructions[i].name() != Some("LG2") {
+                continue;
+            }
+            let lg2_dst = (self.instructions[i].dst, self.instructions[i].dst_half);
+            let Some(mul_i) = self.instructions[i + 1..].iter().position(|insn| {
+                insn.name() == Some("MUL")
+                    && insn.constant.is_some()
+                    && insn
+                        .operands()
+                        .any(|s| matches!(s, Source::Register { index, half } if (index, half) == lg2_dst))
+            }) else {
+                continue;
+            };
+            let mul_i = i + 1 + mul_i;
+            let mul = &self.instructions[mul_i];
+            let exponent = mul
+                .constant
+                .expect("checked by the position() predicate above");
+            let mul_dst = (mul.dst, mul.dst_half);
+            let Some(ex2_i) = self.instructions[mul_i + 1..].iter().position(|insn| {
+                insn.name() == Some("EX2")
+                    && insn
+                        .operands()
+                        .any(|s| matches!(s, Source::Register { index, half } if (index, half) == mul_dst))
+            }) else {
+                continue;
+            };
+            let ex2_i = mul_i + 1 + ex2_i;
+            if self.reaches_output(ex2_i) {
+                // The scalar rides in whichever lane the `MUL` actually
+                // reads; the others are the constant slot's unused padding.
+                let value = exponent
+                    .into_iter()
+                    .find(|v| *v != 0.0)
+                    .unwrap_or(exponent[0]);
+                return Some(value);
+            }
+        }
+        None
+    }
+
+    /// Whether the value the instruction at `from` writes survives, by
+    /// register identity, to the last instruction that writes a colour
+    /// channel - [`Self::taint`]'s own definition of "the output", seeded
+    /// on one register instead of on an interpolator.
+    ///
+    /// Half and full registers are merged into one file here, the same
+    /// simplification [`Self::taint`] makes and for the same reason: this is
+    /// a yes/no reachability question, where merging two registers can only
+    /// widen what is found reachable, never narrow it - a safe
+    /// over-approximation. [`Self::output_texels`] keeps them apart because
+    /// that question extracts a specific channel rather than asking whether
+    /// one is reached at all.
+    fn reaches_output(&self, from: usize) -> bool {
+        let seed = &self.instructions[from];
+        let mut tainted: [[bool; 4]; 64] = [[false; 4]; 64];
+        for (channel, slot) in tainted[usize::from(seed.dst) & 63].iter_mut().enumerate() {
+            *slot = seed.mask & (1 << channel) != 0;
+        }
+        let mut reaches = false;
+        for insn in &self.instructions[from + 1..] {
+            let from_tainted = insn.operands().any(|s| {
+                matches!(s, Source::Register { index, .. } if tainted[usize::from(index) & 63].iter().any(|b| *b))
+            });
+            let dst = usize::from(insn.dst) & 63;
+            for (channel, slot) in tainted[dst].iter_mut().enumerate() {
+                if insn.mask & (1 << channel) != 0 {
+                    *slot = from_tainted;
+                }
+            }
+            if insn.mask & 0b0111 != 0 {
+                reaches = from_tainted;
+            }
+        }
+        reaches
+    }
+
     fn taint(&self, through_textures: bool) -> u16 {
         // `tainted[reg]` is a bit per channel per interpolator, flattened: the
         // register file is small and 16 interpolators fit a `u16` each.

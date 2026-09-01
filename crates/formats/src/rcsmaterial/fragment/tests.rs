@@ -527,3 +527,96 @@ fn a_later_fetch_clobbers_the_register_it_writes() {
         "unit 0's fetch took H1 over before the add"
     );
 }
+
+/// Builds an `LG2` / `MUL {exponent}` / `EX2` chain into register `reg`, the
+/// idiom `renderer.md` reads as `pow(x, exponent)`.
+///
+/// `mask` is applied to all three instructions, not only `EX2` - real
+/// shipped microcode threads a scalar through one lane throughout a chain
+/// like this, and giving `LG2`/`MUL` the default full mask would make them
+/// count as colour writes in their own right whenever `mask` picks a
+/// non-colour lane, which is not what a scalar `pow` computation is.
+fn pow_chain(reg_index: u8, exponent: f32, mask: u8) -> Vec<Instruction> {
+    let mut lg2 = insn(0x1d); // LG2, arity 1
+    lg2.dst = reg_index;
+    lg2.mask = mask;
+
+    let mut mul = insn(0x02); // MUL, arity 2
+    mul.dst = reg_index;
+    mul.mask = mask;
+    mul.sources = [reg(reg_index, false), Source::Constant, Source::Input];
+    mul.constant = Some([exponent, 0.0, 0.0, 0.0]);
+
+    let mut ex2 = insn(0x1c); // EX2, arity 1
+    ex2.dst = reg_index;
+    ex2.mask = mask;
+    ex2.sources = [reg(reg_index, false), Source::Input, Source::Input];
+
+    vec![lg2, mul, ex2]
+}
+
+/// The ship's own reading: `pow(N.H, 40)` (`@0x40 LG2 / @0x43 MUL by 40 /
+/// @0x46 EX2`, `renderer.md`'s "Ships have no Lambert diffuse either"),
+/// multiplied into the register the program's final `MAD` writes as colour.
+#[test]
+fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
+    let mut instructions = pow_chain(1, 40.0, 0xf);
+    let mut mad = insn(0x04); // MAD H0.xyz, spec, N.L, prelit - the colour, END
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(40.0));
+}
+
+/// A `pow` chain whose result nothing ever reads again is dead code, not the
+/// specular term - `None`, not a guess.
+#[test]
+fn a_pow_chain_never_read_again_returns_none() {
+    let program = Program {
+        declared: Declared::default(),
+        instructions: pow_chain(1, 40.0, 0xf),
+    };
+    assert_eq!(program.specular_exponent(), None);
+}
+
+/// **The instruction shape alone is not enough - only the chain reaching the
+/// output is returned**, even when a dead `pow` chain sits later in the
+/// stream and would otherwise be found first by the last-first search. This
+/// is the Zone `rim^10`/`rim^5` case in miniature: the identical
+/// `LG2`/`MUL`/`EX2` shape, on a register nothing downstream reads.
+#[test]
+fn a_dead_pow_chain_after_the_real_one_does_not_win() {
+    let mut instructions = pow_chain(1, 40.0, 0xf);
+    let mut mad = insn(0x04); // the real colour write, reading register 1
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    instructions.push(mad);
+    // A second, unrelated chain afterward - e.g. a rim term folded only into
+    // alpha, so it never touches a colour channel and never overwrites what
+    // the real chain already wrote.
+    instructions.extend(pow_chain(2, 10.0, 0b1000));
+    let mut end = insn(0x01); // MOV H0.w, {const}, END - alpha only
+    end.dst = 0;
+    end.dst_half = true;
+    end.mask = 0b1000;
+    end.sources = [Source::Constant, Source::Input, Source::Input];
+    end.constant = Some([1.0, 0.0, 0.0, 0.0]);
+    end.end = true;
+    instructions.push(end);
+
+    let program = Program {
+        declared: Declared::default(),
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(40.0));
+}
