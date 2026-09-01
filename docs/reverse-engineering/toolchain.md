@@ -530,16 +530,31 @@ one truly-unknown nibble (e.g. a register number) as a small set of exact
 patterns run in parallel, rather than relying on wildcarding to do it in one
 call.
 
-`run_script_inline`, which would otherwise let a single script enumerate
-every form in one pass, is currently gated off by config rather than
-broken: it returns `"Script execution disabled. Set
+`run_script_inline`/`run_ghidra_script`, which would otherwise let a single
+script enumerate every form in one pass, are gated off by config rather than
+broken: they return `"Script execution disabled. Set
 GHIDRA_MCP_ALLOW_SCRIPTS=1 ..."` (checked live 2026-08-27, `dry_run:
 true`). An earlier session (2026-08-17) saw a different failure from the
 same call - `GhidraPlaceholderBundle cannot be cast to
 GhidraSourceBundle` - which does not reproduce now; whether that was fixed
-or is just superseded by the env-var gate is unknown. Either way, treat
-coverage as the union of explicit per-mnemonic sweeps until scripting is
-enabled and confirmed working, not as a fact that stays true on its own.
+or is just superseded by the env-var gate is unknown.
+
+**This repository's own `.mcp.json` sets `GHIDRA_MCP_ALLOW_SCRIPTS=1` in
+`ghidra-mcp`'s `env`, so scripting should come up enabled whenever Claude
+Code itself starts the bridge from this repo.** Do not treat "scripting is
+off" as a fixed constraint to route around by habit. Before any analysis
+pass that scripting would do better than a manual sweep - anything the
+per-mnemonic-sweep workaround above exists for - check the actual state
+first with a one-call `run_script_inline`/`run_ghidra_script` probe
+(`dry_run: true` if available). If it still reports scripting disabled
+(a bridge started outside `.mcp.json`, an older bridge build, or a `.mcp.json`
+edit that was not picked up), **stop and ask the user to enable it** (confirm
+`GHIDRA_MCP_ALLOW_SCRIPTS=1` reaches the bridge's environment and restart the
+bridge/MCP connection) rather than silently falling back to the slower,
+easier-to-miss-a-form workaround. Only fall back to the manual sweep if the
+user declines or scripting is confirmed unavailable. Once enabled, treat that
+as the normal state and prefer scripting for anything the explicit-sweep
+pattern above was compensating for.
 
 ## Emulators
 
