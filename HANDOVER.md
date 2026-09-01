@@ -377,7 +377,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`--until` cannot reach a late movie frame on a machine with an audio device](handover/until-cannot-reach-a-late-movie-frame-on.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's string tables are not read, and its front-end font is absent](handover/pures-string-tables-are-not-read-and-its.md)
-- [`raceable` composes a Pulse path on every source, and nothing has established why that works](handover/raceable-composes-a-pulse-path-on-every-source.md)
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
 - [One team's `Ship.vex` does not resolve by name](handover/one-teams-ship-vex-does-not-resolve-by.md)
