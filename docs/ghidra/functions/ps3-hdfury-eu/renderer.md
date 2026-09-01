@@ -1135,7 +1135,86 @@ fogColour chain.
 never read `0x008b7f04`. The right search is TOC-scoped, not byte-scoped: a
 `-0x54c0(r2)` `lwz` inside a function whose *own* `.opd` TOC is `0x008bd3c4`
 - not a `search_byte_patterns` hit on the instruction bytes alone. That
-search was not run this session.
+search is run below.
+
+### The TOC-scoped search: all 81 engine parameters named, the real getter found, still no writer (2026-09-01)
+
+**The corrected search.** `search_instructions` for the literal `lwz
+rX,-0x54c0(r2)` finds it in **eight** places program-wide (not the two the
+byte-pattern search found before - that one was scoped to *an* instance, not
+*this* one), and reading each hit's own `.opd` TOC word narrows them to the
+ones that actually run under `0x008bd3c4`: `Shader_InitEngineParams` itself,
+plus three others - `0x003f0ff8`, `0x003f1010`, `0x003f1028` - all three
+`.opd`-adjacent to `Shader_InitEngineParams`'s own (`0x0088c750`-`0x0088c770`,
+one module). The other two hits (`0x000b2af0`, `0x000b43b0`) carry TOC
+`0x008AD4D8` - the same wrong TOC as the refuted pair above, unrelated by the
+same reasoning.
+
+**`Shader_InitEngineParams` decompiled in full names every one of the 81
+entries**, confirming the existing cross-checked reading at first-party
+strength: entry 7 (`+0x40e0`) is built from `Crc32_HashString(PTR_s_fogColour_008b7f8c)`
+- the literal string `"fogColour"` on the disc, not an inference. The
+sequence, `+0x4000` to `+0x4a00` in `0x20` steps: `(unnamed, PTR_DAT_008b7f70)`,
+`viewProj`, `(unnamed, PTR_DAT_008b7f78)`, `world`, `eyePositionWorldSpace`,
+`positionBias`, `positionScale`, **`fogColour`**, `paraboloidReflectionTex`,
+`paraboloidIblTex`, `constantAmbientColour`, `falseLightDirectionPower`,
+`prelitScaleSpecular`, `prelitBias`, `directionalLight0DirectionWorldS[pace]`,
+`directionalLight0Colour`, `directionalLight0Proj`, `directionalLight0ShadowTex`,
+`directionalLight0LightmapTex`, `pointLight0PositionWorldSpace`,
+`pointLight0Colour`, `pointLight0Falloff`, `textureSpot0PositionWorldSpace`,
+`textureSpot0Proj`, `textureSpot0Tex`, `textureSpot0ShadowTex`,
+`textureSpot0Colour`, `textureSpot0Falloff`, `textureSpot1*` (same six
+fields), `textureSpot2*` (same six), `shadowMatrix`, `shadowMapTex`,
+`shadowMapTexSize`, `quakePointA`, `quakePointB`, `quakeOffset`,
+`quakeTrackUpNormal`, `distortion`, `refractProject`, `reflectProject`,
+`screenSpaceRefractionTex`, `screenSpaceReflectionTex`, `zoneColourTint`,
+`zoneEffectInner`, `zoneEffectOuter`, `zoneBaseInner`, `zoneBaseOuter`,
+`zoneBaseAltInner`, `zoneBaseAltOuter`, `zoneOrigin`, `zoneTexInner`,
+`zoneTexOuter`, `zoneTexInnerNearest`, `zoneTexOuterNearest`, `zoneTexVis`,
+`zoneAnisoPalette`, `zoneAnisoPaletteOuter`, `zoneAnisoPower`,
+`GradientColour`, `GradientColour1`, `GradientColour2`, `GradientColour3`,
+`iblScalePower`, `ambientShadowMatrix`, `ambientShadowBlendFactor`,
+`ambientShadowTex`, `globalAlphaScaler`, `auroraBrightness`, `auroraOffset`,
+`auroraColour`, `engineTrail`, then the eight technique hashes
+(`+0x4a20`-`0x4a3c`) already read. This is a byproduct worth having on its
+own - the first two entries are unnamed strings this session did not chase
+(`PTR_DAT_008b7f70`/`PTR_DAT_008b7f78`; likely `technique` and one more,
+unread).
+
+**`0x003f1010`, renamed `Shader_GetEngineParamTable`** (confidence 85):
+`return g_ShaderEngineParamBase + 0x4000;` - a one-line accessor for exactly
+the 81-entry table's base, nothing else. **`0x003f0ff8`, renamed
+`Shader_GetVariantHash`** (confidence 80): `return *(g_ShaderEngineParamBase
++ index*4);`, a flat word-indexed read over the *first* `0x4000` bytes of the
+same allocation - i.e. a different table sharing the base pointer, not the
+81-entry one. Its known callers (`FUN_003ea368`, `FUN_003eb890`, seven more,
+all `Render_RunCompiledOps`-adjacent material-effect code) pass a
+runtime-computed OR'd flags value, never a fixed index, so this reads a
+shader-**variant** selector, not an engine parameter - a real function, just
+not on the fogColour path. **`0x003f1028`, renamed
+`Shader_BuildVariantHashTable`** (confidence 78): fills `0x1000` (4096)
+consecutive words at `g_ShaderEngineParamBase` with `~Crc32_HashString` of
+permuted technique/feature-name fragments (`HalfBright`, `ShadowMap`,
+`ZoneMode`, `FalseLight`, `ZoneTrans`, `NoAlbedo`, `IleLightmap`/`IleVertex`/
+`Ambient`, `Spot0`-`Spot3`) - the table `Shader_GetVariantHash` reads. So the
+single allocation at `g_ShaderEngineParamBase` (`0x008b7f04`'s pointee) is
+two tables back to back: `0x0000`-`0x3fff` the 4096-entry variant-hash cache,
+`0x4000`-`0x4a3c` the 81-entry (+8 technique-hash) engine parameter table -
+which is why `Shader_GetVariantHash`'s callers looked like a lead and
+weren't; they are reading the neighbouring table through the same base
+pointer.
+
+**`Shader_GetEngineParamTable` has no static caller either** - `get_xrefs_to`
+and `get_function_callers` both find nothing for it, not even a trampoline
+(checked directly against its `.opd` slot, `0x0088c758`, the way
+`Material_SetInstanceParamPointer`'s cross-TOC trampoline was found before -
+here there isn't one). This is the same "reached through a computed/indirect
+call" wall as the refuted pair, except this time on the function that
+actually is on the fogColour path, confirmed by name and by TOC. Two
+independent sessions have now exhausted the static leads this thread named
+(the byte-scoped search, then the TOC-scoped one); **the rpcs3 live-read
+alternative in Next Steps is the remaining path**, not a fallback of last
+resort.
 
 ### The registry is resolved: every post program's block is addressable
 

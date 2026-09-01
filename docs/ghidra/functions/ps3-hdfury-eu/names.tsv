@@ -117,6 +117,9 @@
 0x007a2da8	data	Trail_SpeedParamName	95	engine-trail.md
 0x003f1300	function	Shader_InitEngineParams	90	renderer.md
 0x005d4cf8	function	Shader_InitParamEntry	88	renderer.md
+0x003f1010	function	Shader_GetEngineParamTable	85	renderer.md
+0x003f0ff8	function	Shader_GetVariantHash	80	renderer.md
+0x003f1028	function	Shader_BuildVariantHashTable	78	renderer.md
 0x005e29c0	function	Post_BindResolveParams	85	renderer.md
 0x005e3f68	function	Post_BindResolveCorrectionParams	85	renderer.md
 0x003df0d8	function	Renderer_SetColourCorrection	85	renderer.md
