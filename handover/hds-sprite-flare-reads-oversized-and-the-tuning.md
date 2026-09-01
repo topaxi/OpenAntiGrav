@@ -55,9 +55,16 @@ into a world-space quad is still unlocated.
   is. No `.pob` or emitter table has been matched to it.
 - `Flare Highlight Power`/`Boost` (32.0/1.0), `Spikes Thrust/Boost Max
   Scale` (1.5/2.0), `Shockwave Cycle Speed` (0.01): named, unread.
-- The trail itself is also suspected inaccurate per the user's report, but
-  this session did not get to it - the size finding above is the flare
-  only.
+- The trail itself is also suspected inaccurate per the user's report.
+  **Checked and refuted**: a separate HD-vs-Fury trail asset (no - one
+  asset, disc-wide, colour-mixed by the already-implemented `engineTrail`
+  parameter) and a Zone-specific trail material (no - neither the trail's
+  nor the flame's material declares any of the 16 known zone-parameter
+  hashes). See "Checked: no separate trail for HD vs. Fury" on
+  engine-trail.md. If the trail still reads wrong in Zone specifically, the
+  live candidate is HD's still-unlocated Zone environment recolour
+  ([zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md))
+  reaching ships too, not a second trail asset - unconfirmed either way.
 
 ## Next Steps
 

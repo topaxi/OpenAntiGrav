@@ -674,6 +674,38 @@ a world-space quad remains unlocated**, which is the same wall
 rows above; this session did not get further than confirming where it is
 not.
 
+### Checked: no separate trail for HD vs. Fury, and no zone-specific one
+
+The user's report also suspected the trail itself, and named two possible
+splits: a different trail between classic HD and Fury, and a Zone-race-
+specific one. Both checked and refuted, disc-wide:
+
+- **No second trail asset exists.** All seven `DATA0N.PSARC` archives list
+  exactly one live trail stem, `enginetrail_bluered_triangle` (`DATA06`),
+  plus the dead `enginetrail_triangle` (`DATA02`, already established as
+  unreferenced by the executable). No `zone`- or `fury`-prefixed trail file
+  exists anywhere on the disc - `grep -i "zone\|fury"` over every archive's
+  trail-matching entries comes back empty. HD and Fury share the one asset;
+  what differs is the `engineTrail` colour-mix parameter (`0xbb48e390`) the
+  Fury-skin byte patches, already read and implemented.
+- **The trail's own material declares no Zone parameter.** HD's Zone-mode
+  environment recolour is a live, separate, unsolved thread
+  ([zone-effectsettings-loader.md](zone-effectsettings-loader.md)) with its
+  own 16-name parameter block (`zoneColourTint`, `zoneEffectInner/Outer`,
+  `zoneBaseInner/Outer`, `zoneBaseAltInner/Outer`, `zoneOrigin`,
+  `zoneTexInner/Outer` and their `Nearest` pairs, `zoneTexVis`,
+  `zoneAnisoPalette(Outer)`, `zoneAnisoPower`) whose hashes are already
+  known (renderer.md). Both `hd_enginetrail_bluered.rcsmaterial` and
+  `flame_test.rcsmaterial`'s raw bytes were checked against all 16 hashes,
+  little- and big-endian: zero hits in either. So if a Zone race's exhaust
+  genuinely reads different on the original, it is not this material
+  sampling zone state directly - consistent with renderer.md's own finding
+  that the Zone recolour is track/scenery-side and still unlocated, not
+  something to re-derive here. `oag_render`'s exhaust pipeline
+  (`exhaust.rs`/`.wgsl`) carries no zone awareness at all, same as the disc
+  material it reproduces - not a gap against this material, though it would
+  need one if the still-open Zone mechanism turns out to reach ships too.
+
 **The finding this session is confident of, screenshot to screenshot: this
 engine's sprite flare is drawn much larger, relative to the hull, than the
 original's.** `data/reference/hd-capture/flare-size/` holds the pair -
