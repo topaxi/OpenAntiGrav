@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 #
 # Builds the portable AppImage and copies it, plus whatever's under
-# data/images/, data/dlc/ and data/extracted/vita/, onto a Steam Deck (or any
-# Linux box reachable over ssh).
+# data/images/, data/dlc/, data/extracted/vita/ and Pure's DLC key table,
+# onto a Steam Deck (or any Linux box reachable over ssh).
 #
 # The AppImage lands on the remote user's Desktop, ready to double-click or run
 # from a terminal. The data lands where `oag-game`'s own search path already
-# looks without any flag: `<XDG_DATA_HOME>/oag/images`, `<XDG_DATA_HOME>/oag/dlc`
-# and `<XDG_DATA_HOME>/oag/extracted/vita` (see crates/game/src/source.rs and
-# docs/tools/packaging.md#where-the-disc-image-comes-from) - so a fresh Deck
-# needs nothing set to find them.
+# looks without any flag: `<XDG_DATA_HOME>/oag/images`, `<XDG_DATA_HOME>/oag/dlc`,
+# `<XDG_DATA_HOME>/oag/extracted/vita` and `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
+# (see crates/game/src/source.rs, crates/game/src/dlc.rs's
+# `default_pure_dlc_keys_path` and docs/tools/packaging.md#where-the-disc-image-comes-from)
+# - so a fresh Deck needs nothing set to find them.
 #
 # Usage:
 #   scripts/deploy-to-deck.sh [host] [--skip-build] [--no-data] [--dry-run] [--scp]
@@ -18,8 +19,8 @@
 #                 deck@steamdeck.
 #   --skip-build  Don't rebuild; sync whatever is already in data/appimage/
 #                 OpenAntiGrav-x86_64-portable.AppImage.
-#   --no-data     Only sync the AppImage; skip data/images, data/dlc and
-#                 data/extracted/vita.
+#   --no-data     Only sync the AppImage; skip data/images, data/dlc,
+#                 data/extracted/vita and the DLC key table.
 #   --dry-run     Pass --dry-run to rsync, or print what scp would copy.
 #                 Touches nothing, locally or on the remote, beyond the ssh
 #                 probes needed to resolve paths.
@@ -71,15 +72,17 @@ desktop_dir="$remote_home/Desktop"
 images_dir="$remote_data_home/oag/images"
 dlc_dir="$remote_data_home/oag/dlc"
 vita_dir="$remote_data_home/oag/extracted/vita"
+keys_dir="$remote_data_home/oag/keys"
 echo "AppImage -> $desktop_dir/"
 echo "images   -> $images_dir/"
 echo "dlc      -> $dlc_dir/"
 echo "2048     -> $vita_dir/"
+echo "keys     -> $keys_dir/"
 
 if (( dry_run )); then
     echo "(--dry-run: not creating remote directories or transferring anything)"
 else
-    ssh "$host" mkdir -p "$desktop_dir" "$images_dir" "$dlc_dir" "$vita_dir"
+    ssh "$host" mkdir -p "$desktop_dir" "$images_dir" "$dlc_dir" "$vita_dir" "$keys_dir"
 fi
 
 use_rsync=0
@@ -168,6 +171,21 @@ if (( sync_data )); then
     # for it at $vita_dir on a machine with no OAG_IMAGE and no data/ beside
     # the AppImage, which is exactly the Deck's own layout.
     sync_dir "$project_root/data/extracted/vita" "$vita_dir"
+
+    step "Copying data/keys/pure-dlc-keys.txt"
+    # Only this one file, not the whole data/keys/ directory: Wipeout Pure's
+    # DLC packs need it to decrypt (see
+    # docs/architecture/adr/0033-external-key-material-for-decryption.md),
+    # so it has to reach the Deck the same way the packs themselves do -
+    # unlike hdfury-ps3-eu.dkey above, or data/keys/vita-zrif.tsv, which are
+    # either not needed to play anything yet or already spent producing
+    # data/extracted/vita and have no reason to leave this machine.
+    pure_dlc_keys="$project_root/data/keys/pure-dlc-keys.txt"
+    if [[ -f $pure_dlc_keys ]]; then
+        sync_file "$pure_dlc_keys" "$keys_dir"
+    else
+        echo "skipping $pure_dlc_keys: not present, Pure's DLC packs (if any) won't decrypt on $host"
+    fi
 else
     step "Skipping data/ (--no-data)"
 fi
@@ -177,5 +195,6 @@ echo "AppImage: $desktop_dir/$(basename "$appimage")"
 echo "images:   $images_dir"
 echo "dlc:      $dlc_dir"
 echo "2048:     $vita_dir"
+echo "keys:     $keys_dir"
 echo
 echo "Run it: ssh $host '$desktop_dir/$(basename "$appimage")'"

@@ -337,8 +337,15 @@ way Pulse's four DLC teams are - see
   savedata-signature check needs, since `pi.wad` is packaged as savedata) is
   still unknown.
 
-**Not yet done**: wiring this into `oag_assets::dlc`/`oag_game::dlc` so Pure's
-packs mount the way Pulse's do. See the open handover thread.
+**Wired in.** `oag_game::dlc::ensure_extracted` decrypts a pack the moment it
+finds a key that fits, `oag_formats::pure_dlc` and the zlib support this
+uncovered in `oag_assets::dlc::Archive::decode` (Pure's `pi.wad` is the first
+shipped use of `Compression::Zlib`) are both implemented, and
+`oag_pure::open_with_packs` mounts the result behind a Pure source the same
+way `oag_pulse::open_with_packs` mounts Pulse's own - see
+[ADR-0033](../architecture/adr/0033-external-key-material-for-decryption.md)
+for why decryption happens in-process rather than as an offline tool, and
+`crates/game/tests/pure_dlc_ground_truth.rs` for the ground-truth coverage.
 
 ## Reading one
 
