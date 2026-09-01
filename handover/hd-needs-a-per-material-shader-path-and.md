@@ -6,9 +6,28 @@
 
 - No per-material lighting branch exists: `mesh.wgsl` has one lit path for all HD geometry, and 53 of 57 ship meshes fall to `albedo * ambient` (dark hull)
 - Two general classification rules (SHO-declared families, `output_lit_by` dataflow) were tried and rejected as classifiers
-- Specular exponent is a labelled stand-in at 32; the disc actually uses 5, 10, 32, 26.156, 40 and 300
+- Specular exponent is a labelled stand-in at 32; the disc actually uses 5, 10, 32, 26.156, 40 and 300 - **narrowed 2026-09-01, see below**
 - Tangent frame, a paraboloid reflection map, and shadow maps are still missing inputs
+- Checking the Lambert sun diffuse fix against RPCS3 pixel-for-pixel is blocked on [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)'s own open item: `viewProj` is not located yet, so the capture harness has no working camera. Not this thread's dependency to close.
+
+**2026-09-01: `fragment::Program::specular_exponent()` reimplements the sweep
+(`crates/formats/src/rcsmaterial/fragment.rs`), gated on a saturated-dot-fed
+`LG2` and on the chain reaching the program's output - both necessary, per a
+disc-wide re-sweep that does not reproduce the six published counts and says
+why not: `5`/`10` turn out to be entirely Zone's `rim^10`/`rim^5` (nothing
+survives excluding Zone-declaring blocks), and the largest surviving bucket
+(`0`, 573 blocks) reads as `SpecularPower` patched at draw time rather than a
+real fifth value - `pow(x, 0) = 1` is not a plausible authored shininess.
+Full numbers and reasoning in
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), the
+paragraph after the original sweep. **Only `32`, `40` and `300` still read as
+plausible real exponents after this pass** - the identical instruction shape
+also computes `exp(x)` via `log2(e)` and at least one Fresnel/falloff-shaped
+curve, which a saturated-dot gate alone cannot tell apart from a genuine
+`pow(N.H, e)` without tracing the dot's *other* operand.
 
 ## Next Steps
 
-- Check the Lambert sun diffuse fix against RPCS3 pixel-for-pixel (not yet done)
+- Check the Lambert sun diffuse fix against RPCS3 pixel-for-pixel - blocked, see Open above; pick up [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md) first
+- Trace what the `DP3`'s other operand is for each `specular_exponent()` hit, to separate a real half-vector specular term from a Fresnel/falloff curve sharing its shape - this is what would let `32`/`40`/`300` (or more) be wired per-variant into `mesh.wgsl` instead of staying a shared stand-in
+- Decode the `patch fslot` to `const@slot` table (`rcsmaterial.md`, already flagged as owed) to check the `0`-bucket theory directly: does `SpecularPower`'s patched slot actually correspond to one of these dead-literal `LG2`/`MUL`/`EX2` chains?

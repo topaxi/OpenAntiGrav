@@ -1658,6 +1658,70 @@ stays as the stand-in, now labelled as one. Confidence 80 - the sweep keys on
 an instruction pattern rather than on each block's meaning, so some of the 5s
 and 10s may be another `pow`.
 
+**Reimplemented and disc-verified (2026-09-01), and the ambiguity above is
+worse than "some of the 5s and 10s".** `fragment::Program::specular_exponent`
+ports the sweep: an `LG2`/`MUL`/`EX2` chain whose `LG2` reads a register a
+saturated `DP3` most recently wrote (the `N.H`/`N.L` idiom every specular and
+sun-diffuse read on this page shares), returned only when the chain's result
+reaches the program's output colour (the same "last colour write" rule
+[`output_lit_by`'s `taint`](../../../../crates/formats/src/rcsmaterial/fragment.rs)
+already uses). Verified against the ship's own worked example
+(`pow(N.H, 40)`, `@0x40`/`@0x43`/`@0x46` above) and against a synthetic case
+built from `track_surface`'s own lightmap curve, which the bare instruction
+shape alone does not exclude (see below) - both pass as unit tests.
+
+**A disc-wide sweep with both gates does not reproduce the six counts
+above, and the gap is now understood well enough to say why, not just that
+it fails.** Population, excluding Zone-declaring blocks:
+
+```text
+0          573 blocks   35     4
+1.4426949   19          200    8
+250         4           260    24
+300         10          32     409
+40          2
+```
+
+Three findings, not one:
+
+1. **The `0` bucket - the largest - is very likely the "patched at draw
+   time" case this page's own RGBE and sun-direction readings already
+   established** (`c[464]`/`c[463]` above): a material that *declares*
+   `SpecularPower` (`0x81e0e773`, first named on this page) but leaves its
+   file-static literal at `0.0`, patched to a real value at export or draw
+   time. `pow(x, 0) = 1` is not a plausible authored shininess, so these 573
+   blocks are the strongest candidates for "the exponent is not in the file
+   at all" rather than for a fifth real value. Unverified beyond the
+   plausibility of the theory - closing it needs the `patch fslot` to
+   `const@slot` decoder `rcsmaterial.md` already flags as owed, not a guess
+   dressed as a finding.
+2. **`5` and `10` do not survive excluding Zone at all** - every occurrence
+   of either literal in a saturated-dot-fed, output-reaching chain is on a
+   Zone-declaring block, i.e. the rim exponents. That means the published
+   `5`/`10` counts either did not exclude Zone, or were reading a different,
+   narrower population than "every material" states - either way, "5 and 10
+   are specular values" does not hold up against this reimplementation.
+3. **`1.4426949`, `200`, `250`, `260` and `35` are new, and none of them is a
+   plausible shininess.** `1.4426949` is `log2(e)`, the idiom for computing
+   `exp(x) = exp2(x * log2(e))` rather than `pow(x, e)` - a real, different
+   use of the identical three instructions that the saturated-dot gate does
+   not exclude, because an `exp()` curve can just as well be fed by a
+   saturated dot product (a falloff, not a power). `200`/`250`/`260`/`35`
+   read as further instances of the same problem: a Fresnel-style or
+   falloff term sharing the specular idiom's shape and its `N`-something
+   operand, not a shininess value in that range.
+
+**Net: `32`, `40` and `300` are the only values this reimplementation still
+finds plausible as real specular exponents** (`26.156` did not recur in this
+sweep at all - a scope difference from the earlier one, not investigated
+further). `mesh.wgsl` keeps the shared `32` stand-in; wiring
+`specular_exponent()`'s answer per-variant is not done, because a value this
+reading returns with confidence 80 and a value it returns because a `pow`
+happened to also be fed by a saturated dot are indistinguishable without
+tracing what the *other* operand of that `DP3` is - the half-vector for a
+real specular term, something else for a Fresnel or falloff curve. That
+trace is the next step, not this one.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
