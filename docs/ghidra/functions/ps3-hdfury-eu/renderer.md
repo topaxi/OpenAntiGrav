@@ -1216,6 +1216,69 @@ independent sessions have now exhausted the static leads this thread named
 alternative in Next Steps is the remaining path**, not a fallback of last
 resort.
 
+### A controlled live read: the engine-param table's fogColour slot is dead in gameplay, but that doesn't answer "unscaled" (2026-09-01)
+
+**What was actually read, stated up front so the boundary is clear**: this is
+a live read of `Shader_GetEngineParamTable`'s `fogColour` slot
+(`0x008b7f04`'s pointee `+0x40f8`, the value pointer) and of the settings
+singleton's `Fog.Fog Density` (`0x008b6fb4`'s pointee `+0x500`). **It is not**
+a read of the compiled/patched microcode constant slot the Next Steps
+alternative named (the fslot-offset direct patch `scripts/ps3-microcode.py`'s
+docstring describes) - that target is still unread.
+
+**Method: `scripts/rpcs3-drive.py capture --region`**, walking `<addr
+chain>:<len>` expressions (`@` dereferences) against a live, paused GDB
+session - see its own docstring for the chain grammar. Three boots on
+Talon's Junction (its own `track.envsettings` authors `"Fog.Fog
+Density"=0.001000`, confirmed by re-reading the file, not assumed): 11
+screenshot-confirmed in-race reads across the first two (3 interior in run 1;
+4 more - one confirmed exterior, per `04.png` - in run 2, whose remaining 3
+landed after a wall collision put the run on the Results screen, screenshot
+`07.png` confirmed, so not counted as in-race), plus a third, **controlled**
+run of 4.
+
+**The measurement (confidence ~90 on the read itself)**: `fogColour`'s value
+pointer resolves to a stable, non-null address (`0x00aed480`, identical
+across all three boots) whose 16 bytes read `(0, 0, 0, 0)` on **every one**
+of the 15 reads, in-race and out. The struct base itself cross-checks clean
+- `0x00d3e220` this run, whose first word reads a `~crc32`-shaped value,
+exactly what `Shader_BuildVariantHashTable` fills at offset 0 of the same
+allocation, confirming the chain arithmetic independently of the fogColour
+question.
+
+**Why this isn't just an absent reading: the third run controls for it.**
+A bare zero from one slot proves nothing on its own - the mechanism could be
+unbuilt this frame, the pause could have landed outside any render pass, or
+the chain could be silently wrong. So the same pause instants also read
+`viewProj` (slot 1, `+0x4038`, a `mat4`) and `eyePositionWorldSpace` (slot 4,
+`+0x4098`), two slots that **must** hold a real, per-frame-changing camera
+if the mechanism is live at all. Both did, every time - real eye coordinates
+that move race to race (`[1.5, -46.9, -176.9]`, `[563.6, -17.0, -5.5]`,
+`[442.5, -3.9, 269.9]`, `[28.0, -46.8, 149.6]`) and a real, non-degenerate
+view-projection row alongside them. **The engine-parameter mechanism is
+therefore confirmed live and correctly wired at the exact instants
+`fogColour` reads zero.** That is what makes the null worth publishing
+rather than a boot that happened not to catch anything.
+
+**What this does and does not settle - three possibilities survive, not
+one.** It retires *this table* as fogColour's live source in normal race
+gameplay on this circuit, but does not distinguish:
+
+1. fog reaches the shader via the fslot-offset direct patch instead, bypassing this table entirely;
+2. fog is not enabled at all in this race type/configuration, and both routes would read empty here regardless;
+3. the slot is vestigial - declared by `Shader_InitEngineParams`, never filled by anything at runtime.
+
+A grep of this page and the handover thread for what the 2026-08-18 reference
+frame showed about visible fog came up silent - it records the render being
+*judged* against that frame, not whether haze was visible in it - so
+possibility 2 is not ruled out either. **The "unscaled" confidence stays at
+60**, unmoved: the question "is `fogColour.w` `Fog.Fog Density` unscaled"
+cannot be answered by reading a slot that does not carry the value in the
+first place. What this retires is the *approach* the last two sessions took
+(find `+0x40f8`'s writer), not the question - the next lead is the
+fslot-offset direct patch mechanism, unread, or a live read of the compiled
+microcode constant itself.
+
 ### The registry is resolved: every post program's block is addressable
 
 Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
