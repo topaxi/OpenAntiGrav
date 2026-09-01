@@ -354,7 +354,7 @@ the original running.
 | `WO_SHIP_COLL_SPARK_DAMAGE` | 4 emitters | 4 emitters, **same four names** |
 | `WO_ROCKET_EXPLO` | 7 emitters | 5 emitters |
 | `WO_ROCKET_FLARE` | 2 emitters | 1 emitter |
-| `WO_ROCKET_EXPLO_TRACK` | 4 emitters | **no entry of that name** |
+| `WO_ROCKET_EXPLO_TRACK` | 4 emitters | **absent, no name resolves** |
 | `WO_SHIP_ENGINEFLARE` | **no entry** | **no entry** |
 
 Three things in that table are worth separating, because they are three different
@@ -368,9 +368,24 @@ kinds of fact:
   The collision spark is the one that matches emitter-for-emitter by name.
 - **`WO_SHIP_ENGINEFLARE` is absent from both discs**, so it is not a Pure gap at
   all: that name resolves on neither pressing and the engine already reports it
-  and draws nothing. Only `WO_ROCKET_EXPLO_TRACK` is genuinely Pure-shaped -
-  present on Pulse, absent on Pure - and whether Pure spells it differently or
-  ships no such effect is unread.
+  and draws nothing. `WO_ROCKET_EXPLO_TRACK` is genuinely Pure-shaped - present
+  on Pulse, absent on Pure - and Pure ships no such effect under any name
+  rather than spelling it differently. Confidence **78**: `strings` on Pure's
+  `BOOT.BIN`, both the USA and EU pressings, lists `WO_ROCKET_EXPLO` and
+  `WO_ROCKET_FLARE` as literal `Data\Psys\...POB` paths and every sibling
+  explosion effect (`WO_MISSILE_EXPLO`, `WO_DISRUPTOR_EXPLO`, `WO_MINE_EXPLO`,
+  ...) the same way, but never a track-hit variant; six plausible alternate
+  spellings (`WO_ROCKET_EXPLOTRACK`, `WO_ROCKET_TRACK_EXPLO`,
+  `WO_ROCKET_EXPLO_TRACKHIT`, `WO_ROCKET_TRACKHIT`, `WO_ROCKET_HIT_TRACK`, and
+  the exact Pulse spelling itself) all miss against Pure USA's `Data.wad`
+  directory by hash. Capped short of the 85+ band because this is a string
+  search corroborated on two pressings, not a runtime trace or a decompiled
+  read of Pure's own rocket-hit code - a name assembled at runtime from a
+  template rather than stored whole would not show up this way, though no
+  sibling `.pob` name in this table is templated either. The likely reading:
+  Pure's rocket does not draw a separate effect when it hits track geometry,
+  it draws `WO_ROCKET_EXPLO` (or nothing) either way - still unconfirmed
+  without reading Pure's own rocket-collision code.
 
 What is **not** established is any *trigger* on Pure. These play because the
 engine fires them from its own recovered Pulse triggers; nothing has read Pure's
