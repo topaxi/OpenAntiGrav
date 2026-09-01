@@ -98,6 +98,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         textures: Vec::new(),
         lightmaps: Vec::new(),
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
@@ -276,6 +277,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         xform: 0,
         sun_mask: 1.0,
         slots: crate::mesh::slots::DEFAULT,
+        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

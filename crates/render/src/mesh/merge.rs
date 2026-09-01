@@ -37,6 +37,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         textures: Vec::new(),
         lightmaps: Vec::new(),
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
@@ -183,6 +184,7 @@ mod merge_tests {
                     xform: 0,
                     sun_mask: 1.0,
                     slots: slots::DEFAULT,
+                    specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
@@ -206,6 +208,7 @@ mod merge_tests {
             textures: (0..textures).map(|_| None).collect(),
             lightmaps: Vec::new(),
             material_slots: Vec::new(),
+            material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
 
             vertex_colour_is_light: false,

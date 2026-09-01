@@ -214,6 +214,15 @@ pub struct Model {
     /// [`slots::DEFAULT`], which is what this renderer did before the reading
     /// existed. See `mesh::rcs::skin::roles`.
     pub material_slots: Vec<u32>,
+    /// Each material slot's specular exponent, positionally beside
+    /// [`Self::textures`] exactly as [`Self::material_slots`] is - the
+    /// per-material `pow(N.H, e)` value read off the same resolved fragment
+    /// program, in place of `mesh.wgsl`'s shared fallback.
+    ///
+    /// Empty for every title but Wipeout HD, the only one with a shader
+    /// table to read this from. See `mesh::rcs::skin::roles` and
+    /// `oag_formats::rcsmaterial::fragment::Program::specular_exponent`.
+    pub material_specular_exponent: Vec<f32>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -327,6 +336,7 @@ impl Model {
             textures: Vec::new(),
             lightmaps: Vec::new(),
             material_slots: Vec::new(),
+            material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
 
             vertex_colour_is_light: false,
@@ -349,7 +359,7 @@ mod lod;
 pub use lod::Lod;
 
 mod vertex;
-pub use vertex::{GpuVertex, slots};
+pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, slots};
 
 mod anim_node;
 pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
@@ -784,6 +794,7 @@ fn build_class(
                         xform,
                         sun_mask: 1.0,
                         slots: crate::mesh::slots::DEFAULT,
+                        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                     });
                 }
                 for tri in batch.triangles() {
@@ -918,6 +929,7 @@ fn build_class(
         textures,
         lightmaps: Vec::new(),
         material_slots: Vec::new(),
+        material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,

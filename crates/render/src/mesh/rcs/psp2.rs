@@ -185,6 +185,7 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
                 slots: 0,
                 xform: 0,
                 sun_mask: 1.0,
+                specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
             });
         }
         for &index in &submesh.indices {

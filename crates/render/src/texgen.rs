@@ -188,6 +188,7 @@ mod tests {
             xform: 0,
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
+            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
         }
     }
 

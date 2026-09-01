@@ -1711,16 +1711,33 @@ Three findings, not one:
    falloff term sharing the specular idiom's shape and its `N`-something
    operand, not a shininess value in that range.
 
-**Net: `32`, `40` and `300` are the only values this reimplementation still
-finds plausible as real specular exponents** (`26.156` did not recur in this
-sweep at all - a scope difference from the earlier one, not investigated
-further). `mesh.wgsl` keeps the shared `32` stand-in; wiring
-`specular_exponent()`'s answer per-variant is not done, because a value this
-reading returns with confidence 80 and a value it returns because a `pow`
-happened to also be fed by a saturated dot are indistinguishable without
-tracing what the *other* operand of that `DP3` is - the half-vector for a
-real specular term, something else for a Fresnel or falloff curve. That
-trace is the next step, not this one.
+**Net at that point: `32`, `40` and `300` were the only values this
+reimplementation still found plausible as real specular exponents**
+(`26.156` did not recur in this sweep at all - a scope difference from the
+earlier one, not investigated further).
+
+**Wired 2026-09-01.** `1.4426949` (`log2(e)`) turned out not to need a
+policy decision at all: it is a *misclassification*, not an ambiguous real
+value - the identical instruction shape computing `exp(x)` rather than
+`pow(x, e)` - and `Program::specular_exponent` now excludes it structurally
+(a third gate, matching the constant exactly rather than filtering by
+magnitude; see its own doc comment). That leaves `200`/`250`/`260`/`35`
+genuinely unresolved as "confirmed real" versus "another pow sharing the
+idiom's shape", exactly as `32`/`40`/`300` were - and per this project's own
+rule, a confidence-80 reading that has survived every discriminator found so
+far is wired as read, not held back a second time for an uncertainty already
+priced into that number. `mesh::rcs::skin::roles` now calls
+`specular_exponent()` per material slot, trusting every answer **except a
+literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
+that specific value keeps reading as `SpecularPower` patched at draw time
+(finding 1 above) rather than as a sixth real constant - so `0.0` and every
+material the decoder could not resolve at all fall back to the shared `32`
+stand-in (`mesh::vertex::GpuVertex::specular_exponent`,
+`mesh::DEFAULT_SPECULAR_EXPONENT`), and every other resolved value is
+carried straight into `mesh.wgsl`'s `pow(ndh, in.specular_exponent)`. The
+`patch fslot` to `const@slot` decoder would still let the `0.0` bucket close
+outright rather than fall back - that is the next step this leaves open, not
+a reason to hold up the read the disc already gives for the rest.
 
 ### The sun is real and it is masked (2026-08-20)
 
