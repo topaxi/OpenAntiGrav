@@ -47,9 +47,9 @@ emulator with no standalone CLI for just this step.
 `GameRoot_Construct`. See
 [game-boot.md](../docs/ghidra/functions/vita-2048-eu-v104/game-boot.md) for
 the boot allocator and manager/root constructors that thread went on to name,
-and [2048 vs HD/Fury lineage](vita-2048-vs-hd-fury-lineage.md) for the
-codebase-lineage question it raised. What's left here is loose ends unrelated
-to either.
+and [vita-2048-eu-v104/README.md](../docs/ghidra/functions/vita-2048-eu-v104/README.md#the-lineage-question-is-answered-confirmed)
+for the codebase-lineage question it raised, now confirmed. What's left here
+is loose ends unrelated to either.
 
 ## Open
 

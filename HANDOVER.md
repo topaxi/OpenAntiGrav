@@ -276,7 +276,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read](handover/hds-sprite-flare-reads-oversized-and-the-tuning.md)
 - [HD's glow draws, and the coordinate it samples on is the one thing not read](handover/hds-glow-draws-and-the-coordinate-it-samples.md)
 - [2048's four Vita eboots are decrypted and imported; loose ends from getting there](handover/2048s-vita-eboots-are-imported-re-not-started.md)
-- [Check whether 2048 is the HD/Fury codebase retargeted, not a Pulse-lineage build](handover/vita-2048-vs-hd-fury-lineage.md)
+- [2048's seven boot-manager names could be cross-verified against `ps3-hdfury-eu`, once that side has the same singletons named](handover/vita-2048-boot-managers-await-ps3-side-names.md)
 - [2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track](handover/2048s-track-vex-parses-but-two-binary-formats-changed.md)
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/hd-collisions-flatten-a-severity-tree.md)

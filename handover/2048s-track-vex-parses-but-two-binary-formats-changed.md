@@ -1,8 +1,10 @@
 # 2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track
 
 2026-08-26. Scoped to "load a Wipeout 2048 craft and track to spawn in via
-`just play 2048 --race`, no menu/intro" - see [2048 vs HD/Fury lineage](vita-2048-vs-hd-fury-lineage.md)
-for the codebase-lineage question this corroborates further. Worked in
+`just play 2048 --race`, no menu/intro" - see
+[vita-2048-eu-v104/README.md](../docs/ghidra/functions/vita-2048-eu-v104/README.md#the-lineage-question-is-answered-confirmed)
+for the codebase-lineage question this corroborates further (confirmed
+2026-09-01). Worked in
 `../oag-2048` (`git worktree add`), against `data/extracted/vita/PCSF00007/base/PSP2/data.psarc`
 (1.6 GiB, EU base package, decrypted per
 [the eboot thread](2048s-vita-eboots-are-imported-re-not-started.md)'s pipeline -
@@ -20,7 +22,8 @@ generically and nothing asserts either value. The manifest gives every path as a
 real string (`data/art/published/environments/altima/track.vex`), same as HD.
 
 **The asset *tree* is HD/Fury's, not Pulse's**, corroborating
-[the lineage thread](vita-2048-vs-hd-fury-lineage.md) a second, independent way:
+[the confirmed lineage finding](../docs/ghidra/functions/vita-2048-eu-v104/README.md#the-lineage-question-is-answered-confirmed)
+a second, independent way:
 `.rcsmodel`/`.rcsmaterial`/`.rcsskeleton`/`.rcsanimclip`, `.pob`, `.pvs`/`.probes`,
 `.envsettings`, `.bnk` - HD's whole extension family, present here too. 2048 also
 ships all fourteen HD teams verbatim under `data/art/published/hdships/<Team>/`
