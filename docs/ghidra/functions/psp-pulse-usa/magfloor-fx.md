@@ -115,35 +115,43 @@ found, consistent with the indirect/vtable-driven construction this codebase
 has already documented for other node-class constructors, e.g. `Engine
 Flare`'s on [exhaust.md](exhaust.md#the-engine-flare-constructor)).
 
-## The anchor transform exists but its numbers were not read
+## The 16-float block is boilerplate, not the anchor - the real anchor is still unlocated
 
 After loading and hiding both objects, `MagFloorFx_Construct` builds a
-16-float (0x40-byte) block from a run of globals (`_DAT_0028c7a0`..`_DAT_0028c7dc`,
-with one element - the second float of the last row - sourced from a
-*different* global, `_DAT_002acef0`, breaking the otherwise-sequential
-addresses) and passes it to `FUN_08945284` twice, once per object
-(`param_3` `1`/`0` distinguishing them). That function copies the 16 floats
-verbatim into a lazily-allocated transform-cache slot on the target object
-and then sets two bits in the *same* `+0x2c` field `MagFloorFx_Show`/`Hide`
-already use - `0x01000000` when `param_3 == 0`, `0x08000000` when it is not -
-which reads as a draw-key/layer selector in the same high-byte position
-`draw-order.md` already decoded for the mesh-layer discriminator, not
-anything positional.
+16-float (0x40-byte) block (disassembly: `lui a3,0x29` / `addiu a0,a3,-0x3860`
+constructs the absolute address `0x0028c7a0` directly, not through `$gp` or
+an image-relative displacement) and passes it to `FUN_08945284` twice, once
+per object (`param_3` `1`/`0` distinguishing them). That function copies the
+16 floats verbatim into a lazily-allocated transform-cache slot on the target
+object and then sets two bits in the *same* `+0x2c` field `MagFloorFx_Show`/
+`Hide` already use - `0x01000000` when `param_3 == 0`, `0x08000000` when it
+is not - which reads as a draw-key/layer selector in the same high-byte
+position `draw-order.md` already decoded for the mesh-layer discriminator,
+not anything positional.
 
-**Shape only, not the numbers.** This is very plausibly the authored anchor
-- a fixed local transform placing the effect relative to the craft, matching
-"below the craft" - and a per-object render-mode/layer bit, but this session
-could not read the sixteen floats: `inspect_memory_content` on
-`0x08a90ba0` (`0x0028c7a0 + 0x08804000`, the same image-relative convention
-`missile.md` documents for `jal` targets) lands on unrelated C++ runtime
-string data, not the expected floats, and the address as Ghidra prints it
-(`0x0028c7a0`) is not itself a valid load address in the `ram` space (the
-only non-overlay space this program has) or any of the standard PSP virtual
-mirrors. This project's own project-level notes record at least one other
-case of a global reached through `$gp` carrying an instruction displacement
-unrelated to its printed address - this may be the same class of trap rather
-than a one-off, and is worth checking against that method before spending
-more time on it.
+**First read this as the authored per-effect anchor; it almost certainly
+is not.** `get_xrefs_to` on `0x0028c7a0` returns **over eighty** reads from
+completely unrelated constructors across the binary - `Gfx_Init`,
+`Trail_InitPreset`, `ShipShield_Update`, `Missile_Update`, `Rocket_Update`,
+`AnimTransform_EvalRotation`, `Mine_SpawnExplosion`, and dozens more with no
+shared subsystem. A per-effect authored anchor would not be read by the
+shield, a missile and the graphics init path alike; a shared default/identity
+matrix constant used to seed a node's local transform before something else
+positions it would be exactly this widely read. Reading it (`ram:0028c7a0`
+is not backed by this Ghidra project's loaded segments, so the actual sixteen
+values were not confirmed) is very unlikely to change this reading, so this
+session stopped chasing it rather than spend more time reading a constant
+that most likely does not vary per-object anyway.
+
+**So the real placement question is still open, and differently shaped than
+this page first thought**: `MagFloorFx_Construct` has no visible call that
+positions either object relative to the craft - it loads, hides, colours,
+and seeds an identity-shaped default transform, then returns. Wherever the
+two nodes get parented onto the craft's scene graph (the mechanism
+`exhaust.md` already documents for `Engine Flare`/`Trail`'s own placement)
+is not in this function. `MagFloorFx_Construct` was not traced back to a
+caller - finding that caller, not reading this constant, is the next step
+for the anchor question.
 
 ## The sfx half is open
 
@@ -170,12 +178,25 @@ whether any of them happens to be *placed* along that track's magstrip
 sections specifically was not checked, and would need the pad/emitter
 placement data, not just the bank's cue list.
 
-So: **no per-craft magfloor sfx cue exists in `Data.wad`.** What remains
-unconfirmed is only the first reading - that the hum is baked into one or
-both `.vex` nodes' own emitter, the way `Engine Flare` owns `~ENGINE`
-([exhaust.md](exhaust.md#exhaust_updateenginesound)) - which would make it
-invisible to a bank-name search rooted at the trigger, and needs the node
-class's own update function, not yet read.
+So: **no per-craft magfloor sfx cue exists in `Data.wad`.** The `Engine
+Flare`-owns-`~ENGINE` reading this page originally carried as the live
+hypothesis is now weaker than it looked: `Engine Flare`/`Trail` are their
+own dedicated node classes with bespoke C++ update functions
+([exhaust.md](exhaust.md)), which is *why* one can own a sound emitter.
+`MagEffect1.vex`/`MagEffect2.vex` are not - `oag-view --mesh` finds a plain
+`CLASS_MESH` (`0x125`) payload node in both (`crates/view/src/draws.rs`
+filters on exactly that class id to find anything to draw at all), the
+generic mesh class every ordinary prop uses, loaded through the same
+resource loader every weapon model goes through - not a bespoke class with
+its own update function the way `Engine Flare` is. A generic mesh node has
+nowhere to hide an emitter. Combined with the bank census finding nothing,
+**the more honest reading is that the hum is not attached to this effect at
+all** - it is plausibly one of the per-track ambience loops found above
+(`~HUM`/`~bighum`/`~SINGLE_GRINDER`), and the maintainer associates it with
+magstrip sections because that is where those sections happen to place it,
+not because riding the strip triggers it. Not confirmed either way - it
+would need the pad/emitter placement data for a magstrip track, not just the
+bank's cue list.
 
 **Do not invent a cue for this.** Per `CLAUDE.md`'s do-not-invent rule, no sfx
 is wired until the emitter reading above is confirmed or refuted.
@@ -190,9 +211,9 @@ is wired until the emitter reading above is confirmed or refuted.
 
 ## Open questions
 
-- Which node class `MagEffect1`/`MagEffect2` register as, and whether that
-  class's own update function is where a sound emitter would live - the same
-  question `exhaust.md` answered for `Engine Flare`/`Trail`, unasked here yet.
+- **Where these two nodes are placed relative to the craft - the primary
+  open question now.** `MagFloorFx_Construct` does not position them; the
+  caller that parents them onto the craft's scene graph is unlocated.
 - What `entity+0x8bc` gates in `Ship_MagFloorEnter`/`Ship_MagFloorExit`
   (possibly per-player scoping, unconfirmed - see `entity+0x368` on
   [shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
@@ -201,12 +222,13 @@ is wired until the emitter reading above is confirmed or refuted.
   "ship entity" pointer documented at `craft+0x1c4` elsewhere on this page's
   binary, or a distinct sub-object at the same relative offsets - no caller
   was traced for the constructor.
-- The sfx mechanism - whether the hum is baked into one of the two `.vex`
-  nodes' own emitter; no bank cue names it, but the node's own update
-  function was not read.
+- The sfx mechanism, now leaning toward "not attached to this effect at all"
+  (see above) rather than a hidden emitter - not settled, since the
+  per-track ambience reading is also unconfirmed.
 - What colour `func_0x0010e2b4` packs for the two objects, and whether it
-  differs between them (not decoded - the four source globals could not be
-  read from this session's Ghidra bridge).
+  differs between them (not decoded - the source globals sit in the same
+  unmapped-in-this-project low address range as the shared transform
+  constant above).
 - Pure's code side (does it have an equivalent trigger over a different or
   absent asset, under a path this session did not hash?) and HD/Fury's
   mechanism, if any, are both unchecked.
@@ -217,9 +239,15 @@ is wired until the emitter reading above is confirmed or refuted.
   Node identity closed (90): `MagFloorFx_Construct` loads both assets by
   exact string address into the same `+0xac`/`+0xb0` fields the trigger and
   `MagFloorFx_Show`/`Hide` (renamed from the unnamed enable/disable pair)
-  operate on. All 582 cues across Pulse's 36 sound banks enumerated: no
-  per-craft magfloor cue in `SHIP`/`SHIP_ZM`, and the `MAG*`/`HUM`/`GRIND`
-  hits elsewhere are track-ambience banks, not craft ones - narrows the sfx
-  question to "is it baked into the vex node's own emitter", not answers it.
-  Pure ruled out for these two exact asset hashes in `Data.wad` only; Pure's
-  code and HD/Fury both unchecked.
+  operate on. The constructor's 16-float block, first read as a candidate
+  authored anchor, is instead a shared default transform (80+ unrelated
+  callers via `get_xrefs_to`) - the real anchor is wherever the two nodes get
+  parented onto the craft, still unlocated. All 582 cues across Pulse's 36
+  sound banks enumerated: no per-craft magfloor cue in `SHIP`/`SHIP_ZM`, and
+  the `MAG*`/`HUM`/`GRIND` hits elsewhere are track-ambience banks, not craft
+  ones; combined with both files parsing as a plain `CLASS_MESH` payload (no
+  bespoke node class to hide an emitter in, unlike `Engine Flare`), the sfx
+  reading shifted from "probably a hidden emitter" to "probably not attached
+  to this effect at all" - still not confirmed either way. Pure ruled out for
+  these two exact asset hashes in `Data.wad` only; Pure's code and HD/Fury
+  both unchecked.

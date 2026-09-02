@@ -1,4 +1,4 @@
-# Magfloor gfx/sfx: node identity is proven, the anchor's numbers are the last gfx blocker, sfx and the other two titles are open
+# Magfloor gfx/sfx: node identity is proven, where the effect anchors on the craft is the last gfx blocker, sfx leans "not attached at all"
 
 Started from the user's request to investigate/implement additional gfx and
 sfx while on a magfloor, in a worktree (`../oag-magfloor-fx`, branch
@@ -7,7 +7,7 @@ confirmed both a visible spark/glow below the craft and an audible hum exist
 in the original. Full writeup: [`magfloor-fx.md`](../docs/ghidra/functions/psp-pulse-usa/magfloor-fx.md),
 with the trigger itself on [`engine.md`](../docs/ghidra/functions/psp-pulse-usa/engine.md#the-tail-of-ship_casthoverprobes-fires-the-mag-floor-gfxsfx-2026-09-02).
 
-**Gfx, Pulse PSP: node identity proven, one blocker left before implementing.**
+**Gfx, Pulse PSP: node identity proven, placement is the one blocker left.**
 Two real `.vex` models ship on the disc, `Data\visual_effects\MagEffect1.vex`
 and `MagEffect2.vex` (entries 1079/1080 of `Data.wad`, hashes `ba9996ee`/
 `fd39ec3e`), preloaded every race alongside the weapon effects. Extracted,
@@ -22,26 +22,33 @@ functions this pass) to flip a flag and OR/AND a bit on two child objects.
 nodes**: `MagFloorFx_Construct` (`0x088590a8`, also newly named) loads both
 by their exact string address into the same two fields, confidence 90.
 
-**What's still missing for an honest implementation**: the constructor also
-builds a 16-float local transform and a per-object render-mode bit and hands
-both to a generic node-transform setter, which is very plausibly the
-authored anchor (where under the craft these sit) and blend/layer selection
-- but the sixteen floats live behind a `$gp`-relative addressing quirk this
-session's Ghidra bridge couldn't resolve to real memory (see
-`magfloor-fx.md`'s "The anchor transform exists but its numbers were not
-read"). Implementing the attachment point without those numbers would mean
-guessing a placement, which is exactly what the do-not-invent rule forbids.
+**What's still missing for an honest implementation: where the two nodes
+anchor on the craft.** The constructor's own 16-float transform block looked
+at first like a candidate authored anchor, but `get_xrefs_to` on its source
+address turns up 80+ reads from completely unrelated constructors (`Gfx_Init`,
+`Missile_Update`, `ShipShield_Update`, ...) - a shared default/identity
+transform, not per-effect data. The real placement happens wherever these two
+nodes get parented onto the craft's scene graph, and `MagFloorFx_Construct`
+has no such call - its caller, which would show that, was not traced.
+Implementing the attachment point on a guess would be exactly what the
+do-not-invent rule forbids.
 
-**Sfx, Pulse PSP: no cue exists, but the mechanism is still open.** No
-sound-play call anywhere in the trigger chain, and `oag-wad sounds` against
-the whole of `Data.wad` (36 banks, 582 cues, all enumerated) rules out a
-per-craft cue: `SHIP`/`SHIP_ZM` have none candidate-shaped, and the
-`MAG*`/`HUM`/`GRIND` hits elsewhere are all in per-track ambience banks
-(`basilic`, `dekonst`, `gentrak`, `fortcle`), alongside plainly environmental
-cues like `~crowd`/`~radardish`/`~billboard`. What remains is one
-hypothesis: the hum is baked into one of the two vex nodes' own emitter, the
-way `Engine Flare` owns `~ENGINE` - not yet checked, needs the node class's
-own update function.
+**Sfx, Pulse PSP: no cue exists, and the mechanism now leans "not attached to
+this effect at all".** No sound-play call anywhere in the trigger chain, and
+`oag-wad sounds` against the whole of `Data.wad` (36 banks, 582 cues, all
+enumerated) rules out a per-craft cue: `SHIP`/`SHIP_ZM` have none
+candidate-shaped, and the `MAG*`/`HUM`/`GRIND` hits elsewhere are all in
+per-track ambience banks (`basilic`, `dekonst`, `gentrak`, `fortcle`),
+alongside plainly environmental cues like `~crowd`/`~radardish`/`~billboard`.
+The earlier live hypothesis - a sound baked into one of the two vex nodes'
+own emitter, the way `Engine Flare` owns `~ENGINE` - is weaker than it
+looked: `Engine Flare`/`Trail` are bespoke node classes with their own C++
+update functions, which is *why* one can own an emitter; both MagEffect
+files parse as a plain `CLASS_MESH` payload (`oag-view`'s own class filter
+confirms it), the generic mesh class every ordinary prop uses, with no
+per-class code to hide an emitter in. The more honest reading now is that the
+hum the maintainer hears is a per-track ambience loop that happens to sit
+near magstrip sections, not a per-craft cue at all - still not confirmed.
 
 **Pure and HD/Fury: neither implemented.** Pure's `Data.wad` (both regions,
 832 entries, censused in full) does not contain either hash under the same
@@ -55,21 +62,19 @@ out. HD/Fury's `EBOOT.elf` has no `MagEffect` string at all; not investigated
 further.
 
 **Nothing was implemented in `crates/` this session** - the render/audio
-wiring was deliberately left for a follow-up once the anchor numbers and the
-sfx mechanism are resolved, per the do-not-invent rule: attaching two real
-vex meshes at a guessed position, or firing an invented sound cue, would be
-exactly the kind of plausible-looking stand-in `CLAUDE.md` warns against -
-node identity alone is not enough, placement matters too.
+wiring was deliberately left for a follow-up once the placement is located
+and the sfx question settles one way or the other, per the do-not-invent
+rule: attaching two real vex meshes at a guessed position, or firing an
+invented sound cue, would be exactly the kind of plausible-looking stand-in
+`CLAUDE.md` warns against - node identity alone is not enough, placement
+matters too.
 
 ## Open
 
-- The anchor transform's actual sixteen floats (and the per-object
-  render-mode bit) - the constructor builds and hands them off, but they sit
-  behind a `$gp`-relative addressing quirk this session's static Ghidra
-  bridge could not resolve to real memory. Needs a live-emulator watchpoint
-  read, per this project's own notes on the same class of trap.
-- The sfx mechanism - no bank cue exists, so it is either baked into one of
-  the two vex nodes' own emitter or the hum has some other source entirely.
+- Where the two nodes anchor on the craft - `MagFloorFx_Construct`'s caller,
+  which would show the parenting/placement, is unlocated.
+- The sfx mechanism - leaning "not attached to this effect", not confirmed;
+  would need a magstrip track's pad/emitter placement data to settle.
 - What `entity+0x8bc` gates in `Ship_MagFloorEnter`/`Ship_MagFloorExit`.
 - Whether `MagFloorFx_Construct`'s `entity` parameter really is the same
   "ship entity" pointer documented at `craft+0x1c4` elsewhere, or a distinct
@@ -80,24 +85,24 @@ node identity alone is not enough, placement matters too.
 
 ## Next Steps
 
-- Read the anchor transform's sixteen floats with a live emulator and a
-  watchpoint (the static approach is exhausted this session) - this is now
-  the single blocker on the gfx side, since node identity is settled.
-- Read the node class `MagEffect1`/`MagEffect2` register as, and whether its
-  own update function owns a sound emitter (the `Engine Flare` pattern) -
-  the single open question on the sfx side, since the bank census ruled out
-  a plain cue.
+- Find `MagFloorFx_Construct`'s caller (no direct caller resolved statically;
+  a live emulator breakpoint on `0x088590a8` while loading a magstrip track,
+  the same method `weatherpos.md` used for a similarly indirect constructor,
+  is the precedent to follow) - this is now the single blocker on the gfx
+  side, since node identity is settled.
+- Check whether any magstrip-carrying track's pad/emitter data places one of
+  the `~HUM`/`~bighum`/`~SINGLE_GRINDER` ambience cues specifically along the
+  strip, to settle the sfx question the other way from "not attached".
 - Get a Ghidra session with `psp-pure-usa`/`psp-pure-eu` actually switched in
   (this session's bridge only exposed `BOOT.BIN` ambiguously across the two
   Pulse regions and never resolved to Pure) and repeat the string/asset search
   there.
-- Once the anchor and the sfx mechanism clear confidence, implement: attach
-  `MagEffect1.vex`/`MagEffect2.vex` to the craft in `oag-render` at the
-  recovered transform, additively blended, shown/hidden off the physics
-  crate's existing `Surface::MagFloor` contact signal
-  (`crates/physics/src/maglock.rs`/`hover.rs` already compute the equivalent
-  of `craft+0x240`).
+- Once the anchor is located, implement: attach `MagEffect1.vex`/
+  `MagEffect2.vex` to the craft in `oag-render` at the recovered transform,
+  additively blended, shown/hidden off the physics crate's existing
+  `Surface::MagFloor` contact signal (`crates/physics/src/maglock.rs`/
+  `hover.rs` already compute the equivalent of `craft+0x240`).
 - A side-by-side `just play` capture on a magstrip track (e.g. a Pulse circuit
   known to have one) against the geometry screenshots in `magfloor-fx.md`
-  would corroborate the visual identification independently of the emulator
-  read.
+  would corroborate the visual identification independently of locating the
+  constructor's caller.
