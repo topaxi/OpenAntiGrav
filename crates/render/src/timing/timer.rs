@@ -112,12 +112,19 @@ impl Ring {
         }
     }
 
-    /// Every slot waiting on a map, oldest claim first - so a backlog drains
-    /// in the order the frames happened rather than in slot order.
-    fn in_flight(&self) -> Option<(usize, u64)> {
+    /// The oldest slot whose map has landed, by `ready`.
+    ///
+    /// **Oldest of the *ready* ones, not the oldest outright.** A backlog
+    /// drains in the order the frames happened, which is what the ordinary
+    /// case wants; but a map that never completes must not hold up the slots
+    /// behind it, or one failure takes the ring with it - four of them and
+    /// nothing is ever measured again. The reading names its own frame either
+    /// way, so a caller is never misled by the one case where this hands back
+    /// a later frame first.
+    fn ready(&self, ready: impl Fn(usize) -> bool) -> Option<(usize, u64)> {
         (0..SLOTS)
             .filter_map(|slot| match self.slots[slot] {
-                Slot::InFlight(frame) => Some((slot, frame)),
+                Slot::InFlight(frame) if ready(slot) => Some((slot, frame)),
                 _ => None,
             })
             .min_by_key(|&(_, frame)| frame)
@@ -299,9 +306,12 @@ impl PassTimer {
                 .readback
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, move |result| {
-                    // A failed map leaves the flag clear, so the slot simply
-                    // never reports - which loses one sample rather than
-                    // reporting a wrong one.
+                    // A failed map leaves the flag clear and the slot is
+                    // never read - one sample lost rather than a wrong one
+                    // reported. It costs the ring that slot for the rest of
+                    // the run, which is why `Ring::ready` takes the oldest
+                    // *ready* slot rather than the oldest one: a slot stuck
+                    // like this must not hold up the ones behind it.
                     if result.is_ok() {
                         mapped.store(true, Ordering::Release);
                     }
@@ -311,11 +321,11 @@ impl PassTimer {
         // Non-blocking, unlike the probe in `timing/tests.rs`: waiting here
         // would drain the pipeline this is measuring.
         let _ = device.poll(wgpu::PollType::Poll);
-        let (slot, frame) = self.ring.in_flight()?;
+        let (slot, frame) = self
+            .ring
+            .ready(|slot| self.buffers[slot].mapped.load(Ordering::Acquire))?;
         let buffers = &self.buffers[slot];
-        if !buffers.mapped.swap(false, Ordering::Acquire) {
-            return None;
-        }
+        buffers.mapped.store(false, Ordering::Release);
         let ticks = {
             let slice = buffers.readback.slice(..);
             let Ok(mapped) = slice.get_mapped_range() else {

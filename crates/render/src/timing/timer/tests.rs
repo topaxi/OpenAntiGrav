@@ -18,7 +18,7 @@ fn a_claim_names_the_frame_it_was_made_for() {
     let slot = ring.claim(7).expect("a free slot");
     ring.copied(slot);
     ring.mapping(slot);
-    assert_eq!(ring.in_flight(), Some((slot, 7)));
+    assert_eq!(ring.ready(|_| true), Some((slot, 7)));
 }
 
 /// The property the whole ring exists for: four frames in flight at once, each
@@ -32,11 +32,11 @@ fn four_frames_in_flight_come_back_as_themselves() {
         ring.mapping(slot);
     }
     for frame in 100..104 {
-        let (slot, in_flight) = ring.in_flight().expect("a reading");
+        let (slot, in_flight) = ring.ready(|_| true).expect("a reading");
         assert_eq!(in_flight, frame, "a backlog drains oldest first");
         ring.free(slot);
     }
-    assert_eq!(ring.in_flight(), None);
+    assert_eq!(ring.ready(|_| true), None);
 }
 
 /// A slot is never handed out twice, which is what would produce a *wrong*
@@ -50,9 +50,43 @@ fn a_full_ring_refuses_rather_than_reusing() {
         ring.mapping(slot);
     }
     assert_eq!(ring.claim(99), None);
-    let (slot, _) = ring.in_flight().expect("a reading");
+    let (slot, _) = ring.ready(|_| true).expect("a reading");
     ring.free(slot);
     assert_eq!(ring.claim(99), Some(slot), "the freed one, and only it");
+}
+
+/// A map that never lands costs its own slot and nothing else.
+///
+/// The failure this guards is not a missing sample, it is a dead ring: taking
+/// the oldest slot outright rather than the oldest *ready* one would have a
+/// single stuck flag hold up every slot behind it for the rest of the run, and
+/// four of them stop the timer measuring anything ever again.
+#[test]
+fn a_slot_whose_map_never_lands_does_not_hold_up_the_others() {
+    let mut ring = Ring::new();
+    let stuck = ring.claim(1).expect("a free slot");
+    ring.copied(stuck);
+    ring.mapping(stuck);
+    let later = ring.claim(2).expect("a free slot");
+    ring.copied(later);
+    ring.mapping(later);
+
+    assert_eq!(
+        ring.ready(|slot| slot != stuck),
+        Some((later, 2)),
+        "frame 2 is readable while frame 1's map is outstanding"
+    );
+    ring.free(later);
+    assert_eq!(ring.ready(|slot| slot != stuck), None);
+    // Every slot but the stuck one is still in circulation: three more claims
+    // land, and none of them is the one whose map never came back.
+    for frame in 3..6 {
+        let slot = ring.claim(frame).expect("a free slot");
+        assert_ne!(slot, stuck, "the stuck slot was handed out again");
+        ring.copied(slot);
+        ring.mapping(slot);
+        ring.free(slot);
+    }
 }
 
 /// Round robin rather than lowest-free-first: a readback wants the longest
@@ -77,7 +111,7 @@ fn an_unresolved_claim_holds_its_slot() {
         ring.claim(frame).expect("a free slot");
     }
     assert_eq!(ring.claim(99), None);
-    assert_eq!(ring.in_flight(), None, "nothing to read, either");
+    assert_eq!(ring.ready(|_| true), None, "nothing to read, either");
 }
 
 /// The transitions are one-way. `copied` on a slot that was never claimed, or
@@ -88,7 +122,7 @@ fn a_transition_out_of_order_changes_nothing() {
     let mut ring = Ring::new();
     ring.copied(2);
     ring.mapping(2);
-    assert_eq!(ring.in_flight(), None);
+    assert_eq!(ring.ready(|_| true), None);
     assert_eq!(ring.claim(1), Some(0), "and slot 2 is still free");
 }
 
