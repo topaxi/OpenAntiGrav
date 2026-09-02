@@ -633,6 +633,20 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**Ghidra's decompile of a PS3 HD/Fury function above the `0x32d5e0` TOC break
+names the wrong strings, disc-wide, not just for one function.** Read closing
+the engine-shader-parameters thread, 2026-08-24 originally. `0x003f1300`
+(`Shader_InitEngineParams`) decompiles showing sound-bank and `.vex` path
+literals that are not what the function actually references - it sits above
+the TOC break [memory.md](docs/ghidra/functions/ps3-hdfury-eu/memory.md)
+documents, so Ghidra resolves its `lwz rX,disp(r2)` loads against the wrong
+table entries. The only correct read is
+[`scripts/ps3-toc.py`](scripts/ps3-toc.py) walking the function's own loads
+against its own OPD TOC. Check a high-address PS3 function's decompile
+against this before trusting any string or symbol name it shows - a
+plausible-looking wrong string here reads exactly like a correct one until
+checked.
+
 **A stationary `--race` capture never reaches the particle path at all, so it is worthless as evidence about anything a sharpener, a filter or a compression step does to effects.** 2026-09-02, closing the FSR 1 default question. `--race` holds the throttle without steering, so the player crosses no `Weapon Pad`, fires nothing and hits nothing. Measured from the vertex side: the `psys` path costs **199 bytes** in a stationary `--race` capture and **1.99 MB** under `--autopilot --give rocket --press square` - four orders of magnitude, because the stationary run never enters it. The frame *looks* like a race and contains none of the high-frequency additive content - spark burst, rocket plume, shield shell - that the question was about. A preference for FSR 1 was carried for weeks on exactly such a capture. **Add `--give rocket --hold cross --press square` to any capture meant to judge effects**, and prefer a play-test over a still for a picture-quality judgement: a byte-diff answers "are these different", not "is this better".
 
 **Do not read a menu or front-end capture taken with `--upscaler` as evidence about the upscaler.** The flag changes the UPSCALER row's own *text*, so two images differ for a reason that has nothing to do with resampling - that nearly produced a false conclusion once. Since [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) the trap is worse than it was: no upscaler touches menu or front-end pixels at all any more, so the row's text is the *only* thing that can differ between the two captures.
