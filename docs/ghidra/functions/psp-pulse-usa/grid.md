@@ -405,13 +405,19 @@ write, same shape of object-allocation boilerplate, same downstream call into
 type `1` from `Race_SpawnAiRacer` and type `2` from here, are the same
 generic per-craft constructor) - but it **never reads `DAT_00057c44`** (the
 team-catalogue pointer array) or anything else keyed by `id`. Since `id` is a
-hardcoded `0` for every racer in this path and the constructor it feeds does
-not do a team lookup either (per `shield.md`'s own account of what
-`Craft_Construct_q` reads), **Custom Race's team assignment does not happen
-through `id` or through `Race_SpawnAiRacer`'s catalogue-pointer mechanism at
-all** - it happens somewhere this session did not reach, most likely inside
-`Craft_Construct_q` itself keyed by `racer_index`/`slot` rather than `id`, or
-in a completely separate step this call chain does not touch.
+hardcoded `0` for every racer in this path, **Custom Race's team assignment
+does not happen through `id` or through `Race_SpawnAiRacer`'s
+catalogue-pointer mechanism at all** - and, read in full separately this
+session, `Craft_Construct_q` itself is not where it happens either: it
+initialises physics/hover/shield/particle state off `param_2` (a small `0`-`3`
+role tag, not `id` or a team index) and touches no `.vex`/team-path string or
+`DAT_00057c44` anywhere in its body. A whole-binary `search_strings` for
+`Data.Ships`/`Ship.vex` found nothing, so the path is very likely built at
+runtime from a team-name substring plus a fixed suffix rather than present as
+one literal. Team assignment for Custom Race happens somewhere neither spawn
+chain nor its shared constructor touches - unfound this session, and the
+renderer/asset-loading side (rather than either entity constructor) is the
+more promising place to look next.
 
 **This falsifies part of the previous section's framing** for the mode that
 actually matters here: `id`'s catalogue-pointer mechanism may be real for
@@ -464,11 +470,13 @@ its neighbours in that section are not.
   Race_SpawnGrid" above) hardcodes `id` to `0` for every racer. So `id`'s
   catalogue-pointer mechanism, whatever it turns out to mean, **does not
   answer this question for Custom Race** - team assignment there happens
-  through a mechanism this session did not find, most likely inside
-  `Craft_Construct_q` (`0x08840c74`, shared by both spawn paths) keyed by
-  `racer_index`/`slot` rather than by `id`. The ordering
-  `livery::teams_for_slots` uses today is still this project's own, not the
-  original's, and is labelled as such in the load report.
+  through a mechanism this session did not find. `Craft_Construct_q`
+  (`0x08840c74`, shared by both spawn paths) is read in full and **ruled
+  out**: it never references a team-path string or `DAT_00057c44`. The
+  renderer/asset-loading side, rather than either entity constructor, is the
+  next place to look. The ordering `livery::teams_for_slots` uses today is
+  still this project's own, not the original's, and is labelled as such in
+  the load report.
 - **`modesto_heights`'s reversed grid, one slot short.** See "Reversed grids"
   above - inside the track's own bounds, not chased further.
 - **The stall rescue does not catch a craft bouncing in place.** Found while
