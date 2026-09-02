@@ -770,7 +770,6 @@ impl Chain {
         );
         self.current.set(1 - current);
     }
-
 }
 
 /// The rectangle drawn into a target of `level`, given the scene's own drawn
