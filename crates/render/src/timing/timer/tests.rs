@@ -211,7 +211,9 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
         // than a hang.
         let mut reading = None;
         for _ in 0..1_000 {
-            device.poll(wgpu::PollType::wait_indefinitely()).expect("the GPU");
+            device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("the GPU");
             if let Some(got) = timer.read(&device) {
                 reading = Some(got);
                 break;
@@ -230,7 +232,10 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
             "{name}: a cleared 256x256 pass measured {} s",
             reading.seconds
         );
-        eprintln!("{name}: frame {frame} took {:.6} ms", reading.seconds * 1000.0);
+        eprintln!(
+            "{name}: frame {frame} took {:.6} ms",
+            reading.seconds * 1000.0
+        );
     }
 }
 

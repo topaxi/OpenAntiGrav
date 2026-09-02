@@ -66,8 +66,7 @@ pub mod zone;
 /// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    adapter.features()
-        & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY)
+    adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY)
 }
 
 /// The device descriptor every `request_device` in this workspace uses.
