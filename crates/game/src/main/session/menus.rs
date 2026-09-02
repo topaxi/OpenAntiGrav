@@ -237,7 +237,7 @@ impl Session {
             remix_menu::settle(&mut self.settings.remix.variant, &variants);
             model.supply(menu::ValueSource::RemixVariant, &variants);
         }
-        self.seed_menu(&mut model);
+        self.seed_menu(&mut model, shell.title.name);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
         // restart note is the difference between the two. Told every time the
@@ -415,8 +415,8 @@ impl Session {
     /// A key nothing edits is reported rather than ignored: it means a setting
     /// exists that a player has no way to change, which is a gap worth seeing in
     /// the log rather than a silent one.
-    fn seed_menu(&self, model: &mut menu::Menu) {
-        for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy) {
+    fn seed_menu(&self, model: &mut menu::Menu, title: &str) {
+        for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title) {
             if !model.seed(key, &value) {
                 warn!("nothing in the menus edits {key}");
             }

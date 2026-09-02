@@ -180,23 +180,35 @@ fn main() -> Result<()> {
     // Loaded (and, on first run or a missing key, written back complete) before
     // anything else: a bad value in the file should fail immediately, not eight
     // seconds of intro later.
-    let settings = settings::load()?;
+    let mut settings = settings::load()?;
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
+    // A CLI render-profile flag overrides *every* title's entry for this run
+    // only - never persisted, the same footing `anisotropy` above is already
+    // on. There is no title open yet this early, so there is no one title to
+    // single out; a flag naming one and not the rest would silently leave the
+    // rest of a play session's titles unaffected the moment a different disc
+    // is chosen, which is not what typing the flag once means.
     let render_scale = match cli.render_scale {
-        Some(percent) => crate::display::Scale::try_from(percent)
-            .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
-        None => settings.graphics.render_scale,
+        Some(percent) => Some(
+            crate::display::Scale::try_from(percent)
+                .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
+        ),
+        None => None,
     };
-    let settings = settings::Settings {
-        graphics: settings::Graphics {
-            upscaler: cli.upscaler.unwrap_or(settings.graphics.upscaler),
-            render_scale,
-            anti_aliasing: cli.anti_aliasing.unwrap_or(settings.graphics.anti_aliasing),
-            motion_blur: cli.motion_blur.unwrap_or(settings.graphics.motion_blur),
-            ..settings.graphics
-        },
-        ..settings
-    };
+    for profile in settings.render_profiles.values_mut() {
+        if let Some(render_scale) = render_scale {
+            profile.render_scale = render_scale;
+        }
+        if let Some(upscaler) = cli.upscaler {
+            profile.upscaler = upscaler;
+        }
+        if let Some(anti_aliasing) = cli.anti_aliasing {
+            profile.anti_aliasing = anti_aliasing;
+        }
+        if let Some(motion_blur) = cli.motion_blur {
+            profile.motion_blur = motion_blur;
+        }
+    }
 
     // Parsed before anything is loaded, and for both ways in: the front end can
     // hand off to a race, so a misspelled class must not be discovered eight

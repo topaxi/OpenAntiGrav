@@ -599,9 +599,11 @@ pub(crate) struct Cli {
 
     /// Which resampler carries the frame onto the surface: bilinear or fsr1.
     ///
-    /// Overrides `[graphics] upscaler` in the settings file (`settings::path`)
-    /// for this run only; the file on disk is not changed. Here for the same
-    /// reason `--anisotropy` is, and for one more: two `--presented` captures
+    /// Overrides `[render_profiles.<title>] upscaler` for *every* title, for
+    /// this run only; the file on disk is not changed. Every title rather than
+    /// one, because no title is open yet this early to single one out - see
+    /// `crate::main::render_scale` in `main.rs`. Here for the same reason
+    /// `--anisotropy` is, and for one more: two `--presented` captures
     /// differing only by this flag are how the resamplers get compared, and
     /// asking somebody to edit a settings file between them is how a comparison
     /// ends up differing by something else as well.
@@ -611,10 +613,12 @@ pub(crate) struct Cli {
     /// What percentage of the displayed size the game is rendered at, 25 to
     /// 200.
     ///
-    /// Overrides `[graphics] render_scale` for this run only. The companion to
-    /// `--upscaler`: a resampler can only be judged at a scale where it has
-    /// something to resample, and the two flags together are what let one
-    /// command produce one image of a comparison.
+    /// Overrides `[render_profiles.<title>] render_scale` for *every* title,
+    /// for this run only - see `--upscaler`'s own doc for why every title
+    /// rather than one. The companion to `--upscaler`: a resampler can only be
+    /// judged at a scale where it has something to resample, and the two
+    /// flags together are what let one command produce one image of a
+    /// comparison.
     #[arg(long)]
     pub(crate) render_scale: Option<u32>,
 
@@ -647,21 +651,23 @@ pub(crate) struct Cli {
 
     /// Anti-aliasing mode: off, fxaa, smaa or msaa4x.
     ///
-    /// Overrides `[graphics] anti_aliasing` in the settings file
-    /// (`settings::path`) for this run only; the file on disk is not changed.
-    /// Here for the same reason `--upscaler` is: two `--presented` captures
-    /// differing only by this flag are how the modes get compared.
+    /// Overrides `[render_profiles.<title>] anti_aliasing` for *every* title,
+    /// for this run only; the file on disk is not changed - see `--upscaler`'s
+    /// own doc for why every title rather than one. Here for the same reason
+    /// `--upscaler` is: two `--presented` captures differing only by this flag
+    /// are how the modes get compared.
     #[arg(long)]
     pub(crate) anti_aliasing: Option<crate::display::AntiAliasing>,
 
     /// Motion blur strength: off, low, medium or high.
     ///
-    /// Overrides `[graphics] motion_blur` in the settings file
-    /// (`settings::path`) for this run only; the file on disk is not changed.
-    /// Here for the reason `--anti-aliasing` is: two captures differing only
-    /// by this flag are how the blur gets compared against itself off, and a
-    /// capture honours it by rendering a primer frame at the tick-before-last
-    /// camera first - see `race::CaptureOptions::motion_blur`.
+    /// Overrides `[render_profiles.<title>] motion_blur` for *every* title, for
+    /// this run only; the file on disk is not changed - see `--upscaler`'s own
+    /// doc for why every title rather than one. Here for the reason
+    /// `--anti-aliasing` is: two captures differing only by this flag are how
+    /// the blur gets compared against itself off, and a capture honours it by
+    /// rendering a primer frame at the tick-before-last camera first - see
+    /// `race::CaptureOptions::motion_blur`.
     #[arg(long)]
     pub(crate) motion_blur: Option<crate::display::MotionBlur>,
 
