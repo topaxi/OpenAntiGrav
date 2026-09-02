@@ -226,3 +226,12 @@
 0x001254c8	function	Rocket_Construct	88	weapons.md
 0x0014aea8	function	RocketManager_Construct	85	weapons.md
 0x00128ab0	function	WeaponExplosions_Construct	85	weapons.md
+0x0012f430	function	BombManager_Construct	85	weapons.md
+0x0011b8e8	function	MineManager_Construct	85	weapons.md
+0x00112128	function	CannonManager_Construct	85	weapons.md
+0x001457b8	function	PlasmaManager_Construct	85	weapons.md
+0x00141e70	function	MissileManager_Construct	85	weapons.md
+0x001483a0	function	QuakeManager_Construct	85	weapons.md
+0x0013d520	function	LeachBeamManager_Construct	85	weapons.md
+0x00113288	function	EMPManager_Construct	85	weapons.md
+0x00118dc0	function	LightBarrierManager_Construct	85	weapons.md

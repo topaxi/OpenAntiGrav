@@ -151,6 +151,12 @@ both read *per-viewport* stage entries of the same RaceManager, which is the
 shape a two-player mode needs. Full trace on
 [zone-effectsettings-loader.md](zone-effectsettings-loader.md#2026-08-30-a-tenth-pass-all-four-0x04-source-branches-read---and-mode-0xe-is-detonator-not-zone).
 
+**2026-09-02, a narrowing but not a close.** [`weapons.md`](weapons.md#weaponmanagers-other-ten-members-nine-named-one-inherits-from-cannon)
+found that `WeaponManager_Construct` builds no weapon-adjacent member at all
+for mode `6`, and builds exactly one (`LightBarrierManager`, not a weapon)
+for modes `0xd` and `0x15` - consistent with `6` being single-player Zone and
+`0xd`/`0x15` a Zone Battle pair, but it does not assign which id is which.
+
 ## Two ways this differs from RaceManager
 
 **There is no intermediate multiplayer base.** All five `MP*` mode managers call
