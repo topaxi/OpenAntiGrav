@@ -21,11 +21,20 @@ impl Race {
         // for anybody yet. It also means a pickup armed *this* tick takes hold
         // on the next one, which is a tick of latency this port has and has not
         // measured against the original.
-        let controls = if self.flown_for_the_player() {
+        let mut controls = if self.flown_for_the_player() {
             self.autopilot_controls()
         } else {
             ship_controls(snapshot, self.scheme)
         };
+        // The start-line countdown: measured, not authored - see
+        // `RaceState::thrust_gated` for the live capture this reproduces. Only
+        // thrust was held and recorded, so only thrust is gated; steering stays
+        // live through the countdown, which is unmeasured either way but costs
+        // nothing to leave alone. Autopilot is gated too - the capture measured
+        // the engine's own gate, not a distinction between input sources.
+        if RaceState::thrust_gated(self.world.tick) {
+            controls.thrust = 0.0;
+        }
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
         self.spend_pickup(snapshot);

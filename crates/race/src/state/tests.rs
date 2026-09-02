@@ -340,3 +340,14 @@ fn a_lap_clock_before_its_own_start_reads_zero() {
     assert_eq!(state.lap_ticks(100), 0);
     assert_eq!(state.lap_ticks(99), 0);
 }
+
+/// The exact boundary the live capture measured: gated through tick 271,
+/// released at tick 272. See [`super::COUNTDOWN_TICKS`]'s doc comment for the
+/// capture this pins.
+#[test]
+fn thrust_is_gated_for_exactly_the_measured_span() {
+    assert!(RaceState::thrust_gated(0));
+    assert!(RaceState::thrust_gated(super::COUNTDOWN_TICKS - 1));
+    assert!(!RaceState::thrust_gated(super::COUNTDOWN_TICKS));
+    assert!(!RaceState::thrust_gated(super::COUNTDOWN_TICKS + 1));
+}

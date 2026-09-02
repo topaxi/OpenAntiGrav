@@ -111,11 +111,14 @@ def main():
         default=[],
         metavar="BUTTON",
         help="hold a button during --warmup only, then hand over to --script. A "
-        "scripted capture warms up holding *nothing* by default, which is what "
-        "sitting through a countdown needs (thrust through it is a false start). "
-        "This is for the other case: reaching the script's starting speed first, "
-        "so that a scenario begins the way the reference capture did rather than "
-        "from a standstill.",
+        "scripted capture warms up holding *nothing* by default, which keeps the "
+        "start pose reproducible; a live capture found no penalty for holding "
+        "thrust through a countdown (throttleState just reads 0 for the gated "
+        "ticks, no stall - see docs/gameplay/race-modes.md), so this default is "
+        "about pose, not about avoiding a false start. --warmup-hold is for the "
+        "other case: reaching the script's starting speed first, so that a "
+        "scenario begins the way the reference capture did rather than from a "
+        "standstill.",
     )
     parser.add_argument("--out", type=Path, help="write here instead of stdout")
     parser.add_argument(

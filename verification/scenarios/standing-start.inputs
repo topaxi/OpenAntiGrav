@@ -24,7 +24,9 @@
 # scenario is the durable artefact; the CSV is not.
 #
 # Reference scenario: Time Trial, Venom, Talon's Junction White
-# (Data\Environments\16_Track), Assegai. A script's warmup holds nothing,
-# because holding thrust through the countdown is a false start.
+# (Data\Environments\16_Track), Assegai. A script's warmup holds nothing so the
+# start pose is reproducible (see docs/reverse-engineering/ppsspp-debugger.md's
+# --start-heading trap) - not because holding thrust through the countdown is a
+# false start. It measurably isn't: docs/gameplay/race-modes.md.
 
 300 cross

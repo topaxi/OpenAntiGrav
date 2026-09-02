@@ -123,6 +123,28 @@ leading hypothesis and is worth testing next, since it would remove the wart
 entirely. Until then, prefer the order above - it is measured, and it is a large
 improvement on what it replaces.
 
+**A further exception, found 2026-09-02 tracing `Ship_SetState`'s state-7 arm**
+(`docs/ghidra/functions/psp-pulse-usa/shield.md`): a `lui`/`lw`-offset pair used
+to build the *base of an indirect jump table* - `lui at,0x27; addu at,at,a0;
+lw at,0x7c40(at)` computing `table + index*4` - still carried the raw
+pre-relocation value even though this is exactly the HI16/LO16 shape the note
+above says is fixed on `psp-pulse-usa`. `inspect_memory_content` failed outright
+on the literal `0x00277c40` and on a second, unrelated global-byte address
+(`0x002ac7e3`) built the same way a few instructions earlier in the same
+function; both read cleanly once `+ 0x08804000` was added, and the corrected
+jump-table address (`0x08a7bc40`) landed exactly four bytes past the *end* of
+`Ship_SetState`'s own already-documented nine-entry table (`0x08a7bc18` +
+`9*4` = `0x08a7bc3c`, one null word, then `0x08a7bc40`) - strong confirmation
+the correction is right, not a coincidence. So the fix in this file's note
+above is not "every HI16/LO16 pair on `psp-pulse-usa` is corrected" - it is
+"every HI16/LO16 pair the auto-analyzer actually processed as a relocation
+target is corrected". A jump-table base the analyzer never recognized as one
+(this whole function decompiles as one indirect call - see `shield.md`) is
+exactly the kind of code the relocation pass never walked, and it carries the
+same raw offset the `jal`-target wart does, corrected the same way. Suspect
+this wherever a function's jump table was found by manual disassembly rather
+than by Ghidra's own analysis.
+
 ### Naming programs
 
 Name each program for its origin, so a documentation page's "Binary" field is

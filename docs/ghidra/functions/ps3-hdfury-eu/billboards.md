@@ -172,6 +172,51 @@ four addresses, only observed to sit near them in the same data region.
 Slot 8 is not special-cased anywhere in this function; its `321Go_StartFinish`
 content is used exactly as authored.
 
+## The four `321Go_*.vex` shapes are confirmed as genuinely different content, by rendering them
+
+2026-09-02, from the race-start countdown handover thread, asset side only - does
+not touch `mode_descriptor` or close the code-side lead above. Two things this
+session's static reading could not settle without actually looking at the geometry:
+
+1. **Are the four names really four different objects, or aliases/debris?** Settled
+   by listing `data/images/hdfury-ps3-eu-dec.iso`'s own PSARC archives rather than
+   reading strings out of the executable: `321go_startfinish.vex` (12,544 B),
+   `321go_zone.vex` (8,368 B), `321go_hd_zone_battle.vex` (10,304 B),
+   `321go_hd_detonator.vex` (11,568 B) are four distinct files with four distinct
+   sizes under `/data/billboards/hd_adverts/321go/` in `DATA00.PSARC`/`DATA02.PSARC` -
+   not one file aliased four ways.
+2. **What do they actually look like?** `just view` renders a `.vex` straight off a
+   PSARC entry the same way it does off a WAD - `oag-view
+   "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC" --mesh
+   "/data/billboards/hd_adverts/321go/321go_zone.vex" --screenshot out.png` - and the
+   two renders answer the user's own memory directly. `321go_startfinish.vex` is a
+   large multi-part structure - **19 mesh nodes, 1,530 triangles**, a checkered-flag
+   banner reading `"FX-350 Official A-G Racing League"` in one of its panels, sized
+   for a full gantry arch. `321go_zone.vex` is comparatively tiny - **3 mesh nodes,
+   222 triangles** - a flat rectangular panel carrying one big texture
+   (`321_go_zone.gtf`, **2048x1024**, dwarfing every other texture in the folder;
+   the countdown digit texture `321_go_64.gtf` is 64x128 by contrast) that renders as
+   a small stylised track-loop icon in red/green/blue, not digits or light bulbs.
+   **This is a byte-for-byte match to the user's own description**: "it draws a
+   small rectangular track, instead of the 3 2 1 GO" in a Zone race. The node names
+   corroborate it structurally too - `321go_zone.vex` has exactly one content node
+   beyond its two background panels, literally named
+   `pasted__Go_HD_start_light_321go`, while `321go_hd_zone_battle.vex` and
+   `321go_hd_detonator.vex` (10,304 B / 11,568 B, DLC3 assets per their own embedded
+   Maya paths) each carry a handful of `polySurface`/`planarTrimmedSurface` nodes of
+   their own - simpler than `StartFinish`'s nineteen, more than `Zone`'s three - so
+   the four shapes read as four *actually different* pieces of authored content,
+   not a placeholder and three unused siblings.
+
+**This does not identify which mesh a given race instantiates or resolve
+`mode_descriptor`'s shape** - the code-side lead a few paragraphs above is exactly
+as open as it was. What it does confirm is that the lead is worth finishing: if the
+`field_0x4c + 0xf0` pointer really does resolve to one of these four addresses per
+mode, the payoff is not a cosmetic reskin, it is precisely the different display the
+user remembers. Full account, cross-posted, in
+[docs/ui/hud.md](../../../ui/hud.md#deferred-and-known) and the handover thread this
+session opened.
+
 ## `GetBillboardMeshIdFromName` has no found caller - but its write recurs in a function that does
 
 `GetBillboardMeshIdFromName`'s only xref Ghidra reports is a **data**
@@ -279,6 +324,15 @@ billboard-specific - below the 70 needed to commit to either reading.
   confirmed as identity; the operand permutation was not worked through, on
   either copy of the write).
 - **`mode_descriptor`'s shape**, and whether the four `321Go_*.vex` names
-  really are what `field_0x4c + 0xf0` resolves to.
+  really are what `field_0x4c + 0xf0` resolves to. **Higher-value than before**:
+  the four meshes are now confirmed genuinely different content by rendering them
+  (above), including a byte-for-byte match to a player's own memory of what Zone's
+  gantry looks like, so resolving this pointer is no longer just tidiness - it is
+  what would let the difference actually be implemented rather than only observed.
+  A static attempt this session (following `PTR_DAT_008b2dac`'s literal stored
+  value) did not converge - the candidate address aliased hundreds of unrelated
+  functions, which does not fit a single struct's base address and was not chased
+  further. Live RPCS3 watchpoints, the way this thread's own history solved
+  comparably stuck leads, are the likely next step.
 - **`type`'s consumer**, if it has one - unread by this function despite being
   authored on every slot.

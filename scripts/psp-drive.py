@@ -426,10 +426,19 @@ def expect(dbg, wanted, what, timeout=15.0):
 def settle_into_race(dbg, describe=True):
     """From the ship-select confirmation to a stationary craft on the start line.
 
-    Sleeps rather than state polls, because the front end reads `InGame` for the
-    loading screen, the track description and the countdown alike - there is
-    nothing to poll. Nothing is held through any of it: thrust through a
-    countdown is a false start, and Pulse answers one by stalling the engine.
+    Sleeps rather than state polls: the track description screen does have its
+    own name (`InGameTrackDescriptionScreen`, confirmed live), but nothing
+    distinguishes the countdown itself from ordinary `InGame` once that screen
+    is dismissed, so there is still nothing to poll for the second half of the
+    wait. **Holding thrust through the countdown is not a false start** - a
+    live capture with `cross` held continuously from before the track
+    description screen through the whole countdown and into the launch never
+    armed the stun timer (`craft+0x290`) or `craft+0x2e0`, reproduced on three
+    separate runs, two different entry paths. `throttleState` (`craft+0x2b8`)
+    simply reads 0 for the gated ticks and steps straight to the held value
+    the instant the gate lifts - an input gate, not a penalty. See
+    `docs/gameplay/race-modes.md#the-countdown-is-measured` and
+    `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     """
     time.sleep(RESTART_TO_DESCRIPTION)
     if describe:
@@ -560,10 +569,12 @@ def menu(args):
 def restart(args):
     """Back to a stationary craft on the start line, past the countdown.
 
-    The sequence is `ppsspp-debugger.md`'s, with its two traps: the confirm on
+    The sequence is `ppsspp-debugger.md`'s, with one trap: the confirm on
     RESTART RACE is routinely swallowed, so it is pressed until the state
-    actually leaves the pause menu; and **nothing may be held through the
-    countdown** or Pulse stalls the engine for a false start.
+    actually leaves the pause menu. Nothing is held through the countdown here
+    for reproducibility, not because holding thrust is unsafe - see
+    `settle_into_race`'s docstring for the live measurement that retired the
+    false-start belief this comment used to repeat.
     """
     dbg = Debugger(args.port)
     dbg.resume()

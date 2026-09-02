@@ -511,12 +511,53 @@ flag lands on the board rather than overshooting it. Measured on
 `pulse-psp-usa.chd`, default circuit, Venom, elite AI: the race ends around tick
 7,500, a little over two minutes.
 
-## What no mode has yet
+## The countdown is measured
 
-A countdown. `ReadyText`, `GoText`, `CountdownTime` and the `<Mode3D>` models all
-parse and nothing drives them, and the original's false-start stall - which
-silently kills the engine if you hold thrust before the lights - is unimplemented
-too. A race begins the moment it loads.
+`ReadyText`, `GoText`, `CountdownTime` and the `<Mode3D>` models all parse; what
+was missing was runtime evidence of what they are actually timed against. Three
+live PPSSPP captures settle it - `pulse-psp-usa.chd`, Time Trial, Talon's
+Junction White, `cross` held continuously from before the track description
+screen through the whole countdown and into the launch, two runs entered via
+`psp-drive.py restart` and one via a genuine front-end menu walk
+(`psp-drive.py menu`). All three agree to the tick:
+
+- The front end reports `InGameTrackDescriptionScreen` for ticks 0-60, then
+  `InGame` from tick 61 - a real, pollable state name, not the "nothing to
+  poll" this page and `ppsspp-debugger.md` used to say. It reads as load time
+  plus the first frame the dialog's dismiss press is seen, not an authored
+  minimum-show timer - thrust was already held before the dialog appeared on
+  every run and it still dismissed at the same tick each time.
+- From tick 61, the craft sits stationary - `throttleState` (`craft+0x2b8`)
+  reads a flat `0.0` regardless of the input held, and position holds within
+  jitter (< 0.1 units total drift, `grounded` staying `1.0`) rather than
+  creeping under any partial thrust.
+- At tick 333, `throttleState` steps straight from `0.0` to the full held
+  value (`100.0`) - no ramp, no separate launch state.
+- So the countdown itself, dialog-dismiss to green, is **272 ticks**, dt-summed
+  to **4.5377 s** - identical (to five figures) on all three runs.
+
+**Holding thrust through the countdown is not a false start.** This page and
+four places in `scripts/` used to say Pulse stalls the engine for it; that was
+unmeasured belief, not a finding, and it does not hold up: `craft+0x290` (the
+collision stun timer) and `craft+0x2e0` (`Ship_UpdateEngine`'s other early-return
+gate, see
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-engine-has-an-early-return-that-produces-no-thrust-at-all))
+both stay flat at `0.0` across the entire 1200-tick capture, on every run. That
+also **refutes** `engine.md`'s own standing hypothesis that `craft+0x2e0` gates a
+race start - it does not arm during one. Whatever pins `throttleState` to zero
+for those 272 ticks is a separate write this capture does not locate; the
+early-return path documented in `engine.md` is confirmed *not* to be it.
+
+**What this does not cover, yet:** Single Race / a full grid, Zone mode's own
+timing (partially mapped statically - see
+[zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)), Pure, HD/Fury
+and 2048. Treat the 272-tick figure as Pulse Time Trial's own number until one of
+those is checked against it, not as a cross-title constant.
+
+`crates/race` implements the shape this measured - an input gate rather than a
+physics hold or a stall state - at a fixed tick count; see `crates/race/src/`
+for the current implementation and whether it has grown per-mode or per-title
+values since this was written.
 
 ## See also
 
