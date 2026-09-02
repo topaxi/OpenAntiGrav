@@ -13,65 +13,62 @@ file is gone, this work is very likely already done, and
 is the thing to check before starting rather than the missing file.
 When it lands, delete this section from whichever thread is still open.
 
-**Decided, and one slice of it built.**
+**Decided, and most of it built.**
 [ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
 settles what [ADR-0013](../docs/architecture/adr/0013-anti-aliasing-architecture.md)
-explicitly declined to decide: the scene resolves onto the surface first, and
-the UI draws after it, into the surface, at presentation size. Read it before
-touching any of the rest - it records three consequences neither thread had,
-and one of them reorders the remaining work.
+explicitly declined to decide: the scene resolves first, the UI draws after it,
+at presentation size. Read it before touching the rest.
 
-**The performance overlay has moved** (`crates/game/src/main/session/frame.rs`):
-it draws after `Framebuffer::resolve`, onto the surface, laid out against the
-aspect rectangle rather than the offscreen extent. It is the one element whose
-final position needs no new plumbing, because it is deliberately outside the
-grade - an instrument, not picture content.
-`the_ui_composites_over_the_blit_at_presentation_resolution` in
-`crates/game/src/upscale/tests.rs` pins both halves of the property, and it was
-checked against the old order rather than assumed: drawn before the resolve, a
-one-surface-pixel fill covers no sample centre in the scaled viewport and
-disappears from the frame completely.
+**What is built.** `Framebuffer` now holds a presentation-sized target between
+the upscale and the surface, and `Framebuffer::resolve` is gone, split in two:
 
-**Roughly a day and a half left**, and the order below is the ADR's, not the
-cheapest-first one:
+- `resolve_scene` - FXAA/SMAA, FSR 1 and the blit, into that target,
+  **ungraded**.
+- `composite` - the target onto the surface, **graded**, last.
 
-- **The grade, first.** It rides inside `Framebuffer::resolve`, so anything
-  composited after that pass is ungraded. That is right for the overlay and
-  wrong for the menus: a brightness row a player cannot see working on the menu
-  they are standing on is the exact behaviour `crate::upscale`'s module doc
-  defends. So nothing else can move until `resolve` upscales into a
-  presentation-sized target and a final grade-and-blit pass writes the surface
-  after the composite. That target is the first code to write, not the last -
-  and it costs one RGBA8 at surface size plus a fullscreen pass, stated in the
-  ADR rather than discovered here.
-- **The HUD and the scoreboard.** `RaceStage::render` draws the scene and then
-  one of the two into the same target, and `RaceStage::warm_up` is a second
-  caller of it that still has to warm the HUD's pipelines. **This slice changes
-  bytes in every race `--screenshot`**, which this project verifies with
-  byte-identical diffs - land it alone, with the diff explained rather than
-  discovered.
-- **The menus, the front end and the loading screen.** The front end draws its
-  movie and its UI through one `Renderer::render` over one draw list, the movie
-  being a `Draw::Video` entry in it. ADR-0036 puts a movie on the scene side of
-  the seam, so this slice means splitting that call.
-- **Both capture paths, which are not the same shape.**
-  `crates/game/src/race/capture.rs` builds a `Framebuffer` conditionally on
-  `--presented` and calls `upscale::target_size` itself;
-  `crates/game/src/capture.rs`'s front-end path has no `Framebuffer` at all,
-  which is the whole reason FSR 1 has never reached the front end. A fix to one
-  is not a fix to the other.
+The UI draws between them. Two elements have moved across:
 
-**The 480x272 authored grid** (`display.rs`) is what every overlay lays out in,
-and compositing later means scaling that grid to the *surface* rather than to
-the offscreen target - one substitution, in more places than it looks. It is
-the same rectangle on screen either way, so nothing moves; only which pixels a
-glyph is rasterised into changes.
+- **The performance overlay**, onto the surface *after* `composite`, so it is
+  deliberately outside the grade - an instrument, not picture content. ADR-0036's
+  one standing exception.
+- **The HUD and the scoreboard**, into the presentation target *before*
+  `composite`, so they are sharp at any render scale, no upscaler ever sees
+  them, and they are still inside brightness and gamma. `RaceStage::render` is
+  the scene alone now; `RaceStage::draw_hud` is the other half, called from
+  `Session::frame` and from `race/capture.rs`'s `--presented` path.
+
+Two tests in `crates/game/src/upscale/tests.rs` pin it:
+`the_ui_composites_over_the_blit_at_presentation_resolution` for the geometry
+and `the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not` for
+the grade, the exception, and double-grading. Both were checked against the old
+arrangement rather than assumed - drawn into the scaled target, a
+one-surface-pixel fill covers no sample centre and vanishes from the frame
+completely.
+
+**Correcting ADR-0036 while it is fresh:** its consequence "every race
+`--screenshot` changes bytes when the HUD moves" is **wrong**. Only
+`--presented` does. The plain capture path builds no `Framebuffer` and runs no
+resolve, so its HUD was already at native size and is untouched. The ADR is
+immutable and stays as written; this is the correction of record.
+
+**Roughly half a day left**, and it is one slice:
+
+- **The menus, the front end and the loading screen.** They still draw into the
+  offscreen target from their stages, so they are still rasterised at the render
+  scale. The front end is the awkward one: it draws its movie and its UI through
+  one `Renderer::render` over one draw list, with the movie a `Draw::Video`
+  entry in it, and ADR-0036 puts a movie on the *scene* side of the seam - so
+  this means splitting that call.
+- **`crates/game/src/capture.rs`'s front-end path still has no `Framebuffer`
+  at all**, which is the whole reason FSR 1 has never reached the front end.
+  `race/capture.rs` is done and is not a template for it: that one had a
+  `Framebuffer` already.
 
 What it delivers, in the words `docs/overview/modern-features.md` uses: the
 prerequisite table's last row, *a scene without UI in it*, stops being
-**Absent**. It has **not** stopped yet - the overlay slice does not clear that
-row, and it moves in the change that moves the HUD and the menus. Update it
-there.
+**Absent**. It has **not** stopped yet - the HUD is out of the scaled target
+but the menus and the front end are not, and FSR 3.1 needs all of it. The row
+moves in the change that moves them. Update it there.
 
 ## Open
 
@@ -81,5 +78,5 @@ there.
 
 ## Next Steps
 
-- Finish Phase 0 above, starting with the presentation-sized target and the grade pass after the composite - nothing else can move until the grade can follow the UI. It is the prerequisite for everything else here, and it is shared with [dynamic-resolution-wants-a-viewport-not-an-allocation.md](dynamic-resolution-wants-a-viewport-not-an-allocation.md).
+- Finish Phase 0 above. What is left is the menus and the front end, and giving `capture::run`'s front-end path a `Framebuffer` - which is this thread's own blocker, not incidental to it. Shared with [dynamic-resolution-wants-a-viewport-not-an-allocation.md](dynamic-resolution-wants-a-viewport-not-an-allocation.md).
 - Then re-run the default comparison on menu and HUD content, which is the sample the default flip is actually held to.
