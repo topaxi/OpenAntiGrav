@@ -18,10 +18,12 @@
 //! [ADR-0012](../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
 //! already mandates for the upscalers.
 //!
-//! **Nothing in the workspace requests these features yet.** This reports; it
-//! does not enable. `mesh_render::optional_features` is the one place that
-//! would change, and it changes when a consumer exists - a feature turned on
-//! with nothing reading it is a driver behaviour change bought for nothing.
+//! The consumer exists now: [`PassTimer`] is the ring of timestamp pairs a
+//! frame loop brackets one pass with, and `mesh_render::optional_features`
+//! asks for what [`Timing::features`] reports because of it. This module is
+//! still only the probe - it reports what an adapter offers, and
+//! [`PassTimer::new`] then checks what the *device* actually came back with,
+//! which are two different questions.
 
 /// What one adapter offers for timing work on the GPU.
 ///
@@ -122,6 +124,9 @@ impl Timing {
         }
     }
 }
+
+mod timer;
+pub use timer::{PassTimer, Reading};
 
 #[cfg(test)]
 mod tests;
