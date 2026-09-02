@@ -12,7 +12,7 @@
 //! +0x0d  u8    mip levels           at least 1
 //! +0x0e  u8    dimension            2 in all 7,333
 //! +0x0f  u8    cubemap              1 in 23 of 7,333
-//! +0x10  u32   remap                a channel permutation; see `remap`
+//! +0x10  u32   remap                per-channel source and force; see `Remap`
 //! +0x14  u16   width
 //! +0x16  u16   height
 //! +0x18  u16   depth                1 in all 7,333
@@ -96,14 +96,12 @@
 //! function is the platform's own documented `cellGcm` tiling, not reversed
 //! from this disc - **confidence 88**: an exact match on a 4x4 synthetic
 //! fixture (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`),
-//! and on the disc, 33 of 34 judgeable swizzled `A8R8G8B8`/`A8B8G8R8` files
-//! decode smoother than a deliberately wrong linear misread - the same
-//! roughness test the DXT endianness question above uses, clearing the same
-//! 90 percent bar with room to spare - with the one exception individually
-//! inspected by eye rather than waved through: a coherent, already-blocky
-//! test chart that defeats a within-row roughness metric, not scrambled
-//! tiles. See
-//! `docs/formats/gtf.md` for the numbers and
+//! and on the disc, **all 43 judgeable swizzled files** decode smoother than a
+//! deliberately wrong linear misread, with no exceptions - the same roughness
+//! test the DXT endianness question above uses, measured on both axes rather
+//! than along rows only, because a raster misread of a tiled surface comes out
+//! as row-uniform stripes that a within-row metric scores as the smooth one.
+//! See `docs/formats/gtf.md` for the numbers and
 //! `crates/formats/tests/gtf_ground_truth.rs`. Not corroborated against the
 //! executable's own texture upload code - `EBOOT.elf` carries no `swizzle`
 //! string to search for, and no upload routine has been located - which is
