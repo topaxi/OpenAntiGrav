@@ -188,6 +188,47 @@ inside a single connection rather than booting per pose; the reasons are in
 [rpcs3-debugger.md](rpcs3-debugger.md)'s trap list and they are all
 unrecoverable.
 
+## A root-window grab is not the framebuffer, and only one of them can measure geometry
+
+**Confidence 92**, measured 2026-09-02 while settling the main menu's tab
+corner.
+
+`scripts/rpcs3-drive.py`'s `screenshot()` grabs the X root window, which is what
+every capture in `data/reference/` up to now used. What that returns is
+whatever the emulator *presented into its own window*, and on a bare Xvfb with
+no window manager that window is **1280x720 and stays there** - `Start games in
+fullscreen mode` has nothing to fullscreen against, so neither the display's own
+geometry nor `Resolution Scale` changes the picture. A 1600x1200 display and a
+2560x1440 one both give the same 1278x718 after the black trim. That is enough
+to read a colour and not enough to measure a widget corner, and it is why the
+strip-tab chamfer went two rounds of eyeballing before it was measured.
+
+**RPCS3's own frame grab is the one to use for geometry.** It goes through the
+home menu (`Take Screenshot`, row four) and writes the *framebuffer* to
+`~/.config/rpcs3/screenshots/<TITLE_ID>/`, and unlike the root-window grab it
+**does honour `Resolution Scale`**: at `200` against a configured `1920x1080` it
+writes **3840x2160**, three times the linear resolution of what the window
+shows. `scripts/rpcs3-drive.py shot --screen "Main Menu"` drives it end to end.
+
+```sh
+# in ~/.config/rpcs3/config.yml, under Video:
+#   Resolution Scale: 200
+OAG_RPCS3_GEOMETRY=2560x1440x24 python3 scripts/rpcs3-drive.py display
+uv run --with evdev python3 scripts/rpcs3-drive.py shot --screen "Main Menu"
+```
+
+**Put `Resolution Scale` back to `100` afterwards.** It is a global setting, and
+leaving it up silently changes every later capture's resolution and costs frame
+rate on a driven run.
+
+Two things this does not buy. The scaled framebuffer renders the *same geometry*
+at more samples, so it resolves a shape the game rasterises and says nothing new
+about one the game samples out of a texture - which is itself the useful
+distinction, since a magnified texture mask shows uniform runs where rasterised
+geometry does not. And HD's own output is 1280x720 whatever the scale, so a
+scale-100 capture already *is* native; the scaling buys resolution above native,
+not a fix to a downscale that was never happening.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

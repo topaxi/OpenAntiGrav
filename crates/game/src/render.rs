@@ -66,6 +66,17 @@ struct Quad {
     /// A trailing attribute, so adding it changed no existing site's meaning -
     /// see [`Draw::RotatedSprite`] on why the variant is separate too.
     rotation: f32,
+    /// How far the quad's **top-right** corner is pulled left, in screen units.
+    ///
+    /// `0.0` for everything but [`Draw::ChamferedFill`], which is HD's
+    /// main-menu tab corner and nothing else. Moving the one corner rather
+    /// than adding vertices is what keeps this a trailing field on the
+    /// existing six-vertex quad: the two triangles are `TL, TR, BL` and
+    /// `BL, TR, BR`, so pulling `TR` left shortens the top edge in the first
+    /// and turns the second's shared edge into the diagonal joining the two.
+    /// A general pentagon would need a vertex count change, and the shape this
+    /// draws is not a pentagon - see [`Draw::ChamferedFill`].
+    chamfer: f32,
 }
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
@@ -336,7 +347,8 @@ impl Renderer {
                         2 => Float32x4,
                         3 => Float32x4,
                         4 => Float32,
-                        5 => Float32
+                        5 => Float32,
+                        6 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -521,7 +533,12 @@ impl Renderer {
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
         for (index, draw) in list.iter().enumerate() {
             match draw {
-                Draw::Fill { rect, color } => self.push_solid(*rect, *color),
+                Draw::Fill { rect, color } => self.push_solid(*rect, *color, 0.0),
+                Draw::ChamferedFill {
+                    rect,
+                    chamfer,
+                    color,
+                } => self.push_solid(*rect, *color, *chamfer),
                 Draw::Video { rect, .. } => {
                     video_at = Some(self.quads.len() as u32);
                     video_rect = *rect;
@@ -535,6 +552,7 @@ impl Renderer {
                     border: *color,
                     mode: MODE_SPRITE,
                     rotation: 0.0,
+                    chamfer: 0.0,
                 }),
                 Draw::RotatedSprite {
                     rect,
@@ -548,6 +566,7 @@ impl Renderer {
                     border: *color,
                     mode: MODE_SPRITE,
                     rotation: *rotation,
+                    chamfer: 0.0,
                 }),
                 Draw::Text {
                     x,
@@ -667,7 +686,7 @@ impl Renderer {
         }
     }
 
-    fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4]) {
+    fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: f32) {
         let solid = self.atlas.solid;
         self.quads.push(Quad {
             rect,
@@ -680,6 +699,7 @@ impl Renderer {
             border: color,
             mode: MODE_ATLAS,
             rotation: 0.0,
+            chamfer,
         });
     }
 }

@@ -45,6 +45,9 @@ struct Instance {
     // everything but the lock-on reticle's corner brackets, which are four
     // instances of one model at four quarter turns.
     @location(5) rotation: f32,
+    // How far the top-right corner is pulled left, in screen units. Zero for
+    // everything but HD's main-menu tab corner.
+    @location(6) chamfer: f32,
 };
 
 struct VertexOut {
@@ -92,7 +95,18 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // its side instead of standing it up as the 153x676 column it is. A square
     // quad comes out the same either way, which is why the lock-on reticle -
     // the only caller until 2026-08-31, and 8 pixels square - never showed it.
-    let centred = (corner - vec2<f32>(0.5, 0.5)) * instance.rect.zw;
+    //
+    // The chamfer, before anything else touches the corner: it is a change to
+    // where this vertex *is* on the quad, not a transform of the quad. Only
+    // the top-right corner moves, and only left - the two triangles are
+    // `TL, TR, BL` and `BL, TR, BR`, so a shorter top edge in the first leaves
+    // the second's `TR`-to-`BR` edge as the diagonal joining the two lengths.
+    // Clamped at the quad's own width so an over-wide chamfer collapses the
+    // top edge to a point rather than folding it back past the left edge.
+    let cut = min(instance.chamfer, instance.rect.z);
+    let is_top_right = corner.x * (1.0 - corner.y);
+    let corner_px = corner * instance.rect.zw - vec2<f32>(is_top_right * cut, 0.0);
+    let centred = corner_px - instance.rect.zw * 0.5;
     let turn = mat2x2<f32>(
         vec2<f32>(cos(instance.rotation), sin(instance.rotation)),
         vec2<f32>(-sin(instance.rotation), cos(instance.rotation)),
