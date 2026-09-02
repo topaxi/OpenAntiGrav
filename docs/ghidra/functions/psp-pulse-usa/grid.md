@@ -361,6 +361,68 @@ named. Re-run `create_function` at `0x08806bbc` and `0x08806b80` (or rely on
 `run_analysis` picking them up) before expecting either address to decompile
 after a reimport.
 
+## Custom Race does not go through `Race_SpawnGrid` at all, and hardcodes `id` to 0
+
+2026-09-02, live-confirmed. Everything in the previous section is real, but it
+describes a code path this session's own live capture never reaches from
+**RACEBOX -> CUSTOM RACE -> SINGLE RACE** - the menu route
+`scripts/psp-drive.py menu --single-race` drives and the route this project's
+own `oag-game --race --mode single_race` corresponds to. Breakpoints on
+`Race_SpawnGrid` (`0x088247e0`) and `Race_SpawnAiRacer` (`0x088253f8`) armed
+before a fresh load, over three separate attempts, **never fired** - each
+attempt confirmed still armed and enabled afterward
+(`cpu.breakpoint.list`), so this is not a broken breakpoint, it is a path not
+taken. A breakpoint on `Ai_Construct` (`0x088536bc`) fired immediately on the
+same load, so AI opponents are constructed by *something* - just not by
+`Race_SpawnAiRacer`.
+
+**The real orchestrator is `FUN_0882e57c`, reached from `Ai_Construct`'s own
+call stack**: `Ai_Construct` <- `FUN_08834c5c` (a two-line "construct and
+register" wrapper, unrelated to teams) <- `FUN_088285e0` <- `FUN_0882e57c`.
+Confirmed two ways that agree: the live `ra` register at each breakpoint hit,
+and `search_instructions` on the callers' own relative `jal` operands
+(`245e0` resolves to five call sites, one of them `FUN_0882e57c` twice).
+
+`FUN_0882e57c` branches on `_DAT_0005780c` (0 was what a fresh Single Race
+took, live-confirmed; the other branch reads a per-racer "old slot -> new
+slot" field at `+0xd0` and reads as a grid *reorder*, not traced further).
+The `0` branch, disassembled at `0x0882e744`/`0x0882e898` (`li a2,0`, not a
+register - a real immediate, checked at the instruction level specifically
+because this is the whole claim):
+
+```c
+for (racer_index = 0; racer_index < g_racer_count - 1; racer_index++) {
+    name_ptr = _DAT_0005ab88[racer_index].name_ptr;          // the same +0x3c cache Race_SpawnGrid also writes
+    FUN_088285e0(mgr, racer_index, /* id */ 0, /* slot */ racer_index, name_ptr);
+}
+FUN_0882821c(mgr, racer_index, /* id */ 0, /* slot */ racer_index, player_name_ptr);  // last racer, presumed local player
+```
+
+`FUN_088285e0` is `Race_SpawnAiRacer`'s structural twin - same `+0x19bc` slot
+write, same shape of object-allocation boilerplate, same downstream call into
+`Craft_Construct_q` (`0x08840c74` - already named and documented on
+[`shield.md`](shield.md), confirming `func_0x0003cc74`'s two call sites,
+type `1` from `Race_SpawnAiRacer` and type `2` from here, are the same
+generic per-craft constructor) - but it **never reads `DAT_00057c44`** (the
+team-catalogue pointer array) or anything else keyed by `id`. Since `id` is a
+hardcoded `0` for every racer in this path and the constructor it feeds does
+not do a team lookup either (per `shield.md`'s own account of what
+`Craft_Construct_q` reads), **Custom Race's team assignment does not happen
+through `id` or through `Race_SpawnAiRacer`'s catalogue-pointer mechanism at
+all** - it happens somewhere this session did not reach, most likely inside
+`Craft_Construct_q` itself keyed by `racer_index`/`slot` rather than `id`, or
+in a completely separate step this call chain does not touch.
+
+**This falsifies part of the previous section's framing** for the mode that
+actually matters here: `id`'s catalogue-pointer mechanism may be real for
+whatever route does reach `Race_SpawnGrid` (Main Menu's other top item,
+**RACE CAMPAIGN**, never driven this session - a hypothesis, not checked),
+but it is not what decides which team a Custom Race opponent flies. None of
+`FUN_0882e57c`, `FUN_088285e0` or `FUN_08834c5c` are renamed: the mechanics
+above are read at confidence 90 (decompiled and cross-checked live), but
+which menu route reaches which function is confirmed for exactly one route
+and hypothesised for the other, and a name should not get ahead of that.
+
 ## Names landed
 
 | Address | Name | Confidence |
@@ -372,8 +434,11 @@ after a reimport.
 | `0x08ab0a90` | `g_grid_orders` | 82 |
 
 `0x0882821c`, the local player's twin of `Race_SpawnAiRacer`, is **deliberately
-not named**: it is only inferred from the call site's position in the
-`if`/`else`, and it has not been read.
+not named**: it was inferred from the call site's position in the `if`/`else`
+and not read at the time. Since read one level further (previous section) -
+it is also `FUN_0882e57c`'s call for the last racer, same argument shape,
+`id` hardcoded to `0` there too - but still not named, for the same reason
+its neighbours in that section are not.
 
 ## What is still open
 
@@ -388,18 +453,22 @@ not named**: it is only inferred from the call site's position in the
   Both closed: the AI landed 2026-08-11 and per-team hulls on 2026-08-15. A
   slot now flies its own team's `Data\Ships\<Team>\Ship.vex` - eight
   different models, 845 to 1,497 triangles - with its own nozzle and plume. See
-  `crates/game/src/livery.rs`. **Which team flies which slot is narrowed, not
-  closed.** See "Which team flies which slot" above: `id` is a genuine,
-  separate per-entrant field (confidence 90 on the struct layout and the
-  accessors), read from the same eight-entry struct `racer_index` and `slot`
-  also index, populated by a menu-callback cluster this session could not
-  reach by a direct `jal`. **Still open**: what writes
-  `racer[racer_index].id` itself - the one remaining link between "which
-  racer is racing" and "which team-select seat it corresponds to" - and
-  whether `id` numbers a stable team-select seat, a pad/entrant index, or
-  something else. The ordering `livery::teams_for_slots` uses today is still
-  this project's own, not the original's, and is labelled as such in the
-  load report.
+  `crates/game/src/livery.rs`. **Which team flies which slot is narrowed for
+  one mode and re-opened for the one that matters.** `id` is a genuine,
+  separate per-entrant field on `Race_SpawnGrid`'s struct (confidence 90 on
+  the layout and accessors, see "Which team flies which slot" above) - but
+  live capture on **RACEBOX -> CUSTOM RACE -> SINGLE RACE**, the mode this
+  project actually implements, shows that path never reaches
+  `Race_SpawnGrid`/`Race_SpawnAiRacer` at all, and its own spawn function
+  (`FUN_0882e57c`/`FUN_088285e0`, see "Custom Race does not go through
+  Race_SpawnGrid" above) hardcodes `id` to `0` for every racer. So `id`'s
+  catalogue-pointer mechanism, whatever it turns out to mean, **does not
+  answer this question for Custom Race** - team assignment there happens
+  through a mechanism this session did not find, most likely inside
+  `Craft_Construct_q` (`0x08840c74`, shared by both spawn paths) keyed by
+  `racer_index`/`slot` rather than by `id`. The ordering
+  `livery::teams_for_slots` uses today is still this project's own, not the
+  original's, and is labelled as such in the load report.
 - **`modesto_heights`'s reversed grid, one slot short.** See "Reversed grids"
   above - inside the track's own bounds, not chased further.
 - **The stall rescue does not catch a craft bouncing in place.** Found while
@@ -416,7 +485,13 @@ not named**: it is only inferred from the call site's position in the
   on the same eight-entry struct `racer_index`/`slot` also index (confidence
   90); the front-end cluster that populates it is reached only through a
   computed call this session's tools could not resolve, so the write site for
-  `id` itself is still open. See "Which team flies which slot" above.
+  `id` itself is still open. See "Which team flies which slot" above. **Same
+  day, live capture then showed `Race_SpawnGrid` is not even reached by
+  Custom Race / Single Race** - the mode this project implements goes through
+  a different, previously undocumented spawn function that hardcodes `id` to
+  `0`, so the open question for that mode is now "what does decide the team"
+  rather than "what does `id` mean". See "Custom Race does not go through
+  `Race_SpawnGrid`" above.
 - 2026-09-02: `oag_physics::hover::sweep` (`docs/gameplay/ai.md`) closed the
   *sustained*-stall shape of the failure below disc-wide; the bounce-in-place
   gap itself re-confirmed open on `05_Track` and `07_Track` at novice.
