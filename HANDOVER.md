@@ -405,7 +405,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`](handover/positional-audio-is-recovered-whole-and-the-pan.md)
 - [HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks](handover/hds-exhaust-is-measured-from-the-running-game.md)
 - [HD's engine trail is one of four ribbons, and a craft flying through one sparks](handover/hds-engine-trail-is-one-of-four-ribbons.md)
-- [HD's 81 engine shader parameters are read from their own initialiser, and `time` is entry 0](handover/hds-81-engine-shader-parameters-are-read-from.md)
 - [The PS2 boost plume draws, and the PS2 file is not the PSP file wearing the same name](handover/the-ps2-boost-plume-draws-and-the-ps2.md)
 - [HD's frame was too bright and too bloomy; the bloom chain was not what was wrong](handover/hds-frame-was-too-bright-and-too-bloomy.md)
 - [HD needs a per-material shader path, and two general rules for finding one have been refuted](handover/hd-needs-a-per-material-shader-path-and.md)
