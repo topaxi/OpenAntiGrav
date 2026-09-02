@@ -1172,6 +1172,20 @@ still-unfound `DAT_08b32428`, which is also `.bss`-shaped - not the same
 addressing mode, but worth checking against the segment-1 base if a HI16/LO16
 route to it ever turns up instead of `$gp`.
 
+**`get_xrefs_to` can work after all - on the naive address, not the relocated
+one.** Found tracing `g_ingame`'s readers for the same thread: `get_xrefs_to`
+on `0x08ab0818` (the relocated, correct address) finds nothing, as this whole
+section predicts - but `get_xrefs_to` on `0x002ac818` (the naive, unrelocated
+value Ghidra actually indexed) returned all 27 read/write sites in one call,
+both known writers (`InGame_Construct`, `InGame_Destruct`) included. That is
+a five-minute lookup in place of the `search_instructions` dance the rest of
+this section prescribes. **Confirmed for a `lui`/`lw` data reference; not for
+a `jal`** - `get_function_callers("InGame_Construct")` still returned nothing,
+and finding its one caller needed `search_instructions` on the zero-padded
+relative operand as before. Two data points, not a generalised rule: try the
+naive-address xref first for a data reference, but don't expect it to rescue
+a call-target search.
+
 **`psp-pulse-eu` has the same `jal` wart, not just `psp-pulse-usa`.** Found
 2026-08-31 tracing `World_LoadTrack_q` (`0x088835f0`, EU) for
 [the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md):
