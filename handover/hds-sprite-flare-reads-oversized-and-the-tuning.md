@@ -56,21 +56,38 @@ trick) was also checked and ruled out - track sponsor signage, unrelated.
 Artefacts (the object dump, the six candidate buffers, the meta) are under
 `data/reference/hd-capture/flare-size/sprite-dump/`.
 
+**2026-09-02, a third session found the draw call - full account on
+engine-trail.md ("Third session: it was on `EngineFlare`'s own vtable, not a
+separate manager").** Neither of the two untried angles the second session
+left open was quite it: not a separate manager object, and no pushbuffer scan
+was needed. `EngineFlare`'s own vtable (`0x00869d30`) has two class-specific
+slots besides `EngineFlare_Update` that neither prior session had opened -
+slot 5 and slot 7, the identical two slots `TrailEffectManager`'s vtable uses
+for `Trail_Enqueue`/`Trail_RenderTick`. Read live off the vtable (8-byte OPD
+stride, no symbol to decompile from since neither had a name yet): slot 5 is
+`EngineFlare_Enqueue` (`0x002a06e0`, confidence 84 - byte-for-byte
+`Trail_Enqueue`'s own function, confirmed to write into the *same* render-queue
+object via two different TOC slots holding an identical pointer value); slot 7
+is `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78 - gated on a flag in
+the same shared per-frame global `Trail_RenderTick` also gates on, at a
+different byte offset, and reaching `Rsx_SetMethod` through a chain of
+TOC-fixup trampolines). This is the missing consumer. What it does not yet
+settle: which of its loads is `Flare Radius` itself - most of the function's
+body past the gate is RSX submission plumbing, not the tuning values.
+
 ## Open
 
-- The consumer of `Flare Radius`/`Flare Radius Min`/`Max Radius Jitter` -
-  the function that builds the sprite's world-space quad - is unlocated
-  after both a static and a live pass. Ruled out: `EngineFlare_PlaceShapes`
-  and `_Update` (neither reads a radius-shaped field), `FUN_002a17e8` (the
-  engine-sound state machine), the six RSX pointers inside the
-  `EngineFlare` object itself (occlusion-query buffers, not vertex data),
-  and `Billboard.cpp` (track signage). Two untried angles: the sprite may
-  be owned by a separate manager `EngineFlare` calls into rather than
-  building geometry itself (the shape `TrailEffectManager` has for the
-  ribbon - worth searching for the same way, a TOC-neighbourhood sweep
-  rather than a struct dump); or scan the RSX pushbuffer directly for the
-  draw's own `NV4097` vertex-array command, which needs no CPU-side handle
-  to find.
+- **The sprite's draw call is now located: `EngineFlare_RenderTick`
+  (`0x002a08a8`, confidence 78, on `EngineFlare`'s own vtable - see
+  engine-trail.md).** What remains open is narrower than "find the consumer":
+  which of `EngineFlare_RenderTick`'s loads corresponds to `Flare Radius` /
+  `Flare Radius Min` / `Max Radius Jitter`, and separately to
+  `Flare Fadeout Dist/Range` and `Flare Size Clamp`. The function is long
+  (`0x002a08a8`-`0x002a1500`+) and most of it past its per-frame gate is RSX
+  vertex/state submission (a chain of TOC-fixup trampolines reaching
+  `Rsx_SetMethod` and several not-yet-named helpers in the
+  `0x005a4000`-`0x005f1000` region) rather than the tuning reads themselves -
+  not yet traced to the specific float that becomes the quad's half-size.
 - `Flare Fadeout Dist`/`Range` (15.0/15.0): whether a near/far fade is what
   is missing, and if so its curve - linear, smoothstep, or something else -
   is unread. The leading candidate for the oversized-flare finding, but
@@ -99,14 +116,18 @@ Artefacts (the object dump, the six candidate buffers, the meta) are under
 
 ## Next Steps
 
-- Find the sprite's actual draw call. Two sessions ruled out the obvious
-  places (both `EngineFlare` methods, the six RSX pointers the object
-  itself holds, `Billboard.cpp`) without finding it. Next: look for a
-  separate manager on `TrailEffectManager`'s pattern (a TOC-neighbourhood
-  sweep near `Engine_Flare_Rich.gtf`'s string, the way `Trails`'s block was
-  found), or scan the RSX pushbuffer for the draw's own vertex-array
-  command instead of chasing a CPU-side handle.
-- Once the consumer is read, either confirm and implement the
+- Trace `EngineFlare_RenderTick` (`0x002a08a8`) past its per-frame gate to
+  find which load is the quad half-size. It reads a dozen floats out of the
+  shared render-frame global at `0x00aea540` (`+0x470`..`+0x4a8`,
+  unidentified past "shared state") before reaching the RSX submission
+  chain - one of those, or a field read later in the function past what this
+  session decompiled, is the candidate. A live read (breakpoint or memory
+  poll while the sprite is on screen, the way `hd-flare-sprite-dump.py`
+  polled the object) on the function's float registers at the point it
+  builds the quad corners would settle it faster than more static reading -
+  runtime verification is worth more than any amount of decompiling per the
+  [confidence rubric](../docs/reverse-engineering/confidence-rubric.md).
+- Once the consumer's radius math is read, either confirm and implement the
   `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.
