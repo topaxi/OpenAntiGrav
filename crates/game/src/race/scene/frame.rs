@@ -15,8 +15,9 @@ impl Scene {
     /// One render pass with one clear: a second pass would either wipe the first's
     /// colour or need its own decision about the depth buffer.
     ///
-    /// `cull` is `[graphics] frustum_culling` - off by default, see that
-    /// setting's own doc comment for the measurement behind that default.
+    /// `cull` is `[graphics] frustum_culling` - **on** by default, see that
+    /// setting's own doc comment for the measurement behind that default and
+    /// for the cost the test itself carries.
     ///
     /// Returns what the track's frustum culling did, for the performance
     /// overlay - see [`SceneStats`].
@@ -173,6 +174,18 @@ impl Scene {
         // Not substituted with white: a missing input draws nothing, the
         // same rule `zone_uniform` above already keeps for its own inputs.
         let zone_tint = self.zone_grade.as_ref().and_then(|grade| grade.eq_tint());
+        // Cleared, not rebuilt: see `Scene::scratch`.
+        let mut scratch = self.scratch.borrow_mut();
+        scratch.clear();
+        let super::Scratch {
+            vertices,
+            trail,
+            additive,
+            alpha,
+            pads_ready,
+            recoloured,
+        } = &mut *scratch;
+
         for drawable in [
             Some(&self.track),
             self.collision.as_ref(),
@@ -201,6 +214,7 @@ impl Scene {
         // texels, so binding it to a ship cost nothing. It now **replaces** the
         // albedo, so binding it to a ship would blank the ship. Fog and the
         // light rig still reach them unchanged - only `zone` is dropped.
+        oag_render::perfprobe::mark("fog+zonevis");
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             ..scene
@@ -225,6 +239,7 @@ impl Scene {
             // runs both off the tick.
             drawable.write_node_anims(queue, seconds);
         }
+        oag_render::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
         // original, so there is nothing about them for that switch to test.
@@ -247,6 +262,7 @@ impl Scene {
         // giving `flame_speed * scene.time.x` something to advance. Writing
         // the *scene* here instead would fog and light them, which is the
         // question the paragraph above says is unrecovered.
+        oag_render::perfprobe::mark("ship-anims");
         let flame_scene = mesh_render::Scene {
             time: [seconds; 4],
             ..mesh_render::Scene::off()
@@ -262,6 +278,7 @@ impl Scene {
         // matrix, roll included, so the horizon rolls with the ship through a
         // barrel roll exactly as `camera::chase` describes the original's
         // external view doing.
+        oag_render::perfprobe::mark("flame-scene");
         if let Some(sky) = &self.sky {
             sky.write(
                 queue,
@@ -279,6 +296,7 @@ impl Scene {
         // How many slots this race fills, which bounds every per-craft loop from
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.
+        oag_render::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
         // Slot-indexed rather than `zip`ped over `race.ship_model_matrices()`,
         // whose filter-then-collect drops out of slot order the moment a
@@ -306,7 +324,7 @@ impl Scene {
         // by anything that ever rebuilds the buffer.
         let [left, right] = race.airbrake_flaps();
         if let Some(player) = self.ships.first() {
-            player.deflect_airbrakes(queue, left, right);
+            player.deflect_airbrakes(queue, left, right, recoloured);
         }
         // The shield shell: the craft's own matrix with a uniform swell on top,
         // and its colour written into the vertex buffer.
@@ -340,7 +358,7 @@ impl Scene {
                 race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
                 prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
-            shell.tint(queue, state.colour());
+            shell.tint(queue, state.colour(), recoloured);
         }
         // The cockpit sphere, which replaces the player's shell rather than
         // joining it - `ShipShield_Update` draws one *or* the other and hides
@@ -356,11 +374,12 @@ impl Scene {
                 race.ship_model_matrix_of(0) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
                 prev_vp * prev.ship(0, race) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
             );
-            sphere.tint(queue, state.colour());
+            sphere.tint(queue, state.colour(), recoloured);
         }
         // One matrix per rocket in the air. `zip` bounds it the way the ships'
         // loop is bounded: nothing in the air writes nothing, and the drawables
         // past the live count keep last frame's uniforms and are not drawn.
+        oag_render::perfprobe::mark("ship+shield-write");
         let rocket_matrices = race.rocket_model_matrices();
         for (index, (drawable, matrix)) in self.rockets.iter().zip(&rocket_matrices).enumerate() {
             // A rocket that just spawned has no previous pose; this frame's
@@ -502,6 +521,7 @@ impl Scene {
             // above takes 60 Hz frames and clamps.
             boost.write_node_anims(queue, race.exhaust_of(slot).plume_timer());
         }
+        oag_render::perfprobe::mark("rockets+plumes");
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         }
@@ -518,14 +538,15 @@ impl Scene {
         // freezing this one; both now run off `seconds` and there is nothing
         // left to keep apart.
         if let Some(weapon_pads) = &self.weapon_pads {
-            let ready: Vec<bool> = race
-                .weapon_pad_refresh_left()
-                .iter()
-                .map(|&left| left <= 0.0)
-                .collect();
-            weapon_pads.tint_weapon_pads(queue, seconds, &ready);
+            pads_ready.extend(
+                race.weapon_pad_refresh_left()
+                    .iter()
+                    .map(|&left| left <= 0.0),
+            );
+            weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
         }
 
+        oag_render::perfprobe::mark("pads+tint");
         // The camera's own axes, read out of the view matrix: for a view matrix
         // `V`, world-space right and up are rows 0 and 1 of its rotation part.
         // Building the quad from these is what makes it face the viewer, and it is
@@ -545,8 +566,7 @@ impl Scene {
         // it falls outside the frustum on its own. See `Race::draws_own_ship`,
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
-        let mut vertices = Vec::new();
-        let mut trail = Vec::new();
+        oag_render::perfprobe::mark("pre-exhaust");
         for slot in 0..drawn {
             // Per craft, unlike the nozzle check below - an inactive slot is
             // out of the race regardless of what its model authors. `continue`
@@ -575,40 +595,43 @@ impl Scene {
             // 54-sample ring, extruded in the craft's frame rather than the
             // camera's - and every other source the PSP preset's ribbon.
             if race.hd_trail_active() {
-                trail.extend(race.hd_trail_vertices(slot));
+                race.extend_hd_trail_vertices(trail, slot);
             } else {
-                trail.extend(exhaust.trail_vertices(right, up));
+                exhaust.extend_trail_vertices(trail, right, up);
             }
         }
         // Only the billboard *fallback* for a rocket whose model did not
         // load - the flare around one that did is an asset now, and goes
         // through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, !self.rockets.is_empty()));
+        oag_render::perfprobe::mark("exhaust-gather");
         self.exhaust.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
             race.camera_position(),
-            &vertices,
-            &trail,
+            vertices,
+            trail,
         );
         // The hull's collision sparks and the stage's rocket effects share
         // one pipeline and one pair of buffers: both are `.pob` particles in
         // the same two blend classes, so a second pipeline would buy nothing
         // but a second pass.
-        let (mut additive, mut alpha) = race.spark_vertices(right, up);
+        oag_render::perfprobe::mark("exhaust-upload");
+        let (spark_additive, spark_alpha) = race.spark_vertices(right, up);
+        additive.extend(spark_additive);
+        alpha.extend(spark_alpha);
         let (stage_additive, stage_alpha) = race.stage_vertices(right, up);
         additive.extend(stage_additive);
         alpha.extend(stage_alpha);
         self.sparks.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
-            &additive,
-            &alpha,
+            additive,
+            alpha,
         );
 
-        let depth_view = self
-            .depth
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        oag_render::perfprobe::mark("psys-gather");
+        let depth_view = &self.attachment_views.depth;
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
         // what reaches `view`, after the read bloom. See `Self::hd`.
@@ -617,17 +640,12 @@ impl Scene {
         // the target at the end of this one pass; everything else draws
         // straight into it, exactly as before this setting existed. See
         // `Self::msaa_color`.
-        let msaa_view = self
-            .msaa_color
-            .as_ref()
-            .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
-        let (attachment_view, resolve_target) = match &msaa_view {
+        let msaa_view = self.attachment_views.msaa.as_ref();
+        let (attachment_view, resolve_target) = match msaa_view {
             Some(msaa_view) => (msaa_view, Some(target)),
             None => (target, None),
         };
-        let velocity_view = self
-            .velocity
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let velocity_view = &self.attachment_views.velocity;
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
             color_attachments: &[
@@ -661,7 +679,7 @@ impl Scene {
                 // velocity across a silhouette edge produces a vector that
                 // describes neither surface. See `Self::velocity`.
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &velocity_view,
+                    view: velocity_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -671,7 +689,7 @@ impl Scene {
                 }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &depth_view,
+                view: depth_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     // `Store`, not `Discard`: the motion blur's reconstruction
@@ -688,6 +706,7 @@ impl Scene {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_render::perfprobe::mark("pass-open");
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
         // First, and that ordering is as load-bearing as the exhaust's being
         // last. The sky writes no depth and compares `Always`, so it paints the
@@ -820,6 +839,7 @@ impl Scene {
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);
+        oag_render::perfprobe::mark("scene-pass");
 
         // Wipeout HD's read post chain: gate, downsample, the two blurs, the
         // composite back over the linear scene, and the encode into the
@@ -853,8 +873,8 @@ impl Scene {
                 encoder,
                 &oag_render::post::motion_blur::Frame {
                     scene: view,
-                    velocity: &velocity_view,
-                    depth: &depth_view,
+                    velocity: velocity_view,
+                    depth: depth_view,
                     sample_count: self.anti_aliasing.msaa_samples(),
                     size: (size.width, size.height),
                     viewport,
@@ -862,6 +882,7 @@ impl Scene {
                 },
             );
         }
+        oag_render::perfprobe::mark("post-chain");
         stats
     }
 }

@@ -140,6 +140,16 @@ fn init_logging() {
     .init();
 }
 
+/// The counting allocator behind `oag-render`'s off-by-default `perf-probe`
+/// feature, and the reason it is installed here rather than in a test: it has
+/// to be the process's allocator to see the frame path's allocations at all.
+///
+/// Absent entirely without the feature - not merely inert - so a default build
+/// keeps the system allocator with no wrapper in front of it.
+#[cfg(feature = "perf-probe")]
+#[global_allocator]
+static ALLOCATOR: oag_render::perfprobe::Counting = oag_render::perfprobe::Counting;
+
 fn main() -> Result<()> {
     init_logging();
     let cli = Cli::parse();

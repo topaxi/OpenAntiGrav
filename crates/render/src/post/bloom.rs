@@ -321,24 +321,27 @@ impl Bloom {
         encoder: &mut wgpu::CommandEncoder,
         scene: &wgpu::TextureView,
     ) {
-        let bright_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bloom bright"),
-            layout: &self.layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(scene),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.constants_bright.as_entire_binding(),
-                },
-            ],
-        });
+        let bright_group = crate::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("bloom bright"),
+                layout: &self.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(scene),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.constants_bright.as_entire_binding(),
+                    },
+                ],
+            },
+        );
 
         let mut pass = |label: &str,
                         pipeline: &wgpu::RenderPipeline,

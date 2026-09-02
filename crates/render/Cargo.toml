@@ -17,6 +17,17 @@ bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
 pollster = "0.4"
 
+[features]
+# Off by default. Turns on `oag_render::perfprobe`'s counters, its `mark`
+# and `report_frame` printing, `oag-game`'s counting global allocator and its
+# `OAG_RENDER_BENCH` loop. See `handover/the-frame-path-allocated-16-mb-a-frame.md`.
+#
+# Every probe call site is compiled either way and every one of them collapses
+# to nothing without this - the counters are behind `cfg!`, not `#[cfg]`, so
+# the code cannot rot while the flag is off, which is the failure a debug
+# affordance nobody builds actually has.
+perf-probe = []
+
 [lints]
 workspace = true
 

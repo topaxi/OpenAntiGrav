@@ -164,6 +164,54 @@ const PREPARED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// The tile reductions' format: one velocity per tile.
 const TILE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
+/// The seven bind groups the chain binds, and what they were built against.
+///
+/// Rebuilt when - and only when - one of the things inside them moves: the
+/// caller's three attachment views (`attachments`), this pass's own scratch
+/// targets (`size`, `tile`) or which prepare variant is in use
+/// (`sample_count`). Everything else the groups name is owned here and
+/// outlives any frame.
+///
+/// A bind group is a driver object, and the chain needs seven of them;
+/// building them every frame was 194 heap allocations a frame on its own,
+/// measured on Talon's Junction - about half of everything
+/// `race::Scene::render` allocated.
+///
+/// **The three caller views are held by value, and that is what makes the
+/// comparison sound rather than merely cheap.** `wgpu::TextureView` compares
+/// by the identity of its inner handle, so two *different* views could in
+/// principle land on the same address once the first is freed - but a clone
+/// kept here keeps the first alive, so an address this cache still holds can
+/// never be handed to anything else. Nothing outside this struct has to
+/// promise anything about when it rebuilds its attachments.
+#[derive(Debug)]
+struct Groups {
+    key: Key,
+    prepare: wgpu::BindGroup,
+    idle: wgpu::BindGroup,
+    rows: wgpu::BindGroup,
+    columns: wgpu::BindGroup,
+    spread: wgpu::BindGroup,
+    gather: wgpu::BindGroup,
+    home: wgpu::BindGroup,
+    /// Which prepare pipeline `prepare` was built for; the MSAA variant has
+    /// its own layout.
+    multisampled: bool,
+}
+
+/// Everything a [`Groups`] was built against: the caller's three views, this
+/// pass's own target geometry, and the sample count that picks the prepare
+/// variant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Key {
+    scene: wgpu::TextureView,
+    velocity: wgpu::TextureView,
+    depth: wgpu::TextureView,
+    size: (u32, u32),
+    tile: u32,
+    sample_count: u32,
+}
+
 /// The six pipelines, their targets, and the uniform they share.
 #[derive(Debug)]
 pub struct MotionBlur {
@@ -188,6 +236,8 @@ pub struct MotionBlur {
     tile_a: Option<Target>,
     tile_b: Option<Target>,
     scratch: Option<Target>,
+    /// The chain's bind groups, kept across frames - see [`Groups`].
+    groups: Option<Groups>,
     format: wgpu::TextureFormat,
     size: (u32, u32),
     tile: u32,
@@ -371,6 +421,7 @@ impl MotionBlur {
             tile_a: None,
             tile_b: None,
             scratch: None,
+            groups: None,
             format,
             size: (0, 0),
             tile: 0,
@@ -410,52 +461,18 @@ impl MotionBlur {
             self.written = Some(wanted);
         }
 
-        // Group 0 for each pass: only the slots a pass reads matter, but a
-        // bound texture must not also be that pass's render target - usage
-        // scopes are validated for what is *bound*, not what the shader
-        // statically reads - so each pass names all three texture slots
-        // explicitly with views that are not its own target. Five targets and
-        // three slots, so the whole table in one place:
-        //
-        // | pass          | reads          | slot it reads through | target    |
-        // | ---           | ---            | ---                   | ---       |
-        // | prepare       | group 1 only   | -                     | prepared  |
-        // | tile-max x    | prepared       | prepared (3)          | tile_rows |
-        // | tile-max y    | tile_rows      | tile (4)              | tile_a    |
-        // | neighbour-max | tile_a         | tile (4)              | tile_b    |
-        // | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch   |
-        // | copy          | scratch        | colour (0)            | scene     |
-        let group = |label: &str,
-                     colour: &wgpu::TextureView,
-                     prepared_view: &wgpu::TextureView,
-                     tile_view: &wgpu::TextureView| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(label),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(colour),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.constants.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::TextureView(prepared_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: wgpu::BindingResource::TextureView(tile_view),
-                    },
-                ],
-            })
+        let key = Key {
+            scene: frame.scene.clone(),
+            velocity: frame.velocity.clone(),
+            depth: frame.depth.clone(),
+            size: frame.size,
+            tile,
+            sample_count: frame.sample_count,
         };
+        if self.groups.as_ref().is_none_or(|groups| groups.key != key) {
+            self.groups = Some(self.build_groups(device, frame, key));
+        }
+        let Some(groups) = &self.groups else { return };
 
         let mut pass = |label: &str,
                         pipeline: &wgpu::RenderPipeline,
@@ -484,114 +501,193 @@ impl MotionBlur {
             pass.draw(0..3, 0..1);
         };
 
-        // 1. prepare: raw velocity + depth into one single-sampled texture.
-        let (prepare_pipeline, prepare_group) = if frame.sample_count > 1 {
-            let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("motion blur prepare (msaa)"),
-                layout: &self.prepare_ms_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(frame.velocity),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::TextureView(frame.depth),
-                    },
-                ],
-            });
-            (&self.prepare_ms, group)
+        let prepare_pipeline = if groups.multisampled {
+            &self.prepare_ms
         } else {
-            let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("motion blur prepare"),
-                layout: &self.prepare_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(frame.velocity),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(frame.depth),
-                    },
-                ],
-            });
-            (&self.prepare, group)
+            &self.prepare
         };
-        // Prepare does not read group 0, but the pipeline layout carries it
-        // so the WGSL's shared declarations resolve; bind harmless views
-        // that are not its own target.
-        let idle = group(
-            "motion blur prepare g0",
-            &tile_b.view,
-            &tile_b.view,
-            &tile_a.view,
-        );
+        // 1. prepare: raw velocity + depth into one single-sampled texture.
         pass(
             "motion blur prepare",
             prepare_pipeline,
-            &[&idle, &prepare_group],
+            &[&groups.idle, &groups.prepare],
             &prepared.view,
         );
         // 2 and 3: the separable tile reduction, horizontal then vertical.
-        let rows = group(
-            "motion blur tile-max (x)",
-            &prepared.view,
-            &prepared.view,
-            &tile_b.view,
-        );
         pass(
             "motion blur tile-max (x)",
             &self.tile_max_x,
-            &[&rows],
-            &tile_rows.view,
-        );
-        let columns = group(
-            "motion blur tile-max (y)",
-            &prepared.view,
-            &prepared.view,
+            &[&groups.rows],
             &tile_rows.view,
         );
         pass(
             "motion blur tile-max (y)",
             &self.tile_max_y,
-            &[&columns],
+            &[&groups.columns],
             &tile_a.view,
         );
         // 4: neighbour-max.
-        let spread = group(
-            "motion blur neighbour-max",
-            &prepared.view,
-            &prepared.view,
-            &tile_a.view,
-        );
         pass(
             "motion blur neighbour-max",
             &self.neighbour_max,
-            &[&spread],
+            &[&groups.spread],
             &tile_b.view,
         );
         // 5: the gather, into scratch.
-        let gather = group(
-            "motion blur reconstruct",
-            frame.scene,
-            &prepared.view,
-            &tile_b.view,
-        );
         pass(
             "motion blur reconstruct",
             &self.reconstruct,
-            &[&gather],
+            &[&groups.gather],
             &scratch.view,
         );
         // 6: home.
-        let home = group(
-            "motion blur copy",
-            &scratch.view,
-            &prepared.view,
-            &tile_a.view,
+        pass("motion blur copy", &self.copy, &[&groups.home], frame.scene);
+    }
+
+    /// Builds all seven bind groups for one `key`. See [`Groups`].
+    ///
+    /// Group 0 for each pass: only the slots a pass reads matter, but a bound
+    /// texture must not also be that pass's render target - usage scopes are
+    /// validated for what is *bound*, not what the shader statically reads -
+    /// so each pass names all three texture slots explicitly with views that
+    /// are not its own target. Five targets and three slots, so the whole
+    /// table in one place:
+    ///
+    /// | pass          | reads          | slot it reads through | target    |
+    /// | ---           | ---            | ---                   | ---       |
+    /// | prepare       | group 1 only   | -                     | prepared  |
+    /// | tile-max x    | prepared       | prepared (3)          | tile_rows |
+    /// | tile-max y    | tile_rows      | tile (4)              | tile_a    |
+    /// | neighbour-max | tile_a         | tile (4)              | tile_b    |
+    /// | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch   |
+    /// | copy          | scratch        | colour (0)            | scene     |
+    fn build_groups(&self, device: &wgpu::Device, frame: &Frame<'_>, key: Key) -> Groups {
+        // Every caller has already checked these, and a `render` that reached
+        // here without them would have returned; `expect` rather than a second
+        // `let else` so the shape of this function stays one build.
+        let (prepared, tile_rows, tile_a, tile_b, scratch) = (
+            self.prepared.as_ref().expect("resized"),
+            self.tile_rows.as_ref().expect("resized"),
+            self.tile_a.as_ref().expect("resized"),
+            self.tile_b.as_ref().expect("resized"),
+            self.scratch.as_ref().expect("resized"),
         );
-        pass("motion blur copy", &self.copy, &[&home], frame.scene);
+        let group = |label: &str,
+                     colour: &wgpu::TextureView,
+                     prepared_view: &wgpu::TextureView,
+                     tile_view: &wgpu::TextureView| {
+            crate::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some(label),
+                    layout: &self.layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(colour),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: self.constants.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::TextureView(prepared_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::TextureView(tile_view),
+                        },
+                    ],
+                },
+            )
+        };
+        let multisampled = frame.sample_count > 1;
+        let prepare = if multisampled {
+            crate::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some("motion blur prepare (msaa)"),
+                    layout: &self.prepare_ms_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(frame.velocity),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::TextureView(frame.depth),
+                        },
+                    ],
+                },
+            )
+        } else {
+            crate::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some("motion blur prepare"),
+                    layout: &self.prepare_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(frame.velocity),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(frame.depth),
+                        },
+                    ],
+                },
+            )
+        };
+        Groups {
+            key,
+            prepare,
+            // Prepare does not read group 0, but the pipeline layout carries
+            // it so the WGSL's shared declarations resolve; bind harmless
+            // views that are not its own target.
+            idle: group(
+                "motion blur prepare g0",
+                &tile_b.view,
+                &tile_b.view,
+                &tile_a.view,
+            ),
+            rows: group(
+                "motion blur tile-max (x)",
+                &prepared.view,
+                &prepared.view,
+                &tile_b.view,
+            ),
+            columns: group(
+                "motion blur tile-max (y)",
+                &prepared.view,
+                &prepared.view,
+                &tile_rows.view,
+            ),
+            spread: group(
+                "motion blur neighbour-max",
+                &prepared.view,
+                &prepared.view,
+                &tile_a.view,
+            ),
+            gather: group(
+                "motion blur reconstruct",
+                frame.scene,
+                &prepared.view,
+                &tile_b.view,
+            ),
+            home: group(
+                "motion blur copy",
+                &scratch.view,
+                &prepared.view,
+                &tile_a.view,
+            ),
+            multisampled,
+        }
     }
 
     fn resize(&mut self, device: &wgpu::Device, size: (u32, u32), tile: u32) {
