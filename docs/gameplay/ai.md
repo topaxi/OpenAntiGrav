@@ -1812,9 +1812,45 @@ race - that measurement predates the rescues, and both halves of the grid are
 recovered now (`Race::lost_off_the_circuit` for an opponent,
 `Race::lost_off_the_track` for the player, who does the same thing with a Turbo
 and was the last one left falling). What the gate is still for is the craft not
-leaving in the first place: a recovered lap is not a lap it drove. The speed
-target and the lookahead ceiling (`look_max`, 90 units - a third of a second at
-270) are the next places to look.
+leaving in the first place: a recovered lap is not a lap it drove.
+
+**`look_max` is ruled out, measured rather than reasoned.** The named suspect
+was the lookahead ceiling (90 units - a third of a second at 270) capping the
+ordinary steering/braking loop's horizon after a boost, separately from the
+`allows_speed` gate's own unclamped one. `crates/game/examples/turbo_lookahead_sweep.rs`
+tracks, for every Turbo an opponent fires, how far it strays from the spline
+over the boost plus a short coast, at `look_max` 90 (today's value), 100, 110,
+120 and 200 (the value past which the clamp cannot bind at any speed measured
+on this circuit - see below). 32 seeds, seven opponents, a minute each -
+224 craft-minutes, eight times the original measurement:
+
+| look_max | Turbos fired | mean excursion | worst excursion | escapes |
+| --- | --- | --- | --- | --- |
+| 90 | 104 | 14.5 | 47.4 | 0 |
+| 100 | 97 | 13.6 | 28.9 | 0 |
+| 110 | 99 | 15.1 | 43.5 | 0 |
+| 120 | 101 | 15.2 | 47.1 | 0 |
+| 200 | 100 | 15.3 | 47.1 | 0 |
+
+Flat across every setting, and **zero escapes at any of them** against a
+456-unit rescue threshold on this circuit - the worst excursion measured,
+47.4, is nowhere near it. Two things follow. First, `look_max` cannot be the
+lever: raising it from 90 to 200 changes nothing about how far a boosted
+craft strays. Second, the specific failure this section opened with did not
+reproduce once, in a sample eight times the size of the one that found it
+originally - the opponent respawn and stall rescue, both landed after this
+measurement was first taken, most plausibly already cover what `look_max`
+was suspected of. The residual gap this section describes is not shown to
+exist any more on `16_Track`; it has not been re-measured on other circuits,
+and nothing here rules out a rarer event this sample size still missed.
+
+Confirmed separately, from the same sweep: the arithmetic
+(`look_min + look_speed * speed > look_max`) says the clamp can only bind
+above 200 u/s at `look_max` 90, and the sweep's own max observed forward
+speed - 321-322 u/s, consistent across every setting - means it *does*
+bind occasionally even at `look_max` 120. `look_max` is exclusively a
+boost-phase parameter: no craft in this sample ever drove fast enough
+outside a Turbo to feel it.
 
 ### The field burns
 
