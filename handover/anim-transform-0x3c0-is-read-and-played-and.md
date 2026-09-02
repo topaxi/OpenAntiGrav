@@ -11,19 +11,21 @@ the fallback clock global lives). Confirmed by exact arithmetic reproducing
 `.rel.text` relocation record itself (bits 16-23 of `r_info` are the segment
 index). HANDOVER.md's relocation trap section is corrected to match. Full
 account: [anim-transform.md](../docs/ghidra/functions/psp-pulse-usa/anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image).
-The class descriptors flagged alongside it were not re-checked in this pass.
+**The class descriptor is checked too, same session**: `AnimTransform_Register`'s
+own `desc` local resolves to `0x08b620f8` under the segment-1 base (not
+`0x0888c960`, which lands inside an unrelated function under the single-base
+reading) - named `g_anim_transform_desc`, confidence 85, in `names.tsv`.
 
 ## Open
 
 - What advances `g_ingame->0x40` is not established.
 - `AnimEnd` is read by the binder and by nothing else.
 - The rate multiplier `AnimTransform_Update` can apply is inert because nothing writes its `+0x5c` numerator.
-- The class descriptors, flagged as sharing the fallback global's relocation
-  problem, were not re-checked against the per-segment base found above.
 
 ## Next Steps
 
-- If a class descriptor resolves into `.bss` or `.cplinit`, apply the
-  segment-1 base (`+0x08ad9798`) found above rather than `+0x08804000`.
 - `g_ingame->0x40`'s advancer and the `+0x5c` numerator are each a fresh
-  Ghidra trace, not blocked on anything above.
+  Ghidra trace, not blocked on anything above - `g_ingame`'s address is
+  established, so a search for what writes its `+0x40` (or a live watchpoint)
+  is the direct route; `+0x5c` needs finding what, if anything, ever writes a
+  node's own `+0x5c` rather than the shared clock.

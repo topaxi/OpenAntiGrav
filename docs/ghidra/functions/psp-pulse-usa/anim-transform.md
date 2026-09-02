@@ -27,16 +27,28 @@ under fixed geometry. This one moves the geometry.
 | `0x08a6bd48` | `Mesh_ClassTag` | 88 | `void *(void)` |
 | `0x08ad0fb4` | `g_anim_transform_vtable` | 85 | data |
 | `0x08ab0818` | `g_ingame` | 85 | data - the in-game object, whose `+0x40` is the animation clock |
+| `0x08b620f8` | `g_anim_transform_desc` | 85 | data - the `desc` local `AnimTransform_Register` builds and passes to `Vex_RegisterClass`; see below |
 
 **A trap first, because every address above depends on it.** This program's
 `jal` targets and `lui`/`addiu` immediates are **link-time**, not runtime: the
 ELF is relocatable and Ghidra rebased the sections without rewriting the
-immediates. Every one is `+0x08804000` - the `.text` base - from what the
-listing shows. Confirmed two independent ways before anything here was believed:
+immediates. Confirmed two independent ways before anything here was believed:
 `jal 0x0010d4fc` inside `Node_SetAnimTimeTree` is that function's own recursive
 call (`0x089114fc`), and `jal 0x00104eb8` is the already-named
 `Vex_RegisterClass` (`0x08908eb8`). A reader who takes the decompiler's
 `func_0x...` at face value will chase addresses that do not exist.
+
+**It is not always `+0x08804000`.** A `jal` target always is - a call target
+is always in `.text`. A `lui`/`addiu` or `lui`/`lw` pair can resolve into
+either of this binary's two `PT_LOAD` segments, and each has its own base:
+`+0x08804000` for segment 0 (`.text` through `.data`), `+0x08ad9798` for
+segment 1 (`.cplinit`/`.linkonce.d`/`.ctors`/`.bss`). `g_anim_transform_desc`
+above is the second case in this same function: its `lui a0,0x9` / `addiu
+s0,a0,-0x76a0` at `0x089000a0` computes to `0x0888c960` under the `.text`
+base - which lands inside an unrelated function, `FUN_0888c408` - and to
+`0x08b620f8`, in `.bss`, under the segment-1 base instead. Full derivation:
+[the second relocation base](#the-second-relocation-base-is-found-it-is-per-segment-not-per-image),
+found chasing the same problem in `AnimTransform_Update`'s clock fallback.
 
 ## How the class was reached
 
@@ -44,11 +56,11 @@ Not from the class-name table - through its own registration site, which is the
 same route [`pads.md`](pads.md) used for the two pad classes:
 
 ```c
-void AnimTransform_Register(void) {          // 0x0890009c
-    Vex_RegisterClass(&desc, 0x3c0);         // 0x3c0 = Anim Transform
-    desc->0x38 = g_anim_transform_vtable;    // 0x08ad0fb4
-    desc->0x28 = "file";                     // 0x08a84bc0
-    desc->0x04 = AnimTransform_ClassTag();   // 0x08a6bb84
+void AnimTransform_Register(void) {                     // 0x0890009c
+    Vex_RegisterClass(&g_anim_transform_desc, 0x3c0);    // 0x08b620f8, 0x3c0 = Anim Transform
+    g_anim_transform_desc->0x38 = g_anim_transform_vtable; // 0x08ad0fb4
+    g_anim_transform_desc->0x28 = "file";                // 0x08a84bc0
+    g_anim_transform_desc->0x04 = AnimTransform_ClassTag(); // 0x08a6bb84
     ...
 }
 ```
@@ -321,10 +333,6 @@ matching them case-insensitively would be a departure.
   only.
 - **What advances `g_ingame->0x40`.** The clock object is identified and its
   writers are named; the per-frame increment of the field itself is not traced.
-- **The class descriptors** were flagged by an earlier draft of this page as
-  sharing the fallback global's relocation problem; not re-checked once the
-  per-segment base (above) was found. If one resolves into `.bss` or
-  `.cplinit`, it needs `+0x08ad9798`, not `+0x08804000`.
 - **The two alternate evaluators**, `0x088ff6ec` and `0x088fe934`, unreachable
   on this disc.
 - **The third `Node_SetAnimTimeTree` class**, `0x08a6bd18`.
