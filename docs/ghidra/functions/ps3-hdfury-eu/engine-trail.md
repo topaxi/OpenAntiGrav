@@ -1201,6 +1201,55 @@ in the right direction, not asserted to close the gap outright: the 1.5
 row above shows there is room to go further if 0.75 alone is not enough
 once checked against the original's own measured proportions.
 
+**The calibration against the original's own proportions, done next, found
+a second measurement trap and a real but partial result.** The obvious way
+to check "does 0.75 make this look right" is a brightness threshold on the
+final composited frame, matching each glow's bbox against the engine bay's
+own width (nozzle-to-nozzle) - the same kind of measurement "Seventh
+session" used across three screenshots. It does not work cleanly on either
+side: `RGB > 170` on `original-rpcs3.png`'s engine bay returns a
+93x60-pixel box against a 95x65 box (bathtub-full - because the metal
+turbine housings either side of the actual glow carry their own bright
+specular highlights, and the threshold cannot tell a glowing plasma core
+from a shiny cowling). The same threshold on this engine's own frame
+returns a box pinned to whatever crop margin is given, for the same
+reason plus the hull's own white livery paint at the fuselage edges. A
+threshold that cannot separate "flare" from "everything else bright
+nearby" cannot calibrate against one either - this is a second, distinct
+measurement trap from the "saturating threshold across overlapping
+additive layers" one above, hitting a *single*, non-additive frame this
+time (the original's, and this engine's own composited output, not an
+isolated diff).
+
+Falling back to reading the *glowing, blue-tinted core* out of a zoomed,
+gridded crop by eye - not thresholded, but a human distinguishing plasma
+glow from metal specular the way the threshold could not - and comparing
+its width to the engine bay's own nozzle-to-nozzle span in the same crop:
+
+| Capture | Glow width | Engine-bay width | Ratio |
+| --- | --- | --- | --- |
+| `original-rpcs3.png` | ~36px | ~85px | ~0.42 |
+| this engine, unscaled (`SPRITE_RADIUS` unmultiplied) | ~125px | ~170px | ~0.74 |
+| this engine, `* CRAFT_ROW_SCALE` (landed) | ~105px | ~170px | ~0.62 |
+
+By this reading the landed fix closes roughly a third of the visual gap
+(`(0.74-0.62)/(0.74-0.42) ≈ 0.38`), not all of it - matching the pixel-diff
+footprint numbers' own message rather than contradicting them. Reaching
+the original's ~0.42 ratio from unscaled's ~0.74 would need close to
+`0.42/0.74 ≈ 0.57` of the current radius (≈1.7, near the flat-half row's
+1.5, already measured to overshoot toward ~0.3 the other way) - **and that
+number is not implemented**, deliberately: it is fitted to two screenshots
+read by eye, not to any traced consumer in the original, and this project
+elsewhere holds the opposite standard on purpose (`post::bloom`'s own
+module doc: "every constant here is read out of the executable; none is
+fitted to a screenshot"). Landing it would trade one honestly-labelled
+partial fix for one invented-looking exact one. What closes the rest
+honestly is either Ghidra evidence for what the original itself multiplies
+`Flare Radius` by (nothing this page has read names a consumer for it, per
+"the original's own scale factor for this specific field" above), or an
+explicit, disclosed decision to fit a value anyway - which is a call for
+whoever picks this thread up next, not one to make silently mid-session.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -

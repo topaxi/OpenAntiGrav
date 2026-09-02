@@ -244,35 +244,49 @@ the fade math not run."
 
 ## Next Steps
 
-- **Calibrate the remaining gap against the original's own measured
-  proportions, rather than guessing between 0.75 and a further cut.** The
-  landed `CRAFT_ROW_SCALE` fix is a consistency correction (the sprite's
-  radius now lives in the same space its position already did), not a
-  value read off the original - it is not confirmed to close the gap
-  outright. Take a fresh `ours.png` at the fix's new size, crop it the same
-  way "Seventh session" cropped the three original RPCS3 captures
-  (`original-rpcs3.png`, `tuning-dump/race.png`,
-  `rendertick-break-v2/race.png`), and measure flare width against hull
-  width in all four the same way. If still oversized, the pixel-diff
-  isolation method this session used (see engine-trail.md "Reproducing
-  this", the `just play ... --screenshot` + numpy-diff recipe) is cheap
-  enough to retest a further cut (the flat-half row in the eighth
-  session's table, radius 1.5, cut the footprint ~71%) without any
-  emulator session.
+- **Calibration is done, and it landed on a decision point rather than a
+  number.** A brightness-threshold measurement of glow-width against
+  engine-bay width, matched to how "Seventh session" compared the three
+  RPCS3 captures, does not work on either side of the comparison: the
+  threshold cannot separate the flare's own glow from the metal turbine
+  housings' specular highlights in the original, or from the hull's own
+  white livery paint in this engine's frame - both read as "the box is
+  full" regardless of the true glow size. Reading the glow by eye instead
+  (a human can tell plasma from specular; a threshold could not) gives
+  glow-width/engine-bay-width ratios of ~0.42 (original), ~0.74 (this
+  engine unscaled), ~0.62 (this engine with the landed `CRAFT_ROW_SCALE`
+  fix) - so the fix closes roughly a third of the visual gap, not all of
+  it, matching what the pixel-diff footprint numbers already said. See
+  engine-trail.md "Eighth session"'s calibration addendum for the full
+  table and crops.
+- **The remaining ~0.62 -> ~0.42 gap is a decision, not a next action to
+  just take.** Reaching ~0.42 from ~0.74 by eye would need close to `0.57x`
+  the current (already-scaled) radius - but that number comes from fitting
+  two screenshots read by eye, not from any traced consumer in the
+  original, and this project holds the opposite standard everywhere else
+  (`crates/render/src/post/bloom.rs`'s own doc: "every constant here is
+  read out of the executable; none is fitted to a screenshot"). Landing an
+  eyeballed multiplier on top of the evidence-backed `CRAFT_ROW_SCALE` one
+  would quietly lower that bar. **Whoever picks this up next should choose,
+  explicitly, between**: (a) hold at the evidence-backed 0.75 and pursue
+  the RE side - find what the original's own draw call actually multiplies
+  `Flare Radius` by (nothing on engine-trail.md names a consumer for this
+  specific field yet; `0x002a1210`, past the third gate the sixth session
+  found, is the one untraced piece of `EngineFlare_RenderTick` still worth
+  a live read for this, low priority as it looked for the occlusion query
+  it now reads as more likely), or (b) accept a fitted multiplier as a
+  disclosed, visual-only approximation and land it as such - a real product
+  choice, not a default to make silently.
 - **Separately, check whether the original itself depth/occlusion-clips the
   sprite against the craft's own hull mesh.** Not reached this session -
-  the pixel-diff isolation answered "which draw call" (the sprite) but not
-  "is a missing depth clip part of the size gap, on top of the radius
-  itself." `crates/render/src/exhaust.rs` (~line 1062, "the flare's draw
-  pipeline") already documents depth test on/write off, issued after the
-  opaque hulls - correctly wired, per that code's own comments - so this is
-  about whether the sprite's *placement* sits inside enough hull geometry
-  for that test to matter, not about a missing test.
-- If calibration still leaves a gap once both of the above are checked,
-  `0x002a1210` and `FUN_006765e8()`'s frame-budget-throttle hypothesis
-  (global at `PTR_DAT_008b7838`, two 8-byte fields, called only from
-  `Game_PresentLoop_q`/`PhotoMode_Update`) are still open, live-tracing
-  targets from the sixth session - lower priority now that the sprite
-  radius itself is confirmed to be the dominant lever.
+  `crates/render/src/exhaust.rs` (~line 1062, "the flare's draw pipeline")
+  already documents depth test on/write off, issued after the opaque
+  hulls - correctly wired, per that code's own comments - so this is about
+  whether the sprite's *placement* sits inside enough hull geometry for
+  that test to matter, not about a missing test. Lower priority than the
+  decision above: the eyeball measurement's whole-glow-shape read (a
+  cone/teardrop reaching well past the engine bay on this engine, an
+  ellipse fully contained by it in the original) looks more like a size
+  difference than an occlusion one, but this was not directly tested.
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.
