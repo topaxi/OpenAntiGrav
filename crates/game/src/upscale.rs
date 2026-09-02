@@ -750,24 +750,37 @@ fn bind(
     grade: &wgpu::Buffer,
     view: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("upscale"),
-        layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: grade.as_entire_binding(),
-            },
-        ],
-    })
+    // Through the probe rather than `device.create_bind_group` directly, the
+    // same as the five sites in `oag_render::post`. This is the sixth, and the
+    // only one outside that module - which is why a sweep of `post/` alone
+    // missed it. A counting passthrough: the same bind group, and nothing at
+    // all without the `perf-probe` feature.
+    //
+    // It counts three callers, and only two of them are per-frame:
+    // `resolve_scene` binds an upscaler's or a post-process's output every
+    // frame it runs one, while `target` and `output` bind once per resize. A
+    // resize is rare enough that the count still reads as per-frame churn.
+    oag_render::perfprobe::bind_group(
+        device,
+        &wgpu::BindGroupDescriptor {
+            label: Some("upscale"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: grade.as_entire_binding(),
+                },
+            ],
+        },
+    )
 }
 
 /// How big the offscreen target should be for a viewport rectangle and a scale.
