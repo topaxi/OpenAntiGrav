@@ -18,6 +18,7 @@ mod draws;
 mod logging;
 mod offscreen;
 mod orbit;
+mod ps3_mesh;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -710,7 +711,7 @@ fn main() -> Result<()> {
         let ps3 = mesh::rcs::scene_from(&cli.archive, name, &data)?
             .inspect(|(_, report)| println!("{}", report.describe()));
         let model = match ps3 {
-            Some((model, _)) => model,
+            Some((model, _)) => ps3_mesh::with_pads(&cli.archive, name, &data, model),
             None => mesh::build_with_textures(name, &data, external, cli.lod)?,
         };
         let model = inspect(model, &data, &cli);

@@ -372,12 +372,6 @@ impl Drawable {
     /// `i`-th [`mesh::Model::node_vertex_ranges`] entry - positional, not by
     /// name, for the reason that field's own doc comment gives.
     ///
-    /// Rewrites the *replacement* colour, not a multiply against the pad's
-    /// authored one - `pad+0x6c` overwrites the mesh's own GE colour command
-    /// every tick in the original, it does not modulate it. Always from
-    /// `self.model.vertices`, never from the last frame's buffer, for the
-    /// same accumulation reason [`Self::deflect_airbrakes`] gives.
-    ///
     /// A no-op on a model with no weapon pads - every track and the sky -
     /// since `ready` is empty there.
     pub(super) fn tint_weapon_pads(
@@ -387,16 +381,60 @@ impl Drawable {
         ready: &[bool],
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
+        self.recolour_nodes(
+            queue,
+            ready.iter().map(|&is_ready| {
+                if is_ready {
+                    oag_render::weapon_pad::ready_colour(seconds)
+                } else {
+                    oag_render::weapon_pad::COOLDOWN_COLOUR
+                }
+            }),
+            tinted,
+        );
+    }
+
+    /// Recolours every speed pad's own geometry to
+    /// [`oag_render::speedup_pad::COLOUR`] - see that module's own doc
+    /// comment for why there is no state to switch between, unlike
+    /// [`Self::tint_weapon_pads`].
+    ///
+    /// A no-op on a model with no speed pads - every track and the sky.
+    pub(super) fn tint_speedup_pads(&self, queue: &wgpu::Queue, tinted: &mut Vec<mesh::GpuVertex>) {
+        let count = self.model.node_vertex_ranges.len();
+        self.recolour_nodes(
+            queue,
+            std::iter::repeat_n(oag_render::speedup_pad::COLOUR, count),
+            tinted,
+        );
+    }
+
+    /// Rewrites each of this drawable's [`mesh::Model::node_vertex_ranges`]
+    /// entries to its own flat `colour`, one per iterator item, positional
+    /// and zipped the way [`Self::tint_weapon_pads`]' own doc comment
+    /// describes.
+    ///
+    /// Rewrites the *replacement* colour, not a multiply against the pad's
+    /// authored one - `pad+0x6c` overwrites the mesh's own GE colour command
+    /// every tick in the original (see `oag_render::weapon_pad`), and this
+    /// mirrors that shape for the speed pad's own, unrecovered override.
+    /// Always from `self.model.vertices`, never from the last frame's
+    /// buffer, for the same accumulation reason [`Self::deflect_airbrakes`]
+    /// gives.
+    ///
+    /// `tinted` is scratch the caller owns and this refills - see
+    /// `Scene::scratch`.
+    fn recolour_nodes(
+        &self,
+        queue: &wgpu::Queue,
+        colours: impl Iterator<Item = [f32; 3]>,
+        tinted: &mut Vec<mesh::GpuVertex>,
+    ) {
         let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
-        for (range, &is_ready) in self.model.node_vertex_ranges.iter().zip(ready) {
+        for (range, colour) in self.model.node_vertex_ranges.iter().zip(colours) {
             let span = range.start as usize..range.end as usize;
             let Some(base) = self.model.vertices.get(span) else {
                 continue;
-            };
-            let colour = if is_ready {
-                oag_render::weapon_pad::ready_colour(seconds)
-            } else {
-                oag_render::weapon_pad::COOLDOWN_COLOUR
             };
             // Refilled rather than rebuilt - one pad's worth of vertices, and
             // there is a pad's worth of them on every lap of every circuit

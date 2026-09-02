@@ -1,119 +1,304 @@
-//! The `Weapon Pad` chunk hashes a `.vex`'s node tree names, split out of
-//! [`super::build_scene`]'s world-space pass so a caller can gate them apart
-//! from the rest of the circuit.
+//! `Speedup Pad`/`Weapon Pad` geometry, from the `.rcsmodel` beside the
+//! `.vex`, through their own node-ordered pass.
 //!
 //! # Why this needs its own pass
 //!
-//! A `Weapon Pad` node names its chunk at the mesh payload's own `+0x30`
-//! exactly like an ordinary `Mesh` node does, but the chunk it names is baked
-//! in world space regardless - `docs/formats/rcsmodel.md`, "The pads are
-//! second-pass geometry with a first-pass-shaped reference". [`super::referenced`]
-//! only ever walks `Mesh`-class nodes, so a `Weapon Pad` node's hash was never
-//! in the set it excludes, and the chunk fell into the same "no node
-//! references this, draw it in world space" bucket as the road and every
-//! other second-pass chunk. Left there, a weapon pad chunk is
-//! indistinguishable from ordinary track geometry and drew in every mode -
-//! see `docs/gameplay/race-modes.md` for the report that caught it.
+//! A `Weapon Pad`/`Speedup Pad` node names its chunk at the mesh payload's
+//! own `+0x30` exactly like an ordinary `Mesh` node does, but the chunk it
+//! names is baked in world space regardless -
+//! `docs/formats/rcsmodel.md`, "The pads are second-pass geometry with a
+//! first-pass-shaped reference". [`super::referenced`] only ever walks
+//! `Mesh`-class nodes, so a pad node's hash was never in the set it
+//! excludes, and the chunk fell into the same "no node references this,
+//! draw it in world space" bucket as the road and every other second-pass
+//! chunk. Left there, a pad chunk is indistinguishable from ordinary track
+//! geometry and drew in every mode - see `docs/gameplay/race-modes.md` for
+//! the report that caught it on `Weapon Pad` first.
 //!
-//! `Speedup Pad` chunks are the same shape and are deliberately left alone:
-//! nothing gates them by mode, on this disc or the original's.
+//! [`super::build_scene`]'s own world-space pass excludes both classes'
+//! chunks via [`pad_chunk_hashes`] rather than drawing them into a shared
+//! "everything nobody claims" bucket the way it used to for `Weapon Pad`
+//! alone - that bucket has no per-node correspondence to build
+//! `Model::node_vertex_ranges` from, and without that field
+//! `Drawable::tint_weapon_pads`/`tint_speedup_pads` have nothing to zip
+//! against. [`build_pads`]/[`build_weapon_pads`] draw the excluded chunks
+//! through [`build_pad_class`] instead: one node-ordered pass per class,
+//! walking [`oag_formats::pads::volumes`]'s own node order so
+//! `oag_game::race::load`'s trigger list and this module's vertex ranges
+//! stay lined up one entry each.
 
+use anyhow::{Context, Result, bail};
 use oag_formats::{rcsmodel, vex};
 
-use super::{DrawCall, Model};
+use super::{
+    Geometry, MaterialSetup, Model, Report, Textures, anim_node, authored, bounding_sphere,
+    declares_no_texcoord, emit, face_normals, material_setup, node_geometry, surface,
+};
 
-/// The chunk hashes every node of `pad_class` names, restricted to hashes this
-/// `.rcsmodel` actually carries.
+/// Every chunk hash a node of `class_id` names at its mesh payload's own
+/// `+0x30`, in no particular order - a pure lookup, unlike [`super::referenced`],
+/// which also excludes a chunk the *ordinary* node pass would double-draw. A
+/// pad chunk is never a candidate for that pass in the first place (its class
+/// never matches `mesh_class`), so there is nothing here to exclude.
 ///
-/// Not filtered through [`super::is_world_baked`] the way [`super::referenced`]
-/// is: every `Weapon Pad` chunk measured on the disc is world-baked already
-/// (`docs/formats/rcsmodel.md`), so the only thing left to check here is
-/// whether the hash names a chunk this file has at all.
-pub(super) fn hashes(
-    data: &[u8],
-    nodes: &[vex::Node],
-    pad_class: u32,
-    model: &rcsmodel::Model,
-) -> Vec<u32> {
-    let order = vex::byte_order(data);
+/// Not filtered through [`super::is_world_baked`] either: every pad chunk
+/// measured on the disc is world-baked already (`docs/formats/rcsmodel.md`),
+/// so a hash naming no chunk this file has is the only thing worth checking
+/// for, and [`build_pad_class`] already skips those on its own.
+pub(super) fn pad_chunk_hashes<'a>(
+    data: &'a [u8],
+    nodes: &'a [vex::Node],
+    order: oag_formats::ByteOrder,
+    class_id: u32,
+) -> impl Iterator<Item = u32> + 'a {
     nodes
         .iter()
-        .filter(|node| node.class_id == pad_class)
-        .filter_map(|node| {
-            let (hash, ..) = super::node_geometry(&data[node.payload()], order)?;
-            model.mesh(hash).is_some().then_some(hash)
-        })
-        .collect()
+        .filter(move |node| node.class_id == class_id)
+        .filter_map(move |node| node_geometry(&data[node.payload()], order).map(|(hash, ..)| hash))
 }
 
-/// An empty model that shares `out`'s texture setup - the skeleton
-/// [`super::build_scene`]'s weapon-pad chunks emit into, so a material
-/// resolves to the same texture, lightmap and shader role it would in the
-/// circuit's own model.
+/// The track's `Speedup Pad` geometry, from the `.rcsmodel` beside the
+/// `.vex` - the PS3 counterpart of [`super::super::build_pads`].
 ///
-/// **Deliberately leaves `node_vertex_ranges` empty** - see its own doc
-/// comment on `Model`. This pass has no per-node correspondence for a
-/// world-baked chunk to build one from, so the model this returns draws
-/// (the bug this module fixes) but never cycles its ready/cooling-down
-/// colour the way a PSP-shaped weapon-pad model does.
-pub(super) fn skeleton(label: &str, out: &Model) -> Model {
-    Model {
-        textures: out.textures.clone(),
-        lightmaps: out.lightmaps.clone(),
-        material_slots: out.material_slots.clone(),
-        material_specular_exponent: out.material_specular_exponent.clone(),
-        material_variants: out.material_variants.clone(),
-        // **Carried because `material_slots` is.** A slot's word holds its
-        // index into this table in its high half, so copying the roles without
-        // the table leaves a pad's vertices indexing an empty one - which
-        // reads as an all-zero entry and silently drops the glow rather than
-        // failing. See `mesh::slots::MATERIAL_SHIFT`.
-        emissive: out.emissive.clone(),
-        vertex_colour_is_light: out.vertex_colour_is_light,
-        // Carried for the same reason: a pad chunk resolves to the circuit's
-        // own material table, so a cutout among them must be tested against
-        // the reference that table authors and not against the shader's
-        // PSP default. See `super::cutout`.
-        alpha_test_ref: out.alpha_test_ref,
-        ..Model::none(label)
-    }
+/// See [`build_weapon_pads`] for the shared implementation and the doc
+/// comment explaining why this cannot simply read out of
+/// [`super::build_scene`]'s own world-space pass.
+pub fn build_pads(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    build_pad_class(label, data, model_blob, textures, |c| c.speedup_pad)
 }
 
-/// `None` for a chunk-less pad model, otherwise the same finishing
-/// [`super::build_scene`] gives its own circuit model: face normals derived
-/// where the file authored none, and a bounding sphere to frame it by.
-pub(super) fn finish(mut pad_out: Model) -> Option<Model> {
-    if pad_out.indices.is_empty() {
-        return None;
-    }
-    super::face_normals(&mut pad_out);
-    let (centre, radius) = super::bounding_sphere(&pad_out.vertices);
-    pad_out.centre = centre;
-    pad_out.radius = radius;
-    Some(pad_out)
-}
-
-/// Puts a weapon-pad model back onto the circuit it was split out of,
-/// offsetting its indices and draw ranges past what `out` already holds.
+/// The track's `Weapon Pad` geometry, the same way as [`build_pads`] - the
+/// PS3 counterpart of [`super::super::build_weapon_pads`].
 ///
-/// The one caller is [`super::scene_from`]: every browser or diagnostic goes
-/// through it rather than [`super::build_scene`] directly, wants the whole
-/// disc on screen, and has no `Mode` to gate the split by.
-pub(super) fn merge_back(out: &mut Model, extra: Model) {
-    let vertex_offset = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
-    let index_offset = u32::try_from(out.indices.len()).unwrap_or(u32::MAX);
-    out.vertices.extend(extra.vertices);
-    out.indices
-        .extend(extra.indices.into_iter().map(|i| i + vertex_offset));
-    let shift = |mut draws: Vec<DrawCall>| {
-        for draw in &mut draws {
-            draw.range = (draw.range.start + index_offset)..(draw.range.end + index_offset);
-        }
-        draws
+/// # Why this cannot reuse `build_scene`'s world-space pass
+///
+/// A pad chunk *is* drawn somewhere by [`super::build_scene`] unless
+/// excluded via [`pad_chunk_hashes`] - but that pass walks `.rcsmodel`
+/// chunks in **file** order, with no node identity attached, into one shared
+/// buffer with every other track chunk. `Drawable::tint_weapon_pads` needs
+/// the opposite: one [`Model::node_vertex_ranges`] entry per pad **node**, in
+/// the same **tree** order [`oag_formats::pads::volumes`] walks to build the
+/// trigger list `oag_game::race::Race` drives ready/cooling state from - see
+/// that function and `crates/game/src/race/pads.rs`. So this is a second,
+/// dedicated pass over exactly the nodes of one pad class.
+///
+/// One [`Model::node_vertex_ranges`] entry per node of the wanted class,
+/// pushed **unconditionally**, empty for a node whose chunk does not resolve
+/// or decode. That is the same "never skip a slot" rule
+/// `super::super::build_class` uses, and it is what keeps the array lined up
+/// with [`oag_formats::pads::volumes`]'s own count, one entry each.
+///
+/// Positions are already in world space - a `Weapon Pad`/`Speedup Pad`
+/// chunk's coordinates ignore its node the same way every other world-baked
+/// chunk [`super::build_scene`] draws does - so this bakes each node's chunk
+/// with the identity transform rather than the node's own `to_world`, and
+/// the caller draws the resulting model at `Mat4::IDENTITY`, exactly as it
+/// already draws [`super::super::build_pads`]'s PSP output.
+///
+/// # Errors
+///
+/// As [`super::build_scene`]. Empty, rather than an error, for a `.vex`
+/// version this project has not recovered the wanted class id for - the
+/// same "authors none" answer `super::super::build_optional_class` gives.
+pub fn build_weapon_pads(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    build_pad_class(label, data, model_blob, textures, |c| c.weapon_pad)
+}
+
+pub(super) fn build_pad_class(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+    pick: fn(vex::classes::Classes) -> Option<u32>,
+) -> Result<(Model, Report)> {
+    if !vex::has_magic(data) {
+        bail!("{label} is not a .vex file (no VEXX magic)");
+    }
+    let classes = vex::classes_of(data).with_context(|| format!("{label}: class table"))?;
+    let Some(class_id) = pick(classes) else {
+        return Ok((Model::none(label), Report::default()));
     };
-    out.draws.extend(shift(extra.draws));
-    out.alpha_tested_draws
-        .extend(shift(extra.alpha_tested_draws));
-    out.transparent_draws.extend(shift(extra.transparent_draws));
-    out.mesh_count += extra.mesh_count;
+    let model = rcsmodel::Model::parse(model_blob)
+        .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
+    let nodes = vex::nodes(data).context("walking the node tree")?;
+    let order = vex::byte_order(data);
+
+    let mut out = Model::none(label);
+    let mut report = Report::default();
+    let MaterialSetup {
+        textures: skins,
+        lightmaps: seconds,
+        material_slots,
+        material_specular_exponent,
+        material_variants,
+        emissive,
+        alpha_test_ref,
+    } = material_setup(&model, textures, &mut report);
+    out.textures = skins;
+    out.lightmaps = seconds;
+    out.material_slots = material_slots;
+    out.material_specular_exponent = material_specular_exponent;
+    out.material_variants = material_variants;
+    out.emissive = emissive;
+    out.alpha_test_ref = alpha_test_ref;
+    // **`false`, unlike every other PS3 model - this is the load-bearing
+    // difference that makes gameplay tinting visible at all.** An ordinary
+    // HD chunk's `in.colour` is a baked *light* the shader adds inside its
+    // authored lighting sum (`mesh.wgsl`'s `lit_texel`, "the vertex colour is
+    // inside `authored` on this path, not a factor outside it") and never
+    // reads as a tint there - measured directly: overwriting a pad's colour
+    // with `speedup_pad::COLOUR` while this stayed `true` produced a
+    // byte-identical capture, because `Drawable::recolour_nodes` was writing
+    // into a channel the authored branch only ever adds a few percent of
+    // itself back into, never multiplies. `false` and the `lit = 0.0` below
+    // together route the pad through `mesh.wgsl`'s *other*, stand-in branch
+    // instead (`shaded.rgb = mix(plain_rgb, authored_rgb, ... * in.lit)`,
+    // `in.lit = 0.0` selects `plain_rgb` in full), where vertex colour has
+    // always been a genuine multiplicative tint - the same channel every
+    // non-HD title's pad already used it as.
+    out.vertex_colour_is_light = false;
+
+    let mut node_vertex_ranges = Vec::new();
+    for node in nodes.iter().filter(|n| n.class_id == class_id) {
+        let node_first_vertex = out.vertices.len() as u32;
+        report.nodes += 1;
+        if let Some((hash, ..)) = node_geometry(&data[node.payload()], order)
+            && let (Some(chunk_index), Some(chunk)) = (model.mesh_index(hash), model.mesh(hash))
+        {
+            report.addressed += 1;
+            if emit_chunk(
+                &mut out,
+                &model,
+                model_blob,
+                chunk_index,
+                chunk,
+                None,
+                &mut report,
+            ) {
+                report.drawn += 1;
+                out.mesh_count += 1;
+            }
+        }
+        node_vertex_ranges.push(node_first_vertex..out.vertices.len() as u32);
+    }
+    out.node_vertex_ranges = node_vertex_ranges;
+    // Forces every pad vertex through `mesh.wgsl`'s stand-in branch - see the
+    // `vertex_colour_is_light` comment above for why both flags have to move
+    // together. A no-op for the picture PSP and PS2 pads draw: this crate's
+    // own PSP `emit` already leaves ordinary geometry's `lit` at `1.0` and a
+    // pad there was never routed through the HD-only authored branch in the
+    // first place, so nothing changes for those titles.
+    for vertex in &mut out.vertices {
+        vertex.lit = 0.0;
+    }
+
+    face_normals(&mut out);
+    let (centre, radius) = bounding_sphere(&out.vertices);
+    out.centre = centre;
+    out.radius = radius;
+    Ok((out, report))
+}
+
+/// Decodes every surface of one `.rcsmodel` chunk into `out`, baked at the
+/// identity transform, and reports what happened doing it.
+///
+/// Shared by [`super::build_scene`]'s world-space pass (chunks no node
+/// references) and [`build_pad_class`] (a `Speedup Pad`/`Weapon Pad` node's
+/// own chunk, which is baked in world space the same way - see
+/// `super::is_world_baked`'s doc comment): both draw a whole chunk at
+/// [`anim_node::Placement::STATIC`] and count the same things while doing
+/// it - a world-baked chunk's own coordinates already ignore whatever node
+/// named it, so there is no per-chunk transform to thread through here.
+/// `node` is passed through to [`emit`] unchanged - `None` for both current
+/// callers, since a chunk drawn here carries no useful node identity of its
+/// own (see `DrawCall::node`'s own doc comment on ambiguity across
+/// sources).
+///
+/// Returns whether anything was actually emitted, which is what tells a
+/// caller whether to count the chunk as drawn at all.
+pub(super) fn emit_chunk(
+    out: &mut Model,
+    model: &rcsmodel::Model,
+    model_blob: &[u8],
+    chunk_index: usize,
+    chunk: &rcsmodel::Mesh,
+    node: Option<u32>,
+    report: &mut Report,
+) -> bool {
+    let mut emitted = false;
+    // **Every surface, not just the chunk's own.** A quarter of the disc's
+    // chunks declare more than one, each with its own material, bias and
+    // descriptors, and they are 40 % more geometry than the first surfaces
+    // carry between them. See `rcsmodel::Mesh::surfaces`.
+    for mesh in chunk.surfaces() {
+        if super::isolate::excludes(model, mesh) {
+            report.isolated += 1;
+            continue;
+        }
+        // **What the chunk declares, first**, which is what turned these on:
+        // 3,382 of the disc's chunks declare a stride the search below cannot
+        // fit, and every one of them used to be skipped silently here. See
+        // `rcsmodel::vertex_decl`.
+        let Some(stride) = mesh
+            .declared_stride()
+            .or_else(|| mesh.solve_stride_without_a_box(model_blob))
+        else {
+            report.no_stride += 1;
+            continue;
+        };
+        let surface = surface(
+            model,
+            mesh,
+            &out.textures,
+            &out.material_slots,
+            &out.material_specular_exponent,
+        );
+        report.see_through += usize::from(surface.blend.is_some());
+        report.cutout += usize::from(surface.cutout);
+        report.no_texcoord += usize::from(declares_no_texcoord(mesh));
+        for submesh in &mesh.submeshes {
+            if submesh.vertex_count == 0 || submesh.index_count == 0 {
+                continue;
+            }
+            let (Ok(points), Ok(indices)) = (
+                mesh.positions(model_blob, submesh, stride),
+                mesh.indices(model_blob, submesh),
+            ) else {
+                continue;
+            };
+            let normals = mesh.normals(model_blob, submesh, stride).ok();
+            let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+            let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
+            let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
+            report.authored_normals += normals.as_deref().map_or(0, authored);
+            emit(
+                out,
+                Geometry {
+                    points: &points,
+                    normals: normals.as_deref(),
+                    texcoords: texcoords.as_deref(),
+                    lightmap_texcoords: lightmap_texcoords.as_deref(),
+                    vertex_light: vertex_light.as_deref(),
+                    indices: &indices,
+                    chunk: u32::try_from(chunk_index).ok(),
+                },
+                &anim_node::Placement::STATIC,
+                node,
+                surface,
+            );
+            report.triangles += indices.len() / 3;
+            emitted = true;
+        }
+    }
+    emitted
 }

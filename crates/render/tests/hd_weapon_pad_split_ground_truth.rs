@@ -24,8 +24,19 @@
 //! This checks the fix at the layer it belongs to: the decode, not the
 //! render. `crates/render/examples/hd_pads.rs` already established that
 //! Talon's Junction authors 9 `Weapon Pad` nodes; this checks `build_scene`
-//! pulls exactly those chunks into its own second model and leaves the main
-//! one without them, on the real disc bytes.
+//! excludes exactly those chunks from the circuit model and
+//! `mesh::rcs::build_weapon_pads` draws them separately, on the real disc
+//! bytes.
+//!
+//! **The mechanism moved on 2026-09-02, the property this pins did not.**
+//! `build_scene` used to split a weapon-pad chunk into a second model of its
+//! own, returned alongside the circuit one; it now simply excludes both pad
+//! classes' chunks (`mesh::rcs::pads::pad_chunk_hashes`) and leaves drawing
+//! them to their own node-ordered pass - see `build_scene`'s own doc
+//! comment. That pass is what gives a pad model real per-node
+//! `Model::node_vertex_ranges`, which the world-space split never could, and
+//! is what `Drawable::tint_weapon_pads`/`tint_speedup_pads` need to cycle a
+//! pad's ready/cooling colour at all.
 
 use std::path::{Path, PathBuf};
 
@@ -87,19 +98,25 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
          count hd_pads.rs reports"
     );
 
-    let (track_model, weapon_pad_model, report) =
+    let (track_model, report) =
         mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
             mesh::read_blob(&spec, path).ok()
         })
         .expect("build_scene decodes talons_junction");
     println!("{}", report.describe());
 
+    let (weapon_pad_model, pad_report) =
+        mesh::rcs::build_weapon_pads(TRACK, &vex_data, &model_blob, &mut |path| {
+            mesh::read_blob(&spec, path).ok()
+        })
+        .expect("build_weapon_pads decodes talons_junction");
+    println!("{}", pad_report.describe());
+
     assert_eq!(
-        report.weapon_pads,
+        pad_report.drawn,
         expected_hashes.len(),
-        "build_scene's own weapon-pad chunk count against the independent node walk"
+        "build_weapon_pads' own drawn-chunk count against the independent node walk"
     );
-    let weapon_pad_model = weapon_pad_model.expect("9 weapon pad chunks should build a model");
     assert!(!weapon_pad_model.indices.is_empty());
 
     // **The chunk this project cares about most: it must not double-draw.**

@@ -19,27 +19,21 @@ use oag_render::mesh::{self, Model};
 /// A sibling that will not decode falls back exactly as a missing one does, and
 /// the report says which happened: they need different work to fix.
 ///
-/// # The second element
-///
-/// **The circuit's `Weapon Pad` chunks, kept apart on purpose.** A PS3
-/// circuit's weapon pads are baked into the same world-space chunk pass as
-/// the road (`oag_render::mesh::rcs::build_scene`'s own doc comment explains
-/// why), so this is the only place that pass ever has a `Mode` to gate them
-/// by - the caller wires this straight into the same `weapon_pad_model` slot
-/// `Scene::new` already gates by `oag_race::Mode::weapons_enabled` for the
-/// PSP-shaped path. `None` for a ribbon build, a Wipeout 2048 circuit (its
-/// `.rcsmodel` carries no comparable node tree, so a caller reaches its pads a
-/// different way if it ever does), and a `.vex` version with no recovered
-/// `weapon_pad` class id.
+/// **Excludes both pad classes' chunks on a Wipeout HD source.**
+/// `oag_render::mesh::rcs::build_scene`'s own doc comment explains why - a
+/// caller that wants a circuit's `Weapon Pad`/`Speedup Pad` geometry reaches
+/// it through `pads::ps3_pad_models` instead, which is what gives
+/// `race::load` a tintable, gateable model rather than one baked
+/// unremovably into this one.
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
     track: &str,
     track_blob: &[u8],
     geometry: &Option<Vec<u8>>,
     report: &mut Vec<String>,
-) -> (Option<Model>, Option<Model>) {
+) -> Option<Model> {
     match geometry {
-        None => (None, None),
+        None => None,
         // **Two containers wear this extension.** Wipeout HD's needs the `.vex`
         // beside it - a chunk is addressed by hash and its stride comes from the
         // node's box - and Wipeout 2048's needs neither, so it takes a builder
@@ -50,30 +44,30 @@ pub(super) fn track_model(
             {
                 Ok((model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
-                    (Some(model), None)
+                    Some(model)
                 }
                 Err(error) => {
                     report.push(format!(
                         "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
                          drawing the derived ribbon instead, as --ribbon does"
                     ));
-                    (None, None)
+                    None
                 }
             }
         }
         Some(geometry) => match mesh::rcs::build_scene(track, track_blob, geometry, &mut |path| {
             archives.read_name(path).ok()
         }) {
-            Ok((model, weapon_pads, built)) => {
+            Ok((model, built)) => {
                 report.push(format!("{track}: {}", built.describe()));
-                (Some(model), weapon_pads)
+                Some(model)
             }
             Err(error) => {
                 report.push(format!(
                     "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
                      drawing the derived ribbon instead, as --ribbon does"
                 ));
-                (None, None)
+                None
             }
         },
     }

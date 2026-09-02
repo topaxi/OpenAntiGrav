@@ -66,7 +66,6 @@ fn the_report_names_both_kinds_of_absence() {
         triangles: 4_000,
         strays: 2,
         unreferenced: 639,
-        weapon_pads: 9,
         see_through: 257,
         cutout: 41,
         cutout_unread: 0,
@@ -138,9 +137,5 @@ fn the_report_names_both_kinds_of_absence() {
     assert!(
         line.contains("639 chunk(s) no node references"),
         "a circuit is mostly this, so the line has to say it: {line}"
-    );
-    assert!(
-        line.contains("9 weapon pad chunk(s), drawn separately and gated by mode"),
-        "the split has to be visible in the load report, not just in the model: {line}"
     );
 }

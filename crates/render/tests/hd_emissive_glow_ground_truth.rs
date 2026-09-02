@@ -73,7 +73,7 @@ fn build(image: &Path, archive: &str, path: &str) -> Option<mesh::Model> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
     let data = mesh::read_blob(&spec, path).ok()?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
-    let (model, _pads, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
         mesh::read_blob(&spec, name).ok()
     })
     .expect("the scene builds");

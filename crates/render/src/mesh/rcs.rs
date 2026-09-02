@@ -32,7 +32,7 @@ use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
 use oag_formats::{rcsmodel, vex};
 
-use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, anim_node, slots};
+use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots, anim_node, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -107,16 +107,9 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
     let Some(geometry) = sibling_geometry(spec, name, data) else {
         return Ok(None);
     };
-    let (mut model, weapon_pads, report) = build_scene(name, data, &geometry, &mut |path| {
+    let (model, report) = build_scene(name, data, &geometry, &mut |path| {
         super::read_blob(spec, path).ok()
     })?;
-    // Put back together - see `pads::merge_back`'s own doc for why.
-    if let Some(weapon_pads) = weapon_pads {
-        pads::merge_back(&mut model, weapon_pads);
-        let (centre, radius) = bounding_sphere(&model.vertices);
-        model.centre = centre;
-        model.radius = radius;
-    }
     Ok(Some((model, report)))
 }
 
@@ -142,6 +135,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 mod cutout;
 mod isolate;
 mod pads;
+pub use pads::{build_pads, build_weapon_pads};
 pub mod psp2;
 mod skin;
 use skin::{flips, picks, roles, skin, variants};
@@ -178,8 +172,13 @@ use place::{is_world_baked, node_geometry, referenced};
 /// baked into this circuit's file. The sky traffic that is visible here is
 /// the world-space `animating_traffic` chunks, which the second pass draws.
 ///
-/// **A third bucket, `Weapon Pad` chunks, is split into the return tuple's
-/// second element** - see [`pads`].
+/// **Both pad classes' chunks are excluded from this pass entirely**, not
+/// drawn into a third bucket - [`pads::build_pads`]/[`pads::build_weapon_pads`]
+/// draw them through their own node-ordered pass instead, which is what a
+/// tintable, gameplay `Drawable` needs and this pass cannot give: see that
+/// pair's own doc comment for why. A caller that wants one merged picture
+/// regardless - the viewer's `--mesh`/`--track` - draws them back in itself;
+/// see `oag_view::ps3_mesh::with_pads`.
 ///
 /// # Errors
 ///
@@ -189,7 +188,7 @@ pub fn build_scene(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
-) -> Result<(Model, Option<Model>, Report)> {
+) -> Result<(Model, Report)> {
     let (mut out, mut report) =
         build_with_options(label, data, model_blob, textures, |c| c.mesh, true)?;
 
@@ -200,96 +199,42 @@ pub fn build_scene(
     let mesh_class = classes
         .and_then(|c| c.mesh)
         .context("no mesh class id for this .vex version")?;
-    let placed = referenced(data, &nodes, mesh_class, &model);
-    // `None` (only `V6` has a recovered `weapon_pad` id) leaves the pad model empty.
-    let weapon_pad_hashes = classes
-        .and_then(|c| c.weapon_pad)
-        .map(|pad_class| pads::hashes(data, &nodes, pad_class, &model))
-        .unwrap_or_default();
-    let mut pad_out = pads::skeleton(label, &out);
+    let order = vex::byte_order(data);
+    let mut placed = referenced(data, &nodes, mesh_class, &model);
+    // **Both pad classes' chunks are excluded here too, not only the ordinary
+    // `Mesh` ones `referenced` names.** They would otherwise fall through to
+    // the unreferenced-chunk loop below exactly the way `referenced`'s own doc
+    // comment describes for an ordinary node - a `Weapon Pad`/`Speedup Pad`
+    // node's chunk hash never matches `mesh_class`, so `referenced` never even
+    // looks at it. [`pads::build_pads`]/[`pads::build_weapon_pads`] draw these
+    // same chunks through their own node-ordered pass instead, and this is
+    // what stops a pad drawing twice once a caller uses both - see that
+    // pair's own doc comment for why a separate pass exists at all.
+    for class in [
+        classes.and_then(|c| c.speedup_pad),
+        classes.and_then(|c| c.weapon_pad),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        placed.extend(pads::pad_chunk_hashes(data, &nodes, order, class));
+    }
 
     for (chunk_index, chunk) in model.meshes.iter().enumerate() {
         if placed.contains(&chunk.hash) {
             continue;
         }
-        let is_weapon_pad = weapon_pad_hashes.contains(&chunk.hash);
-        let target = if is_weapon_pad {
-            &mut pad_out
-        } else {
-            &mut out
-        };
-        let mut emitted = false;
-        // **Every surface, not just the chunk's own.** A quarter of the disc's
-        // chunks declare more than one, each with its own material, bias and
-        // descriptors, and they are 40 % more geometry than the first surfaces
-        // carry between them. See `rcsmodel::Mesh::surfaces`.
-        for mesh in chunk.surfaces() {
-            if isolate::excludes(&model, mesh) {
-                report.isolated += 1;
-                continue;
-            }
-            // **What the chunk declares, first**, which is what turned these on:
-            // 3,382 of the disc's chunks declare a stride the search below cannot
-            // fit, and every one of them used to be skipped silently here. See
-            // `rcsmodel::vertex_decl`.
-            let Some(stride) = mesh
-                .declared_stride()
-                .or_else(|| mesh.solve_stride_without_a_box(model_blob))
-            else {
-                report.no_stride += 1;
-                continue;
-            };
-            let surface = surface(
-                &model,
-                mesh,
-                &target.textures,
-                &target.material_slots,
-                &target.material_specular_exponent,
-            );
-            report.see_through += usize::from(surface.blend.is_some());
-            report.cutout += usize::from(surface.cutout);
-            report.no_texcoord += usize::from(declares_no_texcoord(mesh));
-            for submesh in &mesh.submeshes {
-                if submesh.vertex_count == 0 || submesh.index_count == 0 {
-                    continue;
-                }
-                let (Ok(points), Ok(indices)) = (
-                    mesh.positions(model_blob, submesh, stride),
-                    mesh.indices(model_blob, submesh),
-                ) else {
-                    continue;
-                };
-                let normals = mesh.normals(model_blob, submesh, stride).ok();
-                let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
-                let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
-                let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
-                report.authored_normals += normals.as_deref().map_or(0, authored);
-                emit(
-                    target,
-                    Geometry {
-                        points: &points,
-                        normals: normals.as_deref(),
-                        texcoords: texcoords.as_deref(),
-                        lightmap_texcoords: lightmap_texcoords.as_deref(),
-                        vertex_light: vertex_light.as_deref(),
-                        indices: &indices,
-                        chunk: u32::try_from(chunk_index).ok(),
-                    },
-                    &anim_node::Placement::STATIC,
-                    None,
-                    surface,
-                );
-                report.triangles += indices.len() / 3;
-                emitted = true;
-            }
-        }
-        if emitted {
-            target.mesh_count += 1;
-            if is_weapon_pad {
-                report.weapon_pads += 1;
-            } else {
-                report.unreferenced += 1;
-            }
+        if pads::emit_chunk(
+            &mut out,
+            &model,
+            model_blob,
+            chunk_index,
+            chunk,
+            None,
+            &mut report,
+        ) {
+            report.unreferenced += 1;
+            out.mesh_count += 1;
         }
     }
 
@@ -298,9 +243,7 @@ pub fn build_scene(
     out.centre = centre;
     out.radius = radius;
 
-    let pad_out = pads::finish(pad_out);
-
-    Ok((out, pad_out, report))
+    Ok((out, report))
 }
 
 /// Whether a chunk's declaration names no texture coordinate.
@@ -648,6 +591,81 @@ fn emit(
     });
 }
 
+/// One `.rcsmodel`'s whole material setup: every texture, lightmap, slot
+/// role, specular exponent, additive-glow table and alpha-test reference a
+/// caller's [`Model`] needs before it emits a single vertex.
+///
+/// Shared by [`build_with_options`] and [`pads::build_pad_class`] - both read
+/// the same per-material tables off the same file, keyed the same way, and a
+/// caller that re-derived them by hand would drift from this one the moment
+/// either grew a term. It has grown four already (`material_specular_exponent`,
+/// `emissive`, `alpha_test_ref`, the `FLIP_V` fold) since the reading this was
+/// still one inline block.
+struct MaterialSetup {
+    textures: TextureSlots,
+    lightmaps: TextureSlots,
+    material_slots: Vec<u32>,
+    material_specular_exponent: Vec<f32>,
+    material_variants: Vec<Option<oag_formats::rcsmaterial::Variant>>,
+    emissive: Vec<crate::mesh::Emissive>,
+    alpha_test_ref: Option<f32>,
+}
+
+fn material_setup(
+    model: &rcsmodel::Model,
+    textures: Textures<'_>,
+    report: &mut Report,
+) -> MaterialSetup {
+    // **The variant first**, because which sampler entry each of this
+    // renderer's two bindings comes from is a property of the shader the
+    // lit-race key resolves to, not of the entry's position - see
+    // `skin::picks`.
+    let material_variants = variants(model, textures, report);
+    let picks = picks(model, &material_variants, textures);
+    let (skins, seconds) = skin(model, &picks, textures, report);
+    // After the variants, because the roles are read off the resolved one.
+    let skin::Roles {
+        packed: mut material_slots,
+        specular_exponent: material_specular_exponent,
+    } = roles(model, &material_variants, &picks, &seconds, textures);
+    // **The coordinate's orientation, off the resolved *vertex* block** rather
+    // than the fragment one the roles come from, and folded into the same word
+    // because it is the same kind of statement: what this material's own
+    // microcode says. See `skin::flips`.
+    for (packed, flipped) in
+        material_slots
+            .iter_mut()
+            .zip(flips(model, &material_variants, textures))
+    {
+        if flipped {
+            *packed |= slots::FLIP_V;
+        }
+    }
+    // The additive glow, read off the same resolved variant the roles are -
+    // and after the flip, because it writes into the same word. See
+    // `mesh::slots::ADD_SECOND`.
+    let emissive = emissive::emissive(
+        model,
+        &material_variants,
+        &seconds,
+        &mut material_slots,
+        textures,
+    );
+    // The disc's own alpha-test reference, for a caller's cutout draws - see
+    // `cutout`, which reports a comparison this shader cannot reproduce
+    // rather than drawing one wrongly.
+    let alpha_test_ref = cutout::reference(model, report);
+    MaterialSetup {
+        textures: skins,
+        lightmaps: seconds,
+        material_slots,
+        material_specular_exponent,
+        material_variants,
+        emissive,
+        alpha_test_ref,
+    }
+}
+
 /// Flattens every node of `class` into one buffer pair, taking its geometry
 /// from `model_blob`.
 ///
@@ -724,41 +742,16 @@ fn build_with_options(
     let mut out = Model::none(label);
     out.anim_nodes = anim_nodes;
     let mut report = Report::default();
-    // **The variant first**, because which sampler entry each of this
-    // renderer's two bindings comes from is a property of the shader the
-    // lit-race key resolves to, not of the entry's position - see
-    // `skin::picks`.
-    let material_variants = variants(&model, textures, &mut report);
-    let picks = picks(&model, &material_variants, textures);
-    let (skins, seconds) = skin(&model, &picks, textures, &mut report);
-    // After the variants, because the roles are read off the resolved one.
-    let skin::Roles {
-        packed: mut material_slots,
-        specular_exponent: material_specular_exponent,
-    } = roles(&model, &material_variants, &picks, &seconds, textures);
-    // **The coordinate's orientation, off the resolved *vertex* block** rather
-    // than the fragment one the roles come from, and folded into the same word
-    // because it is the same kind of statement: what this material's own
-    // microcode says. See `skin::flips`.
-    for (packed, flipped) in
-        material_slots
-            .iter_mut()
-            .zip(flips(&model, &material_variants, textures))
-    {
-        if flipped {
-            *packed |= slots::FLIP_V;
-        }
-    }
-    // The additive glow, read off the same resolved variant the roles are -
-    // and after the flip, because it writes into the same word. See
-    // `mesh::slots::ADD_SECOND`.
-    out.emissive = emissive::emissive(
-        &model,
-        &material_variants,
-        &seconds,
-        &mut material_slots,
-        textures,
-    );
+    let MaterialSetup {
+        textures: skins,
+        lightmaps: seconds,
+        material_slots,
+        material_specular_exponent,
+        material_variants,
+        emissive,
+        alpha_test_ref,
+    } = material_setup(&model, textures, &mut report);
+    out.emissive = emissive;
     out.textures = skins;
     out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in
@@ -770,7 +763,7 @@ fn build_with_options(
     // The disc's own alpha-test reference, for the cutout draws below - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.
-    out.alpha_test_ref = cutout::reference(&model, &mut report);
+    out.alpha_test_ref = alpha_test_ref;
     out.material_variants = material_variants;
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
