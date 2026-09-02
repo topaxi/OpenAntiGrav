@@ -668,20 +668,33 @@ pub enum Upscaler {
     /// the size of the rectangle it goes into, and the blit's sampler is
     /// bilinear - so `off` and "bilinear" are one option, not two.
     ///
-    /// **The default.** The comparison that would move it has been run once,
-    /// at 50 % on one frame of one track, and FSR 1 won it clearly - but one
-    /// frame of one track is not the sample a default flip is held to here.
+    /// **The default, and settled 2026-09-02 rather than still open.** It was
+    /// carried for a long time as a question - whether `[graphics] upscaler`
+    /// should default to `fsr1` - held up by a doubt about two kinds of content
+    /// a sharpener rings on: 480x272-era paletted raster with coverage-atlas
+    /// glyphs, and high-frequency additive scene effects. Both halves are now
+    /// closed, by different means.
     ///
-    /// The caution used to be about two kinds of content: 480x272-era paletted
-    /// raster and coverage-atlas glyphs, which a sharpener rings on, and
-    /// high-frequency scene effects. **Half of that is now moot rather than
-    /// unmeasured**: since
+    /// The first stopped being a question at all. Since
     /// [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
     /// no upscaler ever sees a menu, a front-end screen or the HUD - they
-    /// composite at presentation resolution, after the resolve. What is still
-    /// unmeasured is a race frame with particle effects, a rocket and a shield
-    /// in it, which the one stationary capture behind this default did not
-    /// contain. See HANDOVER.
+    /// composite at presentation resolution, after the resolve.
+    ///
+    /// The second was play-tested. Two windowed races at `--render-scale 50`,
+    /// identical but for `--upscaler`, with `--give rocket` so the effects the
+    /// doubt was actually about were on screen - the earlier preference rested
+    /// on a *stationary* capture that never reached the particle path at all.
+    /// The maintainer's verdict on FSR 1 there was that it looks good. **They
+    /// nonetheless chose `off` at 100 % render scale as the shipped default**;
+    /// no reason was stated, and none is invented here.
+    ///
+    /// One thing that is a fact about the code rather than about the decision:
+    /// [`Scale::default`] is [`Scale::FULL`], and FSR 1 only runs where it is
+    /// actually magnifying (`magnifies` in
+    /// [`crate::upscale::Framebuffer::resolve_scene`]), so on a default install
+    /// this row is inert whichever way it points. It starts meaning something
+    /// the moment a player lowers the render scale, and at that point the
+    /// play-test above is what they should be told.
     #[default]
     Off,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.

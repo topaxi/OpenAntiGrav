@@ -59,14 +59,13 @@ Read out of the tree on 2026-09-02, not assumed:
 
 ## The three things that block it, in order of expense
 
-**1. The UI lives inside the scaled target - and this is a blocker, not a
-caveat.** A *static* 50 % is a choice the player sees once. A scale changing
-every few frames makes HUD glyphs off a coverage atlas crawl continuously, and
-that lands on the one element being read mid-race. This is the same restructure
-[fsr-1s-default-is-open.md](fsr-1s-default-is-open.md) is blocked on, and the
-same "Absent" row - *a scene without UI in it* - in
-[modern-features.md](../docs/overview/modern-features.md). Doing it once
-unblocks DRS, FSR 1 on the front end, and FSR 3.1.
+**1. The UI lived inside the scaled target - and this was a blocker, not a
+caveat. It is done.** A *static* 50 % is a choice the player sees once. A scale
+changing every few frames would have made HUD glyphs off a coverage atlas crawl
+continuously, on the one element being read mid-race. Phase 0 below removed it:
+no UI is drawn at the render scale any more, and
+[modern-features.md](../docs/overview/modern-features.md)'s *a scene without UI
+in it* row is **Done**.
 
 **Decided in
 [ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
@@ -277,20 +276,16 @@ conventionally a function of the scale factor, so *camera jitter*, the other
 
 ## Next Steps
 
-1. Finish Phase 0 above - decided in ADR-0036 and part-built, with the
-   presentation-sized target and the grade pass as the next piece. Everything
-   below queues behind it, and so does
-   [fsr-1s-default-is-open.md](fsr-1s-default-is-open.md).
-2. Read `Framebuffer`'s five consumers of `size()` end to end (`resolve`,
+1. Read `Framebuffer`'s five consumers of `size()` end to end (`resolve`,
    `present`, `frame.rs:490`, `session/load.rs:486`, `race/capture.rs:317`) and
    write down which of them means "the allocation" and which means "what was
    drawn". That list *is* the Phase 1 diff.
-3. Probe `Features::TIMESTAMP_QUERY` on the development machines and record
+2. Probe `Features::TIMESTAMP_QUERY` on the development machines and record
    what is actually available - the fallback chain's shape depends on the
    answer, and a probe is twenty lines.
-4. Write ADR-0037 for the viewport-not-allocation decision before the code, and
+3. Write ADR-0037 for the viewport-not-allocation decision before the code, and
    `docs/rendering/dynamic-resolution.md` alongside it. Neither may link back
    into this file: a `docs/` page must never link into `handover/`.
-5. Update [modern-features.md](../docs/overview/modern-features.md)'s
+4. Update [modern-features.md](../docs/overview/modern-features.md)'s
    prerequisite table and the M7 "Modern features" row in
    [roadmap.md](../docs/overview/roadmap.md) when the first phase lands.

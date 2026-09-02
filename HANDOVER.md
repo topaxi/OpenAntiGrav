@@ -350,7 +350,7 @@ keeps the mechanism documented for a need heading-pinning cannot reach.
 
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
-- [Dynamic resolution wants a viewport, not an allocation](handover/dynamic-resolution-wants-a-viewport-not-an-allocation.md) - **its shared Phase 0 landed 2026-09-02**; Phases 1-5 are unbuilt
+- [Dynamic resolution wants a viewport, not an allocation](handover/dynamic-resolution-wants-a-viewport-not-an-allocation.md) - **its shared Phase 0 landed 2026-09-02**; Phases 1-5 are unbuilt. The FSR 1 thread it shared that phase with is closed, so this file is now the only copy
 - [The frame path allocated 1.6 MB a frame; five reasons are fixed and the rest are counted](handover/the-frame-path-allocated-16-mb-a-frame.md)
 - [Invented UI text has no translation, and the disc's own strings have no override path either](handover/invented-ui-text-has-no-translation-and-the.md)
 - [HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read](handover/hds-sprite-flare-reads-oversized-and-the-tuning.md)
@@ -450,7 +450,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
 - [Menus: rebinding is the one thing that does not work](handover/menus-rebinding-is-the-one-thing-that-does.md)
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
-- [FSR 1's default is open](handover/fsr-1s-default-is-open.md) - **the shared Phase 0 landed and dissolved the menu half of the doubt**; what is left is one comparison on a race frame with effects in it
 - [Front-end gaps behind `Image`](handover/front-end-gaps-behind-image.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)
@@ -600,6 +599,10 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A stationary `--race` capture never reaches the particle path at all, so it is worthless as evidence about anything a sharpener, a filter or a compression step does to effects.** 2026-09-02, closing the FSR 1 default question. `--race` holds the throttle without steering, so the player crosses no `Weapon Pad`, fires nothing and hits nothing. Measured from the vertex side: the `psys` path costs **199 bytes** in a stationary `--race` capture and **1.99 MB** under `--autopilot --give rocket --press square` - four orders of magnitude, because the stationary run never enters it. The frame *looks* like a race and contains none of the high-frequency additive content - spark burst, rocket plume, shield shell - that the question was about. A preference for FSR 1 was carried for weeks on exactly such a capture. **Add `--give rocket --hold cross --press square` to any capture meant to judge effects**, and prefer a play-test over a still for a picture-quality judgement: a byte-diff answers "are these different", not "is this better".
+
+**Do not read a menu or front-end capture taken with `--upscaler` as evidence about the upscaler.** The flag changes the UPSCALER row's own *text*, so two images differ for a reason that has nothing to do with resampling - that nearly produced a false conclusion once. Since [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) the trap is worse than it was: no upscaler touches menu or front-end pixels at all any more, so the row's text is the *only* thing that can differ between the two captures.
 
 **ADR-0036 states one consequence that is wrong, and ADR-0038 supersedes a second item in it - both ADRs are immutable, so this is the correction of record.** 2026-09-02, landing the UI-compositing restructure. (1) ADR-0036's consequence *"every race `--screenshot` changes bytes when the HUD moves"* is **false**: only `--presented` does. The plain capture path in `crates/game/src/race/capture.rs` builds no `Framebuffer` and runs no resolve, so its HUD was already drawn at native size and its bytes are untouched - verified by the capture path having no `Framebuffer` branch outside `presented`. Anyone re-baselining race screenshots on the strength of that sentence would be regenerating goldens for a change that did not reach them. (2) ADR-0036 puts a movie on the *scene* side of the UI seam, which for the front end would have meant splitting one draw list across two passes; [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) supersedes that item, because the front end's scene side holds **nothing but the movie quad** and the launcher and loading screen have no movie at all. A stage with no 3D scene draws its whole list straight into the presentation target and `resolve_scene` is not called. Read ADR-0038 before ADR-0036's seam wording sends you to build the split.
 
