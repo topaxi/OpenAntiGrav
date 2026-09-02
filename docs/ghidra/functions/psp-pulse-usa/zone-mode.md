@@ -604,15 +604,29 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
      metadata section (`.symtab`, `.rel.text`, `_elfSectionHeaders`, and
      siblings) that `is_overlay:true` only because that is how this importer
      represents ELF sections generically - none is a PSP runtime code-overlay
-     bank, so this is not overlay-bank confusion. **What actually explains
-     it is still open.** The next attempt should not assume a function start
-     at all: disassemble a few instructions at the raw table-entry address
-     directly (as this section's own correction did for the table base
-     itself) before asking `decompile_function` to resolve it, in case a
-     table entry is a mid-function re-entry point rather than a distinct
-     function - a real compiler pattern for near-duplicate per-case bodies
-     that share a tail, and one `FUN_0881d458` (position-label formatting,
-     plenty of internal branching of its own) is shaped for.
+     bank, so this is not overlay-bank confusion. **Confirmed instead: both
+     entries are genuine mid-function re-entry points, not a resolver
+     mistake.** Raw `disassemble_bytes` at `0x0881d594` and `0x0881d638`
+     (bypassing `decompile_function`'s containing-function lookup entirely)
+     shows ordinary mid-body instruction sequences at both - no stack-frame
+     prologue (no `addiu sp,sp,-N` / `sw ra,...(sp)`) at either address - so
+     these really are jump-table targets *inside* `0x0881d458`, the way a
+     compiler emits near-identical per-case bodies that share a tail. **That
+     means this whole 18-entry table is very likely unrelated to mode-object
+     construction at all** - it reads as a later, separate per-mode dispatch
+     inside `Race_CreateModeObject` (position-label / HUD-text formatting
+     variants, given what `0x0881d458` does), sitting after the two generic
+     `0x6d0`/`0xc80`-byte allocations this function's own body already shows,
+     not the `switch`-with-per-case-allocation this page's own
+     `## Identification` section describes for `case 6`. The two accounts are
+     not yet reconciled - most likely they describe two different dispatches
+     inside the same function (an earlier, real per-mode object-type switch
+     the `## Identification` section already read, and this later, unrelated
+     one), but that is inference, not confirmed by reading the whole function
+     start to finish. **Finding a non-Zone mode's own countdown handler still
+     needs the *first* switch, not this one** - re-read
+     `Race_CreateModeObject` end to end for it rather than reusing this
+     table.
 
 ## What is implemented
 

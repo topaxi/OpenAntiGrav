@@ -204,15 +204,19 @@ function references - so the nested countdown's tick counter is the closest thin
 
 **Display/logic, current focus:**
 
-1. `Race_CreateModeObject`'s per-mode dispatch table (`0x08a7a1e8`, `+0x08804000`-
-   corrected, confirmed twice - decompile and raw disassembly) is right; what its
-   *entries* point to is not - two decompiled as one shared, unrelated HUD-text
-   function, a PSP-overlay explanation was checked and ruled out (see
-   `zone-mode.md`), and a mid-function re-entry point is the next hypothesis. Try
-   disassembling an entry's raw bytes before asking `decompile_function` to
-   resolve it, then find a non-Zone entry's own vtable `+0x1c` slot - the direct
-   way to see whether a circuit race's countdown matches Zone's 40-tick-cue,
-   two-part-gate
+1. **The 18-entry table at `0x08a7a1e8` is a dead end for this, confirmed rather
+   than just suspected** - both entries checked land on genuine mid-function
+   re-entry points inside one HUD-text formatter (`0x0881d458`, raw
+   `disassemble_bytes` shows no function prologue at either), a PSP-overlay
+   explanation was checked and ruled out, and it most likely reads as a *later*,
+   unrelated per-mode dispatch inside `Race_CreateModeObject` (position-label
+   formatting) rather than the mode-object-type switch `zone-mode.md`'s own
+   `## Identification` section already documents for `case 6`. **Re-read
+   `Race_CreateModeObject` end to end for that first switch instead** - it is
+   what actually selects `Zone_Create` vs. whatever a circuit race calls, and
+   finding a non-Zone mode's own countdown handler needs that one, then its
+   vtable `+0x1c` slot - the direct way to see whether a circuit race's
+   countdown matches Zone's 40-tick-cue, two-part-gate
    shape or differs from it.
 2. ~~`create_function` for Zone's inner-substate setter~~ **Done this session**:
    named `RaceMode_SetSubstate` (`0x08827454`, confidence 80); the outer-state
