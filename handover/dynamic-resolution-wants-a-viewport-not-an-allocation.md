@@ -57,9 +57,11 @@ day earlier cited five, and every one of them has moved since.
 - **GPU timestamps are enabled and read, and nothing consumes the readings.**
   `mesh_render::optional_features` asks for `TIMESTAMP_QUERY` - the portable
   bit only - and `Session::scene_cost` is fed the `race` pass's cost every
-  frame in the window. There is no controller and no overlay row, so the meter
-  is written and never read; that is deliberate, and it is what makes the
-  signal a measured thing rather than a planned one. The wall-clock
+  frame in the window. There is no controller, so the meter is written and
+  never read; that is deliberate, and it is what makes the signal a measured
+  thing rather than a planned one. The `dev` overlay does name the render
+  *size* (`perf::RenderSize`), which is a different number - what the frame was
+  drawn at, not what it cost. The wall-clock
   `perf::Meter` is still what the overlay draws, and is still pinned to the
   refresh under `Vsync::On` and to the limit under any `FrameLimit` - which is
   why it was never the signal to control on.
