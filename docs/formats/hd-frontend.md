@@ -1031,13 +1031,28 @@ within a pixel, from a capture taken on a different boot at a third of the
 resolution.
 
 **This retires the "step or diagonal" question by answering both halves.** The
-shipped one-step band has the cut's *extent* right (`6.4` against a measured
-`6.6`) and its *slope* wrong; the `Draw::ChamferedFill` primitive built and
-reverted on 2026-09-01 had the slope right and ran the diagonal the whole `6.4`
-to the corner, with no landing - which is exactly the "the original looks like a
-step, ours is just a cut angle" the direct comparison reported. Neither was
-wrong about what it saw. The shape needs both: a `2.25`-unit 45-degree cut
+one-step band that shipped had the cut's *extent* right (`6.4` against a
+measured `6.6`) and its *slope* wrong; the `Draw::ChamferedFill` primitive built
+and reverted on 2026-09-01 had the slope right and ran the diagonal the whole
+`6.4` to the corner, with no landing - which is exactly the "the original looks
+like a step, ours is just a cut angle" the direct comparison reported. Neither
+was wrong about what it saw. The shape needs both: a `2.25`-unit 45-degree cut
 followed by a `4.4`-unit flat run.
+
+**Drawn as of 2026-09-02, and checked at HD's own resolution rather than by
+eye.** `Draw::ChamferedFill` is back, applied to a *band* the height of the cut
+and narrowed by the landing, over an ordinary `Draw::Fill` - so the landing is
+the gap between the band's right edge and the tab's, and nothing draws it.
+Rendering `--menu-page main --screenshot --size 1920x1080` puts this build in
+HD's own grid, where the corner is directly comparable with the capture:
+
+| | diagonal across | diagonal down | landing |
+| --- | ---: | ---: | ---: |
+| the real menu | `9` | `9.5` | `17.5` |
+| this build | `9` | `9` | `18` |
+
+Within half a pixel on all three. `crates/game/src/menu/strip.rs`,
+`crates/game/src/menu/skin.rs`, `crates/game/src/ui.wgsl`.
 
 **It is rasterised geometry, not a texture mask.** The diagonal's per-row steps
 at `3840` are `+2,0,+2,0,+1,+1,+1,+1,+1,+2,0,+2,0` - irregular, averaging one,
