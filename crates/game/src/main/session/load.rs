@@ -449,6 +449,8 @@ impl Session {
         // takes out on `self.stage` alone would conflict with a whole-`self`
         // call made while it is still live.
         let pvs_culling = self.pvs_culling();
+        // Read before the borrow below too, for the same reason.
+        let render_profile = self.render_profile();
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -486,6 +488,7 @@ impl Session {
                     self.framebuffer.allocation(),
                     self.anisotropy,
                     &self.settings,
+                    &render_profile,
                     self.scheme,
                     self.autopilot,
                 );

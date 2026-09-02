@@ -1177,7 +1177,8 @@ recipe and its three traps.
       blooms each take a resource size and a viewport separately, FSR 1's being
       a restoration of `ffx_fsr1.h`'s own two arguments; and
       `crates/game/src/drs.rs` turns the reading into a rectangle behind
-      `[graphics] dynamic_resolution` and `dynamic_resolution_floor`. The
+      `[render_profiles.<title>] dynamic_resolution` and its floor, per title
+      beside the ceiling they pair with. The
       budget is a share of the target frame period rather than anything derived
       from the wall clock, which is the one decision here worth an ADR
       ([ADR-0040](../architecture/adr/0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md)).

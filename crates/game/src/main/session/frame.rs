@@ -23,15 +23,19 @@ impl Session {
     /// spelled `100` says.
     fn drs_limits(&self) -> drs::Limits {
         let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        // Off the **render profile**, like the ceiling it pairs with: a target
+        // Pulse holds comfortably is not one HD/Fury holds, which is the whole
+        // reason those rows are per title.
+        let profile = self.render_profile();
         let floor = upscale::target_size(
             rect,
-            self.settings.graphics.dynamic_resolution_floor,
+            profile.dynamic_resolution_floor,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         drs::Limits::new(
             self.framebuffer.allocation(),
             floor,
-            self.settings.graphics.dynamic_resolution,
+            profile.dynamic_resolution,
         )
     }
 
@@ -480,7 +484,7 @@ impl Session {
             .resize_output(&self.gpu.device, self.gpu.size());
         let wanted = upscale::target_size(
             rect,
-            self.settings.graphics.render_scale,
+            self.render_profile().render_scale,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
@@ -576,6 +580,9 @@ impl Session {
         }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
+        // Read before `self.stage` is borrowed mutably below, for the same
+        // reason `pvs_culling` is.
+        let render_profile = self.render_profile();
         // Diagnostic only, and read before the match for the same reason
         // `pvs_culling` is: whether this is the frame `race_ready_at` is still
         // waiting on. Splits `Session::race_ready_at`'s single "since the scene
@@ -636,7 +643,7 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                    self.settings.graphics.motion_blur,
+                    render_profile.motion_blur,
                     self.camera_jitter,
                     &zone_spectrum,
                     self.pass_timer
@@ -676,12 +683,15 @@ impl Session {
                 &self.gpu.queue,
                 &mut encoder,
                 rect,
-                &upscale::Presentation {
-                    upscaler: self.settings.graphics.upscaler,
-                    sharpness: self.settings.graphics.upscale_sharpness.stops(),
-                    anti_aliasing: self.settings.graphics.anti_aliasing,
-                    brightness: self.settings.display.brightness,
-                    gamma: self.settings.display.gamma,
+                &{
+                    let render_profile = self.render_profile();
+                    upscale::Presentation {
+                        upscaler: render_profile.upscaler,
+                        sharpness: render_profile.upscale_sharpness.stops(),
+                        anti_aliasing: render_profile.anti_aliasing,
+                        brightness: self.settings.display.brightness,
+                        gamma: self.settings.display.gamma,
+                    }
                 },
             );
         }

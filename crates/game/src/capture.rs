@@ -16,6 +16,9 @@ use crate::input::Input;
 use crate::race;
 use crate::render::{Renderer, VideoFormat};
 
+mod menu_page;
+use menu_page::menu_page;
+
 /// What to capture.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -119,173 +122,6 @@ pub struct Options {
 /// bounded.
 const MAX_TICKS: u32 = 60 * 60;
 
-/// Draws one page of our own menus, with the source's own lists supplied.
-///
-/// The lists matter even for a still: a circuit row with nothing in it and one
-/// showing this disc's twenty-four circuits are different pictures, and the
-/// point of the flag is to look at the real one.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "every one of these is a separate thing the page needs, and a struct \
-              for one call site would name the grouping without clarifying it"
-)]
-fn menu_page(
-    settings: &crate::settings::Settings,
-    anisotropy: Anisotropy,
-    page: &str,
-    tracks: &[crate::catalogue::Track],
-    teams: &[crate::catalogue::Team],
-    languages: &[crate::language::Language],
-    strings: &crate::language::StringTable,
-    music_discs: &crate::audio::MusicDiscs,
-    backdrop: Option<crate::menu::Backdrop>,
-    skin: &crate::menu::Skin,
-    // The width of a string in the face the entries are drawn in, which a
-    // horizontal strip needs and a column does not. The same face `skin`'s line
-    // height came off, for the same reason: a strip laid out with the wrong
-    // widths overlaps its own entries.
-    measure: &dyn Fn(&str) -> f32,
-    // The disc's own frame around the page - its clear colour and its rules.
-    // Read here rather than left out, because a captured page that is missing
-    // the frame the window draws is exactly the divergence this module exists
-    // to prevent.
-    frame: &crate::menu::Frame,
-    phase: Option<f32>,
-) -> Result<Vec<crate::frontend::Draw>> {
-    let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
-        .context("parsing the built-in menu definition")?;
-    if definition.page(page).is_none() {
-        anyhow::bail!(
-            "no menu page named {page:?}; this definition has {}",
-            definition
-                .pages
-                .iter()
-                .map(|p| format!("{:?}", p.id))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-    }
-
-    let mut model = crate::menu::Menu::new(definition);
-    model.supply(
-        crate::menu::ValueSource::Tracks,
-        &tracks
-            .iter()
-            .map(|track| crate::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
-            .collect::<Vec<_>>(),
-    );
-    model.supply(
-        crate::menu::ValueSource::Teams,
-        &teams
-            .iter()
-            .map(|team| crate::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
-            .collect::<Vec<_>>(),
-    );
-    model.supply(
-        crate::menu::ValueSource::RaceModes,
-        &crate::menu::mode_choices(strings),
-    );
-    model.supply(
-        crate::menu::ValueSource::Languages,
-        &languages
-            .iter()
-            .map(|language| crate::menu::Choice::labelled(&language.name, &language.native_name))
-            .collect::<Vec<_>>(),
-    );
-    // No window here, so no screens to enumerate: the list is `default` plus
-    // whatever the settings already name. That is enough for the row to draw
-    // the player's own value, which is all `--menu-page` is for, and it does
-    // not invent a monitor this machine may not have.
-    model.supply(
-        crate::menu::ValueSource::Monitors,
-        &crate::display::Monitor::offered(
-            &settings
-                .display
-                .monitor
-                .name()
-                .map(ToString::to_string)
-                .into_iter()
-                .collect::<Vec<_>>(),
-        )
-        .into_iter()
-        .map(crate::menu::Choice::plain)
-        .collect::<Vec<_>>(),
-    );
-    // The same treatment, and for a closer reason than it looks: enumerating
-    // adapters here would work, but with no surface to be compatible with it
-    // would list ones the window's own row would have dropped. A page drawn to
-    // show a player their settings should not offer a wider choice than the
-    // page they can actually use.
-    model.supply(
-        crate::menu::ValueSource::Renderers,
-        &crate::display::Renderer::offered(
-            &settings
-                .graphics
-                .renderer
-                .name()
-                .map(ToString::to_string)
-                .into_iter()
-                .collect::<Vec<_>>(),
-        )
-        .into_iter()
-        .map(crate::menu::Choice::plain)
-        .collect::<Vec<_>>(),
-    );
-    // Straight off the boot survey, not off the settings file, and that is
-    // the difference from the two rows above: what a player may choose here
-    // depends on which discs they own rather than on what they last picked, so
-    // a still drawn from the file alone would show a row that is always
-    // usable. Empty draws it unusable, which is what most machines would see.
-    model.supply(
-        crate::menu::ValueSource::MusicSources,
-        &if music_discs.both() {
-            crate::audio::MusicSource::ALL
-                .iter()
-                .map(|source| crate::menu::Choice::plain(source.name()))
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        },
-    );
-    // Seeded after supplying, and from the same list the live menus use, so
-    // what the flag draws is what a player would see rather than whatever each
-    // row's list happened to start on.
-    //
-    // No `Menu::in_effect` to go with it, deliberately: the RENDERER row's
-    // restart note is the gap between the settings file and a *running* game,
-    // and there is no running game here - this path makes a device of its own to
-    // draw one frame with. Supplying the settings value would draw a note that
-    // is silent by construction; supplying this capture's adapter would say a
-    // player had changed something they have not touched.
-    for (key, value) in crate::settings::menu_seeds(settings, anisotropy) {
-        model.seed(key, &value);
-    }
-    model.open(page);
-    // The same window the live menus use, so a captured page scrolls where a
-    // played one does rather than where a default happened to put it.
-    model.set_visible_rows(crate::menu::visible_rows(skin));
-    let layers = crate::menu::draw_list(
-        &model,
-        skin,
-        &oag_input::keys::bound_keys,
-        measure,
-        backdrop,
-        frame,
-    );
-    let Some(phase) = phase else {
-        return Ok(layers.flatten());
-    };
-    // The same arithmetic the live stage runs, through the same easing, so what
-    // this draws is a frame of the real transition rather than a picture of one.
-    let shape = crate::menu::Transition::default();
-    let mut tween = crate::anim::Tween::new(1.0);
-    tween.advance(phase.clamp(0.0, 1.0));
-    let t = tween.eased();
-    Ok(layers
-        .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
-        .flatten())
-}
-
 /// Runs the sequence and writes one frame.
 ///
 /// `audio` is stepped once per simulation tick, in the same loop the front end
@@ -300,6 +136,7 @@ pub fn run(
     audio: &mut crate::audio::Audio,
 ) -> Result<()> {
     let Boot {
+        title,
         languages,
         strings,
         tracks,
@@ -491,6 +328,16 @@ pub fn run(
             options.settings.audio.music_source,
             &crate::boot::default_audio_cache_dir(),
         );
+        // The five render-profile settings, resolved against this title -
+        // see `crate::settings::RenderProfile`. Read once rather than inline
+        // below, since `anti_aliasing` is needed twice: once for the scene
+        // pipeline and once for `Presentation`'s own resolve pass.
+        let render_profile = options
+            .settings
+            .render_profiles
+            .get(title.name)
+            .cloned()
+            .unwrap_or_default();
         return race::capture(
             loaded,
             &race::CaptureOptions {
@@ -515,19 +362,19 @@ pub fn run(
                 bloom: options.settings.graphics.bloom,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,
-                anti_aliasing: options.settings.graphics.anti_aliasing,
-                motion_blur: options.settings.graphics.motion_blur,
+                anti_aliasing: render_profile.anti_aliasing,
+                motion_blur: render_profile.motion_blur,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.
                 pose_boost: None,
                 pose_intensity: None,
                 pose_speed: None,
                 presented: options.presented.then_some(race::Presented {
-                    render_scale: options.settings.graphics.render_scale,
+                    render_scale: render_profile.render_scale,
                     presentation: crate::upscale::Presentation {
-                        upscaler: options.settings.graphics.upscaler,
-                        sharpness: options.settings.graphics.upscale_sharpness.stops(),
-                        anti_aliasing: options.settings.graphics.anti_aliasing,
+                        upscaler: render_profile.upscaler,
+                        sharpness: render_profile.upscale_sharpness.stops(),
+                        anti_aliasing: render_profile.anti_aliasing,
                         brightness: options.settings.display.brightness,
                         gamma: options.settings.display.gamma,
                     },
@@ -576,6 +423,7 @@ pub fn run(
             let list = menu_page(
                 &options.settings,
                 options.anisotropy,
+                title.name,
                 page,
                 &tracks,
                 &teams,

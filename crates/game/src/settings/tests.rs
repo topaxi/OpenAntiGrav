@@ -7,6 +7,7 @@
 //! module may hold. See `scripts/check-file-size.py`, which is the rule as a
 //! gate.
 
+use super::render_profile::{KNOWN_TITLES, MOVED_TO_RENDER_PROFILES, PROFILE_KEYS};
 use super::*;
 
 /// The default circuit has to be the one every capture was taken on, or a
@@ -79,7 +80,10 @@ fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
 fn read(text: &str) -> Settings {
     let mut table: toml::Table = text.parse().expect("parse");
     migrate(&mut table);
-    table.try_into().expect("deserialise")
+    migrate_render_profiles(&mut table);
+    let mut settings: Settings = table.try_into().expect("deserialise");
+    ensure_known_titles(&mut settings);
+    settings
 }
 
 /// Every file written before the split has all of these in `[graphics]`,
@@ -113,10 +117,20 @@ perf_overlay = \"fps\"
     );
     assert_eq!(settings.display.vsync, crate::perf::Vsync::Smooth);
     assert_eq!(settings.display.frame_limit.hz(), Some(120));
-    // Stayed, and must not have been carried across with the rest.
+    // Stayed in `[graphics]`, and must not have been carried across with the
+    // rest.
     assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
-    assert_eq!(settings.graphics.render_scale.percent(), 75);
     assert_eq!(settings.graphics.perf_overlay, crate::perf::Overlay::Fps);
+    // Moved a second time, out of `[graphics]` into every known title's own
+    // render profile - see `a_file_written_before_the_render_profile_split_
+    // seeds_every_known_title` for that migration on its own.
+    for title in KNOWN_TITLES {
+        assert_eq!(
+            settings.render_profiles[*title].render_scale.percent(),
+            75,
+            "{title}"
+        );
+    }
     // Added, so they come out as their defaults rather than as an error.
     assert!(settings.display.monitor.is_default());
     assert_eq!(settings.graphics.fov, crate::display::Fov::AUTHORED);
@@ -195,22 +209,146 @@ fn a_display_key_that_is_not_a_table_leaves_the_file_untouched() {
 /// Every seed names a setting the file can actually hold, which is what
 /// stops a renamed field leaving a menu row showing its list's first
 /// option instead of the player's own value.
+///
+/// The five relocated `graphics.*` rows are checked against every known
+/// title's own `[render_profiles.<title>]` table rather than `[graphics]`
+/// itself, since that is where `menu_seeds` actually reads and
+/// `ensure_known_titles` actually writes them - see [`RenderProfile`].
 #[test]
 fn every_menu_seed_names_a_key_the_settings_file_has() {
-    let settings = Settings::default();
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let table: toml::Table = written.parse().expect("parse");
 
-    for (setting, _) in menu_seeds(&settings, Anisotropy::default()) {
+    for (setting, _) in menu_seeds(&settings, Anisotropy::default(), oag_pulse::TITLE.name) {
         let Some((section, key)) = setting.split_once('.') else {
             // `language` is a bare key, and only present once picked.
             assert_eq!(setting, "language");
             continue;
         };
+        if section == "graphics" && PROFILE_KEYS.contains(&key) {
+            let profiles = table
+                .get("render_profiles")
+                .and_then(toml::Value::as_table)
+                .unwrap_or_else(|| panic!("no [render_profiles] table for {setting}"));
+            for title in KNOWN_TITLES {
+                let profile = profiles
+                    .get(*title)
+                    .and_then(toml::Value::as_table)
+                    .unwrap_or_else(|| panic!("no [render_profiles.{title}] table for {setting}"));
+                assert!(
+                    profile.contains_key(key),
+                    "[render_profiles.{title}] has no {key}"
+                );
+            }
+            continue;
+        }
         let holder = table
             .get(section)
             .and_then(toml::Value::as_table)
             .unwrap_or_else(|| panic!("no [{section}] table for {setting}"));
         assert!(holder.contains_key(key), "[{section}] has no {key}");
     }
+}
+
+/// A file from before the render-profile split has one flat value per key
+/// with no way to say which title it was tuned against, so migration has to
+/// seed *every* known title's entry with it rather than guess one - see
+/// [`migrate_render_profiles`]'s own doc comment for the rule.
+#[test]
+fn a_file_written_before_the_render_profile_split_seeds_every_known_title() {
+    let settings = read(
+        "\
+[graphics]
+anisotropy = \"4x\"
+render_scale = 50
+upscaler = \"fsr1\"
+anti_aliasing = \"smaa\"
+motion_blur = \"medium\"
+",
+    );
+
+    // Stayed in `[graphics]`: this key was never part of the render-profile
+    // split.
+    assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
+
+    // Moved, and identically, into every known title - not just one.
+    for title in KNOWN_TITLES {
+        let profile = &settings.render_profiles[*title];
+        assert_eq!(profile.render_scale.percent(), 50, "{title}");
+        assert_eq!(profile.upscaler, crate::display::Upscaler::Fsr1, "{title}");
+        assert_eq!(
+            profile.anti_aliasing,
+            crate::display::AntiAliasing::Smaa,
+            "{title}"
+        );
+        assert_eq!(
+            profile.motion_blur,
+            crate::display::MotionBlur::Medium,
+            "{title}"
+        );
+    }
+
+    // The file written back is in the new shape, with nothing left in
+    // `[graphics]` to be migrated a second time.
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    let round_tripped = read(&written);
+    for title in KNOWN_TITLES {
+        assert_eq!(
+            round_tripped.render_profiles[*title].render_scale.percent(),
+            50,
+            "{title}"
+        );
+    }
+}
+
+/// The property the whole split exists for: two titles asking for the same
+/// row get back each their *own* stored value, not one shared or averaged
+/// answer - proven at the boundary `menu_seeds` resolves through, without
+/// needing a live `Session`.
+#[test]
+fn menu_seeds_resolves_the_render_profile_by_title() {
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
+    settings
+        .render_profiles
+        .get_mut(oag_pulse::TITLE.name)
+        .expect("seeded above")
+        .render_scale = "50".parse().expect("valid scale");
+    settings
+        .render_profiles
+        .get_mut(oag_hd::TITLE.name)
+        .expect("seeded above")
+        .render_scale = "100".parse().expect("valid scale");
+
+    let value_for = |title: &str| -> String {
+        menu_seeds(&settings, Anisotropy::default(), title)
+            .into_iter()
+            .find(|(key, _)| *key == "graphics.render_scale")
+            .map(|(_, value)| value.to_string())
+            .expect("graphics.render_scale is always seeded")
+    };
+
+    assert_eq!(value_for(oag_pulse::TITLE.name), "50");
+    assert_eq!(value_for(oag_hd::TITLE.name), "100");
+}
+
+/// Every migratable key is a profile key, and the reverse is not required.
+///
+/// The two lists mean different things - "lives in the profile" against "used
+/// to live flat in `[graphics]` and has to be moved" - and the second is a
+/// subset of the first. A key added to `RenderProfile` after the split has no
+/// flat past, so putting it in the migration list would have
+/// `migrate_render_profiles` looking in `[graphics]` for something that was
+/// never written there.
+#[test]
+fn every_migratable_key_is_a_profile_key() {
+    for key in MOVED_TO_RENDER_PROFILES {
+        assert!(
+            PROFILE_KEYS.contains(&key),
+            "{key} migrates into a profile field that does not exist"
+        );
+    }
+    assert!(PROFILE_KEYS.len() >= MOVED_TO_RENDER_PROFILES.len());
 }

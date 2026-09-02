@@ -1,9 +1,12 @@
 # Dynamic resolution
 
-**Status: it works, and it is off by default.** `[graphics]
-dynamic_resolution` names a target frame rate, `[graphics]
-dynamic_resolution_floor` bounds how far the picture may shrink, and
-`[graphics] render_scale` becomes the ceiling - the controller reads it and
+**Status: it works, and it is off by default.** `dynamic_resolution` names a
+target frame rate, `dynamic_resolution_floor` bounds how far the picture may
+shrink, and `render_scale` becomes the ceiling. All three live in
+`[render_profiles.<title>]` and so are **per title**, which is the right table
+for them: a target Pulse holds comfortably is not one HD/Fury holds, and the
+whole point of the feature is that the answer depends on how expensive the
+scene is - the controller reads it and
 never writes it. Every scene-resolution pass takes a resource size and a
 viewport separately, the scene pass is timed on the GPU every frame, and
 `crates/game/src/drs.rs` turns the second into the first.
@@ -369,9 +372,10 @@ than a cleverer policy.
 
 ### The rows
 
-`[graphics] dynamic_resolution` names the rate and `off` is one of its values -
+`[render_profiles.<title>] dynamic_resolution` names the rate and `off` is one
+of its values -
 one row, one answer, and no second key that can disagree with it.
-`[graphics] dynamic_resolution_floor` is a `display::Scale` off the same list
+`dynamic_resolution_floor` is a `display::Scale` off the same list
 `render_scale` offers, so the two read against each other.
 
 The floor row warns when it is at or above the render scale, and the pairs are

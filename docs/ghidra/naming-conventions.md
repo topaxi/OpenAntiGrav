@@ -58,6 +58,7 @@ rest are reserved for areas not yet analysed.
 | `Audio_` | Sound and music |
 | `Ui_` | HUD and menus |
 | `Mem_` | Allocation |
+| `Plugin_` | Front-end plugin manifest loading (`Data\Plugins\PIxxx`) |
 | `Math_` | Shared math helpers |
 | `Sys_` | Platform and OS interaction |
 

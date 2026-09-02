@@ -54,6 +54,40 @@ impl Session {
         }
     }
 
+    /// The [`settings::RenderProfile`] the five relocated `graphics.*` rows
+    /// below read and write, for whichever title `self.shell` currently
+    /// names - see [`settings::Settings::render_profiles`].
+    ///
+    /// `None` only when this run has no menus at all (`self.shell` is
+    /// `None`), the same case every other per-shell row in this file already
+    /// falls back on: a graphics row can only be touched with menus open, so
+    /// this never actually returns `None` from a live keypress.
+    fn render_profile_mut(&mut self) -> Option<&mut settings::RenderProfile> {
+        let title = self.shell.as_ref()?.title.name;
+        Some(
+            self.settings
+                .render_profiles
+                .entry(title.to_string())
+                .or_default(),
+        )
+    }
+
+    /// [`Self::render_profile_mut`]'s read-only sibling, for the frame loop
+    /// and every other reader that only needs a value rather than a place to
+    /// write one back.
+    ///
+    /// Defaults rather than `None` on a shell-less run (a `--dry-run` or a
+    /// capture with no menus): the render loop needs *a* value to draw with
+    /// every frame, and [`settings::RenderProfile::default`] is exactly what
+    /// `Graphics`'s own fields fell back to before this split.
+    pub(crate) fn render_profile(&self) -> settings::RenderProfile {
+        self.shell
+            .as_ref()
+            .and_then(|shell| self.settings.render_profiles.get(shell.title.name))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// Applies a changed setting and writes it back.
     ///
     /// Persisted on every keypress rather than on the way out, because there is
@@ -213,7 +247,11 @@ impl Session {
             "graphics.render_scale" => match text.parse::<display::Scale>() {
                 // Applied by the next frame: `frame` sizes the target from this
                 // every time and rebuilds it when the answer changes.
-                Ok(scale) => self.settings.graphics.render_scale = scale,
+                Ok(scale) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.render_scale = scale;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -224,7 +262,9 @@ impl Session {
                 // turning it *off* immediate: `frame` re-applies the extent
                 // every frame, and off means the ceiling.
                 Ok(target) => {
-                    self.settings.graphics.dynamic_resolution = target;
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.dynamic_resolution = target;
+                    }
                     self.drs.reset();
                 }
                 Err(e) => {
@@ -236,8 +276,14 @@ impl Session {
                 // A floor at or above the render scale is stored rather than
                 // refused - the menu warns about it, the way the upscaler row
                 // warns at scales where it does nothing - and `drs::Limits`
-                // brings it under the ceiling where the two meet.
-                Ok(scale) => self.settings.graphics.dynamic_resolution_floor = scale,
+                // brings it under the ceiling where the two meet. Both land in
+                // the render profile, beside the ceiling they are compared
+                // against.
+                Ok(scale) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.dynamic_resolution_floor = scale;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -247,7 +293,11 @@ impl Session {
                 // Applied by the next frame. Choosing `fsr1` for the first time
                 // builds its two pipelines inside that frame, which is a shader
                 // compilation a player may notice once and never again.
-                Ok(upscaler) => self.settings.graphics.upscaler = upscaler,
+                Ok(upscaler) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.upscaler = upscaler;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -256,7 +306,11 @@ impl Session {
             "graphics.upscale_sharpness" => match text.parse::<display::Sharpness>() {
                 // Applied by the next frame: it is one float in the upscaler's
                 // uniform, rewritten only when it moves.
-                Ok(sharpness) => self.settings.graphics.upscale_sharpness = sharpness,
+                Ok(sharpness) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.upscale_sharpness = sharpness;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -271,7 +325,11 @@ impl Session {
             // row's restart note distinguishes the two cases; see
             // `Session::open_menus`.
             "graphics.anti_aliasing" => match text.parse::<display::AntiAliasing>() {
-                Ok(mode) => self.settings.graphics.anti_aliasing = mode,
+                Ok(mode) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.anti_aliasing = mode;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -282,7 +340,11 @@ impl Session {
             // is built with every race, whatever this says. See
             // `race::Scene::motion_blur`.
             "graphics.motion_blur" => match text.parse::<display::MotionBlur>() {
-                Ok(strength) => self.settings.graphics.motion_blur = strength,
+                Ok(strength) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.motion_blur = strength;
+                    }
+                }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
                     return;

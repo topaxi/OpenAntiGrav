@@ -375,6 +375,31 @@ The 116 split cleanly, and the split is what makes them actionable:
   until then the addresses are candidates, not names, which is why the database
   no longer asserts them.
 
+  **Checked 2026-09-02, and all six are false leads - closing this table
+  rather than leaving it open.** `diff_functions` against the USA address gave
+  a middling similarity (0.59-0.75) for every row, well below the
+  near-1.0/body-identical bar that actually earned `Camera_SubmitScene`/
+  `Camera_PublishTripod` their confidence 90 (shared distinctive literals, not
+  just a score) - `AmbientLight_Construct`'s pair is 65 EU instructions
+  against 31 USA, the kind of size mismatch a real counterpart doesn't have.
+  Decompiled the two highest-scoring rows to check directly rather than trust
+  the score alone: `0x0892d6f0` (the `AmbientLight_Init` candidate) takes no
+  arguments and writes two different constant pairs to fixed globals through
+  two calls to what decompiles as the same function - nothing like EU's
+  single-pass `self`-mutating `AmbientLight_Init`. `0x0890cc80` (the
+  `Mesh_ApplyMaterialLighting` candidate) is a **different, unrelated node's
+  submit method** - it builds a back-to-front sort key with the exact
+  `349.525`/`0xfffff` constants documented on
+  [`exhaust.md`](functions/psp-pulse-usa/exhaust.md)'s `ExhaustFlare_Submit`,
+  which this candidate is not. Both negatives are consistent with the same
+  root cause this section already names: the 2026-08-09 permutation incident
+  scattered `psp-pulse-eu` names onto nearby but wrong `psp-pulse-usa`
+  addresses, and a fuzzy sweep's neighbourhood match landed on whichever
+  unrelated function happened to sit near the true one. **Not chased
+  further**: the true USA counterparts for these six EU functions are still
+  unfound, and a fresh search (not reusing these six addresses) is what
+  finding them would need.
+
 **Run the audit after any sweep**, and especially after anything that renames
 off fuzzy matches. The check is cheap and the alternative is discovering a
 permuted family by decompiling one of them.

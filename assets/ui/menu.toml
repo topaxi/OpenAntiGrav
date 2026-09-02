@@ -457,6 +457,9 @@ values = ["50", "75", "100", "125", "150", "200"]
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
 # keys that can disagree is a state somebody has to define behaviour for.
+# Persisted per title in `[render_profiles.<title>]`, like every other
+# render-cost row on this page - the setting key here names the row, not the
+# table it lands in.
 # Directly under RENDER SCALE because the pairing is the point - while this
 # names a rate, that row is the **ceiling**, and the controller reads it and
 # never writes it, so a loaded machine cannot make a chosen quality drift

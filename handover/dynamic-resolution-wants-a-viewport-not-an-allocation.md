@@ -1,9 +1,9 @@
 # Dynamic resolution wants a viewport, not an allocation
 
 **All five phases landed 2026-09-02.** Dynamic resolution works and is off by
-default: `[graphics] dynamic_resolution` names a target rate,
-`[graphics] dynamic_resolution_floor` bounds the fall, `render_scale` is the
-ceiling. The permanent record is
+default: `[render_profiles.<title>] dynamic_resolution` names a target rate,
+`dynamic_resolution_floor` bounds the fall, `render_scale` is the ceiling - all
+three per title, beside each other. The permanent record is
 [dynamic-resolution.md](../docs/rendering/dynamic-resolution.md),
 [ADR-0037](../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)
 and
@@ -35,10 +35,12 @@ are closed.
 
 ## Open
 
-- **Whether the floor should be per-title.** HD/Fury's scenes and Pulse's are
-  not the same cost, and a floor that is right for one may be visibly poor on
-  the other. `dynamic_resolution_floor` is one value for every title; no
-  measurement has been taken either way.
+- **~~Whether the floor should be per-title.~~ Answered by the merge, not by a
+  measurement.** `render_profiles` landed on main in parallel and moved every
+  render-cost setting per title, so the floor and the target went in beside the
+  ceiling they pair with. What is *still* open is the reading that would say
+  what each title's default should be - HD/Fury's scenes and Pulse's are not
+  the same cost, and all four titles currently default the same.
 - **Whether the ceiling allocation's memory is acceptable on the Steam Deck**,
   which [goals.md](../docs/overview/goals.md) names in the first tier. It is
   the one number ADR-0037 states as unmeasured, and the answer could argue for
