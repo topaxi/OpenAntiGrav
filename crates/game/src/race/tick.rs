@@ -226,8 +226,8 @@ impl Race {
         // Zone *and a single race* reach this - a time trial and a speed lap do
         // not, racing with the original's `Damage` option off, which floors
         // their pool at 20. See `oag_gameplay::damage_rules`, and
-        // `RaceState::eliminate` for what is not recovered about the single
-        // race's own answer.
+        // `RaceState::eliminate` for the disc text that settles the single
+        // race's own answer as the same one.
         if self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
             && self.world.race.eliminate()
         {

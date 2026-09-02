@@ -338,8 +338,10 @@ runs for half a second, and state 5 sets **bit 12 of `entity+0x860`** - the bit
 by nothing findable. `oag_physics::damage::CraftState` is the state machine and
 `oag_race::RaceState::eliminate` is the ending.
 
-Zone is the only one of the three modes that can reach it, because it is the only
-one that races with damage on - see below.
+Zone is the only one of *the three modes above* that can reach it, because it is
+the only one of them that races with damage on - see below. **A single race
+reaches it too**, and its own ending is settled the same way: see
+[A destroyed craft is out of a single race](#a-destroyed-craft-is-out-of-a-single-race-not-respawned).
 
 **What is deliberately absent is the presentation.** The original plays
 `_BLOWUP`, hides the HUD and swings the camera into its mode 5 on the way
@@ -410,6 +412,50 @@ nothing until now.
   race-setup format carries `laps="%d"`, so the original configures it per event
   and no single race has been watched long enough to read what a Custom Race is
   set to. `Mode::SINGLE_RACE_LAPS`, flagged as a guess where it is defined.
+
+### A destroyed craft is out of a single race, not respawned
+
+**A craft destroyed mid-race takes "Ship destroyed" as its result instead of a
+finishing place. It does not come back.** Confidence **75**, and the evidence is
+the disc's own text plus the executable's field list - the same method
+[`ER_ZONE_DEST`](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be) was
+settled by, one notch lower because the field-list ordering is read rather than
+traced to the widget that consumes it.
+
+The results screen's field list sits at `0x08a82dfc` in `psp-pulse-usa`'s
+`BOOT.BIN`, in layout order rather than alphabetically, and reads:
+
+```
+ER_RACING  tablehighlight  BigTopText  ER_RES  Line1 .. Line8
+ER_SHIP_DES  ER_1STP ER_2NDP ER_3RDP ER_4THP ER_5THP ER_6THP ER_7THP ER_8THP
+ER_TT_COM  ER_SL_COM  ER_ZONE_COM  "%s %s"  ER_ELIM_COM  ER_END_TOUR
+```
+
+`Line1`..`Line8` are the eight scoreboard rows, and the run that follows them is
+that row's **status**, one of three: `ER_RACING` *"Racing"*, `ER_SHIP_DES`
+*"Ship destroyed"*, or `ER_1STP`..`ER_8THP` *"1st place"*..*"8th place"*. A
+status only means something if the alternatives exclude each other, so a craft
+that was destroyed did not go on to take a place - if destruction were followed
+by a respawn, the row would end the race either still `Racing` or holding a
+place, and `ER_SHIP_DES` would never appear on it.
+
+`ER_SHIP_DES` is `"Ship destroyed"` in English (`"Schiff zerstört"`,
+`"Nave destruida"`, `"Nave distrutta"`), read out of the language tables in
+`Data.wad` beside `ER_ZONE_DEST`'s `"Ship destroyed on zone"`. The two strings
+being distinct is itself part of the argument: Zone gets its own wording because
+Zone is a different mode reaching the same state, not because destruction means
+something different there.
+
+**Respawn belongs to Eliminator, and the strings say that too.** `ER_DEATHS`
+reads *"Deaths:"* and `ER_YOU_ELIM` *"You have been eliminated!"*, both beside
+`ER_ELIM_COM` *"Eliminator complete - "*. A mode that counts deaths is a mode
+you come back in; a single race has no such row.
+
+**So `oag_race::RaceState::eliminate` ending a single race is right**, and the
+`CraftState::Eliminated` doc's "the original moves on from here after 1.5 s,
+into a respawn or the Eliminator's kill bookkeeping" resolves to the second
+branch for the modes this engine runs. What is still unread is what the original
+does with the 1.5 s itself.
 
 ## What happens when a race ends
 

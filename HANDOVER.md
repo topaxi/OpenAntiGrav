@@ -131,18 +131,27 @@ file does not need to carry its own.
   noticed because these two tests are `#[ignore]`d and disc-backed and so never
   run in CI.
 
-  **What is blocked, and it is an RE question rather than a code one:** whether
-  ending the race is even the right answer for a single race. Zone's rule *is*
-  recovered - `ER_ZONE_DEST` reads "Ship destroyed on zone"
-  ([race-modes.md](docs/gameplay/race-modes.md)). For a single race,
-  `Ship_SetState`'s state 3 (Respawn) and state 4 (Destroyed) are both read
-  ([shield.md](docs/ghidra/functions/psp-pulse-usa/shield.md)) and **nothing
-  says which one follows a depleted pool**. Until that is settled - from the
-  executable, or from someone playing a single race and being blown up - fixing
-  the test would be picking an answer rather than recording one. Two comments
-  that flatly asserted "only Zone can reach this" are corrected in place
+  **The rule was then recovered, and it says the code is right.** A craft
+  destroyed in a single race is **out** - it takes "Ship destroyed" as its
+  result instead of a finishing place, and does not respawn. Confidence 75, off
+  the results screen's own field list at `0x08a82dfc` in `psp-pulse-usa`'s
+  `BOOT.BIN` (`ER_RACING` / `ER_SHIP_DES` / `ER_1STP`..`ER_8THP` as the three
+  per-row statuses) plus the language tables in `Data.wad`. Respawn belongs to
+  Eliminator, the mode with an `ER_DEATHS` "Deaths:" row. Full argument, and the
+  reason a *status* only means something if its alternatives exclude each other,
+  in [race-modes.md](docs/gameplay/race-modes.md). Two comments that flatly
+  asserted "only Zone can reach this" are corrected in place
   (`oag_race::RaceState::eliminate`, `race::tick`); they were true when written
   and stopped being true without anyone editing them.
+
+  **So the fix is to the two tests, and it is not written yet.** They assert
+  that an autopiloted player finishes three laps, which stopped being reachable
+  and is not going to become reachable again by fixing the rules. Whoever picks
+  this up: the choice is between racing them somewhere nothing shoots back and
+  asserting the elimination as a second legitimate ending. Note that
+  `Options::opponents` will **not** help - it is `false`-follows-the-mode and
+  only *adds* a grid to the single-ship modes; a single race grids eight either
+  way, which is why a solo probe reproduced the death tick for tick.
 
   The other four are undiagnosed.
 

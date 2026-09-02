@@ -195,12 +195,14 @@ impl RaceState {
     /// that would have caught it are `#[ignore]`d and disc-backed. Gating this
     /// on the mode would encode the rules table twice.
     ///
-    /// **Whether ending the race is the right answer for a single race is not
-    /// recovered.** Zone's is: `ER_ZONE_DEST` reads "Ship destroyed on zone"
-    /// (`docs/gameplay/race-modes.md`). For a single race, `Ship_SetState`'s
-    /// states 3 (Respawn) and 4 (Destroyed) are both read
-    /// (`docs/ghidra/functions/psp-pulse-usa/shield.md`) and nothing says which
-    /// follows a depleted pool. See HANDOVER.
+    /// **Ending the race is the right answer for a single race too**, settled
+    /// 2026-09-02 at confidence 75 off the disc's own text: the results
+    /// screen's field list gives each scoreboard row one of three statuses -
+    /// `ER_RACING` "Racing", `ER_SHIP_DES` "Ship destroyed", or
+    /// `ER_1STP`..`ER_8THP` "1st place".."8th place". A destroyed craft takes
+    /// the second *instead of* a place, so it does not come back to earn one.
+    /// Respawn belongs to Eliminator, which is the mode with an `ER_DEATHS`
+    /// "Deaths:" row. Full argument in `docs/gameplay/race-modes.md`.
     pub fn eliminate(&mut self) -> bool {
         if self.finished {
             return false;
