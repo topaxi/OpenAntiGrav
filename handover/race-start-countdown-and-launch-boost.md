@@ -8,11 +8,13 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
 | Countdown state machine + timing | open | **Zone's own read in detail** (below) | open                | open |
 | Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
-| Zone/view display variants       | **model confirmed identical** (below) | **model confirmed identical** (below) | asset axis: distinct per-mode models exist (below) | asset axis: distinct per-mode models exist (below) |
+| Zone display: HUD overlay        | **confirmed identical** (below) | **confirmed identical** (below) | **confirmed identical** (below) | untried |
+| Zone display: track-side gantry  | untried | see billboard thread (open)    | **real difference, disc-confirmed** (below) | asset family exists, untried past a string search |
 
 *(Focus as of 2026-09-02: display/logic only for now, per direction from the user -
 the launch-boost rows below are last session's record, not being chased further at
-the moment.)*
+the moment. The display row split in two mid-session: "the countdown display" turned
+out to name two different objects, conflated here at first - see below.)*
 
 **Countdown state machine + timing**: what drives `ReadyText`/`GoText`/`CountdownTime`
 and the `<Mode3D>` models (`Pulse_Ready_Go`, `Cockpit_321GO`) from race load to green -
@@ -28,12 +30,17 @@ different searches, not one - see the Open section.
 
 **Zone/view display variants**: the user's memory is that HD/Fury's Zone races show a
 different countdown display/render than a circuit race; unsure about the other three
-titles. Two independent axes may both be true and must not be collapsed into one: a
-**mode** axis (does the countdown *model* itself change per mode) and a **view** axis
-(chase/external vs cockpit - `hud.md` names two separate Pulse countdown models,
-`Pulse_Ready_Go` and `Cockpit_321GO`, confirmed real and mode-independent, see below).
-**Resolved for the mode axis, on the two PSP titles specifically: it does not vary.**
-See the 2026-09-02 disc-read entry below - this is no longer open for Pulse or Pure.
+titles. **Two genuinely different objects can both plausibly be "the countdown
+display", and this thread's own first two passes conflated them before catching it**:
+the on-screen `<Mode3D>` HUD overlay (`ReadyGo`/`Cockpit321Go`, the "3, 2, 1, GO"
+graphic) versus the track-side starting-line gantry (`TrackStartup.xml`'s billboard
+slot 8, a physical object standing on the circuit, subject of
+[a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)).
+**The HUD overlay is now confirmed identical across every mode on every title
+checked** (Pulse, Pure, HD - see below); **the track-side gantry is confirmed to
+genuinely differ per mode on HD**, and is the far more likely home for the user's
+memory, since it is the one actually standing in the world rather than drawn on the
+screen.
 
 2026-09-02, first pass, static only, both HD/Fury and Pulse, no live debugger this
 session: **the launch boost most likely is not a player-timing mechanic, and Zone's
@@ -148,31 +155,44 @@ XML-driven HUD-widget attribute names resolved through a hash lookup, the same s
 function references - so the nested countdown's tick counter is the closest thing to
 "what drives the display" found so far, not a confirmed direct link.
 
-2026-09-02, third pass: **the mode-display axis is settled for both PSP titles, off
-primary-source disc data, not inference.** Chasing the code-side dispatch tables
-proved unreliable this session (see above), so this went straight to the source
-instead: `oag-wad cat` against `pulse-psp-usa.chd` and `pure-psp-usa.chd`, every HUD
-layout each title ships. **Pulse's `Arcade_HUD.xml`, `TimeTrial_HUD.xml`,
-`Elimination_HUD.xml` and `Zone_HUD.xml` all carry an identical `<Mode3D>` countdown
-block** - `<Model name="ReadyGo">` → `Src="Data\HUD\Pulse_Ready_Go.vex"`, same `x`/`y`/
-`z`/`ztest`, plus an identical `Cockpit321Go` → `Data\HUD\Cockpit_321GO.vex` entry.
-**Pure's `Arcade_HUD.xml` and `Zone_HUD.xml` agree the same way** on one model,
-`Data\HUD\Ready_GO.vex` (no separate cockpit entry on Pure in either file - it may not
-carry that split at all). Full account, side by side, in
-[hud.md](../docs/ui/hud.md#deferred-and-known). **So on both PSP titles the countdown
-gantry model does not vary by mode - Zone's own `<Mode3D>` block differs only in its
-other widgets** (Pure's Zone layout swaps in `Zone_Bar_1/3.vex` and
-`Zone_outline_1.vex` for the speed/shield bars in place of Arcade's `Bar_1/3.vex`/
-`Bar_outline_1.vex` - a skin change to the HUD bars, nothing to do with the
-countdown). Confidence 95 - this is the literal XML the game ships, not decompiled or
-inferred. **This is the opposite of HD/Fury and 2048**, both of which carry a
-`321Go_<Mode>.vex` family with real per-mode variants (`StartFinish`/`Zone`/
-`HD_Zone_Battle`/`hd_detonator`, plus `2048`/`2048_Combat`) - so **the user's memory of
-a different Zone countdown almost certainly comes from HD/Fury or 2048, not from
-either PSP title.** Whether HD/2048 actually *render* the different model per mode
-(as opposed to merely shipping the asset unused) is still unconfirmed - see the
-billboard thread's own open items - but the asset-level asymmetry between title
-generations is now solid on both sides: PSP shares one model, PS3/Vita ships several.
+2026-09-02, third pass: **the mode-display axis is settled for the HUD overlay on all
+three titles checked, and a real difference is confirmed elsewhere - on the
+track-side gantry, not the HUD.** These are two different objects, conflated in this
+thread's own first two passes above before being caught here - corrected rather than
+left standing. Full account, side by side with the direct XML for every file quoted,
+in [hud.md](../docs/ui/hud.md#deferred-and-known):
+
+- **The HUD `<Mode3D>` overlay** (the on-screen "3, 2, 1, GO" graphic, `ReadyGo`/
+  `Cockpit321Go`): `oag-wad cat` against `pulse-psp-usa.chd` and `pure-psp-usa.chd`
+  shows Pulse's `Arcade_HUD.xml`, `TimeTrial_HUD.xml`, `Elimination_HUD.xml` and
+  `Zone_HUD.xml` all carrying an identical block - `Src="Data\HUD\Pulse_Ready_Go.vex"`
+  plus `Data\HUD\Cockpit_321GO.vex`, same transform - and Pure's `Arcade_HUD.xml`/
+  `Zone_HUD.xml` agreeing the same way on `Data\HUD\Ready_GO.vex`. **HD/Fury agrees
+  too**: `hud_ready_go.xml`, the fragment every mode's HUD file `LoadXML`s in, is
+  byte-identical across every skin checked on the disc (default, `2097_hud`,
+  `wo3_hud`, `splitscreenzone_hud`), all naming `Data\HUD\Pulse_Ready_Go.vex`. So
+  **the on-screen graphic does not vary by mode on any of the three titles checked.**
+  Confidence 95 - literal XML off each disc, not decompiled or inferred.
+- **The track-side starting-line gantry** (`TrackStartup.xml`'s billboard slot 8, a
+  physical object standing on the circuit - see
+  [billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md) and
+  [a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)):
+  **a real difference, now confirmed on HD by listing the actual archive rather than
+  string-searching the executable.** `PS3_GAME/USRDIR/DATA00.PSARC`/`DATA02.PSARC`
+  carry four `.vex` meshes under `/data/billboards/hd_adverts/321go/` with four
+  distinct byte sizes (`321go_startfinish.vex` 12,544 B, `321go_zone.vex` 8,368 B,
+  `321go_hd_zone_battle.vex` 10,304 B, `321go_hd_detonator.vex` 11,568 B) - real
+  geometry differences, not aliases sharing one file the way the HUD overlay does.
+  **Which one a given race actually instantiates remains the billboard thread's own
+  open question**, unresolved by this session too. 2048's four-plus-two count from
+  last session was string search only, not yet cross-checked against a full archive
+  listing the way HD was here.
+
+**So: the on-screen graphic is ruled out as the source of the user's memory on every
+title checked; the track-side gantry is a real, disc-confirmed difference on HD (and
+very likely 2048), still open on whether it actually renders per mode at runtime.**
+That reframing also answers why this thread's earlier passes felt like they were
+chasing two different things at once - they were.
 
 ## Open
 
