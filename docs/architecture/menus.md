@@ -172,7 +172,7 @@ row edits. So a row cannot be greyed by anything that is not itself a row - and
 the case that makes the boundary worth writing down is a **runtime hardware
 capability**.
 
-DYNAMIC RESOLUTION is the example. On an adapter with no `TIMESTAMP_QUERY`
+TARGET FPS is the example. On an adapter with no `TIMESTAMP_QUERY`
 there is no cost signal, so the controller never moves the render extent
 whatever the row says. That is exactly the shape `disabled_by` is drawn for and
 exactly the thing it cannot say, because "this adapter has a GPU timer" is not
@@ -661,7 +661,7 @@ test pins the warning's list to `upscale::magnifies` from the other side, so the
 guard that declines to run the upscaler and the message that says it did not
 cannot drift apart.
 
-DYNAMIC RESOLUTION and DYNAMIC RESOLUTION FLOOR sit under RENDER SCALE for the
+TARGET FPS and MINIMUM RESOLUTION sit under RENDER SCALE for the
 same reason, and the floor's warning is the second place a `warn_when` list is
 pinned to something outside the asset. `Condition` compares values and has no
 ordering - deliberately, because an ordering is the first thing that would make
@@ -672,6 +672,24 @@ set from `Scale::OFFERED`, so a value added to either row cannot quietly leave
 the list behind. The other half of the pairing is not in the menus at all:
 `drs::Limits::new` brings the floor under the ceiling where the two first meet,
 because a warning tells a player rather than stopping them.
+
+**And a ceiling is not a drawn size.** Three warnings on this page were written
+when `render_scale` *was* the size the frame is drawn at, and a controller that
+goes below it makes each of them wrong - UPSCALER's most visibly, since at a
+100 % ceiling with a 50 % minimum it reported a magnifying FSR 1 as having no
+effect. What each wants is the lowest size the rows permit, which is an OR
+across two rows, and `Condition.all` is an AND: so each is two entries sharing
+one message, one requiring the controller off and one requiring its floor high
+enough. That is what `Entry::warnings` being a list buys, beyond the two
+unrelated statements on ANTI-ALIASING it was originally for.
+
+TARGET FPS also warns when it is above DISPLAY's FRAME LIMIT - and is
+**clamped** to it, which is the same statement made twice on purpose: the row
+says what was asked for and `drs::Target::at_most` holds the controller to what
+the loop will produce. Neither half is honest alone. Both stop under `vsync =
+on`, where the display is the bound and nothing here knows its refresh; the
+warning says so by naming the two vsync modes it applies to, which is the same
+value-listing `disabled_by` does on FRAME LIMIT itself.
 
 RENDER SCALE itself carries **no** warning about any of this, which is a
 decision and not an oversight. Since ADR-0038 the row changes nothing on the

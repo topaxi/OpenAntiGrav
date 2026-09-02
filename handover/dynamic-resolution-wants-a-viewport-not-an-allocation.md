@@ -1,8 +1,8 @@
 # Dynamic resolution wants a viewport, not an allocation
 
 **All five phases landed 2026-09-02.** Dynamic resolution works and is off by
-default: `[render_profiles.<title>] dynamic_resolution` names a target rate,
-`dynamic_resolution_floor` bounds the fall, `render_scale` is the ceiling - all
+default: `[render_profiles.<title>] target_fps` names a target rate,
+`minimum_resolution` bounds the fall, `render_scale` is the ceiling - all
 three per title, beside each other. The permanent record is
 [dynamic-resolution.md](../docs/rendering/dynamic-resolution.md),
 [ADR-0037](../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)

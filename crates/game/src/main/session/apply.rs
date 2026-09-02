@@ -257,13 +257,13 @@ impl Session {
                     return;
                 }
             },
-            "graphics.dynamic_resolution" => match text.parse::<drs::Target>() {
+            "graphics.target_fps" => match text.parse::<drs::Target>() {
                 // Applied by the next frame, and the reset is what makes
                 // turning it *off* immediate: `frame` re-applies the extent
                 // every frame, and off means the ceiling.
                 Ok(target) => {
                     if let Some(profile) = self.render_profile_mut() {
-                        profile.dynamic_resolution = target;
+                        profile.target_fps = target;
                     }
                     self.drs.reset();
                 }
@@ -272,7 +272,7 @@ impl Session {
                     return;
                 }
             },
-            "graphics.dynamic_resolution_floor" => match text.parse::<display::Scale>() {
+            "graphics.minimum_resolution" => match text.parse::<display::Scale>() {
                 // A floor at or above the render scale is stored rather than
                 // refused - the menu warns about it, the way the upscaler row
                 // warns at scales where it does nothing - and `drs::Limits`
@@ -281,7 +281,7 @@ impl Session {
                 // against.
                 Ok(scale) => {
                     if let Some(profile) = self.render_profile_mut() {
-                        profile.dynamic_resolution_floor = scale;
+                        profile.minimum_resolution = scale;
                     }
                 }
                 Err(e) => {

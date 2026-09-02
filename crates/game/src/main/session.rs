@@ -78,7 +78,7 @@ pub(crate) struct Session {
     /// The dynamic-resolution controller, fed the same GPU reading
     /// [`Session::scene_cost`] is.
     ///
-    /// Runs only while `[graphics] dynamic_resolution` names a rate; off, it
+    /// Runs only while `[graphics] target_fps` names a rate; off, it
     /// is asked for the ceiling every frame and returns it. See
     /// [`oag_game::drs`], which owns the whole policy and reads nothing.
     pub(crate) drs: drs::Controller,
@@ -499,9 +499,21 @@ impl Session {
     /// still measured, only the graph's scale is off - and getting it right
     /// needs a refresh rate off the monitor, which is work of its own.
     fn presentation_hz(&self) -> u32 {
+        self.limiter_hz().unwrap_or_else(|| self.clock.rate().hz())
+    }
+
+    /// The rate the frame limiter is actually holding the loop to, or `None`
+    /// when nothing is.
+    ///
+    /// `None` for `FrameLimit::UNLIMITED` and for [`crate::perf::Vsync::On`],
+    /// where the display is the bound and this build cannot ask a surface what
+    /// its refresh is. **Deliberately not the `presentation_hz` fallback**:
+    /// guessing the simulation's 60 is a fine default for a graph's scale and
+    /// a bad one for a clamp, because a 144 Hz panel would silently have its
+    /// `target_fps` capped at 60. See [`oag_game::drs::Target::at_most`].
+    fn limiter_hz(&self) -> Option<u32> {
         self.frame_period()
             .and_then(|_| self.settings.display.frame_limit.hz())
-            .unwrap_or_else(|| self.clock.rate().hz())
     }
 
     /// Puts the next frame on the schedule, one period after the last one was

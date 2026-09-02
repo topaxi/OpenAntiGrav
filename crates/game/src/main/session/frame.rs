@@ -29,13 +29,17 @@ impl Session {
         let profile = self.render_profile();
         let floor = upscale::target_size(
             rect,
-            profile.dynamic_resolution_floor,
+            profile.minimum_resolution,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         drs::Limits::new(
             self.framebuffer.allocation(),
             floor,
-            profile.dynamic_resolution,
+            // Held under the limiter: aiming above a rate the loop is not
+            // allowed to produce would drop the resolution permanently to buy
+            // frames that are never presented. The menu warns about the same
+            // pairing; this is what stops it costing anything.
+            profile.target_fps.at_most(self.limiter_hz()),
         )
     }
 

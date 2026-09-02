@@ -122,6 +122,30 @@ impl Target {
         self.0 > 0
     }
 
+    /// This target, held under a presentation rate that will not deliver it.
+    ///
+    /// **Aiming above the frame limiter is asking for frames the loop is not
+    /// allowed to produce.** At `target_fps = 144` behind a 60 limit the
+    /// budget would be 2.4x too tight, so the controller would drop the
+    /// resolution - permanently, and to hold a rate the limiter forbids
+    /// whatever it does. Every pixel it gave up would buy nothing.
+    ///
+    /// `None` means nothing bounds the rate and the target stands. That covers
+    /// [`crate::perf::FrameLimit::UNLIMITED`], and it also covers
+    /// [`crate::perf::Vsync::On`], where the *display* is the bound and this
+    /// build cannot ask a surface what its refresh is. Guessing the
+    /// simulation's 60 there - which is what `Session::presentation_hz` falls
+    /// back to for the overlay's graph scale, and says so - would silently cap
+    /// a 144 Hz panel's target at 60. A wrong clamp is worse than none,
+    /// because the menu says the target it was given.
+    #[must_use]
+    pub fn at_most(self, hz: Option<u32>) -> Self {
+        match (self.hz(), hz) {
+            (Some(target), Some(bound)) if target > bound => Self(bound),
+            _ => self,
+        }
+    }
+
     /// How long the scene pass may take, in seconds, or `None` when off.
     ///
     /// [`SCENE_SHARE`] of the target frame period. See the module docs for why

@@ -349,3 +349,56 @@ fn a_fall_needs_no_patience_at_all() {
         "a dropped frame has already been seen; there is nothing to wait for"
     );
 }
+
+/// A target above the limiter is held to the limiter.
+///
+/// Otherwise the budget is computed for frames the loop is not allowed to
+/// produce: at 144 behind a 60 limit it would be 2.4x too tight, so the
+/// controller would drop the resolution permanently and every pixel it gave up
+/// would buy nothing.
+#[test]
+fn a_target_above_the_frame_limit_is_held_to_it() {
+    let target = Target::OFFERED[5];
+    assert_eq!(target.hz(), Some(144));
+    assert_eq!(target.at_most(Some(60)).hz(), Some(60));
+    // The budget follows, which is the whole point of the clamp.
+    let held = target.at_most(Some(60)).scene_budget().expect("on");
+    let sixty = Target::OFFERED[2].scene_budget().expect("on");
+    assert!((held - sixty).abs() < f32::EPSILON);
+}
+
+/// A limiter at or above the target changes nothing, and neither does none.
+///
+/// `None` covers two different situations that must behave the same way:
+/// `FrameLimit::UNLIMITED`, and `Vsync::On` where the display is the bound and
+/// this build cannot ask a surface what its refresh is. **Guessing there would
+/// be worse than not clamping**: the fallback available is the simulation's
+/// 60, which would silently cap a 144 Hz panel's target at 60 while the menu
+/// row still said 144.
+#[test]
+fn a_limiter_at_or_above_the_target_leaves_it_alone() {
+    let target = Target::OFFERED[2];
+    assert_eq!(target.at_most(Some(60)), target);
+    assert_eq!(target.at_most(Some(144)), target);
+    assert_eq!(target.at_most(None), target);
+    // And off stays off whatever the limiter says.
+    assert_eq!(Target::OFF.at_most(Some(30)), Target::OFF);
+    assert!(!Target::OFF.at_most(Some(30)).is_on());
+}
+
+/// Every offered target, against every offered limit, lands on the lower.
+#[test]
+fn the_clamp_is_the_lower_of_the_two_for_every_offered_pair() {
+    for target in Target::OFFERED {
+        for limit in crate::perf::FrameLimit::OFFERED {
+            let held = target.at_most(limit.hz());
+            match (target.hz(), limit.hz()) {
+                (Some(want), Some(bound)) => {
+                    assert_eq!(held.hz(), Some(want.min(bound)), "{target} under {limit}");
+                }
+                // Off stays off; an unlimited limiter bounds nothing.
+                _ => assert_eq!(held, target, "{target} under {limit}"),
+            }
+        }
+    }
+}
