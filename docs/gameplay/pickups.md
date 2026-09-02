@@ -65,6 +65,12 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A plasma bolt flies the Rocket's own floor-following path** - `Plasma_Update` is `Rocket_Update` | **recovered** | 85 |
 | The bolt rides `WO_PLASMA_HEAD` and fires the `PLASMA` cue, both read out of `.rodata` | **recovered** | 90 |
 | **What `<Plasma charge_time>` does** - authored, no consumer found, and play says there is one | **unread** | - |
+| `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
+| **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
+| A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |
+| A blade **reflects perfectly off walls** with no damping and no bounce budget | **recovered** | 88 |
+| **What ends a blade** - the `fuse` is read, whether running out detonates or reaps is not | **ours** | - |
+| **When `rhicochetdamage`/`rhicochetForce` are spent** - the only second pair any weapon authors | **unread** | - |
 | **Not firing at all when nothing locks** | **ours** | - |
 
 The three "ours" rows in the middle are not a gap anyone can close by looking
@@ -247,7 +253,7 @@ term entirely - see below.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb and Plasma**
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma and Shuriken**
 (2026-09-02).
 
 - ~~**Missile** needs the lock distances its own `<Stats>` authors, and a target
@@ -272,9 +278,19 @@ term entirely - see below.
   follower instruction for instruction, and `Weapon_FirePlasma` (`0x0886a868`)
   spawns exactly one where the Rocket spawns three. See
   [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md).
-- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and most
-  of the remaining five need the slowdown mechanic behind
-  `<Global slowdown_limit>`, which has no consumer.
+- ~~**Shuriken** needs a ricochet and a fuse.~~ **Built 2026-09-02**, and the
+  estimate that said otherwise is the finding. Judged from its constructor and
+  its bounce alone it looked like a session's work; `Shuriken_Update`
+  (`0x08877bdc`) then turned out to be the *same floor follower* the Rocket and
+  the Plasma share, differing only in that a wall bounces a blade instead of
+  ending it. One blade, thrown at a coin-flipped **±20 degrees**, carrying the
+  throwing craft's own speed, reflecting perfectly off walls until its authored
+  `fuse` runs out. See
+  [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md).
+- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and the
+  **Repulser** a field the craft *is in* rather than a projectile - its handler
+  copies four of its own `<Stats>` onto the firing craft before it spawns
+  anything.
 
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
@@ -503,13 +519,11 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Five of the thirteen weapons.** Quake needs track deformation, LeachBeam a
-  beam, and the remaining three - Cannon, Repulser, Shuriken - need either the
-  slowdown mechanic or a fire path nothing has read. **Four of the five do have
-  a dispatched handler**, read on
-  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md) along with the
-  Plasma's; only their bodies are unread, which is a much shorter walk than
-  this row used to describe.
+- **Four of the thirteen weapons.** Quake needs track deformation, LeachBeam a
+  beam, the Repulser a craft-state field, and the Cannon a fire path nothing has
+  read. **Three of the four have a dispatched handler**, read on
+  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md); only their bodies
+  are unread, which is a much shorter walk than this row used to describe.
 
   The Cannon is the odd one and stays odd: its fire bit `0x2000` is set by
   `Weapon_RequestFire` and dispatched by **nothing**. That is now a statement

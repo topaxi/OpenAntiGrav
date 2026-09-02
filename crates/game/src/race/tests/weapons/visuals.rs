@@ -8,10 +8,9 @@
 
 use super::*;
 
-/// Only the Rocket, the Missile and the Plasma ride a flare, and each rides
-/// its **own**: `WO_ROCKET_FLARE`, `WO_MISSILE_HEAD` and `WO_PLASMA_HEAD` are
-/// three separate authored files, not one generic "something is in the air"
-/// marker.
+/// Only the Rocket, the Missile, the Plasma and the Shuriken ride a flare, and
+/// each rides its **own**: four separate authored files, not one generic
+/// "something is in the air" marker.
 ///
 /// **Regression test for a real bug, not a speculative one.** This gate used
 /// to be `kind.is_none()`, true for *every* live projectile, which attached
@@ -30,6 +29,7 @@ fn each_projectile_rides_only_its_own_flare() {
             Weapon::Rocket => Some(crate::race::ROCKET_FLARE_EFFECT),
             Weapon::Missile => Some(crate::race::MISSILE_FLARE_EFFECT),
             Weapon::Plasma => Some(crate::race::PLASMA_FLARE_EFFECT),
+            Weapon::Shuriken => Some(crate::race::SHURIKEN_FLARE_EFFECT),
             _ => None,
         };
         assert_eq!(
@@ -144,4 +144,44 @@ fn a_missile_flying_straight_up_gets_a_finite_basis() {
     let (a, b) = missile_flare_anchors(Vec3::ZERO, Vec3::Y, 0.4);
     assert!(a.is_finite(), "primary anchor went non-finite: {a:?}");
     assert!(b.is_finite(), "second anchor went non-finite: {b:?}");
+}
+
+/// Two weapons bounce and **each plays its own burst**, which is the same rule
+/// the flares follow and is here for the same reason: reusing one weapon's
+/// authored file for another is invention wearing a real asset.
+#[test]
+fn each_bouncing_weapon_plays_its_own_burst() {
+    use crate::race::weapons::bounce_effect_for;
+    use oag_formats::weapons::Weapon;
+
+    for weapon in Weapon::ALL {
+        let expected = match weapon {
+            Weapon::Missile => Some(crate::race::MISSILE_BOUNCE_EFFECT),
+            Weapon::Shuriken => Some(crate::race::SHURIKEN_BOUNCE_EFFECT),
+            _ => None,
+        };
+        assert_eq!(
+            bounce_effect_for(Some(weapon)),
+            expected,
+            "{weapon:?} plays the wrong bounce burst"
+        );
+    }
+    assert_eq!(bounce_effect_for(None), None, "an empty slot plays nothing");
+}
+
+/// A rising counter on a weapon that cannot bounce is not a bounce.
+///
+/// The gate generalised from "is it a Missile" to "does this weapon bounce at
+/// all" when the Shuriken landed, and the failure mode that generalisation
+/// could introduce is a Rocket - whose counter is always zero - being read as
+/// bouncing if the test ever became `now > before` alone.
+#[test]
+fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
+    use crate::race::weapons::bounced_this_tick;
+    use oag_formats::weapons::Weapon;
+
+    assert!(bounced_this_tick(Some(Weapon::Shuriken), 3, 4));
+    assert!(!bounced_this_tick(Some(Weapon::Shuriken), 4, 4));
+    assert!(!bounced_this_tick(Some(Weapon::Rocket), 0, 1));
+    assert!(!bounced_this_tick(Some(Weapon::Plasma), 0, 1));
 }

@@ -119,6 +119,7 @@ mod assets;
 mod camera;
 mod capture;
 mod drawable;
+mod effect_names;
 mod effects;
 mod field;
 mod hash;
@@ -146,6 +147,7 @@ pub mod zone_grade;
 pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
 pub use camera::chase_params;
 pub use capture::{CaptureOptions, Presented, capture, describe};
+pub use effect_names::*;
 pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::load;
@@ -338,155 +340,6 @@ pub const ROCKET_MODEL_ENTRY: &str = r"Data\Weapons\Rocket.vex";
 /// only when it did not. Small enough to read as a bolt rather than a fireball
 /// at the distance a rocket is fired from.
 pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
-
-/// The effect the original attaches to every rocket at launch.
-///
-/// **Recovered, confidence 72.** `Rocket_Init` (`0x0885cdb8`) spawns it through
-/// `Psys_Spawn_q` with the tag `ROFL`; the string is at `0x08a7c100`. Two
-/// emitters, both [`oag_formats::pob::flags::LOOPING`], so it runs for as long
-/// as the rocket does rather than for its authored 100 ticks - see
-/// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
-///
-/// **There is no separate trail effect.** The Shuriken authors a `_HEAD` and a
-/// `_TRAIL`; the rocket has only this, so the one emitter draws both the glow
-/// at the nose and the streak behind it.
-pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
-
-/// The effect the original attaches to every missile at launch.
-///
-/// **Recovered, confidence 90** (the same reading that settles bit `0x40` as
-/// the Missile - see `docs/ghidra/functions/psp-pulse-usa/missile.md`).
-/// `Missile_Init` (`0x0885a160`) plays this **at two anchors**, alongside the
-/// two `Trail_InitPreset` calls that are the missile's own twin-trail
-/// signature.
-///
-/// **Both anchors are now ridden.** The "two anchors" are not fixed hull
-/// locators on a missile model this project never located - they are two
-/// points `Missile_Update` computes every tick, orbiting the missile's own
-/// flight line at a constant rate. Nothing about them needed a `.vex` or a
-/// locator: [`weapons::missile_flare_anchors`] derives both from the
-/// projectile's own tracked position and velocity, at confidence 80. See
-/// that function's doc comment for the full formula and what is still
-/// unsettled about it, and [`Race::advance_projectile_flares`] for how the
-/// two instances are attached and followed.
-pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
-
-/// The effect the original attaches to every plasma bolt at launch.
-///
-/// **Recovered, confidence 90.** `Plasma_Init` (`0x0885bd18`) spawns it with
-/// the fourcc `PLHE` - the same slot `Missile_Init` puts `MIEX` in - and the
-/// name string is at `0x08a7c0c0`, read directly out of `.rodata` rather than
-/// inferred from a plausible name. It sits one entry away from the `PLASMA`
-/// cue name at `0x08a7c0ac`, which the same constructor plays.
-///
-/// **One instance, at the bolt's own position.** `Plasma_Init` makes a single
-/// spawn call, unlike the Missile's pair - so nothing here needs the orbiting
-/// second anchor `weapons::missile_flare_anchors` derives.
-///
-/// `WO_PLASMA_FLASH` is authored on the same disc and is **not** wired: no
-/// read call site plays it, so whether it is the muzzle flash, the detonation
-/// or something else is open. See
-/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
-pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
-
-/// The explosion a rocket that hits **track geometry** plays.
-///
-/// **Recovered, confidence 72.** Both of `Rocket_Update`'s (`0x0885d2a8`)
-/// detonating branches spawn it, tag `ROD2`, string `0x08a7c110`. Four
-/// emitters: a root glow, `fat_streaks`, a `SMOKERING` and `Fire_Emitter`.
-pub const TRACK_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO_TRACK";
-
-/// The explosion a rocket that hits a **craft** plays.
-///
-/// **Recovered, confidence 72.** `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`),
-/// reached only from the craft-hit path `Rocket_HitCraft_q` (`0x0886ebdc`), tag
-/// `ROEX`, string `0x08a7ca74`. Seven emitters, the largest tree on the disc:
-/// a root that hangs a `SMOKEMUSHROOM` off every particle, 32 pieces of
-/// `DEBRIS` a tick, a `SMOKERING`, a `GLOW`, and a second per-particle pair of
-/// `FIREMUSHROOM` glows.
-///
-/// That the two explosions are separately authored is confirmed rather than
-/// inferred from the names, which is why this engine plays two files rather
-/// than one file at two sizes.
-pub const CRAFT_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO";
-
-/// The explosion a missile plays, whatever it hits and however it ends.
-///
-/// **Recovered, confidence 88.** `Missile_SpawnExplosion` (`0x08868d50`,
-/// fourcc `MIEX`) is the pool teardown's only particle-spawning call, reached
-/// from a craft hit, from the fifth wall bounce giving up, and from the
-/// `SELF_DETONATE_SECONDS` timeout alike - see
-/// `docs/ghidra/functions/psp-pulse-usa/missile.md#the-blast-and-what-does-not-reach-it`.
-///
-/// **One file for every ending, unlike the Rocket's track/craft split.** The
-/// Missile authors no second explosion `.pob` the way the Rocket authors
-/// `WO_ROCKET_EXPLO_TRACK` beside `WO_ROCKET_EXPLO` - `docs/formats/pob.md`'s
-/// 35-name list has exactly one `WO_MISSILE_EXPLO`. So [`Race::blast_for`]
-/// does not drop the struck craft's own position under it the way
-/// [`CRAFT_BLAST_DROP`] does for the Rocket: no equivalent offset has been
-/// read for the Missile, and inventing one would be exactly the kind of
-/// plausible-looking number `CLAUDE.md` forbids. It plays at the impact point.
-pub const MISSILE_EXPLO_EFFECT: &str = "WO_MISSILE_EXPLO";
-
-/// What a missile plays on every wall it glances off, before it finally
-/// detonates.
-///
-/// **Recovered, confidence 92** (the same reading as the flight model's
-/// 12.0 probe length). `Missile_Update`'s wall branch mirrors the velocity,
-/// pushes off the surface and "fires `WO_MISSILE_BOUNCE` with the
-/// `MISSILEEXPWALL` cue" up to [`oag_gameplay::projectile::missile::MAX_BOUNCES`]
-/// times before the fifth attempt gives up and reaches
-/// [`MISSILE_EXPLO_EFFECT`] instead - see
-/// `docs/ghidra/functions/psp-pulse-usa/missile.md#the-flight-model-the-rockets-with-one-literal-changed`.
-///
-/// **A burst, not a riding instance** - [`Race::ignite_missile_bounces`]
-/// plays it with [`psys::Stage::play`], the same one-shot call
-/// [`Race::ignite_blast`] uses, because a bounce is a moment rather than
-/// something to follow.
-pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
-
-/// The explosion a mine plays, whenever and however it detonates.
-///
-/// **Recovered, confidence 90, direct instruction-level read.** `Mine_SpawnExplosion`
-/// (`0x08867f1c`) is called from `FUN_08867370`'s uniform teardown pass for
-/// every entity the fuse timeout **or** `Weapon_PostBlastImpulse_q`'s own
-/// trigger_radius sweep (`FUN_08867b50`) marked for destruction - so a mine
-/// that runs out of time and a mine a craft walks into play the same file.
-/// It calls the already-named `Psys_Spawn_q` with the fourcc tag `MIEX` - a
-/// generic "this is an explosion" instance tag shared with
-/// [`MISSILE_EXPLO_EFFECT`]'s own spawner, not a per-weapon label - and a
-/// string argument confirmed by a direct memory read to be `"WO_MINE_EXPLO"`.
-/// See `docs/ghidra/functions/psp-pulse-usa/mine.md#mine_spawnexplosion-plays-wo_mine_explo`.
-///
-/// **The Bomb is not this.** Its own teardown is a distinct function - the
-/// pool cursor mine.md reads is `+0xc4`/cap 32 against the Mine's
-/// `+0x164`/`+0x64` - and whether it reaches this same spawner or its own is
-/// unchased; see [`Race::blast_for`].
-pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
-
-/// How far below a struck craft's centre its blast is drawn, in world units.
-///
-/// **Recovered, confidence 78.** `Rocket_HitCraft_q` (`0x0886ebdc`) builds the
-/// explosion's position from the struck craft's own position with `y - 2.5`, not
-/// from the rocket's impact point.
-pub const CRAFT_BLAST_DROP: f32 = 2.5;
-
-/// The engine flare the **PS2** port authors as a particle effect.
-///
-/// Two looping emitters, and there is no PSP counterpart - the PSP release
-/// authors no `Data\Psys` engine flare at all, which is why
-/// [`oag_render::exhaust`] draws one procedurally from the `Engine Flare`
-/// locator and the behaviour measured off the PSP. Where the source *does*
-/// ship one, playing it beats approximating it, so a PS2-sourced race gets
-/// the asset and the procedural flare quad steps aside - see
-/// [`Race::engine_flare_effect`].
-pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
-
-/// The two systems HD plays on a craft that flies into an engine trail.
-///
-/// Re-exported from where the rest of HD's exhaust constants live, because
-/// that is what they are - see [`Race::advance_trail_hits`] for the trigger.
-pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
 
 /// Every `Data\Psys` effect this race loads, and what triggers it.
 ///

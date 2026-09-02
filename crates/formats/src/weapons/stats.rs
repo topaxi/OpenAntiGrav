@@ -251,6 +251,90 @@ impl PlasmaStats {
     }
 }
 
+/// The Shuriken's `<Stats>`, less the four attributes nothing consumes.
+///
+/// # The offsets are read, and they close the run the Mine's page opened
+///
+/// `WeaponStats_ParseShuriken` (`0x0880d790`), the same shape as every other
+/// parser here. **Thirteen** attributes at `+0x144`..`+0x174`, confidence
+/// **92**, and that is exactly where
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s attribute-count arithmetic
+/// puts them - the fourth measured anchor in the struct's unread middle, after
+/// Turbo's `+0x84`, Shield's `+0x8c` and the Plasma's `+0x9c`. See
+/// `docs/ghidra/functions/psp-pulse-usa/shuriken.md` for the full table.
+///
+/// # One blade, thrown twenty degrees off the nose
+///
+/// No `spread`, and `Weapon_FireShuriken` (`0x08870240`) spawns once - the same
+/// pair of arguments that says the Plasma fires one. What it does instead of a
+/// fan is **pick a side**: `Shuriken_Init` (`0x08877280`) rotates the launch
+/// basis by a literal `0.349066` radians - `20.000` degrees - or by its exact
+/// negation, chosen by a `rand() > 0.5` the fire handler draws. See
+/// [`crate::weapons::ShurikenStats::speed_for`]'s neighbour,
+/// `oag_gameplay::projectile::shuriken::launch`.
+///
+/// # Three of the thirteen are authored and decoded nowhere
+///
+/// `rhicochetdamage` and `rhicochetForce` are the only *second* damage and
+/// force any weapon authors, and nothing read says when they are spent - a
+/// glancing hit off a craft is the obvious guess and a guess is what it would
+/// be. `slowdown_time` is the slowdown mechanic's half of a pair whose other
+/// half has no consumer, as on every other weapon.
+///
+/// A fourth is decoded but only half understood: `fuse` is read
+/// **here** but its *meaning* is this engine's reading: `Shuriken_Update`
+/// (`0x08877bdc`) counts `+0x48` up every tick - the offset the Mine's fuse
+/// lives at - and the pool teardown that would read it was not followed, so
+/// whether a blade that times out detonates or is simply reaped is unread.
+/// This build reaps it silently, which is what the Rocket's own pool does.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ShurikenStats {
+    /// Energy paid back for absorbing it rather than throwing it.
+    pub absorb: f32,
+    /// The impulse the blast pushes a craft with.
+    ///
+    /// `blastForce` in the file, capitalised where the Rocket's is not. The
+    /// parser's comparison is case-insensitive, so this is the file's spelling
+    /// rather than a correction.
+    pub blastforce: f32,
+    /// How far from the impact the blast reaches.
+    pub blastradius: f32,
+    /// Energy the blast costs a craft inside that radius.
+    ///
+    /// `blastdamage`, **not** `rhicochetdamage` - see the type's own docs for
+    /// the second pair and why it stays undecoded.
+    pub blastdamage: f32,
+    /// Added to the throwing craft's own speed at launch.
+    pub launch_speed: f32,
+    /// How long a blade lives, in seconds.
+    ///
+    /// Authored at `2` on both shipped tables. See the type's own docs: the
+    /// attribute is read, what running out *does* is this engine's reading.
+    pub fuse: f32,
+    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
+    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
+    ///
+    /// Not public for the reason [`RocketStats::speeds`] is: the index *is* the
+    /// meaning. Read it through [`ShurikenStats::speed_for`].
+    pub(super) speeds: [f32; 4],
+}
+
+impl ShurikenStats {
+    /// How fast a blade flies in one speed class, in km/h.
+    ///
+    /// **Added to the throwing craft's own speed, which is measured rather than
+    /// chosen.** `Weapon_FireShuriken` hands `Shuriken_Init` the craft's speed
+    /// multiplied by `3.6` - that is, in km/h - and the constructor computes
+    /// `(craft_kmh + authored) / 3.6` for the launch velocity. That settles for
+    /// this weapon the open question
+    /// `oag_gameplay::projectile::rocket::launch` records for the Rocket, and it
+    /// is a second, independent statement that the authored speeds are km/h.
+    #[must_use]
+    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
+        self.speeds[class as usize]
+    }
+}
+
 /// The Mine's `<Stats>`: seven attributes, and none of them a speed.
 ///
 /// # The offsets are read, not guessed

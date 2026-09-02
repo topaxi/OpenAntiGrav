@@ -225,6 +225,18 @@ impl Race {
             .and_then(oag_formats::weapons::WeaponStats::mine)
     }
 
+    /// The Shuriken's authored `<Stats>`, or `None` when the table did not load
+    /// or authors no Shuriken.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/shuriken_ground_truth.rs`.
+    #[must_use]
+    pub fn shuriken_stats(&self) -> Option<oag_formats::weapons::ShurikenStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::shuriken)
+    }
+
     /// The Rocket's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Rocket.
     ///

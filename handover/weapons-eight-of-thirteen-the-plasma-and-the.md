@@ -1,11 +1,52 @@
-# Weapons: eight of thirteen, and the dispatch table read whole
+# Weapons: nine of thirteen, and the dispatch table read whole
 
 2026-09-02, [plasma.md](../docs/ghidra/functions/psp-pulse-usa/plasma.md),
 [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) and
 [pickups.md](../docs/gameplay/pickups.md) - the pages to read, not this row.
 Supersedes the seven-of-thirteen thread, which superseded the four.
-**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb and Plasma** now do
-something.
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma and Shuriken**
+now do something.
+
+## 2026-09-02, later: the Shuriken, and an estimate that was wrong by a lot
+
+**The finding is the estimate, not the weapon.** Judged from its fire handler,
+its constructor and its bounce - four functions - the Shuriken looked like a
+session of its own: a reflection unlike the Missile's, two damage numbers where
+`blast_stats` returns one triple, a fuse, and a seeded coin flip. That
+assessment was written into a `docs/` page and committed. Then
+`Shuriken_Update` (`0x08877bdc`) - **the one function not read** - turned out to
+be the *same floor follower* the Rocket and the Plasma already share, differing
+only in that a wall calls `Shuriken_Bounce` where a rocket detonates. The
+weapon cost about what the Plasma did.
+
+**So: the trajectory is the expensive part of a weapon in this engine, and the
+trajectory is the one thing you cannot infer.** It was inferred here from the
+entity layout differing from the Plasma's (`+0x130` against `+0xf0`) and from
+the bounce being unlike the Missile's, and both of those were true and neither
+implied what it looked like it implied. The page carries the correction rather
+than hiding it.
+
+**A port bug came out of the same read**, and it had shipped hours earlier:
+`Plasma_Update` probes `12.0` along its carried normal and this engine gave the
+Plasma the *Rocket's* `6.0`. Noticing the constant a third time in
+`Shuriken_Update` is what caught it. `SURFACE_PROBE_LENGTH` is now per-kind and
+the comment says what it should have said all along - **the Rocket is the odd
+one out at 6.0**; the Missile, the Plasma and the Shuriken all read 12.0, each
+off its own function.
+
+**What the Shuriken turned out to be**: one blade, thrown at a coin-flipped
+`±0.349066` rad - **20.000 degrees**, a literal and its exact negation -
+carrying the throwing craft's own speed in km/h on top of the class speed,
+riding `WO_SHURIKEN_HEAD`, reflecting perfectly off walls (`v - 2(v.n)n`, no
+damping, no bounce budget, pushed `0.1` out along the normal) with
+`WO_SHURIKEN_BOUNCE` on each, until its authored `fuse` runs out. **Measured on
+`pulse-psp-usa.chd`: a blade lived 119 of its 120 fuse ticks and bounced three
+times off Talon's Junction.**
+
+**The coin is drawn from `World::rng` and is hashed state**, and the ordering is
+the original's: `Weapon_FireShuriken` draws *inside* its pool-space check, so
+both fire paths here check for a free slot **before** drawing. Drawing and
+discarding would advance the generator on a tick the original does not.
 
 ## 2026-09-02: the Plasma, and two by-catches worth more than the weapon
 
@@ -241,33 +282,31 @@ Put back.
   `0x088537ac` on `world+0x58`, and is absent from `Weapon_RequestFire`'s jump
   table entirely, so something other than the request word sets it. Still the
   obvious candidate, still unchased.
-- **Five weapons are still unbuilt, and the Shuriken is now read end to end
-  without being built** - see [shuriken.md](../docs/ghidra/functions/psp-pulse-usa/shuriken.md),
-  which is where the next session should start. Four functions and the whole
-  thirteen-attribute `<Stats>` block are recovered: it throws **one** blade at a
-  **coin-flipped ±20 degrees** (`0x3eb2b8c3` and its negation, exact to five
-  figures), inherits the firing craft's own speed in km/h on top of the class
-  speed, carries `pulse_shuriken.vex` and a looping `~SHURIKENTRAVEL` voice, and
-  **bounces as a perfect mirror with no damping**, nudged `0.1` out along the
-  normal.
-
-  **It was read rather than built on purpose, and the reason is the same
-  trajectory-sharing heuristic that made the Plasma cheap - applied in the other
-  direction.** The Shuriken shares nothing: its bounce is *not* the Missile's
-  (which counts to `MAX_BOUNCES`; this counts nothing and dies on a `fuse`), it
-  is the only weapon of the thirteen authoring **two** damages and **two**
-  forces where `projectile::blast_stats` returns one triple, and its launch
-  needs a seeded coin flip. That is a session, and half-doing it would have been
-  worse than handing over a complete read. **The first thing to chase is what
-  ends a blade** - the `fuse` consumer and `WO_SHURIKEN_EXPIRE`'s call site,
-  both unfollowed.
+- **Four weapons are still unbuilt.** The Quake needs track deformation, the
+  LeachBeam a beam and a victim, the Repulser a craft-state field (below), and
+  the Cannon a fire path that nothing dispatches.
+- **What ends a Shuriken is a reading, not a recovery.** `Shuriken_Update`
+  counts `+0x48` up - the offset the Mine's fuse lives at - and the pool
+  teardown that would read it was not followed, so this build reaps a timed-out
+  blade **silently**, which is what the Rocket's own pool does.
+  `WO_SHURIKEN_EXPIRE` is authored and stays unwired for the same reason. The
+  teardown is the first thing to read if anyone wants that closed.
+- **`rhicochetdamage` and `rhicochetForce` are decoded nowhere.** The only
+  *second* damage and force any weapon authors, and nothing read says when they
+  are spent - a glancing hit off a craft is the obvious guess. There is
+  currently no moment in this engine where they *could* be spent: a hull hit
+  ends a blade and only geometry bounces it.
+- **`WO_SHURIKEN_TRAIL` is authored and unwired.** It hangs off a *second*
+  anchor whose basis the constructor rotates by -pi/2 and the update rebuilds
+  every tick; a `Projectile` here carries a position and a velocity and no roll,
+  so there is nowhere to put it.
 - **The Repulser's handler is read and it is not an instantaneous blast.**
   `Weapon_FireRepulser` (`0x0886ce8c`) **copies four of its own `<Stats>` onto
   the firing craft** at `+0x170`/`+0x178`/`+0x17c` and *then* spawns a pool
   entity - a shape no other weapon has, and it reads as "the field is a state
   the craft is in" rather than a one-off push. Recorded in `shuriken.md`'s last
   section rather than a page of its own, because one function is not enough for
-  one. Quake still needs track deformation and LeachBeam a beam.
+  one.
 - **The Bomb's `damageradius` is authored and spent nowhere.** It is the only
   second radius any weapon has, and the one blast path read at instruction level
   spends `blastradius` for both damage and impulse. Left undecoded rather than

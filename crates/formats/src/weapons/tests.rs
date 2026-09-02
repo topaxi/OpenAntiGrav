@@ -18,6 +18,7 @@ const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
 <Weapon type="Missile"><Stats absorb="22" blastforce="23" blastradius="24" damage="25" slowdown_time="26" venomspeed="500" flashspeed="600" rapierspeed="700" phantomspeed="800" launchSpeed="27" lock_min_dist="28" lock_max_dist="29"/></Weapon>
 <Weapon type="Plasma"><Stats absorb="52" blastforce="53" blastradius="54" charge_time="55" damage="56" slowdown_time="57" venomspeed="900" flashspeed="1000" rapierspeed="1100" phantomspeed="1200" launchSpeed="58"/></Weapon>
+<Weapon type="Shuriken"><Stats absorb="60" rhicochetForce="61" blastForce="62" blastradius="63" rhicochetdamage="64" blastdamage="65" slowdown_time="66" venomspeed="1300" flashspeed="1400" rapierspeed="1500" phantomspeed="1600" launchSpeed="67" fuse="68"/></Weapon>
 <Weapon type="Bomb"><Stats absorb="40" blastforce="41" blastradius="42" damage="43" damageradius="44" slowdown_time="45" timetodie="46" trigger_radius="47"/></Weapon>
 <Weapon type="Mine"><Stats absorb="30" blastforce="31" blastradius="32" damage="33" slowdown_time="34" timetodie="35" trigger_radius="36"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
@@ -511,4 +512,61 @@ fn a_file_without_a_plasma_has_no_plasma_stats() {
     let none =
         "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
     assert_eq!(parse(none).expect("parses").plasma(), None);
+}
+
+/// The Shuriken reads ten of its thirteen, and reads the **blast** pair rather
+/// than the ricochet pair.
+///
+/// The fixture gives the two pairs adjacent, distinct numbers on purpose: a
+/// parser that grabbed `rhicochetdamage` where it meant `blastdamage` would
+/// produce a perfectly plausible struct, and only disjoint values catch it.
+#[test]
+fn the_shuriken_reads_its_blast_pair_and_not_its_ricochet_pair() {
+    let shuriken = parse(FIXTURE)
+        .expect("the fixture parses")
+        .shuriken()
+        .expect("the fixture authors a Shuriken");
+    assert_eq!(
+        shuriken,
+        ShurikenStats {
+            absorb: 60.0,
+            blastforce: 62.0,
+            blastradius: 63.0,
+            blastdamage: 65.0,
+            launch_speed: 67.0,
+            fuse: 68.0,
+            speeds: [1300.0, 1400.0, 1500.0, 1600.0],
+        }
+    );
+    // Said again as an inequality, because the assertion above only fails
+    // *usefully* if a reader knows which of the two pairs 64 and 61 were.
+    assert_ne!(shuriken.blastdamage, 64.0, "that is `rhicochetdamage`");
+    assert_ne!(shuriken.blastforce, 61.0, "that is `rhicochetForce`");
+}
+
+/// A file with no Shuriken is not an error, for
+/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+#[test]
+fn a_file_without_a_shuriken_has_no_shuriken_stats() {
+    let none =
+        "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
+    assert_eq!(parse(none).expect("parses").shuriken(), None);
+}
+
+/// A Shuriken missing its fuse is absent rather than defaulted to zero, which
+/// would be a blade reaped on the tick it was thrown.
+#[test]
+fn a_shuriken_missing_its_fuse_is_absent_rather_than_defaulted() {
+    let no_fuse = FIXTURE.replace(" fuse=\"68\"", "");
+    let stats = parse(&no_fuse).expect("the rest of the file still parses");
+    assert_eq!(stats.shuriken(), None);
+    assert!(
+        stats.skipped.contains(&(Weapon::Shuriken, "fuse")),
+        "the skip must name the attribute: {:?}",
+        stats.skipped
+    );
+    assert!(
+        stats.rocket().is_some(),
+        "one undecodable weapon must not cost the file its others"
+    );
 }

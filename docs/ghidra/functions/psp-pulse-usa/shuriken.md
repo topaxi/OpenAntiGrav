@@ -2,25 +2,32 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 
-**Status:** **read, not built.** Four functions and the whole `<Stats>` block are
-recovered; nothing in `oag_gameplay` fires one yet. This page exists so the
-session that builds it starts from evidence rather than from the schema - the
-reading was done on 2026-09-02 alongside the Plasma's, once
-[plasma.md](plasma.md)'s dispatch table handed over the handler address.
+**Status:** **read and built.** Five functions and the whole `<Stats>` block are
+recovered; `oag_gameplay::projectile::shuriken` and
+`oag_formats::weapons::ShurikenStats` are the port. The reading was done on 2026-09-02
+alongside the Plasma's, once [plasma.md](plasma.md)'s dispatch table handed over
+the handler address.
 
-**Why it was read but not built.** The Plasma cost almost nothing because it
-shares the Rocket's whole flight model. The Shuriken does not: it needs a
-perfect-reflection bounce that is *not* the Missile's, two separate damage
-numbers where `oag_gameplay::projectile::blast_stats` returns one, a fuse, and a
-seeded coin flip at launch. That is a session of its own, and half-doing it
-would have been worse than handing over a complete read.
+**A correction this page carries rather than hides.** Its first version said
+"read end to end" while `Shuriken_Update` was the one function *not* read, and
+concluded from the other four that "the Shuriken shares nothing" with the
+weapons already built. **Reading the update reversed that**: it is the Rocket's
+own floor follower - the same 12-unit probe along a carried surface normal, the
+same speed-preserving redirect - and the single substantive difference is that a
+**wall calls [`Shuriken_Bounce`](#shuriken_bounce-0x088778ac-is-a-mirror-with-no-energy-lost)
+where a rocket detonates**. The estimate that followed from the unread version
+("a session of its own") was wrong by a lot, and the lesson is the one
+`plasma.md` already records: the expensive part of a weapon here is its
+trajectory, and *the trajectory is the thing you have to actually read* rather
+than infer from a constructor's entity layout.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
 | `0x0880d790` | `WeaponStats_ParseShuriken` | 92 |
 | `0x08870240` | `Weapon_FireShuriken` | 88 |
 | `0x08877280` | `Shuriken_Init` | 88 |
-| `0x088778ac` | `Shuriken_Bounce` | 85 |
+| `0x088778ac` | `Shuriken_Bounce` | 88 |
+| `0x08877bdc` | `Shuriken_Update` | 85 |
 
 Read [weapon-fire.md](weapon-fire.md) and [plasma.md](plasma.md) first: the
 `jal`/`func_0x000NNNNN` operands here are image-base-relative, and it is
@@ -116,6 +123,9 @@ nothing here needs an asset this project cannot reach.
 
 ## `Shuriken_Bounce` (`0x088778ac`) is a mirror, with no energy lost
 
+Called from `Shuriken_Update`'s travel-segment test, `case 0` - the branch that
+ends a rocket.
+
 ```c
 float d = dot(s->velocity, normal);
 s->velocity = s->velocity + (-normal) * (2.0f * d);   // v - 2(v.n)n
@@ -126,15 +136,60 @@ Sound_Play(1.0f, s->travel_voice, ..., "SHURIKENHIT");// 0x08a7cd5c
 
 **A perfect specular reflection with no damping term anywhere in the
 function**, and the blade is nudged `0.1` units back out along the normal so the
-next tick's sweep does not start inside the wall. Confidence **85**: the
-arithmetic is unambiguous, the `0.1` is a code literal, and both the effect and
-the cue are direct `.rodata` reads.
+next tick's sweep does not start inside the wall. Confidence **88**: the
+arithmetic is unambiguous, the `0.1` is a code literal, both the effect and the
+cue are direct `.rodata` reads, and the caller is now identified.
 
 **This is not the Missile's bounce and must not reuse it.**
 `oag_gameplay::projectile::missile::MAX_BOUNCES` glances off up to five walls
 under the Missile's own rule; nothing here counts bounces at all, and what ends
 a shuriken is its `fuse` (see below), not a bounce budget. Reusing the Missile's
 path would be the same class of mistake as the Rocket's flare riding a mine.
+
+## `Shuriken_Update` (`0x08877bdc`) is the Rocket's floor follower, until a wall
+
+Stripped of the VFPU shuffling and the orientation bookkeeping:
+
+```c
+s->age += dt;                                  // + 0x48, the fuse's clock
+s->prev = s->position;                         // + 0x140 <- + 0x120
+next    = s->prev + s->velocity * dt;          // + 0x130
+probe   = next - s->surface * 12.0f;           // + 0x150, the carried normal
+
+switch (Collide(world, next, probe, &hit, &normal, s->bounds, 0)) {
+  case 0x7f: s->velocity.y -= dt * 50.0f;  break;   // no floor: fall
+  case 4: case 0: break;
+  default:                                          // a floor: ride it
+      s->surface  = normal;
+      next        = hit + s->surface * g_ride_height;
+      s->velocity = (next - s->prev) / dt;
+}
+
+switch (Collide(world, s->prev, next, &hit, &normal, s->bounds, 0)) {
+  case 4:            s->flags |= 0x14;                          break;  // destroy
+  case 3: case 1:    ... ride the surface, as above ...          break;
+  case 0:            next = Shuriken_Bounce(s, &hit, &normal);   break;  // <- a wall
+}
+s->position = next;
+// then: rebuild the blade's basis from velocity and surface, copy it to the
+// head (+0x60) and trail (+0xb0) anchors, rotate the trail's by -pi/2, and
+// push the model transform.
+```
+
+**Compare `Plasma_Update` (`0x0885c6cc`) on [plasma.md](plasma.md).** The two
+are the same function but for three things, and only the third matters to a
+port:
+
+1. The Plasma's no-floor case pushes velocity along the **carried surface
+   normal**; the Shuriken's decrements **world y** alone (`+0x134`). Both use
+   the same `50.0` literal.
+2. The Shuriken rebuilds an orientation basis every tick, because it has a model
+   and two anchored effects; the Plasma has neither.
+3. **A wall bounces it instead of ending it.** That is the weapon.
+
+Confidence **85** - the structure is unambiguous, the constants are literals, and
+the `case 0` target resolves to `Shuriken_Bounce` by the image-base arithmetic
+(`0x000738ac + 0x08804000`), which is also the only caller found for it.
 
 ## The `<Stats>` block: thirteen attributes at `+0x144`..`+0x174`
 
@@ -169,14 +224,17 @@ verbatim as `launchSpeed` is - the parser's comparison is case-insensitive (see
 [weapon-fire.md](weapon-fire.md)), so a reader matching names exactly should not
 be surprised by them.
 
-### The two damage numbers are the shape of the work
+### The two damage numbers, and which half is built
 
 The Shuriken is the only weapon of the thirteen authoring **two** damages and
-**two** forces: `rhicochetdamage`/`rhicochetForce` for a glancing hit off a
-craft, `blastdamage`/`blastForce` for whatever ends it.
-`oag_gameplay::projectile::blast_stats` returns a single
-`(blastradius, damage, blastforce)` triple, so it does not fit as it stands -
-that, rather than the flight, is the real cost of this weapon.
+**two** forces. `blastdamage`/`blastForce` are what `blast_stats` spends when a
+blade reaches a craft, which is the weapon's effect and is built.
+`rhicochetdamage`/`rhicochetForce` are **not decoded**: a glancing hit off a
+craft is the obvious reading and it is a reading, so
+`oag_formats::weapons::ShurikenStats` leaves both out rather than picking one.
+The engine's own bounce path only ever fires off *geometry* - a hull hit ends
+the blade - so there is currently no moment at which a ricochet number would be
+spent even if it were decoded.
 
 ## What is not verified
 
@@ -196,11 +254,16 @@ that, rather than the flight, is the real cost of this weapon.
   fan.
 - **The launch cue's own name.** The pointer at `0x08a7cd44` resolves to
   `0x08a7cd38`, which is before the region read here.
-- **`0x08a7cdbc`** is named `WO_SHURIKEN_BOUNCE` on the strength of sitting
-  immediately after `WO_SHURIKEN_HEAD` in the same run and being spawned from
-  the bounce handler with fourcc `SHBO`. The string itself was not read
-  directly, unlike the other three - **read it before relying on it**, per the
-  standard `Mine_SpawnExplosion` set.
+- ~~**`0x08a7cdbc`** is named from its position and fourcc rather than read.~~
+  **Read directly, 2026-09-02**: `0x08a7cdbc` is `WO_SHURIKEN_BOUNCE`, 18 bytes
+  and NUL-terminated. All four of the Shuriken's effect names now meet the
+  direct-read standard `Mine_SpawnExplosion` set.
+- **Which surface `case 0` actually means.** `Shuriken_Update` treats the
+  collide result `0` as a wall and `4` as fatal, where `Plasma_Update` treats
+  **both** `0` and `4` as fatal. The result codes themselves are not decoded
+  anywhere in this tree, so "0 is a wall a blade can bounce off and 4 is one it
+  cannot" is this page's reading of two switch statements, not a recovered
+  enumeration.
 
 ## A neighbour read on the way: the Repulser
 

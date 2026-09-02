@@ -464,6 +464,30 @@ fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
+/// The Shuriken's own fixture: the schema both shipped tables author, with the
+/// ricochet pair present and distinct from the blast pair so a test can tell
+/// which one reached the blast.
+///
+/// `fuse` is short (`0.5`) on purpose where the disc authors `2`: these tests
+/// drive tens of ticks, not hundreds, and a blade that outlives every one of
+/// them cannot exercise the expiry.
+fn one_shuriken_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Shuriken"><Stats absorb="31" rhicochetForce="32"
+               blastForce="33" blastradius="34" rhicochetdamage="35"
+               blastdamage="36" slowdown_time="37" venomspeed="500"
+               flashspeed="600" rapierspeed="700" phantomspeed="800"
+               launchSpeed="38" fuse="0.5"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Shuriken"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
 /// A parameter set with a real hull, so the reset probes have something to
 /// probe with, and no gravity, so a ship only moves when a test moves it.
 fn hulled_handling() -> Handling {

@@ -8,7 +8,7 @@
 
 use super::*;
 
-mod weapons;
+mod opponent_weapons;
 
 /// How much of an Autopilot pickup is left when the announcer warns.
 ///

@@ -16,7 +16,9 @@ mod visuals;
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(test)]
-pub(super) use visuals::{bounced_this_tick, flare_effect_for, missile_flare_anchors};
+pub(super) use visuals::{
+    bounce_effect_for, bounced_this_tick, flare_effect_for, missile_flare_anchors,
+};
 
 /// The far plane the reticle's own projection uses.
 ///
@@ -251,6 +253,50 @@ impl Race {
                         // Every slot was taken. Keep the pickup rather than
                         // spend it on a shot that never left - the same rule
                         // the Rocket's arm follows for an empty volley.
+                        return;
+                    }
+                }
+                oag_formats::weapons::Weapon::Shuriken => {
+                    let Some(stats) = weapons.shuriken() else {
+                        // As the Rocket: nothing to put in the air.
+                        return;
+                    };
+                    // **Nothing is drawn unless there is somewhere to put the
+                    // blade**, which is the original's own order:
+                    // `Weapon_FireShuriken` takes its `rand()` *inside* the
+                    // pool-space check. Drawing first and discarding would
+                    // advance the seeded generator on a tick the original does
+                    // not, and the generator is hashed state.
+                    if self.world.projectiles.live() >= oag_gameplay::projectile::MAX_PROJECTILES {
+                        return;
+                    }
+                    // Copied out before the draw because `launch` borrows the
+                    // world's generator mutably and the ship state immutably at
+                    // once; both are small `Copy` structs.
+                    let physics = self.world.ships[0].physics;
+                    let dimensions = self.world.ships[0].handling.dimensions;
+                    // **One blade, twenty degrees off the nose, side chosen by
+                    // a coin.** See `oag_gameplay::projectile::shuriken::launch`
+                    // and `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
+                    let (position, velocity) = oag_gameplay::projectile::shuriken::launch(
+                        &physics,
+                        &dimensions,
+                        &stats,
+                        to_format_class(self.class),
+                        &mut self.world.rng,
+                    );
+                    if !self
+                        .world
+                        .projectiles
+                        .throw(position, velocity, 0, stats.fuse)
+                    {
+                        // Unreachable given the check above, and kept as the
+                        // same "keep the pickup rather than spend it on nothing"
+                        // rule the Rocket's and the Plasma's arms follow -
+                        // `throw` is the only thing that can answer the question
+                        // authoritatively, and a silently dropped shot that also
+                        // ate the pickup is the failure worth being paranoid
+                        // about.
                         return;
                     }
                 }

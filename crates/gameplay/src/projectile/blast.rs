@@ -35,6 +35,14 @@ pub(super) fn blast_stats(
         Weapon::Plasma => weapons
             .plasma()
             .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        // **`blastdamage` and `blastForce`, not the ricochet pair.** The
+        // Shuriken is the only weapon authoring a second damage and a second
+        // force, and nothing read says when those are spent - see
+        // `oag_formats::weapons::ShurikenStats`, which leaves both undecoded
+        // rather than picking one.
+        Weapon::Shuriken => weapons
+            .shuriken()
+            .map(|s| (s.blastradius, s.blastdamage, s.blastforce)),
         Weapon::Mine => weapons
             .mine()
             .map(|s| (s.blastradius, s.damage, s.blastforce)),

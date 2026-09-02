@@ -98,10 +98,26 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
          detonation or the unfound charge-up is open. See \
          `docs/ghidra/functions/psp-pulse-usa/plasma.md`.",
     ),
-    ("WO_SHURIKEN_HEAD", "the Shuriken is not built."),
-    ("WO_SHURIKEN_TRAIL", "the Shuriken is not built."),
-    ("WO_SHURIKEN_BOUNCE", "the Shuriken is not built."),
-    ("WO_SHURIKEN_EXPIRE", "the Shuriken is not built."),
+    // **Not `WO_SHURIKEN_HEAD` or `WO_SHURIKEN_BOUNCE`** - both are wired,
+    // off `Shuriken_Init` (`0x08877280`) and `Shuriken_Bounce` (`0x088778ac`).
+    // The Shuriken landed 2026-09-02; its other two files are below.
+    (
+        "WO_SHURIKEN_TRAIL",
+        "the Shuriken flies and rides its `_HEAD`, but this is attached at a \
+         *second* anchor whose basis `Shuriken_Init` rotates by -pi/2 about the \
+         blade and `Shuriken_Update` rebuilds every tick. A `Projectile` here \
+         carries a position and a velocity and no roll, so there is nowhere to \
+         hang it. Playing the head's file at a second point instead would be \
+         invention wearing a real asset.",
+    ),
+    (
+        "WO_SHURIKEN_EXPIRE",
+        "a blade dies on its authored `fuse` and this build reaps it silently, \
+         which is what the Rocket's own pool does. `Shuriken_Update` only \
+         counts `+0x48` up; the teardown that would read it - and play this - \
+         was not followed, so whether a timed-out blade shows anything at all \
+         is unread. See `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.",
+    ),
     ("WO_REPULSER", "the Repulser is not built."),
     ("WO_REPULSER_BLAST", "the Repulser is not built."),
     ("WO_QUAKE", "the Quake is not built."),

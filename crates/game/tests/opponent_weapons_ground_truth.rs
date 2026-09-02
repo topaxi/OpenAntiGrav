@@ -235,13 +235,25 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// that gap further, split the metric by weapon rather than dropping the floor
 /// again - the guard is worth nothing once it cannot separate the two causes.
 ///
-/// **One measured divergence is worth naming here**, because it is the reason
-/// the third row could have been milder: the disc's own `WeaponAIstats.xml`
-/// authors the Plasma at `useAgainstAI="1.0"` where the Rocket, the Missile and
-/// the Mine are all `1.2` - so **the original does use it against other craft
-/// less often**, and this engine does not, because that whole decision is
-/// unported (see `Race::spend_opponent_pickup`). `Race::fire_opponent_plasma`
-/// deliberately reuses the Rocket's gate rather than inventing a second one.
+/// **Two measured divergences are worth naming here**, because between them
+/// they are the reason the third row could have been milder - and the larger of
+/// the two may yet push the floor back *up*:
+///
+/// - **The Plasma very probably winds up before it fires, and this build fires
+///   it instantly.** `<Plasma charge_time>` is authored at `3` on all three
+///   shipped tables, no consumer has been found on a path read end to end, and
+///   a maintainer who plays Pulse says the weapon does charge. A three-second
+///   commit per shot changes how often a field actually lands one far more than
+///   anything else here does. So "the weapon working" above is true of the
+///   weapon *as read*, and if `charge_time` is ever found this measurement
+///   should be retaken before the floor is trusted. See
+///   `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+/// - The disc's own `WeaponAIstats.xml` authors the Plasma at
+///   `useAgainstAI="1.0"` where the Rocket, the Missile and the Mine are all
+///   `1.2` - so the original also uses it against other craft less often, and
+///   this engine does not, because that whole decision is unported (see
+///   `Race::spend_opponent_pickup`). `Race::fire_opponent_plasma` deliberately
+///   reuses the Rocket's gate rather than inventing a second one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {

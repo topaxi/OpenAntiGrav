@@ -134,13 +134,21 @@ impl Race {
         &mut self,
         before: &[u8; oag_gameplay::projectile::MAX_PROJECTILES],
     ) {
-        let Some(effect) = self.effects.get(MISSILE_BOUNCE_EFFECT).cloned() else {
-            return;
-        };
         for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
-            if bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
-                self.stage.play(&effect, projectile.position, 1.0);
+            if !bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
+                continue;
             }
+            // Looked up per slot rather than once outside the loop, because two
+            // weapons bounce and they play different files - see
+            // [`bounce_effect_for`]. A weapon whose file did not load plays
+            // nothing and does not fall back to the other's.
+            let Some(effect) = bounce_effect_for(projectile.kind)
+                .and_then(|name| self.effects.get(name))
+                .cloned()
+            else {
+                continue;
+            };
+            self.stage.play(&effect, projectile.position, 1.0);
         }
     }
 
@@ -389,6 +397,7 @@ pub(in crate::race) fn flare_effect_for(
         oag_formats::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
         oag_formats::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
         oag_formats::weapons::Weapon::Plasma => Some(PLASMA_FLARE_EFFECT),
+        oag_formats::weapons::Weapon::Shuriken => Some(SHURIKEN_FLARE_EFFECT),
         _ => None,
     }
 }
@@ -517,5 +526,24 @@ pub(in crate::race) fn bounced_this_tick(
     before: u8,
     now: u8,
 ) -> bool {
-    kind == Some(oag_formats::weapons::Weapon::Missile) && now > before
+    bounce_effect_for(kind).is_some() && now > before
+}
+
+/// Which burst a weapon plays on a wall it glances off, or `None` for one that
+/// does not glance at all.
+///
+/// Two weapons bounce and **each authors its own file**, which is the whole
+/// reason this is a map rather than a boolean: `Missile_Update` spawns
+/// `WO_MISSILE_BOUNCE` and `Shuriken_Bounce` (`0x088778ac`) spawns
+/// `WO_SHURIKEN_BOUNCE`, both read directly out of `.rodata`. Playing one
+/// weapon's file for the other is the bug that shipped as a mine riding the
+/// Rocket's flare.
+pub(in crate::race) fn bounce_effect_for(
+    kind: Option<oag_formats::weapons::Weapon>,
+) -> Option<&'static str> {
+    match kind? {
+        oag_formats::weapons::Weapon::Missile => Some(MISSILE_BOUNCE_EFFECT),
+        oag_formats::weapons::Weapon::Shuriken => Some(SHURIKEN_BOUNCE_EFFECT),
+        _ => None,
+    }
 }

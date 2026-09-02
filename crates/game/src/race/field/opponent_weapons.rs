@@ -172,6 +172,58 @@ impl Race {
         )
     }
 
+    /// Throws an opponent's blade, if its driver wants a shot now.
+    ///
+    /// Returns whether anything left, for [`Race::fire_opponent_plasma`]'s
+    /// reason, and gates on the same `Driver::wants_to_fire` for the same one:
+    /// nothing read weighs this weapon differently at the moment of throwing,
+    /// and a second invented gate would be inventing a difference rather than
+    /// recovering one.
+    ///
+    /// **The coin is drawn from the world's generator here exactly as it is on
+    /// the player's path**, and only once there is room in the array - see
+    /// `Race::spend_pickup`'s Shuriken arm, whose ordering this mirrors line for
+    /// line. A driver that declines the shot draws nothing at all, so the
+    /// generator stream does not depend on how many opponents happened to be
+    /// holding a Shuriken this tick.
+    fn throw_opponent_shuriken(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if self.world.ships[slot]
+            .driver
+            .wants_to_fire(&context)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(stats) = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::shuriken)
+        else {
+            return false;
+        };
+        if self.world.projectiles.live() >= oag_gameplay::projectile::MAX_PROJECTILES {
+            return false;
+        }
+        let physics = self.world.ships[slot].physics;
+        let dimensions = self.world.ships[slot].handling.dimensions;
+        let (position, velocity) = oag_gameplay::projectile::shuriken::launch(
+            &physics,
+            &dimensions,
+            &stats,
+            to_format_class(self.class),
+            &mut self.world.rng,
+        );
+        self.world
+            .projectiles
+            .throw(position, velocity, slot as u8, stats.fuse)
+    }
+
     /// What an opponent does with a pickup it is holding.
     ///
     /// # This is a policy, and it is the crudest one that is not "nothing"
@@ -335,6 +387,10 @@ impl Race {
             }
         } else if weapon == oag_formats::weapons::Weapon::Plasma {
             if !self.fire_opponent_plasma(slot, field) {
+                return;
+            }
+        } else if weapon == oag_formats::weapons::Weapon::Shuriken {
+            if !self.throw_opponent_shuriken(slot, field) {
                 return;
             }
         } else if matches!(

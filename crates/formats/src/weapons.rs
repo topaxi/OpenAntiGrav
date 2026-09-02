@@ -187,7 +187,9 @@ impl Weapon {
 
 mod stats;
 
-pub use stats::{BombStats, MineStats, MissileStats, PlasmaStats, RocketStats, Simple};
+pub use stats::{
+    BombStats, MineStats, MissileStats, PlasmaStats, RocketStats, ShurikenStats, Simple,
+};
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
@@ -262,6 +264,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::mine`].
     mine: Option<MineStats>,
+    /// The Shuriken's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::shuriken`].
+    shuriken: Option<ShurikenStats>,
     /// The Bomb's own block, or `None` for a file that omits it.
     ///
     /// Read it through [`Self::bomb`].
@@ -344,6 +350,15 @@ impl WeaponStats {
     #[must_use]
     pub fn bomb(&self) -> Option<BombStats> {
         self.bomb
+    }
+
+    /// The Shuriken's `<Stats>`, or `None` when the file authors no Shuriken.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is.
+    #[must_use]
+    pub fn shuriken(&self) -> Option<ShurikenStats> {
+        self.shuriken
     }
 
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
@@ -451,6 +466,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut rocket = None;
     let mut missile = None;
     let mut plasma = None;
+    let mut shuriken = None;
     let mut mine = None;
     let mut bomb = None;
     let mut absorb = Vec::new();
@@ -520,6 +536,25 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
                     launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
+                    speeds: class_speeds(block)?,
+                })
+            })?;
+            continue;
+        }
+        if weapon_kind == Weapon::Shuriken {
+            // Optional for the Bomb's reason. **Three of the thirteen authored
+            // attributes are deliberately absent** - `rhicochetdamage`,
+            // `rhicochetForce` and `slowdown_time` - see `ShurikenStats`.
+            shuriken = optional_block(&mut skipped, weapon_kind, || {
+                Ok(ShurikenStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    // The file capitalises these two where the Rocket's are
+                    // lower-case; kept verbatim, as `launchSpeed` is.
+                    blastforce: number(block, "Stats", "blastForce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    blastdamage: number(block, "Stats", "blastdamage")?,
+                    launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
+                    fuse: number(block, "Stats", "fuse")?,
                     speeds: class_speeds(block)?,
                 })
             })?;
@@ -612,6 +647,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         rocket,
         missile,
         plasma,
+        shuriken,
         mine,
         bomb,
         absorb,
