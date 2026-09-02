@@ -22,20 +22,27 @@ confidence 55 on that specific claim, which is why the lower-level
 enable/disable pair (`0x088598ac`/`0x088598d8`) is cited by address rather
 than renamed.
 
-**Sfx, Pulse PSP: not located.** No sound-play call anywhere in the trigger
-chain. Two live hypotheses, neither confirmed: baked into one of the two vex
-nodes' own emitter (the way `Engine Flare` owns `~ENGINE`), or a cue never
-searched for because only `BOOT.BIN`'s strings were searched, not the sound
-banks. `oag-wad sounds` against `Data.wad` was not run this session.
+**Sfx, Pulse PSP: no cue exists, but the mechanism is still open.** No
+sound-play call anywhere in the trigger chain, and `oag-wad sounds` against
+the whole of `Data.wad` (36 banks, 582 cues, all enumerated) rules out a
+per-craft cue: `SHIP`/`SHIP_ZM` have none candidate-shaped, and the
+`MAG*`/`HUM`/`GRIND` hits elsewhere are all in per-track ambience banks
+(`basilic`, `dekonst`, `gentrak`, `fortcle`), alongside plainly environmental
+cues like `~crowd`/`~radardish`/`~billboard`. What remains is one
+hypothesis: the hum is baked into one of the two vex nodes' own emitter, the
+way `Engine Flare` owns `~ENGINE` - not yet checked, needs the node class's
+own update function.
 
 **Pure and HD/Fury: neither implemented.** Pure's `Data.wad` (both regions,
 832 entries, censused in full) does not contain either hash under the same
-path spelling - a real negative for these two exact assets, but Pure's own
-Ghidra binary was unreachable this session (the MCP bridge only had one
-program switched in at a time and `psp-pure-usa`/`psp-pure-eu` would not
-switch in), so whether Pure has an equivalent trigger over a different or
-absent asset is unchecked, not ruled out. HD/Fury's `EBOOT.elf` has no
-`MagEffect` string at all; not investigated further.
+path spelling - a real negative for these two exact assets under that one
+path, not a claim that Pure lacks the effect entirely (a different path or
+casing, or `FE.wad`, was not tried). Pure's own Ghidra binary was unreachable
+this session (the MCP bridge only had one program switched in at a time and
+`psp-pure-usa`/`psp-pure-eu` would not switch in), so whether Pure has an
+equivalent trigger over a different or absent asset is unchecked, not ruled
+out. HD/Fury's `EBOOT.elf` has no `MagEffect` string at all; not investigated
+further.
 
 **Nothing was implemented in `crates/` this session** - the render/audio
 wiring was deliberately left for a follow-up once the sfx mechanism and the
@@ -48,8 +55,8 @@ of plausible-looking stand-in `CLAUDE.md` warns against.
 
 - The node-identity claim (`entity+0xac`/`+0xb0` == the two MagEffect nodes) -
   needs the constructor that writes those two fields, not yet located.
-- The sfx mechanism - baked into a node's own emitter, or a bank cue not yet
-  searched for.
+- The sfx mechanism - no bank cue exists, so it is either baked into one of
+  the two vex nodes' own emitter or the hum has some other source entirely.
 - What `entity+0x8bc` gates in `Ship_MagFloorEnter`/`Ship_MagFloorExit`.
 - Pure's code side is unchecked (only the asset-hash census ran).
 - HD/Fury's mechanism, if any, is unchecked beyond the one string search.
@@ -57,8 +64,10 @@ of plausible-looking stand-in `CLAUDE.md` warns against.
 
 ## Next Steps
 
-- Run `oag-wad sounds` against Pulse's `Data.wad` and grep the cue list for
-  anything magfloor-shaped, before assuming the hum is baked into a vex node.
+- Read the node class `MagEffect1`/`MagEffect2` register as, and whether its
+  own update function owns a sound emitter (the `Engine Flare` pattern) -
+  now the single open question on the sfx side, since the bank census ruled
+  out a plain cue.
 - Get a Ghidra session with `psp-pure-usa`/`psp-pure-eu` actually switched in
   (this session's bridge only exposed `BOOT.BIN` ambiguously across the two
   Pulse regions and never resolved to Pure) and repeat the string/asset search

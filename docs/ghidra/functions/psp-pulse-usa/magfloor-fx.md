@@ -8,14 +8,17 @@
 
 ## Summary
 
-Riding a magstrip has a dedicated visual effect on Pulse, separate from both
-the collision mesh (`Mag Floor Collision`, class `0x3e6`) and the track's own
-glowing strip texture. It is two ordinary `.vex` models,
+Two ordinary `.vex` models ship on Pulse's disc and preload every race:
 `Data\visual_effects\MagEffect1.vex` and `Data\visual_effects\MagEffect2.vex`,
-shown and hidden by `Ship_MagFloorEnter`/`Ship_MagFloorExit`
+separate from both the collision mesh (`Mag Floor Collision`, class `0x3e6`)
+and the track's own glowing strip texture. Separately, the tail of
+`Ship_CastHoverProbes` edge-detects the mag-floor contact bool it already
+computes and calls `Ship_MagFloorEnter`/`Ship_MagFloorExit`
 ([engine.md](engine.md#the-tail-of-ship_casthoverprobes-fires-the-mag-floor-gfxsfx-2026-09-02)),
-called from the tail of `Ship_CastHoverProbes` on the rising/falling edge of
-the mag-floor contact bool.
+which show/hide two child scene nodes on rising/falling edge. **That the two
+assets and the two shown/hidden nodes are the same two is inferred from
+proximity and shape, not located** - see [The trigger](#the-trigger) for
+exactly how far the evidence goes.
 
 **Found starting from an `AskUserQuestion` to the maintainer** (they play these
 games): both a visible spark/glow below the craft and an audible hum were
@@ -88,29 +91,42 @@ flag, OR/AND a bit on two children) is read at high confidence.
 
 No call to any sound-play function was found in `Ship_MagFloorEnter`,
 `Ship_MagFloorExit`, or the enable/disable pair - the whole visible chain is
-scene-graph flag flips, nothing that looks like `Sound_Play`. Two readings,
-neither confirmed:
+scene-graph flag flips, nothing that looks like `Sound_Play`.
 
-1. The hum is baked into one or both `.vex` nodes themselves, the way
-   `Engine Flare` owns its own `~ENGINE` sound emitter
-   ([exhaust.md](exhaust.md#exhaust_updateenginesound)) - showing the node
-   would then start its sound as a side effect of a generic node-class update,
-   invisible to a search rooted at the trigger.
-2. It is a cue this search did not find because it was only ever searched for
-   as a string in `BOOT.BIN` (`MAG*`, nothing found beyond `Mag Floor
-   Collision`) - Pulse's actual cue names live in sound banks, which were not
-   enumerated. `oag-wad sounds` against `Data.wad` (see `oag-wad --help`) is
-   the next step, not a string search of the executable.
+**`oag-wad sounds` was run against the whole of `Data.wad`** (36 banks, 582
+cues, all named), closing off the more obvious version of "the cue was never
+searched for". The `SHIP` bank (`#860`) - the one most likely to carry a
+per-craft magfloor cue, since it already carries `~ENGINE`, `MALFUNCTION`,
+`FLIP`, `.COLLISIONS` - has no candidate: its nine cues are `.COLLISIONS`,
+`EXPLBIG`/`EXPLBIG_PC`, `EXPLSMALL`/`EXPLSMALL_PC`, `FLIP`, `MALFUNCTION`,
+`RESET`, `~ENGINE`. `SHIP_ZM` (Zone mode's ship bank) has none either. A
+broader grep for `mag|strip|hum|grind|lock` across every bank does turn up
+`~HUM` (in the per-track ambience banks `basilic`, `dekonst`), `~bighum`/
+`~hum` (in `gentrak`, alongside `~radardish`/`~billboard`/`~neon`/`~crowd`/
+`~startline`) and `~SINGLE_GRINDER` (in `fortcle`) - but every one of these
+banks is named after a *track*, not a craft, and sits beside plainly
+environmental cues (crowd noise, a radar dish, a starting-line neon buzz).
+Read as generic track-scenery ambience, not a per-craft magfloor cue - though
+whether any of them happens to be *placed* along that track's magstrip
+sections specifically was not checked, and would need the pad/emitter
+placement data, not just the bank's cue list.
+
+So: **no per-craft magfloor sfx cue exists in `Data.wad`.** What remains
+unconfirmed is only the first reading - that the hum is baked into one or
+both `.vex` nodes' own emitter, the way `Engine Flare` owns `~ENGINE`
+([exhaust.md](exhaust.md#exhaust_updateenginesound)) - which would make it
+invisible to a bank-name search rooted at the trigger, and needs the node
+class's own update function, not yet read.
 
 **Do not invent a cue for this.** Per `CLAUDE.md`'s do-not-invent rule, no sfx
-is wired until one of the two readings above is actually confirmed.
+is wired until the emitter reading above is confirmed or refuted.
 
 ## Cross-platform
 
 | Title | Result |
 | --- | --- |
 | Pulse PSP (USA) | Both assets present, hashes `ba9996ee`/`fd39ec3e`, entries 1079/1080 of `Data.wad`. The trigger above. |
-| Pure PSP (USA/EU) | **Not found.** `oag-wad hash` on the same two path spellings gives the same two hashes (the hash function is path-text-only, not per-title), and neither hash is an entry in `pure-psp-usa.chd`'s or `pure-psp-eu.chd`'s `Data.wad` (832 entries, censused in full). Pure's own Ghidra binary was not reachable in this session (bridge only exposes one program at a time; see below) so the *code* side - whether Pure even has an equivalent trigger reading a different asset - is unchecked, not ruled out. |
+| Pure PSP (USA/EU) | **These two exact hashed names are absent.** `oag-wad hash` on the same two path spellings (`Data\visual_effects\MagEffect1.vex`/`MagEffect2.vex`) gives the same two hashes (the hash function is path-text-only, not per-title), and neither hash is an entry in `pure-psp-usa.chd`'s or `pure-psp-eu.chd`'s `Data.wad` (832 entries, censused in full). That is narrower than "Pure has no such effect": a different path, a different casing that hashes differently, or a different archive (`FE.wad` was not censused) would all read the same as absent here. Pure's own Ghidra binary was not reachable in this session (bridge only exposed one program at a time) so the *code* side - whether Pure even has an equivalent trigger, over a different or absent asset - is unchecked, not ruled out. |
 | HD/Fury PS3 | **No `MagEffect` string anywhere in `EBOOT.elf`.** Whatever HD/Fury does for a magstrip section (if anything - HD's track set may not reuse Pulse's magstrip sections at all) is a different mechanism or absent; not investigated further this session. |
 
 ## Open questions
@@ -123,13 +139,20 @@ is wired until one of the two readings above is actually confirmed.
 - What `entity+0x8bc` gates (possibly per-player scoping, unconfirmed - see
   `entity+0x368` on [shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
   for a similarly-shaped but distinct field this codebase has already chased).
-- The sfx mechanism (see above) - two readings, neither confirmed.
+- The sfx mechanism - whether the hum is baked into one of the two `.vex`
+  nodes' own emitter; no bank cue names it, but the node's own update
+  function was not read.
 - Pure's code side (does it have an equivalent trigger over a different or
-  absent asset?) and HD/Fury's mechanism, if any, are both unchecked.
+  absent asset, under a path this session did not hash?) and HD/Fury's
+  mechanism, if any, are both unchecked.
 
 ## History
 
 - 2026-09-02: Assets found and parsed (90), trigger function tail read (85),
   the enable/disable pair read mechanically (confidence on node identity 55,
-  left unnamed), sfx mechanism not located. Pure ruled out for these two exact
-  asset hashes; Pure's code and HD/Fury both unchecked.
+  left unnamed). All 582 cues across Pulse's 36 sound banks enumerated: no
+  per-craft magfloor cue in `SHIP`/`SHIP_ZM`, and the `MAG*`/`HUM`/`GRIND`
+  hits elsewhere are track-ambience banks, not craft ones - narrows the sfx
+  question to "is it baked into the vex node's own emitter", not answers it.
+  Pure ruled out for these two exact asset hashes in `Data.wad` only; Pure's
+  code and HD/Fury both unchecked.
