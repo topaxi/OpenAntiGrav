@@ -162,26 +162,37 @@ full-viewport paint is worth a depth prepass, GPU-side cost of the six motion
 blur passes, and whether finding 4's saving is visible on an integrated GPU (it
 is a CPU-side saving; the GPU sees fewer descriptor binds).
 
-## The instrumentation is still here
+## The instrumentation is still here, behind an off-by-default feature
 
 `crates/render/src/perfprobe.rs` and its call sites, the `perfprobe::mark`
 calls through `race/scene/frame.rs`, the `OAG_RENDER_BENCH` block in
-`race/capture.rs`, and the `#[global_allocator]` in `crates/game/src/main.rs`
-are **debug code, not for merge as-is**. Every one is marked in its own doc
-comment. They are worth keeping until the Open list above is empty, because
-every number in this file came out of them and re-deriving them costs an
-afternoon.
+`race/capture.rs` and the counting `#[global_allocator]` in
+`crates/game/src/main.rs` are all behind **`perf-probe`, which is off**. A
+default build has no allocator wrapper (`nm` finds no `perfprobe` symbol in
+it), and every counter folds to nothing: they sit behind `cfg!` rather than
+`#[cfg]`, so the bodies still compile with the flag off and cannot rot between
+the runs that use them. The one true `#[cfg]` is the `#[global_allocator]`
+static itself, which has to be absent rather than inert.
+
+Verified both ways: with the feature the numbers above reproduce; without it
+the same commands print nothing, and the eleven captures come out byte-identical
+either way.
 
 Reproduce:
 
 ```sh
-OAG_RENDER_PERF=1 cargo run --release -p oag-game -- \
+OAG_RENDER_PERF=1 cargo run --release -p oag-game --features perf-probe -- \
   data/images/pulse-psp-usa.chd --race --mode single_race \
   --screenshot /tmp/race.png --ticks 600
-OAG_RENDER_BENCH=300 cargo run --release -p oag-game -- \
+OAG_RENDER_BENCH=300 cargo run --release -p oag-game --features perf-probe -- \
   data/images/pulse-psp-usa.chd --race --mode single_race \
   --screenshot /tmp/race.png --ticks 600
 ```
+
+**`just` does not build with the feature on**, deliberately - a second clippy
+pass on every commit to cover one `#[cfg]`'d static is not worth the minutes.
+Run `cargo clippy -p oag-game --all-targets --features perf-probe` by hand
+after touching anything in this list.
 
 ## Next Steps
 

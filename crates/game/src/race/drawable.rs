@@ -415,7 +415,7 @@ impl Drawable {
         frustum: Option<&Frustum>,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
-        let mut last_slot: Option<usize> = None;
+        let mut binds = oag_render::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
         // the first tier always allows. That is the ship and the collision
@@ -428,7 +428,7 @@ impl Drawable {
         if self.model.indices.is_empty() {
             return stats;
         }
-        probe_pipeline_set();
+        oag_render::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
@@ -450,7 +450,7 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            probe_texture_bind(&mut last_slot, slot);
+            binds.record(slot);
             // Switched only when the slot changes, the same elision the
             // transparent list's `set_pipeline` already runs. Batches
             // sharing a texture arrive in runs - a model's own batch order
@@ -474,7 +474,7 @@ impl Drawable {
 
         // Second pipeline, same pass: alpha-tested batches, cutout. See
         // `mesh_render::Built::alpha_test_pipeline`.
-        probe_pipeline_set();
+        oag_render::perfprobe::pipeline_set();
         pass.set_pipeline(&self.alpha_test_pipeline);
         for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
             if !visible(
@@ -493,7 +493,7 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            probe_texture_bind(&mut last_slot, slot);
+            binds.record(slot);
             // Elided when unchanged, as above.
             if last_bound != Some(slot) {
                 pass.set_bind_group(1, &self.textures[slot], &[]);
@@ -535,7 +535,7 @@ impl Drawable {
             }
             let pipeline = pipelines.select(draw);
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                probe_pipeline_set();
+                oag_render::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }
@@ -545,7 +545,7 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            probe_texture_bind(&mut last_slot, slot);
+            binds.record(slot);
             // Elided when unchanged, as above.
             if last_bound != Some(slot) {
                 pass.set_bind_group(1, &self.textures[slot], &[]);
@@ -591,7 +591,7 @@ impl Drawable {
     /// PSP.
     pub(super) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
         let mut stats = SceneStats::default();
-        let mut last_slot: Option<usize> = None;
+        let mut binds = oag_render::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         if self.model.indices.is_empty() {
             return stats;
@@ -614,7 +614,7 @@ impl Drawable {
             // that sets it differently should still be obeyed.
             let pipeline = &self.additive_pipeline[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                probe_pipeline_set();
+                oag_render::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }
@@ -624,7 +624,7 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            probe_texture_bind(&mut last_slot, slot);
+            binds.record(slot);
             // Elided when unchanged, as above.
             if last_bound != Some(slot) {
                 pass.set_bind_group(1, &self.textures[slot], &[]);
@@ -669,20 +669,4 @@ pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
     Mat4::from_rotation_translation(body.orientation, body.position)
         * Mat4::from_rotation_y(MODEL_YAW)
         * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
-}
-
-/// **Debug instrumentation for the render-performance review. Not for merge.**
-fn probe_texture_bind(last: &mut Option<usize>, slot: usize) {
-    use std::sync::atomic::Ordering::Relaxed;
-    oag_render::perfprobe::TEXTURE_BINDS.fetch_add(1, Relaxed);
-    if *last == Some(slot) {
-        oag_render::perfprobe::TEXTURE_BINDS_REDUNDANT.fetch_add(1, Relaxed);
-    }
-    *last = Some(slot);
-}
-
-/// **Debug instrumentation for the render-performance review. Not for merge.**
-fn probe_pipeline_set() {
-    use std::sync::atomic::Ordering::Relaxed;
-    oag_render::perfprobe::PIPELINE_SETS.fetch_add(1, Relaxed);
 }

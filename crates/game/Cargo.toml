@@ -107,6 +107,8 @@ gstreamer-video = { version = "0.23", optional = true }
 
 [features]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
+# See `oag-render`'s feature of the same name. Off by default.
+perf-probe = ["oag-render/perf-probe"]
 
 [lints]
 workspace = true

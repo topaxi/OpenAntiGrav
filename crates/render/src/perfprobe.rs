@@ -1,5 +1,12 @@
 #![allow(unsafe_code)]
-//! **Debug instrumentation for the render-performance review. Not for merge.**
+//! **Debug instrumentation, behind the off-by-default `perf-probe` feature.**
+//!
+//! Without the feature every function here is a no-op the optimiser deletes:
+//! [`on`] returns `false` before it touches anything, and each counter is
+//! behind a `cfg!` rather than a `#[cfg]`, so the bodies still compile and
+//! cannot rot while the flag is off. [`bind_group`] and [`texture_view`] are
+//! passthroughs either way. Build with
+//! `cargo run -p oag-game --features perf-probe`.
 //!
 //! Three things the frame path does that nothing else counts:
 //!
@@ -32,8 +39,10 @@ pub struct Counting;
 
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCS.fetch_add(1, Relaxed);
-        ALLOC_BYTES.fetch_add(layout.size() as u64, Relaxed);
+        if counting() {
+            ALLOCS.fetch_add(1, Relaxed);
+            ALLOC_BYTES.fetch_add(layout.size() as u64, Relaxed);
+        }
         unsafe { System.alloc(layout) }
     }
 
@@ -42,25 +51,47 @@ unsafe impl GlobalAlloc for Counting {
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        ALLOCS.fetch_add(1, Relaxed);
-        ALLOC_BYTES.fetch_add(new_size as u64, Relaxed);
+        if counting() {
+            ALLOCS.fetch_add(1, Relaxed);
+            ALLOC_BYTES.fetch_add(new_size as u64, Relaxed);
+        }
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }
 
-/// Whether the probe should print at all.
+/// Whether the probe should print at all: the `perf-probe` feature *and*
+/// `OAG_RENDER_PERF` in the environment.
 ///
-/// Read once. `env::var_os` allocates an `OsString` on every call, and this is
-/// asked once per [`mark`] - about thirteen times a frame - so reading it live
-/// would have this module allocating in the frame path it exists to count.
+/// The environment half is read once. `env::var_os` allocates an `OsString`
+/// on every call, and this is asked once per [`mark`] - about thirteen times
+/// a frame - so reading it live would have this module allocating in the
+/// frame path it exists to count.
 #[must_use]
+#[inline]
 pub fn on() -> bool {
+    if !cfg!(feature = "perf-probe") {
+        return false;
+    }
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_RENDER_PERF").is_some())
 }
 
+/// Whether the counters below record anything.
+///
+/// Separate from [`on`]: a counter costs one relaxed atomic and is wanted
+/// whenever the feature is built, where printing is wanted only when asked
+/// for. Both are constant-folded away without the feature.
+#[inline]
+const fn counting() -> bool {
+    cfg!(feature = "perf-probe")
+}
+
 /// Every counter, zeroed.
+#[inline]
 pub fn reset() {
+    if !counting() {
+        return;
+    }
     for counter in [
         &ALLOCS,
         &ALLOC_BYTES,
@@ -99,7 +130,9 @@ pub fn report_frame(frame: u64) {
 /// `device.create_bind_group`, counted.
 #[must_use]
 pub fn bind_group(device: &wgpu::Device, desc: &wgpu::BindGroupDescriptor<'_>) -> wgpu::BindGroup {
-    BIND_GROUPS.fetch_add(1, Relaxed);
+    if counting() {
+        BIND_GROUPS.fetch_add(1, Relaxed);
+    }
     device.create_bind_group(desc)
 }
 
@@ -109,14 +142,18 @@ pub fn texture_view(
     texture: &wgpu::Texture,
     desc: &wgpu::TextureViewDescriptor<'_>,
 ) -> wgpu::TextureView {
-    TEXTURE_VIEWS.fetch_add(1, Relaxed);
+    if counting() {
+        TEXTURE_VIEWS.fetch_add(1, Relaxed);
+    }
     texture.create_view(desc)
 }
 
 /// `queue.write_buffer`, counted.
 pub fn write_buffer(queue: &wgpu::Queue, buffer: &wgpu::Buffer, offset: u64, data: &[u8]) {
-    WRITE_BUFFERS.fetch_add(1, Relaxed);
-    WRITE_BUFFER_BYTES.fetch_add(data.len() as u64, Relaxed);
+    if counting() {
+        WRITE_BUFFERS.fetch_add(1, Relaxed);
+        WRITE_BUFFER_BYTES.fetch_add(data.len() as u64, Relaxed);
+    }
     queue.write_buffer(buffer, offset, data);
 }
 
@@ -138,4 +175,38 @@ pub fn mark(label: &str) {
         allocs.saturating_sub(LAST_ALLOCS.swap(allocs, Relaxed)),
         bytes.saturating_sub(LAST_BYTES.swap(bytes, Relaxed)),
     );
+}
+
+/// One `Drawable::draw`'s worth of texture bind-group bookkeeping: how many
+/// were issued, and how many named the slot already bound.
+///
+/// Here rather than in `oag-game` so its state disappears with the feature -
+/// without `perf-probe` the field is written and never read, and the whole
+/// struct folds away.
+#[derive(Debug, Default)]
+pub struct Binds {
+    last: Option<usize>,
+}
+
+impl Binds {
+    /// Records that the caller is about to bind `slot`.
+    #[inline]
+    pub fn record(&mut self, slot: usize) {
+        if !counting() {
+            return;
+        }
+        TEXTURE_BINDS.fetch_add(1, Relaxed);
+        if self.last == Some(slot) {
+            TEXTURE_BINDS_REDUNDANT.fetch_add(1, Relaxed);
+        }
+        self.last = Some(slot);
+    }
+}
+
+/// Records one `set_pipeline`.
+#[inline]
+pub fn pipeline_set() {
+    if counting() {
+        PIPELINE_SETS.fetch_add(1, Relaxed);
+    }
 }
