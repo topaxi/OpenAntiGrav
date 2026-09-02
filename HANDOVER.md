@@ -48,9 +48,12 @@ file does not need to carry its own.
   names as its `CAPTURE` and which no earlier note listed. Beware
   `talons-junction-time-trial-lap.csv`, which *is* present and is a different
   file from the `-omega` one.
-- **Three numbers about this suite look green and are not, and each hid the
-  next. Read all three before believing any red count.** Every one of them was
-  believed by somebody on 2026-09-02 before being checked:
+- **Four numbers about this suite look green and are not, and each hid the next.
+  Read all four before believing any red count.** Every one was believed by
+  somebody on 2026-09-02 - two people, working from opposite ends - before being
+  checked. They are one mistake with four faces: a green number trusted without
+  the check that would have refuted it, where the check is always *did the thing
+  I think I measured actually run*:
   1. **`just test-data` reported one failure and there were six.** The recipe
      had no `--no-fail-fast`, and the two `oag-formats` reds sort early enough
      to stop the run at 138 of 3,300. Fixed in the `justfile`; a truncated run
@@ -60,12 +63,17 @@ file does not need to carry its own.
      only that nothing was *filtered out*. Reading it as coverage is what
      produced a since-deleted claim in this file that the missing traces were
      back, when `ls` says they are not.
-  3. **A filtered re-run of a failure is not evidence either.** Four of the six
-     below pass when run alone and fail in the full sweep - reproducibly, on an
-     idle machine, on `main`. "It passed on its own, so it was load" is the
-     reasoning that kept five of them undocumented; it was believed and
-     retracted in the same session. The sensitivity is undiagnosed
-     (parallelism, or shared state under `data/cache/`).
+  3. **A filter can select none of the tests you meant and still report a
+     confident green.** `-E 'test(...)'` matches a test's own name and module
+     path, **not** the binary it lives in - so `test(race_finish)` selects
+     nothing, `race_finish_ground_truth` being the binary, while
+     `test(rcsmodel)` quietly selects `oag-formats`'s `rcsmodel::tests::*` unit
+     tests and none of the ground-truth ones. A re-run of "the failures" this
+     way came back **39 passed**, of 39 tests that were not the failures. And
+     because all six are `#[ignore]`d, dropping `--run-ignored all` runs zero of
+     them and reports `0 tests run` as success. Filter by **exact test name**
+     and keep `--run-ignored all`; then all four fail alone exactly as they do
+     in the sweep, which is what the reproduction below is.
 
   **So a red count means nothing without the variable's state attached.** The
   same tree, same commit, same day: **6 failed / 0 skipped** plain, and
@@ -89,9 +97,21 @@ file does not need to carry its own.
     the one that was already recorded, failing with "nothing recovered the
     craft". All six are undiagnosed.
 
-  Four of them are the filtered-re-run trap above. The two `oag-formats` ones
-  were separately traced to pristine `157a4666`, which reaches further back than
-  either `main` baseline does.
+  **They reproduce alone, and there is no parallelism or shared-state effect** -
+  an earlier version of this entry claimed one, on the strength of the bad
+  filter above, and sent a reader after a `data/cache/` bug that does not exist.
+  Four of four fail on their own with:
+
+  ```sh
+  cargo nextest run --workspace --run-ignored all --no-fail-fast \
+    -E 'test(a_single_race_ends_when_the_player_completes_its_laps) or
+        test(the_finished_race_leaves_a_board_with_the_whole_grid_on_it) or
+        test(every_difficulty_is_quicker_than_the_one_below_it) or
+        test(a_craft_that_stops_on_the_disc_is_put_back)'
+  ```
+
+  The two `oag-formats` ones were separately traced to pristine `157a4666`,
+  which reaches further back than either `main` baseline does.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
 - **Gate status:** last measured green at **2,724 tests (2026-09-02)** in 3.8s,
