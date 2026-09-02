@@ -7,8 +7,8 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 |                                  | Pure | Pulse                          | HD/Fury                        | 2048 |
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
 | Countdown state machine + timing | open | partial - false-start stall lead only (below) | open                | open |
-| Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | open |
-| Zone/view display variants       | open | open                            | strong evidence (below)         | open |
+| Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
+| Zone/view display variants       | open | open                            | strong evidence (below)         | strong evidence (below) |
 
 **Countdown state machine + timing**: what drives `ReadyText`/`GoText`/`CountdownTime`
 and the `<Mode3D>` models (`Pulse_Ready_Go`, `Cockpit_321GO`) from race load to green -
@@ -101,8 +101,33 @@ is not what it turned out to hold. That does not settle the Zone-display questio
 it just means state 7 isn't where the answer lives; the asset-side evidence below
 is unaffected.
 
+**2048: seven `321Go_*.vex` models, not four - confirms the engine-lineage link and
+adds two of its own.** `vita-2048-eu-v104` carries every HD/Fury name
+(`321Go_StartFinish.vex`, `321Go_Zone.vex`, `321Go_HD_Zone_Battle.vex`,
+`321go_hd_detonator.vex`, same inconsistent-lowercase one included) plus two new
+ones, `321Go_2048.vex` and `321Go_2048_Combat.vex` - almost certainly this title's
+own signature mode and its combat variant. `Cockpit321Go` is present too, same as
+Pulse and HD - the view axis holds on a third title. `StartBoost` appears twice in
+`.rodata`, unread beyond the string existing (not traced to confirm it is the same
+AI-tuning table HD's is, though the name and title's engine lineage both point that
+way). This is the strongest cross-title corroboration for the Zone/view axis this
+session found - three of four titles now show the same two-axis shape (mode-keyed
+gantry model, separate cockpit model), and it cost one string search per title.
+Pure's binary (`psp-pure-usa`) was **not reachable this session** - `list_instances`
+reports it open in the underlying Ghidra project, but every `search_functions`/
+`search_strings`/`switch_program` call against `/psp-pure-usa/BOOT.BIN` returned
+"Program not found", with only 4 of the 9-11 listed programs actually addressable
+through this MCP connection. Worth a fresh connection or Ghidra-side check before
+assuming Pure lacks the same asset family - the absence here is a tooling gap, not
+a finding.
+
 ## Open
 
+- **Pure (`psp-pure-usa`/`-eu`) was unreachable via ghidra-mcp this session** despite
+  `list_instances` listing it as open - only 4 of 9-11 listed programs answered
+  `search_strings`/`search_functions`/`switch_program` calls. Try a fresh MCP
+  connection, or check from the Ghidra GUI directly, before concluding anything
+  about Pure's own countdown assets.
 - **State 7's mode-class value is still unnamed.** `0x08aae7e3` and the global
   pointer's `+0xb8` field feeding the resolved per-mode table are read but not
   identified - which ~19 mode/network variants map to which of the two clear-bit
@@ -157,5 +182,7 @@ is unaffected.
    before publishing either a positive or a negative claim about how they differ -
    the billboard thread's own stated lesson, from a mistake made on this exact asset
    family.
-6. Sweep `vita-2048-eu-v104` for the vocabulary this session found working on HD
-   (`321Go`, `StartBoost`, `Cockpit321Go`) before starting 2048 cold; then Pure.
+6. Get Pure reachable through ghidra-mcp (fresh connection, or check the Ghidra GUI
+   directly for why only 4 of 9-11 listed programs answer this session) and then
+   run the same three-string sweep (`321Go`, `StartBoost`, `Cockpit321Go`) that
+   worked cleanly on both HD and 2048.
