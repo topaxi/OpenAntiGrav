@@ -485,7 +485,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
 - [Menus: rebinding is the one thing that does not work](handover/menus-rebinding-is-the-one-thing-that-does.md)
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
-- [Front-end gaps behind `Image`](handover/front-end-gaps-behind-image.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)
 - [`--until` cannot reach a late movie frame on a machine with an audio device](handover/until-cannot-reach-a-late-movie-frame-on.md)

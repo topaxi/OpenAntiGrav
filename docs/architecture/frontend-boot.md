@@ -581,13 +581,31 @@ still does not enter.
 
 ### Image layout
 
-**An `Image` with no `x` is centred**, confidence **85**. `Show Logo`'s image
-gives a `y` and no `x`, and its texture is 512 wide on a 480-wide screen, so
-centring and left-pinning differ by 16 pixels. The texture settles it: its art is
-transparent out to column 23 on the left and from column 488 on the right, so it
-is authored centred inside its own 512. Centred on screen the art lands at 7..471
-with even margins; pinned at `x = 0` it would run to 487 and lose its right edge.
-Measured from the one image there is, not read out of the widget's layout code.
+**An `Image` with no `x` is left-pinned, not centred**, confidence **90**,
+settled against a live capture rather than the texture alone. `Show Logo`'s
+image gives a `y` and no `x`, and its texture is 512 wide on a 480-wide
+screen, so centring and left-pinning differ by 16 pixels. The texture's own
+transparency (out to column 23 on the left, from column 488 on the right)
+only says the art is authored centred *inside its own 512* - it says nothing
+about where that 512 lands on the 480-wide screen, which is the actual
+question an untouched texture can't answer. That took a real frame: a live
+`PPSSPPSDL` capture of `Show Logo` (2026-09-02, `pulse-psp-usa.chd`, driven
+through the websocket debugger - see
+[`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md)), cropped to
+the SDL window's own `960x544` geometry (a clean 2x of the PSP's native
+`480x272`, so no scaling ambiguity) and read back at native resolution.
+Column-by-column, the frame is exactly `0` (pure black) through screen
+column 22 and the first non-zero pixel is column 23 - the same column the
+texture's own transparency edge sits at, with **no** 16px shift. Centred
+would have put that edge at screen column 7 instead, which the capture does
+not show. The right edge is not independently useful for this: `Show Logo`'s
+backdrop (`gameshare_backdrop.mip`, a separate, stacked `Image`) carries its
+own diagonal gradient into that area, so pixel brightness there never drops
+to a clean background baseline before the window edge either way - the left
+edge is the one place the background is genuinely black on both sides of the
+question, which is why it is what settles this.
+`crates/game/src/frontend/draw.rs` drops the `x == 0.0` centring special case
+accordingly and draws every `Image` at its authored `x` directly.
 
 **Colour space is not a detail here.** A `.mip` palette holds sRGB bytes, so
 declaring the sheet's texture `Rgba8UnormSrgb` makes sampling return linear -
