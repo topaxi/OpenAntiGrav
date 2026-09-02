@@ -25,8 +25,13 @@ pub struct Options {
     /// scale, the upscaler, the grade and the aspect bars.
     ///
     /// Only reaches the race hand-off today. The front end's own capture path
-    /// has no `Framebuffer` either, and giving it one is the same piece of work
-    /// as the UI-compositing restructure.
+    /// has no `Framebuffer` at all, and since
+    /// [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+    /// that is correct rather than a gap: the front end has no 3D scene, so
+    /// there is no render scale to apply and no upscaler that would ever run
+    /// there. What a `--presented` front-end capture still misses is the grade
+    /// and the aspect bars, which a windowed front-end frame does get from
+    /// `Framebuffer::composite`.
     pub presented: bool,
     /// Run until this state is current, then capture.
     pub until: Option<String>,
