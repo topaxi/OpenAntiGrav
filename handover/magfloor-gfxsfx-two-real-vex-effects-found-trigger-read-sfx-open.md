@@ -69,8 +69,56 @@ invented sound cue, would be exactly the kind of plausible-looking stand-in
 `CLAUDE.md` warns against - node identity alone is not enough, placement
 matters too.
 
+**A live-capture attempt was made this session and did not reach the
+inverted section.** Following the "Next Steps" advice above, `MagFloorFx_Show`
+and `Ship_MagFloorEnter` were both armed as PPSSPP breakpoints (PPSSPP v1.20.4,
+SDL build under Xvfb, `docs/reverse-engineering/ppsspp-debugger.md`'s
+workflow) and driven at Talon's Junction, Time Trial, White, three separate
+ways:
+
+1. Free-running `scripts/psp-drive.py drive --script
+   verification/scenarios/talons-junction-time-trial-lap.inputs` (the fast
+   path) while a breakpoint listened on a second connection - completed a
+   full, clean 3146-tick lap (final speed ~56, matching a healthy racing
+   speed) without either breakpoint firing.
+2. The same script replayed breakpoint-driven through `scripts/psp-trace.py`
+   (temporarily adding `mag_gate`/`mag_blend` columns at `craft+0x240`/
+   `+0x280` to `psp_trace_fields.py`, reverted after) - also a clean 3146-tick
+   run, and **the craft's `up_y` never went negative even once across the
+   whole lap**. This is the useful negative: `talons-junction-time-trial-lap.inputs`
+   is an *open-loop* replay of pre-recorded button presses, and it does not
+   reproduce the original capture's line closely enough, over ~1,100 ticks,
+   to still enter the inverted loop - it just drives a normal path around
+   that stretch of track instead. `cornering-ground-truth.md`'s own
+   confidence-90 finding that mag-lock engages there is not contradicted by
+   this: that finding came from a *closed-loop* captured lap, and this
+   replay diverged from it long before reaching the section in question.
+3. `scripts/psp-autopilot.py` (closed-loop, chasing `oag-trace track`'s own
+   spline) - the correct tool for this, since it self-corrects instead of
+   replaying stale button presses. Two attempts both crashed a corner around
+   32-35% of the way round (spline point ~1150-1200 of 3448, right around
+   where the inverted section should start) before completing a lap, ending
+   the race early ("the craft update stopped firing... the race is over").
+   Neither run's `mag_gate` column ever went nonzero either, consistent with
+   never reaching the section - `up_y` stayed within `0.81`-`1.0`.
+
+**So the negative result across all three attempts is explained by never
+reaching the inverted section at all, not by the trigger failing to fire
+there.** This is a driving problem, not an RE problem: the autopilot's
+pure-pursuit steerer (explicitly not a claim about the original's AI, just a
+means to get a lap driven) needs to actually get around Talon's Junction's
+technical inverted loop, which it did not manage twice in a row this session.
+Scratch instrumentation (`mag_gate`/`mag_blend` columns, a throwaway capture
+script) was reverted/removed before merging - nothing about the method
+needs to be reconstructed from memory, it is all in this section.
+
 ## Open
 
+- Getting a closed-loop autopilot run all the way through Talon's Junction's
+  inverted section without crashing, so `MagFloorFx_Show`/`Ship_MagFloorEnter`
+  can actually be observed live - the immediate blocker, ahead of "where the
+  two nodes anchor" below (that question cannot even be attempted until this
+  one is solved).
 - Where the two nodes anchor on the craft - `MagFloorFx_Construct`'s caller,
   which would show the parenting/placement, is unlocated.
 - The sfx mechanism - leaning "not attached to this effect", not confirmed;
@@ -85,11 +133,22 @@ matters too.
 
 ## Next Steps
 
-- Find `MagFloorFx_Construct`'s caller (no direct caller resolved statically;
-  a live emulator breakpoint on `0x088590a8` while loading a magstrip track,
-  the same method `weatherpos.md` used for a similarly indirect constructor,
-  is the precedent to follow) - this is now the single blocker on the gfx
-  side, since node identity is settled.
+- Get a closed-loop `psp-autopilot.py` run all the way through Talon's
+  Junction's inverted section - tune `--look-min`/`--look-speed`/
+  `--look-max`/`--deadband`/`--brake-at` (see its own `--help`) rather than
+  retrying with the defaults a third time, since two identical attempts both
+  crashed at the same ~32-35% mark. `--gate`/`--gate-dir` (drive to a chosen
+  world point instead of a full lap) may be the faster route in if a rough
+  coordinate for the inverted section's entry can be estimated from the
+  track mesh, avoiding the technical corners before it entirely.
+- Once a run reaches the section live: with `MagFloorFx_Show` armed, read
+  `a0` (the entity), then `entity+0xac`/`entity+0xb0`, then each object's
+  `+0x3c` -> `+0x40..0x7f` (16 floats, the transform-cache slot
+  `MagFloorFx_Construct`/`FUN_08945284` write to) and compare against an
+  identity matrix - if it differs, that is the anchor; if it is still
+  identity, the anchor really is set elsewhere and `MagFloorFx_Construct`'s
+  caller needs to be found instead (a live breakpoint on `0x088590a8` itself,
+  the same method `weatherpos.md` used for a similarly indirect constructor).
 - Check whether any magstrip-carrying track's pad/emitter data places one of
   the `~HUM`/`~bighum`/`~SINGLE_GRINDER` ambience cues specifically along the
   strip, to settle the sfx question the other way from "not attached".
