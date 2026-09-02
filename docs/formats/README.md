@@ -223,6 +223,14 @@ triangle. Six of its nine surface values are read out of the executable's own
 class-ID switch, and the same six fall out independently from matching 170,744
 collision triangles against Wipeout HD's named classes.
 
+**[2048 sky](2048-sky.md)** is a `skycube.rcsmodel` beside every circuit's
+`track.vex` - an authored dome mesh in the same `.rcsmodel` container the
+track and craft already read, not Wipeout HD's bare `sky.gtf` cubemap. Reading
+its geometry needed a second, previously-unrecognised submesh record shape,
+which closes every GPU pointer the whole 993-file `.rcsmodel` corpus used to
+leave unpaired, not only the sky's own. A race now draws a sky rather than
+black.
+
 **[2048 status](2048-status.md)** is the probe run a third title on, and the
 first that is not a disc at all - *Wipeout 2048* ships as a Vita `.pkg`. Its
 PSARC, its `.vex` class table and its handling XML all read unchanged; three

@@ -126,13 +126,38 @@ pub const RELOCATION_LEN: usize = 8;
 ///
 /// The **shape this module finds records by**: a relocation entry names a word
 /// holding an offset into the GPU section, and a submesh is the pair of them
-/// exactly this far apart. See [`submeshes`].
+/// exactly this far apart. See [`submeshes`]. This is the gap the 244,889-
+/// submesh track/craft corpus uses exclusively - see `docs/formats/2048-rcsmodel.md`.
 pub const BUFFER_POINTER_GAP: usize = 28;
+
+/// The second known gap, a different record shape entirely rather than a
+/// wider version of the same one.
+///
+/// **Confidence 92.** First found on `SkyCube/skycube.rcsmodel` - a small,
+/// single-material dome mesh with no counterpart in the corpus
+/// [`BUFFER_POINTER_GAP`] was originally measured against - but **not a
+/// sky-only shape**: adding it to the search closes every GPU pointer the
+/// 993-file corpus names, from 5,294 unpaired down to zero, and raises the
+/// submesh count from 244,889 to 247,536 - only a few dozen of those new
+/// submeshes are sky domes, the rest ordinary props and craft parts that
+/// happen to use the larger record. Every pair this gap admits still has to
+/// pass [`one`]'s own arithmetic - divisible-by-three index count, a buffer
+/// whose byte length matches, a stride the vertex count divides evenly - the
+/// same bar [`BUFFER_POINTER_GAP`] clears, so a coincidental 184-byte gap is
+/// rejected on the same terms rather than taken on the gap alone. See
+/// `docs/formats/2048-rcsmodel.md`.
+pub const SKY_BUFFER_POINTER_GAP: usize = 184;
+
+/// Every gap [`submeshes`] tries, in the order it tries them.
+const KNOWN_BUFFER_POINTER_GAPS: [usize; 2] = [BUFFER_POINTER_GAP, SKY_BUFFER_POINTER_GAP];
 
 /// Offset of the index-buffer pointer within a submesh record.
 pub const INDEX_POINTER: usize = 0x10;
 
-/// Offset of the vertex-buffer pointer within a submesh record.
+/// Offset of the vertex-buffer pointer within an ordinary, [`BUFFER_POINTER_GAP`]
+/// submesh record. A [`SKY_BUFFER_POINTER_GAP`] record's vertex pointer sits
+/// at `INDEX_POINTER + SKY_BUFFER_POINTER_GAP` instead - [`submeshes`] passes
+/// the gap it matched through to [`one`] rather than assuming this one.
 pub const VERTEX_POINTER: usize = INDEX_POINTER + BUFFER_POINTER_GAP;
 
 /// How far **before** a submesh record's own start its material index sits.
@@ -495,15 +520,17 @@ pub fn parse(file: &[u8]) -> Result<Model> {
 /// whose layout is unread, so instead of walking it this takes the one thing
 /// the header states exactly - where every pointer into the GPU section lives -
 /// and pairs them. A submesh record holds its index-buffer pointer at
-/// [`INDEX_POINTER`] and its vertex-buffer pointer
-/// [`BUFFER_POINTER_GAP`] bytes later, with its two counts at the record's own
-/// `+0x00` and `+0x04`.
+/// [`INDEX_POINTER`] and its vertex-buffer pointer one of
+/// [`KNOWN_BUFFER_POINTER_GAPS`] bytes later, with its two counts at the
+/// record's own `+0x00` and `+0x04`.
 ///
 /// What makes that safe rather than a pattern match is that **it is checked**:
 /// a pair is only taken when the index count is divisible by three and its
 /// buffer is exactly that many `u16`s rounded up to four bytes. On the whole
 /// corpus that check has never once failed on a pair, and never once passed on
-/// something that was not a submesh.
+/// something that was not a submesh - true of both known gaps, tried in the
+/// same pass rather than one after the other, so a gap that does not check out
+/// costs one step (`i += 1`) rather than desynchronising the sites after it.
 fn submeshes(file: &[u8], cpu: Section, gpu: Section) -> Result<(Vec<SubMesh>, usize)> {
     let declarations_by_stride = vertex_decl::find_by_stride(&file[cpu.at..cpu.at + cpu.len]);
     let mut sites: Vec<usize> = (0..gpu.entries)
@@ -534,12 +561,21 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section) -> Result<(Vec<SubMesh>, u
     let mut i = 0usize;
     while i + 1 < sites.len() {
         let (first, second) = (sites[i], sites[i + 1]);
-        if second - first != BUFFER_POINTER_GAP || first < INDEX_POINTER {
+        let gap = second - first;
+        if first < INDEX_POINTER || !KNOWN_BUFFER_POINTER_GAPS.contains(&gap) {
             i += 1;
             continue;
         }
         let record = first - INDEX_POINTER;
-        let Some(mesh) = one(file, cpu, gpu, record, &length_of, &declarations_by_stride) else {
+        let Some(mesh) = one(
+            file,
+            cpu,
+            gpu,
+            record,
+            gap,
+            &length_of,
+            &declarations_by_stride,
+        ) else {
             i += 1;
             continue;
         };
@@ -551,11 +587,17 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section) -> Result<(Vec<SubMesh>, u
 }
 
 /// One submesh record, or `None` if it does not check out.
+///
+/// `gap` is which of [`KNOWN_BUFFER_POINTER_GAPS`] the caller matched - the
+/// vertex pointer sits `gap` bytes past the index pointer regardless of which,
+/// since that is the same offset the relocation pair that found this record
+/// already named.
 fn one(
     file: &[u8],
     cpu: Section,
     gpu: Section,
     record: usize,
+    gap: usize,
     length_of: &impl Fn(u32) -> Option<usize>,
     declarations_by_stride: &std::collections::HashMap<usize, vertex_decl::VertexDecl>,
 ) -> Option<SubMesh> {
@@ -566,7 +608,7 @@ fn one(
         return None;
     }
     let index_ptr = u32_at(file, base + INDEX_POINTER, "index pointer").ok()?;
-    let vertex_ptr = u32_at(file, base + VERTEX_POINTER, "vertex pointer").ok()?;
+    let vertex_ptr = u32_at(file, base + INDEX_POINTER + gap, "vertex pointer").ok()?;
     // The index buffer is exactly its own contents, rounded up to a 4-byte
     // boundary. This is the check that says the pair really is a submesh.
     let index_bytes = length_of(index_ptr)?;

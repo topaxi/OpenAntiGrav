@@ -14,7 +14,7 @@ mod geometry;
 mod roster;
 mod surfaces;
 use crate::remix::craft_of;
-use environment::hd_sky_model;
+use environment::{hd_sky_model, psp2_sky_model};
 
 /// Loads a track, a ship and its handling out of a disc image.
 ///
@@ -579,12 +579,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
-    let sky_model = if ps3_geometry.is_some() {
-        // Wipeout HD authors no `Skycube` node at all - its sky is the
+    let sky_model = if let Some(geometry) = &ps3_geometry {
+        // Two containers wear this extension, and their skies are unrelated
+        // formats - see `geometry::track_model`'s own dispatch on the same
+        // check. Wipeout HD authors no `Skycube` node at all: its sky is the
         // `sky.gtf` cubemap beside the track, drawn through the same
-        // camera-centred sky path, and a Zone race swaps that file out. See
-        // `mesh::sky_cube` and `oag_hd::race::ZONE_SKY`.
-        hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
+        // camera-centred sky path, and a Zone race swaps that file out (see
+        // `mesh::sky_cube` and `oag_hd::race::ZONE_SKY`). Wipeout 2048's is
+        // `skycube.rcsmodel`, an authored dome in the same `.rcsmodel`
+        // container the track and craft already read - see
+        // `environment::psp2_sky_model`.
+        if mesh::rcs::psp2::is_psp2(geometry) {
+            psp2_sky_model(&mut archives, &track, &mut report)
+        } else {
+            hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
+        }
     } else if !vex_geometry {
         None
     } else {

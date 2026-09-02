@@ -85,6 +85,135 @@ pub(super) fn hd_sky_model(
     }
 }
 
+/// `SkyCube/skycube.rcsmodel`'s sibling name beside a Wipeout 2048 `track.vex`.
+///
+/// **Beside the track's own directory, not the track's own stem.** Unlike
+/// [`sky_gtf_name`], the sky file's basename is fixed (`skycube.rcsmodel`
+/// regardless of whether the track file is `track.vex` or
+/// `track_reversed.vex`) and it is not inside a `SkyCube/` subdirectory
+/// despite the `.rcsmaterial` and `.gxt` beside it being - measured off the
+/// shipped archive layout, not assumed from the directory name. See
+/// [2048-sky.md](../../../docs/formats/2048-sky.md).
+fn psp2_sky_sibling_name(track: &str) -> Option<String> {
+    let at = track.rfind(['/', '\\'])?;
+    Some(format!(
+        "{}{}skycube.rcsmodel",
+        &track[..at],
+        &track[at..=at]
+    ))
+}
+
+/// The camera-centred radius every Wipeout 2048 sky is rescaled to.
+///
+/// **Appearance-invariant, the same argument [`mesh::sky_cube::HALF_EXTENT`]
+/// makes for Wipeout HD's generated cube** - the picture a camera-centred
+/// shape draws does not depend on its absolute size, only on clearing the
+/// near plane (`1.0`, `race::camera`'s own constant). What differs here is
+/// that the *authored* dome ships small: measured at radius 1.83 units on
+/// every base-game circuit (`altima` among them), not the tens-of-units scale
+/// Wipeout HD's cube or Pulse's authored skies use. Left at that size, a
+/// visible point at angle `theta` off the view axis sits at view-space depth
+/// `radius * cos(theta)` - so anything past roughly 57 degrees off-axis
+/// (`arccos(1.0 / 1.83)`) would clip into the near plane, which a merely wide
+/// field of view reaches at the screen corners. Rescaled to the same 32-unit
+/// convention Wipeout HD's cube uses, the same corner clears past ~88
+/// degrees, comfortably past any FOV this project drives the camera at.
+const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
+
+/// Wipeout 2048's sky, or `None` with the reason in the report.
+///
+/// **An authored dome mesh, not a generated cube.** Wipeout HD's sky is
+/// `sky.gtf`, a bare cubemap with no geometry of its own -
+/// [`hd_sky_model`] supplies the cube. Wipeout 2048's is `skycube.rcsmodel`
+/// beside the track, a small camera-centred dome mesh in the same `.rcsmodel`
+/// container [`geometry::track_model`] already reads the track and craft
+/// through - see `oag_formats::rcsmodel::psp2` and
+/// [2048-sky.md](../../../docs/formats/2048-sky.md) for the format finding
+/// that made this readable at all (the dome's own submesh record uses a
+/// second, previously-unrecognised buffer-pointer gap,
+/// `psp2::SKY_BUFFER_POINTER_GAP`).
+///
+/// **No rotation is applied.** Wipeout HD's `Lighting.Sky rotation` comes off
+/// `.envsettings`, and that file does not parse for this title at all - see
+/// `docs/formats/2048-status.md` - so there is nothing this reading could turn
+/// the dome by even if the mesh authored an asymmetric horizon (it does not
+/// measurably: every sampled circuit's dome is close to a uniform sphere).
+///
+/// **Zone's sky swap is not wired.** `data/Tex/zoneSky.gxt` exists on the
+/// disc, the same file HD's `Data/Tex/ZoneSky.gtf` names, but nothing here
+/// reads it - a Zone race draws the circuit's own dome, same as every other
+/// mode. Recorded as located-and-unwired rather than chased, the same
+/// `CLAUDE.md` line this whole function follows: draw what is read, say what
+/// is not.
+pub(super) fn psp2_sky_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    let name = psp2_sky_sibling_name(track)?;
+    let Ok(blob) = archives.read_name(&name) else {
+        report.push(format!(
+            "{name}: not in the archive set - the sky stays black"
+        ));
+        return None;
+    };
+    if !mesh::rcs::psp2::is_psp2(&blob) {
+        report.push(format!(
+            "{name}: not a Wipeout 2048 .rcsmodel - the sky stays black"
+        ));
+        return None;
+    }
+    let (mut model, built) =
+        match mesh::rcs::psp2::build(&name, &blob, &mut |path| archives.read_name(path).ok()) {
+            Ok(built) => built,
+            Err(error) => {
+                report.push(format!("{name}: {error:#} - the sky stays black"));
+                return None;
+            }
+        };
+    if model.indices.is_empty() {
+        report.push(format!(
+            "{name}: decoded to no triangles - the sky stays black"
+        ));
+        return None;
+    }
+    // Camera-centred like every other sky source (`mesh::sky_cube::build`'s
+    // own doc comment), but rescaled from the authored dome's own small
+    // radius up to `PSP2_SKY_TARGET_RADIUS` - see that constant's doc for why
+    // the authored size alone risks a near-plane clip. A uniform scale about
+    // the model's own centre, which `finish_bounds` inside `psp2::build`
+    // already measured as the dome's origin.
+    let authored_radius = model.radius;
+    if authored_radius > 0.0 {
+        let scale = PSP2_SKY_TARGET_RADIUS / authored_radius;
+        for vertex in &mut model.vertices {
+            for a in vertex.position.iter_mut() {
+                *a *= scale;
+            }
+            // A sky is a picture of light, not a surface - the same rule
+            // `mesh::sky_cube::build` states for HD's generated cube, and
+            // Pulse's own skies (authored `_nolight`) confirm independently.
+            // Left at `psp2::build`'s default of `1.0`, the stand-in light
+            // rig would shade one side of the dome as if it were geometry.
+            vertex.lit = 0.0;
+        }
+        model.radius *= scale;
+        for draw in &mut model.draws {
+            for a in draw.bounds.centre.iter_mut() {
+                *a *= scale;
+            }
+            draw.bounds.radius *= scale;
+        }
+    }
+    report.push(format!(
+        "{name}: the circuit's sky dome, {}, rescaled from its authored radius of \
+         {authored_radius:.2} unit(s) to {PSP2_SKY_TARGET_RADIUS:.0} to clear the near \
+         plane at any field of view",
+        built.describe(),
+    ));
+    Some(model)
+}
+
 /// The name of the `.envsettings` beside a track `.vex`, or `None`.
 ///
 /// The rewrite the disc's own pairing uses:

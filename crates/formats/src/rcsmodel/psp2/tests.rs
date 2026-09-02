@@ -81,6 +81,114 @@ fn build_with_normal(vertex_count: usize, stride: usize, normal: [u8; 3]) -> Vec
     file
 }
 
+/// Builds an image like [`build`], but each submesh's own record spells out
+/// which of [`KNOWN_BUFFER_POINTER_GAPS`] separates its two buffer pointers -
+/// the shape a real sky file mixes (`SKY_BUFFER_POINTER_GAP` on the dome
+/// itself, [`BUFFER_POINTER_GAP`] on whatever else the record graph
+/// carries), which [`build`] alone cannot exercise since every one of its
+/// records is the ordinary gap.
+fn build_with_gaps(submeshes: &[(usize, usize, usize, usize)]) -> Vec<u8> {
+    let record_len = INDEX_POINTER + submeshes.iter().map(|s| s.3).max().unwrap_or(0) + 4;
+    let mut cpu = vec![0u8; submeshes.len() * record_len];
+    let mut gpu = Vec::new();
+    let mut relocations = Vec::new();
+    for (i, &(index_count, vertex_count, stride, gap)) in submeshes.iter().enumerate() {
+        let record = i * record_len;
+        cpu[record..record + 4].copy_from_slice(&(index_count as u32).to_le_bytes());
+        cpu[record + 4..record + 8].copy_from_slice(&(vertex_count as u32).to_le_bytes());
+
+        let index_at = gpu.len() as u32;
+        for k in 0..index_count {
+            gpu.extend_from_slice(&((k % vertex_count) as u16).to_le_bytes());
+        }
+        while gpu.len() % 4 != 0 {
+            gpu.push(0);
+        }
+        let vertex_at = gpu.len() as u32;
+        for v in 0..vertex_count {
+            for a in 0..3 {
+                gpu.extend_from_slice(&((v * 3 + a) as f32).to_bits().to_le_bytes());
+            }
+            gpu.extend(std::iter::repeat_n(0u8, stride - 12));
+        }
+
+        let index_ptr_at = record + INDEX_POINTER;
+        let vertex_ptr_at = record + INDEX_POINTER + gap;
+        cpu[index_ptr_at..index_ptr_at + 4].copy_from_slice(&index_at.to_le_bytes());
+        cpu[vertex_ptr_at..vertex_ptr_at + 4].copy_from_slice(&vertex_at.to_le_bytes());
+        relocations.push(index_ptr_at as u32);
+        relocations.push(vertex_ptr_at as u32);
+    }
+
+    let header_len = DESCRIPTOR_BASE + 2 * DESCRIPTOR_LEN + relocations.len() * RELOCATION_LEN;
+    let mut out = vec![0u8; header_len];
+    out[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+    out[0x08..0x0c].copy_from_slice(&2u32.to_le_bytes());
+    out[0x0c..0x10].copy_from_slice(&(header_len as u32).to_le_bytes());
+    out[0x24..0x28].copy_from_slice(&(cpu.len() as u32).to_le_bytes());
+    out[0x28..0x2c].copy_from_slice(&0u32.to_le_bytes());
+    out[0x2c..0x30].copy_from_slice(&0u32.to_le_bytes());
+    out[0x44..0x48].copy_from_slice(&(gpu.len() as u32).to_le_bytes());
+    out[0x48..0x4c].copy_from_slice(&0u32.to_le_bytes());
+    out[0x4c..0x50].copy_from_slice(&(relocations.len() as u32).to_le_bytes());
+    let table = DESCRIPTOR_BASE + 2 * DESCRIPTOR_LEN;
+    for (i, &offset) in relocations.iter().enumerate() {
+        let at = table + i * RELOCATION_LEN;
+        out[at..at + 4].copy_from_slice(&offset.to_le_bytes());
+        out[at + 4..at + 8].copy_from_slice(&0u32.to_le_bytes());
+    }
+    out.extend_from_slice(&cpu);
+    out.extend_from_slice(&gpu);
+    out
+}
+
+/// A [`SKY_BUFFER_POINTER_GAP`] pair is found on its own, the same as an
+/// ordinary [`BUFFER_POINTER_GAP`] one - proves the second gap is genuinely
+/// tried, not just accepted by coincidence when it happens to sit next to an
+/// ordinary one.
+#[test]
+fn a_sky_gap_submesh_is_found_on_its_own() {
+    let decoded = parse(&build_with_gaps(&[(9, 4, 20, SKY_BUFFER_POINTER_GAP)])).expect("parses");
+    assert_eq!(decoded.submeshes.len(), 1);
+    assert_eq!(decoded.submeshes[0].stride, 20);
+    assert_eq!(decoded.unpaired_pointers, 0);
+}
+
+/// The real shape a six-submesh sky file carries: one [`SKY_BUFFER_POINTER_GAP`]
+/// record then five ordinary ones. **The regression this guards**: pairing
+/// greedily by index (`i += 2` only on a match) must not let a matched
+/// sky-gap pair shift where the scan resumes, or every downstream ordinary
+/// pair desynchronises - which would either miss real submeshes or, worse,
+/// pair two pointers that were never a submesh together.
+#[test]
+fn a_sky_gap_record_does_not_desynchronise_the_ordinary_pairs_after_it() {
+    let specs = [
+        (9, 4, 20, SKY_BUFFER_POINTER_GAP),
+        (6, 3, 28, BUFFER_POINTER_GAP),
+        (12, 5, 28, BUFFER_POINTER_GAP),
+    ];
+    let decoded = parse(&build_with_gaps(&specs)).expect("parses");
+    assert_eq!(decoded.submeshes.len(), 3);
+    let counts: Vec<(usize, usize)> = decoded
+        .submeshes
+        .iter()
+        .map(|m| (m.indices.len(), m.positions.len()))
+        .collect();
+    assert_eq!(counts, vec![(9, 4), (6, 3), (12, 5)]);
+    assert_eq!(decoded.unpaired_pointers, 0);
+}
+
+/// A gap that is neither known value is left unpaired, the same as any other
+/// pointer pair that does not check out - the corpus-safety property the
+/// second gap must not weaken: an arbitrary gap must still not be read as a
+/// submesh.
+#[test]
+fn an_unknown_gap_is_not_taken_as_a_submesh() {
+    let decoded = parse(&build_with_gaps(&[(9, 4, 20, 100)])).expect("parses");
+    assert!(decoded.submeshes.is_empty());
+    assert_eq!(decoded.unpaired_pointers, 2);
+}
+
 #[test]
 fn unpack_normal_decodes_signed_bytes_over_127() {
     assert_eq!(unpack_normal([127, 0, 0]), [1.0, 0.0, 0.0]);

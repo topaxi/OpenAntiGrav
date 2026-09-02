@@ -1496,9 +1496,14 @@ control point shrunk to 96 bytes), a `track_col.col` collision container of
 its own, and `.rcsmodel`'s normal, diffuse UV, material table and
 per-submesh material binding, all closed 2026-08-27 - plus `PVRTII4BPP`,
 almost every 2048 texture's pixel format, closed the same day. The result
-paints 2,782 of the circuit's 2,800 draws and all 16 of the craft's. See
-[2048-status](../formats/2048-status.md) for the full evidence and what is
-still open (`tangent`'s type nibble, `.envsettings`, `track.pvs`'s header).
+paints 2,782 of the circuit's 2,800 draws and all 16 of the craft's, and the
+circuit's own authored sky dome now draws too - `skycube.rcsmodel`, a small
+camera-centred mesh in the same container, closed 2026-09-02 alongside a
+second submesh record shape that turned out to account for every previously-
+unpaired GPU pointer in the whole corpus, not only the sky's. See
+[2048-status](../formats/2048-status.md) and [2048-sky](../formats/2048-sky.md)
+for the full evidence and what is still open (`tangent`'s type nibble,
+`.envsettings`, `track.pvs`'s header, Zone's own sky swap).
 
 ### What Race Remix does today
 
