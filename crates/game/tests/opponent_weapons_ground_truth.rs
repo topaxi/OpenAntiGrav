@@ -191,10 +191,11 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// term that lets a driver see a laid charge at all. Same circuit, same seed,
 /// same minute:
 ///
-/// | | mean energy | worst craft |
-/// | --- | --- | --- |
-/// | blind | 76 of 95 | **34** |
-/// | dodging | 86 of 95 | **75** |
+/// | | charges laid | mean energy | worst craft |
+/// | --- | --- | --- | --- |
+/// | blind | - | 76 of 95 | **34** |
+/// | dodging | 12 | 86 of 95 | **75** |
+/// | dodging, with the Plasma in the draw (2026-09-02) | 6 | 77 of 95 | **47** |
 ///
 /// The mean barely moves and the *worst* craft more than doubles, which is the
 /// shape to expect and is worth stating: the damage was never spread evenly. It
@@ -202,6 +203,45 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// eating cluster after cluster on a line it could not see. The dodge does not
 /// make mines useless - 75 of 95 is still a craft that has been hit - it stops
 /// one craft being singled out for a punishment it had no way to avoid.
+///
+/// # Why the third row exists, and why the floor moved rather than the code
+///
+/// **The Plasma landing in `pickup::IMPLEMENTED` on 2026-09-02 took the worst
+/// craft from 75 to 47 and this test red.** It was measured rather than
+/// assumed: the same scenario on the commit before, and on that commit alone,
+/// gives the second row.
+///
+/// It is the weapon working, not a regression, and the arithmetic says so. The
+/// Plasma's authored `damage` is the largest of any weapon on both shipped
+/// tables - **four times the Rocket's and twelve times the Mine's** - and one
+/// hit is more than half a full pool. A worst craft at 47 of 95 is down by
+/// roughly *one* of them net of regeneration, where the whole point of the
+/// blind-mine number (34) was that it took a dozen small ones nobody could see.
+/// The halved charge count in the same row is the other half of the same story:
+/// the Plasma takes draw share from the Mine and the Bomb, so **fewer** mines
+/// are laid, not more.
+///
+/// **Nothing here can be dodged by anybody**, which is what makes it fair in
+/// the sense this test was written to defend: a bolt in flight arrives faster
+/// than any driver or player could react, so the player is under exactly the
+/// same threat. That is the opposite of the mine case, where an opponent was
+/// eating charges the player could steer around.
+///
+/// So the floor below moved from half a pool to `0.45`, and the value is picked
+/// rather than fitted: it must sit **above** the blind-mine 34 the guard exists
+/// to catch and **below** what the field now reaches with the game's hardest
+/// weapon in play. `0.45` of 95 is 42.75, which is 8.75 clear of the failure
+/// shape and 4.25 clear of the current measurement. If a future weapon squeezes
+/// that gap further, split the metric by weapon rather than dropping the floor
+/// again - the guard is worth nothing once it cannot separate the two causes.
+///
+/// **One measured divergence is worth naming here**, because it is the reason
+/// the third row could have been milder: the disc's own `WeaponAIstats.xml`
+/// authors the Plasma at `useAgainstAI="1.0"` where the Rocket, the Missile and
+/// the Mine are all `1.2` - so **the original does use it against other craft
+/// less often**, and this engine does not, because that whole decision is
+/// unported (see `Race::spend_opponent_pickup`). `Race::fire_opponent_plasma`
+/// deliberately reuses the Rocket's gate rather than inventing a second one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
@@ -264,9 +304,12 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
     // A regression in the dodge shows up here first and in the mean barely at
     // all.
     assert!(
-        worst > full * 0.5,
+        worst > full * 0.45,
         "one craft ended on {worst:.0} of {full:.0} while the field averaged \
-         {mean:.0} - it is being singled out, which is what happens when a driver \
-         cannot see the charges it is driving over"
+         {mean:.0} - it is being singled out. Two things do that and they look \
+         alike here: a driver that cannot see the charges it is driving over \
+         (the shape this guard was written for, which measured 34), or a craft \
+         eating repeated Plasma hits (one is worth more than half a pool). \
+         {laid} charges were laid this run - a low count points at the second"
     );
 }

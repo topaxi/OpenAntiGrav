@@ -83,11 +83,21 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ("WO_LEACHBEAM_ENERGY", "the Leach Beam is not built."),
     (
         "WO_CANNON_SPARKS",
-        "the Cannon is in the weapon table and fires nothing - only the \
-         Rocket reaches `projectile::spawn`.",
+        "the Cannon is in the weapon table and fires nothing - its fire bit \
+         `0x2000` is set by `Weapon_RequestFire` and dispatched by nothing in \
+         `Weapons_DispatchFire`, across all sixteen bits rather than the five \
+         that used to be read.",
     ),
-    ("WO_PLASMA_HEAD", "the Plasma is not built."),
-    ("WO_PLASMA_FLASH", "the Plasma is not built."),
+    // **Not `WO_PLASMA_HEAD`** - that one is wired, off `Plasma_Init`
+    // (`0x0885bd18`), and this list is the *untriggered* half. The Plasma
+    // landed 2026-09-02.
+    (
+        "WO_PLASMA_FLASH",
+        "the Plasma fires, but nothing read plays this second file of its: no \
+         call site was found for it, so whether it is the muzzle flash, the \
+         detonation or the unfound charge-up is open. See \
+         `docs/ghidra/functions/psp-pulse-usa/plasma.md`.",
+    ),
     ("WO_SHURIKEN_HEAD", "the Shuriken is not built."),
     ("WO_SHURIKEN_TRAIL", "the Shuriken is not built."),
     ("WO_SHURIKEN_BOUNCE", "the Shuriken is not built."),

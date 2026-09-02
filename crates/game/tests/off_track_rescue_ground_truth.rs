@@ -204,8 +204,13 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     race.set_autopilot(true);
 
     // A lap's worth of driving first, so the craft leaves from the circuit rather
-    // than from the grid.
-    for _ in 0..600 {
+    // than from the grid - and **past the start-line countdown before that
+    // starts counting**. `RaceState` gates thrust for the measured
+    // `oag_race::COUNTDOWN_TICKS` (272), so 600 ticks was 328 of driving from a
+    // standing start and the craft was thrown from near the grid rather than
+    // from the circuit. Red since `b4bb23ee` landed the countdown, and
+    // invisible to `just` because this file never runs in CI.
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 600 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
     let from = race.world.ships[0].physics.body.position;

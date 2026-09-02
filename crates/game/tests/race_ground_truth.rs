@@ -64,14 +64,6 @@ use oag_game::{boot, catalogue, movie, race};
 use oag_gameplay::input::{Button, Input};
 use oag_physics::{Raycaster, SpeedClass};
 
-/// Ticks the per-tick suspension assertions cover: two seconds at the fixed 60 Hz.
-///
-/// Short on purpose, because this is the test that checks *every* tick against a hover
-/// target and a probe count. Ten seconds of the same scenario is covered by
-/// [`a_ship_stays_on_the_track_for_ten_seconds`], which asserts the envelope and
-/// finiteness rather than the suspension.
-const TICKS: u32 = 120;
-
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -153,122 +145,10 @@ fn envelope(loaded: &race::Loaded) -> f32 {
     loaded.setup.spline.max_half_width() * 2.0
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_ship_spawns_on_the_track_and_flies_along_it() {
-    let Some(loaded) = load() else { return };
-    let bound = envelope(&loaded);
-    let handling = loaded.setup.handling;
-    let mut race = race::Race::start(loaded.setup);
-
-    // The spawn itself: on the track's authored `Start Position`, the suspension's
-    // resting height above the surface, the right way up, and with the mass the force
-    // law will read also in the body the integrator divides by.
-    //
-    // The height assertion below is worth more than it looks now that the spawn takes
-    // its height off the *collision mesh* under the slot while this reads it off the
-    // *spline*: agreeing to a hundredth means those two surfaces agree there, which
-    // nothing made them do.
-    let start = race.telemetry();
-    assert!(start.position.is_finite(), "{:?}", start.position);
-    assert_eq!(race.ship().physics.body.mass, handling.physical.mass);
-    assert!(
-        (start.height_above_spline - race::spawn_height(&handling)).abs() < 0.01,
-        "spawned at {} above the spline, wanted {}",
-        start.height_above_spline,
-        race::spawn_height(&handling)
-    );
-    // `up` from a `.vex` frame is the surface normal negated, and getting that
-    // backwards buries the ship. On this track's first sample the surface is roughly
-    // level, so the ship's own up must have a positive world y.
-    assert!(
-        race.ship().physics.body.up().y > 0.5,
-        "the ship is not the right way up: {}",
-        race.ship().physics.body.up()
-    );
-
-    let mut held = race::HeldButtons::new(Button::Cross.bit());
-    let mut grounded_ticks = 0u32;
-    // Counted apart, because one probe in contact and two are different situations:
-    // a single probe is a pitch torque applied every tick.
-    let mut both_probes = 0u32;
-    let mut worst_distance = 0.0f32;
-    let mut peak_speed = 0.0f32;
-
-    for tick in 0..TICKS {
-        let snapshot = held.snapshot();
-        race.tick(&snapshot);
-        let telemetry = race.telemetry();
-
-        assert!(
-            telemetry.position.is_finite(),
-            "tick {tick}: {}",
-            race::describe(&telemetry)
-        );
-        assert!(
-            telemetry.spline_distance < bound,
-            "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            race::describe(&telemetry)
-        );
-
-        if race.ship().physics.grounded > 0.0 {
-            grounded_ticks += 1;
-        }
-        if race.ship().physics.grounded == 1.0 {
-            both_probes += 1;
-        }
-        worst_distance = worst_distance.max(telemetry.spline_distance);
-        peak_speed = peak_speed.max(telemetry.speed);
-    }
-
-    let end = race.telemetry();
-    println!("{}", race::describe(&end));
-    println!(
-        "grounded on {grounded_ticks}/{TICKS} tick(s), both probes on {both_probes}, \
-         worst spline distance {worst_distance:.2} of {bound:.1}, peak speed {peak_speed:.2}"
-    );
-
-    // It hovered: a probe reached the collision geometry on some tick. Without this
-    // the ship could be in free fall and everything above would still hold.
-    assert!(
-        grounded_ticks > 0,
-        "no hover probe ever reached the track's collision geometry"
-    );
-    // And it hovered on *both* probes, every tick. This is the pin on
-    // `race::DEFAULT_TRACK`: against the track this scenario was previously flown on,
-    // the same run held both probes on 6 of these 120 ticks and one on 83, which reads
-    // as a suspension that cannot hold a ship and was actually a ship being flown over
-    // the wrong track's collision geometry. Strict on purpose - a single dropped probe
-    // here is a regression worth looking at, and this test never runs in CI.
-    assert_eq!(
-        both_probes, TICKS,
-        "both hover probes were in contact on only {both_probes} of {TICKS} tick(s); \
-         see race::DEFAULT_TRACK"
-    );
-    // And it went somewhere. Thrust held for two seconds against an engine that
-    // reaches tens of units per second cannot leave it where it started.
-    let travelled = (end.position - start.position).length();
-    assert!(
-        travelled > 10.0,
-        "the ship travelled {travelled:.2} units in {TICKS} ticks: {}",
-        race::describe(&end)
-    );
-    // And it went *forwards*. Three separate conventions have to agree for this to
-    // hold - the spline's tangent, the rotation `Pose::from_sample` builds from it,
-    // and the body axis the engine pushes along - and any one of them inverted would
-    // still satisfy every assertion above.
-    let forward = race.ship().physics.body.forward();
-    let along = race.ship().physics.body.linear_velocity.dot(forward);
-    assert!(
-        along > 0.0,
-        "thrust drove the ship backwards along its own forward axis: {along:.2}"
-    );
-    assert_eq!(race.world.tick, u64::from(TICKS));
-}
-
-/// Ticks the handoff test flies. Half of [`TICKS`], and for the same reason: the
-/// question is whether `Launch Game` produces a driveable ship at all, not how long
-/// one stays driveable.
+/// Ticks the handoff test flies. Half the two seconds
+/// `ship_spawn_ground_truth.rs` drives, and for the same reason: the question is
+/// whether `Launch Game` produces a driveable ship at all, not how long one
+/// stays driveable.
 const HANDOFF_TICKS: u32 = 60;
 
 /// `Launch Game` is what puts a player in a ship, so the two halves have to

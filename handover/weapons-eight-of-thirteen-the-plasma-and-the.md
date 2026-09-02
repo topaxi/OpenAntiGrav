@@ -185,8 +185,20 @@ Put back.
   follow**: the *second* fourteen-entry jump table at `0x08a7bc90`, which
   `Ship_FireHeldWeapon` dispatches through by `weapon_id + 1` **after**
   `Weapon_RequestFire` returns, and `WO_PLASMA_FLASH`'s absent call site.
-  `PlasmaStats` carries no field for it meanwhile, the same treatment
-  `damageradius` gets.
+  **The first of those two is now read and closed**: `0x08a7bc90` is a computed
+  goto inside `Ship_FireHeldWeapon`, not a call table, and its Plasma arm is
+  five instructions that increment a per-weapon "times fired" tally and branch
+  to the shared exit. No arm holds a timer. What is left is
+  `WO_PLASMA_FLASH`'s call site and the HUD - a charging weapon usually has a
+  meter, and `Arcade_HUD.xml` is fully parsed. `PlasmaStats` carries no field
+  for the attribute meanwhile, the same treatment `damageradius` gets.
+- **A trap that will cost somebody an hour, left behind by that read.** The
+  tally above sits at **`+0x1ac` on the object at `0x00057fdc`**, and
+  `weapon-fire.md` and `mine.md` both record two failed sweeps for what writes
+  **`craft+0x1ac`**, the Mine's round counter. The offsets collide exactly and
+  the objects are different. Whoever finds this increment while hunting that
+  writer will think they have it; they have not, and it is incremented here
+  where `Weapon_DropMines` decrements.
 - **The Plasma draws no detonation.** `Race::blast_for` returns `None`: the pool
   teardown that consumes `Plasma_Update`'s destroy bit was not followed, and
   `WO_PLASMA_FLASH` is authored with no located call site. `FUN_08867370` is the

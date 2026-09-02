@@ -283,9 +283,48 @@ shot back**:
 before it fires.** That is the same oracle that settled the Rocket's parallel
 fan and the Mine-versus-Bomb attribution, and it has been right both times. So
 the reading here is *not* "the attribute is vestigial" - it is **the consumer
-exists and has not been found**, and the search should start at the second jump
-table (`0x08a7bc90`), which this page did not follow, and at
-`WO_PLASMA_FLASH`'s absent call site.
+exists and has not been found**.
+
+### The second jump table is read, and it is not the charge
+
+`0x08a7bc90` was the obvious next place to look and it is now **closed**. It is
+not a call table at all: it is a **computed goto** inside `Ship_FireHeldWeapon`
+itself, which is why the decompiler emitted `(**(code **)(...))()` under a
+`WARNING: Treating indirect jump as call`. Every arm ends in
+`b 0x08844eb4` - a branch to the function's shared exit - rather than in a
+return.
+
+Fourteen arms, index `weapon_id + 1`, and the shape is uniform. The Plasma's
+(index 8, `0x08844d04`) is five instructions:
+
+```c
+if (FUN_08809b38()) {                       // jal 0x00005b38
+    (*(int *)(*(int **)0x00057fdc + 0x1ac))++;
+}
+// b 0x08844eb4, the shared exit
+```
+
+The Bomb's (`0x08844c80`) is byte-identical but for `+0x1a0`, the Mine's
+(`0x08844cac`) but for `+0x1a4`, and the next along but for `+0x1a8`.
+**Consecutive word offsets on one global object, one per weapon, incremented by
+one on each shot** - which reads as a per-weapon "times fired" tally rather than
+anything in the fire path. Not every arm is that stanza: the Quake's
+(`0x08844d30`) plays a sound through the same helper `Plasma_Init` uses, and the
+Cannon's arm *is* the shared exit, so it does nothing at all.
+
+**No arm holds a timer, and the Plasma's holds nothing but a counter.** The lead
+is closed; `charge_time`'s consumer is somewhere else.
+
+**A trap this leaves behind, and it is a bad one.** That counter is at `+0x1ac`
+**on the object at `0x00057fdc`** - *not* on a craft. `weapon-fire.md` and
+`mine.md` both record two independent failed sweeps for what writes
+**`craft+0x1ac`**, the Mine's own round counter, and the offsets collide
+exactly. Anyone who finds this increment while hunting that writer will think
+they have it. They have not: different base, different object, and the value is
+incremented here where `Weapon_DropMines` decrements a craft field.
+
+What is left to try is `WO_PLASMA_FLASH`'s absent call site, and the HUD - a
+charging weapon usually has a meter, and `Arcade_HUD.xml` is fully parsed.
 
 `oag_formats::weapons::PlasmaStats` therefore carries **no** `charge_time`
 field, under the module's own rule that an attribute earns a field when
@@ -296,7 +335,8 @@ than papered over with an invented three-second timer.
 
 ## What is not verified
 
-- **Where `charge_time` is spent.** Above. The biggest open item on the weapon.
+- **Where `charge_time` is spent.** Above. The biggest open item on the weapon,
+  and one of the two named leads is now closed rather than merely unfollowed.
 - **What `WO_PLASMA_FLASH` is for.** Authored, located, no call site found.
 - **The Plasma's detonation effect.** `Plasma_Update`'s destroy bit is raised in
   two branches and the teardown that consumes it was not followed, so whether
