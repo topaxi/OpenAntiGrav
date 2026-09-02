@@ -4,10 +4,23 @@
 
 ## Open
 
-- Nothing yet samples the normal map, specular map, or facing ramp roles in their own role
-- Tone gap: renders clip 21 % to white against a reference's 15 %
+- The facing-ramp combine for this exact material (`etched_glass_tech`, the
+  glass floor) is now fully traced - see
+  [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md),
+  which is where its two implementation blockers (an unrouted sampler bind, a
+  missing paraboloid reflection probe) are tracked so they sit beside the
+  renderer's other missing inputs rather than being duplicated here
+- Tone gap: renders clip 21 % to white against a reference's 15 % - a
+  same-camera comparison needs
+  [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)'s
+  own open item (`viewProj` not yet located) before this can be measured
+  precisely rather than eyeballed off the existing `data/reference/hd-talons-glass/`
+  capture
 
 ## Next Steps
 
-- Wire up sampling of the normal map, specular map, and facing ramp roles in their own role
-- Investigate the tone-clipping gap (21 % here versus 15 % in the reference)
+- Pick up [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
+  for the shading work - normal map, specular map and this material's facing
+  ramp all live there now
+- Pick up [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)
+  first if the goal is the tone gap specifically
