@@ -491,11 +491,27 @@ impl Session {
             }
         }
 
-        // Each stage fills the target, and the target *is* the game's
-        // rectangle: the bars are the surface the blit does not cover.
+        // **Two targets, and which one a stage draws into is whether it has a
+        // scene**, per [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
+        //
+        // A race draws into the *scene* target, at the render scale, and fills
+        // it - the target is the game's rectangle, and the bars are the surface
+        // the blit does not cover.
+        //
+        // Every other stage is UI all the way down: the launcher, the loading
+        // screen, the front end and the menus draw into the *presentation*
+        // target instead, at the aspect rectangle, and `resolve_scene` is
+        // skipped for them entirely. `Renderer::render` clears, so that clear
+        // draws the bars exactly where the blit's own would have. Their
+        // backdrop movie comes along at presentation size, which is one
+        // resample rather than two.
         let size = self.framebuffer.size();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
-        let target = self.framebuffer.view();
+        let scene_target = self.framebuffer.view();
+        let ui_target = self.framebuffer.output();
+        // Whether this frame has anything for the upscaler to carry. Read
+        // before the match, which borrows `self.stage` mutably.
+        let has_scene = matches!(self.stage, Stage::Race(_));
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Diagnostic only, and read before the match for the same reason
@@ -507,11 +523,11 @@ impl Session {
             self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
-                stage.render(&self.gpu, &mut encoder, target, inside);
+                stage.render(&self.gpu, &mut encoder, ui_target, rect);
                 (None, None)
             }
             Stage::Loading(stage) => {
-                stage.render(&self.gpu, &mut encoder, target, inside, phase, &progress);
+                stage.render(&self.gpu, &mut encoder, ui_target, rect, phase, &progress);
                 (None, None)
             }
             Stage::Frontend(stage) => {
@@ -522,8 +538,8 @@ impl Session {
                 stage.render(
                     &self.gpu,
                     &mut encoder,
-                    target,
-                    inside,
+                    ui_target,
+                    rect,
                     self.backdrop.as_mut(),
                 )?;
                 (None, stage.video_label())
@@ -532,8 +548,8 @@ impl Session {
                 stage.render(
                     &self.gpu,
                     &mut encoder,
-                    target,
-                    inside,
+                    ui_target,
+                    rect,
                     self.backdrop.as_mut(),
                 )?;
                 (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
@@ -552,7 +568,7 @@ impl Session {
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
-                    target,
+                    scene_target,
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
@@ -577,23 +593,32 @@ impl Session {
             _ => None,
         };
 
-        // The upscaler and the blit, into the presentation target rather than
-        // onto the surface - so that this and a `--presented` capture cannot
-        // drift apart, and so the HUD below lands on a frame that is already at
-        // presentation size. Ungraded on purpose; `composite` grades.
-        self.framebuffer.resolve_scene(
-            &self.gpu.device,
-            &self.gpu.queue,
-            &mut encoder,
-            rect,
-            &upscale::Presentation {
-                upscaler: self.settings.graphics.upscaler,
-                sharpness: self.settings.graphics.upscale_sharpness.stops(),
-                anti_aliasing: self.settings.graphics.anti_aliasing,
-                brightness: self.settings.display.brightness,
-                gamma: self.settings.display.gamma,
-            },
-        );
+        // **Only when there was a scene to carry.** A UI-only stage has already
+        // drawn straight into the presentation target above, and its own clear
+        // put the bars there; running the resolve now would blit a stale scene
+        // over the top of it. See
+        // [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
+        //
+        // For a race this is the upscaler and the blit, into the presentation
+        // target rather than onto the surface - so that this and a `--presented`
+        // capture cannot drift apart, and so the HUD below lands on a frame that
+        // is already at presentation size. Ungraded on purpose; `composite`
+        // grades.
+        if has_scene {
+            self.framebuffer.resolve_scene(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &mut encoder,
+                rect,
+                &upscale::Presentation {
+                    upscaler: self.settings.graphics.upscaler,
+                    sharpness: self.settings.graphics.upscale_sharpness.stops(),
+                    anti_aliasing: self.settings.graphics.anti_aliasing,
+                    brightness: self.settings.display.brightness,
+                    gamma: self.settings.display.gamma,
+                },
+            );
+        }
 
         // The HUD, after the resolve and at presentation size, laid out against
         // the aspect rectangle rather than the offscreen extent - so it stays
@@ -603,9 +628,8 @@ impl Session {
         // performance overlay does. See
         // [ADR-0036](../../../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
         //
-        // Only the race has one. The menus, the front end and the loading
-        // screen are still drawn into the offscreen target by their stages
-        // above, and moving them is the rest of that ADR's work.
+        // Only the race has one; every other stage *is* its own UI and drew
+        // itself into this target already.
         if let Stage::Race(stage) = &mut self.stage {
             stage.draw_hud(&self.gpu, &mut encoder, self.framebuffer.output(), rect);
         }

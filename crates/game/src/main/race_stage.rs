@@ -131,9 +131,11 @@ impl RaceStage {
     /// deliberately the caller's own framebuffer rather than a fresh scratch
     /// texture: it is the exact size and format the real first frame draws
     /// into, so the exact pipeline variants get warmed, and it is safe to
-    /// overwrite because the loading screen clears the whole frame before it
-    /// draws anything - see `loading::Screen::draw_list`'s own full-screen
-    /// `Draw::Fill`.
+    /// overwrite because nothing is reading it: since
+    /// [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+    /// the loading screen does not draw into the scene target at all - it goes
+    /// straight to the presentation target - so this target sits idle from the
+    /// moment a race is being built until the first frame that draws one.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn warm_up(
         &mut self,

@@ -65,12 +65,21 @@ section has always listed, now with their status:
 | A depth buffer the upscaler can consume | **Done** - `StoreOp::Store` and `TEXTURE_BINDING`, read every frame by the motion blur pass ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)) |
 | Per-pixel motion vectors from every draw | **Done** - the race writes an always-on `Rg16Float` velocity attachment from every draw's premultiplied previous-tick matrices ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)); motion blur is its first consumer |
 | Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
-| A scene without UI in it | **Absent** - the HUD, the menus and the front end draw into the same target, at the render scale. Decided in [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md) and part-built: the performance overlay composites onto the surface already, and clearing this row is what moving the rest delivers |
+| A scene without UI in it | **Done** - the UI composites at presentation resolution ([ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)) and a stage with no scene never enters the offscreen target at all ([ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)). The HUD and the scoreboard draw into the presentation target after the resolve, the performance overlay onto the surface after the grade, and the menus, front end, launcher and loading screen bypass the offscreen target entirely. What FXAA, SMAA and an upscaler now see is the race's 3D scene and nothing else |
 
-That last row is the expensive one, and it is not on the original list because
-it only becomes visible once something downstream needs a scene it can reason
+That last row was the expensive one, and it is not on the original list because
+it only became visible once something downstream needed a scene it could reason
 about. FSR must consume a frame with no UI in it, and the UI must then be
-composited at presentation resolution.
+composited at presentation resolution. **It is now done**, and it cost a
+presentation-sized colour target plus one more fullscreen pass a frame - stated
+in ADR-0036 rather than hidden. **Camera jitter is the only row left.**
+
+It paid for itself twice over on the way. The HUD and the menus are no longer
+resampled at all, which was a picture-quality complaint in its own right; and it
+answered half of an open question without a measurement - the doubt over
+defaulting `[graphics] upscaler` to `fsr1` was that a sharpener rings on
+480x272-era paletted raster and coverage-atlas glyphs, and no sharpener reaches
+either any more.
 
 **Rows two and three are cleared, both by
 [motion blur](../rendering/motion-blur.md)** - its camera-reprojection

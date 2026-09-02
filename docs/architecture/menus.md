@@ -653,6 +653,16 @@ Turning vsync off changes nothing about the frame that is drawn, only about when
 it is shown; halving the render scale changes the frame itself. That test is
 what settles the two rows a reader would otherwise argue about:
 
+**One caveat a player will notice before a reader does.** Since
+[ADR-0038](adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+RENDER SCALE applies to a race and to nothing else - a stage with no 3D scene
+draws at presentation resolution regardless, because scaling a menu saves no GPU
+and only softens it. So moving that row *from a menu* changes nothing visible
+until a race starts, where it used to resample the menu under the player's hand.
+Whether the row should say so is open: the existing `warn_when` vocabulary says
+"this row does nothing given another row", and this is "this row does nothing on
+this screen", which is a different sentence to say to somebody.
+
 - **Brightness and gamma are DISPLAY**, even though they are a fragment shader.
   They are a calibration of somebody's monitor, applied to a frame the game has
   already finished drawing - see below.

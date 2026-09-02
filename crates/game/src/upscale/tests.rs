@@ -728,3 +728,147 @@ fn the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not() {
         "the performance overlay must stay outside the grade"
     );
 }
+
+/// A stage with no scene draws straight into the presentation target, and its
+/// own clear is what draws the aspect bars -
+/// [ADR-0038](../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
+///
+/// Three things at once, and the third is the one that would be missed:
+///
+/// 1. **`composite` does not need `resolve_scene` to have run.** The launcher,
+///    the loading screen, the front end and the menus skip it entirely, so
+///    whatever they drew has to reach the surface on its own.
+/// 2. **`Renderer::render` clears, and that clear draws the bars.** `present`
+///    used to do it, clearing the surface around the rectangle it blitted
+///    into. A UI-only frame never reaches `present`, so the bars have to come
+///    from the stage's own pass - which is only true because it clears the
+///    whole attachment and then restricts itself to the viewport.
+/// 3. **The bars land in the right pixels at a pillarboxed aspect.** A viewport
+///    narrower than the target is the case the default `psp` aspect never
+///    exercises, and it is where an off-by-a-rectangle would hide.
+#[test]
+fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
+    use crate::frontend::{Draw, SCREEN};
+    use crate::render::Renderer;
+
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("ui only stage test"),
+        ..Default::default()
+    })) else {
+        return;
+    };
+
+    // The scene target is built and never drawn into, exactly as it sits idle
+    // while the front end is up.
+    let mut framebuffer = Framebuffer::new(&device, format, (2, 2)).expect("the pipeline");
+    framebuffer.resize_output(&device, (8, 8));
+    let mut ui = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        crate::font::Atlas::build(),
+        &crate::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+
+    let surface = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("ui only readback"),
+        size: wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let surface_view = surface.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("ui only readback"),
+        size: (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 8) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    // Pillarboxed: four pixels of game with two of bar either side, which is
+    // the shape `display::viewport` produces on a window wider than the aspect.
+    // `render` rather than `overlay`, because a stage owns its frame and
+    // clears - that clear is what is under test.
+    ui.render(
+        &device,
+        &queue,
+        &mut encoder,
+        framebuffer.output(),
+        &[Draw::Fill {
+            rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
+            color: [0.0, 0.0, 1.0, 1.0],
+        }],
+        (2.0, 0.0, 4.0, 8.0),
+        None,
+    );
+    // No `resolve_scene`. Straight to the surface.
+    framebuffer.composite(
+        &queue,
+        &mut encoder,
+        &surface_view,
+        Brightness::NEUTRAL,
+        Gamma::NEUTRAL,
+    );
+
+    encoder.copy_texture_to_buffer(
+        surface.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                rows_per_image: Some(8),
+            },
+        },
+        wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let mapped = slice.get_mapped_range().expect("the readback");
+    let row = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize * 4;
+    let pixel = |x: usize| {
+        let at = row + x * 4;
+        [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    };
+
+    for x in [0, 1, 6, 7] {
+        assert_eq!(
+            pixel(x),
+            [0, 0, 0, 255],
+            "column {x} is a bar and the stage's clear has to have drawn it"
+        );
+    }
+    for x in [2, 3, 4, 5] {
+        assert_eq!(
+            pixel(x),
+            [0, 0, 255, 255],
+            "column {x} is inside the rectangle and never reached the surface"
+        );
+    }
+    drop(mapped);
+    readback.unmap();
+}

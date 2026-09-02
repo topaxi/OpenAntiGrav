@@ -1112,10 +1112,17 @@ recipe and its three traps.
       aspect ratio (`psp`, `ps2` or `free`), **brightness and gamma**, and a
       **render scale** from 50 % to 200 %, the last of which is the
       internal-resolution knob below 100 and supersampling above it. Every
-      stage draws into an offscreen target and one pass stretches it into the
-      aspect rectangle, which is also where the letterbox bars and the
-      brightness/gamma grade come from - one pass, so every stage is covered
-      and a screenshot deliberately is not. A **field of view** row is in as a
+      **race** draws into an offscreen target and one pass stretches it into a
+      presentation-sized target, where the HUD composites on top before a final
+      graded pass writes the surface - so the UI is never resampled
+      ([ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)).
+      A stage with no 3D scene - the launcher, the loading screen, the front end
+      and the menus - skips the offscreen target altogether and draws at
+      presentation resolution, so the render scale applies to a race and nothing
+      else ([ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)).
+      The letterbox bars and the brightness/gamma grade both come out of that
+      final pass, so every stage is covered by one shader and a screenshot
+      deliberately is not. A **field of view** row is in as a
       percentage of the disc's authored value rather than an angle, because
       an absolute angle would name a field the game only shows while
       stationary - the original widens it with speed. (Until 2026-08-09 the

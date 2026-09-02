@@ -1,6 +1,6 @@
 //! Rendering at a resolution the window is not, and blitting the result up.
 //!
-//! Every stage draws into an offscreen colour texture rather than straight onto
+//! A **race** draws into an offscreen colour texture rather than straight onto
 //! the surface, and [`Framebuffer::resolve_scene`] afterwards stretches that
 //! texture into the [`display::viewport`](crate::display::viewport) rectangle.
 //! Below 100 % that is the usual internal-resolution knob; above it, it is
@@ -12,6 +12,14 @@
 //! one, and one more full-size texture, which
 //! [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
 //! is the reasoning for.
+//!
+//! **Every other stage skips the offscreen texture entirely** and draws into
+//! that presentation target itself - the launcher, the loading screen, the
+//! front end and the menus are UI all the way down, so there is no scene for an
+//! upscaler to carry and the render scale means nothing to them. See
+//! [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
+//! `resolve_scene` is not called on those frames, and their own clear draws the
+//! aspect bars that [`Framebuffer::present`] would otherwise have drawn.
 //!
 //! # Why a scale and not a resolution
 //!

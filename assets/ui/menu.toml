@@ -440,6 +440,14 @@ restart_required = "RESTART THE GAME TO DRAW WITH THIS"
 # Below 100 is the usual internal-resolution knob, above it is supersampling,
 # and it is measured against the aspect rectangle so it means the same thing at
 # every aspect. Applies from the next frame.
+#
+# **It applies to a race and to nothing else**, since ADR-0038: a stage with no
+# 3D scene draws at presentation resolution whatever this says, because scaling
+# a menu saves nothing and only makes it blurrier. So a player moving this row
+# sees the menu they are standing on not change - which is the one thing about
+# it worth a warning, and there is no `warn_when` for "does nothing on this
+# screen" as opposed to "does nothing given another row". Left as it is rather
+# than stretched; see the ADR's consequences.
 [[page.entry]]
 kind = "choice"
 label = "RENDER SCALE"
