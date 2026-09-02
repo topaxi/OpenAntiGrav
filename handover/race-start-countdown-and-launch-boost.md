@@ -4,11 +4,11 @@ Three questions, tracked as one grid across the four titles this project reads. 
 skeletal, then one static-only pass landed the same day - see below for what each
 "partial" and "strong evidence" cell actually rests on before trusting it.
 
-|                                  | Pure | Pulse                  | HD/Fury                | 2048 |
-| -------------------------------- | ---- | ---------------------- | ----------------------- | ---- |
-| Countdown state machine + timing | open | partial (below)         | open                     | open |
-| Launch reaction speedboost       | open | partial (below)         | **likely not a thing** (below) | open |
-| Zone/view display variants       | open | open                    | strong evidence (below) | open |
+|                                  | Pure | Pulse                          | HD/Fury                        | 2048 |
+| -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
+| Countdown state machine + timing | open | partial - false-start stall lead only (below) | open                | open |
+| Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | open |
+| Zone/view display variants       | open | open                            | strong evidence (below)         | open |
 
 **Countdown state machine + timing**: what drives `ReadyText`/`GoText`/`CountdownTime`
 and the `<Mode3D>` models (`Pulse_Ready_Go`, `Cockpit_321GO`) from race load to green -
@@ -77,30 +77,37 @@ authored"; confidence unassigned for "and Zone's is drawn differently in practic
 because nothing has watched one render - the billboard thread's own stated lesson
 about publishing a render claim without a screenshot applies here just as much.
 
-**Pulse: `Ship_SetState`'s previously-undocumented states 6 and 7 are shaped like a
-countdown lockout and a per-mode dispatch, respectively - hypothesis only, not
-runtime-verified.** Full account, all nine arms, in
+**Pulse: `Ship_SetState`'s previously-undocumented states 6, 7 and 8 read.** Full
+account, all nine arms, in
 [shield.md](../docs/ghidra/functions/psp-pulse-usa/shield.md#the-full-nine-arm-table-and-a-race-start-hypothesis-for-states-6-and-7).
-In short: state 6 sets the *same timer field* states 4/5 use for the destruction
-sequence (`entity->0x874`) to `2.0`s (local player) or `0.8`s (everyone else, split
-on the already-confirmed-at-80 `entity->0x368` field) and silences something before
-calling one more function on the entity - the shape of "stall the engine, arm a
-timer", matching `race-modes.md`'s existing false-start claim. Confidence 55. State 7
-reads a global to pick a race-mode-descriptor value, range-checks it against 19, and
-indexes a second jump table - the strongest lead either title has produced this
-session for "does the countdown branch on race mode", but **the two absolute
-addresses involved did not read back through `inspect_memory_content`**, so the
-byte-level detail is not trustworthy yet; confidence capped at 40 (below the naming
-threshold, deliberately) until the addresses are re-derived, possibly against the
-same class of unapplied-relocation gap `billboards.md`'s trap already names for
-`jal` targets on this binary.
+State 6 sets the *same timer field* states 4/5 use for the destruction sequence
+(`entity->0x874`) to `2.0`s (local player) or `0.8`s (everyone else, split on the
+already-confirmed-at-80 `entity->0x368` field) and silences something before calling
+one more function on the entity - the shape of "stall the engine, arm a timer",
+matching `race-modes.md`'s existing false-start claim. Confidence 55, still not
+runtime-verified. **State 7's per-mode dispatch is now resolved and read - and it
+walks back the countdown hypothesis this thread first reached for.** The two
+addresses its own disassembly builds turned out to need the same
+`+ 0x08804000` correction `workflow.md` already documents for `jal` targets, now
+generalised to a `lui`/`lw`-pair jump-table base too (new trap, written up in
+`workflow.md` and `shield.md` both). Corrected, 18 of 19 entries land on just two
+targets, both of which toggle the *same* "craft destroyed" bit (`entity->0x860`
+bit `0x1000`) `zone-mode.md` already names - one conditionally, with a call; one
+unconditionally, without. Confidence 55: **state 7 reads as a "clear the destroyed
+flag" transition whose exact shape depends on a game-mode class, not as a
+countdown-specific per-mode dispatch.** The per-mode table itself is real and
+resolved; what it was hoped to show (a countdown that visibly branches on mode)
+is not what it turned out to hold. That does not settle the Zone-display question -
+it just means state 7 isn't where the answer lives; the asset-side evidence below
+is unaffected.
 
 ## Open
 
-- **The two `Ship_SetState` state-7 addresses did not read back** (`0x002ac7e3` for
-  the global-byte test, `0x00277c40 + index*4` for the inner jump table) - top
-  priority for continuing the Pulse side, since state 7 is the best per-mode-dispatch
-  lead either title has produced.
+- **State 7's mode-class value is still unnamed.** `0x08aae7e3` and the global
+  pointer's `+0xb8` field feeding the resolved per-mode table are read but not
+  identified - which ~19 mode/network variants map to which of the two clear-bit
+  behaviours is unknown, and so is `FUN_0003c7b0`, the call the conditional path
+  makes.
 - **No live capture of an actual false start exists.** Everything about states 6/8 in
   `shield.md` is a branch-clear static reading; a PPSSPP watchpoint on `entity->0x874`
   and `entity->0x8c` during a real held-thrust-before-lights start would settle which
@@ -129,21 +136,23 @@ same class of unapplied-relocation gap `billboards.md`'s trap already names for
 
 ## Next Steps
 
-1. Re-derive `Ship_SetState` state 7's two absolute addresses correctly (the global
-   byte and the inner jump-table base) and read the table's entries - settles the
-   per-mode-dispatch hypothesis and gives a real arm count to compare against how
-   many modes Pulse actually has.
-2. Live-capture a false start in PPSSPP: hold thrust before the lights, watchpoint
+1. Live-capture a false start in PPSSPP: hold thrust before the lights, watchpoint
    `entity->0x874` and `entity->0x8c` on the player's own entity, and read which
-   state (6 or 8) actually fires and for how long.
-3. Trace the throttle/thrust input path during the countdown (starting from
+   state (6 or 8) actually fires and for how long. This is now the single best next
+   move on the Pulse side - state 7 turned out not to be the countdown after all.
+2. Trace the throttle/thrust input path during the countdown (starting from
    `Ship_UpdateThrust` or its equivalent, per `docs/gameplay/ai.md`'s and
    `engine.md`'s existing naming) for anything that reads a countdown clock or a
-   "pressed near green" timestamp - the search this session did not run.
+   "pressed near green" timestamp - the search this session did not run, and with
+   state 7 read and not panning out, this is the remaining lead for the boost
+   question on Pulse.
+3. Identify the ~19-entry mode-class value state 7 reads (`0x08aae7e3` /
+   global`+0xb8`) and `FUN_0003c7b0` - would finish state 7 even though it is no
+   longer expected to answer this thread's own questions directly.
 4. Finish tracing the mode-descriptor pointer from
    [a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)'s
-   open item 1 to a `321Go_*.vex` shape - settles the mode-display axis on the asset
-   side, and pairs with step 1's logic-side answer.
+   open item 1 to a `321Go_*.vex` shape - still the best lead for the mode-display
+   axis on the asset side.
 5. Get a live screenshot of a Zone countdown next to a circuit-race one (any title)
    before publishing either a positive or a negative claim about how they differ -
    the billboard thread's own stated lesson, from a mistake made on this exact asset
