@@ -174,23 +174,33 @@ the fade math not run."
 
 ## Open
 
-- **The gate that closes the fade math is found and confirmed live - it is
-  a third, previously-untraced branch, not either of the two originally
-  suspected.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78)
+- **The gate that closes the fade math is found and confirmed live, and a
+  seventh session then ruled the fade math out as the oversized-flare cause
+  regardless.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78)
   computes `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout
   Dist`/`Range`, confirmed live at `+0x484`/`+0x488` of the shared tuning
-  block) but never reaches that computation for the sampled craft. The
+  block) but never reaches that computation for the sampled craft - the
   byte-flag gate (`struct_base+0x494`) and count-field gate
-  (`craft+0x5fa4`) are both confirmed **open** (5 live samples, none skip).
-  The actual gate is `0x002a0b44`, a branch on `FUN_006765e8()`'s return
-  value - confirmed **closed**, 2/2 live - which sends execution to
-  `0x002a1210` instead, a real and separate code path (not the shared
-  epilogue `0x002a1110` an earlier version of this note mistook for a gate
-  landing). `0x002a1210` itself reaches the same family of RSX-submission
-  calls the fade path does, so **whether the visible sprite's quad comes
-  from that branch, the fade branch, or neither is now the open question** -
-  narrower and better-evidenced than "which gate," but not yet answered.
-  See engine-trail.md "Sixth session" for the full account.
+  (`craft+0x5fa4`) are both confirmed **open** (5 live samples, none skip),
+  and the actual gate is `0x002a0b44`, a branch on `FUN_006765e8()`'s
+  return value, confirmed **closed** (2/2 live), which sends execution to
+  `0x002a1210` instead. **But the fade's own numbers rule it out as the
+  size cause even if it did run**: a 15-unit fade start leaves anything
+  closer than 15 units - both engines' chase camera sits a few units out -
+  fully faded *in*, undiminished, so reaching this branch would not shrink
+  the sprite. Neither branch this thread has found writes the sprite's
+  half-size at all; that is a flat renderer-side constant
+  (`oag_render::exhaust::hd::SPRITE_RADIUS`, 3.0) with no distance term.
+  `0x002a1210`'s own shape - a `craft+0x270`-indexed ring buffer entry
+  reaching the same RSX-submission trampolines - reads more like the
+  occlusion query `Flare Occluder Radius`/`Flare Depth Bias` want than a
+  second draw path, and an occlusion query would not set the size either.
+  **The size question now points at the renderer** (a missing
+  distance/occlusion clip against the craft's own mesh, or a wrong
+  hull-to-flare scale ratio), confirmed by three independent RPCS3
+  screenshots that all show a small tight glow against this engine's large
+  blob at comparable chase framing. See engine-trail.md "Sixth session" and
+  "Seventh session" for the full account.
 - `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
   fade result computed above (that clamp uses a *different* tuning-block
   field, `+0x4a8`, which reads `1.0` live and is more likely
@@ -220,30 +230,32 @@ the fade math not run."
 
 ## Next Steps
 
-- **Read what `0x002a1210` actually does with the sprite, live.** It is
-  reached (confirmed, 2/2) instead of the fade math for the sampled craft,
-  and it is not a bail-out - it builds a small `craft+0x270`-indexed
-  ring-buffer entry and reaches RSX-submission trampolines
-  (`0x00677ff8`/`0x00679298`/`0x00679288`, the same family the fade path's
-  own later code reaches). Static reading alone was not enough to tell
-  whether this is the occlusion query, the actual sprite draw, or something
-  else this thread hasn't named - it needs the same live-register technique
-  `hd-flare-gate-check.py` used, at a point past its own two further gates
-  (themselves untraced: one on `bl 0x006765f8`'s result, one on a byte flag
-  at `struct_base+0x5aac`, both of which can loop back to `0x002a0b48`).
-- **Separately, find out what `FUN_006765e8()`/`0x003c7dd8` actually reads**
-  - the global at `PTR_DAT_008b7838`, two 8-byte fields compared then a flag
-  byte at `+0x38`. If it really is a frame-budget throttle (the hypothesis
-  from its call sites - `Game_PresentLoop_q` and `PhotoMode_Update`, no
-  others), that reframes the whole open question: **the fade math might be
-  a genuine, correct law that simply doesn't get its turn under a driven
-  autopilot session's frame timing**, in which case a human playing
-  normally - or a differently-paced capture - might see it fire. Reading
-  live values of both 8-byte fields while thrusting would settle whether
-  this is really a budget check or something else entirely (a per-frame
-  toggle unrelated to timing, say).
-- Once whichever branch actually builds the sprite is confirmed, either
-  implement the `Flare Fadeout Dist/Range` law (if it's the fade branch) or
-  read `0x002a1210`'s own quad math (if it's that one).
+- **Check whether the original's flare is actually depth/occlusion-clipped
+  against the craft's own hull mesh, and this engine's is not.** The
+  screenshot comparison (engine-trail.md "Seventh session") shows the
+  original's flare tucked tightly between the engine nozzles - plausibly
+  because most of a larger quad is hidden behind the hull geometry around
+  it - while this engine's draws the full unclipped blob. Check the
+  sprite's draw call in `crates/render/src/mesh_render.rs` (the
+  `depth_stencil` blocks around lines 559-707) for whether it is issued
+  with a depth test against the already-drawn opaque hull, and if so,
+  whether the flare's world position sits far enough inside the hull's own
+  geometry for that test to matter, or if it's placed in open air below the
+  ship where nothing would clip it either way. This is a renderer/asset
+  question, not a Ghidra one - no emulator needed to start it.
+- **Separately, check whether `SPRITE_RADIUS` (3.0 world units) is
+  plausible against this craft's own hull scale.** No measured hull-width
+  constant was found in this session's search of `crates/physics/src/params.rs`
+  (`Hull width` field, `HULL_SCALE = 0.75` in `crates/physics/src/pair.rs`) -
+  reading an actual craft's authored width and comparing its half-extent to
+  a 3.0-unit sprite radius would say whether the constant itself is
+  disproportionate to the ship, independent of any occlusion question.
+- If both come back clean (sensible radius, correct depth test, still
+  oversized), then `0x002a1210` and `FUN_006765e8()`'s frame-budget-throttle
+  hypothesis (global at `PTR_DAT_008b7838`, two 8-byte fields, called only
+  from `Game_PresentLoop_q`/`PhotoMode_Update`) are still open, live-tracing
+  targets - but they bear on *whether* something like an occlusion query
+  runs, not on the sprite's size, so they are lower priority than the two
+  bullets above.
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.

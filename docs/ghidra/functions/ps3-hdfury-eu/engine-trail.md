@@ -650,12 +650,15 @@ something other than the sprite's raw world-space half-size (a projected or
 screen-relative size, most likely) - but that reading is a hypothesis from
 the numbers alone, not a traced consumer, and nothing here acts on it.
 
-**`Flare Fadeout Dist`/`Range` (15.0/15.0) is the leading candidate for the
-oversized-flare finding below**, on the same "hypothesis from the numbers,
-not a traced consumer" terms: a near/far fade starting at 15 world units and
-finishing at 30 would read as "small at ordinary chase distance" - which is
-what the original shows and this engine does not, since `hd::Sprite` applies
-no distance term at all. What two sessions' worth of reading could not settle
+**`Flare Fadeout Dist`/`Range` (15.0/15.0) is ruled out as the cause of the
+oversized-flare finding below - a correction to what this page said here
+before "Seventh session" reread the numbers.** A fade starting at 15 world
+units and finishing at 30 does the *opposite* of what would explain the
+screenshots: it leaves anything closer than 15 units - both engines' own
+chase camera sits at a few units - fully faded *in*, i.e. undiminished, and
+only shrinks or fades something the camera is 15-30 units from. It cannot be
+why the player's own flare reads small in the original and large in this
+engine; whatever does that is unrelated to this term. What two sessions' worth of reading could not settle
 is which function actually builds the sprite's quad - what follows is what
 each ruled out. `EngineFlare_Init` (`0x002a1528`) writes two adjacent constants-table
 entries (index `0x1686`/`0x1687`) into `+0xe4`, `+0x144` and four identical
@@ -880,7 +883,10 @@ is not a gate landing - it is the function's one epilogue**, the register
 restore and `blr` every path returns through, including the full-work path:
 `0x002a1434: b 0x002a1110` sits right after the RSX submission block
 (`0x002a1210`-`0x002a1424`, the `bl`s to `0x00679278`/`0x006792a8`/
-`0x006792b8`/`0x00323aa0`/`0x006792c8` that actually issue the draw). A
+`0x006792b8`/`0x00323aa0`/`0x006792c8` that reach the RSX submission
+trampolines - none of the five has been read far enough to confirm it
+issues a *draw* rather than, say, an occlusion-query dispatch; see
+"Seventh session" below). A
 breakpoint there fires on *every returning call*, successful or not - "12 of
 12 hits" is equivalent to "12 of 12 calls returned," which was never in
 doubt and says nothing about which branch ran. The doc previously claimed
@@ -1055,6 +1061,77 @@ cause: `the_sprite_flares_constants_are_the_discs_own` pins `SPRITE_RADIUS`
 (3.0), `SPRITE_RADIUS_MIN` (2.0) and `SPRITE_RADIUS_JITTER` (0.5) against
 this same file, byte for byte.
 
+### Seventh session: the fade branch is geometrically ruled out, and the size question moves to the renderer
+
+Prompted by review: the sixth session's "which branch draws the sprite"
+framing was itself the wrong question to keep pushing on with more Ghidra
+tracing. Two things follow from evidence this page already had, neither
+acted on until now.
+
+**`Flare Fadeout Dist`/`Range` (15.0/15.0) cannot be what makes the
+player's own flare oversized, regardless of which branch runs.** Both this
+engine's own chase camera and the original's sit a few world units behind
+the craft - nowhere near the 15-unit distance the `saturate()` fade (see
+"Fourth session") starts biting at. A fade keyed to a 15-unit start is
+fully faded-*in* (no reduction at all) at ordinary chase range whether or
+not `EngineFlare_RenderTick`'s fade math ever executes for that craft. The
+"Open" bullet below has called this "the leading candidate" since the
+2026-09-01 screenshot comparison; that framing was wrong on the numbers
+alone, not just unconfirmed - correcting it here rather than leaving it
+stand.
+
+**A second look at the four screenshots already on disc, not just the
+one this page cited, confirms the size gap is real and repeats.**
+`data/reference/hd-capture/flare-size/{original-rpcs3.png (first
+session), tuning-dump/race.png (fourth), rendertick-break-v2/race.png
+(fifth)}` are three independent RPCS3 captures, taken across three
+sessions with different craft speeds and track sections, and all three
+show the same shape: a small, tight, blue-white point of light tucked
+directly between the two engine nozzles, no wider than roughly a sixth of
+the hull's own span at that framing. `ours.png` (this engine, comparable
+chase framing) shows a large white-to-yellow blob spanning most of the
+gap between the side nacelles and bleeding below the hull silhouette -
+different in extent, shape and colour, not merely brighter. Cropped
+side-by-side comparison, not a pixel-diff tool (none of the four share a
+camera angle or resolution closely enough for one): the three original
+captures agree with each other and disagree with `ours.png` the same way
+each time, which is what "the gap is real" needs to mean here, short of a
+matched-view capture (see "Matched-view comparison" above for what that
+takes).
+
+**What actually sizes the sprite, per the renderer's own code, is a flat
+constant with no distance term at all**: `oag_render::exhaust::hd::SPRITE_RADIUS`
+(3.0, jittered ±0.5, floored at 2.0) is applied unconditionally every
+frame (`crates/game/src/race/load.rs`'s own report already says so - "its
+radius, alpha walk and texture do draw"). Nothing this page has traced in
+`EngineFlare_RenderTick` writes that half-size; the function's own two
+known consumers of the tuning block are the fade scale (gated off, per
+the sixth session) and whatever `0x002a1210` does past the third gate.
+Re-reading `0x002a1210` with this in mind: its shape - a
+`craft+0x270`-indexed ring buffer entry (modulo 3) feeding the same RSX
+submission trampolines the fade path's own tail does - matches an
+occlusion query dispatched once per frame far better than it matches a
+second draw path, and `Flare Occluder Radius`/`Flare Depth Bias` (both
+already read live, "All 41 rows" above) are real tunables with no located
+consumer anywhere else on this page. An occlusion query, whichever of
+`0x002a1210`'s branches it turns out to be, does not set a quad's size -
+so confirming that reading would close the "what does 0x002a1210 draw"
+question without touching the size question at all.
+
+**This reframes the open item.** It is not "which branch draws the
+sprite" (neither branch this page has found sizes it) and it is not "read
+the fade math" (ruled out by the fade's own numbers). It is: what, if
+anything, in the original scales `Flare Radius` by anything other than the
+`Max Radius Jitter` band this engine already applies - and if nothing
+does, then 3.0 half-size at this craft's own scale is either what the
+original actually draws (in which case the size gap is a renderer-side
+bug: wrong units, wrong hull-to-flare scale ratio, or a missing
+occlusion/depth clip against the craft's own mesh that the original gets
+for free and this engine does not) or the tuning row's consumer is a
+different field than the one currently believed to be `Flare Radius`. Both
+halves are renderer/asset questions from here, not further disassembly of
+`EngineFlare_RenderTick` - see "Next Steps" on the handover thread.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -
@@ -1178,9 +1255,12 @@ Open, in rough order of visible cost:
   2026-09-01 screenshot comparison confirms this matters**: drawn at the
   literal 3.0/2.0/0.5 with no distance term, the sprite is visibly oversized
   against the original at ordinary chase distance - "All 41 rows" above has
-  the evidence and the ruled-out causes; `Flare Fadeout Dist/Range` (15/15)
-  is the leading candidate and still unread, so `hd::Sprite`'s radius is
-  unchanged rather than fitted to the screenshots. **Two 2026-09-01 sessions
+  the evidence and the ruled-out causes; `hd::Sprite`'s radius is
+  unchanged rather than fitted to the screenshots. **`Flare Fadeout
+  Dist/Range` (15/15) is ruled out as the cause, not just unread** - see
+  "Seventh session" below: a 15-unit fade start is fully faded-in at
+  ordinary chase distance regardless of whether the fade math runs, so
+  reaching it would not shrink anything. **Two 2026-09-01 sessions
   hunted the draw call and did not find it** (`+0xe4` turned out to be
   intensity, not radius storage - a correction to this page; neither
   `EngineFlare_PlaceShapes` nor `_Update` reads any radius-shaped field back
@@ -1217,10 +1297,17 @@ Open, in rough order of visible cost:
   previously-untraced branch on `FUN_006765e8()`'s return value
   (`0x002a0b44`) - closed, 2/2 live, routing to `0x002a1210` instead of the
   fade math. That address is real code, not the shared epilogue, and itself
-  reaches the same RSX-submission trampolines the fade path does - so which
-  branch (if either) actually builds the visible sprite's quad is now the
-  open question, not just "why does the fade math not run." See "Sixth
-  session" above.
+  reaches the same RSX-submission trampolines the fade path does. **A
+  seventh session reframed this again**: neither branch this page has
+  found writes the sprite's half-size at all - that comes from a flat,
+  distance-independent constant in the renderer (`SPRITE_RADIUS`) - and
+  `0x002a1210`'s own shape (a modulo-3 ring buffer entry, feeding the same
+  trampolines) reads far more like the occlusion query `Flare Occluder
+  Radius`/`Flare Depth Bias` want than like a second draw path. An
+  occlusion query would not explain the size gap either. See "Seventh
+  session" above for why the size question now points at the renderer
+  (a missing distance/occlusion clip, or a wrong hull-to-flare scale
+  ratio) rather than at either of this function's branches.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
@@ -1284,6 +1371,13 @@ uv run --with evdev python3 scripts/hd-flare-rendertick-break.py /tmp/hd-flare-r
 uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check byte
 uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check count
 uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check alt
+# the screenshot comparison behind "Seventh session" above - crop each PNG
+# around the engine gap and eyeball flare width against hull width; no
+# script, three original-side captures already on disc:
+#   data/reference/hd-capture/flare-size/original-rpcs3.png
+#   data/reference/hd-capture/flare-size/tuning-dump/race.png
+#   data/reference/hd-capture/flare-size/rendertick-break-v2/race.png
+#   data/reference/hd-capture/flare-size/ours.png             # this engine
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
