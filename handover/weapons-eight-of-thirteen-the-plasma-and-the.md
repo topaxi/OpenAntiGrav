@@ -1,9 +1,74 @@
-# Weapons: seven of thirteen, and two doc pages had two of them swapped
+# Weapons: eight of thirteen, and the dispatch table read whole
 
-2026-08-26, [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) and
+2026-09-02, [plasma.md](../docs/ghidra/functions/psp-pulse-usa/plasma.md),
+[mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) and
 [pickups.md](../docs/gameplay/pickups.md) - the pages to read, not this row.
-Supersedes the four-of-thirteen thread. **Turbo, Shield, Rocket, Missile,
-Autopilot, Mine and Bomb** now do something.
+Supersedes the seven-of-thirteen thread, which superseded the four.
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb and Plasma** now do
+something.
+
+## 2026-09-02: the Plasma, and two by-catches worth more than the weapon
+
+**The Plasma cost almost nothing and that is the finding, not an aside.** The
+Bomb was cheap because it reused the Mine's whole module; the Plasma is cheap
+because it reuses the **Rocket's** whole flight model. `Plasma_Update`
+(`0x0885c6cc`) is `Rocket_Update`'s floor follower instruction for instruction -
+the same 12-unit probe along the carried surface normal, the same
+speed-preserving redirect, the same fall, the same detonate on a wall, the same
+`/ 3.6`. `oag_gameplay::projectile::advance` already *was* that function, so the
+port needed no flight code at all: a `PlasmaStats`, a one-shot `launch`, two
+fire arms and a flare name. **The pattern to carry forward is that the
+expensive part of a weapon in this engine is its trigger and its trajectory,
+and a weapon that shares a trajectory with one already built is nearly free.**
+That is worth checking for the Shuriken before assuming its ricochet is new
+work - the Missile already bounces.
+
+**By-catch 1: `Weapons_DispatchFire`'s full sixteen bits.** `weapon-fire.md`
+printed five and truncated the rest with a `...` for three months. Reading all
+sixteen and adding the image base back settles five weapons' handlers at once,
+and **six of the rows are cross-checks against pages that already had the
+answer - all six pass**. That is what makes the new rows trustworthy, and it is
+also what caught this session's own arithmetic slip: the first draft of that
+table added `0x08804000` without carrying, so *every* handler address was
+wrong, and only the cross-checkable rows announced it. **Write the rows you can
+check down first; a table of only-new addresses would have shipped.**
+
+**By-catch 2: all fourteen `<Stats>` parsers, and a retired blocker.**
+`WeaponStats_Parse`'s dispatch chain plus the type-string run at `0x08a78bf4`
+names every parser in one read, four of them cross-checking against known
+addresses. And `mine.md`'s "five of the fourteen parsers were never defined as
+functions, `create_function` refuses, and the bridge cannot read `.text`" is
+**no longer true** - `decompile_function` works on `0x0880cc2c` directly and
+`inspect_memory_content` reads `.rodata` normally. Whatever that blocker was, the
+route through the decompiler plus a `.rodata` string read is open, and it is how
+the whole page was read.
+
+**And the block landed exactly where arithmetic said it would.** `mine.md`
+derived the layout of the `0xa4` unread bytes between the Missile's block and
+the Mine's from nothing but attribute counts, putting the Plasma at
+`+0x9c`..`+0xc4`. Measuring it there makes it the third checked anchor in that
+run, after Turbo's `+0x84` and Shield's `+0x8c`. The arithmetic can now be
+trusted for the Quake's four and the Cannon's five as well.
+
+**Two files split rather than baselined** (`crates/formats/src/weapons.rs`,
+`crates/game/src/race/field.rs`), and the second surfaced the *same* fault the
+last split did: a stranded doc comment. `fire_opponent_rocket`'s paragraphs sat
+above `fire_opponent_missile` and the Rocket carried none, exactly as
+`Driver::drift`'s did. **Moving code is how these are found**, which is an
+argument for splitting a file at the ceiling rather than baselining it.
+
+**And two pre-existing ground-truth reds fixed on the way**, both in
+`mine_ground_truth.rs`: their 120-tick warm-up went *inside* the measured
+272-tick start-line countdown the day `b4bb23ee` landed, so the craft was
+stationary and every "a moving craft" assertion failed for a reason unrelated to
+mines. Both files now warm up through `oag_race::COUNTDOWN_TICKS`. **Worth
+carrying forward: a landed countdown silently invalidates every disc-backed
+test's warm-up premise, and those tests never run in CI.** Grep for a bare tick
+count in `crates/game/tests/` before trusting any of them.
+
+**Measured on `pulse-psp-usa.chd`**: one press is one bolt, it leaves ahead of
+the craft at the disc's own Venom figure converted from km/h, and it covered
+291.5 units of Talon's Junction still flying. `just` green at 2,765.
 
 **The Mine is the interesting one, and not because it was hard.** Its blocker
 was that the project had it filed under the wrong function. `weapon-fire.md`
@@ -108,6 +173,29 @@ Put back.
 
 ## Open
 
+- **`<Plasma charge_time>` is authored and nothing read spends it, and play
+  says something should.** This is the one place the port is knowingly at odds
+  with a from-play report, so it is first on this list. The whole press-to-flight
+  path was read - `Ship_FireHeldWeapon` (`0x08844ae8`) -> `Weapon_RequestFire`
+  (`0x08862d9c`) -> `Weapon_FirePlasma` (`0x0886a868`) -> `Plasma_Update`
+  (`0x0885c6cc`) - and **none of the four holds a shot back**; `Plasma_Update`
+  reads `+0x54` as a plain age. A maintainer who plays Pulse, asked cold, says
+  the Plasma winds up before it fires, and that oracle has been right twice on
+  this subsystem already. **Two places to look that this session did not
+  follow**: the *second* fourteen-entry jump table at `0x08a7bc90`, which
+  `Ship_FireHeldWeapon` dispatches through by `weapon_id + 1` **after**
+  `Weapon_RequestFire` returns, and `WO_PLASMA_FLASH`'s absent call site.
+  `PlasmaStats` carries no field for it meanwhile, the same treatment
+  `damageradius` gets.
+- **The Plasma draws no detonation.** `Race::blast_for` returns `None`: the pool
+  teardown that consumes `Plasma_Update`'s destroy bit was not followed, and
+  `WO_PLASMA_FLASH` is authored with no located call site. `FUN_08867370` is the
+  template - find the Plasma-pool equivalent (cursor `+0xa4`, array `+0x64`, cap
+  16) and see what it calls at teardown. The damage and impulse land; only the
+  picture is missing.
+- **`0x0885c5a4`, the Plasma's speed lookup, is deliberately unnamed.** It was
+  not decompiled; a name off a structural analogy with `Rocket_SpeedForClass`
+  alone is what the rubric's 50-70 band is for.
 - **How many mines a press lays is invented.** `oag_gameplay::projectile::mine::CLUSTER`
   is `5`. Two independent sweeps for what writes the original's counter at
   `craft+0x1ac` found only the handler's own decrement, and no `<Stats>`
@@ -125,13 +213,20 @@ Put back.
   address rendering, and because `contact-response.md` records a live breakpoint
   reading its `+0x164` as `1` at race load with no weapon fired, which a mine
   count should not be. Under 50 by the rubric, so no rename.
-- **Nothing dispatches bit `0x2000`**, the Cannon's own fire bit, anywhere in
-  `Weapons_DispatchFire`. Where the Cannon actually fires is unread; bit
-  `0x4000` on `world+0x58` (`0x088537ac`) is the obvious candidate and was not
-  chased.
-- Six weapons are still unbuilt: Quake needs track deformation, LeachBeam a
-  beam, and the remaining four - Cannon, Plasma, Repulser, Shuriken - need
-  either the slowdown mechanic or a fire path nothing has read.
+- **Nothing dispatches bit `0x2000`**, the Cannon's own fire bit - and as of
+  2026-09-02 that is a statement about **all sixteen** dispatched bits rather
+  than the five `weapon-fire.md` printed. Bit `0x4000` **is** dispatched, to
+  `0x088537ac` on `world+0x58`, and is absent from `Weapon_RequestFire`'s jump
+  table entirely, so something other than the request word sets it. Still the
+  obvious candidate, still unchased.
+- **Five weapons are still unbuilt, and four of them now have a handler
+  address.** Quake (`Weapon_FireQuake`, `0x0886c600`), LeachBeam
+  (`0x08866658`), Repulser (`0x0886ce8c`) and Shuriken (`0x08870240`) are each
+  dispatched to a real function; only their **bodies** are unread, which is a
+  much shorter walk than "a fire path nothing has read". Quake still needs
+  track deformation and LeachBeam a beam; the Repulser and the Shuriken are the
+  two to take next, and the Shuriken's ricochet may already exist - see the
+  2026-09-02 section's point about shared trajectories.
 - **The Bomb's `damageradius` is authored and spent nowhere.** It is the only
   second radius any weapon has, and the one blast path read at instruction level
   spends `blastradius` for both damage and impulse. Left undecoded rather than
