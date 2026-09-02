@@ -287,6 +287,8 @@
 0x08810e10	function	Gu_Disable	90	exhaust.md
 0x08810a60	function	Gu_ColorMaterial	85	exhaust.md
 0x08810e6c	function	Gu_SetMatrix	88	exhaust.md
+0x08900884	function	VexCamera_Submit	85	exhaust.md
+0x08900a9c	function	VexCamera_Draw	82	exhaust.md
 0x08b65700	data	g_trail_state_list	85	exhaust.md
 0x08928460	function	Gfx_BindTexture	75	exhaust.md
 0x0891e35c	function	Gfx_Enqueue	92	mesh-draw.md
@@ -627,3 +629,4 @@
 0x08877280	function	Shuriken_Init	88	shuriken.md
 0x088778ac	function	Shuriken_Bounce	85	shuriken.md
 0x08877bdc	function	Shuriken_Update	85	shuriken.md
+0x0888b980	function	Plugin_LoadManifest	80	../../../architecture/frontend-boot.md

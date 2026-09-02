@@ -11,8 +11,8 @@
 # names rather than the project's Subsystem_VerbNoun scheme.
 #
 # address	kind	name	confidence	evidence
-0x81003dd2	function	Game_Main	86	game-boot.md
-0x81000032	function	GameRoot_Construct	84	game-boot.md
+0x81003dd2	function	Game_Main	90	game-boot.md
+0x81000032	function	GameRoot_Construct	90	game-boot.md
 0x812f15b2	function	RcsModel_Load	94	track-and-collision-loaders.md
 0x8118d134	function	KdTree_Load	87	track-and-collision-loaders.md
 0x8118fac8	function	SimpleMesh_Load	92	track-and-collision-loaders.md
@@ -23,7 +23,7 @@
 0x812e5590	function	Memory_Alloc	82	game-boot.md
 0x812e4f68	function	Heap_Alloc	80	game-boot.md
 0x8122ebfc	function	SystemRoot_Construct	84	game-boot.md
-0x812677ea	function	SpeechManager_Construct	80	game-boot.md
+0x812677ea	function	SpeechManager_Construct	90	game-boot.md
 0x81262c5a	function	SoundManager_Construct	90	game-boot.md
 0x8106322a	function	FrontendRoot_Construct	90	game-boot.md
 0x8125f796	function	MusicManager_Construct	90	game-boot.md

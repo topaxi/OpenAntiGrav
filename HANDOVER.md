@@ -391,7 +391,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's glow draws, and the coordinate it samples on is the one thing not read](handover/hds-glow-draws-and-the-coordinate-it-samples.md)
 - [2048's four Vita eboots are decrypted and imported; loose ends from getting there](handover/2048s-vita-eboots-are-imported-re-not-started.md)
 - [Race start: the countdown state machine, the launch reaction boost, and whether Zone shows a different countdown](handover/race-start-countdown-and-launch-boost.md) - all four titles, all three questions open
-- [2048's seven boot-manager names could be cross-verified against `ps3-hdfury-eu`, once that side has the same singletons named](handover/vita-2048-boot-managers-await-ps3-side-names.md)
 - [2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track](handover/2048s-track-vex-parses-but-two-binary-formats-changed.md)
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/hd-collisions-flatten-a-severity-tree.md)
@@ -449,10 +448,8 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Audio: race SFX plays on all three titles](handover/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/oag-trace-plan-has-never-been-replayed-into.md)
 - [M6 authored lighting: no hardware light slot found enabled, and no `DirectionalLight` consumer found anywhere](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
-- [Ghidra target of record is `psp-pulse-eu`; EU cross-verification is owed](handover/ghidra-target-of-record-is-psp-pulse-eu.md)
 - [`/psp-pure-usa`, `/psp-pure-eu` and `/psp-pure-eu-reimport` were missing from the project on 2026-08-10, despite the 2026-08-09 note below describing them as already imported and saved](handover/psp-pure-usa-psp-pure-eu-and-psp.md)
 - [The EU/Pure imports have never been diffed](handover/the-eu-pure-imports-have-never-been-diffed.md)
-- [Ghidra names owed from the camera/matrix corroboration](handover/ghidra-names-owed-from-the-camera-matrix-corroboration.md)
 - [The ghost-ship renderer is read and written down nowhere else](handover/the-ghost-ship-renderer-is-read-and-written.md)
 - [Magstrip leftovers, none load-bearing](handover/magstrip-leftovers-none-load-bearing.md)
 - [Magfloor gfx/sfx: two real `.vex` effects found, the trigger is read, sfx and the other two titles are open](handover/magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md)

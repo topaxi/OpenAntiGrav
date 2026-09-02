@@ -352,3 +352,8 @@
 0x0892d708	function	AmbientLight_Init	85	lighting.md
 0x088786d0	function	Camera_SubmitScene	90	camera.md
 0x08885bd4	function	Camera_PublishTripod	90	camera.md
+0x0888b7dc	function	Plugin_LoadManifest	80	../../../architecture/frontend-boot.md
+0x08845d80	function	Ship_UpdateCameraRigs	90	camera.md
+0x08901744	function	VexCamera_BuildProjection	90	camera.md
+0x0881be60	function	Hud_Update	90	camera.md
+0x08901b48	function	VexCamera_EvaluateFovCurve	90	camera.md

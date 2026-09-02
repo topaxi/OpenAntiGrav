@@ -182,11 +182,13 @@ Statically corroborated the same day (confidence up from the live read alone):
 command bytes pin index `0` = projection (`0x3e`/`0x3f`, the only 16-word
 upload), `1` = view (`0x3c`/`0x3d`), `2` = world (`0x3a`/`0x3b`) - so this
 function's two calls really are view and world, and it emits no index-0
-command at all. The scene projection it inherits is built by `FUN_08901dc4`
-(fov in degrees at `cam+0x50`, near hardcoded `1.2`, far `2000.0` from
+command at all. The scene projection it inherits is built by
+`VexCamera_BuildProjection` (`0x08901dc4`, [camera.md](camera.md); fov in
+degrees at `cam+0x50`, near hardcoded `1.2`, far `2000.0` from
 `g_display+0x1698`), installed into the display's parallel projection stack at
 `+0x1190`; `+0x1410` is the **view** stack, written from the camera node's
-matrix at `+0x50` by `FUN_08900884`/`FUN_08900a9c`. The `FUN_0891e9d0` called
+matrix at `+0x50` by `VexCamera_Submit`/`VexCamera_Draw`
+(`0x08900884`/`0x08900a9c`, named below). The `FUN_0891e9d0` called
 after `Gu_CallList` is fog re-evaluation (`Fog_FindVolume`, then GE state 7
 enable/disable), not matrix restoration. One caveat for future live reads: the
 second camera type (`FUN_088b7f24`/`FUN_088b8548`, aspect hardcoded
@@ -647,6 +649,64 @@ is `150000 * (1 - exp(-i * dt / 80)) / 80` - `0` at the head rising to about
 the tail; "numerically nil" was an error from evaluating the weights without
 the vector's magnitude.
 
+## `VexCamera_Submit` and `VexCamera_Draw`
+
+| | |
+| --- | --- |
+| **Addresses** | `0x08900884` (`VexCamera_Submit`), `0x08900a9c` (`VexCamera_Draw`) |
+| **Confidence** | 85, 82 |
+
+Named from the 2026-09-02 pass landing the view-stack write this page already
+described - and corrected the same session, once the pseudo-address call
+targets were resolved (`real = pseudo + 0x08804000`, per this page's own
+history) instead of left as `func_0x...`. Every resolved target is already a
+named row on this page or `camera.md`:
+
+- `func_0x0000ce6c(1)` -> `0x08810e6c` = **`Gu_SetMatrix`**, index `1` = view.
+- `func_0x000fddc4(self+0x40, 1)` -> `0x08901dc4` = **`VexCamera_BuildProjection`**,
+  called on a camera node at `self+0x40` - a *different* object than `self`.
+- `func_0x000fe96c(0x42820000)` - `0x42820000` as a float is **`65.0`**, the
+  same empty-curve fov constant `camera.md` documents for
+  `VexCamera_EvaluateFovCurve`.
+- `func_0x0011a35c(display, self, K)` -> `0x0891e35c` = **`Gfx_Enqueue`**.
+- `_DAT_002bb5d4` -> `0x08abf5d4` = **`g_display`**.
+
+That resolves the mechanism, not just the labels: `self+0x9c` and `self+0xa0`
+are not state ids, they are **precomputed `Gfx_Enqueue` sort keys** - the
+same third argument `ExhaustFlare_Submit` above passes. So this pair is the
+`+0x34`/`+0x44` submit/draw slots (this page's own vtable table) for a
+**vex-authored camera's own scene node**, not a generic camera or a state
+machine - both functions call `VexCamera_BuildProjection` directly and carry
+its `65.0` fov constant.
+
+`VexCamera_Submit(self)` gates on a global disable byte (`g_display+0x5dec`)
+and a per-node flag at `self+0xa4`, then dispatches on a mode int at
+`self+0xa8`. Mode `<= 0` copies the node's 4x4 matrix (`self+0x50`..`self+0x8c`)
+into the display's view stack (`+0x1410`..`+0x144c`), installs it with
+`Gu_SetMatrix(1)`, rebuilds the projection via `VexCamera_BuildProjection`,
+then enqueues **both** keys (`self+0x9c`, `self+0xa0`). Mode `1` enqueues only
+`self+0xa0`, skipping the matrix work - a resubmit of whatever is already
+installed.
+
+`VexCamera_Draw(self, display, key)` is the deferred callback
+`Gfx_FlushRenderManager` invokes for a queued entry, branching on **which of
+the node's two keys it was flushed for**, not on an enter/exit state. The
+`self+0x9c`-key branch repeats the view/projection install, sets more GE
+state, reads the projection stack (`display+0x1190`) and transforms two
+clip-space corners through `Math_TransformVec4` (`func_0x00181ff8` ->
+`0x08985ff8`, already named above at confidence 90) into a log2-difference
+value written to `display+0x5df4`
+- still shaped like a mip/LOD bias driven by view width, not otherwise
+identified - then a final GE call matching a fog near/far/colour setup
+(`5000.0`, `5008.0`, `0x80808080`). The `self+0xa0`-key branch is a single
+virtual dispatch through a vtable at `*(int*)(_DAT_002ad0b0+0x38)+0x44` plus
+conditional cleanup - a second, lighter draw pass through this node's own
+vtable rather than anything resolved here, which is why `VexCamera_Draw`
+sits at 82 rather than matching `VexCamera_Submit`'s 85.
+
+The `display+0x5df4` bias computation and the meaning of the two keys beyond
+"two enqueued draw passes" remain open.
+
 ## Textures
 
 | Path | String | Handle | Loader |
@@ -747,6 +807,8 @@ gains a `_q` suffix, below 50 is not renamed at all. Mirrored in
 | `0x08810e10` | function | `Gu_Disable` | 90 |
 | `0x08810a60` | function | `Gu_ColorMaterial` | 85 |
 | `0x08810e6c` | function | `Gu_SetMatrix` | 88 |
+| `0x08900884` | function | `VexCamera_Submit` | 85 |
+| `0x08900a9c` | function | `VexCamera_Draw` | 82 |
 | `0x08b62908` | data | `g_engine_flare_texture` | 88 |
 | `0x08b657c0` | data | `g_engine_noise_textures` | 80 |
 | `0x08b65700` | data | `g_trail_state_list` | 85 |

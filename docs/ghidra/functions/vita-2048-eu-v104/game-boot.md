@@ -8,7 +8,14 @@ got imported at all.
 
 ## `Game_Main` - `0x81003dd2`
 
-**Confidence: 86**
+**Confidence: 90** (raised from 86, 2026-09-02: `ps3-hdfury-eu` now has its own
+`Game_Main` at `0x000196e8`, called directly from that binary's own CRT-startup
+routine with an `(argc, argv, envp)` shape and immediately followed by `exit`.
+It runs the same construction order this function does - `GameRoot`, then
+`SpeechManager`, `SoundManager`, `FrontendRoot`, `MusicManager` - see
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md). A third,
+independently-analysed codebase agreeing with the same shape is stronger
+evidence than the EU/USA v104 address-identical check alone.)
 
 The game's top-level entry point, called from `FUN_812ed860` via a computed
 call (the SDK's module-start-to-`main` trampoline) at the same address in
@@ -65,7 +72,11 @@ the PSP/PS2 Pulse lineage.** Full evidence table in
 
 ## `GameRoot_Construct` - `0x81000032`
 
-**Confidence: 84**
+**Confidence: 90** (raised from 84, 2026-09-02: `ps3-hdfury-eu` has its own
+`GameRoot_Construct`, tagged with the literal same `"GameRoot.cpp"` file name,
+called as the first thing that binary's own `Game_Main` does, and allocating a
+near-identical nested block - `0x2044` bytes there against `0x2040` here. Full
+citation in [`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md).)
 
 Constructs the engine's `GameRoot` singleton object, called exactly once, as
 the very first thing `Game_Main` does after allocating its backing storage -
@@ -164,9 +175,31 @@ vtable store, and the same `LinkObj` allocate-and-link pattern for a nested
 - a second engine-wide singleton alongside `GameRoot`, constructed
 immediately after it and before any manager that has its own log line.
 
+**Not raised, 2026-09-02**: `ps3-hdfury-eu`'s `Game_Main` allocates a
+same-sized, same-position object (`0x40` bytes there against this one's
+`0x3c`, constructed immediately after `GameRoot` and before any of the four
+managers - the same slot) and registers it onto `GameRoot` the same way every
+other manager is, but its constructor (`0x006767e8`) sits at a TOC this
+binary's own [`memory.md`](../ps3-hdfury-eu/memory.md) flags as
+`inherited` rather than `exact` - the risky half of the per-function-TOC
+defect - and carries no `.cpp` tag in the attribution map, unlike every
+confirmed manager. That is consistent with a `SystemRoot` counterpart sitting
+in the same slot, but reading it safely needs the TOC fixed first
+(`AssignPs3R2FromOpd.java` via a full re-import - see
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md)), not
+something to trust from an inherited-TOC decompile. Left as a structural
+candidate, not evidence.
+
 ## `SpeechManager_Construct` - `0x812677ea`
 
-**Confidence: 80**
+**Confidence: 90** (raised from 80, 2026-09-02: `ps3-hdfury-eu` has its own
+`SpeechManager_Construct`, tagged `"SpeechManager.cpp"`, constructed
+immediately after `GameRoot` and the `SystemRoot`-slot object in the same
+relative position this one occupies. The PS3 tag is clean, which is what
+raises this past the "odd `param_1[0xb]` value" cap below - the class
+identity was never actually in doubt, only this binary's own tag field was
+unusual. Citation in
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md).)
 
 Called with the object `Game_Main` allocates directly between logging
 `"Create speech manager..."` and `"done\n"` - the same log-bracket evidence
@@ -184,6 +217,10 @@ log-line bracket alone already puts the identification past 70.
 
 **Confidence: 90**
 
+Corroborated 2026-09-02: `ps3-hdfury-eu` has its own `SoundManager_Construct`,
+tagged `"SoundManager.cpp"`, in the matching construction-order slot. See
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md).
+
 Two independent evidence classes agree on this one: it is both the object
 built directly after `Game_Main` logs `"Create sound manager..."` (the
 `Game_Main`-confidence evidence) and it carries its own debug tag,
@@ -199,6 +236,10 @@ in `Game_Main`.
 ## `FrontendRoot_Construct` - `0x8106322a`
 
 **Confidence: 90**
+
+Corroborated 2026-09-02: `ps3-hdfury-eu` has its own `FrontendRoot_Construct`,
+tagged `"FrontendRoot.cpp"`, in the matching construction-order slot. See
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md).
 
 The address the boot-managers thread guessed as a "3D audio/positional-audio
 manager" (explicitly flagged confidence 0, hypothesis only) - it is not audio
@@ -220,6 +261,11 @@ corroborate each other independently.
 ## `MusicManager_Construct` - `0x8125f796`
 
 **Confidence: 90**
+
+Corroborated 2026-09-02: `ps3-hdfury-eu` has its own `MusicManager_Construct`,
+tagged `"MusicManager.cpp"`, in the matching construction-order slot - the
+last of the five, exactly as here. See
+[`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md).
 
 Same two-evidence-class agreement as `SoundManager_Construct`: built directly
 after `Game_Main` logs `"Create music manager..."`, and carries its own tag,
@@ -243,3 +289,12 @@ examined further this pass.
   `FrontendRoot_Construct` was guessed as a 3D-audio manager, and
   `SystemRoot_Construct` was guessed as an input/options manager. Neither
   guess was acted on before being read.
+- 2026-09-02: `ps3-hdfury-eu`'s own boot chain located and named (`Game_Main`,
+  `GameRoot_Construct`, `SpeechManager_Construct`, `SoundManager_Construct`,
+  `FrontendRoot_Construct`, `MusicManager_Construct` - see
+  [`ps3-hdfury-eu/game-boot.md`](../ps3-hdfury-eu/game-boot.md)), raising
+  `Game_Main` 86→90, `GameRoot_Construct` 84→90 and `SpeechManager_Construct`
+  80→90 here, and adding a corroboration note to the three already at 90.
+  `SystemRoot_Construct`'s PS3 counterpart is a same-size, same-slot candidate
+  only - its constructor sits at an inherited (unfixed) TOC on that binary, so
+  it is not read.
