@@ -84,10 +84,31 @@ Forcing alternate pads to cooldown (a temporary override, since removed) with
 *different* picture and no assertion failure: the branch reaches the reused
 buffer, and the reused buffer still uploads exactly its pad's span.
 
-`just` passes. `just test-data` fails two `oag-formats` ground-truth tests
-(`a_third_of_a_circuits_chunks_are_see_through`,
-`the_disc_declares_more_widths_than_the_search_looks_for`) - **both reproduce
-on pristine `157a4666`** and neither is in a crate this work touches.
+`just` passes. **`just test-data` reports six pre-existing failures, and an
+earlier version of this line said two** - a count taken from a run that stopped
+early. Corrected 2026-09-02, and the way it was wrong is worth keeping:
+
+- `just test-data` is `cargo nextest run --workspace --run-ignored all` with no
+  `--no-fail-fast`, so nextest stops on failure. The run behind "two" executed
+  **138 of 3,298 tests** and never reached the other four. The identity of the
+  two was right and their trace back to `157a4666` holds; the implied
+  completeness did not. **A `test-data` run cannot enumerate what is red** -
+  add `--no-fail-fast` when that is the question.
+- With `--no-fail-fast` on `5e212d1b`: 3,304 run, **6 failed, 0 skipped**. None
+  is in a crate this work touches, and the FSR 1 thread reproduced the same six
+  independently on a clean worktree.
+- **Setting `OAG_REQUIRE_GAME_DATA=1` gives 17, and the extra 11 are not code.**
+  That variable turns "silently pass on missing data" into a failure, and
+  `data/traces/` is *derived* evidence this checkout is missing three files of -
+  `talons-junction-standing-start.csv`, `pad0-boost.csv` and
+  `talons-junction-time-trial-lap-omega.csv`. The 11 are `chase_camera`,
+  `maglock`, `pure_dlc`, `wall_contact` and `yaw_authority` ground truth, all
+  trace-backed. Quote a red count with the variable's state attached or it means
+  nothing.
+- **`0 skipped` does not mean the data was there.** nextest counts a test that
+  early-returns on a missing file as *passed*; the 17-failure run reported
+  `0 skipped` too. It says nothing was filtered out, not that anything was
+  exercised.
 
 ## Fixed
 
