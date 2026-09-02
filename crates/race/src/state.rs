@@ -186,11 +186,21 @@ impl RaceState {
     /// fire a sound or a screen on the edge. Idempotent: calling it every tick
     /// of a wrecked craft returns `true` once.
     ///
-    /// **Mode-agnostic on purpose.** Only Zone can reach it in practice, because
-    /// a time trial and a speed lap race with the original's `Damage` option off
-    /// and their pool floors at 20 - see `oag_gameplay::damage_rules`. Gating it
-    /// on the mode would encode that twice, and wrongly the day a mode with
-    /// damage on arrives.
+    /// **Mode-agnostic on purpose.** `oag_gameplay::damage_rules` clears the
+    /// original's `Damage` option for a time trial and a speed lap, which floors
+    /// their pool at 20, so those two cannot reach it. **Zone and a single race
+    /// both can** - this doc used to say only Zone did, which was true only
+    /// while nothing shot at the player. It stopped being true when the AI
+    /// gained weapons on 2026-08-26 and nobody noticed, because the two tests
+    /// that would have caught it are `#[ignore]`d and disc-backed. Gating this
+    /// on the mode would encode the rules table twice.
+    ///
+    /// **Whether ending the race is the right answer for a single race is not
+    /// recovered.** Zone's is: `ER_ZONE_DEST` reads "Ship destroyed on zone"
+    /// (`docs/gameplay/race-modes.md`). For a single race, `Ship_SetState`'s
+    /// states 3 (Respawn) and 4 (Destroyed) are both read
+    /// (`docs/ghidra/functions/psp-pulse-usa/shield.md`) and nothing says which
+    /// follows a depleted pool. See HANDOVER.
     pub fn eliminate(&mut self) -> bool {
         if self.finished {
             return false;

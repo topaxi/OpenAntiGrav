@@ -223,9 +223,11 @@ impl Race {
         // position should not go on counting laps - and checked every tick
         // because `RaceState::eliminate` is the thing that makes it idempotent.
         //
-        // Only Zone can reach this: a time trial and a speed lap race with the
-        // original's `Damage` option off, which floors their pool at 20. See
-        // `oag_gameplay::damage_rules`.
+        // Zone *and a single race* reach this - a time trial and a speed lap do
+        // not, racing with the original's `Damage` option off, which floors
+        // their pool at 20. See `oag_gameplay::damage_rules`, and
+        // `RaceState::eliminate` for what is not recovered about the single
+        // race's own answer.
         if self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
             && self.world.race.eliminate()
         {

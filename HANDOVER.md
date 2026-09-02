@@ -109,7 +109,42 @@ file does not need to carry its own.
   - `oag-game::difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`
   - `oag-game::stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back`,
     the one that was already recorded, failing with "nothing recovered the
-    craft". All six are undiagnosed.
+    craft".
+
+  **The two `race_finish_ground_truth` ones are diagnosed as of 2026-09-02, and
+  the cause is not a bug in the finish rule.** The autopiloted player is *shot
+  to death* on lap 2 of 3. Measured by instrumenting `damage::apply_contact` and
+  `damage::apply_weapon`: every drop is a weapon hit at the disc's own authored
+  amounts - 15, 15, 5, 5, 5, 15, 10 - and wall contact contributes under 2.0 a
+  time and never matters. The craft reaches `CraftState::Destroyed` on tick
+  3285, `Eliminated` on 3315, and `RaceState::eliminate` ends the race with the
+  player's `standing.finish_tick` still `None`, which is exactly what both
+  assertions report. Wall contact is a red herring; so are the opponents as a
+  *collision* source, since `pair` never fires here.
+
+  **The premise expired rather than the code regressing.** The file's own
+  comment records tick **7,717** and a clean crossing on 2026-08-17. The AI
+  gained working weapons on **2026-08-26** (`40877621` the Mine, `b02f4a48` the
+  Bomb, `6ca44754`/`1928a42d` missile lock-on, `dac4c4a3` drivers steering
+  around charges). An autopilot has no defence - it does not use a shield, does
+  not dodge - so on a full grid at Venom it now dies before the flag. Nothing
+  noticed because these two tests are `#[ignore]`d and disc-backed and so never
+  run in CI.
+
+  **What is blocked, and it is an RE question rather than a code one:** whether
+  ending the race is even the right answer for a single race. Zone's rule *is*
+  recovered - `ER_ZONE_DEST` reads "Ship destroyed on zone"
+  ([race-modes.md](docs/gameplay/race-modes.md)). For a single race,
+  `Ship_SetState`'s state 3 (Respawn) and state 4 (Destroyed) are both read
+  ([shield.md](docs/ghidra/functions/psp-pulse-usa/shield.md)) and **nothing
+  says which one follows a depleted pool**. Until that is settled - from the
+  executable, or from someone playing a single race and being blown up - fixing
+  the test would be picking an answer rather than recording one. Two comments
+  that flatly asserted "only Zone can reach this" are corrected in place
+  (`oag_race::RaceState::eliminate`, `race::tick`); they were true when written
+  and stopped being true without anyone editing them.
+
+  The other four are undiagnosed.
 
   **They reproduce alone, and there is no parallelism or shared-state effect** -
   an earlier version of this entry claimed one, on the strength of the bad
