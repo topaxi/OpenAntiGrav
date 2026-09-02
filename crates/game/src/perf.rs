@@ -33,10 +33,28 @@
 //!
 //! # Where it is drawn
 //!
-//! Into the offscreen target, over whatever the stage drew, in the same
-//! 480x272 space as the front end and the menus - so at a render scale of 50 %
-//! the overlay is drawn at 50 % too. That is deliberate: the overlay should
-//! cost what the game costs, or it is measuring a frame that does not exist.
+//! Onto the **surface**, after `upscale::Framebuffer::resolve` has already put
+//! the frame there - so the overlay is rasterised at presentation resolution
+//! whatever the render scale is, per
+//! [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+//! It still lays out in the same 480x272 space as the front end and the menus;
+//! that grid is mapped onto the aspect rectangle of the surface rather than of
+//! the offscreen target, which is the same rectangle on screen.
+//!
+//! **This used to be the other way round**, and the argument for it was that
+//! "the overlay should cost what the game costs, or it is measuring a frame
+//! that does not exist". That holds for a render scale a player sets once. It
+//! does not hold for one that moves: this overlay is what somebody reads to
+//! judge what a resolution controller is doing, and an overlay resampling along
+//! with the scene cannot be read while it moves. Its cost also has to leave the
+//! scene's budget before a GPU-timestamp signal can measure the part that
+//! scales.
+//!
+//! Two consequences worth knowing. The overlay is **not graded** - brightness
+//! and gamma ride in the resolve it now comes after - which is deliberate for
+//! an instrument and is the one standing exception to ADR-0036. And it is no
+//! longer touched by FXAA, SMAA or FSR 1, so its glyphs stop being edge-detected
+//! and sharpened as though they were scene content.
 //!
 //! It is **window-only**. `--screenshot` runs the sequence as fast as it can
 //! with no presentation at all, so a frame time from it would be a real

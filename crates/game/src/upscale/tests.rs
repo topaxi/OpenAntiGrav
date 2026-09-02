@@ -466,3 +466,161 @@ fn a_degenerate_rectangle_still_gives_a_creatable_texture() {
         }
     }
 }
+
+/// The UI composites **after** the blit, onto the surface, at presentation
+/// resolution - [ADR-0036](../../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+///
+/// Two properties in one picture, and both are what the arrangement is for:
+///
+/// 1. **The blit survives.** `Renderer::overlay` loads rather than clears, so
+///    what the resolve put on the surface - including the aspect bars it
+///    cleared around the rectangle - is still there under a UI pass that covers
+///    only part of it. Get this wrong and the frame is a UI on black.
+/// 2. **A feature one presentation pixel wide comes out one pixel wide.** The
+///    offscreen target here is 2x2 against an 8x8 surface, so one of its texels
+///    is a four-pixel block. Drawing the same fill *before* the resolve was
+///    tried while this test was written, and it does not merely widen: a
+///    quarter-pixel quad in a two-pixel viewport covers no sample centre at
+///    all, so column zero came back the scene's own red and the UI was gone
+///    entirely. Landing on exactly column zero is the assertion that the UI was
+///    rasterised against the surface and not against the render scale.
+///
+/// A `Draw::Fill` rather than the performance overlay's own list, deliberately:
+/// what is under test is where the pass lands, and pinning it to glyph layout
+/// would make it fail for reasons that are not this.
+///
+/// Returns early on a machine with no adapter, which is what CI's runners are.
+#[test]
+fn the_ui_composites_over_the_blit_at_presentation_resolution() {
+    use crate::frontend::{Draw, SCREEN};
+    use crate::render::Renderer;
+
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("ui composite test"),
+        ..Default::default()
+    })) else {
+        return;
+    };
+
+    // What the window surface and every capture target are since ADR-0020.
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut framebuffer = Framebuffer::new(&device, format, (2, 2)).expect("the pipeline");
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        crate::font::Atlas::build(),
+        &crate::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+
+    let surface = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("composite readback"),
+        size: wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let surface_view = surface.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("composite readback"),
+        size: (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 8) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    // The scene: a flat red over the whole offscreen target, which the blit
+    // then stretches over the whole surface.
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("scene"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: framebuffer.view(),
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    framebuffer.set_grade(&queue, Brightness::NEUTRAL, Gamma::NEUTRAL, false);
+    framebuffer.present(&mut encoder, &surface_view, (0.0, 0.0, 8.0, 8.0), None);
+
+    // 480 authored units across 8 surface pixels is 60 units to the pixel, so
+    // this fill is the leftmost column and nothing else.
+    renderer.overlay(
+        &device,
+        &queue,
+        &mut encoder,
+        &surface_view,
+        &[Draw::Fill {
+            rect: [0.0, 0.0, SCREEN.0 / 8.0, SCREEN.1],
+            color: [0.0, 0.0, 1.0, 1.0],
+        }],
+        (0.0, 0.0, 8.0, 8.0),
+    );
+
+    encoder.copy_texture_to_buffer(
+        surface.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                rows_per_image: Some(8),
+            },
+        },
+        wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let mapped = slice.get_mapped_range().expect("the readback");
+    // A middle row, away from any edge the blit's own sampler clamps at.
+    let row = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize * 4;
+    let pixel = |x: usize| {
+        let at = row + x * 4;
+        [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    };
+
+    assert_eq!(
+        pixel(0),
+        [0, 0, 255, 255],
+        "the UI pass did not reach the surface"
+    );
+    for x in 1..8 {
+        assert_eq!(
+            pixel(x),
+            [255, 0, 0, 255],
+            "column {x} lost the blit under the UI, or the fill was widened by \
+             being rasterised at the render scale rather than at the surface"
+        );
+    }
+    drop(mapped);
+    readback.unmap();
+}

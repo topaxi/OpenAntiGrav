@@ -571,29 +571,6 @@ impl Session {
             _ => None,
         };
 
-        // Over the stage and inside the offscreen target, so the overlay is
-        // drawn at the render scale the game is - measuring a frame nobody is
-        // presenting would be the one way to get this wrong. One pass, skipped
-        // entirely when the setting is off.
-        let list = perf::draw_list(
-            &self.meter,
-            self.settings.graphics.perf_overlay,
-            self.presentation_hz(),
-            scene_stats,
-            video_label,
-            memory,
-        );
-        if !list.is_empty() {
-            self.overlay.overlay(
-                &self.gpu.device,
-                &self.gpu.queue,
-                &mut encoder,
-                target,
-                &list,
-                inside,
-            );
-        }
-
         // The whole back half of the frame - the upscaler, the grade and the
         // blit - so that this and a `--presented` capture cannot drift apart.
         self.framebuffer.resolve(
@@ -610,6 +587,53 @@ impl Session {
                 gamma: self.settings.display.gamma,
             },
         );
+
+        // **After** the resolve, and onto the surface rather than the offscreen
+        // target: the overlay composites at presentation resolution, per
+        // [ADR-0036](../../../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+        // `rect` rather than `inside` for the same reason - the 480x272 grid
+        // this lays out in is mapped onto the aspect rectangle of the *surface*
+        // now, which is the same rectangle on screen and a different set of
+        // pixels to rasterise into.
+        //
+        // This overturns `perf.rs`'s older "the overlay should cost what the
+        // game costs". That is right for a render scale a player sets once and
+        // wrong for one that moves: the overlay is the row somebody reads to
+        // judge what a resolution controller is doing, and an overlay
+        // resampling along with the scene cannot be read while it moves. It
+        // also takes the overlay out of FXAA, SMAA and FSR 1, whose treatment
+        // of coverage-atlas glyphs [ADR-0013](../../../../../docs/architecture/adr/0013-anti-aliasing-architecture.md)
+        // flagged as inherited doubt rather than intent.
+        //
+        // The cost of this is that the overlay is no longer graded, since the
+        // grade rides in the resolve above. Deliberate and permanent for this
+        // one element: it is an instrument, and a frame-time graph a brightness
+        // of 20 % makes unreadable is a worse instrument. Every *other* piece of
+        // UI keeps the grade when it moves, which is what the presentation
+        // target in ADR-0036's decision is for.
+        //
+        // `Renderer::overlay` loads rather than clears, so the blit and the
+        // aspect bars underneath it survive. One pass, skipped entirely when the
+        // setting is off.
+        let list = perf::draw_list(
+            &self.meter,
+            self.settings.graphics.perf_overlay,
+            self.presentation_hz(),
+            scene_stats,
+            video_label,
+            memory,
+        );
+        if !list.is_empty() {
+            self.overlay.overlay(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &mut encoder,
+                &view,
+                &list,
+                rect,
+            );
+        }
+
         let submit_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
         if let Some(start) = submit_start {
