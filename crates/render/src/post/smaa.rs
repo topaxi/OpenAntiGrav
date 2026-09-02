@@ -277,20 +277,23 @@ impl Smaa {
         // Pass 1: edge detection reads the scene through the point sampler
         // and writes into `edges`, cleared first because the shader
         // discards rather than writing every texel.
-        let edge_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("smaa edge"),
-            layout: &self.edge_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(frame.source),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.point_sampler),
-                },
-            ],
-        });
+        let edge_bind_group = crate::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("smaa edge"),
+                layout: &self.edge_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(frame.source),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.point_sampler),
+                    },
+                ],
+            },
+        );
         clear_pass(encoder, "smaa edge", &edges.view).run(&self.edge_pipeline, &edge_bind_group);
 
         // Pass 2: blending weights, reading `edges` plus the two lookup
@@ -299,50 +302,56 @@ impl Smaa {
         // so this is rebuilt every frame the same as the other two passes
         // rather than cached against a layout that would need invalidating
         // whenever `edges` resizes.
-        let blend_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("smaa blend"),
-            layout: &self.blend_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&edges.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.area_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&self.search_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-            ],
-        });
+        let blend_bind_group = crate::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("smaa blend"),
+                layout: &self.blend_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&edges.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.area_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&self.search_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                    },
+                ],
+            },
+        );
         clear_pass(encoder, "smaa blend", &blend.view).run(&self.blend_pipeline, &blend_bind_group);
 
         // Pass 3: neighbourhood blend, reading the original scene and the
         // blend weights.
-        let neighborhood_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("smaa neighborhood"),
-            layout: &self.neighborhood_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(frame.source),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&blend.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-            ],
-        });
+        let neighborhood_bind_group = crate::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("smaa neighborhood"),
+                layout: &self.neighborhood_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(frame.source),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&blend.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                    },
+                ],
+            },
+        );
         clear_pass(encoder, "smaa neighborhood", &output.view)
             .run(&self.neighborhood_pipeline, &neighborhood_bind_group);
     }

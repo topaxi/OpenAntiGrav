@@ -278,7 +278,18 @@ impl Drawable {
     ///
     /// A no-op on a model with no flaps, which is every track, the sky, the
     /// collision overlay and any ship whose file does not carry them.
-    pub(super) fn deflect_airbrakes(&self, queue: &wgpu::Queue, left: f32, right: f32) {
+    ///
+    /// `moved` is scratch the caller owns and this refills - see
+    /// `Scene::scratch`. It runs on every frame of every race, so building the
+    /// span into a fresh `Vec` was two allocations a frame that never survived
+    /// the upload.
+    pub(super) fn deflect_airbrakes(
+        &self,
+        queue: &wgpu::Queue,
+        left: f32,
+        right: f32,
+        moved: &mut Vec<mesh::GpuVertex>,
+    ) {
         for (flap, angle) in self.model.airbrakes.iter().zip([left, right]) {
             let Some(flap) = flap else { continue };
             let swing = flap.deflect(angle);
@@ -289,24 +300,22 @@ impl Drawable {
             // From the model's own vertices every time, never from the last
             // frame's: accumulating rotations would drift, and worse, would
             // make the rest position depend on how the ship got there.
-            let moved: Vec<mesh::GpuVertex> = base
-                .iter()
-                .map(|v| {
-                    let mut out = *v;
-                    out.position = swing
-                        .transform_point3(Vec3::from_array(v.position))
-                        .to_array();
-                    out.normal = swing
-                        .transform_vector3(Vec3::from_array(v.normal))
-                        .to_array();
-                    out
-                })
-                .collect();
+            moved.clear();
+            moved.extend(base.iter().map(|v| {
+                let mut out = *v;
+                out.position = swing
+                    .transform_point3(Vec3::from_array(v.position))
+                    .to_array();
+                out.normal = swing
+                    .transform_vector3(Vec3::from_array(v.normal))
+                    .to_array();
+                out
+            }));
             let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
             queue.write_buffer(
                 &self.vertices,
                 span.start as u64 * stride,
-                bytemuck::cast_slice(&moved),
+                bytemuck::cast_slice(moved),
             );
         }
     }
@@ -331,20 +340,25 @@ impl Drawable {
     /// One write for the whole buffer rather than one per node: the shell is a
     /// single mesh, and a per-range loop would be machinery for a case that does
     /// not exist.
-    pub(super) fn tint(&self, queue: &wgpu::Queue, rgba: [f32; 4]) {
-        let tinted: Vec<mesh::GpuVertex> = self
-            .model
-            .vertices
-            .iter()
-            .map(|v| {
-                let mut out = *v;
-                for (channel, scale) in rgba.iter().enumerate() {
-                    out.colour[channel] = v.colour[channel] * scale;
-                }
-                out
-            })
-            .collect();
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&tinted));
+    /// `tinted` is scratch the caller owns and this refills - see
+    /// `Scene::scratch`. A whole shell's vertices, once per craft with its
+    /// shield up and once more for the cockpit sphere: the allocation this
+    /// avoids is larger than the pads' and rarer.
+    pub(super) fn tint(
+        &self,
+        queue: &wgpu::Queue,
+        rgba: [f32; 4],
+        tinted: &mut Vec<mesh::GpuVertex>,
+    ) {
+        tinted.clear();
+        tinted.extend(self.model.vertices.iter().map(|v| {
+            let mut out = *v;
+            for (channel, scale) in rgba.iter().enumerate() {
+                out.colour[channel] = v.colour[channel] * scale;
+            }
+            out
+        }));
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(tinted));
     }
 
     /// Recolours each weapon pad's own geometry by whether it currently hands
@@ -361,7 +375,13 @@ impl Drawable {
     ///
     /// A no-op on a model with no weapon pads - every track and the sky -
     /// since `ready` is empty there.
-    pub(super) fn tint_weapon_pads(&self, queue: &wgpu::Queue, seconds: f32, ready: &[bool]) {
+    pub(super) fn tint_weapon_pads(
+        &self,
+        queue: &wgpu::Queue,
+        seconds: f32,
+        ready: &[bool],
+        tinted: &mut Vec<mesh::GpuVertex>,
+    ) {
         let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
         for (range, &is_ready) in self.model.node_vertex_ranges.iter().zip(ready) {
             let span = range.start as usize..range.end as usize;
@@ -373,18 +393,19 @@ impl Drawable {
             } else {
                 oag_render::weapon_pad::COOLDOWN_COLOUR
             };
-            let tinted: Vec<mesh::GpuVertex> = base
-                .iter()
-                .map(|v| {
-                    let mut out = *v;
-                    out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
-                    out
-                })
-                .collect();
+            // Refilled rather than rebuilt - one pad's worth of vertices, and
+            // there is a pad's worth of them on every lap of every circuit
+            // every frame. See `Scene::scratch`.
+            tinted.clear();
+            tinted.extend(base.iter().map(|v| {
+                let mut out = *v;
+                out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
+                out
+            }));
             queue.write_buffer(
                 &self.vertices,
                 u64::from(range.start) * stride,
-                bytemuck::cast_slice(&tinted),
+                bytemuck::cast_slice(tinted),
             );
         }
     }
@@ -408,6 +429,8 @@ impl Drawable {
         frustum: Option<&Frustum>,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
+        let mut binds = oag_render::perfprobe::Binds::default();
+        let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
         // the first tier always allows. That is the ship and the collision
         // overlay, and any track whose sections did not decode.
@@ -419,6 +442,7 @@ impl Drawable {
         if self.model.indices.is_empty() {
             return stats;
         }
+        oag_render::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
@@ -436,13 +460,35 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Switched only when the slot changes, the same elision the
+            // transparent list's `set_pipeline` already runs. Batches
+            // sharing a texture arrive in runs - a model's own batch order
+            // groups them - so this is not a bet: measured on Talon's
+            // Junction, 87 of 580 binds a frame in a time trial and 101 of
+            // 579 in a full grid re-bound the group already bound.
+            //
+            // Carried across all three lists rather than reset per list,
+            // because a `set_pipeline` between them does not unbind
+            // anything: every pipeline this drawable owns is built from one
+            // layout, which is the same fact that already lets groups 0, 2
+            // and 3 be bound once at the top and left alone through both
+            // pipeline switches below. It restarts at `None` per
+            // [`Self::draw`] call, where the texture array itself changes.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
         // Second pipeline, same pass: alpha-tested batches, cutout. See
         // `mesh_render::Built::alpha_test_pipeline`.
+        oag_render::perfprobe::pipeline_set();
         pass.set_pipeline(&self.alpha_test_pipeline);
         for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
             if !visible(
@@ -457,8 +503,16 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Elided when unchanged, as above.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
@@ -495,13 +549,22 @@ impl Drawable {
             }
             let pipeline = pipelines.select(draw);
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                oag_render::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Elided when unchanged, as above.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
         stats
@@ -542,6 +605,8 @@ impl Drawable {
     /// PSP.
     pub(super) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
         let mut stats = SceneStats::default();
+        let mut binds = oag_render::perfprobe::Binds::default();
+        let mut last_bound: Option<usize> = None;
         if self.model.indices.is_empty() {
             return stats;
         }
@@ -563,13 +628,22 @@ impl Drawable {
             // that sets it differently should still be obeyed.
             let pipeline = &self.additive_pipeline[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                oag_render::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Elided when unchanged, as above.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
         stats

@@ -476,6 +476,53 @@ pub fn capture(
     // As in `RaceStage::render`: the grade follows the zone the race reached.
     scene.sync_zone_grade(&race);
     let spectrum = zone_spectrum(options, audio);
+    oag_render::perfprobe::reset();
+    oag_render::perfprobe::mark("frame-start");
+    // `OAG_RENDER_BENCH=N` re-records the same frame N times into throwaway
+    // encoders and reports the CPU cost of `Scene::render` alone. No GPU
+    // submission and no presentation, so this is the command-recording half of
+    // a frame and nothing else - which is the half every finding here is about.
+    // `cfg!` rather than `#[cfg]`: without `perf-probe` this is `if false` and
+    // the optimiser drops all of it, while the compiler still type-checks it -
+    // so the harness cannot rot between the runs that use it.
+    if cfg!(feature = "perf-probe")
+        && let Ok(runs) = std::env::var("OAG_RENDER_BENCH")
+            .unwrap_or_default()
+            .parse::<u32>()
+    {
+        let mut samples = Vec::with_capacity(runs as usize);
+        for _ in 0..runs {
+            let mut bench = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("race bench"),
+            });
+            let start = std::time::Instant::now();
+            scene.render(
+                &device,
+                &queue,
+                &mut bench,
+                &view,
+                &race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.motion_blur,
+                &spectrum,
+            );
+            samples.push(start.elapsed().as_secs_f64() * 1e6);
+            drop(bench);
+        }
+        samples.sort_by(f64::total_cmp);
+        let mean = samples.iter().sum::<f64>() / samples.len() as f64;
+        println!(
+            "bench Scene::render over {} runs: mean {mean:.1} us, median {:.1} us, p10 {:.1} us, p90 {:.1} us",
+            samples.len(),
+            samples[samples.len() / 2],
+            samples[samples.len() / 10],
+            samples[samples.len() * 9 / 10],
+        );
+    }
     scene.render(
         &device,
         &queue,
@@ -494,6 +541,7 @@ pub fn capture(
         options.motion_blur,
         &spectrum,
     );
+    oag_render::perfprobe::report_frame(race.world.tick);
 
     // The HUD, into the same target. Without this a race screenshot would show
     // the track and no HUD at all, because unlike the front end's capture this

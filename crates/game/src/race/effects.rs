@@ -413,8 +413,21 @@ impl Race {
     /// span 500).
     #[must_use]
     pub fn hd_trail_vertices(&self, slot: usize) -> Vec<oag_render::mesh::GpuVertex> {
+        let mut out = Vec::new();
+        self.extend_hd_trail_vertices(&mut out, slot);
+        out
+    }
+
+    /// [`Self::hd_trail_vertices`], appended to a list the caller owns - the
+    /// form the renderer uses, for the reason
+    /// [`oag_render::exhaust::Exhaust::extend_trail_vertices`] gives.
+    pub fn extend_hd_trail_vertices(
+        &self,
+        out: &mut Vec<oag_render::mesh::GpuVertex>,
+        slot: usize,
+    ) {
         if !self.hd_trail_active {
-            return Vec::new();
+            return;
         }
         let exhaust = &self.exhaust[slot];
         // HD's ramp, not Pulse's: the gained speed field saturates it near
@@ -425,7 +438,7 @@ impl Race {
             exhaust.speed_kmh(),
             if exhaust.engine_on() { 1.0 } else { 0.0 },
         );
-        self.hd_trail[slot].vertices(brightness, s01, self.hd_trail_red[slot])
+        self.hd_trail[slot].extend_vertices(out, brightness, s01, self.hd_trail_red[slot]);
     }
 
     /// Whether this race draws HD's trail tube instead of the PSP ribbon.
