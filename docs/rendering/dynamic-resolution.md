@@ -1,15 +1,17 @@
 # Dynamic resolution
 
-**Status: the structure exists, the controller does not.** `Framebuffer` carries
-an allocation and a render extent separately, per
-[ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md),
-and every consumer of the old single `size` has been resolved to one or the
-other. The cost signal exists too: the scene pass is timed on the GPU every frame in
-the window, and the reading names the frame it was taken on. Nothing moves the
-extent yet - there is no controller, and the scene-resolution post-processes
-still take no viewport - so the extent equals the allocation on every frame the
-game draws, and a build with this structure in it produces byte-identical frames
-to one without.
+**Status: it works, and it is off by default.** `[graphics]
+dynamic_resolution` names a target frame rate, `[graphics]
+dynamic_resolution_floor` bounds how far the picture may shrink, and
+`[graphics] render_scale` becomes the ceiling - the controller reads it and
+never writes it. Every scene-resolution pass takes a resource size and a
+viewport separately, the scene pass is timed on the GPU every frame, and
+`crates/game/src/drs.rs` turns the second into the first.
+
+A build with the whole feature in it produces **byte-identical frames** to one
+without, at the default. That is measured rather than argued: six `--presented`
+captures either side of each commit, covering FSR 1, FXAA, SMAA, the PSP bloom
+with the effect actually contributing, and an HD/Fury circuit.
 
 Dynamic resolution scaling is its own feature and not an upscaling one. It is a
 closed loop: measure what a frame cost, resize the render target for the next
@@ -77,39 +79,59 @@ Two sites deliberately unaffected:
   `Framebuffer` either** and draws the scene straight into the capture texture.
   A `--screenshot` is unaffected by anything on this page.
 
-## The caveat that bounds what may set an extent
+## Every scene pass carries a resource size and a viewport
 
-**No per-frame scene post-process is viewport-aware yet, and there is no safe
-configuration of the settings that makes one.** Two different shapes of not
-knowing:
+`motion_blur` was the only pass already shaped right and is the shape the rest
+took: `Frame` carries the attachments' `size` and the drawn `viewport`
+separately and each pass takes the correct one for each. `post::sub_rectangle`
+is the shared scale-and-clamp, and it returns **exactly `1.0` on both when the
+two sizes are equal, by construction** - the same argument
+`upscale::blit::Source::WHOLE` already made for the final blit, and the reason
+none of this moves a byte at the ceiling.
 
-- **FXAA, SMAA and FSR 1** are handed the **extent** as their input size while
-  reading a view of the **allocation**-sized texture. Correct exactly while the
-  two are equal, and wrong the moment they are not: each derives a texel size
-  from the size it was given, so an extent below the allocation has them
-  stepping the wrong distance across a texture larger than they think it is -
-  and FXAA's and SMAA's own targets would be rebuilt on every extent change,
-  which is the cost this whole structure exists to avoid.
-- **`bloom` and `hd_bloom` take no size and no viewport at all.** They are
-  handed the scene view and nothing else, so a short extent would have them
-  blurring the undrawn region inward as a dark edge along the extent's own
-  boundary. Bloom is its own setting and is on in an ordinary race - which is
-  why "turn the upscaler and the anti-aliasing off" is **not** a safe
-  configuration, and why the rule below is unconditional rather than a list of
-  rows to set to `off`.
+| Pass | What it takes now | Note |
+| --- | --- | --- |
+| `fsr1` | `viewport` and `input` separately | A **restoration**: `FsrEasuCon` takes `inputViewportInPixels` and `inputSizeInPixels`, `con0` off the first and `con1`..`con3` off the second. This port had folded them into one argument, so un-folding moves the diff against `ffx_fsr1.h` closer and keeps [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)'s transliteration property |
+| `fxaa`, `smaa` | `size` (the allocation) and `viewport` | **Their targets size off the allocation**, which is the point: an extent moving several times a second must not rebuild them. Taps step texels of the resource and clamp half a texel inside the drawn edge |
+| `bloom` | A scene `size` and `viewport` | The scratch buffers stay a fixed 240x136, so the bright pass maps the extent onto the whole buffer and the blur radius stays about 2 % of the drawn frame at any scale. The composite writes through a viewport |
+| `hd_bloom` | The same, applied down the ladder | Each level's viewport is its own size times the one fraction, so a single UV scale covers scene, half, quarter and every luminance halving |
+| `motion_blur` | Unchanged | It was already right |
 
-So, until those passes take a viewport and a resource size separately:
-**nothing outside a test may set an extent below the allocation.** The two
-tests that do build a bare `Framebuffer` with no `Scene` behind it, so there is
-no post chain for them to reach. `Framebuffer::set_extent` says so on itself.
+Two things worth carrying forward from doing it:
 
-`motion_blur` is the one pass already shaped right, and is the shape the others
-need: `motion_blur::Frame` carries the attachments' `size` and the drawn
-`viewport` as separate fields and takes the correct one for each. The
-restoration that starts on the rest is un-folding `fsr1::Constants::new`'s
-viewport and size arguments back to the two `ffx_fsr1.h` has, which moves the
-port *closer* to upstream and so keeps ADR-0012's transliteration property
-intact.
+- **SMAA's search loops need no clamp, and that is a property of the clear
+  rather than luck.** `LoadOp::Clear` is not viewport-restricted, so the edges
+  texture outside the extent is zero - and a search terminates on zero edges
+  exactly as it does at the frame border. Only the colour taps are clamped,
+  which is where a dark fringe would otherwise show. It is said in the shader so
+  nobody "fixes" it.
+- **HD's blur tap spacing follows the viewport, not the resource.** The
+  executable measures `Bloom vertical size` against its quarter *frame* - its
+  hard-coded `1/480` and `1/270` are a 1080p frame's quarters - and under a
+  short extent the frame is the extent. Left on the resource the glow would
+  widen as a fraction of the picture every time the scale fell. No recovered
+  constant moves; the divisor is the same formula read at the right size.
+
+### The trap in the resolve, which no capture can catch
+
+`resolve_scene` chose its source rectangle with `match source { Some(_) =>
+Source::WHOLE, None => Source::of(..) }` - that is, "did a pass run". **The
+question is which size the bound view is.** FSR 1 resolves to the presentation
+rectangle and hands back a texture exactly that size; FXAA and SMAA hand back
+an allocation-sized one with the extent in its corner. Both arms agree while
+the extent is the allocation, so every `--presented` capture passes either way
+and the bug would have surfaced the first time a controller stepped the scale -
+as a picture stretched by the allocation-to-extent ratio, long after the change
+that caused it. `upscale::resolved_source` is a named function for exactly that
+reason, and `only_an_upscaled_frame_is_read_whole` is the only guard there is.
+
+### One residual, stated rather than hidden
+
+EASU's twelve-tap kernel reaches about two texels past its sample point, so at
+the right and bottom edge of a short extent it reads the cleared region.
+**Upstream has the same property** and answers it with `inputSizeInPixels`
+alone; adding a clamp `ffx_fsr1.h` does not have would spend ADR-0012's
+transliteration property to fix an artefact nobody has yet reported seeing.
 
 ## There is no scissor, and that is not an omission
 
@@ -127,9 +149,7 @@ whole attachment either way - see ADR-0037's consequences.
 scene pass through the pass descriptor's own `timestamp_writes`, resolves it
 into the same encoder and reads it back after the submit without ever blocking.
 What comes back is fed to `Session::scene_cost`, a second `perf::Meter` beside
-the frame-interval one. **Nothing reads it yet** - there is no controller and
-no overlay row - and it is fed anyway, so the signal a controller will be built
-on is a measured thing rather than a planned one.
+the frame-interval one, and the same reading goes to `Session::drs`.
 
 `mesh_render::optional_features` asks for `TIMESTAMP_QUERY` because of it,
 intersected with the adapter's own and never demanded, exactly as
@@ -155,7 +175,7 @@ recorded rather than hidden:
 | Pass | In the budget | Why |
 | --- | --- | --- |
 | The `race` pass (`race/scene/frame.rs`) | **Yes** | The one pass whose cost falls with the render extent |
-| `bloom`, `hd_bloom`, `motion_blur` | Not yet | They draw at scene resolution and belong in it. They take no viewport, which is the same thing that stops the extent moving at all - so they join the budget in Phase 5, when they gain one |
+| `bloom`, `hd_bloom`, `motion_blur` | Not yet, and still not | They draw at scene resolution and belong in it, and they now take a viewport - so the reason they are out is no longer structural, it is that timing three more passes means three more timestamp claims a frame. `SCENE_SHARE` absorbs the under-measurement in the meantime, which is what makes it a constant to revisit |
 | FXAA, SMAA, FSR 1, the blit | **No, permanently** | The resolve draws at presentation size whatever the scale is |
 | The HUD, the composite, the perf overlay | **No, permanently** | Presentation resolution since ADR-0036 and ADR-0038 |
 
@@ -265,36 +285,106 @@ Three things this settles:
   16.67 ms frame budget - about 320,000 ticks. What bounds a controller is the
   latency of the reading, not its resolution.
 
-## What is still missing, in order of expense
+## The controller
 
-**A controller.** A pure function of fed measurements, the way `perf::Meter`
-already is - `record(cost)` in, a scale out, never reading a clock or a GPU
-itself, which is what makes it testable without one. The conventional policy,
-and it should stay conventional: correct by `sqrt(budget / measured)` because
-cost scales with pixel count - **which is assumed and not yet measured here**,
-see the caveat under the running-race table above; a deadband so a frame
-sitting comfortably inside
-budget does not twitch; a clamped per-frame delta that is asymmetric, falling
-fast because a dropped frame is already visible and rising slowly because a rise
-that overshoots costs a drop; quantized steps on a grid; and a cooldown after
-any step.
+`crates/game/src/drs.rs`, and it reads nothing: fed one scene-pass timing, it
+emits a rectangle. Never a clock, never a GPU, never a settings file - the
+argument `perf.rs` already makes for why a presentation-side module is not a
+determinism problem, and the same shape, so every number in it is testable
+against a sequence somebody chose.
 
-**Settings and a menu row.** `[graphics] dynamic_resolution`, defaulting off -
-the footing every enhancement here starts on - and a floor the controller may
-not go below. `render_scale` keeps its meaning and becomes the ceiling, which is
-what makes a row that disagrees with it worth warning about.
+### The budget is a share of a frame, not a measured frame
 
-## Three properties a controller must not break
+`drs::SCENE_SHARE` of the target period, and the alternative is degenerate
+rather than merely worse. A controller fed headroom from the wall-clock
+interval is inert under vsync or any frame limit: the loop *sleeps* to the
+target, so `interval - scene` is slack that absorbs whatever the scene did not
+use, the ratio is 1.0 at every render scale, and nothing ever moves - in
+precisely the configuration a player turns the feature on for. It would also
+put a clock inside the one module whose selling point is that it has none. See
+[ADR-0040](../architecture/adr/0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md).
 
-- **It never writes `settings.graphics.render_scale`.** It reads it as the
-  ceiling and emits a separate runtime value. Persisting a controller's output
+`SCENE_SHARE` is 0.45 and is **a choice, not a reading**. The budget is the
+`race` pass alone; the rest of the frame has to cover the bloom, the blur, the
+resolve, the UI composite and the driver, none of which is timed. It rises when
+those join the budget.
+
+### The policy
+
+Conventional, and it should stay so: correct by `sqrt(budget / measured)`,
+because cost is per-pixel and the scale is per-axis; a deadband so a
+comfortable frame does not twitch; an asymmetric clamp; a grid; a cooldown
+covering the frames in flight.
+
+Three things that are not obvious, all three found by running it rather than by
+reading it:
+
+- **Both delta clamps are counted in grid steps.** A 4 % rise ceiling against a
+  5 % grid is a controller that can never rise at all - from any grid point,
+  `scale * 1.04` floors straight back onto the point it started from, forever.
+  Counting in the grid's own units makes that unrepresentable rather than a
+  pair of numbers to keep consistent by hand.
+- **The scale is an integer count of grid points.** `0.5 / 0.05` is not exactly
+  `10.0` in `f32`, and deriving the current point by dividing floored a
+  legitimate one-step rise back onto its own point at some scales and not
+  others.
+- **A rise has to be earned by a run of frames, not just survive a cooldown.**
+  Measured: with a cooldown alone, a 4K race aiming at 144 changed resolution
+  **143 times in a minute**, flipping between 100 % and 95 %. Every individual
+  decision was right; the scene pass genuinely costs 0.75 to 1.07 of its budget
+  at one fixed scale as the camera moves. `RISE_PATIENCE` consecutive
+  under-budget frames, with anything comfortable or over budget breaking the
+  run, took the same scene to **49** changes and a trajectory that falls to
+  70 % and climbs back through 75, 80, 85, 90. A fall still answers a single
+  frame: it has already been seen.
+
+At a target the machine can only just hold, the scale settles between two
+adjacent grid points and keeps stepping between them. That is what a closed
+loop on a marginal load does, and the honest answer is a lower target rather
+than a cleverer policy.
+
+### The rows
+
+`[graphics] dynamic_resolution` names the rate and `off` is one of its values -
+one row, one answer, and no second key that can disagree with it.
+`[graphics] dynamic_resolution_floor` is a `display::Scale` off the same list
+`render_scale` offers, so the two read against each other.
+
+The floor row warns when it is at or above the render scale, and the pairs are
+**enumerated** in `menu.toml`: `Condition` compares values and has no ordering,
+deliberately, because that is what keeps the menu module ignorant of what any
+setting means. Thirty-six hand-written comparisons is the kind of list that
+drifts, so `the_floor_warns_at_exactly_the_scales_it_cannot_fall_below`
+generates the same set from `Scale::OFFERED` and demands they match.
+`drs::Limits::new` is the other half: it brings the floor under the ceiling
+where the two first meet, because the warning tells a player rather than
+stopping them and `Ord::clamp` panics when `min > max`.
+
+**RENDER SCALE gets no warning**, decided 2026-09-02 and still true.
+
+**On an adapter with no `TIMESTAMP_QUERY` there is no signal and the extent
+never moves, and the row cannot say so by greying out.** `disabled_by` names a
+*setting*, and `Definition::check_condition` requires a row that edits it - an
+adapter capability is neither. An earlier version of this page claimed the
+`disabled_by` mechanism covered this; it was written before anyone read
+`check_condition`, and this is the correction. The row is stored and inert,
+which is the same thing `restart_required` already means.
+
+## Three properties the controller does not break
+
+- **It never writes `settings.graphics.render_scale`**, and cannot: `drs.rs`
+  does not import `settings` and is handed `drs::Limits` by value. It reads the
+  ceiling and emits a separate runtime rectangle. Persisting a controller's output
   into the player's settings file would make their chosen quality drift
   downward with every session on a loaded machine.
 - **It never reaches the simulation.** Dynamic resolution is presentation-side,
   like `perf::Meter` and `FrameLimit`; the timestep stays fixed at 60 Hz per
   [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md) whatever
   the resolution does.
-- **Every capture path forces it off.** This project's comparisons are
+- **Every capture path is outside it.** `race/capture.rs` builds its own
+  `Framebuffer` at its own `--render-scale`, never calls `set_extent` and never
+  constructs a controller; the front-end capture has no `Framebuffer` at all,
+  which since ADR-0038 is correct rather than a gap. This project's comparisons are
   byte-identical screenshot diffs, and a controller driven by how busy the
   machine is makes every one of them irreproducible. `crate::perf` already makes
   exactly this argument for why the performance overlay is window-only; it
