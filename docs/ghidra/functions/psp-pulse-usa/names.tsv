@@ -615,9 +615,11 @@
 0x0880cb2c	function	WeaponStats_ParseAutopilot	88	plasma.md
 0x0880d328	function	WeaponStats_ParseLeachBeam	88	plasma.md
 0x0880d58c	function	WeaponStats_ParseRepulser	88	plasma.md
-0x0880d790	function	WeaponStats_ParseShuriken	88	plasma.md
+0x0880d790	function	WeaponStats_ParseShuriken	92	shuriken.md
 0x0880dab0	function	WeaponStats_ParseGlobal	88	plasma.md
 0x0886c600	function	Weapon_FireQuake	82	plasma.md
 0x08866658	function	Weapon_FireLeachBeam	82	plasma.md
 0x0886ce8c	function	Weapon_FireRepulser	82	plasma.md
-0x08870240	function	Weapon_FireShuriken	82	plasma.md
+0x08870240	function	Weapon_FireShuriken	88	shuriken.md
+0x08877280	function	Shuriken_Init	88	shuriken.md
+0x088778ac	function	Shuriken_Bounce	85	shuriken.md

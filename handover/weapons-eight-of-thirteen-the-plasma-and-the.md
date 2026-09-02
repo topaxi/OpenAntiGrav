@@ -68,7 +68,17 @@ count in `crates/game/tests/` before trusting any of them.
 
 **Measured on `pulse-psp-usa.chd`**: one press is one bolt, it leaves ahead of
 the craft at the disc's own Venom figure converted from km/h, and it covered
-291.5 units of Talon's Junction still flying. `just` green at 2,765.
+291.5 units of Talon's Junction still flying. `just` green at 2,765, and
+**`just test-data` green at 3,342 of 3,342** - the first time the whole
+disc-backed suite has been.
+
+**The `<Stats>` struct's unread middle is now four-fifths closed.** `mine.md`
+derived the whole `0xa4`-byte run between the Missile's block and the Mine's
+from attribute counts alone; this session measured the Plasma's (`+0x9c`), the
+Shuriken's (`+0x144`) and confirmed the Repulser's (`+0x128`) from a consumer.
+With Turbo's and Shield's already measured that is five anchors, and only the
+Quake's four (`+0x60`) and the Cannon's five (`+0x70`) are left - the two
+weapons nobody has needed a parser for.
 
 **The Mine is the interesting one, and not because it was hard.** Its blocker
 was that the project had it filed under the wrong function. `weapon-fire.md`
@@ -231,14 +241,33 @@ Put back.
   `0x088537ac` on `world+0x58`, and is absent from `Weapon_RequestFire`'s jump
   table entirely, so something other than the request word sets it. Still the
   obvious candidate, still unchased.
-- **Five weapons are still unbuilt, and four of them now have a handler
-  address.** Quake (`Weapon_FireQuake`, `0x0886c600`), LeachBeam
-  (`0x08866658`), Repulser (`0x0886ce8c`) and Shuriken (`0x08870240`) are each
-  dispatched to a real function; only their **bodies** are unread, which is a
-  much shorter walk than "a fire path nothing has read". Quake still needs
-  track deformation and LeachBeam a beam; the Repulser and the Shuriken are the
-  two to take next, and the Shuriken's ricochet may already exist - see the
-  2026-09-02 section's point about shared trajectories.
+- **Five weapons are still unbuilt, and the Shuriken is now read end to end
+  without being built** - see [shuriken.md](../docs/ghidra/functions/psp-pulse-usa/shuriken.md),
+  which is where the next session should start. Four functions and the whole
+  thirteen-attribute `<Stats>` block are recovered: it throws **one** blade at a
+  **coin-flipped ±20 degrees** (`0x3eb2b8c3` and its negation, exact to five
+  figures), inherits the firing craft's own speed in km/h on top of the class
+  speed, carries `pulse_shuriken.vex` and a looping `~SHURIKENTRAVEL` voice, and
+  **bounces as a perfect mirror with no damping**, nudged `0.1` out along the
+  normal.
+
+  **It was read rather than built on purpose, and the reason is the same
+  trajectory-sharing heuristic that made the Plasma cheap - applied in the other
+  direction.** The Shuriken shares nothing: its bounce is *not* the Missile's
+  (which counts to `MAX_BOUNCES`; this counts nothing and dies on a `fuse`), it
+  is the only weapon of the thirteen authoring **two** damages and **two**
+  forces where `projectile::blast_stats` returns one triple, and its launch
+  needs a seeded coin flip. That is a session, and half-doing it would have been
+  worse than handing over a complete read. **The first thing to chase is what
+  ends a blade** - the `fuse` consumer and `WO_SHURIKEN_EXPIRE`'s call site,
+  both unfollowed.
+- **The Repulser's handler is read and it is not an instantaneous blast.**
+  `Weapon_FireRepulser` (`0x0886ce8c`) **copies four of its own `<Stats>` onto
+  the firing craft** at `+0x170`/`+0x178`/`+0x17c` and *then* spawns a pool
+  entity - a shape no other weapon has, and it reads as "the field is a state
+  the craft is in" rather than a one-off push. Recorded in `shuriken.md`'s last
+  section rather than a page of its own, because one function is not enough for
+  one. Quake still needs track deformation and LeachBeam a beam.
 - **The Bomb's `damageradius` is authored and spent nowhere.** It is the only
   second radius any weapon has, and the one blast path read at instruction level
   spends `blastradius` for both damage and impulse. Left undecoded rather than
