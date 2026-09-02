@@ -92,6 +92,15 @@ table. This bears on the open
 [fifth handling class](../../../formats/handling-stats.md) question and does not
 settle it - it is a fact about the AI parser, not about the ladder.
 
+**A third table shows the same four, checked while chasing that question
+(2026-09-02).** The front-end's loading-screen message keys, contiguous at
+`0x08a827c0`-`0x08a827f0`, are `MSC_LOAD_VENOM`, `MSC_LOAD_FLASH`,
+`MSC_LOAD_RAPIER`, `MSC_LOAD_PHANTOM` - immediately preceded by a `"...Class
+Help"` key and followed by `"Event Help"`, with no `MSC_LOAD_VECTOR` in the
+run built for exactly this purpose. Confidence 85, same completeness
+reasoning as the two class tables above: a missing fifth key would have to
+sit somewhere other than the block authored to hold it.
+
 ## The per-class record
 
 One record per class, indexed from `base + 0x14`, **stride `0x10c`** - the value
