@@ -769,6 +769,10 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         // agreement.
         fov_intercept: None,
         fov_additive: None,
+        // Not modelled by `ShipState` either - it is the constructor's
+        // human-vs-AI argument, not physics state - so reported absent for the
+        // same reason as the two fov terms above.
+        controller_class: None,
         // `ShipState::sideshift_timers` carries the shift force but not the tap
         // window or the lockout, so there is nothing to compare the other three
         // columns against yet - reported absent rather than a false agreement.

@@ -513,7 +513,9 @@ step, returns an unrelated field and was the first, wrong attempt here):
 **the human-controlled craft read `0`, and all seven AI opponents read `2`,**
 with no other value seen. That is the write site plus a clean 8-for-8 live
 read, well past the naming threshold - confidence **85**. Named
-`controller_class` (`crates`' side has no reader yet); `0` and `2` are the
+`controller_class`, and read now: `oag_trace::trace::Frame::controller_class`
+(2026-09-02), wired through `scripts/psp_trace_fields.py`'s already-updated
+capture list the same way every other optional column is. `0` and `2` are the
 only values confirmed live, so whatever `1` and `3` select (multiplayer? a
 second local pad?) is still open, and `oag_game::audio::sfx::Placement::CraftUnlessPlayer`'s
 `== 0` check is confirmed rather than merely uncontradicted.

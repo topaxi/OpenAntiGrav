@@ -26,7 +26,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 61] = [
+pub const COLUMNS: [&str; 62] = [
     "tick",
     "dt",
     "grounded",
@@ -41,6 +41,7 @@ pub const COLUMNS: [&str; 61] = [
     "shield",
     "fov_intercept",
     "fov_additive",
+    "controller_class",
     "ss_tap_window_l",
     "ss_tap_window_r",
     "ss_shift_l",
@@ -129,12 +130,13 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 36] = [
+pub const OPTIONAL_COLUMNS: [&str; 37] = [
     "stun_timer",
     "timer_2e0",
     "shield",
     "fov_intercept",
     "fov_additive",
+    "controller_class",
     "ss_tap_window_l",
     "ss_tap_window_r",
     "ss_shift_l",
@@ -340,6 +342,14 @@ pub struct Frame {
     /// `SPEED_FOV_GAIN_DEG` term - or `None`. Has a second writer, `Hud_Update`'s
     /// impact shake, so a nonzero value alone does not say which one fired.
     pub fov_additive: Option<f32>,
+    /// `craft+0x368`, `Craft_Construct_q`'s own "controller class" argument, or
+    /// `None`. Confidence 85: the write site plus a clean 8-for-8 live read on a
+    /// single race - the human-controlled craft read `0`, all seven AI opponents
+    /// read `2`, no other value seen. See
+    /// `docs/ghidra/functions/psp-pulse-usa/pads.md`. What `1` and `3` would
+    /// select (multiplayer? a second local pad?) is unconfirmed - only `0` and
+    /// `2` have been observed live.
+    pub controller_class: Option<f32>,
     /// The veteran double-tap's left tap window, `entity+0x89c`, or `None` for a
     /// capture taken before the column existed.
     ///
@@ -418,6 +428,7 @@ impl Default for Frame {
             shield: None,
             fov_intercept: None,
             fov_additive: None,
+            controller_class: None,
             ss_tap_window_l: None,
             ss_tap_window_r: None,
             ss_shift_l: None,
@@ -516,6 +527,7 @@ impl Frame {
             "shield" => self.shield?,
             "fov_intercept" => self.fov_intercept?,
             "fov_additive" => self.fov_additive?,
+            "controller_class" => self.controller_class?,
             "ss_tap_window_l" => self.ss_tap_window_l?,
             "ss_tap_window_r" => self.ss_tap_window_r?,
             "ss_shift_l" => self.ss_shift_l?,
@@ -557,6 +569,7 @@ impl Frame {
             "shield" => self.shield.is_some(),
             "fov_intercept" => self.fov_intercept.is_some(),
             "fov_additive" => self.fov_additive.is_some(),
+            "controller_class" => self.controller_class.is_some(),
             "ss_tap_window_l" => self.ss_tap_window_l.is_some(),
             "ss_tap_window_r" => self.ss_tap_window_r.is_some(),
             "ss_shift_l" => self.ss_shift_l.is_some(),
@@ -612,6 +625,7 @@ impl Frame {
             "shield" => self.shield = Some(value),
             "fov_intercept" => self.fov_intercept = Some(value),
             "fov_additive" => self.fov_additive = Some(value),
+            "controller_class" => self.controller_class = Some(value),
             "ss_tap_window_l" => self.ss_tap_window_l = Some(value),
             "ss_tap_window_r" => self.ss_tap_window_r = Some(value),
             "ss_shift_l" => self.ss_shift_l = Some(value),
