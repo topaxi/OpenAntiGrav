@@ -124,14 +124,55 @@ interval between loop iterations, fed to `perf::Meter`. Under `Vsync::On` it is
 pinned to the refresh and under any `FrameLimit` it is pinned to the limit,
 because the frame loop sleeps to it - so it tracks real work only with vsync off
 *and* no limit, which is a diagnostic configuration rather than a shipping one.
-A GPU timestamp (`wgpu::Features::TIMESTAMP_QUERY`, behind the adapter probe and
-fallback chain ADR-0012 already mandates) written either side of the scene
-passes is the primary path, not a refinement. Two things it will need said out
-loud: the reading resolves a frame or more late, so a controller acts on stale
-cost and its cooldown must cover the frames in flight; and where there is no
-timestamp support dynamic resolution is off, and the menu row says so through
-the existing `disabled_by` mechanism rather than advertising a controller driven
-by a signal pinned to the refresh.
+A GPU timestamp written either side of the scene passes is the primary path, not
+a refinement. **The probe for it exists**: `oag_render::timing::Timing` reports
+what one adapter offers without requesting a device, and `Timing::features`
+turns that back into exactly what a `request_device` may safely ask for - the
+fallback discipline
+[ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
+mandates, since asking for a feature an adapter lacks fails the request outright
+rather than degrading. Nothing enables it yet;
+`mesh_render::optional_features` is the one line that changes when a consumer
+exists.
+
+Two things a controller built on it will need said out loud: the reading
+resolves a frame or more late, so it acts on stale cost and its cooldown must
+cover the frames in flight; and where there is no timestamp support dynamic
+resolution is off, and the menu row says so through the existing `disabled_by`
+mechanism rather than advertising a controller driven by a signal pinned to the
+refresh.
+
+### What the probe actually found
+
+Measured 2026-09-02 on this project's development machine, both adapters, by
+`cargo nextest run -p oag-render -E 'test(/timing::/)' --no-capture` - which is
+the command that reproduces the table rather than a transcription of one run.
+Every number below came from resolving a real query pair around a cleared
+256x256 pass, not from reading a feature bit:
+
+| Adapter | Backend | Features | Tick period | A cleared 256x256 pass |
+| --- | --- | --- | --- | --- |
+| Intel(R) Graphics (ARL), integrated | Vulkan | all three | 52.083332 ns | 12,708 ns |
+| NVIDIA RTX PRO 2000 Blackwell Laptop GPU, discrete | Vulkan | all three | 1 ns | 352 ns |
+
+"All three" is `TIMESTAMP_QUERY`, `TIMESTAMP_QUERY_INSIDE_ENCODERS` and
+`TIMESTAMP_QUERY_INSIDE_PASSES`. Only the first is needed to bracket a pass, and
+only the first is WebGPU-portable; a controller should ask for no more.
+
+Three things this settles:
+
+- **The fallback chain has a real branch and it is not hypothetical.** Both
+  adapters here support it, so the no-timestamp path cannot be exercised on this
+  machine - it needs a deliberately downgraded adapter or another machine to
+  test. A green run here is *not* evidence that the degraded path works.
+- **The tick period differs by 52x between two adapters in the same laptop**, so
+  a cost budget must be computed from `Queue::get_timestamp_period` every run
+  and never from a constant. It also means a probe on one adapter says nothing
+  about the other, which is why the test loops over all of them rather than
+  taking whichever `request_adapter` picks.
+- **Granularity is not the limit.** The coarser of the two is 52 ns, against a
+  16.67 ms frame budget - about 320,000 ticks. What bounds a controller is the
+  latency of the reading, not its resolution.
 
 **A controller.** A pure function of fed measurements, the way `perf::Meter`
 already is - `record(cost)` in, a scale out, never reading a clock or a GPU

@@ -177,13 +177,29 @@ budget rather than in a surprise.
 
 ### Phase 2 - a cost signal worth controlling on
 
-**This is the next one to pick up.**
+**This is the next one to pick up, and its probe is done.**
+`oag_render::timing::Timing` reports what an adapter offers without requesting
+a device, and `Timing::features` turns that back into what a `request_device`
+may safely ask for. **Nothing enables it**:
+`mesh_render::optional_features` is the one line that changes when a consumer
+exists, and turning a feature on with nothing reading it buys a driver
+behaviour change for nothing.
 
-**Roughly a day.** `wgpu::Features::TIMESTAMP_QUERY`, behind an adapter probe
-with the fallback chain ADR-0012 already mandates for FSR 3.1: a missing
-feature degrades, never fails to boot. Write a timestamp either side of the
-scene passes so the measurement is *the part that scales* - the UI composite
-after Phase 0 does not scale and must not be in the budget.
+Measured 2026-09-02 on the development machine, both adapters, end to end - a
+real query pair resolved around a cleared pass, not a feature bit read. Both
+support all three timestamp features over Vulkan; the Intel iGPU's tick is
+**52.083332 ns** and the NVIDIA dGPU's is **1 ns**. The table and what it
+settles are on
+[dynamic-resolution.md](../docs/rendering/dynamic-resolution.md#what-the-probe-actually-found);
+the two consequences to carry into the rest of Phase 2 are that a budget must
+be computed from `Queue::get_timestamp_period` every run and never from a
+constant, and that **the no-timestamp fallback path cannot be exercised on this
+machine** - both adapters have the feature, so a green run here is not evidence
+that the degraded path works.
+
+**Roughly a day for the rest.** Write a timestamp either side of the scene
+passes so the measurement is *the part that scales* - the UI composite after
+Phase 0 does not scale and must not be in the budget.
 
 Two things to say out loud in the doc page:
 
@@ -330,10 +346,10 @@ Steps 1, 3 and 4 of the original list are done: the audit is written up in
 written, and `modern-features.md`'s first prerequisite row plus the M7 rows in
 [roadmap.md](../docs/overview/roadmap.md) name the split.
 
-1. Probe `Features::TIMESTAMP_QUERY` on the development machines and record what
-   is actually available - the fallback chain's shape depends on the answer, and
-   a probe is twenty lines. This is Phase 2's first move and is what unblocks
-   everything after it.
+1. Bracket the scene passes with a timestamp pair and feed the resolved
+   duration to a meter, off `Timing` (already built, see Phase 2). The reading
+   resolves a frame or more late, so whatever holds it has to say which frame it
+   belongs to rather than assume the last one.
 2. Measure the ceiling-sized clear before designing a policy around a budget.
    `LoadOp::Clear` is not viewport-restricted, so the scene pass's fixed cost
    does not fall with the extent; how much of a frame that is decides whether a
