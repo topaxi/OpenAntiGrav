@@ -40,18 +40,30 @@ const OUR_LEADING: f32 = 6.0;
 ///
 /// **Ours** in the sense that a `<HorizMenu>` states a position and a colour
 /// and nothing about spacing at all - no `gap`, no second anchor to derive one
-/// from. A 2026-09-01 capture measures what the real strip actually does,
-/// though - see the tab group below, which this value now shares a ruler
-/// with: `9`px in that capture, `3.4` converted. Left at its earlier, larger,
-/// invented `24` regardless - changing a *spacing* rule on a geometry
-/// correction is a second claim, not this one, and 24 still reads as clearly
-/// separated entries rather than the near-touching tabs the capture shows.
-/// Revisit together with the chamfer, not before.
+/// from. Measured in the same 2026-09-01 capture as the tab group below, at
+/// the same ruler (`480 / 1278 = 0.3756`): four tab-to-tab gaps, taken fill-
+/// right-edge to fill-left-edge below the chamfer (where the rectangle is
+/// full width, so no per-row narrowing skews it), came back `7`, `8`, `8`,
+/// `8` raw px across `CAMPAIGN`/`ONLINE`/`RECORDS` and the two entries past
+/// them - call it `8`.
 ///
-/// Deliberately larger than [`OUR_LEADING`]: entries sit side by side with no
-/// column edge to separate them, so the gap is the only thing that says where
-/// one ends and the next begins.
-const STRIP_GAP: f32 = 24.0;
+/// **That `8` is the visible gap, not [`STRIP_GAP`] itself.**
+/// [`super::strip::draw`] steps `x` by `width + gap` from one label's own pen
+/// position to the next, and a tab's fill starts [`TAB_LEFT_PAD`] left of its
+/// own label - so the fill-to-fill gap is `STRIP_GAP - TAB_LEFT_PAD`, and
+/// `STRIP_GAP` is the visible gap plus `TAB_LEFT_PAD`'s own raw `6`:
+/// `8 + 6 = 14` raw, `14 * 0.3756 = 5.3` converted. An earlier version of this
+/// doc read the visible gap (`9`, a coarser measurement than this one) as
+/// `STRIP_GAP` directly and got `3.4` - the same missing step the tab group's
+/// own ruler bug came from, a formula gap here rather than a units one, and
+/// left unfixed at the time deliberately, to keep that pass to the geometry
+/// bug alone. This value is now smaller than [`OUR_LEADING`], which an
+/// earlier note here called deliberate on the reasoning that a strip needs
+/// more separation than a column does with no edge between entries - that
+/// reasoning does not survive a real measurement, and a capture read at this
+/// group's own ruler outranks a readability guess. Confidence 55, same as the
+/// tab group: one capture, four gaps agreeing to within a pixel.
+const STRIP_GAP: f32 = 5.3;
 
 /// A strip entry's own background tab, and the mark under a selected one -
 /// both **ours**, and both approximated rather than authored.
