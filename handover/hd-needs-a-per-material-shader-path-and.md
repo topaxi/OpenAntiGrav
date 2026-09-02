@@ -5,6 +5,7 @@
 ## Open
 
 - No per-material lighting branch exists: `mesh.wgsl` has one lit path for all HD geometry, and 53 of 57 ship meshes fall to `albedo * ambient` (dark hull)
+- **A second, independent `RigidBody` consumer surfaced 2026-09-02**: `crates/render/src/mesh/rcs/skin.rs`'s `variants()` hardcodes `Class::Static` for every chunk on every file, so a material whose only variant is `Class::RigidBody` - the ship's own class, per `rcsmaterial::Class`'s doc - never resolves regardless of what permutation it ships. `Data\FE\FrontEndScene\FrontEndScene_HD_ATG.vex`'s one material (`basic_vertexemissive.rcsmaterial`, one `RigidBody` variant) is the same gap from a different file; see [hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md](hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md). Worth trying `RigidBody` (and `StaticQuake`) alongside `Static` in `variants()` once this thread's per-material lighting branch exists to feed - resolving the key with nothing to shade it differently would only move the count, not the picture.
 - Two general classification rules (SHO-declared families, `output_lit_by` dataflow) were tried and rejected as classifiers
 - Specular exponent is **wired per material now, 2026-09-01 - see below.** `mesh.wgsl`'s shared `32` remains only the fallback, for a literal `0.0` (patched at draw time) or a material the decoder could not resolve.
 - Tangent frame, a paraboloid reflection map, and shadow maps are still missing inputs

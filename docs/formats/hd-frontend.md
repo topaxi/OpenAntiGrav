@@ -1016,6 +1016,48 @@ also thought the Main Menu screen ought to be sharp, for what that is worth).
 Neither this build nor `oag-render` draws any of it today - open
 implementation work, not yet done.
 
+**2026-09-02: the geometry decodes, and its own material argues against the
+"style-specific shader draws it" hypothesis above.** `.rcsmodel`/`.vex`
+decoding landed elsewhere since that paragraph was written - the chunk-header
+and per-chunk-space findings on [rcsmodel.md](rcsmodel.md) - which unblocked
+reading the file directly:
+
+```sh
+cargo run -q -p oag-view --bin oag-view -- \
+  "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC" \
+  --mesh 'Data\FE\FrontEndScene\FrontEndScene_HD_ATG.vex' \
+  --screenshot /tmp/fescene.png
+```
+
+parses and draws clean: 56 of 56 mesh nodes, 9,184 triangles, 18,315 authored
+vertex normals, radius 333.10 - a ring-shaped lattice of small repeating
+segments, unlit and untextured (the shipped lit-race pass does not resolve a
+shader for it - see below). It has exactly **one** material, named by
+`PS3_GAME/USRDIR/DATA02.PSARC`'s own manifest:
+`/data/materials/frontendscene/basic_vertexemissive.rcsmaterial`. That is an
+ordinary per-surface `.rcsmaterial` - the same container every track and ship
+material ships - and **not** one of the 121 engine-owned `_vp`/`_fp` names
+`renderer.md`'s shader-registry census reads out of `EBOOT.elf`, `FEBackgroundAnim*`
+among them. It carries exactly one variant: class `RigidBody`, feature set
+`HalfBrightAmbientSunSpot0SVC0` - the plain sun-plus-ambient lit-race
+permutation [`oag_formats::rcsmaterial::Features::chunk_word`]'s own doctest
+names for "no lightmap coordinate, no vertex colour set" (`LIT_RACE_PASS`,
+`decl: None`), despite the file's own name promising a vertex-driven emissive
+term. Read together, this favours a different picture than "a style-specific
+`FEBackgroundAnim*` shader draws this same mesh": the mesh's own material asks
+to be lit like an ordinary in-race `RigidBody` - sun colour, sun direction,
+ambient - which a front-end screen has no `.envsettings` to supply at all, so
+even a build that shipped this exact variant would have no authored light to
+feed it. The `FEBackgroundAnimFuryWave`/`FEBackgroundAnimFuryBlend` pair
+sharing the `<BackgroundAnim>` widget's name is more likely a **separate**
+full-screen effect layered over or instead of this geometry than the shader
+this geometry's own material asks for. **Confidence 60** - the variant key is
+read off the file, not guessed, but which pass actually draws this scene
+in-game (and whether the key this project computes is the one the executable
+would) is not traced from the executable side. Neither this build nor
+`oag-render` draws any of it - still open implementation work, now with a
+narrower and more specific blocker than "the decoder doesn't exist yet".
+
 ### `menu_font` is `None`, and that is a measurement
 
 Pulse's rows say `font="menu"`, which its language plugins resolve to a face
