@@ -150,6 +150,14 @@ on pristine `157a4666`** and neither is in a crate this work touches.
    on this page from here on is taken from `--autopilot --give <weapon>
    --press square`.
 
+   **It is not only a measurement trap.** The FSR 1 thread found the same blind
+   spot settling a *default*: the one FSR 1 versus bilinear comparison this
+   project has made was taken from a stationary `--race` frame, so it contained
+   no spark burst, no rocket and no shield shell - none of the high-frequency
+   additive content a sharpener rings hardest on, which was the doubt the
+   comparison existed to answer. Any capture-backed claim about a **picture**
+   is exposed to this the same way a claim about a cost is.
+
 ## Open
 
 **Not fixed, with numbers, in the order they are worth fixing:**
@@ -208,6 +216,14 @@ on pristine `157a4666`** and neither is in a crate this work touches.
     capture has no `Framebuffer` at all. So this wants the presented-path
     equivalent of `OAG_RENDER_BENCH`'s re-record loop, which is its own piece
     of work and belongs to neither thread yet.
+
+    **The shape, so it is not re-derived** (the FSR 1 thread's reading, which
+    owns that path): it is N presented frames from *one* process, and the
+    cheapest route is a loop inside the existing capture rather than a new
+    binary - `resolve_scene` and `composite` are already called from
+    `race/capture.rs`, so the frame body exists and only the repetition does
+    not. That is the same shape `OAG_RENDER_BENCH` already has around
+    `Scene::render` in the same file.
 
 ## Not measurable here
 
