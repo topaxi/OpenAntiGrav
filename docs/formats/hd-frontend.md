@@ -992,6 +992,62 @@ from drawing the true cut with an existing primitive, not an invented shape.
 `crates/game/src/menu/strip.rs`, `crates/game/src/menu/frame.rs`,
 `crates/game/src/menu/skin.rs`.
 
+### The tab's corner, pixel-measured: a 45-degree cut *and* a flat landing
+
+**Confidence 88**, measured 2026-09-02 on two independent captures of the same
+screen - one at HD's own `1280x720` output and one at `3840x2160`, three times
+the linear resolution, through RPCS3's framebuffer grab rather than a
+root-window one (see
+[rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md#a-root-window-grab-is-not-the-framebuffer-and-only-one-of-them-can-measure-geometry)).
+Both agree, and both say the same thing: **the previous `17`x`7` reading
+measured the whole cut region and called all of it the chamfer.** It is not.
+
+Taking the selected `CAMPAIGN` tab's right edge row by row, in the `3840`-wide
+framebuffer:
+
+| Rows | Right edge | What that is |
+| --- | --- | --- |
+| `y=26`..`y=44` (19) | `x=55` -> `x=72` (18) | a **45-degree** diagonal: 18 across in 19 down |
+| `y=45` onward | `x=107`, unchanging | the tab's own right edge |
+
+So between the diagonal's foot (`x=72`) and the right edge (`x=107`) there are
+**35 more pixels of flat top edge**. The corner is a pentagon: high top edge,
+a 45-degree cut down, a *flat landing* at the lower level, then the vertical
+right edge - `---\___|`, not `---\|`.
+
+Converted to the `1278`-wide capture's own units (divide by three), and then to
+this build's (`* 0.3756`):
+
+| | raw px at 720p | 480-grid units | shipped today |
+| --- | ---: | ---: | --- |
+| diagonal width | `6.0` | `2.25` | - |
+| flat landing | `11.7` | `4.4` | - |
+| whole cut region | `17.7` | `6.6` | `TAB_CHAMFER_WIDTH = 6.4` |
+| cut height | `6.3` | `2.4` | `TAB_CHAMFER_HEIGHT = 2.6` |
+
+The `1280x720` capture measured independently gives `6` columns of diagonal
+(`x=103`..`109` over `y=5`..`11`) and a `12`-pixel landing - the same numbers
+within a pixel, from a capture taken on a different boot at a third of the
+resolution.
+
+**This retires the "step or diagonal" question by answering both halves.** The
+shipped one-step band has the cut's *extent* right (`6.4` against a measured
+`6.6`) and its *slope* wrong; the `Draw::ChamferedFill` primitive built and
+reverted on 2026-09-01 had the slope right and ran the diagonal the whole `6.4`
+to the corner, with no landing - which is exactly the "the original looks like a
+step, ours is just a cut angle" the direct comparison reported. Neither was
+wrong about what it saw. The shape needs both: a `2.25`-unit 45-degree cut
+followed by a `4.4`-unit flat run.
+
+**It is rasterised geometry, not a texture mask.** The diagonal's per-row steps
+at `3840` are `+2,0,+2,0,+1,+1,+1,+1,+1,+2,0,+2,0` - irregular, averaging one,
+which is what a line rasteriser does at a non-integer position. A magnified
+16x16 mask (`corner2.gtf`, the `<Bracket>` asset the previous pass found) would
+show uniform runs at the magnification factor instead. So the `<Bracket>`
+corner asset is **not** what draws this, and the open question of whether the
+two share a design language is now moot for this widget: it does not sample a
+corner texture at all.
+
 **2026-09-02: what `0xff705070` is for, from a wider sweep rather than the one instance already read.** Every `<HorizMenu>`/`<VertMenu>` widget's own top-level `<Values>` across `mainmenu_definition.xml`, `additional_definition.xml` (two `<HorizMenu>`, one `<VertMenu>`) and all four `manual_definition*.xml` copies carries this exact literal - eight instances, matching the table row above, all the *widget's own* declared colour and none of them reached through `FEGlobals->`, unlike every colour already established as live (`HD_Grey`, `HD_Blue`, `TitleColor`...). The already-captured case (`strip`, this section, above) shows this exact mechanism - a menu-family widget's own `color=` - going unread, text drawing in `TextColor` regardless. Structurally the same widget field on the other seven instances, unconfirmed individually - **confidence 70**, one capture generalised across a consistent pattern rather than seven more captures.
 
 **`online_definition.xml` (`DATA02`/`DATA05`/`DATA06`, fourteen instances per copy) is a different picture, and argues the literal is not simply dead everywhere it appears.** Past the `OnlineMenu` `<HorizMenu>` itself (which *does* use `0xffffffff`, the two-of-ten exception the table above already counts), the same `0xff705070` recurs on five ordinary `<Menu>` widgets (`LoginMenu`, `UserList` x2, `FriendOptions`, `BlockOptions`, `PendingOptions`) and six standalone `<Text>` widgets carrying community/friends status strings (`friendRequests`, `FriendInfo`, `SkinInfo`, `blockedInfo`, `statusInfo`, `pendingInfo`) - every one an info/status label, not a navigation entry. A `<Text>` widget is a materially different draw than a menu entry in this build's own equivalent code (`Frontend::draw_screen_at` reads a parsed `Text`'s own `color` directly, unlike `strip::draw`/`rows::draw` which read a skin-level colour instead) - so nothing here says a `<Text>` widget's own colour goes unread the way a menu entry's does, and the online/community screens are not implemented in this project to check against a capture either way. **Confidence 55** for "this is likely a real, deliberately-chosen secondary/muted text colour on `<Text>` widgets specifically, and likely inert on the `<Menu>`-family widgets beside it the same way it is on the captured strip" - plausible from the pattern and from this build's own analogous code split, not verified against the executable or a capture of the online screen, which does not exist in this project's evidence.
