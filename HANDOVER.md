@@ -128,7 +128,7 @@ file does not need to carry its own.
   which reaches further back than either `main` baseline does.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,724 tests (2026-09-02)** in 3.8s,
+- **Gate status:** last measured green at **2,731 tests (2026-09-02)** in 3.8s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
@@ -350,7 +350,7 @@ keeps the mechanism documented for a need heading-pinning cannot reach.
 
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
-- [Dynamic resolution wants a viewport, not an allocation](handover/dynamic-resolution-wants-a-viewport-not-an-allocation.md) - **starts with a Phase 0 it shares with the FSR 1 thread**
+- [Dynamic resolution wants a viewport, not an allocation](handover/dynamic-resolution-wants-a-viewport-not-an-allocation.md) - **its shared Phase 0 landed 2026-09-02**; Phases 1-5 are unbuilt
 - [The frame path allocated 1.6 MB a frame; five reasons are fixed and the rest are counted](handover/the-frame-path-allocated-16-mb-a-frame.md)
 - [Invented UI text has no translation, and the disc's own strings have no override path either](handover/invented-ui-text-has-no-translation-and-the.md)
 - [HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read](handover/hds-sprite-flare-reads-oversized-and-the-tuning.md)
@@ -450,7 +450,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
 - [Menus: rebinding is the one thing that does not work](handover/menus-rebinding-is-the-one-thing-that-does.md)
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
-- [FSR 1's default is open](handover/fsr-1s-default-is-open.md) - **starts with the same shared Phase 0**: the UI-compositing restructure is written out in full in both files, and whoever picks up either thread does it first
+- [FSR 1's default is open](handover/fsr-1s-default-is-open.md) - **the shared Phase 0 landed and dissolved the menu half of the doubt**; what is left is one comparison on a race frame with effects in it
 - [Front-end gaps behind `Image`](handover/front-end-gaps-behind-image.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)
@@ -600,6 +600,8 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**ADR-0036 states one consequence that is wrong, and ADR-0038 supersedes a second item in it - both ADRs are immutable, so this is the correction of record.** 2026-09-02, landing the UI-compositing restructure. (1) ADR-0036's consequence *"every race `--screenshot` changes bytes when the HUD moves"* is **false**: only `--presented` does. The plain capture path in `crates/game/src/race/capture.rs` builds no `Framebuffer` and runs no resolve, so its HUD was already drawn at native size and its bytes are untouched - verified by the capture path having no `Framebuffer` branch outside `presented`. Anyone re-baselining race screenshots on the strength of that sentence would be regenerating goldens for a change that did not reach them. (2) ADR-0036 puts a movie on the *scene* side of the UI seam, which for the front end would have meant splitting one draw list across two passes; [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) supersedes that item, because the front end's scene side holds **nothing but the movie quad** and the launcher and loading screen have no movie at all. A stage with no 3D scene draws its whole list straight into the presentation target and `resolve_scene` is not called. Read ADR-0038 before ADR-0036's seam wording sends you to build the split.
 
 **A stale or invalid PPSSPP memory watchpoint address is not harmless - it can stop emulation outright, and two debugger connections racing the same execution breakpoint is how one gets computed.** 2026-08-31, chasing [the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md)'s live capture. `psp-drive.py restart`'s own internal `Ship_UpdateCraft` breakpoint and a second, independent connection's own breakpoint at the same address raced each other (PPSSPP execution breakpoints are global CPU state, shared across every client), producing a garbage field read (`craft+0x1CC` came back `0`) that got armed as a watchpoint on address `0x30`. It sat at 0 hits, `enabled: false`, looking exactly as harmless as a working-but-quiet watchpoint should - then `E[MEMMAP] Bad memory access detected! 00000030 ... Stopping emulation` killed the session minutes later, identically across two independent boots. Full account, including the fix (take an address a running script already printed instead of re-deriving it with a second breakpoint):
 [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md#a-stale-or-invalid-watchpoint-address-is-not-harmless---it-can-stop-emulation-outright).

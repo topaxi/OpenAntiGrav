@@ -40,14 +40,17 @@ Read out of the tree on 2026-09-02, not assumed:
   `post/fsr1.rs:46`: *"The input viewport and the input resource are the same
   rectangle here - so the viewport and size arguments collapse into one."*
   Upstream's `FsrEasuCon` takes them separately; this port folded them.
-- **The menus, the front end and the loading screen are still drawn at the
-  render scale**, into the offscreen target, in the same 480x272 space. **The
-  HUD and the performance overlay are not, since ADR-0036** - the HUD into the
-  presentation target before the grade, the overlay onto the surface after it.
-  `perf.rs` used to argue "the overlay should cost what the game costs" for all
-  of them, and its own module doc now records why that is right for a scale set
-  once and wrong for one that moves. So this bullet is mostly cleared, and the
-  part still standing is the part a *player* looks at least while racing.
+- **No UI is drawn at the render scale any more, and that removes a real DRS
+  hazard.** Since ADR-0036 and ADR-0038 the HUD and scoreboard composite into
+  the presentation target after the resolve, the performance overlay goes onto
+  the surface after the grade, and the menus, front end, launcher and loading
+  screen skip the scaled target entirely. Under the old shape a controller
+  moving the scale several times a second would have made HUD glyphs and menu
+  text shimmer as they were re-rasterised at a new size every few frames -
+  the most visible artefact DRS could have produced, on the element a player
+  reads rather than looks at. It structurally cannot happen now. `perf.rs` used
+  to argue "the overlay should cost what the game costs"; its own module doc
+  records why that is right for a scale set once and wrong for one that moves.
 - **The frame-cost signal that exists is a wall-clock interval, not a GPU
   cost.** `frame.rs:118` feeds `perf::Meter::record(elapsed)` the duration
   between loop iterations. The device is created with `Features::empty()`
@@ -84,80 +87,40 @@ because `schedule_next_frame` sleeps to it. It only tracks work with vsync
 `off` *and* no limit - a diagnostic configuration, not a shipping one. So a
 GPU timestamp is the primary path, not a refinement.
 
-## Phase 0, shared: the UI composites at presentation resolution
+## Phase 0 landed 2026-09-02: the UI composites at presentation resolution
 
-**This section is duplicated, on purpose, in
-[FSR 1's default is open](fsr-1s-default-is-open.md) - whoever picks up either thread does this
-first, and it is the same piece of work both times.** Duplicated rather than
-linked because a thread file is deleted the moment its work lands: if the other
-file is gone, this work is very likely already done, and
-[modern-features.md](../docs/overview/modern-features.md)'s prerequisite table
-is the thing to check before starting rather than the missing file.
-When it lands, delete this section from whichever thread is still open.
-
-**Decided, and most of it built.**
+**Done, and it is no longer a prerequisite - it is a property to rely on.**
 [ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
 settles what [ADR-0013](../docs/architecture/adr/0013-anti-aliasing-architecture.md)
-explicitly declined to decide: the scene resolves first, the UI draws after it,
-at presentation size. Read it before touching the rest.
+explicitly declined to decide, and
+[ADR-0038](../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+supersedes its seam item for stages with no 3D scene. Read both before Phase 1;
+they are what the rest of this plan now assumes.
 
-**What is built.** `Framebuffer` now holds a presentation-sized target between
-the upscale and the surface, and `Framebuffer::resolve` is gone, split in two:
+The shape DRS inherits:
 
-- `resolve_scene` - FXAA/SMAA, FSR 1 and the blit, into that target,
-  **ungraded**.
-- `composite` - the target onto the surface, **graded**, last.
+- `resolve_scene` - FXAA/SMAA, FSR 1 and the blit, from the scaled target into
+  a presentation-sized one, **ungraded**.
+- The UI draws into that presentation target.
+- `composite` - the presentation target onto the surface, **graded**, last.
+- A stage with no 3D scene (launcher, loading, front end, menus) never calls
+  `resolve_scene` at all and draws straight into the presentation target; its
+  own clear draws the aspect bars.
 
-The UI draws between them. Two elements have moved across:
-
-- **The performance overlay**, onto the surface *after* `composite`, so it is
-  deliberately outside the grade - an instrument, not picture content. ADR-0036's
-  one standing exception.
-- **The HUD and the scoreboard**, into the presentation target *before*
-  `composite`, so they are sharp at any render scale, no upscaler ever sees
-  them, and they are still inside brightness and gamma. `RaceStage::render` is
-  the scene alone now; `RaceStage::draw_hud` is the other half, called from
-  `Session::frame` and from `race/capture.rs`'s `--presented` path.
-
-Two tests in `crates/game/src/upscale/tests.rs` pin it:
-`the_ui_composites_over_the_blit_at_presentation_resolution` for the geometry
-and `the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not` for
-the grade, the exception, and double-grading. Both were checked against the old
-arrangement rather than assumed - drawn into the scaled target, a
-one-surface-pixel fill covers no sample centre and vanishes from the frame
-completely.
-
-**Correcting ADR-0036 while it is fresh:** its consequence "every race
-`--screenshot` changes bytes when the HUD moves" is **wrong**. Only
-`--presented` does. The plain capture path builds no `Framebuffer` and runs no
-resolve, so its HUD was already at native size and is untouched. The ADR is
-immutable and stays as written; this is the correction of record.
-
-**Roughly half a day left**, and it is one slice:
-
-- **The menus, the front end and the loading screen.** They still draw into the
-  offscreen target from their stages, so they are still rasterised at the render
-  scale. The front end is the awkward one: it draws its movie and its UI through
-  one `Renderer::render` over one draw list, with the movie a `Draw::Video`
-  entry in it, and ADR-0036 puts a movie on the *scene* side of the seam - so
-  this means splitting that call.
-- **`crates/game/src/capture.rs`'s front-end path still has no `Framebuffer`
-  at all**, which is the whole reason FSR 1 has never reached the front end.
-  `race/capture.rs` is done and is not a template for it: that one had a
-  `Framebuffer` already.
-
-What it delivers, in the words `docs/overview/modern-features.md` uses: the
-prerequisite table's last row, *a scene without UI in it*, stops being
-**Absent**. It has **not** stopped yet - the HUD is out of the scaled target
-but the menus and the front end are not, and FSR 3.1 needs all of it. The row
-moves in the change that moves them. Update it there.
+**Two consequences for this thread specifically.** (1) The scaled target is now
+touched by nothing but the race scene, so a controller writing to it several
+times a second cannot make text shimmer - see the "What is verified" bullet
+above. (2) `Framebuffer` already separates the two sizes: `resize` moves the
+scene target on `render_scale`, `resize_output` moves the presentation target on
+the surface. Phase 1's "fixed allocation, moving viewport" now only has to
+change the first of those.
 
 ## The plan
 
 Estimates assume the phase is picked up cold, and assume no ground-truth data
 is needed - none of this is reverse-engineering, all of it is this project's
-own enhancement, on the same footing as FSR 1 and SMAA. Phase 0 above comes
-first; these five follow it.
+own enhancement, on the same footing as FSR 1 and SMAA. Phase 0 above is
+already done; these five are what is left.
 
 ### Phase 1 - a fixed allocation and a moving viewport
 
@@ -246,6 +209,16 @@ warns at scales where it does nothing (`menu/tests/definition.rs:553` asserts
 the warning names exactly those scales) - a DRS row and a `render_scale` row
 that silently disagree is the row a player will file a bug about.
 
+**Decided 2026-09-02: RENDER SCALE itself gets no warning, deliberately.**
+Since ADR-0038 the row changes nothing on the screen a player moves it from -
+the menus draw at presentation resolution, so the setting is invisible until a
+race starts. Asked directly, the maintainer chose silence. The reasoning to
+keep: the existing mechanism means *"this row is redundant given another row's
+value"*, and *"this row's effect is not visible on this screen"* is a different
+kind of statement; overloading one warning with both was judged worse than no
+warning at all. Do not re-open this as an oversight - it is a decision. The DRS
+pairing above is the first kind of statement and does still want a warning.
+
 ### Phase 5 - tell the upscaler the size changed
 
 **Half a day for FSR 1.** Un-collapse `fsr1::Constants::new`'s viewport and
@@ -266,7 +239,9 @@ conventionally a function of the scale factor, so *camera jitter*, the other
   different shapes.** `crates/game/src/race/capture.rs` builds its own
   `Framebuffer` (line 380, conditional on `presented`) and calls `target_size`
   itself (line 317); `crates/game/src/capture.rs`'s front-end path has no
-  `Framebuffer` at all (line 28), which is the whole of Phase 0's difficulty.
+  `Framebuffer` at all (line 28) - which since ADR-0038 is correct rather than
+  a gap, because the front end has no scene to scale; what it still lacks is
+  the grade and the aspect bars, not a render target.
   Fixing only the first leaves the second reacting to machine load. This
   project's comparisons are byte-identical screenshot diffs - thirty captures
   came out byte-identical when the PVS tiers were validated - and a controller

@@ -1,84 +1,68 @@
 # FSR 1's default is open
 
-`oag_render::post::fsr1` transliterates AMD's MIT `ffx_fsr1.h`; the route for FSR 3.1 is settled in [ADR-0012](../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md). It cannot reach the front end because `capture::run`'s front-end path has no `Framebuffer`, and giving it one is the same work as the UI-compositing restructure ([modern features](../docs/overview/modern-features.md) has the prerequisite table). **Do not** read a menu capture taken with `--upscaler` as evidence either way: the flag changes the UPSCALER row's own text, so the two images differ for an unrelated reason - that nearly produced a false conclusion.
+`oag_render::post::fsr1` transliterates AMD's MIT `ffx_fsr1.h`; the route for FSR 3.1 is settled in [ADR-0012](../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md). **Do not** read a menu capture taken with `--upscaler` as evidence either way: the flag changes the UPSCALER row's own text, so the two images differ for an unrelated reason - that nearly produced a false conclusion.
 
-## Phase 0, shared: the UI composites at presentation resolution
+## Phase 0 landed, and it changed this thread's question
 
-**This section is duplicated, on purpose, in
-[Dynamic resolution wants a viewport, not an allocation](dynamic-resolution-wants-a-viewport-not-an-allocation.md) - whoever picks up either thread does this
-first, and it is the same piece of work both times.** Duplicated rather than
-linked because a thread file is deleted the moment its work lands: if the other
-file is gone, this work is very likely already done, and
-[modern-features.md](../docs/overview/modern-features.md)'s prerequisite table
-is the thing to check before starting rather than the missing file.
-When it lands, delete this section from whichever thread is still open.
+**2026-09-02.** The shared UI-compositing restructure is built and green
+([ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md),
+[ADR-0038](../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)).
+`docs/overview/modern-features.md`'s prerequisite row *a scene without UI in
+it* is **Done**; camera jitter is the last FSR 3.1 prerequisite left.
 
-**Decided, and most of it built.**
-[ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
-settles what [ADR-0013](../docs/architecture/adr/0013-anti-aliasing-architecture.md)
-explicitly declined to decide: the scene resolves first, the UI draws after it,
-at presentation size. Read it before touching the rest.
+**There are exactly three paths that draw a frame, and no upscaler touches UI
+content in any of them.** The windowed loop (`main/session/frame.rs`),
+`race/capture.rs`, and `capture.rs`'s front-end path - `main/headless.rs` only
+builds a `race::Presented` for the second, so it is not a fourth; checked
+2026-09-02. The HUD and the scoreboard composite into the presentation target
+after the resolve; the menus, the front end, the launcher and the loading
+screen skip the scaled target entirely.
 
-**What is built.** `Framebuffer` now holds a presentation-sized target between
-the upscale and the surface, and `Framebuffer::resolve` is gone, split in two:
+**This dissolves one half of the doubt rather than deferring it.** The thread
+was opened on two unmeasured risks: paletted 480x272-era raster and
+coverage-atlas glyphs, which a sharpener rings on, and high-frequency scene
+effects. The first is now structurally out of reach of every sharpener - there
+is no menu frame an upscaler can ever touch, so there is nothing left to
+compare and no capture that would say anything. **An earlier version of this
+file said the opposite** - that the menus "only become measurable once Phase 0's
+last slice moves them", and that ADR-0036 made the doubt *narrower, not better*.
+That was written while the HUD had moved and the menus had not. The last slice
+moved them out of the upscaler's path, not into a measurable one, and the
+sentence is retracted here rather than left to send a reader after a risk that
+cannot exist.
 
-- `resolve_scene` - FXAA/SMAA, FSR 1 and the blit, into that target,
-  **ungraded**.
-- `composite` - the target onto the surface, **graded**, last.
-
-The UI draws between them. Two elements have moved across:
-
-- **The performance overlay**, onto the surface *after* `composite`, so it is
-  deliberately outside the grade - an instrument, not picture content. ADR-0036's
-  one standing exception.
-- **The HUD and the scoreboard**, into the presentation target *before*
-  `composite`, so they are sharp at any render scale, no upscaler ever sees
-  them, and they are still inside brightness and gamma. `RaceStage::render` is
-  the scene alone now; `RaceStage::draw_hud` is the other half, called from
-  `Session::frame` and from `race/capture.rs`'s `--presented` path.
-
-Two tests in `crates/game/src/upscale/tests.rs` pin it:
-`the_ui_composites_over_the_blit_at_presentation_resolution` for the geometry
-and `the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not` for
-the grade, the exception, and double-grading. Both were checked against the old
-arrangement rather than assumed - drawn into the scaled target, a
-one-surface-pixel fill covers no sample centre and vanishes from the frame
-completely.
-
-**Correcting ADR-0036 while it is fresh:** its consequence "every race
-`--screenshot` changes bytes when the HUD moves" is **wrong**. Only
-`--presented` does. The plain capture path builds no `Framebuffer` and runs no
-resolve, so its HUD was already at native size and is untouched. The ADR is
-immutable and stays as written; this is the correction of record.
-
-**Roughly half a day left**, and it is one slice:
-
-- **The menus, the front end and the loading screen.** They still draw into the
-  offscreen target from their stages, so they are still rasterised at the render
-  scale. The front end is the awkward one: it draws its movie and its UI through
-  one `Renderer::render` over one draw list, with the movie a `Draw::Video`
-  entry in it, and ADR-0036 puts a movie on the *scene* side of the seam - so
-  this means splitting that call.
-- **`crates/game/src/capture.rs`'s front-end path still has no `Framebuffer`
-  at all**, which is the whole reason FSR 1 has never reached the front end.
-  `race/capture.rs` is done and is not a template for it: that one had a
-  `Framebuffer` already.
-
-What it delivers, in the words `docs/overview/modern-features.md` uses: the
-prerequisite table's last row, *a scene without UI in it*, stops being
-**Absent**. It has **not** stopped yet - the HUD is out of the scaled target
-but the menus and the front end are not, and FSR 3.1 needs all of it. The row
-moves in the change that moves them. Update it there.
+**What is left is the scene half, and it is genuinely unmeasured.** The one
+comparison behind the current preference was taken at 50 % on one frame of one
+track, and FSR 1 won clearly - but see the stationary-capture trap below for
+what that frame did not contain.
 
 ## Open
 
-- FSR1 cannot reach the front end because `capture::run`'s front-end path has no `Framebuffer`
-- A menu capture taken with `--upscaler` is not valid evidence either way (the flag itself changes the UPSCALER row's text)
-- Whether the default should move to `fsr1` at all. It has been compared once, at 50 % on one frame of one track, and FSR 1 won clearly - but the doubt is about content that frame did not contain: the menus and the HUD are 480x272-era paletted raster and glyphs off a coverage atlas, and a sharpener rings on those. The comparison that settles it is only possible *after* Phase 0, because before it there is no menu frame an upscaler has ever touched.
-- **A plain `--race` capture is quiet on the content a sharpener is worst on, and that is how the one comparison so far was taken.** A stationary capture plays no particle effect, fires no weapon and raises no shield, so the frame it produces has none of the high-frequency additive content RCAS rings hardest on - the spark burst, the rocket, the shield shell. Measured from the other end on 2026-09-02: the `psys` vertex path costs 199 bytes in a stationary `--race` capture and 1.99 MB under `--autopilot --give rocket --press square`, four orders of magnitude, because the stationary one never reaches it at all. The same flags are what put the effects in front of an upscaler. Any re-run of the default comparison wants them, and wants the HUD - which since ADR-0036 is composited after the upscaler and so is *not* part of what is being compared any more.
+- **Whether the default should move to `fsr1` at all.** This is now the whole
+  thread. It rests on one comparison, at 50 % on one frame of one track, on
+  scene content that contained no effects.
+- **A plain `--race` capture is quiet on the content a sharpener is worst on, and that is how the one comparison so far was taken.** A stationary capture plays no particle effect, fires no weapon and raises no shield, so the frame it produces has none of the high-frequency additive content RCAS rings hardest on - the spark burst, the rocket, the shield shell. Measured from the other end on 2026-09-02: the `psys` vertex path costs 199 bytes in a stationary `--race` capture and 1.99 MB under `--autopilot --give rocket --press square`, four orders of magnitude, because the stationary one never reaches it at all. The same flags are what put the effects in front of an upscaler.
+- **The HUD is not part of what is being compared any more**, and neither are
+  the menus. A capture diff that includes either is measuring the compositing
+  change, not the upscaler.
+- **`--presented` still does nothing on the front-end path.** `capture.rs` has
+  no `Framebuffer`, so a front-end capture gets no brightness/gamma grade and
+  no aspect bars. This used to be described as the blocker on FSR 1 reaching
+  the front end; since ADR-0038 it is not that at all - an upscaler is never
+  going to run there - it is a missing grade and missing bars, which is a much
+  smaller piece of work and no longer on this thread's critical path.
+- **The user's own play-testing is the better oracle here** and has been named
+  as available. A byte-diff of two stills answers "are they different"; whether
+  the sharpening is an improvement on a moving race is a judgement a still
+  cannot carry.
 
 ## Next Steps
 
-- Finish Phase 0 above. What is left is the menus and the front end, and giving `capture::run`'s front-end path a `Framebuffer` - which is this thread's own blocker, not incidental to it. Shared with [dynamic-resolution-wants-a-viewport-not-an-allocation.md](dynamic-resolution-wants-a-viewport-not-an-allocation.md).
-- Then re-run the default comparison on menu content and on a race frame that actually has effects in it - `--autopilot --give rocket --press square`, per the trap above - which together are the sample the default flip is actually held to.
-- **Do not read ADR-0036 as having shrunk the doubt.** The HUD dropping out of the comparison makes it *narrower*, not *better*: the glyph half was answered structurally, by no upscaler ever touching a HUD again, and nothing was measured to get there. What remains is menus plus effects, the `--give rocket` re-run only exercises the effects half, and **the menus are still inside the scaled target and still entirely unmeasured** - they only become measurable once Phase 0's last slice moves them and `capture::run` has a `Framebuffer`. A re-run that comes back "FSR 1 still wins" on effects alone has settled one of the two halves it needs.
+- **Re-run the comparison on a race frame that actually has effects in it** -
+  `--autopilot --give rocket --press square`, per the trap above - at 50 %
+  render scale, `--upscaler off` against `--upscaler fsr1`. That single sample
+  is now the whole of what the default flip is held to; there is no menu half
+  waiting behind it.
+- **Then ask for a play-test** rather than settling it on the stills alone.
+- Optional, and not blocking: give `capture.rs`'s front-end path the grade and
+  the aspect bars so `--presented` means the same thing on both capture routes.
