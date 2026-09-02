@@ -461,7 +461,7 @@ impl Session {
                     stage.scene.resize(
                         &self.gpu.device,
                         self.gpu.config.format,
-                        self.framebuffer.size(),
+                        self.framebuffer.allocation(),
                     );
                 }
                 Stage::Loading(stage) => {
@@ -469,7 +469,7 @@ impl Session {
                         built.scene.resize(
                             &self.gpu.device,
                             self.gpu.config.format,
-                            self.framebuffer.size(),
+                            self.framebuffer.allocation(),
                         );
                     }
                 }
@@ -486,7 +486,7 @@ impl Session {
                 stage.scene.resize(
                     &self.gpu.device,
                     self.gpu.config.format,
-                    self.framebuffer.size(),
+                    self.framebuffer.allocation(),
                 );
             }
         }
@@ -505,7 +505,12 @@ impl Session {
         // draws the bars exactly where the blit's own would have. Their
         // backdrop movie comes along at presentation size, which is one
         // resample rather than two.
-        let size = self.framebuffer.size();
+        // **The extent, not the allocation** - `inside` is a viewport, and
+        // since [ADR-0037](../../../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)
+        // the scene texture can be larger than the rectangle drawn into it.
+        // Everything that normalises against this inherits the extent for
+        // free, the camera jitter of ADR-0039 included.
+        let size = self.framebuffer.extent();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let scene_target = self.framebuffer.view();
         let ui_target = self.framebuffer.output();

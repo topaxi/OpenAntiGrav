@@ -32,6 +32,12 @@ struct Grade {
     // Padding to sixteen bytes, which is the minimum size of a uniform buffer
     // binding and what the layout below is validated against.
     _pad: f32,
+    // How much of the bound source to read, and how far into it the sampler may
+    // be asked to go. Both `1.0` whenever the source was drawn in full, which
+    // is every frame until a dynamic-resolution controller exists - see the
+    // Rust mirror's `Source` and ADR-0037.
+    uv_scale: vec2<f32>,
+    uv_max: vec2<f32>,
 }
 
 @group(0) @binding(0) var frame: texture_2d<f32>;
@@ -52,7 +58,14 @@ fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let frame_color = textureSample(frame, frame_sampler, in.uv);
+    // The drawn rectangle, not the whole texture. At `uv_scale == 1` and
+    // `uv_max == 1` this is the identity over the `0..1` the triangle covers -
+    // the sampler's own clamp-to-edge already behaved this way - so a frame
+    // drawn in full comes out byte-for-byte as it did before the source
+    // rectangle existed. Below full, `uv_max` keeps the linear tap half a texel
+    // inside the edge, off whatever a larger earlier frame left outside it.
+    let uv = min(in.uv * grade.uv_scale, grade.uv_max);
+    let frame_color = textureSample(frame, frame_sampler, uv);
     // An upscaler hands over perceptual values through a non-sRGB view, because
     // it works in that space throughout; the offscreen target arrives through an
     // sRGB view the sampler has already decoded. Everything below wants linear,
