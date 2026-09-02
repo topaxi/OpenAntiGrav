@@ -6,8 +6,8 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 
 |                                  | Pure | Pulse                          | HD/Fury                        | 2048 |
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
-| Countdown state machine + timing | open | **Zone's own read in detail** (below) | open                | open |
-| Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
+| Countdown state machine + timing | open | **Zone's read statically; a Time Trial's own duration measured live** (below) | open | open |
+| Launch reaction speedboost       | open | **no false-start penalty exists, measured live** (below) | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
 | Zone display: HUD overlay        | **confirmed identical** (below) | **confirmed identical** (below) | **confirmed identical** (below) | untried |
 | Zone display: track-side gantry  | untried | see billboard thread (open)    | **matches the user's own description, rendered and confirmed** (below) | asset family exists, untried past a string search |
 
@@ -217,6 +217,47 @@ still low (unchanged from the pass above) on the runtime mechanism** that actual
 selects it during a real race, which is `mode_descriptor`'s own unresolved pointer
 in `billboards.md`, not settled by a render.
 
+2026-09-02, fifth pass: **the countdown is measured live, not statically, for the
+first time this thread has managed - and it settles the false-start question the
+opening paragraph above named as untraced.** Three PPSSPP captures of
+`pulse-psp-usa.chd` (Time Trial, Talon's Junction White), `cross` held
+continuously from before the track description screen through the whole
+countdown into the launch: two entered via `psp-drive.py restart`, one via a
+genuine front-end menu walk. All three agree to the tick - full account,
+including the two process-boundary traps that cost the first two attempts (a
+separate-process capture starts too late, and the pause menu's "back to menu"
+path needs an explicit `QUIT RACE`, not just `circle`), in
+[race-modes.md](../docs/gameplay/race-modes.md#the-countdown-is-measured) and
+[engine.md](../docs/ghidra/functions/psp-pulse-usa/engine.md#the-engine-has-an-early-return-that-produces-no-thrust-at-all):
+
+- The countdown, dialog-dismiss to green, is **272 ticks** (4.5377 s dt-summed),
+  identical on all three runs.
+- **Holding thrust through it is not a false start.** `throttleState`
+  (`craft+0x2b8`) reads flat `0.0` for the gated span regardless of input held,
+  then steps straight to the full held value - no ramp, no stall. `craft+0x290`
+  and `craft+0x2e0` (the two gates `engine.md` already knew about) both stay at
+  `0.0` for the whole 1200-tick capture on every run, which also **refutes**
+  `engine.md`'s own standing guess that `craft+0x2e0` fits "a capture taken near
+  a race start" - it does not arm during one, so whatever pins throttle to zero
+  is a third mechanism this capture does not locate.
+- This retires the false-start belief this thread's own opening paragraph (and
+  four places in `scripts/`) repeated as fact - it was never measured until now.
+
+**Followed by an implementation**, per direction to proceed once the RE
+supported it: `oag_race::RaceState::thrust_gated` and `COUNTDOWN_TICKS` (272)
+gate the player's thrust for the measured span in `Race::tick`
+(`crates/game/src/race/tick.rs`), scoped to exactly what was measured - thrust
+only, not steering/braking/airbrakes; every mode, since only Time Trial was
+captured and no evidence points at a difference (the same reasoning
+`RaceState::eliminate` already uses). Four new tests, `cargo nextest run
+-p oag-race -p oag-game`; full `just` gate green.
+
+**What this does not touch.** The gantry/billboard display question - blocked
+on the same transform-writer problem [a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)
+already named, unrelated to anything measured this pass - is still open and
+was deliberately not implemented from a guess. Single Race, Zone's own duration
+against this number, and every other title remain unmeasured; see the grid.
+
 ## Open
 
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
@@ -244,18 +285,20 @@ in `billboards.md`, not settled by a render.
   identified - which ~19 mode/network variants map to which of the two clear-bit
   behaviours is unknown, and so is `FUN_0003c7b0`, the call the conditional path
   makes.
-- **No live capture of an actual false start exists.** Everything about states 6/8 in
-  `shield.md` is a branch-clear static reading; a PPSSPP watchpoint on `entity->0x874`
-  and `entity->0x8c` during a real held-thrust-before-lights start would settle which
-  state fires, the real timer value, and whether 6 or 8 is the false start (they are
-  mirror images of each other and nothing here distinguishes which is which).
+- ~~No live capture of an actual false start exists.~~ **Done, fifth pass: there is
+  no false start.** Thrust held continuously through the whole countdown, three
+  runs, never armed `craft+0x290` or `craft+0x2e0` and never stalled - see above.
+  States 6/8 in `shield.md` remain unidentified as *anything* to do with a race
+  start; whatever they are, this capture shows they do not fire from held thrust
+  before the lights.
 - **No player-side launch-timing mechanism has been found on either title searched.**
   This session only ran name/string sweeps, not a trace of the throttle-input path
   through the countdown - a `Ship_UpdateThrust`-adjacent function reading the
   countdown clock during the lights, if one exists, is still unfound. Given HD's
-  `StartBoost` reads as pure grid-slot AI tuning, the working hypothesis going in
-  should now be "the boost is not player-skill-timed", but that has not been
-  positively confirmed, only made less likely by an absence.
+  `StartBoost` reads as pure grid-slot AI tuning, **and Pulse's own thrust gate
+  now measured live is a flat 0-to-full step with no ramp or window to time a
+  press against**, the working hypothesis is now "there is no player-skill launch
+  boost on Pulse" - stronger than before, still not a search of the code itself.
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
@@ -321,9 +364,9 @@ in `billboards.md`, not settled by a render.
 
 **Launch boost, parked for now - not being chased at the moment:**
 
-7. Live-capture a false start in PPSSPP: hold thrust before the lights, watchpoint
-   `entity->0x874` and `entity->0x8c` on the player's own entity, and read which
-   state (6 or 8) actually fires and for how long.
+7. ~~Live-capture a false start in PPSSPP~~ **Done, fifth pass: there isn't one.**
+   No further watchpoint work needed on this specific question; states 6/8 remain
+   open but are no longer the leading candidate for a race-start mechanic.
 8. Trace the throttle/thrust input path during the countdown (starting from
    `Ship_UpdateThrust` or its equivalent, per `docs/gameplay/ai.md`'s and
    `engine.md`'s existing naming) for anything that reads a countdown clock or a

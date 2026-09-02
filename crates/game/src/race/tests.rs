@@ -16,6 +16,7 @@ use oag_formats::track;
 
 mod autopilot;
 mod camera;
+mod countdown;
 mod cues;
 mod field;
 mod hash;

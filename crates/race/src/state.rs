@@ -42,6 +42,28 @@ pub fn wrapped_backward(delta: f32, half_length: f32) -> bool {
     delta > half_length
 }
 
+/// How long the start-line countdown gates thrust, in ticks at the fixed 60 Hz
+/// timestep.
+///
+/// **Measured, not authored.** Three live PPSSPP captures of `pulse-psp-usa.chd`
+/// (Time Trial, Talon's Junction White) agree to the tick: `cross` held
+/// continuously from before the track description screen through the whole
+/// countdown, `throttleState` (`craft+0x2b8`) reads a flat `0.0` for 272 ticks
+/// after the track description screen is dismissed and then steps straight to
+/// the full held value - no ramp, no stall. See
+/// `docs/gameplay/race-modes.md#the-countdown-is-measured`.
+///
+/// **Scope of the measurement, and of this constant.** Only thrust was held and
+/// recorded, so only thrust is gated here - steering, braking and the airbrakes
+/// are unmeasured through a countdown and this crate does not touch them. Only
+/// Time Trial was captured; applied to every mode here for the same reason
+/// [`RaceState::eliminate`] is mode-agnostic - a mode-gated countdown would be a
+/// second, unverified claim (that another mode differs) rather than the
+/// measured one. A grid race's countdown, Zone's own timing, and every other
+/// title are still open - see the doc link above for exactly what "measured"
+/// covers.
+pub const COUNTDOWN_TICKS: u64 = 272;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RaceState {
     /// Which mode's rules are running.
@@ -197,6 +219,19 @@ impl RaceState {
         }
         self.finished = true;
         true
+    }
+
+    /// Whether the start-line countdown still gates thrust at `tick`.
+    ///
+    /// `tick` is the caller's own "ticks elapsed since the race began" counter
+    /// (`World::tick` in `oag_gameplay`, which this crate does not depend on) -
+    /// already zero at the standing start, so this needs no state of its own
+    /// and takes the tick rather than reading a field, the same shape
+    /// [`Self::lap_ticks`] has. See [`COUNTDOWN_TICKS`] for what is and is not
+    /// measured about it.
+    #[must_use]
+    pub fn thrust_gated(tick: u64) -> bool {
+        tick < COUNTDOWN_TICKS
     }
 
     pub fn update(

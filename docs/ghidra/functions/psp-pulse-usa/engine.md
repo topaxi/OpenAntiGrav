@@ -1147,15 +1147,25 @@ reference capture decelerates from 24.271 to 23.571 over its 200 ticks - about
 **So the missing "12x of resistance" is not resistance at all.** It is thrust this
 crate applies and the original does not.
 
-**Which of the two arms fired in the capture is not established.** The arithmetic
-shows only that the early return was taken. `craft+0x290` fits if the run touched
-a wall - though a Time Trial holding accelerate should not be scraping one, and the
-stun also kills lateral grip, which would show as a slide. `craft+0x2e0` fits a
-capture taken near a race start, and its arming condition has never been read.
-Neither timer is in the capture, so re-reading the existing CSV cannot settle it.
-**The decisive measurement is to add `craft+0x290` and `craft+0x2e0` to
-`scripts/psp-trace.py`'s column list and re-capture**; that also confirms the gate
-fired at all, rather than leaving this an inference from a force balance.
+**Which of the two arms fired in the standing-start capture is not established.**
+The arithmetic shows only that the early return was taken. `craft+0x290` fits if
+the run touched a wall - though a Time Trial holding accelerate should not be
+scraping one, and the stun also kills lateral grip, which would show as a slide.
+Neither timer is in that capture, so re-reading the existing CSV cannot settle it.
+
+Both columns are since added to `scripts/psp-trace.py` (`stun_timer`,
+`timer_2e0`), and **`craft+0x2e0` no longer fits "a capture taken near a race
+start"** - that was a guess, and a live capture through an actual race start
+refutes it directly. Three runs, `cross` held from before the track description
+screen through the whole countdown into the launch: `craft+0x290` and
+`craft+0x2e0` both stay flat at `0.0` for all 1200 recorded ticks, on every run.
+The 272-tick gate that keeps `throttleState` at zero during the countdown is
+real (see
+[race-modes.md](../../../gameplay/race-modes.md#the-countdown-is-measured)) and
+is confirmed **not** to be this early-return path - something else pins
+`throttleState` to zero for those ticks, and this function's own early return
+never fires to do it. `craft+0x290` remains the open candidate for the
+standing-start capture specifically.
 
 #### The world-force writer list is complete
 
