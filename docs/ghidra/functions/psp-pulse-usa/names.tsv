@@ -229,8 +229,8 @@
 0x0882fb20	function	Sap_Insert	80	collision.md
 0x088301e0	function	Sap_Update	82	collision.md
 0x08833cc8	function	SapAxis_Update	82	collision.md
-0x08ab0c50	data	g_sap_clamp_min	75	collision.md
-0x08ab0c60	data	g_sap_clamp_max	75	collision.md
+0x08ab0c50	data	g_sap_clamp_min	92	collision.md
+0x08ab0c60	data	g_sap_clamp_max	92	collision.md
 0x0884d868	function	Body_SetOrientation	88	rigid-body.md
 0x088159c0	function	Collision_StepNarrowphase	85	collision.md
 0x08815c1c	function	Collision_GetContact	90	collision.md

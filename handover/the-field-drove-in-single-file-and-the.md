@@ -4,9 +4,11 @@
 
 ## Open
 
-- Nothing yet knows another craft exists - no avoidance, no overtaking, no defending; only the personality spread keeps craft apart
-- One craft in 28 craft-minutes left the circuit firing a Turbo where the braking horizon said "clear" - only half fixed by gating on boosted speed
+- **Stale as of 2026-09-02, not re-verified this session**: this bullet said nothing yet knows another craft exists. `crates/ai/src/driver/avoidance.rs` and `ram.rs` now exist, and `docs/gameplay/ai.md` documents local avoidance, provocation and overtaking having landed since. Whoever picks this thread up next should confirm against the current code and either close this bullet or restate it accurately - it was not this session's next step and was not audited.
+- `look_max` is ruled out (measured 2026-09-02, see Next Steps) - the "one craft in 28 craft-minutes" escape this bullet described did not reproduce at all in a sample eight times that size, at any `look_max` from 90 to 200. Either the opponent respawn/stall rescue landing after the original measurement already covers it, or it needs a bigger sample or a different circuit to catch again. Not closing this bullet outright: absence in 224 craft-minutes is evidence, not proof the failure is gone.
 
 ## Next Steps
 
-- Investigate `look_max` (90 units, a third of a second at 270) as the next suspect for the Turbo-into-corner regression
+- ~~Investigate `look_max` (90 units, a third of a second at 270) as the next suspect for the Turbo-into-corner regression~~ **Done, 2026-09-02**: `crates/game/examples/turbo_lookahead_sweep.rs` sweeps 90/100/110/120/200 across 32 seeds on `16_Track`. Flat mean/worst excursion at every setting, zero escapes anywhere in 224 craft-minutes. `look_max` is not the lever - see `docs/gameplay/ai.md`'s Turbo section for the full table and reasoning. The remaining candidate `ai.md` names, "the speed target", has not been looked at.
+- Re-run `turbo_lookahead_sweep` (or a variant of it) on another circuit, or with more seeds, before concluding the escape is gone rather than just rare - this session's negative result is on one circuit only
+- Separately: confirm or correct the "nothing knows another craft exists" bullet above against the current `oag-ai` code

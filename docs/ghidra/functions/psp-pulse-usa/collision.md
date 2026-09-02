@@ -118,19 +118,54 @@ is still conservative: the broadphase over-reports and the narrowphase filters.
 Confidence **90** for the clamp itself.
 
 **The two globals are all zero in shipped `.data`, and nothing in the image
-writes them.** `0x08ab0c50` and `0x08ab0c60` have three read references each -
-the three functions above - and no write, by both `get_xrefs_to` and a scan for
-the `0xc50`/`0xc60` operand forms; `Sap_Init`, the single `.ctors` entry's
-region, and the surrounding 80 bytes are all clear. Taken literally that makes
-the clamp degenerate, collapsing every endpoint onto one cell, which is
-functionally correct but would leave the broadphase returning everything. That
-reading sits badly with the game's frame rate, so **the constant is recorded as
-unresolved at confidence 45** rather than asserted either way.
+writes them - and the clamp is non-degenerate anyway, confirmed live.**
+`0x08ab0c50` and `0x08ab0c60` have three read references each - the three
+functions above - and no write, by both `get_xrefs_to` and a scan for the
+`0xc50`/`0xc60` operand forms; `Sap_Init`, the single `.ctors` entry's region,
+and the surrounding 80 bytes are all clear. Independently re-checked
+2026-09-02 against the shipped disc image byte-for-byte (`BOOT.BIN`'s ELF
+program header maps `0x08ab0c50` to file offset `0x2accd0`, which reads all
+zero) - the static reading of `.data` itself was never in doubt.
 
-Nothing a reimplementation needs turns on it. Both readings make the packing a
-*conservative accelerator*: it never drops a genuinely overlapping pair, so exact
-AABB overlap is a legal substitute and the bit packing does not have to be
-reproduced at all.
+**What was wrong was the inference drawn from it.** Read live off a running
+`pulse-psp-usa.chd` (PPSSPP v1.20.4, `RemoteDebuggerOnStartup`, a read
+watchpoint armed on `g_sap_clamp_min` as its own positive control): the
+watchpoint fires during a live race, at `PC=0x08830534` - exactly
+`Sap_QueryAabb`'s entry (`0x088304d4`) plus the `0x60`-byte offset to its own
+copy of the eight-instruction clamp block above, proving the clamp path is
+genuinely executing against these two addresses in a live race, not a quiet
+or dead one. The values it reads are **not zero**:
+
+```text
+g_sap_clamp_min = (-1021.0, -1021.0, -1021.0, 0.0)
+g_sap_clamp_max = ( 1021.0,  1021.0,  1021.0, 0.0)
+```
+
+identical across two independent cold boots. That is not the degenerate
+single-cell reading this page used to hedge on - it is close to the packing's
+own representable limit (`bits[0:11] = ((int)coord + 0x400) * 2`, i.e. an
+11-bit field that needs `coord` within roughly `[-1024, 1023]` to stay
+non-negative before the `* 2`), which is exactly the shape a deliberately
+chosen clamp window for this packing would have. **Confidence 92** for the
+clamp being genuinely ±1021-ish and not degenerate - a runtime trace, not
+corroborated in a second binary (PS2 Pulse has no equivalent broadphase to
+check this against), so short of the 95+ band per the confidence rubric.
+
+The write site itself is still not found: a write watchpoint on both globals,
+armed within roughly 100ms of emulated time after a cold boot (`cpu.status`
+read `ticks: 22061009` at the first successful connection, CPU already
+running rather than paused), never fired through menu navigation and a full
+track load into a live race - so whatever writes these two quadwords runs
+earlier than that, most plausibly through an address computed with an
+immediate split the `0xc50`/`0xc60` operand scan would not have matched (a
+base a few words off `0x08ab0c50` itself, e.g. `addiu a0,a0,0xc40` followed by
+`sv.q ...,0x10(a0)`), rather than genuinely writer-less. Not chased further:
+nothing here turns on which instruction does it.
+
+Nothing a reimplementation needs turns on it either way. Both readings make
+the packing a *conservative accelerator*: it never drops a genuinely
+overlapping pair, so exact AABB overlap is a legal substitute and the bit
+packing does not have to be reproduced at all.
 
 - **World broadphase**: 1024 slots, 8 cursors per axis, returns collider indices.
 - **Per-mesh**: one entry per triangle AABB, where the **bit index is the
