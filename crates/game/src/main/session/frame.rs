@@ -1,7 +1,7 @@
 //! One frame: the fixed timestep, the stage update, and the draw.
 
 use anyhow::Result;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 
 use oag_game::frontend::{self};
 use oag_game::keys;
@@ -813,7 +813,7 @@ impl Session {
                     );
                 }
             }
-            debug!(
+            trace!(
                 "scene pass: frame {} took {:.3} ms, read on frame {}",
                 reading.frame,
                 reading.seconds * 1000.0,
