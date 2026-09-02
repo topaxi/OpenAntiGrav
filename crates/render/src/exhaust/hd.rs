@@ -283,8 +283,23 @@ impl Tube {
     /// with it.
     #[must_use]
     pub fn vertices(&self, brightness: f32, speed01: f32, red_mix: f32) -> Vec<GpuVertex> {
+        let mut out = Vec::with_capacity(VERTICES_PER_CRAFT);
+        self.extend_vertices(&mut out, brightness, speed01, red_mix);
+        out
+    }
+
+    /// [`Self::vertices`], appended to a list the caller owns - the form the
+    /// renderer uses, for the reason
+    /// [`crate::exhaust::Exhaust::extend_trail_vertices`] gives.
+    pub fn extend_vertices(
+        &self,
+        out: &mut Vec<GpuVertex>,
+        brightness: f32,
+        speed01: f32,
+        red_mix: f32,
+    ) {
         if !self.ready() {
-            return Vec::new();
+            return;
         }
         let samples = self.samples();
         let head_u = u_head(speed01);
@@ -306,7 +321,7 @@ impl Tube {
             (ahead.position - behind.position).normalize_or_zero()
         };
 
-        let mut out = Vec::with_capacity(VERTICES_PER_CRAFT);
+        out.reserve(VERTICES_PER_CRAFT);
         for fin in 0..FINS {
             // Fins at 0, 60 and 120 degrees from the sample's up, rotating
             // toward `side` - as *lines* the same set as "up and +-60", but
@@ -350,7 +365,6 @@ impl Tube {
                 out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
             }
         }
-        out
     }
 }
 

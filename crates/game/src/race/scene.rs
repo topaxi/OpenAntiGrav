@@ -161,6 +161,22 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
+    /// The four vertex lists [`Scene::render`] gathers each frame, kept so
+    /// their capacity is.
+    ///
+    /// They were four `Vec::new()`s a frame, and the ribbon is what made that
+    /// cost real: `Exhaust::trail_vertices` produces a fixed 648 vertices per
+    /// craft, so a full grid grew the trail list from empty to 5,184 by
+    /// doubling - eight appends over four reallocations, every one copying
+    /// what it had so far. Measured on Talon's Junction, gathering the exhaust
+    /// allocated 1.18 MB a frame with a full grid; cleared and refilled they
+    /// reach their high-water mark once and stay there.
+    ///
+    /// `RefCell` for the reason [`Self::exhaust`] is one: [`Scene::render`]
+    /// takes `&self`, and this is per-frame scratch rather than scene state -
+    /// nothing reads it between frames, and [`Scratch::clear`] is the first
+    /// thing done with it.
+    scratch: std::cell::RefCell<Scratch>,
     /// The recovered bloom, run after the scene pass over whatever the frame
     /// stamped into its alpha channel. `None` when the pipelines would not
     /// build, which costs the glow and nothing else.
@@ -220,11 +236,79 @@ pub struct Scene {
     /// above rebuilt, not just this texture. See
     /// [`crate::display::AntiAliasing::msaa_samples`].
     msaa_color: Option<wgpu::Texture>,
+    /// The three attachment views the race pass binds, held rather than made
+    /// each frame.
+    ///
+    /// A `create_view` is a driver object - a `VkImageView` or its equivalent -
+    /// and the three textures behind these move only in [`Self::new`] and
+    /// [`Self::resize`], so a per-frame rebuild was three allocations and three
+    /// driver calls producing the same three handles every time. They are also
+    /// what lets `oag_render::post::motion_blur` cache its own bind groups:
+    /// a group is only reusable while the views inside it are, and views made
+    /// fresh each frame are never the same views twice.
+    attachment_views: Attachments,
     /// What this scene's pipelines were actually built with, for the
     /// GRAPHICS menu's restart note - see `Session::open_menus` in `main.rs`.
     anti_aliasing: crate::display::AntiAliasing,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
+}
+
+/// The per-frame vertex lists [`Scene`] hands to its two effect pipelines.
+///
+/// One owner rather than four locals, so the buffers survive the frame that
+/// filled them - see [`Scene::scratch`].
+#[derive(Debug, Default)]
+pub(super) struct Scratch {
+    /// Engine flares, HD sprite quads and projectile billboards: the
+    /// `exhaust::Pipeline`'s sprite buffer.
+    pub(super) vertices: Vec<oag_render::mesh::GpuVertex>,
+    /// The engine ribbons, the same pipeline's second buffer.
+    pub(super) trail: Vec<oag_render::mesh::GpuVertex>,
+    /// The particle pipeline's two blend classes.
+    pub(super) additive: Vec<oag_render::mesh::GpuVertex>,
+    pub(super) alpha: Vec<oag_render::mesh::GpuVertex>,
+    /// Which weapon pads currently hand out a pickup, one per pad node.
+    pub(super) pads_ready: Vec<bool>,
+    /// One weapon pad's recoloured vertices, refilled per pad.
+    ///
+    /// The tint runs every frame over every pad on the circuit and uploads
+    /// each node's span separately, so this was one allocation per pad per
+    /// frame - 85 KiB a frame on Talon's Junction, the largest single item
+    /// left in the frame after the ribbon.
+    pub(super) pad_vertices: Vec<oag_render::mesh::GpuVertex>,
+}
+
+impl Scratch {
+    /// Empties all four while keeping what they have already grown to.
+    pub(super) fn clear(&mut self) {
+        self.vertices.clear();
+        self.trail.clear();
+        self.additive.clear();
+        self.alpha.clear();
+        self.pads_ready.clear();
+        self.pad_vertices.clear();
+    }
+}
+
+/// The race pass's three attachment views, rebuilt with the textures behind
+/// them and not before. See [`Scene::attachment_views`].
+#[derive(Debug)]
+pub(super) struct Attachments {
+    pub(super) depth: wgpu::TextureView,
+    pub(super) velocity: wgpu::TextureView,
+    /// `None` at sample count 1, matching [`Scene::msaa_color`].
+    pub(super) msaa: Option<wgpu::TextureView>,
+}
+
+impl Attachments {
+    fn new(depth: &wgpu::Texture, velocity: &wgpu::Texture, msaa: Option<&wgpu::Texture>) -> Self {
+        Self {
+            depth: depth.create_view(&wgpu::TextureViewDescriptor::default()),
+            velocity: velocity.create_view(&wgpu::TextureViewDescriptor::default()),
+            msaa: msaa.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default())),
+        }
+    }
 }
 
 impl Scene {
@@ -771,11 +855,15 @@ impl Scene {
                 }
             };
 
+        let depth = depth_texture(device, size, sample_count);
+        let velocity = motion::velocity_texture(device, size, sample_count);
+        let msaa_color = msaa_color_texture(device, format, size, sample_count);
+        let attachment_views = Attachments::new(&depth, &velocity, msaa_color.as_ref());
         Ok(Self {
             bloom,
             hd,
             motion_blur,
-            velocity: motion::velocity_texture(device, size, sample_count),
+            velocity,
             motion: std::cell::RefCell::new(None),
             track,
             visibility,
@@ -796,8 +884,10 @@ impl Scene {
             zone_grade,
             exhaust,
             sparks,
-            depth: depth_texture(device, size, sample_count),
-            msaa_color: msaa_color_texture(device, format, size, sample_count),
+            scratch: std::cell::RefCell::default(),
+            depth,
+            msaa_color,
+            attachment_views,
             anti_aliasing,
             far,
         })
@@ -884,6 +974,8 @@ impl Scene {
         self.depth = depth_texture(device, size, sample_count);
         self.velocity = motion::velocity_texture(device, size, sample_count);
         self.msaa_color = msaa_color_texture(device, format, size, sample_count);
+        self.attachment_views =
+            Attachments::new(&self.depth, &self.velocity, self.msaa_color.as_ref());
     }
 
     /// What this scene's pipelines were actually built with, for the restart

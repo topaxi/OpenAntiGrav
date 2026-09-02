@@ -274,6 +274,7 @@ keeps the mechanism documented for a need heading-pinning cannot reach.
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
 - [Dynamic resolution wants a viewport, not an allocation](handover/dynamic-resolution-wants-a-viewport-not-an-allocation.md) - **starts with a Phase 0 it shares with the FSR 1 thread**
+- [The frame path allocated 1.6 MB a frame; five reasons are fixed and the rest are counted](handover/the-frame-path-allocated-16-mb-a-frame.md)
 - [Invented UI text has no translation, and the disc's own strings have no override path either](handover/invented-ui-text-has-no-translation-and-the.md)
 - [HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read](handover/hds-sprite-flare-reads-oversized-and-the-tuning.md)
 - [HD's glow draws, and the coordinate it samples on is the one thing not read](handover/hds-glow-draws-and-the-coordinate-it-samples.md)
