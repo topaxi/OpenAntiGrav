@@ -1167,15 +1167,18 @@ recipe and its three traps.
       [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)).
       The velocity attachment is always written in a race, deliberately, so
       FSR 3.1 can rely on it.
-      **Dynamic resolution has its structural half and nothing else**: since
-      2026-09-02 the scene target is allocated once at the `render_scale`
-      ceiling and the frame is drawn into a sub-rectangle of it, so moving the
-      resolution costs a uniform write rather than six texture creations
-      ([ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)).
-      There is no controller, no GPU cost signal and no setting, so that
-      sub-rectangle is the whole target on every frame the game draws - see
-      [dynamic resolution](../rendering/dynamic-resolution.md) for what each of
-      the three still needs.
+      **Dynamic resolution has its structural half and its signal, and no
+      controller**: since 2026-09-02 the scene target is allocated once at the
+      `render_scale` ceiling and the frame is drawn into a sub-rectangle of it,
+      so moving the resolution costs a uniform write rather than six texture
+      creations
+      ([ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)),
+      and the scene pass is timed on the GPU every frame in the window, each
+      reading naming the frame it was taken on. There is still no controller
+      and no setting, and the scene-resolution post-processes take no viewport,
+      so that sub-rectangle is the whole target on every frame the game draws -
+      see [dynamic resolution](../rendering/dynamic-resolution.md) for what
+      each of them still needs.
       **FSR4 is not a plan**: it ships as signed DLLs
       and its driver upgrade path does not reach a native Linux build
 
