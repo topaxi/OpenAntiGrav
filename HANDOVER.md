@@ -41,14 +41,33 @@ file does not need to carry its own.
   citations inside `wall.rs` pointing at files that were not there. Anything
   under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
   committed `verification/scenarios/*.inputs` are what reproduce it.
-  **Two are absent right now (2026-08-26):** `pad0-boost.csv`, which the three
-  `chase_camera_ground_truth` tests read, and
-  `talons-junction-time-trial-lap-omega.csv`, which `maglock_ground_truth` reads.
-  All four skip cleanly and only fail under `OAG_REQUIRE_GAME_DATA=1`, so a
-  sweep with that variable set reads as four reds that are not.
-  `stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back` is a
-  **real** red as of the same date - it fails identically on `origin/main` with
-  "nothing recovered the craft", is not a missing-data skip, and is undiagnosed.
+  **Both traces this bullet used to name as absent are back (2026-09-02):**
+  `pad0-boost.csv` and `talons-junction-time-trial-lap-omega.csv` are present,
+  and a full `--run-ignored all` sweep now reports **0 skipped** - so a run that
+  skips any of them is a `data/` problem to fix with `just link-data`, not the
+  documented state.
+- **Six reds are pre-existing, and only one of them was written down.** Measured
+  2026-09-02 by running `cargo nextest run --workspace --run-ignored all
+  --no-fail-fast` twice: once on a branch and once on a detached worktree at
+  `main` with no changes in it. **The same six fail in both**, so any of them
+  turning up in your own sweep is not yours:
+  - `oag-formats::rcsmodel_decl_ground_truth::the_disc_declares_more_widths_than_the_search_looks_for`
+  - `oag-formats::rcsmodel_material_ground_truth::a_third_of_a_circuits_chunks_are_see_through`
+  - `oag-game::race_finish_ground_truth::a_single_race_ends_when_the_player_completes_its_laps`
+  - `oag-game::race_finish_ground_truth::the_finished_race_leaves_a_board_with_the_whole_grid_on_it`
+  - `oag-game::difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`
+  - `oag-game::stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back`,
+    the one that was already recorded, failing with "nothing recovered the
+    craft". All six are undiagnosed.
+
+  **The trap inside the trap: four of them pass when run filtered and fail in
+  the full sweep.** Re-running the failures alone comes back green, which reads
+  exactly like "it was a flake, the tree is fine" and is how this set stayed
+  undocumented. It is not a flake - the full sweep reproduces them run after
+  run, on an idle machine, on `main`. Whatever the sensitivity is (load,
+  parallelism, or shared state under `data/cache/`), a filtered re-run is not
+  evidence of anything here, and the two `oag-formats` ones were separately
+  traced to pristine `157a4666`.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
 - **Gate status:** last measured green at **2,724 tests (2026-09-02)** in 3.8s,
