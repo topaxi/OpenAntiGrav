@@ -571,16 +571,22 @@ impl Frontend {
                 continue;
             };
 
-            // An `Image` with no `x` is centred rather than pinned to the left
-            // edge. `Show Logo`'s logo is a 512-wide texture on a 480-wide
-            // screen, so the two readings differ by 16 pixels, and the texture
-            // itself settles which: its art is transparent out to column 23 on
-            // the left and from 488 on the right, so it is authored centred
-            // inside its own 512. Centred on screen the art lands at 7..471 with
-            // even margins; pinned at `x = 0` it would run to 487 and lose its
-            // right edge. Confidence 85 - measured from the one image there is,
-            // not read out of the widget's layout code.
-            // See `docs/architecture/frontend-boot.md`.
+            // An `Image` with no `x` is left-pinned, not centred - settled
+            // against a live capture of the real disc, not just the texture.
+            // `Show Logo`'s logo is a 512-wide texture on a 480-wide screen,
+            // so the two readings differ by 16 pixels, and the texture's own
+            // transparency (out to column 23 on the left, from 488 on the
+            // right) only says the art is authored centred *inside its own
+            // 512* - it does not say where that 512 lands on the 480-wide
+            // screen, which is the actual question. A real `PPSSPPSDL` frame
+            // of `Show Logo` (2026-09-02, `pulse-psp-usa.chd`, via the
+            // websocket debugger) settles it: the frame is black up to
+            // screen column 22 and the first non-zero pixel is column 23 -
+            // an exact match to the texture's own column-23 transparency
+            // edge, with no 16px shift. Centred would have put that edge at
+            // screen column 7. Confidence 90 - one clean capture, right at
+            // the boundary the two hypotheses disagree on; see
+            // `docs/architecture/frontend-boot.md`'s `Image layout` section.
             // A texture's own size is in PSP pixels whichever disc it came off,
             // so on the PS2's larger grid the fallback is scaled the way that
             // build scales every other PSP-grid number. See
@@ -588,11 +594,7 @@ impl Frontend {
             let (scale_x, scale_y) = self.space.texture_scale();
             let w = image.width.unwrap_or(placed.width as f32 * scale_x);
             let h = image.height.unwrap_or(placed.height as f32 * scale_y);
-            let x = if image.x == 0.0 {
-                (self.space.size.0 - w) / 2.0
-            } else {
-                image.x
-            };
+            let x = image.x;
 
             // `U`/`V`/`TxtrWidth`/`TxtrHeight` name a sub-rect of `src`'s own
             // texture, in that texture's own pixels - not the whole thing,
