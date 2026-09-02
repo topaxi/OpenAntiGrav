@@ -87,6 +87,12 @@
   and sub-pixel camera jitter by
   [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md).
   No renderer-side prerequisite is outstanding; the port itself is
+- [Dynamic resolution](dynamic-resolution.md) has its **structural half built
+  and nothing else**: the scene target is allocated at the `render_scale`
+  ceiling and drawn into a sub-rectangle of it, per
+  [ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md).
+  There is no controller, no cost signal and no setting, so that sub-rectangle
+  is the whole target on every frame the game draws
 
 ## The art is raster, and that has a consequence
 
