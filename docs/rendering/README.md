@@ -35,7 +35,15 @@
   [`vex.md`](../formats/vex.md), "The texture-transform keyframe block"
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
-  exists (`GpuVertex.lit`), so this is about which surfaces are which
+  exists (`GpuVertex.lit`), so this is about which surfaces are which.
+  **Shadow has a design and no implementation** - four techniques behind one
+  setting, per title rather than one quality dial, in
+  [`shadows.md`](shadows.md), which also records what each disc authors:
+  Pulse's 129 `Dynamic Shadow Occluder` payloads (layout closed at
+  `0x50 + 32n + 16m` on all 129), HD's four shadow jobs and nine decoded
+  per-team `ambient_shadow.gtf`, Pure's nothing at all, and the three classes
+  - `shadow` `0x3cb`, `blob` `0x3e0`, `textureBlob` `0x3df` - authored zero
+  times and therefore inert
 - Environment: `Skycube` (**done** - the payload is a `Mesh` payload, recovered in
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
