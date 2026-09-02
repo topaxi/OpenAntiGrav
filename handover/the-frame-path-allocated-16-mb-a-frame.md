@@ -112,19 +112,31 @@ a green-looking figure produced by a run that had not exercised the thing**:
   `0 skipped` too. It says nothing was filtered out, not that anything was
   exercised.
 - **They do not pass when re-run filtered, and a report that they do is a
-  fourth version of the same mistake.** Every one of these is `#[ignore]`d, so
-  a filtered re-run *without* `--run-ignored all` runs **none of them** and
-  says so in a way that reads as success:
+  fourth version of the same mistake.** With `--run-ignored all` and an
+  exact-name filter, the four fail **4 of 4**, the same as in the sweep. There
+  is no filtered-versus-sweep sensitivity and no shared-state hypothesis to
+  chase: they fail deterministically whenever they run.
 
-      $ cargo nextest run --workspace -E 'test(a_single_race_ends_when_the_player_completes_its_laps) or ...'
+  **Two independent ways to get a false green out of a filtered re-run here,
+  and the second is the one that actually happened.**
+
+  *`nextest`'s `test()` predicate matches a test's own name and module path,
+  never its binary.* Every one of these lives in a `*_ground_truth` binary
+  whose name appears in no test name, so a filter written off the binary
+  quietly selects a different set and reports confidently on it -
+  `test(rcsmodel)` picks up `rcsmodel::tests::*` and
+  `rcsmodel::vertex_decl::tests::*` unit tests, and `test(race_finish)` picks
+  up exactly one unrelated unit test,
+  `race::results::tests::the_board_is_taken_on_the_tick_the_race_finishes`.
+  Thirty-nine tests genuinely passed; not one was a failure being re-run.
+  **`binary(race_finish_ground_truth)` is the predicate that selects what the
+  name suggests** - verified, it lists all three of that binary's tests.
+
+  *And they are all `#[ignore]`d*, so even a correct exact-name filter runs
+  none of them without `--run-ignored all`, in a shape that reads as success:
+
       Starting 0 tests across 166 binaries (3304 tests skipped)
       Summary 0 tests run: 0 passed, 3304 skipped
-
-  Filter by file or by substring instead of by exact name and the non-ignored
-  tests in those binaries report green on their own. With `--run-ignored all`
-  the same four filtered fail **4 of 4**, the same as in the sweep. So there is
-  no filtered-versus-sweep sensitivity to explain, and no shared-state
-  hypothesis needed: they fail deterministically whenever they actually run.
 
 ## Fixed
 
