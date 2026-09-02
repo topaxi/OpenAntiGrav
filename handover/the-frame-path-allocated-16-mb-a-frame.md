@@ -86,7 +86,9 @@ buffer, and the reused buffer still uploads exactly its pad's span.
 
 `just` passes. **`just test-data` reports six pre-existing failures, and an
 earlier version of this line said two** - a count taken from a run that stopped
-early. Corrected 2026-09-02, and the way it was wrong is worth keeping:
+early. Corrected 2026-09-02, and the way it was wrong is worth keeping, because
+four separate wrong numbers came out of this one afternoon and **every one was
+a green-looking figure produced by a run that had not exercised the thing**:
 
 - `just test-data` is `cargo nextest run --workspace --run-ignored all` with no
   `--no-fail-fast`, so nextest stops on failure. The run behind "two" executed
@@ -109,6 +111,20 @@ early. Corrected 2026-09-02, and the way it was wrong is worth keeping:
   early-returns on a missing file as *passed*; the 17-failure run reported
   `0 skipped` too. It says nothing was filtered out, not that anything was
   exercised.
+- **They do not pass when re-run filtered, and a report that they do is a
+  fourth version of the same mistake.** Every one of these is `#[ignore]`d, so
+  a filtered re-run *without* `--run-ignored all` runs **none of them** and
+  says so in a way that reads as success:
+
+      $ cargo nextest run --workspace -E 'test(a_single_race_ends_when_the_player_completes_its_laps) or ...'
+      Starting 0 tests across 166 binaries (3304 tests skipped)
+      Summary 0 tests run: 0 passed, 3304 skipped
+
+  Filter by file or by substring instead of by exact name and the non-ignored
+  tests in those binaries report green on their own. With `--run-ignored all`
+  the same four filtered fail **4 of 4**, the same as in the sweep. So there is
+  no filtered-versus-sweep sensitivity to explain, and no shared-state
+  hypothesis needed: they fail deterministically whenever they actually run.
 
 ## Fixed
 
