@@ -125,6 +125,30 @@ as a picture stretched by the allocation-to-extent ratio, long after the change
 that caused it. `upscale::resolved_source` is a named function for exactly that
 reason, and `only_an_upscaled_frame_is_read_whole` is the only guard there is.
 
+### MSAA resolves the whole attachment, and that is the safe answer
+
+Measured, not reasoned: `crates/render/tests/msaa_resolve_viewport.rs` primes a
+resolve target blue, clears a 4x multisampled attachment red, draws green into
+a quarter-sized viewport of it and reads the resolve back. Inside the viewport
+it is green; **outside it, red** - the pass's own clear, not the blue that was
+there before.
+
+So under `anti_aliasing = "msaa4x"` a short render extent leaves the region
+outside it holding the multisampled attachment's `LoadOp::Clear`, which in a
+race is black with alpha zero - exactly what the non-MSAA path's clear leaves
+there, so every sampler's half-texel clamp covers both identically. The answer
+that would have been a problem is the other one: a viewport-restricted resolve
+would leave the *previous, larger* frame outside the extent, which is the
+classic stale fringe and a materially worse thing to defend against.
+
+No `--presented` capture can distinguish the two, because a capture never moves
+the extent. That is why it is a test.
+
+What it does cost is real: the resolve does full-allocation work whatever the
+extent is, the same way `LoadOp::Clear` is not viewport-restricted. Both bound
+what dynamic resolution can save at a low scale, and both belong in the budget
+conversation rather than in a surprise.
+
 ### One residual, stated rather than hidden
 
 EASU's twelve-tap kernel reaches about two texels past its sample point, so at
