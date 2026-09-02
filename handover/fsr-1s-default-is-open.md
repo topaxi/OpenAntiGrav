@@ -13,32 +13,65 @@ file is gone, this work is very likely already done, and
 is the thing to check before starting rather than the missing file.
 When it lands, delete this section from whichever thread is still open.
 
-**Roughly two days.** The scene resolves to the surface first (blit or
-upscaler, exactly as `upscale::Framebuffer::resolve` does now), and the HUD,
-the menus, the front end and the perf overlay draw *after* it, into the
-surface, at presentation size.
+**Decided, and one slice of it built.**
+[ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+settles what [ADR-0013](../docs/architecture/adr/0013-anti-aliasing-architecture.md)
+explicitly declined to decide: the scene resolves onto the surface first, and
+the UI draws after it, into the surface, at presentation size. Read it before
+touching any of the rest - it records three consequences neither thread had,
+and one of them reorders the remaining work.
 
-Three things it has to get past, all of them already in the tree:
+**The performance overlay has moved** (`crates/game/src/main/session/frame.rs`):
+it draws after `Framebuffer::resolve`, onto the surface, laid out against the
+aspect rectangle rather than the offscreen extent. It is the one element whose
+final position needs no new plumbing, because it is deliberately outside the
+grade - an instrument, not picture content.
+`the_ui_composites_over_the_blit_at_presentation_resolution` in
+`crates/game/src/upscale/tests.rs` pins both halves of the property, and it was
+checked against the old order rather than assumed: drawn before the resolve, a
+one-surface-pixel fill covers no sample centre in the scaled viewport and
+disappears from the frame completely.
 
-- **`capture::run`'s front-end path has no `Framebuffer` at all**
-  (`crates/game/src/capture.rs:28`). That is the whole of the difficulty and
-  the reason FSR 1 has never reached the front end. The race path is not the
-  same shape - `crates/game/src/race/capture.rs:380` builds one conditionally
-  on `presented` and calls `upscale::target_size` itself at line 317 - so both
-  paths need looking at, and a fix to one is not a fix to the other.
-- **`perf.rs`'s "the overlay should cost what the game costs" is the argument
-  that has to be consciously overturned.** It is right for a fixed render scale
-  and wrong for a moving one: the overlay is the row a player uses to judge
-  what the resolution controller is doing, and an overlay that resamples with
-  the scene cannot be read while it moves.
-- **The 480x272 authored grid** (`display.rs:50`) is what every overlay lays
-  out in. Compositing later means scaling that grid to the *surface* rather
-  than to the offscreen target - one substitution, in more places than it
-  looks.
+**Roughly a day and a half left**, and the order below is the ADR's, not the
+cheapest-first one:
+
+- **The grade, first.** It rides inside `Framebuffer::resolve`, so anything
+  composited after that pass is ungraded. That is right for the overlay and
+  wrong for the menus: a brightness row a player cannot see working on the menu
+  they are standing on is the exact behaviour `crate::upscale`'s module doc
+  defends. So nothing else can move until `resolve` upscales into a
+  presentation-sized target and a final grade-and-blit pass writes the surface
+  after the composite. That target is the first code to write, not the last -
+  and it costs one RGBA8 at surface size plus a fullscreen pass, stated in the
+  ADR rather than discovered here.
+- **The HUD and the scoreboard.** `RaceStage::render` draws the scene and then
+  one of the two into the same target, and `RaceStage::warm_up` is a second
+  caller of it that still has to warm the HUD's pipelines. **This slice changes
+  bytes in every race `--screenshot`**, which this project verifies with
+  byte-identical diffs - land it alone, with the diff explained rather than
+  discovered.
+- **The menus, the front end and the loading screen.** The front end draws its
+  movie and its UI through one `Renderer::render` over one draw list, the movie
+  being a `Draw::Video` entry in it. ADR-0036 puts a movie on the scene side of
+  the seam, so this slice means splitting that call.
+- **Both capture paths, which are not the same shape.**
+  `crates/game/src/race/capture.rs` builds a `Framebuffer` conditionally on
+  `--presented` and calls `upscale::target_size` itself;
+  `crates/game/src/capture.rs`'s front-end path has no `Framebuffer` at all,
+  which is the whole reason FSR 1 has never reached the front end. A fix to one
+  is not a fix to the other.
+
+**The 480x272 authored grid** (`display.rs`) is what every overlay lays out in,
+and compositing later means scaling that grid to the *surface* rather than to
+the offscreen target - one substitution, in more places than it looks. It is
+the same rectangle on screen either way, so nothing moves; only which pixels a
+glyph is rasterised into changes.
 
 What it delivers, in the words `docs/overview/modern-features.md` uses: the
 prerequisite table's last row, *a scene without UI in it*, stops being
-**Absent**. Update that row in the same change.
+**Absent**. It has **not** stopped yet - the overlay slice does not clear that
+row, and it moves in the change that moves the HUD and the menus. Update it
+there.
 
 ## Open
 
@@ -48,5 +81,5 @@ prerequisite table's last row, *a scene without UI in it*, stops being
 
 ## Next Steps
 
-- Do Phase 0 above. It is the prerequisite for everything else here, and it is shared with [dynamic-resolution-wants-a-viewport-not-an-allocation.md](dynamic-resolution-wants-a-viewport-not-an-allocation.md).
+- Finish Phase 0 above, starting with the presentation-sized target and the grade pass after the composite - nothing else can move until the grade can follow the UI. It is the prerequisite for everything else here, and it is shared with [dynamic-resolution-wants-a-viewport-not-an-allocation.md](dynamic-resolution-wants-a-viewport-not-an-allocation.md).
 - Then re-run the default comparison on menu and HUD content, which is the sample the default flip is actually held to.
