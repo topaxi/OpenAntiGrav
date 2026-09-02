@@ -2,7 +2,7 @@
 
 use log::{error, warn};
 use oag_game::settings::TriggerSensitivity;
-use oag_game::{audio, display, menu, perf, settings};
+use oag_game::{audio, display, drs, menu, perf, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::pad::TriggerMode;
 use oag_render::mesh_render::Anisotropy;
@@ -250,6 +250,38 @@ impl Session {
                 Ok(scale) => {
                     if let Some(profile) = self.render_profile_mut() {
                         profile.render_scale = scale;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.dynamic_resolution" => match text.parse::<drs::Target>() {
+                // Applied by the next frame, and the reset is what makes
+                // turning it *off* immediate: `frame` re-applies the extent
+                // every frame, and off means the ceiling.
+                Ok(target) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.dynamic_resolution = target;
+                    }
+                    self.drs.reset();
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.dynamic_resolution_floor" => match text.parse::<display::Scale>() {
+                // A floor at or above the render scale is stored rather than
+                // refused - the menu warns about it, the way the upscaler row
+                // warns at scales where it does nothing - and `drs::Limits`
+                // brings it under the ceiling where the two meet. Both land in
+                // the render profile, beside the ceiling they are compared
+                // against.
+                Ok(scale) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.dynamic_resolution_floor = scale;
                     }
                 }
                 Err(e) => {

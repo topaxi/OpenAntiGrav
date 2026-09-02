@@ -43,15 +43,29 @@ struct Constants {
 impl Constants {
     /// `FsrEasuCon` and `FsrRcasCon` in one.
     ///
-    /// The input viewport and the input resource are the same rectangle here -
-    /// the scene target has nothing else in it - so upstream's separate
-    /// viewport and size arguments collapse into one.
-    fn new(input: (u32, u32), output: (u32, u32), sharpness: Sharpness) -> Self {
-        let (iw, ih) = (input.0.max(1) as f32, input.1.max(1) as f32);
+    /// Upstream takes the drawn rectangle and the resource holding it
+    /// separately - `FsrEasuCon(con0..con3, inputViewportInPixelsX/Y,
+    /// inputSizeInPixelsX/Y, outputSizeInPixelsX/Y)` - and the split between
+    /// them is exact: `con0` is the viewport-to-output ratio and nothing else,
+    /// while `con1`..`con3` are gather offsets in texels *of the resource*.
+    /// Since [ADR-0037] the scene target is allocated at the `render_scale`
+    /// ceiling and a smaller rectangle of it may be drawn, so the two are no
+    /// longer the same number and the port keeps them apart the way
+    /// `ffx_fsr1.h` does.
+    ///
+    /// [ADR-0037]: ../../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md
+    fn new(
+        viewport: (u32, u32),
+        size: (u32, u32),
+        output: (u32, u32),
+        sharpness: Sharpness,
+    ) -> Self {
+        let (vw, vh) = (viewport.0.max(1) as f32, viewport.1.max(1) as f32);
+        let (iw, ih) = (size.0.max(1) as f32, size.1.max(1) as f32);
         let (ow, oh) = (output.0.max(1) as f32, output.1.max(1) as f32);
         Self {
             // Output integer position to a pixel position in viewport.
-            con0: [iw / ow, ih / oh, 0.5 * iw / ow - 0.5, 0.5 * ih / oh - 0.5],
+            con0: [vw / ow, vh / oh, 0.5 * vw / ow - 0.5, 0.5 * vh / oh - 0.5],
             // Viewport pixel position to normalized image space, then the
             // centres of the first gather4 relative to the upper-left of 'F'.
             con1: [1.0 / iw, 1.0 / ih, 1.0 / iw, -1.0 / ih],
@@ -118,7 +132,13 @@ pub struct Frame<'a> {
     /// EASU reasons about luma the way an eye does, so it must be handed the
     /// encoded values rather than the linear light an sRGB view would decode to.
     pub source: &'a wgpu::TextureView,
-    /// The size of `source`, which is the scene target's whole extent.
+    /// The rectangle of `source` that was actually drawn this frame -
+    /// upstream's `inputViewportInPixels`. Equal to [`Frame::input`] unless a
+    /// controller is varying the render extent.
+    pub viewport: (u32, u32),
+    /// The size of the resource behind `source` - upstream's
+    /// `inputSizeInPixels`. This is the scene target's **allocation**, which a
+    /// gather offset is measured in texels of.
     pub input: (u32, u32),
     /// The size to resolve to: the presentation rectangle, not the surface.
     pub output: (u32, u32),
@@ -262,6 +282,7 @@ impl Fsr1 {
     ) {
         let Frame {
             source,
+            viewport,
             input,
             output,
             sharpness,
@@ -270,7 +291,7 @@ impl Fsr1 {
 
         // Two floats and a handful of ratios, moved by a menu row and by a
         // window resize. Uploaded only when one of them actually changes.
-        let wanted = Constants::new(input, output, sharpness);
+        let wanted = Constants::new(viewport, input, output, sharpness);
         if self.written != Some(wanted) {
             queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
             self.written = Some(wanted);

@@ -20,6 +20,12 @@ struct Constants {
     // absolute contrast to register than a highlight does. See `fs_main`.
     threshold: f32,
     relative_threshold: f32,
+    // The rectangle of `scene_tex` that was actually drawn, as a UV scale and
+    // a clamp half a texel inside its edge. Both are exactly 1.0 whenever the
+    // drawn rectangle is the whole texture, which is every frame until a
+    // resolution controller moves it - see `post::sub_rectangle`.
+    uv_scale: vec2<f32>,
+    uv_max: vec2<f32>,
 }
 
 @group(0) @binding(0) var scene_tex: texture_2d<f32>;
@@ -49,8 +55,14 @@ fn luma(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
+// A tap `texel_offset` texels from `uv`, kept inside the drawn rectangle.
+//
+// The offset is in texels of the *resource*, which is what `inv_size` holds -
+// a 5-tap cross has to step one real texel whatever fraction of the texture
+// is being drawn into, or the edge test would widen as the render scale fell.
 fn sample_at(uv: vec2<f32>, texel_offset: vec2<f32>) -> vec4<f32> {
-    return textureSampleLevel(scene_tex, scene_sampler, uv + texel_offset * constants.inv_size, 0.0);
+    let at = uv * constants.uv_scale + texel_offset * constants.inv_size;
+    return textureSampleLevel(scene_tex, scene_sampler, min(at, constants.uv_max), 0.0);
 }
 
 @fragment

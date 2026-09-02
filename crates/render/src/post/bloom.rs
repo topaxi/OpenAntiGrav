@@ -96,14 +96,34 @@ pub const BLUR_RADIUS: i32 = 5;
 pub const COMPOSITE_STRENGTH: u8 = 0xaf;
 
 /// The uniform block `bloom.wgsl` reads. `repr(C)` and 16-byte aligned: the
-/// two `vec2`s pack into one row and the strength starts another.
+/// two `vec2`s pack into one row, the strength starts another, and the drawn
+/// sub-rectangle fills a third.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
     texel: [f32; 2],
     direction: [f32; 2],
     strength: f32,
     _pad: [f32; 3],
+    /// Only the bright pass reads these, and only it is handed a rectangle
+    /// that can be short: it samples the *scene* target, which since ADR-0037
+    /// may be larger than what was drawn into it. The blurs and the composite
+    /// read the fixed scratch buffers, which are always whole.
+    uv_scale: [f32; 2],
+    uv_max: [f32; 2],
+}
+
+/// One frame's worth of input to [`Bloom::render`].
+#[derive(Debug, Clone, Copy)]
+pub struct Frame<'a> {
+    /// The scene target: sampled by the bright pass, added back into by the
+    /// composite. Legal because the two happen in different passes.
+    pub scene: &'a wgpu::TextureView,
+    /// `scene`'s real dimensions - the allocation.
+    pub size: (u32, u32),
+    /// The rectangle of `scene` that was drawn, `<= size` on both axes. The
+    /// bright pass reads exactly it and the composite writes exactly it.
+    pub viewport: (u32, u32),
 }
 
 /// The three passes and their two ping-pong buffers.
@@ -123,6 +143,17 @@ pub struct Bloom {
     blur_y: wgpu::BindGroup,
     composite_group: wgpu::BindGroup,
     constants_bright: wgpu::Buffer,
+    /// The composite's own copy, fixed at the whole rectangle.
+    ///
+    /// It shared `constants_bright` until the drawn sub-rectangle joined the
+    /// block, and cannot any more: the two passes read different textures -
+    /// the bright pass the scene, the composite the fixed scratch buffer - so
+    /// a scale that is right for one is wrong for the other.
+    #[expect(dead_code, reason = "held so composite_group's binding stays valid")]
+    constants_composite: wgpu::Buffer,
+    /// What was last written into `constants_bright`, so a frame that moved
+    /// nothing writes nothing.
+    written: std::cell::Cell<Option<Constants>>,
 }
 
 impl Bloom {
@@ -226,12 +257,12 @@ impl Bloom {
         // Mapped at creation rather than written through a queue: every value
         // here is a compile-time constant, so the buffer never needs updating
         // and `new` never needs a `Queue`.
-        let buffer = |label: &str, c: Constants| {
+        let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
             let bytes = bytemuck::bytes_of(&c);
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
                 size: bytes.len() as u64,
-                usage: wgpu::BufferUsages::UNIFORM,
+                usage,
                 mapped_at_creation: true,
             });
             buffer
@@ -242,32 +273,42 @@ impl Bloom {
             buffer.unmap();
             buffer
         };
+        let whole = Constants {
+            texel,
+            direction: [0.0, 0.0],
+            strength,
+            _pad: [0.0; 3],
+            uv_scale: [1.0, 1.0],
+            uv_max: [1.0, 1.0],
+        };
+        // The one buffer here that is not a compile-time constant: the bright
+        // pass's rectangle moves whenever a resolution controller moves the
+        // render extent, so this alone is written through the queue.
         let constants_bright = buffer(
             "bloom bright constants",
-            Constants {
-                texel,
-                direction: [0.0, 0.0],
-                strength,
-                _pad: [0.0; 3],
-            },
+            whole,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        );
+        let constants_composite = buffer(
+            "bloom composite constants",
+            whole,
+            wgpu::BufferUsages::UNIFORM,
         );
         let constants_x = buffer(
             "bloom blur-x constants",
             Constants {
-                texel,
                 direction: [1.0, 0.0],
-                strength,
-                _pad: [0.0; 3],
+                ..whole
             },
+            wgpu::BufferUsages::UNIFORM,
         );
         let constants_y = buffer(
             "bloom blur-y constants",
             Constants {
-                texel,
                 direction: [0.0, 1.0],
-                strength,
-                _pad: [0.0; 3],
+                ..whole
             },
+            wgpu::BufferUsages::UNIFORM,
         );
 
         let group = |label: &str, view: &wgpu::TextureView, constants: &wgpu::Buffer| {
@@ -292,7 +333,7 @@ impl Bloom {
         };
         let blur_x = group("bloom blur-x", &a.view, &constants_x);
         let blur_y = group("bloom blur-y", &b.view, &constants_y);
-        let composite_group = group("bloom composite", &a.view, &constants_bright);
+        let composite_group = group("bloom composite", &a.view, &constants_composite);
 
         Ok(Self {
             bright,
@@ -306,21 +347,50 @@ impl Bloom {
             blur_y,
             composite_group,
             constants_bright,
+            constants_composite,
+            written: std::cell::Cell::new(Some(whole)),
         })
     }
 
-    /// Runs all four steps against `scene`, reading its alpha as the glow mask
-    /// and adding the result back onto it.
+    /// Runs all four steps against the scene, reading its alpha as the glow
+    /// mask and adding the result back onto it.
     ///
-    /// `scene` is both sampled and written, which is legal because the two
-    /// happen in different passes: the bright pass reads it, the composite
+    /// The scene view is both sampled and written, which is legal because the
+    /// two happen in different passes: the bright pass reads it, the composite
     /// writes it, and the blurs touch only the scratch buffers in between.
+    ///
+    /// **The scratch buffers stay a fixed 240x136 whatever the frame is drawn
+    /// at** - see the module docs for why - so a short render extent changes
+    /// only where the bright pass reads and where the composite writes. The
+    /// blur radius therefore stays five texels of 240, about 2 % of the drawn
+    /// frame, at every render scale.
     pub fn render(
         &self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        scene: &wgpu::TextureView,
+        frame: Frame<'_>,
     ) {
+        let Frame {
+            scene,
+            size,
+            viewport,
+        } = frame;
+
+        let (uv_scale, uv_max) = super::sub_rectangle(viewport, size);
+        let wanted = Constants {
+            texel: [1.0 / BLOOM_WIDTH as f32, 1.0 / BLOOM_HEIGHT as f32],
+            direction: [0.0, 0.0],
+            strength: f32::from(COMPOSITE_STRENGTH) / 255.0,
+            _pad: [0.0; 3],
+            uv_scale,
+            uv_max,
+        };
+        if self.written.get() != Some(wanted) {
+            queue.write_buffer(&self.constants_bright, 0, bytemuck::bytes_of(&wanted));
+            self.written.set(Some(wanted));
+        }
+
         let bright_group = crate::perfprobe::bind_group(
             device,
             &wgpu::BindGroupDescriptor {
@@ -347,7 +417,8 @@ impl Bloom {
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView,
-                        load: wgpu::LoadOp<wgpu::Color>| {
+                        load: wgpu::LoadOp<wgpu::Color>,
+                        rect: (u32, u32)| {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -365,17 +436,28 @@ impl Bloom {
                 multiview_mask: None,
             });
             pass.set_pipeline(pipeline);
+            pass.set_viewport(
+                0.0,
+                0.0,
+                rect.0.max(1) as f32,
+                rect.1.max(1) as f32,
+                0.0,
+                1.0,
+            );
             pass.set_bind_group(0, group, &[]);
             pass.draw(0..3, 0..1);
         };
 
         let discard = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
+        // The three scratch passes fill their whole buffer, which is the fixed
+        // 240x136 whatever the scene is drawn at.
         pass(
             "bloom bright",
             &self.bright,
             &bright_group,
             &self.a.view,
             discard,
+            (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
         pass(
             "bloom blur x",
@@ -383,6 +465,7 @@ impl Bloom {
             &self.blur_x,
             &self.b.view,
             discard,
+            (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
         pass(
             "bloom blur y",
@@ -390,14 +473,18 @@ impl Bloom {
             &self.blur_y,
             &self.a.view,
             discard,
+            (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
-        // The only pass that keeps what is already there - it is adding to it.
+        // The only pass that keeps what is already there - it is adding to it -
+        // and the only one that writes at the scene's resolution, so the only
+        // one whose rectangle a controller moves.
         pass(
             "bloom composite",
             &self.composite,
             &self.composite_group,
             scene,
             wgpu::LoadOp::Load,
+            viewport,
         );
     }
 }

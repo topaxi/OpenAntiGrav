@@ -98,6 +98,7 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
                 &mut encoder,
                 oag_render::post::fsr1::Frame {
                     source: framebuffer.perceptual(),
+                    viewport: framebuffer.extent(),
                     input: framebuffer.allocation(),
                     output: (4, 4),
                     sharpness: oag_render::post::fsr1::Sharpness::DEFAULT,

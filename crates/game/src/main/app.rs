@@ -279,6 +279,7 @@ impl App {
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
             scene_cost: perf::Meter::new(),
+            drs: oag_game::drs::Controller::new(),
             pass_timer,
             frame_index: 0,
             stall_frame: 0,

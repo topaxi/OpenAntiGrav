@@ -28,15 +28,22 @@
 use anyhow::Result;
 
 /// The shader's uniform: the inverse render-target size the taps are spaced
-/// by, and the two edge thresholds. `repr(C)` and sixteen bytes for the same
-/// reason `upscale::Grade` is - a uniform binding has a minimum size, and
-/// four floats is exactly it.
+/// by, the two edge thresholds, and the sub-rectangle of the source that was
+/// actually drawn. `repr(C)`, and eight floats rather than four since the
+/// rectangle joined it.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
     inv_size: [f32; 2],
     threshold: f32,
     relative_threshold: f32,
+    /// What to multiply the fullscreen triangle's `0..1` coordinate by to land
+    /// inside the drawn rectangle - `viewport / size`.
+    uv_scale: [f32; 2],
+    /// The furthest a tap may reach, half a texel inside the drawn rectangle's
+    /// outer edge. Without it a tap at the edge reads the region outside the
+    /// viewport, which holds whatever the clear left there.
+    uv_max: [f32; 2],
 }
 
 impl Constants {
@@ -48,12 +55,15 @@ impl Constants {
     /// register as an edge worth blending.
     const RELATIVE_THRESHOLD: f32 = 0.125;
 
-    fn new(size: (u32, u32)) -> Self {
+    fn new(viewport: (u32, u32), size: (u32, u32)) -> Self {
         let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
+        let (scale, max) = super::sub_rectangle(viewport, size);
         Self {
             inv_size: [1.0 / w, 1.0 / h],
             threshold: Self::THRESHOLD,
             relative_threshold: Self::RELATIVE_THRESHOLD,
+            uv_scale: scale,
+            uv_max: max,
         }
     }
 }
@@ -65,8 +75,14 @@ pub struct Frame<'a> {
     /// is: the luma test reasons about encoded values, the way an eye weighs
     /// them, and a linear view would misjudge which edges matter in shadow.
     pub source: &'a wgpu::TextureView,
-    /// The size of `source`, and of the output this resizes to.
+    /// The size of the resource behind `source`, and of the output this
+    /// resizes to. **The allocation, not the drawn rectangle** - keying the
+    /// target off this is what stops a moving render extent rebuilding it
+    /// several times a second.
     pub size: (u32, u32),
+    /// The rectangle of `source` that was drawn, `<= size` on both axes. The
+    /// pass draws into the same rectangle of its own output.
+    pub viewport: (u32, u32),
 }
 
 /// The one pipeline, its uniform, and the target it resizes to match `Frame::size`.
@@ -185,6 +201,10 @@ impl Fxaa {
     }
 
     /// Runs the one pass, resizing the target if `frame.size` moved.
+    ///
+    /// The output is `frame.size` with `frame.viewport` drawn into its
+    /// top-left corner, so a caller reading it back owes the same sub-rectangle
+    /// treatment the scene target does.
     pub fn render(
         &mut self,
         device: &wgpu::Device,
@@ -194,7 +214,7 @@ impl Fxaa {
     ) {
         self.resize(device, frame.size);
 
-        let wanted = Constants::new(frame.size);
+        let wanted = Constants::new(frame.viewport, frame.size);
         if self.written != Some(wanted) {
             queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
             self.written = Some(wanted);
@@ -220,6 +240,14 @@ impl Fxaa {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
+        pass.set_viewport(
+            0.0,
+            0.0,
+            frame.viewport.0.max(1) as f32,
+            frame.viewport.1.max(1) as f32,
+            0.0,
+            1.0,
+        );
         pass.set_bind_group(0, Some(&bind_group), &[]);
         pass.draw(0..3, 0..1);
     }

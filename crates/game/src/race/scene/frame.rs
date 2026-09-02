@@ -874,7 +874,7 @@ impl Scene {
         // consumes the same glow-mask alpha as one of its two terms. See
         // `oag_render::post::hd_bloom`.
         if let Some(hd) = &self.hd {
-            hd.run(encoder, view);
+            hd.run(queue, encoder, view, (viewport.2 as u32, viewport.3 as u32));
         } else if let Some(bloom) = &self.bloom {
             // The recovered post-process, reading the alpha channel the ribbon
             // and the flare stamped and adding a blurred copy of the masked
@@ -882,7 +882,21 @@ impl Scene {
             // the MSAA and the single-sample case, which is why this runs on
             // it rather than on `attachment_view`. See
             // `oag_render::post::bloom`.
-            bloom.render(device, encoder, view);
+            let size = self.depth.size();
+            bloom.render(
+                device,
+                queue,
+                encoder,
+                oag_render::post::bloom::Frame {
+                    scene: view,
+                    // The attachments' dimensions, and then the rectangle
+                    // drawn into them - the split `motion_blur` below already
+                    // makes, and the reason a short render extent no longer
+                    // has the bright pass downsampling the region nobody drew.
+                    size: (size.width, size.height),
+                    viewport: (viewport.2 as u32, viewport.3 as u32),
+                },
+            );
         }
         // Motion blur, last: it smears the finished frame - glow included,
         // which is what a bright thing sweeping past a lens does - and it

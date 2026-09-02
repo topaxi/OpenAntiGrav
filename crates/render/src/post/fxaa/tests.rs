@@ -8,17 +8,34 @@
 use super::*;
 
 #[test]
-fn the_uniform_is_sixteen_bytes_and_holds_the_inverse_size() {
-    assert_eq!(std::mem::size_of::<Constants>(), 16);
-    let c = Constants::new((1920, 1080));
+fn the_uniform_is_thirty_two_bytes_and_holds_the_inverse_size() {
+    assert_eq!(std::mem::size_of::<Constants>(), 32);
+    let c = Constants::new((1920, 1080), (1920, 1080));
     assert_eq!(c.inv_size, [1.0 / 1920.0, 1.0 / 1080.0]);
     assert_eq!(c.threshold, Constants::THRESHOLD);
     assert_eq!(c.relative_threshold, Constants::RELATIVE_THRESHOLD);
+    // Exactly one, not an inset that evaluates close to it: this is what
+    // keeps the pass byte-identical while nothing moves the render extent.
+    assert_eq!(c.uv_scale, [1.0, 1.0]);
+    assert_eq!(c.uv_max, [1.0, 1.0]);
+}
+
+/// A sub-rectangle scales the read and pulls the clamp inside it.
+///
+/// The tap offsets stay texels of the *resource* - a 5-tap cross has to step
+/// one real texel whatever fraction of the texture is drawn, or the edge test
+/// would widen as the render scale fell.
+#[test]
+fn a_drawn_sub_rectangle_scales_the_read_and_not_the_tap() {
+    let c = Constants::new((960, 544), (1440, 816));
+    assert_eq!(c.inv_size, [1.0 / 1440.0, 1.0 / 816.0]);
+    assert_eq!(c.uv_scale, [960.0 / 1440.0, 544.0 / 816.0]);
+    assert_eq!(c.uv_max, [959.5 / 1440.0, 543.5 / 816.0]);
 }
 
 #[test]
 fn a_degenerate_size_cannot_divide_by_zero() {
-    let c = Constants::new((0, 0));
+    let c = Constants::new((0, 0), (0, 0));
     assert!(c.inv_size.iter().all(|v| v.is_finite()), "{:?}", c.inv_size);
 }
 
@@ -68,6 +85,7 @@ fn the_pass_builds_and_draws_on_a_real_device() {
         Frame {
             source: &source,
             size: (64, 64),
+            viewport: (64, 64),
         },
     );
     queue.submit(Some(encoder.finish()));
@@ -137,6 +155,7 @@ fn a_flat_colour_is_untouched() {
         Frame {
             source: &source,
             size: (SIZE, SIZE),
+            viewport: (SIZE, SIZE),
         },
     );
 
@@ -241,6 +260,7 @@ fn a_hard_edge_blends_only_near_the_seam() {
         Frame {
             source: &source,
             size: (SIZE, SIZE),
+            viewport: (SIZE, SIZE),
         },
     );
 

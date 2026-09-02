@@ -165,6 +165,28 @@ row cannot hold**. `value = "onn"` is a startup error rather than a row that
 quietly never greys out. A row whose list comes off a disc has no values yet at
 load, and there the check stops at existence rather than guessing.
 
+#### What `disabled_by` deliberately cannot express
+
+It names a **setting**, and `Definition::check_condition` refuses one that no
+row edits. So a row cannot be greyed by anything that is not itself a row - and
+the case that makes the boundary worth writing down is a **runtime hardware
+capability**.
+
+DYNAMIC RESOLUTION is the example. On an adapter with no `TIMESTAMP_QUERY`
+there is no cost signal, so the controller never moves the render extent
+whatever the row says. That is exactly the shape `disabled_by` is drawn for and
+exactly the thing it cannot say, because "this adapter has a GPU timer" is not
+a setting and no row edits it. Three answers were available: a runtime
+`values_from` list holding `off` alone, which is the RENDERER precedent and
+would make the row unmovable; a `restart_required`-style note, whose meaning -
+*stored, and nothing on this machine will act on it* - is already exactly true
+here; or nothing in the menu at all, with the controller returning the ceiling.
+The last two were taken.
+
+An earlier version of `docs/rendering/dynamic-resolution.md` claimed
+`disabled_by` covered this. It was written before anyone read
+`check_condition`, and this paragraph is the correction of record.
+
 **`action` and `values_from` are closed sets**, checked at load against enums in
 `menu.rs`. A typo in the asset is a startup error naming what it did know, not a
 row that does nothing when pressed. Adding an action means adding it to the enum
@@ -638,6 +660,24 @@ say so. The loader rejects a condition naming a value its row cannot hold, and a
 test pins the warning's list to `upscale::magnifies` from the other side, so the
 guard that declines to run the upscaler and the message that says it did not
 cannot drift apart.
+
+DYNAMIC RESOLUTION and DYNAMIC RESOLUTION FLOOR sit under RENDER SCALE for the
+same reason, and the floor's warning is the second place a `warn_when` list is
+pinned to something outside the asset. `Condition` compares values and has no
+ordering - deliberately, because an ordering is the first thing that would make
+`menu.rs` know what a setting *means* - so "a floor at or above the ceiling" is
+enumerated as one warning per offered floor, thirty-six comparisons in all.
+`the_floor_warns_at_exactly_the_scales_it_cannot_fall_below` generates the same
+set from `Scale::OFFERED`, so a value added to either row cannot quietly leave
+the list behind. The other half of the pairing is not in the menus at all:
+`drs::Limits::new` brings the floor under the ceiling where the two first meet,
+because a warning tells a player rather than stopping them.
+
+RENDER SCALE itself carries **no** warning about any of this, which is a
+decision and not an oversight. Since ADR-0038 the row changes nothing on the
+screen a player moves it from, and *"this row's effect is not visible here"* is
+a different kind of statement from *"this row is redundant given that one"*.
+Overloading one amber line with both was judged worse than no warning at all.
 
 UPSCALER sits directly under RENDER SCALE because only the pairing means
 anything: at 100 % there is nothing to upscale and the choice is between a blit

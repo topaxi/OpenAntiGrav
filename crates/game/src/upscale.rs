@@ -350,6 +350,12 @@ impl Framebuffer {
         // that. The two are equal on every frame the game draws today - see
         // [`Framebuffer::set_extent`] for what bounds that.
         let extent = self.extent;
+        // Every scene-resolution pass reads a view of the **allocation** while
+        // drawing the **extent** into it, and since Phase 5 each is told both:
+        // FXAA/SMAA size their own targets off the allocation so a moving
+        // extent never rebuilds them, and FSR 1 takes upstream's own
+        // `inputViewportInPixels` and `inputSizeInPixels` separately again.
+        let allocation = self.allocation;
 
         let post_process: Option<&wgpu::TextureView> = match presentation.anti_aliasing {
             AntiAliasing::Fxaa => {
@@ -364,7 +370,8 @@ impl Framebuffer {
                             encoder,
                             fxaa::Frame {
                                 source: &self.perceptual,
-                                size: extent,
+                                size: allocation,
+                                viewport: extent,
                             },
                         );
                         fxaa.output()
@@ -390,7 +397,8 @@ impl Framebuffer {
                             encoder,
                             smaa::Frame {
                                 source: &self.perceptual,
-                                size: extent,
+                                size: allocation,
+                                viewport: extent,
                             },
                         );
                         smaa.output()
@@ -408,7 +416,7 @@ impl Framebuffer {
         };
         let upscale_source = post_process.unwrap_or(&self.perceptual);
 
-        let source = (presentation.upscaler == Upscaler::Fsr1 && magnifies(extent, output_size))
+        let resolved = (presentation.upscaler == Upscaler::Fsr1 && magnifies(extent, output_size))
             .then(|| {
                 let fsr = self
                     .fsr1
@@ -429,7 +437,8 @@ impl Framebuffer {
                     encoder,
                     fsr1::Frame {
                         source: upscale_source,
-                        input: extent,
+                        viewport: extent,
+                        input: allocation,
                         output: output_size,
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
@@ -437,7 +446,12 @@ impl Framebuffer {
                 fsr.output()
                     .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
             })
-            .flatten()
+            .flatten();
+        // **Whether FSR 1 actually resolved**, which decides the source
+        // rectangle below - not `source.is_some()`, which is also true for an
+        // FXAA or SMAA frame that is scene-sized.
+        let upscaled = resolved.is_some();
+        let source = resolved
             // The upscaler did not run - off, not magnifying, or its own
             // pipelines failed to build - but FXAA/SMAA already produced a
             // frame in the same non-sRGB space an upscaler's output would be:
@@ -466,14 +480,19 @@ impl Framebuffer {
         // the calibration, which is the arrangement ADR-0036 exists to end. The
         // `decode` flag still belongs here, being about what *this* pass reads.
         //
-        // The source rectangle rides the same write. It is the whole texture
-        // whenever a post-process or an upscaler produced the frame - those
-        // targets are exactly the size they were asked for - and the drawn
-        // sub-rectangle only when the scene target itself is being blitted.
-        let read = match source {
-            Some(_) => Source::WHOLE,
-            None => Source::of(extent, self.allocation),
-        };
+        // The source rectangle rides the same write, and **the question is
+        // which size the bound view is, not whether a pass ran.** FSR 1
+        // resolves to the presentation rectangle and hands back a texture
+        // exactly that size, so its output is whole. FXAA and SMAA draw at
+        // scene resolution into an allocation-sized target with the extent in
+        // its corner, so their output owes the same sub-rectangle the scene
+        // target does.
+        //
+        // The two arms are identical while the extent is the allocation, which
+        // is every frame until a controller moves it - so no capture can tell
+        // a correct reading of this from a wrong one, and the test named on
+        // `Framebuffer::set_extent` is the only thing that can.
+        let read = resolved_source(upscaled, extent, allocation);
         self.set_blit(
             queue,
             Brightness::NEUTRAL,
@@ -593,25 +612,24 @@ impl Framebuffer {
     /// per-frame cost of dynamic resolution: a uniform write and two viewport
     /// calls, against the six texture creations [`Framebuffer::resize`] pays.
     ///
-    /// # Nothing outside a test may set an extent below the allocation yet
+    /// # Who may call this
     ///
-    /// **No per-frame scene post-process is viewport-aware**, and the list is
-    /// longer than the upscaler: FXAA, SMAA and FSR 1 are handed the extent as
-    /// their input size while reading a view of the allocation-sized texture,
-    /// which is correct exactly while the two are equal, and their own targets
-    /// would be rebuilt on every extent change besides; and `bloom` and
-    /// `hd_bloom` take **no** size and no viewport at all, so a short extent
-    /// would have them blurring the undrawn region inward as a dark edge.
-    /// Bloom is its own setting and is on in an ordinary race, so "turn the
-    /// upscaler and the anti-aliasing off" is *not* a safe configuration -
-    /// nothing outside a test, full stop.
+    /// **The frame loop, once a frame, from `drs::Controller::extent`** - and
+    /// deliberately every frame rather than only when the value moves, because
+    /// [`Framebuffer::resize`] resets the extent whenever it reallocates.
     ///
-    /// `motion_blur` is the one pass already shaped right, and is the shape the
-    /// others need: `motion_blur::Frame` carries the attachments' `size` and
-    /// the drawn `viewport` separately and takes the correct one for each. The
-    /// restoration that starts the rest is un-folding
-    /// `fsr1::Constants::new`'s viewport and size arguments back to the two
-    /// `ffx_fsr1.h` has. See
+    /// **Not the capture paths.** `race/capture.rs` builds its own
+    /// `Framebuffer` at its own `--render-scale` and must never gain a
+    /// controller: this project's comparisons are byte-identical screenshot
+    /// diffs, and a rectangle that follows how busy the machine is makes every
+    /// one of them irreproducible. The front-end capture has no `Framebuffer`
+    /// at all, which since ADR-0038 is correct rather than a gap.
+    ///
+    /// Every scene-resolution pass takes a resource size and a viewport
+    /// separately now - FSR 1 back to `ffx_fsr1.h`'s own two arguments, FXAA
+    /// and SMAA sizing their targets off the allocation so a moving extent
+    /// never rebuilds them, and both blooms reading a sub-rectangle and
+    /// writing into one. See
     /// [`docs/rendering/dynamic-resolution.md`](../../../docs/rendering/dynamic-resolution.md).
     pub fn set_extent(&mut self, extent: (u32, u32)) {
         self.extent = (
@@ -783,6 +801,27 @@ fn target(
     });
     let bind_group = bind(device, layout, sampler, grade, &view);
     (texture, view, perceptual, bind_group)
+}
+
+/// Which rectangle of the bound source the blit reads.
+///
+/// **The question is which size the bound view is, not whether a pass ran.**
+/// FSR 1 resolves to the presentation rectangle and hands back a texture
+/// exactly that size, so its output is the whole thing. FXAA and SMAA draw at
+/// scene resolution into an allocation-sized target with the extent in its
+/// corner, so their output owes the same sub-rectangle the scene target does -
+/// and `source.is_some()` cannot tell those two apart.
+///
+/// Its own function because both arms are identical while the extent is the
+/// allocation, which is every frame until a controller moves it: no
+/// `--presented` capture can distinguish a correct reading of this from a
+/// wrong one, so a test on the decision itself is the only guard there is.
+fn resolved_source(upscaled: bool, extent: (u32, u32), allocation: (u32, u32)) -> Source {
+    if upscaled {
+        Source::WHOLE
+    } else {
+        Source::of(extent, allocation)
+    }
 }
 
 /// Whether resolving `scene` to `rect` is a magnification, which is the only

@@ -28,7 +28,7 @@
 
 use anyhow::Result;
 
-use super::{sampler_entry, texture_entry};
+use super::{sampler_entry, texture_entry, uniform_entry};
 
 const AREA_WIDTH: u32 = 160;
 const AREA_HEIGHT: u32 = 560;
@@ -49,8 +49,15 @@ pub struct Frame<'a> {
     /// and `fxaa::Frame::source` are: the luma edge detection reasons about
     /// encoded values, the way an eye weighs them.
     pub source: &'a wgpu::TextureView,
-    /// The size of `source`, and of the output this resizes to.
+    /// The size of the resource behind `source`, and of the intermediates this
+    /// resizes to. **The allocation, not the drawn rectangle** - keying three
+    /// targets off this is what stops a moving render extent rebuilding all of
+    /// them several times a second.
     pub size: (u32, u32),
+    /// The rectangle of `source` that was drawn, `<= size` on both axes. Every
+    /// pass draws into the same rectangle of its own target, so `edges` and
+    /// `blend` carry it too and one scale covers the chain.
+    pub viewport: (u32, u32),
 }
 
 #[derive(Debug)]
@@ -87,6 +94,28 @@ fn target(
     Target { texture, view }
 }
 
+/// The one uniform all three passes share: which sub-rectangle of the
+/// allocation-sized targets was actually drawn.
+///
+/// SMAA had no uniform at all until dynamic resolution needed one - every
+/// number the shader wants it derives from `textureDimensions`, which returns
+/// the *resource* and so stays correct here. What is not derivable is the
+/// mapping from the fullscreen triangle's `0..1` onto the drawn rectangle, and
+/// that is all this carries. Sixteen bytes, a uniform binding's minimum.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+struct Constants {
+    uv_scale: [f32; 2],
+    uv_max: [f32; 2],
+}
+
+impl Constants {
+    fn new(viewport: (u32, u32), size: (u32, u32)) -> Self {
+        let (uv_scale, uv_max) = super::sub_rectangle(viewport, size);
+        Self { uv_scale, uv_max }
+    }
+}
+
 /// The three pipelines, the two lookup textures, and the three intermediates
 /// they draw through.
 #[derive(Debug)]
@@ -110,6 +139,9 @@ pub struct Smaa {
     #[expect(dead_code, reason = "kept alive by search_view's owning texture")]
     search_texture: wgpu::Texture,
     search_view: wgpu::TextureView,
+
+    constants: wgpu::Buffer,
+    written: Option<Constants>,
 
     edges: Option<Target>,
     blend: Option<Target>,
@@ -180,7 +212,7 @@ impl Smaa {
 
         let edge_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("smaa edge"),
-            entries: &[texture_entry(0), sampler_entry(1)],
+            entries: &[texture_entry(0), sampler_entry(1), uniform_entry(4)],
         });
         let edge_pipeline = pass_pipeline(
             device,
@@ -199,6 +231,7 @@ impl Smaa {
                 texture_entry(1),
                 texture_entry(2),
                 sampler_entry(3),
+                uniform_entry(4),
             ],
         });
         let blend_pipeline = pass_pipeline(
@@ -213,7 +246,12 @@ impl Smaa {
         let neighborhood_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("smaa neighborhood"),
-                entries: &[texture_entry(0), texture_entry(1), sampler_entry(2)],
+                entries: &[
+                    texture_entry(0),
+                    texture_entry(1),
+                    sampler_entry(2),
+                    uniform_entry(4),
+                ],
             });
         let neighborhood_pipeline = pass_pipeline(
             device,
@@ -224,6 +262,13 @@ impl Smaa {
             &neighborhood_layout,
             target_format,
         );
+
+        let constants = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("smaa constants"),
+            size: size_of::<Constants>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         Ok(Self {
             edge_pipeline,
@@ -238,6 +283,8 @@ impl Smaa {
             area_view,
             search_texture,
             search_view,
+            constants,
+            written: None,
             edges: None,
             blend: None,
             output: None,
@@ -267,8 +314,16 @@ impl Smaa {
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
-        let _ = queue;
         self.resize(device, frame.size);
+
+        // Four floats, moved only by a resolution controller and a window
+        // resize. Uploaded when they change, the idiom `fxaa` and `fsr1` use.
+        let wanted = Constants::new(frame.viewport, frame.size);
+        if self.written != Some(wanted) {
+            queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
+            self.written = Some(wanted);
+        }
+
         let (Some(edges), Some(blend), Some(output)) = (&self.edges, &self.blend, &self.output)
         else {
             return;
@@ -291,10 +346,15 @@ impl Smaa {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&self.point_sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.constants.as_entire_binding(),
+                    },
                 ],
             },
         );
-        clear_pass(encoder, "smaa edge", &edges.view).run(&self.edge_pipeline, &edge_bind_group);
+        clear_pass(encoder, "smaa edge", &edges.view, frame.viewport)
+            .run(&self.edge_pipeline, &edge_bind_group);
 
         // Pass 2: blending weights, reading `edges` plus the two lookup
         // textures. `area_view`/`search_view` never move - only the edges
@@ -324,10 +384,15 @@ impl Smaa {
                         binding: 3,
                         resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.constants.as_entire_binding(),
+                    },
                 ],
             },
         );
-        clear_pass(encoder, "smaa blend", &blend.view).run(&self.blend_pipeline, &blend_bind_group);
+        clear_pass(encoder, "smaa blend", &blend.view, frame.viewport)
+            .run(&self.blend_pipeline, &blend_bind_group);
 
         // Pass 3: neighbourhood blend, reading the original scene and the
         // blend weights.
@@ -349,10 +414,14 @@ impl Smaa {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.constants.as_entire_binding(),
+                    },
                 ],
             },
         );
-        clear_pass(encoder, "smaa neighborhood", &output.view)
+        clear_pass(encoder, "smaa neighborhood", &output.view, frame.viewport)
             .run(&self.neighborhood_pipeline, &neighborhood_bind_group);
     }
 
@@ -466,8 +535,9 @@ fn clear_pass<'a>(
     encoder: &'a mut wgpu::CommandEncoder,
     label: &str,
     view: &wgpu::TextureView,
+    viewport: (u32, u32),
 ) -> Pass<'a> {
-    Pass(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+    let mut pass = Pass(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view,
@@ -482,7 +552,21 @@ fn clear_pass<'a>(
         timestamp_writes: None,
         occlusion_query_set: None,
         multiview_mask: None,
-    }))
+    }));
+    // The clear covers the whole attachment - `LoadOp::Clear` is not
+    // viewport-restricted - and the draw covers the drawn rectangle. That is
+    // deliberate and is what the `search_*` loops in `smaa.wgsl` lean on: the
+    // edges outside the viewport are zero, so a search terminates there
+    // exactly as it does at the frame border.
+    pass.0.set_viewport(
+        0.0,
+        0.0,
+        viewport.0.max(1) as f32,
+        viewport.1.max(1) as f32,
+        0.0,
+        1.0,
+    );
+    pass
 }
 
 struct Pass<'a>(wgpu::RenderPass<'a>);

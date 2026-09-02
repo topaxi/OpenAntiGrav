@@ -178,6 +178,34 @@ struct Constants {
     tone_darkening_clamp: f32,
     tone_maximum_brightness: f32,
     _pad: [f32; 2],
+    /// Which sub-rectangle of every source in the chain was drawn.
+    ///
+    /// **One pair for the whole ladder**, which is what makes this tractable:
+    /// each level's viewport is its own size times the same fraction, so the
+    /// scale from a level's `0..1` onto its drawn rectangle is that fraction at
+    /// every level. Exactly `1.0` on both until a controller moves the render
+    /// extent - see `post::sub_rectangle`.
+    uv_scale: [f32; 2],
+    uv_max: [f32; 2],
+}
+
+impl Constants {
+    fn new(params: Params, step: [f32; 2], rect: ([f32; 2], [f32; 2])) -> Self {
+        Self {
+            step,
+            alpha_contribution: params.alpha_contribution,
+            frame_contribution: params.frame_contribution,
+            frame_exponent: params.frame_exponent,
+            adaption_rate: params.adaption_rate,
+            adaption_boost: params.adaption_boost,
+            tone_adaption_boost: params.tone_adaption_boost,
+            tone_darkening_clamp: params.tone_darkening_clamp,
+            tone_maximum_brightness: params.tone_maximum_brightness,
+            _pad: [0.0; 2],
+            uv_scale: rect.0,
+            uv_max: rect.1,
+        }
+    }
 }
 
 /// One ready-to-run pass: pipeline, its input bindings, its output.
@@ -185,6 +213,10 @@ struct Constants {
 struct Pass {
     group: wgpu::BindGroup,
     target: wgpu::TextureView,
+    /// `target`'s full dimensions. The rectangle actually drawn is this times
+    /// the render extent's fraction of the scene target, computed at run time
+    /// because the fraction is not known when the targets are built.
+    level: (u32, u32),
 }
 
 /// Everything sized to the viewport, rebuilt whole on resize.
@@ -201,6 +233,16 @@ struct Sized {
     gate: [Pass; 2],
     blur_vertical: Pass,
     blur_horizontal: Pass,
+    /// The scene target's dimensions - the allocation every level below is a
+    /// fraction of.
+    scene_size: (u32, u32),
+    /// The quarter buffer's dimensions, which the blur tap spacing is measured
+    /// against. Kept because that divisor moves with the render extent.
+    quarter: (u32, u32),
+    /// The three uniform buffers, `still` then the two blurs. All three carry
+    /// the drawn rectangle, so all three are rewritten when it moves - which
+    /// is why they are `COPY_DST` rather than mapped once at creation.
+    buffers: [wgpu::Buffer; 3],
     /// The two resolve variants, reading the adapted state written this
     /// frame. `Pass::target` is unused here - the caller's view is the
     /// target.
@@ -230,6 +272,9 @@ pub struct Chain {
     current: std::cell::Cell<usize>,
     /// Whether the adaptation state still holds its zero-initialised value.
     fresh: std::cell::Cell<bool>,
+    /// The drawn rectangle last written into the three uniform buffers, so a
+    /// frame that moved nothing writes nothing.
+    written: std::cell::Cell<Option<(u32, u32)>>,
 }
 
 impl Chain {
@@ -352,6 +397,7 @@ impl Chain {
             sized,
             current: std::cell::Cell::new(0),
             fresh: std::cell::Cell::new(true),
+            written: std::cell::Cell::new(None),
         })
     }
 
@@ -365,6 +411,9 @@ impl Chain {
     /// restarts from zero, which the next frame's rate-1 jump re-seeds.
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
         self.sized = Self::sized(device, &self.layout, &self.sampler, size, self.params);
+        // The three uniform buffers are new and hold the whole rectangle, so
+        // whatever was last written is no longer what is in them.
+        self.written.set(None);
         self.current.set(0);
         self.fresh.set(true);
     }
@@ -391,53 +440,35 @@ impl Chain {
         while w > 1 || h > 1 {
             w = (w / 2).max(1);
             h = (h / 2).max(1);
-            reductions.push(Target::new(device, "hd bloom reduce", (w, h)));
+            reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
         }
         let adapted = [
             Target::new(device, "hd bloom adapted a", (1, 1)),
             Target::new(device, "hd bloom adapted b", (1, 1)),
         ];
 
-        let constants = |label: &str, step: [f32; 2]| {
-            let c = Constants {
-                step,
-                alpha_contribution: params.alpha_contribution,
-                frame_contribution: params.frame_contribution,
-                frame_exponent: params.frame_exponent,
-                adaption_rate: params.adaption_rate,
-                adaption_boost: params.adaption_boost,
-                tone_adaption_boost: params.tone_adaption_boost,
-                tone_darkening_clamp: params.tone_darkening_clamp,
-                tone_maximum_brightness: params.tone_maximum_brightness,
-                _pad: [0.0; 2],
-            };
-            let bytes = bytemuck::bytes_of(&c);
+        let constants = |label: &str| {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
-                size: bytes.len() as u64,
-                usage: wgpu::BufferUsages::UNIFORM,
+                size: size_of::<Constants>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: true,
             });
             buffer
                 .slice(..)
                 .get_mapped_range_mut()
                 .expect("a freshly mapped buffer maps")
-                .copy_from_slice(bytes);
+                .copy_from_slice(bytemuck::bytes_of(&Constants::new(
+                    params,
+                    [0.0, 0.0],
+                    ([1.0, 1.0], [1.0, 1.0]),
+                )));
             buffer.unmap();
             buffer
         };
-        let still = constants("hd bloom constants", [0.0, 0.0]);
-        // The authored `Bloom vertical/horizontal size` over the buffer
-        // being blurred - the executable's own arithmetic, whose hard-coded
-        // 1/480 and 1/270 are its quarter buffers of a 1080p frame.
-        let vertical = constants(
-            "hd bloom blur-v constants",
-            [0.0, params.vertical_size / quarter.1 as f32],
-        );
-        let horizontal = constants(
-            "hd bloom blur-h constants",
-            [params.horizontal_size / quarter.0 as f32, 0.0],
-        );
+        let still = constants("hd bloom constants");
+        let vertical = constants("hd bloom blur-v constants");
+        let horizontal = constants("hd bloom blur-h constants");
 
         let group = |label: &str,
                      source: &wgpu::TextureView,
@@ -476,9 +507,11 @@ impl Chain {
                     state: &wgpu::TextureView,
                     bloom: &wgpu::TextureView,
                     buffer: &wgpu::Buffer,
-                    target: &wgpu::TextureView| Pass {
+                    target: &wgpu::TextureView,
+                    level: (u32, u32)| Pass {
             group: group(label, source, state, bloom, buffer),
             target: target.clone(),
+            level,
         };
 
         // The unused input slots of a pass bind whatever view is already
@@ -493,6 +526,7 @@ impl Chain {
                 &scene.view,
                 &still,
                 &half_target.view,
+                half,
             ),
             pass(
                 "hd bloom to-quarter",
@@ -501,10 +535,11 @@ impl Chain {
                 &half_target.view,
                 &still,
                 &quarter_a.view,
+                quarter,
             ),
         ];
         let mut previous = &quarter_a.view;
-        for reduction in &reductions {
+        for (reduction, level) in &reductions {
             downsamples.push(pass(
                 "hd bloom reduce",
                 previous,
@@ -512,10 +547,11 @@ impl Chain {
                 previous,
                 &still,
                 &reduction.view,
+                *level,
             ));
             previous = &reduction.view;
         }
-        let mean = reductions.last().map_or(&quarter_a.view, |r| &r.view);
+        let mean = reductions.last().map_or(&quarter_a.view, |(r, _)| &r.view);
         // adapt[i] writes ping-pong texture i, reading the other as state.
         let adapt = [
             pass(
@@ -525,6 +561,7 @@ impl Chain {
                 mean,
                 &still,
                 &adapted[0].view,
+                (1, 1),
             ),
             pass(
                 "hd bloom adapt b",
@@ -533,6 +570,7 @@ impl Chain {
                 mean,
                 &still,
                 &adapted[1].view,
+                (1, 1),
             ),
         ];
         // gate[i] runs after adapt[i] and reads the state adapt[i] wrote.
@@ -544,6 +582,7 @@ impl Chain {
                 &quarter_a.view,
                 &still,
                 &quarter_b.view,
+                quarter,
             ),
             pass(
                 "hd bloom gate b",
@@ -552,6 +591,7 @@ impl Chain {
                 &quarter_a.view,
                 &still,
                 &quarter_b.view,
+                quarter,
             ),
         ];
         let blur_vertical = pass(
@@ -561,6 +601,7 @@ impl Chain {
             &quarter_b.view,
             &vertical,
             &quarter_a.view,
+            quarter,
         );
         let blur_horizontal = pass(
             "hd bloom blur-h",
@@ -569,6 +610,7 @@ impl Chain {
             &quarter_a.view,
             &horizontal,
             &quarter_b.view,
+            quarter,
         );
         // The read resolve: scene * exposure + bloom, into the caller's
         // view. encode[i] reads the adapted state written this frame.
@@ -580,6 +622,7 @@ impl Chain {
                 &quarter_b.view,
                 &still,
                 &scene.view,
+                (width, height),
             ),
             pass(
                 "hd encode b",
@@ -588,13 +631,17 @@ impl Chain {
                 &quarter_b.view,
                 &still,
                 &scene.view,
+                (width, height),
             ),
         ];
         let mut scratch = vec![half_target, quarter_a, quarter_b];
-        scratch.extend(reductions);
+        scratch.extend(reductions.into_iter().map(|(target, _)| target));
         scratch.extend(adapted);
         Sized {
             scene,
+            scene_size: (width, height),
+            quarter,
+            buffers: [still, vertical, horizontal],
             downsamples,
             adapt,
             gate,
@@ -608,12 +655,53 @@ impl Chain {
     /// Runs the chain: the downsample ladder, the adaptation update, the
     /// gate, the two blurs, and the read resolve into `view`. The pass
     /// order is `FUN_003b4690`'s own, the resolve `FUN_003e3268`'s.
-    pub fn run(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    ///
+    /// `viewport` is the rectangle of the scene target that was drawn this
+    /// frame. **Every level of the ladder follows it by the same fraction**,
+    /// which is what lets one UV scale cover the chain - and what keeps the
+    /// luminance reduction averaging the picture rather than the cleared
+    /// region beside it. The blur's tap spacing follows it too: the
+    /// executable measures `Bloom vertical size` against its quarter *frame*,
+    /// and under a short extent the frame is the extent, so leaving the
+    /// divisor on the resource would widen the glow as a fraction of the
+    /// picture every time the scale fell.
+    pub fn run(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (u32, u32),
+    ) {
+        let scene = self.sized.scene_size;
+        let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
+        if self.written.get() != Some(viewport) {
+            let rect = super::sub_rectangle(viewport, scene);
+            let quarter = level_viewport(self.sized.quarter, viewport, scene);
+            let write = |buffer: &wgpu::Buffer, step: [f32; 2]| {
+                queue.write_buffer(
+                    buffer,
+                    0,
+                    bytemuck::bytes_of(&Constants::new(self.params, step, rect)),
+                );
+            };
+            write(&self.sized.buffers[0], [0.0, 0.0]);
+            write(
+                &self.sized.buffers[1],
+                [0.0, self.params.vertical_size / quarter.1 as f32],
+            );
+            write(
+                &self.sized.buffers[2],
+                [self.params.horizontal_size / quarter.0 as f32, 0.0],
+            );
+            self.written.set(Some(viewport));
+        }
+
         let mut pass = |label: &str,
                         pipeline: &wgpu::RenderPipeline,
                         stage: &Pass,
                         target: Option<&wgpu::TextureView>,
                         load: wgpu::LoadOp<wgpu::Color>| {
+            let rect = level_viewport(stage.level, viewport, scene);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -631,6 +719,7 @@ impl Chain {
                 multiview_mask: None,
             });
             pass.set_pipeline(pipeline);
+            pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
             pass.set_bind_group(0, &stage.group, &[]);
             pass.draw(0..3, 0..1);
         };
@@ -681,4 +770,24 @@ impl Chain {
         );
         self.current.set(1 - current);
     }
+}
+
+/// The rectangle drawn into a target of `level`, given the scene's own drawn
+/// rectangle.
+///
+/// The same fraction at every level, rounded and floored at one texel: the
+/// ladder ends at a 1x1 mean, and a level that rounded to zero would be a pass
+/// that drew nothing into the texture the next one reads.
+fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) -> (u32, u32) {
+    let axis = |size: u32, drawn: u32, whole: u32| {
+        if drawn >= whole || whole == 0 {
+            return size.max(1);
+        }
+        let scaled = (f64::from(size) * f64::from(drawn) / f64::from(whole)).round();
+        (scaled as u32).clamp(1, size.max(1))
+    };
+    (
+        axis(level.0, viewport.0, scene.0),
+        axis(level.1, viewport.1, scene.1),
+    )
 }

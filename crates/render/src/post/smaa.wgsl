@@ -58,6 +58,27 @@ fn uv_of(index: u32) -> vec2<f32> {
     return vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
 }
 
+// Which sub-rectangle of the (allocation-sized) targets was actually drawn.
+//
+// Every other number these passes want comes from `textureDimensions`, which
+// returns the resource and so needs no help. This is the one thing that is not
+// derivable: the mapping from the fullscreen triangle's 0..1 onto the drawn
+// rectangle. Both fields are exactly 1.0 while the rectangle is the whole
+// texture - see `post::sub_rectangle` - so the arithmetic below is inert until
+// a resolution controller moves it. Bound separately per pass because each
+// pass has its own layout; it is the same buffer behind all three.
+struct Constants {
+    uv_scale: vec2<f32>,
+    uv_max: vec2<f32>,
+}
+
+// One global for all three passes, at a binding no texture or sampler here
+// uses: naga refuses a uniform that shares a slot with a resource of another
+// kind, even in an entry point that reads neither, and the three passes each
+// number their own textures from zero. All three layouts carry it, and it is
+// the same buffer behind each.
+@group(0) @binding(4) var<uniform> constants: Constants;
+
 //-----------------------------------------------------------------------------
 // Pass 1: Luma Edge Detection
 
@@ -65,7 +86,8 @@ fn uv_of(index: u32) -> vec2<f32> {
 @group(0) @binding(1) var edge_point_sampler: sampler;
 
 fn edge_sample_luma(uv: vec2<f32>) -> f32 {
-    return luma(textureSample(edge_color_tex, edge_point_sampler, uv).rgb);
+    let at = min(uv, constants.uv_max);
+    return luma(textureSample(edge_color_tex, edge_point_sampler, at).rgb);
 }
 
 struct EdgeVsOut {
@@ -85,7 +107,7 @@ fn edge_vs_main(@builtin(vertex_index) index: u32) -> EdgeVsOut {
 fn edge_fs_main(in: EdgeVsOut) -> @location(0) vec4<f32> {
     let dims = vec2<f32>(textureDimensions(edge_color_tex));
     let rt = vec2<f32>(1.0 / dims.x, 1.0 / dims.y);
-    let texcoord = in.uv;
+    let texcoord = in.uv * constants.uv_scale;
     let t4 = vec4<f32>(texcoord, texcoord);
     let rt4 = vec4<f32>(rt, rt);
 
@@ -228,7 +250,7 @@ fn smaa_area(dist: vec2<f32>, e1: f32, e2: f32, offset: f32) -> vec2<f32> {
 fn blend_fs_main(in: BlendVsOut) -> @location(0) vec4<f32> {
     let dims = vec2<f32>(textureDimensions(blend_edges_tex));
     let rt = vec2<f32>(1.0 / dims.x, 1.0 / dims.y);
-    let texcoord = in.uv;
+    let texcoord = in.uv * constants.uv_scale;
     let t4 = vec4<f32>(texcoord, texcoord);
     let rt4 = vec4<f32>(rt, rt);
     let pixcoord = texcoord * dims;
@@ -325,8 +347,12 @@ fn neighborhood_vs_main(@builtin(vertex_index) index: u32) -> NeighborhoodVsOut 
 fn neighborhood_fs_main(in: NeighborhoodVsOut) -> @location(0) vec4<f32> {
     let dims = vec2<f32>(textureDimensions(neighborhood_color_tex));
     let rt = vec2<f32>(1.0 / dims.x, 1.0 / dims.y);
-    let texcoord = in.uv;
-    let offset = vec4<f32>(texcoord, texcoord) + vec4<f32>(1.0, 0.0, 0.0, 1.0) * vec4<f32>(rt, rt);
+    let texcoord = in.uv * constants.uv_scale;
+    let uv_max = constants.uv_max;
+    let offset = min(
+        vec4<f32>(texcoord, texcoord) + vec4<f32>(1.0, 0.0, 0.0, 1.0) * vec4<f32>(rt, rt),
+        vec4<f32>(uv_max, uv_max),
+    );
 
     var a = vec4<f32>(0.0);
     a.x = textureSample(neighborhood_blend_tex, neighborhood_linear_sampler, offset.xy).a;
@@ -335,7 +361,12 @@ fn neighborhood_fs_main(in: NeighborhoodVsOut) -> @location(0) vec4<f32> {
     a.z = textureSample(neighborhood_blend_tex, neighborhood_linear_sampler, texcoord).z;
 
     if dot(a, vec4<f32>(1.0)) < 1e-5 {
-        return textureSampleLevel(neighborhood_color_tex, neighborhood_linear_sampler, texcoord, 0.0);
+        return textureSampleLevel(
+            neighborhood_color_tex,
+            neighborhood_linear_sampler,
+            min(texcoord, uv_max),
+            0.0,
+        );
     }
 
     let h = max(a.x, a.z) > max(a.y, a.w);
@@ -348,7 +379,15 @@ fn neighborhood_fs_main(in: NeighborhoodVsOut) -> @location(0) vec4<f32> {
     }
     blending_weight = blending_weight / dot(blending_weight, vec2<f32>(1.0));
 
-    let blending_coord = blending_offset * vec4<f32>(rt.x, rt.y, -rt.x, -rt.y) + vec4<f32>(texcoord, texcoord);
+    // Clamped, unlike the blend pass's own edge taps: a colour tap that
+    // reached past the drawn rectangle would pull the clear inward as a dark
+    // fringe along the extent's boundary, which is the one artefact a
+    // sub-extent would otherwise put on screen. The edge taps need no clamp -
+    // the cleared region reads as no edge, exactly as the frame border does.
+    let blending_coord = min(
+        blending_offset * vec4<f32>(rt.x, rt.y, -rt.x, -rt.y) + vec4<f32>(texcoord, texcoord),
+        vec4<f32>(uv_max, uv_max),
+    );
 
     var color = blending_weight.x
         * textureSampleLevel(neighborhood_color_tex, neighborhood_linear_sampler, blending_coord.xy, 0.0);

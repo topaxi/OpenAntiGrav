@@ -776,6 +776,14 @@ pub fn menu_seeds(
             "graphics.render_scale",
             text(&profile.render_scale.to_string()),
         ),
+        (
+            "graphics.dynamic_resolution",
+            text(&profile.dynamic_resolution.to_string()),
+        ),
+        (
+            "graphics.dynamic_resolution_floor",
+            text(&profile.dynamic_resolution_floor.to_string()),
+        ),
         ("graphics.upscaler", text(&profile.upscaler.to_string())),
         (
             "graphics.upscale_sharpness",

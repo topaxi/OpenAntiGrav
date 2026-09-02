@@ -238,3 +238,33 @@ fn reading_the_whole_allocation_instead_pulls_in_what_was_not_drawn() {
         "reading the whole 4x4 should not come back uniformly green: {read:?}"
     );
 }
+
+/// FXAA and SMAA hand back a scene-sized frame, and the blit has to know that.
+///
+/// The bug this pins is invisible to every instrument this project has: both
+/// arms of [`resolved_source`] agree while the extent is the allocation, which
+/// is every frame the game draws until a controller moves it, so a
+/// `--presented` capture passes either way. It would surface the first time
+/// dynamic resolution stepped the scale - as a picture stretched by the
+/// allocation-to-extent ratio - long after the change that caused it.
+#[test]
+fn only_an_upscaled_frame_is_read_whole() {
+    // FSR 1 resolved to the presentation rectangle: its output is exactly the
+    // size it was asked for, whatever the scene was drawn at.
+    assert_eq!(
+        resolved_source(true, (960, 544), (1440, 816)),
+        Source::WHOLE
+    );
+    // FXAA or SMAA, or nothing at all: an allocation-sized target with the
+    // drawn rectangle in its corner.
+    assert_eq!(
+        resolved_source(false, (960, 544), (1440, 816)),
+        Source::of((960, 544), (1440, 816))
+    );
+    // And at the ceiling the two arms agree, which is exactly why the case
+    // above needs a test of its own rather than a screenshot.
+    assert_eq!(
+        resolved_source(false, (1440, 816), (1440, 816)),
+        resolved_source(true, (1440, 816), (1440, 816))
+    );
+}

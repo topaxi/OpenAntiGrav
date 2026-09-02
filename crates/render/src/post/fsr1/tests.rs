@@ -9,7 +9,7 @@ use super::*;
 
 #[test]
 fn the_easu_constants_are_upstream_s_for_a_two_times_upscale() {
-    let c = Constants::new((960, 540), (1920, 1080), Sharpness::DEFAULT);
+    let c = Constants::new((960, 540), (960, 540), (1920, 1080), Sharpness::DEFAULT);
     // Output pixel to input pixel is exactly one half in both axes, and the
     // half-texel offset upstream subtracts is -0.25 at this ratio.
     assert_eq!(c.con0, [0.5, 0.5, -0.25, -0.25]);
@@ -23,7 +23,7 @@ fn the_easu_constants_are_upstream_s_for_a_two_times_upscale() {
 
 #[test]
 fn a_one_to_one_scale_maps_output_pixels_onto_input_pixels() {
-    let c = Constants::new((1280, 720), (1280, 720), Sharpness::DEFAULT);
+    let c = Constants::new((1280, 720), (1280, 720), (1280, 720), Sharpness::DEFAULT);
     assert_eq!(c.con0[0], 1.0);
     assert_eq!(c.con0[1], 1.0);
     // Still the half-texel shift: EASU resolves at pixel centres.
@@ -98,6 +98,7 @@ fn both_passes_build_and_draw_on_a_real_device() {
         &mut encoder,
         Frame {
             source: &source,
+            viewport: (160, 90),
             input: (160, 90),
             output: (320, 180),
             sharpness: Sharpness::DEFAULT,
@@ -190,6 +191,7 @@ fn upscaling_a_hard_edge_keeps_the_edge_and_the_two_flat_sides() {
         &mut encoder,
         Frame {
             source: &source,
+            viewport: IN,
             input: IN,
             output: OUT,
             sharpness: Sharpness::DEFAULT,
@@ -358,6 +360,7 @@ fn ringing(stops: f32) -> Option<(u8, u8)> {
         &mut encoder,
         Frame {
             source: &source,
+            viewport: IN,
             input: IN,
             output: OUT,
             // Maximum sharpening: if anything rings, it rings here.
@@ -411,7 +414,27 @@ fn ringing(stops: f32) -> Option<(u8, u8)> {
 
 #[test]
 fn a_degenerate_size_cannot_divide_by_zero() {
-    let c = Constants::new((0, 0), (0, 0), Sharpness::DEFAULT);
+    let c = Constants::new((0, 0), (0, 0), (0, 0), Sharpness::DEFAULT);
     assert!(c.con0.iter().all(|v| v.is_finite()), "{:?}", c.con0);
     assert!(c.con1.iter().all(|v| v.is_finite()), "{:?}", c.con1);
+}
+
+/// `con0` reads the drawn rectangle, `con1`..`con3` read the resource.
+///
+/// The two were one argument until dynamic resolution needed them apart, and
+/// they are equal in every configuration the game ships today - so nothing but
+/// this test distinguishes a correct split from a folded one. Upstream's
+/// `FsrEasuCon` takes `inputViewportInPixels` and `inputSizeInPixels`
+/// separately for exactly this case; the numbers below are that signature read
+/// literally.
+#[test]
+fn the_easu_constants_split_the_viewport_from_the_resource() {
+    let c = Constants::new((960, 540), (1440, 816), (1920, 1080), Sharpness::DEFAULT);
+    // The viewport-to-output ratio, and upstream's half-texel offset on it.
+    assert_eq!(c.con0, [0.5, 0.5, -0.25, -0.25]);
+    // Gather offsets are texels of the *resource*, which is larger.
+    let (rx, ry) = (1.0 / 1440.0, 1.0 / 816.0);
+    assert_eq!(c.con1, [rx, ry, rx, -ry]);
+    assert_eq!(c.con2, [-rx, 2.0 * ry, rx, 2.0 * ry]);
+    assert_eq!(c.con3, [0.0, 4.0 * ry, 0.0, 0.0]);
 }

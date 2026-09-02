@@ -27,10 +27,20 @@ pub(super) const KNOWN_TITLES: &[&str] = &[
     oag_2048::TITLE.name,
 ];
 
+/// See [`RenderProfile::dynamic_resolution_floor`]: **50 %**.
+///
+/// Its own function rather than `Default::default()`, which for a
+/// [`crate::display::Scale`] is 100 - a floor equal to the ceiling, which is
+/// the one value that means "the controller has nowhere to go" and would fire
+/// the menu's own warning out of the box.
+fn default_dynamic_resolution_floor() -> crate::display::Scale {
+    crate::display::Scale::OFFERED[0]
+}
+
 /// The render-cost-sensitive slice of [`super::Graphics`], persisted one per
 /// title rather than shared - see the module doc's "Display against graphics
 /// against render profiles" section.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderProfile {
     /// What percentage of the displayed size the game is rendered at.
     ///
@@ -40,6 +50,31 @@ pub struct RenderProfile {
     /// [`crate::display::Scale`].
     #[serde(default)]
     pub render_scale: crate::display::Scale,
+    /// The frame rate a resolution controller aims for, or `off`.
+    ///
+    /// The target *is* the enable, so there is no second key that can disagree
+    /// with it. While it is on, `render_scale` above becomes the **ceiling**
+    /// and keeps its meaning when it is off - the controller reads it and
+    /// never writes it, so a loaded machine cannot make a chosen quality drift
+    /// downward between sessions. See [`crate::drs`].
+    ///
+    /// Per title beside the ceiling it pairs with, which is what this whole
+    /// table is for: a target that Pulse holds comfortably is not one HD/Fury
+    /// holds, and the point of dynamic resolution is that the answer depends
+    /// on how expensive the scene is.
+    #[serde(default)]
+    pub dynamic_resolution: crate::drs::Target,
+    /// The lowest render scale the controller may fall to.
+    ///
+    /// A percentage of the aspect rectangle, exactly as `render_scale` is, so
+    /// the two are directly comparable and a floor at or above the ceiling
+    /// means the controller has nowhere to go. Ignored while
+    /// `dynamic_resolution` is `off`. See [`crate::display::Scale`].
+    ///
+    /// **Defaults to 50 %**, the lowest value the render-scale row itself
+    /// offers, so the floor and the ceiling read against the same list.
+    #[serde(default = "default_dynamic_resolution_floor")]
+    pub dynamic_resolution_floor: crate::display::Scale,
     /// Which resampler carries the frame onto the surface: `off` or
     /// `fsr1`.
     ///
@@ -96,6 +131,23 @@ pub struct RenderProfile {
     pub motion_blur: crate::display::MotionBlur,
 }
 
+impl Default for RenderProfile {
+    fn default() -> Self {
+        Self {
+            render_scale: crate::display::Scale::default(),
+            dynamic_resolution: crate::drs::Target::default(),
+            // The one field whose default is not its type's - see
+            // `default_dynamic_resolution_floor`, and the reason this impl is
+            // written out rather than derived.
+            dynamic_resolution_floor: default_dynamic_resolution_floor(),
+            upscaler: crate::display::Upscaler::default(),
+            upscale_sharpness: crate::display::Sharpness::default(),
+            anti_aliasing: crate::display::AntiAliasing::default(),
+            motion_blur: crate::display::MotionBlur::default(),
+        }
+    }
+}
+
 /// Inserts a default [`RenderProfile`] for every title in [`KNOWN_TITLES`]
 /// that [`Settings::render_profiles`] does not already hold, so the file
 /// stays a complete reference for what it can hold - the same property
@@ -109,9 +161,35 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
     }
 }
 
+/// Every key a `[render_profiles.<title>]` table holds.
+///
+/// A **superset** of [`MOVED_TO_RENDER_PROFILES`], and the distinction is not
+/// pedantry: a setting added to the profile *after* the split never lived flat
+/// in `[graphics]`, so there is nothing to migrate for it and listing it as
+/// migratable would claim a history it does not have. `dynamic_resolution` and
+/// its floor are the first two of those - they landed straight here, beside
+/// the `render_scale` ceiling they are compared against.
+///
+/// Test-only: nothing in the running game asks "which keys does a profile
+/// hold", because the struct answers that. What needs it is the sweep that
+/// checks every menu seed lands in a table the settings file actually writes.
+#[cfg(test)]
+pub(super) const PROFILE_KEYS: [&str; 7] = [
+    "render_scale",
+    "dynamic_resolution",
+    "dynamic_resolution_floor",
+    "upscaler",
+    "upscale_sharpness",
+    "anti_aliasing",
+    "motion_blur",
+];
+
 /// The keys that used to live flat in `[graphics]` and now live in one
 /// `[render_profiles.<title>]` table per title. See [`RenderProfile`] for
 /// why each is render-cost-sensitive enough to want this.
+///
+/// **Only the ones with a flat past**, which is what separates this from
+/// [`PROFILE_KEYS`].
 pub(super) const MOVED_TO_RENDER_PROFILES: [&str; 5] = [
     "render_scale",
     "upscaler",

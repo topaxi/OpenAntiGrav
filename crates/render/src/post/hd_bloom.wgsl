@@ -28,6 +28,14 @@ struct Constants {
     tone_maximum_brightness: f32,
     _pad0: f32,
     _pad1: f32,
+    // Which sub-rectangle of every source in this chain was drawn, as a UV
+    // scale and a clamp half a texel inside its edge. One pair for the whole
+    // ladder: each level's viewport is its own size times the same fraction,
+    // so the mapping from a level's 0..1 onto its drawn rectangle is that
+    // fraction everywhere. Both are exactly 1.0 until a resolution controller
+    // moves the render extent - see `post::sub_rectangle`.
+    uv_scale: vec2<f32>,
+    uv_max: vec2<f32>,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -39,6 +47,17 @@ struct Constants {
 @group(0) @binding(3) var state_tex: texture_2d<f32>;
 // Third input: the blurred bloom, for the resolve. Dummy elsewhere.
 @group(0) @binding(4) var bloom_tex: texture_2d<f32>;
+
+// A source coordinate inside the drawn rectangle.
+//
+// Every level of this chain draws into the same fraction of its own target, so
+// one scale maps a level's 0..1 onto what the level before it actually wrote.
+// The clamp keeps a bilinear tap off the texels past that rectangle, which
+// hold the clear rather than picture - the ladder's own downsampling is what
+// would otherwise pull that inward, level by level, as a darkening edge.
+fn drawn(uv: vec2<f32>) -> vec2<f32> {
+    return min(uv * constants.uv_scale, constants.uv_max);
+}
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -75,7 +94,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 // state fs_adapt below maintains.
 @fragment
 fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
-    let frame = surface(textureSample(source_tex, source_sampler, in.uv));
+    let frame = surface(textureSample(source_tex, source_sampler, drawn(in.uv)));
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let fade = 1.0 - min(adapted * constants.adaption_boost * 0.25, 1.0);
     let luminance = max(dot(frame.rgb, vec3<f32>(0.9, 1.77, 0.33)), 0.0);
@@ -100,7 +119,7 @@ fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
 // sounds like.
 @fragment
 fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
-    return surface(textureSample(source_tex, source_sampler, in.uv));
+    return surface(textureSample(source_tex, source_sampler, drawn(in.uv)));
 }
 
 // **What an 8-bit render target does to a value, done where this chain reads
@@ -164,7 +183,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     var sum = vec3<f32>(0.0);
     for (var i = 0; i < 9; i = i + 1) {
         let offset = f32(i - 4) * constants.step;
-        sum = sum + textureSample(source_tex, source_sampler, in.uv + offset).rgb * BLUR_WEIGHTS[i];
+        sum = sum + textureSample(source_tex, source_sampler, drawn(in.uv) + offset).rgb * BLUR_WEIGHTS[i];
     }
     return vec4<f32>(sum / 4.2, 1.0);
 }
@@ -188,8 +207,8 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // ADD_SAT - and remains ADR-0026's display-encode stand-in.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = surface(textureSample(source_tex, source_sampler, in.uv)).rgb;
-    let bloom = textureSample(bloom_tex, source_sampler, in.uv).rgb;
+    let scene = surface(textureSample(source_tex, source_sampler, drawn(in.uv))).rgb;
+    let bloom = textureSample(bloom_tex, source_sampler, drawn(in.uv)).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness
         - min(

@@ -7,7 +7,7 @@
 //! module may hold. See `scripts/check-file-size.py`, which is the rule as a
 //! gate.
 
-use super::render_profile::{KNOWN_TITLES, MOVED_TO_RENDER_PROFILES};
+use super::render_profile::{KNOWN_TITLES, MOVED_TO_RENDER_PROFILES, PROFILE_KEYS};
 use super::*;
 
 /// The default circuit has to be the one every capture was taken on, or a
@@ -227,7 +227,7 @@ fn every_menu_seed_names_a_key_the_settings_file_has() {
             assert_eq!(setting, "language");
             continue;
         };
-        if section == "graphics" && MOVED_TO_RENDER_PROFILES.contains(&key) {
+        if section == "graphics" && PROFILE_KEYS.contains(&key) {
             let profiles = table
                 .get("render_profiles")
                 .and_then(toml::Value::as_table)
@@ -332,4 +332,23 @@ fn menu_seeds_resolves_the_render_profile_by_title() {
 
     assert_eq!(value_for(oag_pulse::TITLE.name), "50");
     assert_eq!(value_for(oag_hd::TITLE.name), "100");
+}
+
+/// Every migratable key is a profile key, and the reverse is not required.
+///
+/// The two lists mean different things - "lives in the profile" against "used
+/// to live flat in `[graphics]` and has to be moved" - and the second is a
+/// subset of the first. A key added to `RenderProfile` after the split has no
+/// flat past, so putting it in the migration list would have
+/// `migrate_render_profiles` looking in `[graphics]` for something that was
+/// never written there.
+#[test]
+fn every_migratable_key_is_a_profile_key() {
+    for key in MOVED_TO_RENDER_PROFILES {
+        assert!(
+            PROFILE_KEYS.contains(&key),
+            "{key} migrates into a profile field that does not exist"
+        );
+    }
+    assert!(PROFILE_KEYS.len() >= MOVED_TO_RENDER_PROFILES.len());
 }

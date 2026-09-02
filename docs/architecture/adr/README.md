@@ -50,6 +50,7 @@ out to be wrong.
 | [0037](0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md) | Dynamic resolution varies a viewport, not an allocation | Accepted |
 | [0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) | A stage with no scene draws entirely at presentation resolution | Accepted; supersedes [ADR-0036](0036-ui-composites-at-presentation-resolution.md)'s seam item |
 | [0039](0039-camera-jitter-post-multiplies-onto-the-view-projection.md) | Camera jitter post-multiplies onto the view-projection, after the frustum and the motion snapshot | Accepted |
+| [0040](0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md) | The dynamic-resolution budget is a share of a frame, not a measured frame | Accepted |
 
 ## Format
 
