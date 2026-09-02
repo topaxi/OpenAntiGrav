@@ -1147,6 +1147,31 @@ candidate, not just call targets. `get_xrefs_to`/`get_xrefs_from` on the
 naively-read address will report nothing either way, which reads exactly
 like "no reference" and is not.
 
+**Corrected 2026-09-02: `+0x08804000` is not the whole rule for a `lui`/`lw`
+HI16/LO16 pair - it is per-segment, and this binary has two.** All three
+`0x08ab08xx`-shaped examples just above are `.data`, which is segment 0
+(`PT_LOAD` `VirtAddr 0x00000000`) and does get `+0x08804000` - that part
+holds. A fourth case (`AnimTransform_Update`'s clock fallback, found chasing
+[the anim-transform thread](handover/anim-transform-0x3c0-is-read-and-played-and.md))
+resolves under that base to `0x0885c018`, which is *inside a real function*,
+not a global - the tell that the base is wrong for it. This binary's second
+`PT_LOAD` segment (`VirtAddr 0x002d5798`, covering
+`.cplinit`/`.linkonce.d`/`.ctors`/`.bss`) gets its own base,
+`0x08804000 + 0x002d5798 = 0x08ad9798`; applying that instead reproduces
+`texture-animation.md`'s independently-recorded `DAT_08b317b0` exactly, and
+the `.rel.text` record confirms it directly - bits 16-23 of `r_info` are `1`
+for this pair and `0` for every confirmed `.data` case, i.e. the segment
+index. `jal` targets are unaffected (a call target is always in `.text`,
+segment 0), so the "no exempt region" call above still holds for those; a
+HI16/LO16 pair or a 32-bit data word that resolves into `.bss`, `.cplinit`,
+`.ctors` or `.linkonce.d` needs the segment-1 base instead. Full arithmetic
+and the relocation-record check:
+[anim-transform.md](docs/ghidra/functions/psp-pulse-usa/anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image).
+This also bears on [the `$gp`-relative thread](handover/a-global-reached-through-gp-has-an-instruction.md)'s
+still-unfound `DAT_08b32428`, which is also `.bss`-shaped - not the same
+addressing mode, but worth checking against the segment-1 base if a HI16/LO16
+route to it ever turns up instead of `$gp`.
+
 **`psp-pulse-eu` has the same `jal` wart, not just `psp-pulse-usa`.** Found
 2026-08-31 tracing `World_LoadTrack_q` (`0x088835f0`, EU) for
 [the M6 lighting thread](handover/m6-authored-lighting-no-hardware-light-slot-found.md):

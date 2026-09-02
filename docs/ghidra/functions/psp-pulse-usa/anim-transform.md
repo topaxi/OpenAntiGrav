@@ -233,15 +233,46 @@ whose `+0x40` was written by something other than the tree walk, not a model on
 a different clock source. Confidence **85** - the writers and readers are read,
 what advances `g_ingame->0x40` itself is not.
 
-**A caveat that will cost the next reader time otherwise.** Both functions fall
-back to a second global when `g_ingame` is null, and **this page does not give
-its address**. `0x08ab0818` is safe because it lands in `.data`; the fallback's
-immediates compute to `0x0885c018` under the same `+0x08804000`, which is inside
-`.text` and therefore wrong. Data references in this image do **not** all share
-the `.text` relocation base - the class descriptors have the same problem - and
-nothing here has established the second base. `texture-animation.md` records the
-fallback as `DAT_08b317b0` from an earlier import; that number is not reproduced
-here because it could not be re-derived.
+#### The second relocation base is found: it is per-segment, not per-image
+
+Both functions fall back to a second global when `g_ingame` is null:
+`lui a0,0x6` / `lw a0,-0x7fe8(a0)` at `0x088fe0f4`, naive value `0x00058018`.
+Adding the `.text` image base `0x08804000` lands at `0x0885c018` - inside a
+real function (`FUN_0885bf84`, confirmed by disassembling it: dense, legitimate
+`lv.q`/`sv.q` VFPU code, not a literal pool) - so that base is wrong for this
+one, not merely coincidental.
+
+This binary's ELF has **two** `PT_LOAD` program headers, and each gets its own
+base once the image loads: segment 0 (`VirtAddr 0x00000000`, covering `.text`
+through `.data`) gets `+0x08804000`, and segment 1 (`VirtAddr 0x002d5798`,
+covering `.cplinit`/`.linkonce.d`/`.ctors`/`.bss`) gets
+`+0x08804000 + 0x002d5798 = 0x08ad9798`. Applying the segment-1 base here:
+`0x08ad9798 + 0x00058018 = 0x08b317b0` - which lands in `.bss`, and is exactly
+`texture-animation.md`'s `DAT_08b317b0`, the address an earlier import had by
+hand and this page previously could not reproduce.
+
+Confirmed a second way, against the raw `.rel.text` relocation records rather
+than the address arithmetic alone: the two-entry `R_MIPS_HI16`/`R_MIPS_LO16`
+pair for this global carries `r_info = 0x00010005` / `0x00010006` - bits 16-23
+set to `1` - while `g_ingame`'s pair (`0x088fe0b8`/`0x088fe0bc`, the confirmed
+segment-0 case) carries `0x00000005`/`0x00000006`, bits 16-23 `0`. Three more
+confirmed segment-0 globals on this same page's family
+(`0x08ab0838`/`PickupBackground`, `0x08ab2120`, `0x08ab10e8`, all cited from
+[zone-mode.md](zone-mode.md)) carry the same `0` in that byte. So bits 16-23 of
+`r_info` is the segment selector, `0` or `1` matching the program header index,
+and the two observed bytes (`0x00` and `0x01`) are the only two segments this
+binary has - there is no third base to find. Confidence **90**: exact
+arithmetic reproducing an independently-recorded address, corroborated by the
+relocation record itself on both the positive (segment 1) and negative
+(segment 0) cases.
+
+**The rule generalises: any `.cplinit`/`.linkonce.d`/`.ctors`/`.bss` global in
+this binary needs `+0x08ad9798`, not `+0x08804000`.** HANDOVER.md's relocation
+trap previously said "apply the workaround unconditionally... there is no
+exempt region" for the single `+0x08804000` case - that is now corrected there.
+The class descriptors mentioned by an earlier draft of this caveat as sharing
+"the same problem" were not re-checked in this pass; if one is later found in
+`.bss` or `.cplinit`, this is the fix to apply.
 
 ## The node attributes, and what `+0x0e` is
 
@@ -290,8 +321,10 @@ matching them case-insensitively would be a departure.
   only.
 - **What advances `g_ingame->0x40`.** The clock object is identified and its
   writers are named; the per-frame increment of the field itself is not traced.
-- **The second relocation base**, for the fallback global and the class
-  descriptors.
+- **The class descriptors** were flagged by an earlier draft of this page as
+  sharing the fallback global's relocation problem; not re-checked once the
+  per-segment base (above) was found. If one resolves into `.bss` or
+  `.cplinit`, it needs `+0x08ad9798`, not `+0x08804000`.
 - **The two alternate evaluators**, `0x088ff6ec` and `0x088fe934`, unreachable
   on this disc.
 - **The third `Node_SetAnimTimeTree` class**, `0x08a6bd18`.

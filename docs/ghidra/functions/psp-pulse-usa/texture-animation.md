@@ -335,6 +335,15 @@ reaches. What changes is why the walker has three branches at all - it feeds
 this page's texture-transform clock and the scenery-animation clock through one
 tree walk. See [`anim-transform.md`](anim-transform.md).
 
+**`DAT_08b317b0`, above, is confirmed rather than merely carried forward from
+an earlier import.** A later pass on `anim-transform.md` could not reproduce it
+from this binary's `+0x08804000` image base and flagged it as an open "second
+relocation base" - resolved there: this ELF's two `PT_LOAD` segments each get
+their own base once loaded, and `.bss` (where this global lives) is segment 1's
+`+0x08ad9798`, not segment 0's `+0x08804000`. See
+[`anim-transform.md`](anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image)
+for the arithmetic and the relocation-record corroboration.
+
 ## Measured in a live race: only the trail scrolls
 
 **Scope corrected 2026-08-10: this negative covers the immediate-mode
