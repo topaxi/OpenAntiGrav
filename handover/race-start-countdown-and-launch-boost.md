@@ -204,10 +204,15 @@ function references - so the nested countdown's tick counter is the closest thin
 
 **Display/logic, current focus:**
 
-1. Re-derive `Race_CreateModeObject`'s per-mode dispatch table from raw disassembly
-   (do not reuse this session's `0x08a7a1e8`/entry addresses without rechecking) and
-   decompile a non-Zone entry's own vtable `+0x1c` slot - the direct way to see
-   whether a circuit race's countdown matches Zone's 40-tick-cue, two-part-gate
+1. `Race_CreateModeObject`'s per-mode dispatch table (`0x08a7a1e8`, `+0x08804000`-
+   corrected, confirmed twice - decompile and raw disassembly) is right; what its
+   *entries* point to is not - two decompiled as one shared, unrelated HUD-text
+   function, a PSP-overlay explanation was checked and ruled out (see
+   `zone-mode.md`), and a mid-function re-entry point is the next hypothesis. Try
+   disassembling an entry's raw bytes before asking `decompile_function` to
+   resolve it, then find a non-Zone entry's own vtable `+0x1c` slot - the direct
+   way to see whether a circuit race's countdown matches Zone's 40-tick-cue,
+   two-part-gate
    shape or differs from it.
 2. ~~`create_function` for Zone's inner-substate setter~~ **Done this session**:
    named `RaceMode_SetSubstate` (`0x08827454`, confidence 80); the outer-state

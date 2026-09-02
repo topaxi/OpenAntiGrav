@@ -586,15 +586,33 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
      This is what would turn "Zone's countdown is separately implemented"
      into "Zone's countdown is *different*", and it is the single most
      direct next step for the race-start countdown handover thread. **One
-     attempt this session, tried and discarded rather than left silent**:
-     reading `Race_CreateModeObject`'s own per-mode indirect-call table
-     (18 entries, `(mode - 1) * 4 + 0x2761e8`, the same `+0x08804000`
-     correction as `## Identification`'s `case 6`) and decompiling two of its
-     entries landed on the *same* function both times, `0x0881d458` - a
-     results/position-label HUD-text formatter, nothing to do with mode
-     construction. Either the table's base address, the correction, or the
-     entry stride was misread; do not reuse the addresses above without
-     re-deriving them from the raw disassembly first.
+     attempt this session, tried and discarded rather than left silent, and
+     re-checked before writing this down**: `Race_CreateModeObject`'s own
+     per-mode indirect-call table - confirmed twice, once by decompile and
+     once from the raw disassembly at `0x088212f0`
+     (`lui at,0x27; addu at,at,a1; lw at,0x61e8(at)`, `a1` already
+     `(mode - 1) * 4`) - is genuinely at `0x2761e8`, the same
+     `+0x08804000` correction as `## Identification`'s `case 6`. Reading it
+     and decompiling two of its 18 entries (mode 3's and mode 6's, Zone's own
+     `case 6` among them) landed on the *same* function both times,
+     `0x0881d458` - a results/position-label HUD-text formatter, nothing to
+     do with mode construction, and clearly not `Zone_Create`. The base
+     address is confirmed correct (checked twice, decompile and raw
+     disassembly), so that specific error is ruled out. **A PSP-overlay
+     explanation was considered and ruled out too**: `get_address_spaces` on
+     this program lists 17 "overlay" entries, but every one is an ELF
+     metadata section (`.symtab`, `.rel.text`, `_elfSectionHeaders`, and
+     siblings) that `is_overlay:true` only because that is how this importer
+     represents ELF sections generically - none is a PSP runtime code-overlay
+     bank, so this is not overlay-bank confusion. **What actually explains
+     it is still open.** The next attempt should not assume a function start
+     at all: disassemble a few instructions at the raw table-entry address
+     directly (as this section's own correction did for the table base
+     itself) before asking `decompile_function` to resolve it, in case a
+     table entry is a mid-function re-entry point rather than a distinct
+     function - a real compiler pattern for near-duplicate per-case bodies
+     that share a tail, and one `FUN_0881d458` (position-label formatting,
+     plenty of internal branching of its own) is shaped for.
 
 ## What is implemented
 
