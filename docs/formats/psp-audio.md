@@ -963,10 +963,17 @@ doc comment carries the full evidence, repeated here:
 - The PS3 executable (`ps3-hdfury-eu/EBOOT.elf`, `0x007d0818`) holds the
   string `"SCREAM: ERROR! Unknown voice type in bank - must be ADPCM or
   PCM\n\tSCREAM does not know how to handle this data"` - SCREAM's own error
-  message names exactly two voice types. The function that owns the string
-  was not resolved (Ghidra found no code reference to the address, only the
-  data-table entry holding it), so this is not a decompiled read of the
-  decode path itself.
+  message names exactly two voice types. **The function that owns the string
+  is now resolved: `CellMs_QueueVoice` (`0x00633c80`)**, reached through
+  `Scream_OpKeyOn` (`0x00626728`, the PS3 analogue of the opcode `0x01`/`0x09`
+  handler `psp-pulse-usa/sound.md` already names `Scream_OpKeyOn`) and
+  `Scream_KeyOnVoice` (`0x00630310`, the PS3 analogue of PSP's
+  `Scream_KeyOnVoice`). Its decompiled body is a direct read of the
+  ADPCM/PCM split: `NOT_ADPCM_FLAG` set skips a 16-byte header and multiplies
+  a header field by 2 (bytes per sample); `NOT_ADPCM_FLAG` clear walks
+  16-byte blocks for a PS-ADPCM loop/mute flag. See
+  [`docs/ghidra/functions/ps3-hdfury-eu/sound.md`](../ghidra/functions/ps3-hdfury-eu/sound.md#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain)
+  for the full decompile and evidence.
 - Skipping the 16-byte header and reading the rest as big-endian `i16`, every
   one of the 1,167 not-PS-ADPCM spans has a mean roughness (mean absolute
   sample-to-sample step, divided by the span's RMS) of **0.257** against about
@@ -991,12 +998,15 @@ doc comment carries the full evidence, repeated here:
   other 12 header bytes are zero on every span sampled and are not otherwise
   interpreted.
 
-**Confidence: 85.** Two independent quantitative measurements agree with each
-other and with a primary-source string in the shipping executable; not
-runtime-verified (no code reference to the string was found, only the data
-table holding it), so capped below the 95 band per the confidence rubric.
-Finding the function that actually dispatches on voice type - which would let
-this reach "Established" - is open.
+**Confidence: 90**, up from 85 once `CellMs_QueueVoice` was decompiled. Two
+independent quantitative measurements, a primary-source string and now a
+decompiled call site all agree - past `decompile_function`'s own
+"decompilation only" ceiling of 84 because the arithmetic invariant (the
+315-file header-word match, above) is independent, corroborating evidence
+rather than a second reading of the same decompile. Not "Established" (95+):
+no runtime trace exists for this binary, and this codec is a PS3-only
+addition with no PSP or PS2 build to corroborate it against as a second
+binary.
 
 `oag_formats::sblk::Sound::is_adpcm` is still the predicate for which decoder
 applies; `oag_game::audio::sfx` now calls `decode_pcm16` rather than dropping

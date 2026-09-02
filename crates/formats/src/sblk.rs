@@ -777,10 +777,14 @@ pub const PCM16_HEADER_LEN: usize = 16;
 /// PCM\n\tSCREAM does not know how to handle this data"` - SCREAM's own error
 /// message names exactly two voice types, and [`NOT_ADPCM_FLAG`] already
 /// established that a span carrying it is not the first one. The function
-/// that owns the string was not resolved (no code reference to
-/// `0x007d0818` that Ghidra's analysis has found yet, only the data-table
-/// entry holding the string itself), so this is not a decompiled read of the
-/// decode path.
+/// that owns the string is `CellMs_QueueVoice` (`0x00633c80`), reached
+/// through `Scream_OpKeyOn` and `Scream_KeyOnVoice` - PS3 analogues of the
+/// same-named PSP functions. Its decompiled body skips a 16-byte header and
+/// multiplies a header field by 2 (bytes per sample) exactly when
+/// `NOT_ADPCM_FLAG` is set, and walks 16-byte PS-ADPCM blocks for a loop/mute
+/// flag when it is clear. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/sound.md`'s "`0x01`/`0x09` -
+/// `Scream_OpKeyOn`, and the codec dispatch chain" for the full decompile.
 ///
 /// What is measured, over every one of Wipeout HD's 1,167 [`NOT_ADPCM_FLAG`]
 /// spans, skipping this header and reading the rest as big-endian `i16`:
@@ -804,10 +808,11 @@ pub const PCM16_HEADER_LEN: usize = 16;
 /// The other 12 header bytes (0..4 and 8..16) are zero on every span sampled
 /// and their meaning, if any, is not known.
 ///
-/// Confidence: 85. Two independent quantitative measurements agree with each
-/// other and with a primary-source string in the shipping executable that
-/// names PCM as SCREAM's other voice type; not runtime-verified, so capped
-/// below the 95 band per the confidence rubric.
+/// Confidence: 90. Two independent quantitative measurements, a
+/// primary-source string and a decompiled call site (`CellMs_QueueVoice`,
+/// above) all agree; not runtime-verified and this codec has no PSP or PS2
+/// build to corroborate against as a second binary, so capped below the 95
+/// band per the confidence rubric.
 #[must_use]
 pub fn decode_pcm16(data: &[u8]) -> Vec<i16> {
     let body = data.get(PCM16_HEADER_LEN..).unwrap_or(&[]);
