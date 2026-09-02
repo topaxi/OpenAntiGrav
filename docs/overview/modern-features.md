@@ -65,7 +65,7 @@ section has always listed, now with their status:
 | A depth buffer the upscaler can consume | **Done** - `StoreOp::Store` and `TEXTURE_BINDING`, read every frame by the motion blur pass ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)) |
 | Per-pixel motion vectors from every draw | **Done** - the race writes an always-on `Rg16Float` velocity attachment from every draw's premultiplied previous-tick matrices ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)); motion blur is its first consumer |
 | Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
-| A scene without UI in it | **Absent** - the HUD and the perf overlay draw into the same target, at the render scale |
+| A scene without UI in it | **Absent** - the HUD, the menus and the front end draw into the same target, at the render scale. Decided in [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md) and part-built: the performance overlay composites onto the surface already, and clearing this row is what moving the rest delivers |
 
 That last row is the expensive one, and it is not on the original list because
 it only becomes visible once something downstream needs a scene it can reason

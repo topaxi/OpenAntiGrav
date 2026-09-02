@@ -657,9 +657,9 @@ what settles the two rows a reader would otherwise argue about:
   They are a calibration of somebody's monitor, applied to a frame the game has
   already finished drawing - see below.
 - **The performance overlay is GRAPHICS**, even though it is a diagnostic and
-  not decoration. It is drawn *into* the offscreen target, at the render scale,
-  over whatever stage is running; measuring a frame nobody is presenting is
-  exactly the way to get it wrong.
+  not decoration, and even though it is now drawn *after* the brightness and
+  gamma the row above it calls DISPLAY - see below. What it reports is what the
+  graphics settings cost, which is the question the page it sits on is about.
 
 `settings.toml` is split the same way, into `[display]` and `[graphics]`, so
 there is one vocabulary rather than two. Everything was in `[graphics]` before
@@ -737,11 +737,19 @@ spaced", and the second question is the one an average frame rate is incapable
 of answering. A game can hold a perfect 60 and stutter visibly, and only the
 graph shows it.
 
-It is drawn **into the offscreen target**, so at a render scale of 50 % the
-overlay is drawn at 50 % too - it costs what the game costs, or it is measuring a
-frame that does not exist. It uses this project's own 5x7 glyphs rather than the
-disc's font, because `--race` never loads a font and an overlay that vanishes on
-the route where it is most wanted is not an overlay.
+It is drawn **onto the surface, after the frame has been resolved onto it** -
+so it is rasterised at presentation resolution whatever the render scale is,
+per [ADR-0036](adr/0036-ui-composites-at-presentation-resolution.md). It used
+to go into the offscreen target at the render scale, on the argument that it
+should cost what the game costs; that holds for a scale a player sets once and
+not for one that moves, and this is the row somebody reads to judge what a
+resolution controller is doing. Two visible consequences: it is **not graded**,
+brightness and gamma riding in the resolve it now comes after, which is
+deliberate for an instrument and is ADR-0036's one standing exception; and it
+is no longer edge-detected by FXAA or SMAA, nor sharpened by FSR 1. It uses
+this project's own 5x7 glyphs rather than the disc's font, because `--race`
+never loads a font and an overlay that vanishes on the route where it is most
+wanted is not an overlay.
 
 It is **window-only**. `--screenshot` runs the sequence as fast as it can with
 nothing presenting, so a frame time from it would be a real measurement of
