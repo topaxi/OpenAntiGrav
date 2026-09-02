@@ -46,7 +46,8 @@ out to be wrong.
 | [0033](0033-external-key-material-for-decryption.md) | External key material lives under `data/keys/`, gitignored, and its absence is never an error | Accepted |
 | [0034](0034-a-race-may-open-two-titles-at-once.md) | A race may open two titles at once; nothing dispatches through either | Accepted; clarifies [ADR-0022](0022-title-packages.md) |
 | [0035](0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md) | A Race Remix craft pick may fall back to a title that reships the same roster | Accepted |
-| [0036](0036-ui-composites-at-presentation-resolution.md) | The UI composites at presentation resolution | Accepted |
+| [0036](0036-ui-composites-at-presentation-resolution.md) | The UI composites at presentation resolution | Accepted; its seam item superseded by [ADR-0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) |
+| [0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) | A stage with no scene draws entirely at presentation resolution | Accepted; supersedes [ADR-0036](0036-ui-composites-at-presentation-resolution.md)'s seam item |
 
 ## Format
 
