@@ -617,12 +617,8 @@ impl Scene {
         // the same two blend classes, so a second pipeline would buy nothing
         // but a second pass.
         oag_render::perfprobe::mark("exhaust-upload");
-        let (spark_additive, spark_alpha) = race.spark_vertices(right, up);
-        additive.extend(spark_additive);
-        alpha.extend(spark_alpha);
-        let (stage_additive, stage_alpha) = race.stage_vertices(right, up);
-        additive.extend(stage_additive);
-        alpha.extend(stage_alpha);
+        race.extend_spark_vertices(additive, alpha, right, up);
+        race.extend_stage_vertices(additive, alpha, right, up);
         self.sparks.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),

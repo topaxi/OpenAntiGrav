@@ -991,9 +991,27 @@ impl System {
         right: Vec3,
         up: Vec3,
     ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
-        let forward = right.cross(up);
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
+        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up);
+        (additive, alpha_over)
+    }
+
+    /// [`Self::vertices`], appended to two lists the caller owns.
+    ///
+    /// The form the renderer uses. A busy frame plays several effects at once
+    /// and each returned its own growing pair, which the stage then appended
+    /// into a third: measured with rockets in the air, gathering the particles
+    /// allocated 1.99 MB in one frame.
+    pub fn extend_vertices(
+        &self,
+        additive: &mut Vec<GpuVertex>,
+        alpha_over: &mut Vec<GpuVertex>,
+        effect: &Effect,
+        right: Vec3,
+        up: Vec3,
+    ) {
+        let forward = right.cross(up);
         for particle in &self.particles {
             if !particle.alive() {
                 continue;
@@ -1009,9 +1027,9 @@ impl System {
                 // index; the alpha byte comes from the channel either way.
                 ColourMode::OverLife => spec.palette[(age * 255.999) as usize & 0xff],
             };
-            let out = match spec.blend {
-                Blend::Additive => &mut additive,
-                Blend::AlphaOver => &mut alpha_over,
+            let out: &mut Vec<GpuVertex> = match spec.blend {
+                Blend::Additive => additive,
+                Blend::AlphaOver => alpha_over,
             };
             let (centre, axis_a, axis_b, cap) = match spec.render {
                 // `cap = 0.5` collapses the shader's cap/cross profile to
@@ -1047,7 +1065,6 @@ impl System {
                 alpha,
             ));
         }
-        (additive, alpha_over)
     }
 }
 
@@ -1316,15 +1333,27 @@ impl Stage {
     pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
+        self.extend_vertices(&mut additive, &mut alpha_over, right, up);
+        (additive, alpha_over)
+    }
+
+    /// [`Self::vertices`], appended to two lists the caller owns - the form
+    /// the renderer uses, for the reason [`System::extend_vertices`] gives.
+    pub fn extend_vertices(
+        &self,
+        additive: &mut Vec<GpuVertex>,
+        alpha_over: &mut Vec<GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+    ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
-            let (mut a, mut b) = instance.system.vertices(effect, right, up);
-            additive.append(&mut a);
-            alpha_over.append(&mut b);
+            instance
+                .system
+                .extend_vertices(additive, alpha_over, effect, right, up);
         }
-        (additive, alpha_over)
     }
 
     /// How many instances are emitting or still hold live particles.

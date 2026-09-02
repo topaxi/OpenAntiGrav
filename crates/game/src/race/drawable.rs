@@ -183,7 +183,12 @@ impl Drawable {
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
-        queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+        oag_render::perfprobe::write_buffer(
+            queue,
+            &self.uniforms,
+            0,
+            bytemuck::bytes_of(&uniforms),
+        );
     }
 
     /// Samples every authored texture-transform track this model carries at
@@ -208,7 +213,7 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::TexAnims::sample(&self.model, seconds);
-        queue.write_buffer(&self.anims, 0, bytemuck::bytes_of(&anims));
+        oag_render::perfprobe::write_buffer(queue, &self.anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Samples every `Anim Transform` this model carries at `seconds` and
@@ -226,7 +231,7 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
-        queue.write_buffer(&self.node_anims, 0, bytemuck::bytes_of(&anims));
+        oag_render::perfprobe::write_buffer(queue, &self.node_anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Applies a texture transform to this model's **authored** UVs and

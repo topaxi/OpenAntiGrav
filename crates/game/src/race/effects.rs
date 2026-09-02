@@ -692,19 +692,18 @@ impl Race {
     /// neither means anything alone - a particle carries an index into the
     /// effect's emitters rather than a copy of their parameters. Empty when
     /// the disc's own effect did not load.
-    #[must_use]
-    pub fn spark_vertices(
+    pub fn extend_spark_vertices(
         &self,
+        additive: &mut Vec<oag_render::mesh::GpuVertex>,
+        alpha_over: &mut Vec<oag_render::mesh::GpuVertex>,
         right: Vec3,
         up: Vec3,
-    ) -> (
-        Vec<oag_render::mesh::GpuVertex>,
-        Vec<oag_render::mesh::GpuVertex>,
     ) {
-        self.effects
-            .get(sparks::DAMAGE_EFFECT)
-            .map(|effect| self.sparks.vertices(effect, right, up))
-            .unwrap_or_default()
+        let Some(effect) = self.effects.get(sparks::DAMAGE_EFFECT) else {
+            return;
+        };
+        self.sparks
+            .extend_vertices(additive, alpha_over, effect, right, up);
     }
 
     /// Everything the [`psys::Stage`] is playing this frame, split by blend
@@ -713,16 +712,14 @@ impl Race {
     /// The rocket flares and the detonations today. Uploaded through the same
     /// [`oag_render::psys::Pipeline`] as the sparks - one pass, two buffers,
     /// no third pipeline per effect.
-    #[must_use]
-    pub fn stage_vertices(
+    pub fn extend_stage_vertices(
         &self,
+        additive: &mut Vec<oag_render::mesh::GpuVertex>,
+        alpha_over: &mut Vec<oag_render::mesh::GpuVertex>,
         right: Vec3,
         up: Vec3,
-    ) -> (
-        Vec<oag_render::mesh::GpuVertex>,
-        Vec<oag_render::mesh::GpuVertex>,
     ) {
-        self.stage.vertices(right, up)
+        self.stage.extend_vertices(additive, alpha_over, right, up);
     }
 
     /// The pool the rocket effects play in.

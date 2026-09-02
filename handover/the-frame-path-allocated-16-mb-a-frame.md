@@ -135,6 +135,21 @@ on pristine `157a4666`** and neither is in a crate this work touches.
    so four high-water marks would be kept alive to save nothing. Each clears it
    itself rather than trusting what it is handed.
 
+7. **The particle systems allocated 1.99 MB in a frame with rockets in the
+   air**, and this page had them ranked as nothing - because the quiet capture
+   every earlier number came from measured them at **199 bytes**, no effect
+   playing. `psys::System::vertices` returned a growing pair of `Vec`s per
+   playing instance and `psys::Stage::vertices` appended each pair into a third
+   growing pair. Both gained an `extend_vertices` form writing into the
+   caller's lists, which are `Scene::scratch`'s. 1,990,674 -> 594 bytes,
+   128 -> 12 allocations.
+
+   **The lesson is about the capture, not the code**: a stationary `--race`
+   frame plays no effects, fires no weapons and raises no shield, so it reads
+   as quiet on exactly the paths that cost the most when they run. Every figure
+   on this page from here on is taken from `--autopilot --give <weapon>
+   --press square`.
+
 ## Open
 
 **Not fixed, with numbers, in the order they are worth fixing:**
@@ -144,15 +159,35 @@ on pristine `157a4666`** and neither is in a crate this work touches.
   is now the single largest line in the frame. Finding 4 above reduces what is
   recorded into it. Whether it can be reduced further is a question about
   reusing an encoder across frames, which this project has never tried.
-- **`Race::rocket_model_matrices` returns a `Vec` per frame**, inside the
-  ~50 KiB `rockets+plumes` stage.
-- **The per-drawable `write_anims`/`write_node_anims` pair costs 70
-  allocations and 29 KiB a frame** across five drawables. Unread further.
+- **What is left is `wgpu::Queue::write_buffer`, and it is not this code's to
+  remove with another scratch buffer.** The two items that used to sit here -
+  `Race::rocket_model_matrices`' per-frame `Vec` and the
+  `write_anims`/`write_node_anims` pair - were both measured and both turned
+  out to be the *call count*, not the arguments. `rocket_model_matrices` is
+  exactly **one** allocation of the 515 its loop makes.
+
+  Counted at three sites (`Drawable::write` and the two anim writers): **155
+  `write_buffer` calls a frame**, and the allocations track them at roughly
+  4 to 7 each - 126 rocket writes cost 515 allocations, 10 scenery-anim writes
+  cost 69. They happen inside wgpu's staging path, not here.
+
+  So the lever is *fewer calls*, not smaller ones: one uniform buffer with
+  dynamic offsets in place of one buffer per drawable. That is an architecture
+  change and wants its own thread, not a line in this one.
+
+  **Do not read the rocket figure as a real-race cost.** It comes from
+  `--give rocket --press square`, which puts **126** rockets in the air; a
+  race has a handful. It is a magnifier for the per-call cost, not a
+  measurement of a frame anybody plays.
 - **The presentation path builds bind groups per frame, and none of it is
   measured.** `smaa::render` builds three a frame, `fxaa` and `fsr1` one each,
-  and `upscale::Framebuffer::resolve` **one more** whenever a post-process or
-  an FSR 1 output is bound - the two `bind(device, ..)` calls in
-  `crates/game/src/upscale.rs`. That sixth site is easy to miss: it is in
+  and `upscale.rs`'s `fn bind` **one more** per frame whenever a post-process
+  or an FSR 1 output is bound. Cite `fn bind` and not a line number: the
+  callers moved when ADR-0036 split `resolve` into `resolve_scene` and
+  `composite`, and `bind` is where the counter hangs off anyway. Three callers
+  reach it, of which only `resolve_scene`'s two are per frame - `target` and
+  `output` fire once per resize, so a resize shows as a spike rather than as
+  churn. That sixth site is easy to miss: it is in
   `oag-game`, where the other five are in `oag-render`, so a sweep of the post
   chain alone does not find it. SMAA's own comment argues the rebuild is
   deliberate ("a bind group is cheap next to the draw it feeds"); the motion
@@ -162,13 +197,11 @@ on pristine `157a4666`** and neither is in a crate this work touches.
   **All of it is read rather than measured**, and closing that wants two
   things, not one:
 
-  - *A counter on the `Framebuffer` pair.* The five `oag-render` sites carry
-    `perfprobe::bind_group`; these two, being in `oag-game`, do not. Left
-    unwritten deliberately rather than overlooked: `upscale.rs` is being
-    restructured on `worktree-handover-fsr-1s-default-is-open`, where
-    ADR-0036 splits `resolve` into `resolve_scene` and `composite`, and two
-    probe lines added here now would do nothing but conflict with it. That
-    thread has been told which two lines they are.
+  - ~~*A counter on the `Framebuffer` pair.*~~ **Done**, on
+    `worktree-handover-fsr-1s-default-is-open` rather than here, because that
+    thread owned `upscale.rs` while ADR-0036 was landing: `bind` now goes
+    through `perfprobe::bind_group`. One line, since all three callers funnel
+    through it.
   - *A harness that presents N frames.* `--presented` on the race capture does
     drive the real path, but for **one** frame, and the question here is
     per-frame churn - a single-frame total cannot answer it. The front-end
@@ -218,9 +251,10 @@ after touching anything in this list.
 
 ## Next Steps
 
-1. Instrument the presented path: a counter on `upscale.rs`'s two `bind` calls
-   once the FSR 1 thread's `resolve_scene`/`composite` split lands, and a
-   harness that presents N frames. See the Open item for why `--presented` is
-   not that harness.
-2. `Race::rocket_model_matrices`' per-frame `Vec`, then the
-   `write_anims`/`write_node_anims` pair at 70 allocations a frame.
+1. A harness that presents N frames, so the AA chain's and `fn bind`'s
+   per-frame bind groups get a number rather than a reading. The counters are
+   all placed now; see the Open item for why `--presented` alone is not that
+   harness.
+2. If the `write_buffer` call count is worth attacking, it wants its own
+   thread: one uniform buffer with dynamic offsets rather than one per
+   drawable. Nothing smaller will move it.
