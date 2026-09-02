@@ -138,8 +138,9 @@ anchored at the origin). Then:
 - `race/capture.rs:317` calls `target_size` itself and needs the same split, or
   it silently keeps the old meaning.
 
-This is what a new ADR-0036 should record - the number is free as of
-2026-09-02, see the [ADR index](../docs/architecture/adr/README.md): *dynamic
+This is what a new ADR-0037 should record - the number is free as of
+2026-09-02, see the [ADR index](../docs/architecture/adr/README.md), 0036
+having been taken by Phase 0's own decision: *dynamic
 resolution varies a viewport, not an allocation* -
 with the memory cost stated honestly, since the target is always the ceiling's
 size even when rendering below it.
@@ -270,7 +271,7 @@ conventionally a function of the scale factor, so *camera jitter*, the other
 3. Probe `Features::TIMESTAMP_QUERY` on the development machines and record
    what is actually available - the fallback chain's shape depends on the
    answer, and a probe is twenty lines.
-4. Write ADR-0036 for the viewport-not-allocation decision before the code, and
+4. Write ADR-0037 for the viewport-not-allocation decision before the code, and
    `docs/rendering/dynamic-resolution.md` alongside it. Neither may link back
    into this file: a `docs/` page must never link into `handover/`.
 5. Update [modern-features.md](../docs/overview/modern-features.md)'s
