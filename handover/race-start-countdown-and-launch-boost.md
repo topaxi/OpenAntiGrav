@@ -6,9 +6,13 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 
 |                                  | Pure | Pulse                          | HD/Fury                        | 2048 |
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
-| Countdown state machine + timing | open | partial - false-start stall lead only (below) | open                | open |
+| Countdown state machine + timing | open | **Zone's own read in detail** (below) | open                | open |
 | Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
-| Zone/view display variants       | open | open                            | strong evidence (below)         | strong evidence (below) |
+| Zone/view display variants       | open | logic axis: separate impl. confirmed, not yet *differing* (below) | strong evidence, asset axis (below) | strong evidence, asset axis (below) |
+
+*(Focus as of 2026-09-02: display/logic only for now, per direction from the user -
+the launch-boost rows below are last session's record, not being chased further at
+the moment.)*
 
 **Countdown state machine + timing**: what drives `ReadyText`/`GoText`/`CountdownTime`
 and the `<Mode3D>` models (`Pulse_Ready_Go`, `Cockpit_321GO`) from race load to green -
@@ -121,8 +125,45 @@ through this MCP connection. Worth a fresh connection or Ghidra-side check befor
 assuming Pure lacks the same asset family - the absence here is a tooling gap, not
 a finding.
 
+2026-09-02, second pass, display/logic only: **Zone's own countdown state machine is
+now read in real detail on the logic side**, and it is architecturally separate from
+whatever a circuit race uses - though "separate" and "different" are not yet the same
+finding. Full account in
+[zone-mode.md](../docs/ghidra/functions/psp-pulse-usa/zone-mode.md#zone_updatestates-own-five-states-and-state-0s-nested-countdown).
+In short: `Zone_UpdateState` (already named) dispatches five outer states; state 0 -
+the countdown - is a *second*, nested five-substate machine (`0x08829e6c`) with a
+real frame-tick counter (`obj+0x1a04`, new offset, confidence 65), a sound cue fired
+at exactly tick 40 remaining, and a two-part gate (tick count plus a second,
+unresolved float condition) before it hands off to state 1 and racing begins.
+Confidence 65 for the shape. This directly answers part of "what state holds the
+false-start stall and what drives `CountdownTime`" from the intro above: it is this
+nested machine, not (as last session guessed) anything in `Ship_SetState`. **What it
+does not yet show is whether a circuit race's own countdown looks the same** - one
+attempt to find and decompile a non-Zone mode's equivalent state-0 handler (via
+`Race_CreateModeObject`'s per-mode dispatch table) landed on an unrelated HUD-text
+function both times tried, so the comparison is still open, written up as a dead end
+rather than silently dropped (see `zone-mode.md`'s own account). `CountdownTime`/
+`ReadyText`/`GoText` themselves still have no direct code xref - they read as
+XML-driven HUD-widget attribute names resolved through a hash lookup, the same shape
+`hud.md` already documents for the rest of the HUD, not a literal string compare a
+function references - so the nested countdown's tick counter is the closest thing to
+"what drives the display" found so far, not a confirmed direct link.
+
 ## Open
 
+- **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
+  (same 40-tick cue, same two-part gate) or differs is the single most direct
+  open question for the display/logic focus. One attempt this session to reach it
+  through `Race_CreateModeObject`'s dispatch table failed (landed on an unrelated
+  function, see `zone-mode.md`) - needs the table re-derived from raw disassembly,
+  not reused from this session's addresses.
+- **The second gate condition (`fVar17`) substate 1 waits on**, alongside the tick
+  counter reaching zero, was not resolved to a real function this session - a
+  guessed address decompiled to an unrelated matrix-inverse routine.
+- **`CountdownTime`/`ReadyText`/`GoText` have no direct code xref** - consistent
+  with a hash-resolved HUD-XML attribute rather than a literal string a function
+  loads, but not traced to the hash lookup itself, so this is an inference from the
+  shape of the rest of the HUD system, not a read of this specific path.
 - **Pure (`psp-pure-usa`/`-eu`) was unreachable via ghidra-mcp this session** despite
   `list_instances` listing it as open - only 4 of 9-11 listed programs answered
   `search_strings`/`search_functions`/`switch_program` calls. Try a fresh MCP
@@ -161,19 +202,18 @@ a finding.
 
 ## Next Steps
 
-1. Live-capture a false start in PPSSPP: hold thrust before the lights, watchpoint
-   `entity->0x874` and `entity->0x8c` on the player's own entity, and read which
-   state (6 or 8) actually fires and for how long. This is now the single best next
-   move on the Pulse side - state 7 turned out not to be the countdown after all.
-2. Trace the throttle/thrust input path during the countdown (starting from
-   `Ship_UpdateThrust` or its equivalent, per `docs/gameplay/ai.md`'s and
-   `engine.md`'s existing naming) for anything that reads a countdown clock or a
-   "pressed near green" timestamp - the search this session did not run, and with
-   state 7 read and not panning out, this is the remaining lead for the boost
-   question on Pulse.
-3. Identify the ~19-entry mode-class value state 7 reads (`0x08aae7e3` /
-   global`+0xb8`) and `FUN_0003c7b0` - would finish state 7 even though it is no
-   longer expected to answer this thread's own questions directly.
+**Display/logic, current focus:**
+
+1. Re-derive `Race_CreateModeObject`'s per-mode dispatch table from raw disassembly
+   (do not reuse this session's `0x08a7a1e8`/entry addresses without rechecking) and
+   decompile a non-Zone entry's own vtable `+0x1c` slot - the direct way to see
+   whether a circuit race's countdown matches Zone's 40-tick-cue, two-part-gate
+   shape or differs from it.
+2. ~~`create_function` for Zone's inner-substate setter~~ **Done this session**:
+   named `RaceMode_SetSubstate` (`0x08827454`, confidence 80); the outer-state
+   call at substate 4 turned out to already be `RaceMode_SetState` itself.
+3. Resolve substate 1's second gate condition (the `fVar17` call) from the raw
+   disassembly of `0x08829e6c` rather than a guessed address.
 4. Finish tracing the mode-descriptor pointer from
    [a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)'s
    open item 1 to a `321Go_*.vex` shape - still the best lead for the mode-display
@@ -185,4 +225,17 @@ a finding.
 6. Get Pure reachable through ghidra-mcp (fresh connection, or check the Ghidra GUI
    directly for why only 4 of 9-11 listed programs answer this session) and then
    run the same three-string sweep (`321Go`, `StartBoost`, `Cockpit321Go`) that
-   worked cleanly on both HD and 2048.
+   worked cleanly on both HD and 2048, plus the vocabulary from step 1 once it has
+   real names.
+
+**Launch boost, parked for now - not being chased at the moment:**
+
+7. Live-capture a false start in PPSSPP: hold thrust before the lights, watchpoint
+   `entity->0x874` and `entity->0x8c` on the player's own entity, and read which
+   state (6 or 8) actually fires and for how long.
+8. Trace the throttle/thrust input path during the countdown (starting from
+   `Ship_UpdateThrust` or its equivalent, per `docs/gameplay/ai.md`'s and
+   `engine.md`'s existing naming) for anything that reads a countdown clock or a
+   "pressed near green" timestamp.
+9. Identify the ~19-entry mode-class value `Ship_SetState` state 7 reads
+   (`0x08aae7e3` / global`+0xb8`) and `FUN_0003c7b0`.

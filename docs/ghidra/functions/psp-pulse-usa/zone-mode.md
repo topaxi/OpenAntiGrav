@@ -99,18 +99,24 @@ See [pads.md](pads.md) and [engine.md](engine.md).
 | `0x0883e6f4` | function | `Ship_SetShield` | 82 |
 | `0x0883e68c` | function | `Ship_Shield` | 78 |
 | `0x08827350` | function | `RaceMode_SetState` | 80 |
+| `0x08827454` | function | `RaceMode_SetSubstate` | 80 |
 | `0x08827b08` | function | `RaceMode_PushState` | 75 |
 | `0x0881a1c8` | function | `Hud_SetEnergyBar` | 75 |
 | `0x088c291c` | function | `Ship_LoadHandlingStats` | 84 |
 | `0x0894f6a8` | function | `SystemRoot_Create` | 78 |
 
-Why the last seven:
+Why the last eight:
 
 - `Ship_Shield` (`0x0883e68c`) is the getter `Ship_AddShield` reads before adding;
   its result plus the amount is what goes to `Ship_SetShield`.
 - `RaceMode_SetState` (`0x08827350`) writes the mode state at `obj+0x7c8` and
   zeroes `+0x7c0`, `+0x7c4` and `+0x7cc`. It is what moves a Zone run to state 3
   at the end.
+- `RaceMode_SetSubstate` (`0x08827454`) writes `obj+0x7cc` (the field
+  `RaceMode_SetState` zeroes) and zeroes `+0x7c4` - the inner-state cousin of
+  `RaceMode_SetState`, found and named 2026-09-02 tracing the countdown's own
+  substate machine (`## Zone_UpdateState's own five states` above). Had no
+  function boundary in Ghidra at all until this session's `create_function`.
 - `RaceMode_PushState` (`0x08827b08`) is called with the literal
   `"EndRace_Results"` from `Zone_UpdateResults`. 75 rather than higher because
   only this one call site was read.
@@ -148,6 +154,89 @@ list plus consistent use in `Zone_Update`. Confidence **80**.
 
 Two of these offsets are reused by *other* mode subclasses with different
 meanings, so read them only through `Zone_Update`.
+
+`+0x1a04`, `s32`, joins this table at confidence 65: read while chasing the
+race-start countdown handover thread, it is a **frame-tick countdown**, only
+touched by state 0's handler below - see there for how it is used.
+
+## `Zone_UpdateState`'s own five states, and state 0's nested countdown
+
+2026-09-02. `Zone_UpdateState` (`0x0882f214`, vtable slot `+0x1c` above)
+dispatches `obj+0x7c8` (`RaceMode_SetState`'s own field) across five values,
+each a distinct function:
+
+| `obj+0x7c8` | Handler | What it does |
+| --- | --- | --- |
+| 0 (default) | `0x0882f31c` (thin wrapper over `0x08829e6c`) | **The countdown - see below.** |
+| 1 | `0x0882f338` | Resets `+0x1a28` (zone-dirty), `+0x2b8`, the zone dwell timer (`+0x1a24`), and reads `+0x1a18` off a global skill-level field. Reads as "just left the countdown, about to start racing for real" - a second, later reset alongside `Zone_Create`'s own. |
+| 2 | `Zone_UpdateRacing` (`0x0882f37c`) | Already named. |
+| 3 | `Zone_UpdateResults` (`0x0882f438`) | Already named. |
+| 4 | `0x0882f534` | Not read this session. |
+
+**State 0's real body, `0x08829e6c`, is a *second*, nested five-state machine
+on `obj+0x7cc`** (the field `RaceMode_SetState` zeroes alongside `+0x7c8`
+itself, confirming it belongs to the same object rather than being reused
+scratch space). Read at instruction/branch level, not runtime-verified:
+
+- **Substate 1 is the countdown proper.** It decrements `obj+0x1a04` - the new
+  offset above - by one every call, plays a sound cue
+  (`func_0x00136958(0x3ca3d70a, ...)`, the float bit-pattern is roughly `0.02`,
+  read as a pitch or volume argument rather than a duration) at the exact tick
+  it crosses **40**, and once the counter reaches **0**, additionally requires
+  a second float-valued gate (`fVar17`, read off a call this session could not
+  resolve to a real function - see Open) to clear before it advances the
+  *substate* to 2. So the countdown is not purely tick-driven: a tick count
+  down to zero is necessary but a second condition must also pass, which
+  reads as "and the audio/visual countdown sting has finished playing" more
+  than as a second timer, though that is inference, not read.
+- **Substate 0 (the entry substate)** clears `obj+0x3c`, plays another sound,
+  clears two bits (`0x2` and `0x4`) on a global mode-flags word, and - only
+  if `obj+0x2c0` (a linked object, cursor into the field this file elsewhere
+  calls the ship/scoring object) is set - calls `RaceMode_SetState`-adjacent
+  bookkeeping and advances to substate 1. Reads as "arm the countdown".
+- **Substate 2** waits on a `0.5`-second-shaped call
+  (`func_0x0002348c(0x3f000000, obj)` - `0x3f000000` is `0.5f`) before setting
+  two bits (`0x2 | 0x4`) on a global and advancing to substate 3.
+- **Substate 3** branches on `obj+0x1990`/`obj+0x1988` - unread in detail this
+  session, reads as choosing between more than one *post-countdown* message
+  (the two branches load different string-table entries, hashed rather than
+  compared directly) before advancing to substate 4.
+- **Substate 4** waits on a per-object duration (`obj+0x7b8`, not the fixed
+  `0.5f` substate 2 used) and, once it clears, either advances the network
+  path directly or - in the branch a single-machine race actually takes -
+  calls **`RaceMode_SetState(obj, 1)`**, moving the **outer**
+  `Zone_UpdateState` state: this is the exact moment Zone leaves state 0 (the
+  whole countdown) and enters state 1 above.
+
+**The substate setter is now named: `RaceMode_SetSubstate` (`0x08827454`,
+confidence 80)** - it had no function boundary in Ghidra at all going into
+this session (`decompile_function` failed outright); `create_function` plus a
+two-line decompile confirmed it exactly as its call sites predicted:
+`*(obj + 0x7cc) = new_substate; *(obj + 0x7c4) = 0;` - the sibling
+`RaceMode_SetState` above sets `+0x7c8` and zeroes `+0x7c0`/`+0x7c4`/`+0x7cc`,
+so this is that same family's inner-state cousin, named to match. The one
+call in substate 4 that looked like a second, state-7-ish unknown setter
+turned out to already be `RaceMode_SetState` itself, called directly - no new
+function there.
+
+**Confidence 65** for the shape of the whole countdown (five inner substates,
+a real tick counter, a sound cue at a fixed tick, a two-part gate to finish) -
+branch-clear decompilation of one function, corroborated by the now-confirmed
+`RaceMode_SetSubstate`/`RaceMode_SetState` calls and the mode-object table,
+but nothing here has been watched live. Below 70 on purpose: the `fVar17` gate
+function inside substate 1 is still unresolved - see Open.
+
+**This does not, on its own, show Zone's countdown differs from a circuit
+race's.** What it shows is that Zone's countdown is a *separate
+implementation* - `Zone_UpdateState`'s own vtable slot, `Zone_Create`'s own
+`0x1a30`-byte allocation and `0x08ac9c38` vtable (`## Identification` above),
+neither shared with the generic `Race_CreateModeObject` path other modes take.
+Whether a circuit race's equivalent state-0 handler uses the same 40-tick
+sound cue, the same two-part gate, or a different shape entirely is unread -
+finding it (walk the same `Race_CreateModeObject` dispatch table for a
+non-Zone `case`, then its own vtable slot `+0x1c`) is the direct next step for
+comparing them, rather than inferring difference from Zone simply having its
+own code.
 
 ## The ten-second step
 
@@ -479,6 +568,33 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    number of zones to win the event"*, so a target exists and belongs to the event
    rather than to the mode. Where it is stored was not looked for - it is
    progression data, and progression is M7.
+5. **State 0's countdown machinery, remaining pieces** (see the section above;
+   the substate/state setters are resolved now - `RaceMode_SetSubstate` and
+   `RaceMode_SetState`):
+   - The `fVar17` gate substate 1 waits on alongside the tick counter reaching
+     zero - which function actually computes it was not resolved this session
+     (a `func_0x0007f484` guess decompiled to an unrelated matrix-inverse
+     routine, so the address arithmetic or the call site itself was
+     misread - redo from the raw disassembly, not from a guessed corrected
+     address).
+   - Substate 3's `obj+0x1990`/`obx+0x1988` branch and the two hashed
+     string-table loads it picks between are unread past "it branches".
+   - **Whether a non-Zone mode's own state-0 handler (reached the same way,
+     through its own vtable slot `+0x1c` off `Race_CreateModeObject`'s
+     per-mode dispatch) uses the same tick-counter-plus-gate shape, the same
+     40-tick sound cue, or something else entirely is completely unread.**
+     This is what would turn "Zone's countdown is separately implemented"
+     into "Zone's countdown is *different*", and it is the single most
+     direct next step for the race-start countdown handover thread. **One
+     attempt this session, tried and discarded rather than left silent**:
+     reading `Race_CreateModeObject`'s own per-mode indirect-call table
+     (18 entries, `(mode - 1) * 4 + 0x2761e8`, the same `+0x08804000`
+     correction as `## Identification`'s `case 6`) and decompiling two of its
+     entries landed on the *same* function both times, `0x0881d458` - a
+     results/position-label HUD-text formatter, nothing to do with mode
+     construction. Either the table's base address, the correction, or the
+     entry stride was misread; do not reuse the addresses above without
+     re-deriving them from the raw disassembly first.
 
 ## What is implemented
 

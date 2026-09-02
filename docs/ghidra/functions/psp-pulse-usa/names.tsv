@@ -323,6 +323,7 @@
 0x08ab0bc8	data	g_zone_milestones	75	zone-mode.md
 0x0883e68c	function	Ship_Shield	78	zone-mode.md
 0x08827350	function	RaceMode_SetState	80	zone-mode.md
+0x08827454	function	RaceMode_SetSubstate	80	zone-mode.md
 0x08827b08	function	RaceMode_PushState	75	zone-mode.md
 0x0881a1c8	function	Hud_SetEnergyBar	75	zone-mode.md
 0x088c291c	function	Ship_LoadHandlingStats	84	zone-mode.md
