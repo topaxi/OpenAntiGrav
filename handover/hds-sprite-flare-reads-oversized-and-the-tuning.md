@@ -195,12 +195,26 @@ the fade math not run."
   reaching the same RSX-submission trampolines - reads more like the
   occlusion query `Flare Occluder Radius`/`Flare Depth Bias` want than a
   second draw path, and an occlusion query would not set the size either.
-  **The size question now points at the renderer** (a missing
-  distance/occlusion clip against the craft's own mesh, or a wrong
-  hull-to-flare scale ratio), confirmed by three independent RPCS3
-  screenshots that all show a small tight glow against this engine's large
-  blob at comparable chase framing. See engine-trail.md "Sixth session" and
-  "Seventh session" for the full account.
+  **The size question pointed at the renderer, and an eighth session found
+  and partly fixed which draw call.** A first isolation attempt (disabling
+  each additive layer in turn, counting pixels over a brightness threshold)
+  attributed the blob to the flame mesh instead of the sprite - wrong,
+  caught before it was written down: several layers already saturate the
+  same pixels, so a threshold count cannot see a layer's real extent once
+  the region is blown out. A pixel-diff isolation (one layer's own additive
+  contribution, subtracted rather than thresholded) reverses that reading:
+  the sprite is the dominant contributor (a 20,838-pixel footprint
+  difference in a 340x280 crop, reaching from the nozzle almost to the
+  cockpit), the flame mesh a small tight one (1,954 pixels), the boost
+  plume zero. **Fixed**: `race::effects::hd_sprite_quad` now scales the
+  sprite radius by `exhaust::CRAFT_ROW_SCALE` (0.75, matching the factor
+  already applied to the sprite's own position), measured to cut the
+  isolated footprint ~45% - real, not the "no visible change" a first,
+  unmeasured visual check wrongly concluded. Not confirmed to close the
+  gap outright: a flat half (radius 1.5) cuts the footprint further still
+  (~71%), so 0.75 may not be the original's own factor, only a
+  consistency fix in the right direction. See engine-trail.md "Sixth"
+  through "Eighth" sessions for the full account.
 - `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
   fade result computed above (that clamp uses a *different* tuning-block
   field, `+0x4a8`, which reads `1.0` live and is more likely
@@ -230,32 +244,35 @@ the fade math not run."
 
 ## Next Steps
 
-- **Check whether the original's flare is actually depth/occlusion-clipped
-  against the craft's own hull mesh, and this engine's is not.** The
-  screenshot comparison (engine-trail.md "Seventh session") shows the
-  original's flare tucked tightly between the engine nozzles - plausibly
-  because most of a larger quad is hidden behind the hull geometry around
-  it - while this engine's draws the full unclipped blob. Check the
-  sprite's draw call in `crates/render/src/mesh_render.rs` (the
-  `depth_stencil` blocks around lines 559-707) for whether it is issued
-  with a depth test against the already-drawn opaque hull, and if so,
-  whether the flare's world position sits far enough inside the hull's own
-  geometry for that test to matter, or if it's placed in open air below the
-  ship where nothing would clip it either way. This is a renderer/asset
-  question, not a Ghidra one - no emulator needed to start it.
-- **Separately, check whether `SPRITE_RADIUS` (3.0 world units) is
-  plausible against this craft's own hull scale.** No measured hull-width
-  constant was found in this session's search of `crates/physics/src/params.rs`
-  (`Hull width` field, `HULL_SCALE = 0.75` in `crates/physics/src/pair.rs`) -
-  reading an actual craft's authored width and comparing its half-extent to
-  a 3.0-unit sprite radius would say whether the constant itself is
-  disproportionate to the ship, independent of any occlusion question.
-- If both come back clean (sensible radius, correct depth test, still
-  oversized), then `0x002a1210` and `FUN_006765e8()`'s frame-budget-throttle
-  hypothesis (global at `PTR_DAT_008b7838`, two 8-byte fields, called only
-  from `Game_PresentLoop_q`/`PhotoMode_Update`) are still open, live-tracing
-  targets - but they bear on *whether* something like an occlusion query
-  runs, not on the sprite's size, so they are lower priority than the two
-  bullets above.
+- **Calibrate the remaining gap against the original's own measured
+  proportions, rather than guessing between 0.75 and a further cut.** The
+  landed `CRAFT_ROW_SCALE` fix is a consistency correction (the sprite's
+  radius now lives in the same space its position already did), not a
+  value read off the original - it is not confirmed to close the gap
+  outright. Take a fresh `ours.png` at the fix's new size, crop it the same
+  way "Seventh session" cropped the three original RPCS3 captures
+  (`original-rpcs3.png`, `tuning-dump/race.png`,
+  `rendertick-break-v2/race.png`), and measure flare width against hull
+  width in all four the same way. If still oversized, the pixel-diff
+  isolation method this session used (see engine-trail.md "Reproducing
+  this", the `just play ... --screenshot` + numpy-diff recipe) is cheap
+  enough to retest a further cut (the flat-half row in the eighth
+  session's table, radius 1.5, cut the footprint ~71%) without any
+  emulator session.
+- **Separately, check whether the original itself depth/occlusion-clips the
+  sprite against the craft's own hull mesh.** Not reached this session -
+  the pixel-diff isolation answered "which draw call" (the sprite) but not
+  "is a missing depth clip part of the size gap, on top of the radius
+  itself." `crates/render/src/exhaust.rs` (~line 1062, "the flare's draw
+  pipeline") already documents depth test on/write off, issued after the
+  opaque hulls - correctly wired, per that code's own comments - so this is
+  about whether the sprite's *placement* sits inside enough hull geometry
+  for that test to matter, not about a missing test.
+- If calibration still leaves a gap once both of the above are checked,
+  `0x002a1210` and `FUN_006765e8()`'s frame-budget-throttle hypothesis
+  (global at `PTR_DAT_008b7838`, two 8-byte fields, called only from
+  `Game_PresentLoop_q`/`PhotoMode_Update`) are still open, live-tracing
+  targets from the sixth session - lower priority now that the sprite
+  radius itself is confirmed to be the dominant lever.
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.

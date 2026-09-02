@@ -444,13 +444,20 @@ pub const BOOST_EXTRA_XY: f32 = 1.4;
 pub const BOOST_EXTRA_Z: f32 = 2.0;
 
 /// `Flare Radius` from `Data/ships/shipeffectstweaks.txt`: the sprite
-/// flare's base half-size in world units.
+/// flare's base half-size, in the same model space every other per-craft
+/// tuning number in this file lives in - **not** world units on its own.
 ///
 /// The sprite is real and always built: `Enable Flare Sprite` is authored 1,
 /// the flare's own init (`0x002a1528`) loads
 /// `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf` and four corner pairs, and
 /// this is the bright core the exhaust reads as "solid" in the original -
-/// the tube alone is an additive wash without it.
+/// the tube alone is an additive wash without it. A caller placing the
+/// sprite in world space still owes it the craft's own global scale
+/// (`crate::exhaust::CRAFT_ROW_SCALE`, the same factor `model_matrix_of`
+/// applies to the sprite's own position) - see `race::effects::hd_sprite_quad`
+/// and `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md` ("Eighth
+/// session") for why an unscaled 3.0 draws roughly twice the footprint a
+/// pixel-diff isolation measures for it.
 pub const SPRITE_RADIUS: f32 = 3.0;
 
 /// `Flare Radius Min`: the floor the jittered radius may not fall under.

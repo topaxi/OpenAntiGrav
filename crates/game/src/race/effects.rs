@@ -457,7 +457,25 @@ impl Race {
             return Vec::new();
         };
         let sprite = &self.hd_sprite[slot];
-        exhaust::sprite(nozzle, right, up, sprite.radius(), sprite.alpha()).to_vec()
+        // `sprite.radius()` is the tuning file's own `Flare Radius`
+        // (`exhaust::hd::SPRITE_RADIUS`), authored in the same model space as
+        // the hull it sits on - `nozzle` above already carries the craft's
+        // 0.75 global scale through `model_matrix_of`, so the radius needs
+        // the same factor or it draws larger than the hull it is meant to
+        // sit inside. Isolated with a pixel-diff (this quad's own additive
+        // contribution against a render with it disabled, not eyeballing a
+        // saturated crop - see `docs/ghidra/functions/ps3-hdfury-eu/
+        // engine-trail.md`, "Eighth session"): the unscaled sprite's own
+        // footprint reaches almost the whole underside of the hull, and this
+        // factor alone cuts that footprint by roughly half.
+        exhaust::sprite(
+            nozzle,
+            right,
+            up,
+            sprite.radius() * exhaust::CRAFT_ROW_SCALE,
+            sprite.alpha(),
+        )
+        .to_vec()
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its

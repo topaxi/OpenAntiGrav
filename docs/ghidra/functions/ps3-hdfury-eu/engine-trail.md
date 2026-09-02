@@ -1132,6 +1132,75 @@ different field than the one currently believed to be `Flare Radius`. Both
 halves are renderer/asset questions from here, not further disassembly of
 `EngineFlare_RenderTick` - see "Next Steps" on the handover thread.
 
+### Eighth session: it is the sprite after all - a flawed metric said otherwise first
+
+Following the seventh session's redirect to the renderer, this session
+tried to attribute the blob to a specific draw call by disabling each of
+this craft's additive layers in turn (`crates/game/src/race/scene/frame.rs`,
+one `continue` at a time, same deterministic 300-tick capture each time -
+`just play hd --race --press cross --ticks 300 --screenshot`) and counting
+bright pixels (`RGB > 200,200,200`) in a fixed crop around the engine gap.
+**That metric was wrong, and it said so with false confidence**: disabling
+the sprite (`hd_sprite_quad`) moved the count from 7472 to 6480 (~13%),
+halving its radius barely more (6662), and disabling the flame mesh
+(`self.flares`, the `engineflare.rcsmodel` drawable) alone accounted for
+nearly as much (7244) - reading as "the sprite is a minor contributor, look
+at the mesh instead." Both numbers were real; the conclusion from them
+was not. Several additive layers (the sprite, the flame mesh, the tube's
+own bloom) already saturate the same pixels past 200 independently in this
+region, so removing any *one* rarely drops many pixels back under the
+threshold even when that one layer's actual extent is enormous - a
+saturating threshold cannot see through an already-blown-out area.
+
+**A pixel-diff isolation, not a threshold, settles it.** For each layer,
+subtracting a render with it disabled from the same deterministic tick's
+render with it enabled gives that layer's *own* additive contribution,
+independent of what else saturates the same pixel - and thresholding *that
+difference* at a low, non-saturating level (`> 30`, not `> 200`) finds its
+real footprint. Boost plume: **zero** pixels changed, byte for byte
+(`plume_visible()` is false for the sampled slot this run - cleanly ruled
+out, not just quiet). Flame mesh disabled: 1,954 pixels changed inside a
+340x280 crop, a small, tight, roughly-circular difference right at the
+nozzle. **Sprite disabled: 20,838 pixels changed** - a difference image
+(`data/reference/hd-capture/flare-size/sprite-only-diff.png`, not
+committed, gitignored like the rest of `data/reference/`) shows a bright
+cone-shaped glow reaching from the nozzle almost to the cockpit and
+spilling onto the track below the hull. **The sprite is the dominant
+contributor after all** - the opposite of what the threshold-based count
+said, and the reason it was wrong is now on this page rather than in a
+committed doc claim, because the mistake was caught before writing it down
+rather than after.
+
+**The `CRAFT_ROW_SCALE` hypothesis the seventh session tried and read as
+"no visible change" is, measured this way, real and substantial.**
+Isolating the sprite's own footprint (same subtraction, against a render
+with the sprite fully disabled) at three radii, same tick, same crop:
+
+| Radius | Footprint (px > 30) | Footprint bbox | Total additive contribution |
+| --- | --- | --- | --- |
+| 3.0 (unscaled) | 15,684 | 189x220 | 1,928,035 |
+| 2.25 (`* CRAFT_ROW_SCALE`, 0.75) | 8,568 (-45%) | 157x191 | 1,120,181 (-42%) |
+| 1.5 (flat half) | 4,530 (-71%) | 149x100 | 501,944 (-74%) |
+
+Both cuts are real and roughly monotonic with radius - not the "invisible
+either way" the naked eye read off two blown-out crops. **Implemented**:
+`race::effects::hd_sprite_quad` now scales `sprite.radius()` by
+`exhaust::CRAFT_ROW_SCALE` before building the quad, the same factor
+`model_matrix_of` already applies to the sprite's own *position* via
+`nozzle_of` - so the radius lives in the same space the position does,
+rather than one scaled and the other not.
+`oag_render::exhaust::hd::SPRITE_RADIUS`'s doc comment is corrected to say
+so. This is not confirmed against the original's own scale factor for this
+specific field (no live or Ghidra evidence that the original divides
+`Flare Radius` by the same 0.75 rather than by something else, or nothing
+at all) - it is an internal-consistency fix, justified by every other
+per-craft magnitude in this file needing the same factor
+(`TRAIL_DIRECTION_SCALE`'s live-confirmed `200000 * 0.75 = 150,000`
+precedent) and now empirically measured to move the footprint a real 45%
+in the right direction, not asserted to close the gap outright: the 1.5
+row above shows there is room to go further if 0.75 alone is not enough
+once checked against the original's own measured proportions.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -
@@ -1305,9 +1374,24 @@ Open, in rough order of visible cost:
   trampolines) reads far more like the occlusion query `Flare Occluder
   Radius`/`Flare Depth Bias` want than like a second draw path. An
   occlusion query would not explain the size gap either. See "Seventh
-  session" above for why the size question now points at the renderer
-  (a missing distance/occlusion clip, or a wrong hull-to-flare scale
-  ratio) rather than at either of this function's branches.
+  session" above for why the size question points at the renderer rather
+  than at either of this function's branches. **An eighth session settled
+  which renderer piece, with a corrected method**: a first attempt
+  attributed the blob to the flame mesh instead of the sprite off a
+  saturating brightness-threshold count, which turned out to be
+  measuring the wrong thing (several additive layers already saturate the
+  same pixels, so removing any one barely moves a threshold count even
+  when its real extent is enormous). A pixel-diff isolation - one layer's
+  own additive contribution, disabled render subtracted from enabled -
+  reverses that reading: the sprite is the dominant contributor after
+  all, boost plume is zero, flame mesh is a small tight one. **Fixed**:
+  `race::effects::hd_sprite_quad` now scales the sprite radius by
+  `exhaust::CRAFT_ROW_SCALE` (0.75, the same factor already applied to the
+  sprite's own *position*), measured to cut the sprite's isolated
+  footprint by ~45% - real and substantial, though not confirmed to be
+  the exact factor the original itself would apply, and not confirmed to
+  close the gap outright rather than only narrow it. See "Eighth session"
+  above for the method, the numbers, and what is still open.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
@@ -1378,6 +1462,24 @@ uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-ch
 #   data/reference/hd-capture/flare-size/tuning-dump/race.png
 #   data/reference/hd-capture/flare-size/rendertick-break-v2/race.png
 #   data/reference/hd-capture/flare-size/ours.png             # this engine
+# the pixel-diff isolation behind "Eighth session" above - no emulator, this
+# engine only, deterministic ticks so two runs are byte-identical apart from
+# the one thing disabled between them:
+just build
+just play hd --race --press cross --ticks 300 --screenshot /tmp/a.png   # baseline
+# ...then a `continue` right before the draw call under test in
+# crates/game/src/race/scene/frame.rs (frame.rs:760-772 for the flame mesh,
+# :773-787 for the boost plume) or an early return in
+# crates/game/src/race/effects.rs's hd_sprite_quad, rebuild, and:
+just play hd --race --press cross --ticks 300 --screenshot /tmp/b.png   # one layer disabled
+uv run --with pillow --with numpy python3 -c "
+from PIL import Image; import numpy as np
+box = (560, 420, 900, 700)  # the engine gap, at this reproduction's framing
+a = np.asarray(Image.open('/tmp/a.png').convert('RGB').crop(box), dtype=np.int32)
+b = np.asarray(Image.open('/tmp/b.png').convert('RGB').crop(box), dtype=np.int32)
+contrib = np.clip(a - b, 0, 255).sum(axis=2)  # a's layer's own additive contribution
+print('footprint px (>30):', int((contrib > 30).sum()), '  total:', int(contrib.sum()))
+"
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
