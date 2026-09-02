@@ -457,7 +457,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Magstrip leftovers, none load-bearing](handover/magstrip-leftovers-none-load-bearing.md)
 - [Magfloor gfx/sfx: two real `.vex` effects found, the trigger is read, sfx and the other two titles are open](handover/magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md)
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
-- [Weapons: seven of thirteen, and two doc pages had two of them swapped](handover/weapons-seven-of-thirteen-and-two-pages-were.md)
+- [Weapons: nine of thirteen, and the dispatch table read whole](handover/weapons-eight-of-thirteen-the-plasma-and-the.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
 - [The Missile fires without a lock, and the lock-on reticle and its tone are in](handover/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/pure-and-hd-lock-on-too-and-two-axes.md)

@@ -115,7 +115,12 @@ TEST_LIMIT = 200
 # Both splits were move-only and left nothing over 800 lines. The largest thing
 # left is `crates/game/tests/race_ground_truth.rs`.
 BASELINE = {
-    "crates/game/tests/race_ground_truth.rs": 2387,
+    # Ratcheted down from 2,387 on 2026-09-02, when
+    # `a_ship_spawns_on_the_track_and_flies_along_it` moved to
+    # `crates/game/tests/ship_spawn_ground_truth.rs`. The move was forced the
+    # right way round: a disc-backed fix needed twelve lines in a file already
+    # at its ceiling, and a ceiling only ever lowers.
+    "crates/game/tests/race_ground_truth.rs": 2266,
     "crates/formats/src/vex.rs": 1758,
     "crates/game/src/boot.rs": 1784,
     "crates/game/src/movie.rs": 1981,

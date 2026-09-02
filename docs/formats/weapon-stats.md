@@ -79,12 +79,12 @@ a union:
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |
 | **`Shield`** | **`0x0880ca2c`** | **`absorb time`** |
 | **`Autopilot`** | **`0x0880cb2c`** | **`absorb time`** |
-| `Plasma` | `0x0880cc2c` | the rocket's, plus `charge_time` |
+| **`Plasma`** | **`0x0880cc2c`** | the rocket's, less `spread`, plus `charge_time` - **decoded**, offsets and all, on [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md) |
 | `Bomb` | `0x0880cef0` | `absorb blastforce blastradius damage damageradius slowdown_time trigger_radius timetodie` |
 | `Mine` | `0x0880d124` | the bomb's, less `damageradius` |
 | `LeachBeam` | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` |
 | `Repulser` | `0x0880d58c` | `blastforce blastradius absorb damage slowdown_time blast_time wave_time` |
-| `Shuriken` | `0x0880d790` | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` |
+| **`Shuriken`** | **`0x0880d790`** | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` - **decoded** but for the ricochet pair and `slowdown_time`, offsets and all, on [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md) |
 
 **Bold rows are decoded by `oag_formats::weapons`**; the rest are named here and
 read no further, because [nothing consumes them](../gameplay/pickups.md) and a
@@ -93,6 +93,20 @@ partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
 eleven attributes, and the two left plain are `slowdown_time` - half of the
 slowdown mechanic, whose other half is `<Global slowdown_limit>` and which has
 no consumer - and `spread`.
+
+**The Shuriken's block is measured at `+0x144`..`+0x174`**, thirteen slots, and
+the Repulser's seven are confirmed at `+0x128` from a consumer rather than a
+parser - so the run `mine.md` derived from attribute counts alone now has five
+measured anchors and only the Quake's four (`+0x60`) and the Cannon's five
+(`+0x70`) are unchecked.
+
+**The Plasma's block is measured at `+0x9c`..`+0xc4`**, which is exactly where
+[mine.md](../ghidra/functions/psp-pulse-usa/mine.md)'s attribute-count
+arithmetic put it - the third measured anchor in the run between the Missile's
+block and the Mine's, after Turbo's `+0x84` and Shield's `+0x8c`. Ten of its
+eleven attributes are decoded; `charge_time` is the one left plain, and it is
+left plain for an uncomfortable reason rather than a routine one - see
+[plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#charge_time-is-authored-and-nothing-read-spends-it).
 
 **`spread` is the half-angle of a three-rocket fan, in radians**, and that is
 recovered rather than inferred: `Weapon_FireRocket` (`0x0886e104`) spawns one

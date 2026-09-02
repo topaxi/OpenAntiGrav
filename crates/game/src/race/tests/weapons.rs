@@ -7,6 +7,7 @@
 
 use super::*;
 
+mod projectiles;
 mod visuals;
 
 /// How long [`one_turbo_table`]'s Turbo runs for, in seconds.
@@ -373,79 +374,6 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
     );
 }
 
-/// Firing a Rocket puts **three** in the air at once, ahead of the craft,
-/// at the class's own speed - and spends the pickup.
-///
-/// Three is recovered, not chosen: `Weapon_FireRocket` (`0x0886e104`) makes
-/// three literal spawn calls in one invocation. See
-/// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
-///
-/// **The fan's geometry is pinned in `oag_gameplay::projectile`'s own
-/// tests**, the same split the Shield's wiring test uses. What this owns is
-/// the wiring: that the button reaches the array, three times, with the
-/// disc's numbers, and that the slot empties.
-#[test]
-fn a_fired_rocket_puts_three_projectiles_in_the_air() {
-    let mut race =
-        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    let mut buttons = Buttons::new();
-
-    race.tick(&buttons.tick(0));
-    assert_eq!(
-        race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Rocket)
-    );
-    assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
-
-    let before = race.ship().physics.body.position;
-    let forward = race.ship().physics.body.forward();
-    race.tick(&buttons.tick(SQUARE));
-
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
-    assert_eq!(
-        race.world.projectiles.live(),
-        oag_gameplay::projectile::ROCKET_SHOTS,
-        "one press is a volley of three"
-    );
-
-    for slot in 0..oag_gameplay::projectile::ROCKET_SHOTS {
-        let rocket = race.world.projectiles.slots[slot];
-        assert_eq!(rocket.kind, Some(oag_formats::weapons::Weapon::Rocket));
-        assert_eq!(rocket.owner, 0);
-        assert!(
-            (rocket.position - before).dot(forward) > 0.0,
-            "rocket {slot} spawned behind the craft: {:?}",
-            rocket.position
-        );
-        // Venom's authored speed plus `launchSpeed`, the same for all three:
-        // the fan turns them, it does not slow them. Both figures are km/h
-        // in the file, so the velocity is the sum over
-        // `KMH_PER_UNIT_PER_SECOND` - spelled as the arithmetic so the unit
-        // stays legible.
-        let expected = (600.0 + 16.0) / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
-        assert!(
-            (rocket.velocity.length() - expected).abs() < 1e-2,
-            "rocket {slot}: expected (600 + 16) km/h as units per second, got {}",
-            rocket.velocity.length()
-        );
-        assert!(
-            rocket.velocity.dot(forward) > 0.0,
-            "rocket {slot} must fly forwards"
-        );
-    }
-
-    // And they really are fanned rather than three copies of one shot,
-    // which the count alone would not catch.
-    let right = race.ship().physics.body.right();
-    let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
-        .map(|slot| race.world.projectiles.slots[slot].velocity.dot(right))
-        .collect();
-    assert!(
-        lateral.iter().any(|&l| l > 1.0) && lateral.iter().any(|&l| l < -1.0),
-        "the volley did not fan: lateral components {lateral:?}"
-    );
-}
-
 /// The free Turbo a time trial and a speed lap get once per lap, which the
 /// disc records twice - in `MSC_EVENT_TT`/`MSC_EVENT_SL` and in
 /// `TimeTrial_HUD.xml`'s lone `TurboIcon`. See [`Race::grant_free_turbo`].
@@ -601,6 +529,8 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         Weapon::Autopilot,
         Weapon::Mine,
         Weapon::Bomb,
+        Weapon::Plasma,
+        Weapon::Shuriken,
     ];
 
     assert_eq!(

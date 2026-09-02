@@ -73,7 +73,9 @@
 mod blast;
 pub mod mine;
 pub mod missile;
+pub mod plasma;
 mod rocket;
+pub mod shuriken;
 
 pub use blast::blast;
 use blast::blast_stats;
@@ -392,6 +394,24 @@ impl Projectiles {
         )
     }
 
+    /// Throws one blade, with its own authored `fuse` instead of the safety net.
+    ///
+    /// A fourth entry point for [`Self::lay`]'s reason: a rocket and a missile
+    /// must keep landing in the same slot with the same fields they always did,
+    /// or a determinism reference stops being a question about the weapon that
+    /// changed.
+    ///
+    /// **`fuse` is read and what running out *does* is not.** Unlike a mine's
+    /// `timetodie`, which detonates, a blade that times out is **reaped**
+    /// silently here - the Rocket's own pool behaviour, chosen because
+    /// `Shuriken_Update` only counts `+0x48` up and the teardown that would read
+    /// it was not followed. `WO_SHURIKEN_EXPIRE` is authored on the disc and
+    /// stays unwired for the same reason. See
+    /// `oag_formats::weapons::ShurikenStats`.
+    pub fn throw(&mut self, position: Vec3, velocity: Vec3, owner: u8, fuse: f32) -> bool {
+        self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)
+    }
+
     /// Lays one mine or bomb, with its own authored fuse instead of the safety
     /// net.
     ///
@@ -507,13 +527,21 @@ impl Projectiles {
             // original's. Look along the normal being ridden for something to
             // ride; conform to it if it is floor-like, fall if there is nothing.
             //
-            // A missile looks **twice as far** as a rocket: `Missile_Update`
-            // scales its normal by 12.0 where `Rocket_Update` uses 6.0. Two
-            // recovered numbers, so two constants.
-            let probe_length = if guided {
-                missile::SURFACE_PROBE_LENGTH
-            } else {
+            // **The Rocket is the odd one out, and it is the only one that
+            // looks 6.0.** `Rocket_Update` scales its stored normal by `6.0`;
+            // `Missile_Update`, `Plasma_Update` (`0x0885c6cc`) and
+            // `Shuriken_Update` (`0x08877bdc`) all scale theirs by `12.0`, each
+            // read off its own function. Three weapons agreeing is what turns
+            // this from "the Missile is special" into "the Rocket is".
+            //
+            // **The Plasma read 6.0 here until 2026-09-02**, which was a port
+            // bug rather than a reading: it shipped the same day the weapon did
+            // and was caught by reading `Shuriken_Update` and noticing the
+            // constant a third time.
+            let probe_length = if matches!(kind, Weapon::Rocket) {
                 SURFACE_PROBE_LENGTH
+            } else {
+                missile::SURFACE_PROBE_LENGTH
             };
             let probe = Raycaster::raycast(
                 raycaster,
@@ -574,12 +602,32 @@ impl Projectiles {
                 // once the count reaches `MAX_BOUNCES`. A hull hit is a different
                 // collision code and always detonates, which is why this arm asks
                 // for `struck.is_none()`.
-                let may_bounce =
-                    guided && struck.is_none() && projectile.bounces < missile::MAX_BOUNCES;
+                //
+                // **A Shuriken bounces too, by the same law and without a
+                // budget.** `Shuriken_Update`'s travel-segment test calls
+                // `Shuriken_Bounce` (`0x088778ac`) on the branch a rocket dies
+                // on, and that function is `v - 2(v.n)n` with no damping term
+                // anywhere in it - so a blade keeps its speed for ever and what
+                // ends it is its own `fuse`, not a count. Its push-off is its
+                // own literal; see [`shuriken::BOUNCE_PUSH_OFF`].
+                //
+                // `bounces` is still counted for it, because the visual side
+                // reads that counter to know when to play a bounce effect -
+                // nothing gates flight on the number.
+                let push_off = match kind {
+                    Weapon::Shuriken => shuriken::BOUNCE_PUSH_OFF,
+                    _ => missile::BOUNCE_PUSH_OFF,
+                };
+                let may_bounce = struck.is_none()
+                    && match kind {
+                        Weapon::Missile => projectile.bounces < missile::MAX_BOUNCES,
+                        Weapon::Shuriken => true,
+                        _ => false,
+                    };
                 if may_bounce {
-                    projectile.bounces += 1;
+                    projectile.bounces = projectile.bounces.saturating_add(1);
                     projectile.velocity -= normal * (2.0 * projectile.velocity.dot(normal));
-                    projectile.position = point + normal * missile::BOUNCE_PUSH_OFF;
+                    projectile.position = point + normal * push_off;
                     bounced = true;
                 } else {
                     impacts[index] = Some(Impact {

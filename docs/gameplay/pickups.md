@@ -60,6 +60,17 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **That a bomb is static**, like a mine - its spawn direction is recovered and any speed is not | **ours** | - |
 | **That a bomb's fuse is its own `timetodie`**, by analogy with `Mine_Init` | **ours** | - |
 | **The blast's impulse falls off linearly** over `blastradius`; the damage does not | **recovered** | 82 |
+| `<Plasma>`: the Rocket's block less `spread`, at measured offsets `+0x9c`..`+0xc4` | **recovered** | 92 |
+| **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
+| **A plasma bolt flies the Rocket's own floor-following path** - `Plasma_Update` is `Rocket_Update` | **recovered** | 85 |
+| The bolt rides `WO_PLASMA_HEAD` and fires the `PLASMA` cue, both read out of `.rodata` | **recovered** | 90 |
+| **What `<Plasma charge_time>` does** - authored, no consumer found, and play says there is one | **unread** | - |
+| `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
+| **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
+| A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |
+| A blade **reflects perfectly off walls** with no damping and no bounce budget | **recovered** | 88 |
+| **What ends a blade** - the `fuse` is read, whether running out detonates or reaps is not | **ours** | - |
+| **When `rhicochetdamage`/`rhicochetForce` are spent** - the only second pair any weapon authors | **unread** | - |
 | **Not firing at all when nothing locks** | **ours** | - |
 
 The three "ours" rows in the middle are not a gap anyone can close by looking
@@ -242,7 +253,8 @@ term entirely - see below.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo, Shield, Rocket, Missile, Autopilot, Mine and Bomb** (2026-08-26).
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma and Shuriken**
+(2026-09-02).
 
 - ~~**Missile** needs the lock distances its own `<Stats>` authors, and a target
   worth locking - which needs the AI.~~ **Built 2026-08-17**, and what unblocked
@@ -259,9 +271,26 @@ term entirely - see below.
   the fire handler had been attributed to the Cannon and the Bomb's to the Mine,
   because `Weapon_RequestFire`'s jump table holds those two entries out of
   address order. See [mine.md](../ghidra/functions/psp-pulse-usa/mine.md).
-- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and most
-  of the remaining seven need the slowdown mechanic behind
-  `<Global slowdown_limit>`, which has no consumer.
+- ~~**Plasma** needs a fire path nothing has read.~~ **Built 2026-09-02**, and
+  it is the cheapest weapon since the Bomb for the mirror-image reason: the
+  Bomb reused the Mine's whole module and the Plasma reuses the *Rocket's*
+  whole flight model. `Plasma_Update` (`0x0885c6cc`) is `Rocket_Update`'s floor
+  follower instruction for instruction, and `Weapon_FirePlasma` (`0x0886a868`)
+  spawns exactly one where the Rocket spawns three. See
+  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md).
+- ~~**Shuriken** needs a ricochet and a fuse.~~ **Built 2026-09-02**, and the
+  estimate that said otherwise is the finding. Judged from its constructor and
+  its bounce alone it looked like a session's work; `Shuriken_Update`
+  (`0x08877bdc`) then turned out to be the *same floor follower* the Rocket and
+  the Plasma share, differing only in that a wall bounces a blade instead of
+  ending it. One blade, thrown at a coin-flipped **±20 degrees**, carrying the
+  throwing craft's own speed, reflecting perfectly off walls until its authored
+  `fuse` runs out. See
+  [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md).
+- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and the
+  **Repulser** a field the craft *is in* rather than a projectile - its handler
+  copies four of its own `<Stats>` onto the firing craft before it spawns
+  anything.
 
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
@@ -490,11 +519,30 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Six of the thirteen weapons.** Quake needs track deformation, LeachBeam a
-  beam, and the remaining four - Cannon, Plasma, Repulser, Shuriken - need
-  either the slowdown mechanic or a fire path nothing has read. The Cannon's is
-  the odd one: its fire bit `0x2000` is set by `Weapon_RequestFire` and
-  dispatched by **nothing** in `Weapons_DispatchFire`.
+- **Four of the thirteen weapons.** Quake needs track deformation, LeachBeam a
+  beam, the Repulser a craft-state field, and the Cannon a fire path nothing has
+  read. **Three of the four have a dispatched handler**, read on
+  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md); only their bodies
+  are unread, which is a much shorter walk than this row used to describe.
+
+  The Cannon is the odd one and stays odd: its fire bit `0x2000` is set by
+  `Weapon_RequestFire` and dispatched by **nothing**. That is now a statement
+  about all sixteen dispatched bits rather than the five `weapon-fire.md`
+  printed. Bit `0x4000` **is** dispatched, to `0x088537ac` on `world+0x58`, and
+  is absent from `Weapon_RequestFire`'s jump table entirely - so something other
+  than the request word sets it, and it remains the candidate.
+- **The Plasma's `charge_time`.** Authored on all three shipped tables, the only
+  weapon that carries it, and no consumer found on a path that was read end to
+  end - and **a maintainer who plays Pulse says the weapon does wind up before
+  it fires**. So this is a gap in the read rather than a vestigial attribute,
+  and it is the one place the port is knowingly at odds with a from-play report.
+  This build fires instantly, which is what the read code does. See
+  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#charge_time-is-authored-and-nothing-read-spends-it).
+- **The Plasma's detonation effect.** `Race::blast_for` returns `None` for it:
+  the pool teardown that would spawn one is unread, and `WO_PLASMA_FLASH` is
+  authored on the disc with no located call site. The blast's damage and impulse
+  still land - what is missing is the picture, which is the same state the Bomb
+  is in.
 - **The Bomb's `damageradius`.** Authored, the only second radius any weapon
   has, and no consumer found - so it is decoded nowhere and spent nowhere. See
   `oag_formats::weapons::BombStats`.

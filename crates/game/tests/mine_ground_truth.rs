@@ -42,6 +42,19 @@ use oag_game::race;
 use oag_gameplay::input::{Button, Input};
 use oag_physics::SpeedClass;
 
+/// Long enough that the craft is genuinely up to speed before a test measures
+/// anything.
+///
+/// **Past the start-line countdown, not merely "a while".**
+/// `oag_race::COUNTDOWN_TICKS` is the measured 272 ticks `RaceState` gates the
+/// player's thrust through - see
+/// `docs/gameplay/race-modes.md#the-countdown-is-measured`. A warm-up shorter
+/// than it leaves the craft stationary, and every assertion about a *moving*
+/// craft then fails for a reason that has nothing to do with the weapon. These
+/// files read a flat `120` until 2026-09-02 and went red the day the countdown
+/// landed.
+const WARM_UP_TICKS: u64 = oag_race::COUNTDOWN_TICKS + 120;
+
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -114,7 +127,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let loaded = single_race()?;
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
-    for _ in 0..120 {
+    for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
     Some((race, throttle))
@@ -141,9 +154,10 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     let mut race = race::Race::start(loaded.setup);
     // Enough ticks under full throttle that the craft is genuinely moving before
     // the drop starts - a stationary craft lays five mines in one place and
-    // every gap assertion below passes for the wrong reason.
+    // every gap assertion below passes for the wrong reason. See
+    // [`WARM_UP_TICKS`] for why the count is what it is.
     let throttle = held(Button::Cross);
-    for _ in 0..120 {
+    for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
 
@@ -237,7 +251,7 @@ fn a_cluster_is_laid_behind_the_craft() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
-    for _ in 0..120 {
+    for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
     race.mine_stats().expect("the disc authors a Mine");
@@ -280,7 +294,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
-    for _ in 0..120 {
+    for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
     let stats = race.mine_stats().expect("the disc authors a Mine");

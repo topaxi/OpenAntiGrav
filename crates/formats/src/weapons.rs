@@ -185,263 +185,11 @@ impl Weapon {
     }
 }
 
-/// A weapon whose whole schema is `absorb` and `time`.
-///
-/// Turbo, Shield and Autopilot. Their three parsers are byte-identical but for
-/// the offsets they write.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Simple {
-    /// Energy paid back for absorbing this weapon rather than firing it.
-    pub absorb: f32,
-    /// How long it runs for, in seconds.
-    pub time: f32,
-}
+mod stats;
 
-/// The Rocket's `<Stats>`, less the two attributes nothing consumes.
-///
-/// # Why this one is decoded and the other nine projectile weapons are not
-///
-/// The module's rule is that an attribute is decoded when something reads it,
-/// and this is the first weapon with a projectile behind it: see
-/// `crates/gameplay/src/projectile.rs`. The nine still undecoded need a lock, a
-/// beam, track deformation or the slowdown mechanic, and none of those exists.
-///
-/// **One of the Rocket's eleven is left out for the same reason**:
-/// `slowdown_time`, the slowdown mechanic's half of the pair with
-/// [`WeaponStats::slowdown_limit`], which has no consumer.
-///
-/// # `spread` is the fan angle of three rockets, and that is recovered
-///
-/// `Weapon_FireRocket` (`0x0886e104`) spawns one rocket through the craft's own
-/// matrix, one through it rotated by `+spread` and one by `-spread` - three
-/// calls to one spawn helper in a single invocation, with no timer between
-/// them. So a Rocket fires **three at once**, and `spread` is the half-angle of
-/// the fan, in radians. Confidence 88; see
-/// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
-///
-/// The attribute's absence from the Missile - which carries the rocket's
-/// `<Stats>` less `spread`, plus its lock distances - reads the right way round
-/// once this is known: a homing weapon has no use for a launch fan.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct RocketStats {
-    /// Energy paid back for absorbing it rather than firing it.
-    pub absorb: f32,
-    /// The impulse the blast pushes a craft with.
-    pub blastforce: f32,
-    /// How far from the impact the blast reaches.
-    pub blastradius: f32,
-    /// Energy the blast costs a craft inside that radius.
-    pub damage: f32,
-    /// Added to the class's own speed at launch.
-    pub launch_speed: f32,
-    /// Half the fan angle of the three-rocket spread, **in radians**.
-    ///
-    /// `Weapon_FireRocket` (`0x0886e104`) fires one rocket straight ahead, one
-    /// rotated by `+spread` and one by `-spread`. The radians reading comes from
-    /// the `vcst_s(5)` (`2/pi`) it multiplies by before `vcos_s`/`vsin_s`, which
-    /// is exactly the radians-to-quarter-turns conversion Allegrex's
-    /// trigonometric instructions need. See
-    /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
-    pub spread: f32,
-    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
-    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
-    ///
-    /// Private, because the index *is* the meaning: read it through
-    /// [`RocketStats::speed_for`], which cannot get the order wrong.
-    speeds: [f32; 4],
-}
-
-impl RocketStats {
-    /// How fast a rocket flies in one speed class.
-    ///
-    /// **A per-class projectile speed is the file's own design**, not a scaling
-    /// this engine applies: all four are authored separately, which is what a
-    /// weapon that has to stay catchable in Phantom and threatening in Venom
-    /// needs.
-    #[must_use]
-    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
-    }
-}
-
-/// The Missile's `<Stats>`: the Rocket's, less `spread`, plus its lock distances.
-///
-/// # The offsets are read, not guessed
-///
-/// `WeaponStats_ParseMissile` (`0x0880c31c`) is the same shape as the Rocket's
-/// parser - match an attribute name, `swc1` the float at a fixed offset - and its
-/// twelve stores land in the per-speed-class stats struct immediately after the
-/// Rocket's eleven:
-///
-/// | Offset | Attribute | | Offset | Attribute |
-/// | --- | --- | --- | --- | --- |
-/// | `+0x30` | `damage` | | `+0x48` | `blastradius` |
-/// | `+0x34` | `venomspeed` | | `+0x4c` | `blastforce` |
-/// | `+0x38` | `flashspeed` | | `+0x50` | `lock_min_dist` |
-/// | `+0x3c` | `rapierspeed` | | `+0x54` | `lock_max_dist` |
-/// | `+0x40` | `phantomspeed` | | `+0x58` | `absorb` |
-/// | `+0x44` | `launchspeed` | | `+0x5c` | `slowdown_time` |
-///
-/// Confidence 90. See `docs/ghidra/functions/psp-pulse-usa/missile.md`.
-///
-/// `slowdown_time` is left out for the reason [`RocketStats`] leaves it out: the
-/// slowdown mechanic it feeds has no consumer here yet. **It does have one in the
-/// original** - the missile's own impact accumulates it into the victim's
-/// `weapon_record+0x130` - which is recorded on that page so whoever builds the
-/// mechanic starts from a known consumer rather than from nothing.
-///
-/// # A separate struct rather than a widened [`RocketStats`]
-///
-/// The original parses the two with two different functions into two different
-/// sub-blocks, and the two weapons differ in a way that is not a superset
-/// relation: the Rocket has `spread` and no lock, the Missile a lock and no
-/// `spread`. Folding them together would mean an `Option` per field and a struct
-/// that cannot say which weapon it describes.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct MissileStats {
-    /// Energy paid back for absorbing it rather than firing it.
-    pub absorb: f32,
-    /// The impulse the blast pushes a craft with.
-    pub blastforce: f32,
-    /// How far from the impact the blast reaches.
-    pub blastradius: f32,
-    /// Energy the blast costs a craft inside that radius.
-    pub damage: f32,
-    /// Added to the *firing craft's own speed* at launch - see
-    /// `oag_gameplay::projectile::launch_missile`, which is where that
-    /// distinction is argued and where the recovered arithmetic lives.
-    pub launch_speed: f32,
-    /// How far ahead a target must be before it can be locked.
-    ///
-    /// **Measured along the firer's forward axis, not as a straight-line
-    /// range** - `Ship_AcquireLock` (`0x08844784`) compares
-    /// `dot(target - origin, forward)` against this pair. A craft alongside is
-    /// therefore near zero on this axis however far away it is.
-    pub lock_min_dist: f32,
-    /// The far end of that same longitudinal window.
-    pub lock_max_dist: f32,
-    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
-    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
-    ///
-    /// Private for the reason [`RocketStats::speeds`] is: the index *is* the
-    /// meaning. Read it through [`MissileStats::speed_for`].
-    speeds: [f32; 4],
-}
-
-impl MissileStats {
-    /// The speed a missile settles at in one speed class, in km/h.
-    ///
-    /// **The unit matters and it is not units per second.** A missile does not
-    /// fly at this from launch either: `Missile_SpeedNow` (`0x0885a038`) ramps
-    /// linearly from the launch speed to this over one second. See
-    /// `oag_gameplay::projectile::missile_speed_kmh`.
-    #[must_use]
-    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
-    }
-}
-
-/// The Mine's `<Stats>`: seven attributes, and none of them a speed.
-///
-/// # The offsets are read, not guessed
-///
-/// `WeaponStats_ParseMine` (`0x0880d124`) is the same shape as the Rocket's and
-/// the Missile's parsers - match an attribute name, `swc1` the float at a fixed
-/// offset - and its seven stores land immediately after the Bomb's eight:
-///
-/// | Offset | Attribute | | Offset | Attribute |
-/// | --- | --- | --- | --- | --- |
-/// | `+0xe8` | `damage` | | `+0xf8` | `absorb` |
-/// | `+0xec` | `blastradius` | | `+0xfc` | `slowdown_time` |
-/// | `+0xf0` | `blastforce` | | `+0x100` | `trigger_radius` |
-/// | `+0xf4` | `timetodie` | | | |
-///
-/// Confidence 92. See `docs/ghidra/functions/psp-pulse-usa/mine.md`, which is
-/// also the page that corrects *which weapon* the drop handler belongs to.
-///
-/// # No speed, and that is the shape of the weapon
-///
-/// The Rocket, the Missile, the Plasma and the Shuriken each author four
-/// per-class speeds; the Mine authors none. It is not launched at a speed - it
-/// inherits the firing craft's velocity and a random scatter direction, and
-/// then sits there. `slowdown_time` is left out for the reason
-/// [`RocketStats`] leaves it out: the mechanic behind `<Global slowdown_limit>`
-/// still has no consumer.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct MineStats {
-    /// Energy paid back for absorbing it rather than firing it.
-    pub absorb: f32,
-    /// The impulse the blast pushes a craft with.
-    pub blastforce: f32,
-    /// How far from the blast a craft still takes damage.
-    pub blastradius: f32,
-    /// Energy the blast costs a craft inside that radius.
-    pub damage: f32,
-    /// How long a dropped mine lives before it expires, in seconds.
-    ///
-    /// The attribute is spelled `timetodie`, and `Mine_Init` (`0x08859ac8`)
-    /// loads it straight into the entity's own countdown - which is what
-    /// identifies the offset as this weapon's rather than another's.
-    pub timetodie: f32,
-    /// How close a craft must come before the mine goes off.
-    ///
-    /// Distinct from [`Self::blastradius`], and smaller in both shipped tables:
-    /// a mine is tripped inside `trigger_radius` and hurts everything inside
-    /// `blastradius`.
-    pub trigger_radius: f32,
-}
-
-/// The Bomb's `<Stats>`, less the two attributes nothing consumes.
-///
-/// # The Bomb is the Mine one size up, and that is the shipped data's shape
-///
-/// Six of its eight attributes are the Mine's six, and every one of them is
-/// larger on both shipped tables - a bigger charge, a wider blast, a wider trip
-/// and a fuse nearly three times as long. The engine treats it the same way for
-/// exactly that reason: see [`MineStats`], whose fields these mirror.
-///
-/// It differs from the Mine in two places and only two:
-///
-/// - **A press lays one, not a cluster.** `Weapon_FireBomb` (`0x08863a20`)
-///   makes a single spawn where `Weapon_DropMines` (`0x088675cc`) reloads a
-///   timer and spawns again.
-/// - **`damageradius`**, below.
-///
-/// # `damageradius` is authored and is deliberately not decoded
-///
-/// The Bomb is the **only** weapon of the thirteen that authors a second
-/// radius, and it is smaller than `blastradius` on both shipped tables. The
-/// obvious reading is that the blast pushes over the wider circle and hurts over
-/// the narrower one - and it is left as a reading, because the one blast path
-/// this project has read at instruction level (`Weapon_PostBlastImpulse`,
-/// `0x0886794c`) spends `blastradius` for both, and no consumer of a second
-/// radius has been found anywhere.
-///
-/// So it stays undecoded, for the reason [`RocketStats`] leaves `slowdown_time`
-/// undecoded and the module docs give at length: a field decoded with no
-/// consumer is a field nobody has checked. It is named on
-/// `docs/formats/weapon-stats.md` and here, rather than dropped silently, which
-/// is the part that matters - the next person to look for it should find it
-/// recorded as *known and unspent* rather than as missed.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct BombStats {
-    /// Energy paid back for absorbing it rather than firing it.
-    pub absorb: f32,
-    /// The impulse the blast pushes a craft with, at the centre.
-    pub blastforce: f32,
-    /// How far from the blast a craft is still pushed and hurt.
-    pub blastradius: f32,
-    /// Energy the blast costs a craft inside that radius.
-    pub damage: f32,
-    /// How long a dropped bomb lives before it goes off on its own, in seconds.
-    ///
-    /// Twenty on both shipped tables against the Mine's seven, which is the
-    /// single biggest difference between the two weapons: a bomb left on the
-    /// track is a hazard for most of a lap.
-    pub timetodie: f32,
-    /// How close a craft must come before the bomb goes off.
-    pub trigger_radius: f32,
-}
+pub use stats::{
+    BombStats, MineStats, MissileStats, PlasmaStats, RocketStats, ShurikenStats, Simple,
+};
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
@@ -508,10 +256,18 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::missile`].
     missile: Option<MissileStats>,
+    /// The Plasma's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::plasma`].
+    plasma: Option<PlasmaStats>,
     /// The Mine's own block, or `None` for a file that omits it.
     ///
     /// Read it through [`Self::mine`].
     mine: Option<MineStats>,
+    /// The Shuriken's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::shuriken`].
+    shuriken: Option<ShurikenStats>,
     /// The Bomb's own block, or `None` for a file that omits it.
     ///
     /// Read it through [`Self::bomb`].
@@ -568,6 +324,16 @@ impl WeaponStats {
         self.missile
     }
 
+    /// The Plasma's `<Stats>`, or `None` when the file authors no Plasma.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped Pulse tables do author one, and Pure's does not - see
+    /// `docs/formats/pure-status.md`.
+    #[must_use]
+    pub fn plasma(&self) -> Option<PlasmaStats> {
+        self.plasma
+    }
+
     /// The Mine's `<Stats>`, or `None` when the file authors no Mine.
     ///
     /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
@@ -584,6 +350,15 @@ impl WeaponStats {
     #[must_use]
     pub fn bomb(&self) -> Option<BombStats> {
         self.bomb
+    }
+
+    /// The Shuriken's `<Stats>`, or `None` when the file authors no Shuriken.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is.
+    #[must_use]
+    pub fn shuriken(&self) -> Option<ShurikenStats> {
+        self.shuriken
     }
 
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
@@ -690,6 +465,8 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut simple: [Option<Simple>; 3] = [None; 3];
     let mut rocket = None;
     let mut missile = None;
+    let mut plasma = None;
+    let mut shuriken = None;
     let mut mine = None;
     let mut bomb = None;
     let mut absorb = Vec::new();
@@ -740,6 +517,47 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 lock_max_dist: number(block, "Stats", "lock_max_dist")?,
                 speeds: class_speeds(block)?,
             });
+            continue;
+        }
+        if weapon_kind == Weapon::Plasma {
+            // **Optional for the reason the Bomb's block is**: a title that
+            // tunes the Plasma on attributes this build does not read loses
+            // the Plasma and keeps the rest of its table.
+            //
+            // Both dialects do decode. Measured 2026-09-02 on
+            // `pure-psp-usa.chd`: Pure's `Data\XML\weaponstats.xml` authors
+            // `speed="900"` and no `launchSpeed`, which `class_speeds` and the
+            // `optional` below already handle, so Pure gets a Plasma too.
+            // `charge_time` is deliberately not read - see `PlasmaStats`.
+            plasma = optional_block(&mut skipped, weapon_kind, || {
+                Ok(PlasmaStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    blastforce: number(block, "Stats", "blastforce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    damage: number(block, "Stats", "damage")?,
+                    launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
+                    speeds: class_speeds(block)?,
+                })
+            })?;
+            continue;
+        }
+        if weapon_kind == Weapon::Shuriken {
+            // Optional for the Bomb's reason. **Three of the thirteen authored
+            // attributes are deliberately absent** - `rhicochetdamage`,
+            // `rhicochetForce` and `slowdown_time` - see `ShurikenStats`.
+            shuriken = optional_block(&mut skipped, weapon_kind, || {
+                Ok(ShurikenStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    // The file capitalises these two where the Rocket's are
+                    // lower-case; kept verbatim, as `launchSpeed` is.
+                    blastforce: number(block, "Stats", "blastForce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    blastdamage: number(block, "Stats", "blastdamage")?,
+                    launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
+                    fuse: number(block, "Stats", "fuse")?,
+                    speeds: class_speeds(block)?,
+                })
+            })?;
             continue;
         }
         if weapon_kind == Weapon::Bomb {
@@ -828,6 +646,8 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         simple,
         rocket,
         missile,
+        plasma,
+        shuriken,
         mine,
         bomb,
         absorb,
