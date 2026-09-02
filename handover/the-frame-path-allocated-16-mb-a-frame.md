@@ -123,8 +123,17 @@ on pristine `157a4666`** and neither is in a crate this work touches.
    groups 0, 2 and 3 be bound once at the top.
 
 5. **The weapon-pad tint allocated one vertex list per pad per frame**, 85 KiB
-   a frame, for a recolour that runs on every circuit on every frame. Refilled
-   from `Scene::scratch` now.
+   a frame, for a recolour that runs on every circuit on every frame.
+
+6. **`Drawable::tint` and `Drawable::deflect_airbrakes` did the same thing** -
+   a whole shield shell's vertices per visible shell, and the two airbrake
+   flaps' on every frame of every race. With a shield up, the stage holding all
+   three fell from 51 allocations and 20,536 bytes a frame to 48 and 2,376.
+
+   All four now refill one `Scene::scratch` buffer rather than four: they run
+   one after another inside `Scene::render` and none reads what the last wrote,
+   so four high-water marks would be kept alive to save nothing. Each clears it
+   itself rather than trusting what it is handed.
 
 ## Open
 
@@ -135,9 +144,6 @@ on pristine `157a4666`** and neither is in a crate this work touches.
   is now the single largest line in the frame. Finding 4 above reduces what is
   recorded into it. Whether it can be reduced further is a question about
   reusing an encoder across frames, which this project has never tried.
-- **`Drawable::tint` rebuilds a shield shell's whole vertex buffer per visible
-  shell per frame** - the same shape as finding 5 and not fixed only because a
-  shell up is the uncommon case. Fold it into `Scene::scratch` next.
 - **`Race::rocket_model_matrices` returns a `Vec` per frame**, inside the
   ~50 KiB `rockets+plumes` stage.
 - **The per-drawable `write_anims`/`write_node_anims` pair costs 70
@@ -196,8 +202,8 @@ after touching anything in this list.
 
 ## Next Steps
 
-1. Fold `Drawable::tint` into `Scene::scratch`, the way `tint_weapon_pads`
-   already is.
-2. Instrument the presented path so the AA chain's per-frame bind groups get a
-   number rather than a reading.
-3. Fix the stale "off by default" in `race/scene/frame.rs`.
+1. Instrument the presented path so the AA chain's per-frame bind groups get a
+   number rather than a reading - the counters are placed, the harness is not.
+2. Fix the stale "off by default" in `race/scene/frame.rs`.
+3. `Race::rocket_model_matrices`' per-frame `Vec`, then the
+   `write_anims`/`write_node_anims` pair at 70 allocations a frame.

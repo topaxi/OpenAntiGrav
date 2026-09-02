@@ -182,7 +182,7 @@ impl Scene {
             additive,
             alpha,
             pads_ready,
-            pad_vertices,
+            recoloured,
         } = &mut *scratch;
 
         for drawable in [
@@ -323,7 +323,7 @@ impl Scene {
         // by anything that ever rebuilds the buffer.
         let [left, right] = race.airbrake_flaps();
         if let Some(player) = self.ships.first() {
-            player.deflect_airbrakes(queue, left, right);
+            player.deflect_airbrakes(queue, left, right, recoloured);
         }
         // The shield shell: the craft's own matrix with a uniform swell on top,
         // and its colour written into the vertex buffer.
@@ -357,7 +357,7 @@ impl Scene {
                 race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
                 prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
-            shell.tint(queue, state.colour());
+            shell.tint(queue, state.colour(), recoloured);
         }
         // The cockpit sphere, which replaces the player's shell rather than
         // joining it - `ShipShield_Update` draws one *or* the other and hides
@@ -373,7 +373,7 @@ impl Scene {
                 race.ship_model_matrix_of(0) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
                 prev_vp * prev.ship(0, race) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
             );
-            sphere.tint(queue, state.colour());
+            sphere.tint(queue, state.colour(), recoloured);
         }
         // One matrix per rocket in the air. `zip` bounds it the way the ships'
         // loop is bounded: nothing in the air writes nothing, and the drawables
@@ -542,7 +542,7 @@ impl Scene {
                     .iter()
                     .map(|&left| left <= 0.0),
             );
-            weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, pad_vertices);
+            weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
         }
 
         oag_render::perfprobe::mark("pads+tint");

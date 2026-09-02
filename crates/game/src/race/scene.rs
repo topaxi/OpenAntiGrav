@@ -270,24 +270,34 @@ pub(super) struct Scratch {
     pub(super) alpha: Vec<oag_render::mesh::GpuVertex>,
     /// Which weapon pads currently hand out a pickup, one per pad node.
     pub(super) pads_ready: Vec<bool>,
-    /// One weapon pad's recoloured vertices, refilled per pad.
+    /// The span of vertices whichever recolour or reshape is running has just
+    /// built, on its way to a `write_buffer`.
     ///
-    /// The tint runs every frame over every pad on the circuit and uploads
-    /// each node's span separately, so this was one allocation per pad per
-    /// frame - 85 KiB a frame on Talon's Junction, the largest single item
-    /// left in the frame after the ribbon.
-    pub(super) pad_vertices: Vec<oag_render::mesh::GpuVertex>,
+    /// **One buffer for all four of them** - the airbrake flaps, the shield
+    /// shell, the cockpit sphere and each weapon pad - because
+    /// [`Scene::render`] runs them one after another and none of them reads
+    /// what the last one wrote. Four buffers would be four high-water marks
+    /// kept alive to save nothing.
+    ///
+    /// Each of the four cleared and refilled it every frame before this
+    /// existed: 85 KiB a frame for the pads alone on Talon's Junction, plus a
+    /// pair of flap writes on every frame of every race and a whole shell's
+    /// vertices for every craft with its shield up.
+    ///
+    /// Each caller clears it itself rather than trusting the state it is
+    /// handed, so a span is never written from another mesh's leftovers.
+    pub(super) recoloured: Vec<oag_render::mesh::GpuVertex>,
 }
 
 impl Scratch {
-    /// Empties all four while keeping what they have already grown to.
+    /// Empties every list while keeping what they have already grown to.
     pub(super) fn clear(&mut self) {
         self.vertices.clear();
         self.trail.clear();
         self.additive.clear();
         self.alpha.clear();
         self.pads_ready.clear();
-        self.pad_vertices.clear();
+        self.recoloured.clear();
     }
 }
 

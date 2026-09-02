@@ -278,7 +278,18 @@ impl Drawable {
     ///
     /// A no-op on a model with no flaps, which is every track, the sky, the
     /// collision overlay and any ship whose file does not carry them.
-    pub(super) fn deflect_airbrakes(&self, queue: &wgpu::Queue, left: f32, right: f32) {
+    ///
+    /// `moved` is scratch the caller owns and this refills - see
+    /// `Scene::scratch`. It runs on every frame of every race, so building the
+    /// span into a fresh `Vec` was two allocations a frame that never survived
+    /// the upload.
+    pub(super) fn deflect_airbrakes(
+        &self,
+        queue: &wgpu::Queue,
+        left: f32,
+        right: f32,
+        moved: &mut Vec<mesh::GpuVertex>,
+    ) {
         for (flap, angle) in self.model.airbrakes.iter().zip([left, right]) {
             let Some(flap) = flap else { continue };
             let swing = flap.deflect(angle);
@@ -289,24 +300,22 @@ impl Drawable {
             // From the model's own vertices every time, never from the last
             // frame's: accumulating rotations would drift, and worse, would
             // make the rest position depend on how the ship got there.
-            let moved: Vec<mesh::GpuVertex> = base
-                .iter()
-                .map(|v| {
-                    let mut out = *v;
-                    out.position = swing
-                        .transform_point3(Vec3::from_array(v.position))
-                        .to_array();
-                    out.normal = swing
-                        .transform_vector3(Vec3::from_array(v.normal))
-                        .to_array();
-                    out
-                })
-                .collect();
+            moved.clear();
+            moved.extend(base.iter().map(|v| {
+                let mut out = *v;
+                out.position = swing
+                    .transform_point3(Vec3::from_array(v.position))
+                    .to_array();
+                out.normal = swing
+                    .transform_vector3(Vec3::from_array(v.normal))
+                    .to_array();
+                out
+            }));
             let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
             queue.write_buffer(
                 &self.vertices,
                 span.start as u64 * stride,
-                bytemuck::cast_slice(&moved),
+                bytemuck::cast_slice(moved),
             );
         }
     }
@@ -331,20 +340,25 @@ impl Drawable {
     /// One write for the whole buffer rather than one per node: the shell is a
     /// single mesh, and a per-range loop would be machinery for a case that does
     /// not exist.
-    pub(super) fn tint(&self, queue: &wgpu::Queue, rgba: [f32; 4]) {
-        let tinted: Vec<mesh::GpuVertex> = self
-            .model
-            .vertices
-            .iter()
-            .map(|v| {
-                let mut out = *v;
-                for (channel, scale) in rgba.iter().enumerate() {
-                    out.colour[channel] = v.colour[channel] * scale;
-                }
-                out
-            })
-            .collect();
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&tinted));
+    /// `tinted` is scratch the caller owns and this refills - see
+    /// `Scene::scratch`. A whole shell's vertices, once per craft with its
+    /// shield up and once more for the cockpit sphere: the allocation this
+    /// avoids is larger than the pads' and rarer.
+    pub(super) fn tint(
+        &self,
+        queue: &wgpu::Queue,
+        rgba: [f32; 4],
+        tinted: &mut Vec<mesh::GpuVertex>,
+    ) {
+        tinted.clear();
+        tinted.extend(self.model.vertices.iter().map(|v| {
+            let mut out = *v;
+            for (channel, scale) in rgba.iter().enumerate() {
+                out.colour[channel] = v.colour[channel] * scale;
+            }
+            out
+        }));
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(tinted));
     }
 
     /// Recolours each weapon pad's own geometry by whether it currently hands
