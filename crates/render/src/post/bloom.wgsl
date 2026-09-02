@@ -22,6 +22,15 @@ struct Constants {
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
+    // Which sub-rectangle of `source_tex` was drawn, as a UV scale and a clamp
+    // half a texel inside its edge. **Only `fs_bright` reads these** - it is
+    // the one pass that samples the scene target, which since ADR-0037 may be
+    // larger than what was drawn into it. The blurs and the composite read the
+    // fixed 240x136 scratch buffers, which are always whole, and are bound a
+    // block that says so. Both are exactly 1.0 until a controller moves the
+    // extent; see `post::sub_rectangle`.
+    uv_scale: vec2<f32>,
+    uv_max: vec2<f32>,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -60,7 +69,11 @@ const WEIGHTS = array<f32, 11>(
 // Pass 0: `scratch = framebuffer.rgb * framebuffer.a`.
 @fragment
 fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
-    let texel = textureSample(source_tex, source_sampler, in.uv);
+    // The downsample, and the one place the drawn rectangle enters: mapping
+    // the extent onto the whole of the scratch buffer is what keeps the blur
+    // radius a constant fraction of the picture at every render scale.
+    let at = min(in.uv * constants.uv_scale, constants.uv_max);
+    let texel = textureSample(source_tex, source_sampler, at);
     return vec4<f32>(texel.rgb * texel.a, 1.0);
 }
 
