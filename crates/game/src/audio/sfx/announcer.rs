@@ -85,7 +85,7 @@ impl Announcer {
                     let undecoded = if skipped == 0 {
                         String::new()
                     } else {
-                        format!(", {skipped} skipped as not PS-ADPCM")
+                        format!(", {skipped} skipped: decoded to no samples")
                     };
                     report.push(format!(
                         "announcer: {name} -> {} waveform(s){undecoded}",
@@ -181,7 +181,7 @@ impl ClassAnnouncer {
                     let undecoded = if skipped == 0 {
                         String::new()
                     } else {
-                        format!(", {skipped} skipped as not PS-ADPCM")
+                        format!(", {skipped} skipped: decoded to no samples")
                     };
                     report.push(format!(
                         "class announcer: {name} (stage {stage}) -> {} waveform(s){undecoded}",

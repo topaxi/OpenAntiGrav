@@ -67,9 +67,10 @@
 //!
 //! A **waveform descriptor** does declare it, in the negative:
 //! [`NOT_ADPCM_FLAG`]. Every waveform on every PSP and PS2 disc is PS-ADPCM
-//! and none sets the bit; about a third of Wipeout HD's do, in a codec this
-//! project has not identified. [`Sound::is_adpcm`] is the predicate, and a
-//! caller that ignores it will feed the ADPCM decoder noise.
+//! and none sets the bit; about a third of Wipeout HD's do. That third is
+//! [`decode_pcm16`] - see its doc comment for the evidence. [`Sound::is_adpcm`]
+//! is the predicate, and a caller that ignores it will feed the ADPCM decoder
+//! noise.
 //!
 //! # Splitting a bank into its sounds
 //!
@@ -673,8 +674,8 @@ impl Sound {
     /// Whether this waveform is PS-ADPCM, and so whether [`decode_adpcm`] means
     /// anything for it.
     ///
-    /// `false` only on Wipeout HD, whose second codec is not identified. See
-    /// [`NOT_ADPCM_FLAG`].
+    /// `false` only on Wipeout HD, whose second voice type is
+    /// [`decode_pcm16`] - see [`NOT_ADPCM_FLAG`].
     #[must_use]
     pub fn is_adpcm(&self) -> bool {
         self.mode & NOT_ADPCM_FLAG == 0
@@ -760,6 +761,66 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
         }
     }
     out
+}
+
+/// Bytes of header at the front of a [`NOT_ADPCM_FLAG`] span, before the
+/// sample data starts.
+pub const PCM16_HEADER_LEN: usize = 16;
+
+/// Decodes Wipeout HD's second waveform codec: 16-bit PCM, big-endian, behind
+/// a 16-byte header.
+///
+/// # The evidence
+///
+/// `0x007d0818` in the PS3 executable (`ps3-hdfury-eu/EBOOT.elf`) holds the
+/// string `"SCREAM: ERROR! Unknown voice type in bank - must be ADPCM or
+/// PCM\n\tSCREAM does not know how to handle this data"` - SCREAM's own error
+/// message names exactly two voice types, and [`NOT_ADPCM_FLAG`] already
+/// established that a span carrying it is not the first one. The function
+/// that owns the string is `CellMs_QueueVoice` (`0x00633c80`), reached
+/// through `Scream_OpKeyOn` and `Scream_KeyOnVoice` - PS3 analogues of the
+/// same-named PSP functions. Its decompiled body skips a 16-byte header and
+/// multiplies a header field by 2 (bytes per sample) exactly when
+/// `NOT_ADPCM_FLAG` is set, and walks 16-byte PS-ADPCM blocks for a loop/mute
+/// flag when it is clear. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/sound.md`'s "`0x01`/`0x09` -
+/// `Scream_OpKeyOn`, and the codec dispatch chain" for the full decompile.
+///
+/// What is measured, over every one of Wipeout HD's 1,167 [`NOT_ADPCM_FLAG`]
+/// spans, skipping this header and reading the rest as big-endian `i16`:
+///
+/// - **Mean roughness (mean absolute sample-to-sample step, divided by the
+///   span's RMS) is 0.257**, against about 1.41 for white noise and with only
+///   one span over 1.0 at all. Real audio sits far below the noise figure;
+///   this corpus does.
+/// - A labelled span - the `~SHIELD` cue's two non-ADPCM waveforms in
+///   `weapons.bnk` - decodes to a spectrogram of stable horizontal harmonic
+///   bands, which is what a sustained shield-hum effect looks like and not
+///   what noise looks like.
+/// - For the 315 of 1,167 spans whose descriptor also carries
+///   [`LOOP_FLAG`](Sound::is_looping), the header's second big-endian `u32`
+///   (bytes 4..8) equals the sample count exactly: `header_word * 2 + 16 ==
+///   span length`, on every one of those 315. Spans without the loop flag
+///   read zero there instead - what that word means when it is not the
+///   sample count is not known, and does not need to be to decode the audio,
+///   since decoding does not depend on it.
+///
+/// The other 12 header bytes (0..4 and 8..16) are zero on every span sampled
+/// and their meaning, if any, is not known.
+///
+/// Confidence: 90. Two independent quantitative measurements, a
+/// primary-source string and a decompiled call site (`CellMs_QueueVoice`,
+/// above) all agree; not runtime-verified and this codec has no PSP or PS2
+/// build to corroborate against as a second binary, so capped below the 95
+/// band per the confidence rubric.
+#[must_use]
+pub fn decode_pcm16(data: &[u8]) -> Vec<i16> {
+    let body = data.get(PCM16_HEADER_LEN..).unwrap_or(&[]);
+    body.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_be_bytes(*b))
+        .collect()
 }
 
 use crate::byte_order::ByteOrder;

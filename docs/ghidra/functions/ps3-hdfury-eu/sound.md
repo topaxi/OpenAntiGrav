@@ -48,6 +48,7 @@ which is a completely different global.
 
 | Opcode | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- | --- |
+| `0x01`/`0x09` | `0x00626728` | `Scream_OpKeyOn` | 90 | Bind a waveform descriptor to a voice and dispatch it to the ADPCM/PCM codec split - see [below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain) |
 | `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 82 | Resolve a child cue by index or name, play it with a computed volume and pan |
 | `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 78 | Resolve a child cue by index or name, stop every active voice currently playing it |
 | `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 84 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
@@ -56,9 +57,13 @@ which is a completely different global.
 | `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 78 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
 | `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 80 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
 
-Confidence is capped at 84 throughout by the rubric's "decompilation only,
-consistent call sites" band - none of this is runtime-verified, and no second
-binary corroborates it yet (see [Not corroborated on PSP](#not-corroborated-on-psp-yet)).
+Confidence is capped at 84 for every grain opcode by the rubric's
+"decompilation only, consistent call sites" band - none of this is
+runtime-verified, and no second binary corroborates it yet (see
+[Not corroborated on PSP](#not-corroborated-on-psp-yet)). `Scream_OpKeyOn`
+and its callees sit above that cap: they also carry an exact arithmetic
+invariant across many real files, not just a decompiled reading - see
+[below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain).
 
 ### `0x08` - the located handler, `snd_SFX_GRAIN_TYPE_BRANCH`
 
@@ -100,6 +105,115 @@ branch's format-string load. This is confidence **84**: the decompiled control
 flow is unambiguous, and the function's *own* error message names the grain
 type it implements - as strong as a decompilation-only reading gets without a
 runtime trace or a second binary.
+
+### `0x01`/`0x09` - `Scream_OpKeyOn`, and the codec dispatch chain
+
+2026-09-02. `psp-audio.md` recorded HD's second waveform codec as identified by
+data alone (`oag_formats::sblk::decode_pcm16`, confidence 85) with the actual
+PS3 dispatch function unresolved - the error string it decoded from was
+attributed to *a* function via `scripts/ps3-toc.py attrib`, but that function
+was not itself read. It is now, and it closes the loop: three functions, each
+one a direct PS3 analogue of an already-named PSP function.
+
+```text
+Scream_OpKeyOn (0x00626728)      opcode 0x01/0x09's handler
+  -> Scream_KeyOnVoice (0x00630310)   reads the descriptor's mode word
+       -> CellMs_QueueVoice (0x00633c80)  dispatches on the NOT_ADPCM_FLAG bit
+```
+
+**`Scream_OpKeyOn`** computes the waveform descriptor exactly as
+`psp-pulse-usa/sound.md`'s `Scream_OpKeyOn` does - `descriptor = *(u32
+*)(bank+0x34) + (command_word & 0xffffff)` - then copies the descriptor's
+offset (`+0x10`), length (`+0x14`) and mode word (`+0x0e`) into a per-voice
+runtime record before calling `Scream_KeyOnVoice`. The command-operand
+arithmetic is byte-for-byte the PSP reading; only the runtime struct it copies
+into differs, which is expected for a different console generation.
+
+**`Scream_KeyOnVoice`** reads that per-voice record's mode word back and
+extracts bit 6 (`LOOP_FLAG`) and bit 7 (`NOT_ADPCM_FLAG`) as two separate
+one-bit arguments, then calls `CellMs_QueueVoice(voice, addr, size, loop,
+not_adpcm)` - the exact argument order of PSP's `Sas_QueueSetVoice(voice,
+addr, size, loop, only_adpcm)`.
+
+**`CellMs_QueueVoice`** is where the split happens:
+
+```c
+// CellMs_QueueVoice(voice, addr, size, loop, not_adpcm), re-flowed
+if (not_adpcm) {
+    payload = addr + 0x10;              // skip a 16-byte header
+    payload_size = size - 0x10;
+    if (loop) {
+        loop_start = payload + *(u32 *)addr * 2;       // word[0] * 2 bytes
+        loop_len   = payload_size - *(u32 *)addr * 2;
+    }                                    // loop_start/loop_len left zero otherwise
+} else {
+    puts("SCREAM: ERROR! Unknown voice type in bank - must be ADPCM or PCM"); // dead in practice - see below
+    // ADPCM: walk 16-byte blocks looking for a loop-start/end-mute flag ((flags & 6) == 6)
+    ...
+}
+cellMSStreamSetInfo(voice, payload, payload_size, loop_start, loop_len, ...);
+```
+
+This directly corroborates `decode_pcm16`, from decompiled code rather than
+only from an error string and a byte-level census:
+
+- The **16-byte header skip** (`addr + 0x10`, `size - 0x10`) is
+  `oag_formats::sblk::PCM16_HEADER_LEN`, read off the same two fields
+  (`descriptor+0x10`/`+0x14`) this project's own `Sound` struct already reads.
+- The **`* 2`** factor is 2 bytes per sample - 16-bit PCM, matching
+  `decode_pcm16`'s `i16` reads.
+- Header word `0`, used here as a **loop-start sample offset**, is 0 on every
+  span this project measured - consistent with `psp-audio.md`'s finding that
+  word 0 is zero on every sampled span, and explaining *why* it is zero rather
+  than leaving it an unexplained constant: HD's own content always loops from
+  the very start.
+- Header word `1` (`docs/formats/psp-audio.md`'s sample-count invariant, exact
+  on all 315 loop-flagged spans) is **not read by this function at all** -
+  `size` already carries the byte length from the bank's own descriptor, so a
+  redundant sample count baked into the payload by whatever authored it is
+  metadata this runtime path has no need for. `decode_pcm16` was already
+  honest about not interpreting it; this explains why that was the right call
+  rather than an unfinished one.
+- **The condition really is exactly `NOT_ADPCM_FLAG`**, not some other bit:
+  `Scream_KeyOnVoice` passes bit 7 of the mode word as `not_adpcm`, and that
+  bit is `oag_formats::sblk::NOT_ADPCM_FLAG` by definition. The ADPCM branch
+  independently corroborates the *other* codec: it walks 16-byte blocks
+  looking for a flag byte matching `(flags & 6) == 6`, i.e. one of PS-ADPCM's
+  loop-start (`6`) or end-and-mute (`7`) flag values, at the exact `PS-ADPCM`
+  block stride this project's own `decode_adpcm` uses.
+- **The `"Unknown voice type"` error is unreachable from real bank data.** The
+  argument it guards is a single bit (`(mode >> 7) & 1`), so it can only ever
+  be `0` or `1` - both handled paths. This is a defensive "should never
+  happen" catch, not evidence of a third voice type; it is consistent with
+  `psp-audio.md`'s finding that MP3/ATRAC3 (real PS3 third-codec candidates)
+  are ruled out, not merely untested.
+
+**Confidence 90** for all three functions, above `decompile_function`'s
+"decompilation only" cap of 84 because it is *also* corroborated by an exact
+arithmetic invariant across many real files (the 315-file header-word match,
+already in `psp-audio.md`), and because the argument order, field offsets and
+overall shape reproduce an already-established PSP function
+(`psp-pulse-usa/sound.md`'s `Scream_OpKeyOn`/`Sas_QueueSetVoice`) almost
+exactly. Not "Established" (95+): no runtime trace exists for this binary, and
+there is no second PS3 disc to corroborate against - the codec itself is a
+PS3-only addition with nothing on PSP or PS2 to compare it to.
+
+`0x00633c80`'s backend is genuinely a PS3-specific one, not `sceSasCore`: the
+error strings under the `puts`/`printf` calls name real Sony PS3 SDK-shaped
+calls, `cellMSStreamSetInfo()` and `CellMSCoreInit`, which is why this
+function is named under a `CellMs_` prefix rather than reusing PSP's `Sas_` -
+different low-level backend, same role in SCREAM's own dispatch.
+
+All three functions carry TOC `0x008bd3c4` (module B, per `scripts/ps3-toc.py
+toc`), inside the per-function-TOC defect [memory.md](memory.md) warns about,
+so every string above was cross-checked with `scripts/ps3-toc.py str`/`attrib`
+against the address `decompile_function` showed - unlike memory.md's original
+example, they **agreed** on all three functions here, string for string. That
+is worth recording rather than assuming away: it means `decompile_function`'s
+own rendering happened to be trustworthy for this trio specifically, not that
+the defect stopped applying generally. Still cross-check by hand before citing
+a string from anywhere in module B; do not take this page's agreement as
+license to skip the check elsewhere.
 
 ### `0x05` - plays a child with a computed volume and pan
 

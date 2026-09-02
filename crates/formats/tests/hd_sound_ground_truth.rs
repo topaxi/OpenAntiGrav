@@ -23,9 +23,9 @@
 //! # The one thing that is genuinely different
 //!
 //! About a third of HD's waveforms are **not PS-ADPCM**, and the descriptor
-//! says which: `+0x0e`'s `0x80`. What that second codec is has not been
-//! identified, so nothing decodes it - see
-//! [`oag_formats::sblk::NOT_ADPCM_FLAG`] and the census below.
+//! says which: `+0x0e`'s `0x80`. That second codec is 16-bit PCM, big-endian,
+//! behind a 16-byte header - see [`oag_formats::sblk::NOT_ADPCM_FLAG`],
+//! [`oag_formats::sblk::decode_pcm16`] and the census below.
 
 use std::path::{Path, PathBuf};
 
@@ -245,5 +245,77 @@ fn the_not_adpcm_flag_predicts_hd_s_payload() {
         mean(&other) < 0.5,
         "spans marked not-ADPCM are {:.2}% in spec, so the flag is not a codec selector",
         mean(&other) * 100.0
+    );
+}
+
+/// `oag_formats::sblk::decode_pcm16` is the identification of the second
+/// codec, not just a guess: every one of HD's not-PS-ADPCM spans decodes to
+/// audio far smoother than white noise, not to noise itself.
+///
+/// See `docs/formats/psp-audio.md`'s "A third of HD's waveforms are not
+/// PS-ADPCM, and are 16-bit PCM" for the fuller evidence, including a labelled
+/// span's spectrogram this test does not reproduce.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn decode_pcm16_produces_audio_not_noise() {
+    let Some(iso) = image() else {
+        return;
+    };
+
+    // White noise's mean absolute step over RMS is about 1.41 for
+    // uncorrelated 16-bit samples; real audio sits far below it. A per-span
+    // ratio rather than one pooled ratio, so one very loud span cannot hide
+    // many quiet, noisy ones behind it.
+    let mut roughness: Vec<f64> = Vec::new();
+    for (_, _, blob) in every_bank(&iso) {
+        let bank = Bank::parse(&blob).expect("parse");
+        for sound in bank.sounds() {
+            if sound.is_adpcm() {
+                continue;
+            }
+            let Some(data) = bank.waveform(&sound) else {
+                continue;
+            };
+            let pcm = sblk::decode_pcm16(data);
+            if pcm.len() < 2 {
+                continue;
+            }
+            let samples: Vec<f64> = pcm.iter().map(|&s| f64::from(s)).collect();
+            #[expect(clippy::cast_precision_loss, reason = "sample counts are small")]
+            let n = samples.len() as f64;
+            let rms = (samples.iter().map(|s| s * s).sum::<f64>() / n).sqrt();
+            if rms == 0.0 {
+                continue;
+            }
+            let mean_step =
+                samples.windows(2).map(|w| (w[1] - w[0]).abs()).sum::<f64>() / (n - 1.0);
+            roughness.push(mean_step / rms);
+        }
+    }
+
+    #[expect(clippy::cast_precision_loss, reason = "span counts are small")]
+    let mean = roughness.iter().sum::<f64>() / roughness.len() as f64;
+    let worst = roughness.iter().copied().fold(0.0_f64, f64::max);
+    println!(
+        "span roughness    mean {mean:.3}, worst {worst:.3} over {} spans (white noise is ~1.41)",
+        roughness.len()
+    );
+
+    assert!(
+        roughness.len() > 500,
+        "only {} spans measured",
+        roughness.len()
+    );
+    assert!(
+        mean < 0.5,
+        "mean roughness {mean:.3} is not far below white noise's ~1.41"
+    );
+    // One measured span (of 1,167) reaches 1.476, just past the ~1.41 white
+    // noise figure - a short or quiet outlier, not evidence the codec guess is
+    // wrong given how far below it the other 1,166 sit. 2.0 catches a
+    // regression to real noise without pinning that one span exactly.
+    assert!(
+        worst < 2.0,
+        "worst-case roughness {worst:.3} looks like noise"
     );
 }
