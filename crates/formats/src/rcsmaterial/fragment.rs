@@ -381,6 +381,15 @@ impl Program {
     /// overwrites this before it is ever zero on screen" - see
     /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Ships have no
     /// Lambert diffuse either".
+    ///
+    /// **Two different parameters patching the same slot is not excluded by
+    /// this method** - it answers only "does `hash` patch `slot`", not "is
+    /// `hash` the only one that does". Checked rather than assumed:
+    /// `crates/render/examples/hd_specular_patch_census.rs` sweeps every
+    /// pair of a resolved block's own declared parameters and found no two
+    /// distinct ones ever sharing a slot, over 4,586 resolved blocks across
+    /// 16 circuits - a one-to-one relation holds disc-wide as measured, not
+    /// by construction.
     pub fn patches(&self, hash: u32) -> impl Iterator<Item = u16> + '_ {
         self.parameter_patches
             .iter()

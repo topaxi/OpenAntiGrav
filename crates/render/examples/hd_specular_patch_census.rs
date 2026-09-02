@@ -11,6 +11,11 @@
 //! them a round number the shared-literal population - `5`/`10`/`32`/`40`/
 //! `300` - carries), and `mesh::rcs::skin::roles` now reads that value
 //! instead of falling back to the shared stand-in.
+//!
+//! It also checks a second thing `fragment::Program::patches`'s own doc
+//! comment leans on: that no two distinct declared parameters of a resolved
+//! block ever patch the same code slot, over every pair of every block
+//! reached here.
 
 use oag_formats::{rcsmaterial, rcsmodel};
 use oag_render::mesh;
@@ -41,6 +46,8 @@ fn main() -> anyhow::Result<()> {
     let mut zero_authored_nonzero = 0usize;
     let mut zero_authored_zero_or_absent = 0usize;
     let mut other_nonzero = 0usize;
+    let mut blocks_checked = 0usize;
+    let mut slot_collisions = 0usize;
 
     for (archive, name) in CIRCUITS {
         let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
@@ -70,6 +77,25 @@ fn main() -> anyhow::Result<()> {
             else {
                 continue;
             };
+            blocks_checked += 1;
+            let patched_hashes: Vec<u32> = program
+                .declared
+                .parameter_patches
+                .iter()
+                .filter(|&&(_, vreg, _)| vreg == 0xffff)
+                .map(|&(hash, ..)| hash)
+                .collect();
+            for i in 0..patched_hashes.len() {
+                for other in &patched_hashes[i + 1..] {
+                    if patched_hashes[i] == *other {
+                        continue;
+                    }
+                    let a: Vec<u16> = program.patches(patched_hashes[i]).collect();
+                    if program.patches(*other).any(|s| a.contains(&s)) {
+                        slot_collisions += 1;
+                    }
+                }
+            }
             let Some(exponent) = program.specular_exponent() else {
                 continue;
             };
@@ -110,5 +136,7 @@ fn main() -> anyhow::Result<()> {
     println!("  of those, code slot patched by SpecularPower: {zero_patched_by_specular_power}");
     println!("  of those, model authors a non-zero SpecularPower: {zero_authored_nonzero}");
     println!("  of those, model authors zero or nothing: {zero_authored_zero_or_absent}");
+    println!("blocks checked for a shared patch slot: {blocks_checked}");
+    println!("two parameters patching the same slot: {slot_collisions}");
     Ok(())
 }

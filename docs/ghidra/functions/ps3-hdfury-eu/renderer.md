@@ -1951,11 +1951,22 @@ circuits and found the two questions this rests on both close together:
 every one of the 62 materials whose `0.0` chain is patched from
 `SpecularPower` also authors a non-zero value for it - at 30 to 100,
 non-round, a different population from the six shared-literal values above -
-and none of the other 233 materials in the `0.0` bucket does. Pinned as a
-disc invariant by
+and none of the other 233 materials in the `0.0` bucket does. The same sweep
+also checked the assumption `patches` rests on: no two distinct declared
+parameters of a resolved block ever patch the same code slot, over 4,586
+resolved blocks, so asking "does `SpecularPower` patch this slot" has no
+ambiguous second answer. Pinned as a disc invariant by
 `crates/formats/tests/specular_power_ground_truth.rs`, over the three models
 `rcsmodel_common::PAIRS` already shares with the other `.rcsmodel`
 ground-truth binaries.
+
+**This closes a fifth of the `0.0` bucket, not the whole of it.** The
+paragraph above originally called the entire bucket "the strongest candidate
+for `SpecularPower` patched at draw time"; the census shows that is true for
+62 of 295 sampled zeros and leaves the other 233 - four fifths - genuinely
+unexplained. Their `0.0` is faithful to the file (nothing here invents a
+value for them), and they still fall back to the shared `32`. What the
+remaining four fifths' `0.0` actually means is open.
 
 ### The sun is real and it is masked (2026-08-20)
 

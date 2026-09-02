@@ -97,10 +97,16 @@ fn a_zero_specular_exponent_patched_from_specular_power_is_authored_non_zero() {
         }
     }
 
+    println!("{zero_and_patched} slot(s) resolve to a 0.0 chain patched from SpecularPower");
+    // Measured on these three models: 12. A floor rather than an exact
+    // match, so a small, unrelated shift in variant resolution does not fail
+    // this test for a reason that has nothing to do with the invariant it
+    // checks - but a drop to near zero, or a rise by an order of magnitude,
+    // both deserve a look rather than a silent floor bump.
     assert!(
-        zero_and_patched > 0,
-        "none of these three models exercises the SpecularPower patch at all - \
-         a fixture drift, not a passing check"
+        zero_and_patched >= 6,
+        "only {zero_and_patched} slot(s) exercised the SpecularPower patch on \
+         these three models (measured 12) - a fixture drift, not a passing check"
     );
     assert_eq!(confirmed, zero_and_patched);
 }
