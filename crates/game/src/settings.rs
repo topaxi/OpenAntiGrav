@@ -6,25 +6,46 @@
 //! version never wrote. A CLI flag still wins over whatever is on disk for
 //! that one run; see `--anisotropy` in `main.rs`.
 //!
-//! # Display against graphics
+//! # Display against graphics against render profiles
 //!
-//! Two tables, matching the two pages the menus put them on:
+//! Three tables:
 //!
 //! - **`[display]`** is the picture's container and how it reaches a screen:
 //!   which monitor, what kind of window, how big, what shape, how a finished
 //!   frame is presented and what happens to it on the way out.
-//! - **`[graphics]`** is how the picture is drawn: how many pixels, how the
-//!   textures are filtered, how much of the world is in frame.
+//! - **`[graphics]`** is how the picture is drawn, for whichever title the
+//!   value applies to equally: how the textures are filtered, how much of
+//!   the world is in frame.
+//! - **`[render_profiles.<title>]`** is the subset of "how the picture is
+//!   drawn" whose right default trades off against how expensive that
+//!   *particular title's* own scene is to render: resolution, upscaling,
+//!   anti-aliasing, motion blur. Pure and Pulse's PSP/PS2-era scenes and
+//!   HD/Fury/2048's real lighting and higher poly counts are not the same
+//!   cost to draw, and this is kept **one profile per title**, not a shared
+//!   value or a two-way "classic/modern" grouping: a grouping bakes in a
+//!   guess about relative cost that does not hold even within a pair - Pulse
+//!   authors 129 dynamic shadow-occluder hulls across 83 WADs, Pure authors
+//!   none, despite being "the same era". Per title, switching which disc you
+//!   boot switches which profile the menus read and write, with nothing to
+//!   explain in the UI, because only one title is ever open at once. See
+//!   [`RenderProfile`].
 //!
-//! The line between them is *whether the renderer would notice*. Turning off
-//! vsync changes nothing about the frame that is drawn, only about when it is
-//! shown; halving the render scale changes the frame itself. Brightness and
-//! gamma sit on the display side under that rule even though they are a shader:
-//! they are a monitor calibration, applied after the game has finished drawing.
+//! The line between `[display]` and `[graphics]` is *whether the renderer
+//! would notice*. Turning off vsync changes nothing about the frame that is
+//! drawn, only about when it is shown; halving the render scale changes the
+//! frame itself. Brightness and gamma sit on the display side under that
+//! rule even though they are a shader: they are a monitor calibration,
+//! applied after the game has finished drawing. The line between
+//! `[graphics]` and `[render_profiles.<title>]` is *whether the right
+//! default depends on which title is open*: anisotropy and field of view
+//! cost about the same whatever is on screen, so they stay in `[graphics]`.
 //!
-//! Everything was in `[graphics]` until this split, so [`load`] migrates a file
-//! that still is - see [`migrate`].
+//! Everything was in `[graphics]` until the display split, so [`load`]
+//! migrates a file that still is - see [`migrate`]. Everything
+//! render-profile-shaped was still flat in `[graphics]` until *this* split,
+//! so [`load`] migrates that too - see [`migrate_render_profiles`].
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -35,9 +56,12 @@ use oag_render::mesh_render::Anisotropy;
 
 mod controls;
 mod race;
+mod render_profile;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use race::{Race, Remix};
+pub use render_profile::RenderProfile;
+use render_profile::{ensure_known_titles, migrate_render_profiles};
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
 /// does not own. Named the same as `Display`/`FromStr` already spell it in
@@ -74,6 +98,21 @@ pub struct Settings {
     pub display: Display,
     #[serde(default)]
     pub graphics: Graphics,
+    /// The render-cost-sensitive slice of [`Graphics`], one entry per title,
+    /// keyed by [`oag_title::Title::name`]. See the module doc's "Display
+    /// against graphics against render profiles" section for why this is
+    /// its own table rather than a field on `Graphics`.
+    ///
+    /// A `BTreeMap` rather than `HashMap` so the canonical rewrite
+    /// [`load`]/[`save`] write is stable across runs - an unordered map's
+    /// iteration order is not something this file should depend on.
+    ///
+    /// [`ensure_known_titles`] fills in every title this build links, so the
+    /// file documents all of them the same way every `Graphics` field is
+    /// always present regardless of whether a player touched it - a title
+    /// with no entry yet reads as [`RenderProfile::default`].
+    #[serde(default)]
+    pub render_profiles: BTreeMap<String, RenderProfile>,
     #[serde(default)]
     pub audio: Audio,
     #[serde(default)]
@@ -324,48 +363,6 @@ pub struct Graphics {
     /// any other adapter.
     #[serde(default)]
     pub renderer: crate::display::Renderer,
-    /// What percentage of the displayed size the game is rendered at.
-    ///
-    /// Below 100 is the usual internal-resolution knob; above it is
-    /// supersampling. Measured against the aspect rectangle rather than the
-    /// window, so it means the same thing whatever `display.aspect` is. See
-    /// [`crate::display::Scale`].
-    #[serde(default)]
-    pub render_scale: crate::display::Scale,
-    /// Which resampler carries the frame onto the surface: `off` or
-    /// `fsr1`.
-    ///
-    /// Defaults to `off`, which is what this always did. FSR 1 costs two
-    /// fullscreen passes and is a clear win on photographic art at a low render
-    /// scale; whether it is one on this game's hard-edged paletted art is a
-    /// screenshot comparison has now been run, and at 50 % on one frame of one
-    /// track FSR 1 wins clearly. **The default has not moved on it**, because
-    /// one frame of one track is not the sample a default flip is held to
-    /// here; see HANDOVER for what would settle it. See
-    /// [`crate::display::Upscaler`].
-    ///
-    /// **Only has an effect below 100 % `render_scale`.** FSR 1 is a magnifier;
-    /// asked to minify it undoes the supersampling it was handed. See
-    /// `crate::upscale::magnifies`.
-    #[serde(default)]
-    pub upscaler: crate::display::Upscaler,
-    /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each
-    /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
-    #[serde(default)]
-    pub upscale_sharpness: crate::display::Sharpness,
-    /// Which anti-aliasing the scene draws with: `off`, `fxaa`, `smaa` or
-    /// `msaa4x`.
-    ///
-    /// Defaults to `off`. **Only `msaa4x` is baked into the scene's
-    /// pipelines when a race starts** - `off`, `fxaa` and `smaa` are read
-    /// fresh every frame by `upscale::Framebuffer::resolve_scene`, the same as
-    /// `upscaler` is, and moving among those three takes effect the frame
-    /// they were chosen on. Moving to or from `msaa4x` takes effect the next
-    /// time a race is launched, because that is what rebuilds the pipelines
-    /// it is a property of. See [`crate::display::AntiAliasing`] and
-    /// `docs/architecture/adr/0013-anti-aliasing-architecture.md`.
-    #[serde(default)]
-    pub anti_aliasing: crate::display::AntiAliasing,
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
     ///
@@ -502,25 +499,6 @@ pub struct Graphics {
     /// a known-wrong picture to make a recovered subsystem visible.
     #[serde(default = "default_bloom")]
     pub bloom: bool,
-    /// How hard the finished frame is smeared along the camera's own motion:
-    /// `off`, `low`, `medium` or `high`.
-    ///
-    /// **An enhancement of this project's, off by default.** Neither PSP
-    /// build renders motion blur, so on is a divergence a player opts into -
-    /// the same footing as FSR 1 and SMAA, unlike the recovered bloom above
-    /// whose default is about calibration. It is also the first consumer of
-    /// the reprojection infrastructure temporal anti-aliasing needs, which is
-    /// most of why it exists - see `oag_render::post::motion_blur`,
-    /// `docs/rendering/motion-blur.md` and ADR-0028.
-    ///
-    /// A strength rather than a boolean, per that design: the value names a
-    /// shutter fraction, and the technique underneath can improve without a
-    /// settings migration - it already has once, camera reprojection to the
-    /// design's per-object velocity buffer, with nobody's file moving. Read
-    /// fresh every frame, so the row applies live, MSAA included: the
-    /// blur's prepare stage reads sample 0 of the multisampled attachments.
-    #[serde(default)]
-    pub motion_blur: crate::display::MotionBlur,
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
     /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
@@ -584,10 +562,6 @@ impl Default for Graphics {
     fn default() -> Self {
         Self {
             renderer: crate::display::Renderer::default(),
-            render_scale: crate::display::Scale::default(),
-            upscaler: crate::display::Upscaler::default(),
-            upscale_sharpness: crate::display::Sharpness::default(),
-            anti_aliasing: crate::display::AntiAliasing::default(),
             anisotropy: Anisotropy::default(),
             fov: crate::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),
@@ -595,7 +569,6 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
             bloom: default_bloom(),
-            motion_blur: crate::display::MotionBlur::default(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),
         }
@@ -648,7 +621,11 @@ const MOVED_TO_DISPLAY: [&str; 5] = [
 /// saw on the menu.
 ///
 /// Anything not on that list is left alone, so a `[graphics]` that still has
-/// `anisotropy` or `render_scale` is not touched: those did not move.
+/// `anisotropy` or `fov` is not touched: those never moved out of
+/// `[graphics]` at all. `render_scale` and its render-profile siblings did
+/// move, but to `[render_profiles.<title>]` rather than `[display]` - see
+/// [`migrate_render_profiles`], a separate function because it moves keys to
+/// a table per title rather than to one fixed table.
 fn migrate(table: &mut toml::Table) {
     // Checked *before* anything is taken out of `[graphics]`, so a file this
     // gives up on is left exactly as it was rather than half-moved. A
@@ -702,18 +679,20 @@ pub fn load() -> Result<Settings> {
         Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
     };
 
-    let settings: Settings = match &on_disk {
+    let mut settings: Settings = match &on_disk {
         Some(text) => {
             let mut table: toml::Table = text
                 .parse()
                 .with_context(|| format!("parsing {}", path.display()))?;
             migrate(&mut table);
+            migrate_render_profiles(&mut table);
             table
                 .try_into()
                 .with_context(|| format!("parsing {}", path.display()))?
         }
         None => Settings::default(),
     };
+    ensure_known_titles(&mut settings);
 
     let canonical = format!(
         "{HEADER}{}",
@@ -741,12 +720,24 @@ pub fn load() -> Result<Settings> {
 /// `anisotropy` is passed rather than read off `settings` because the command
 /// line can override it for one run, and the menus should show what is in
 /// effect.
+///
+/// `title` names whose [`RenderProfile`] the five `graphics.*` rows below
+/// that moved into `render_profiles` should read. Passed rather than looked
+/// up here because a caller (the live menus) already has the open title in
+/// hand as `Session::title.name` - there is exactly one at a time, so there
+/// is nothing for the menus to choose between.
 #[must_use]
 pub fn menu_seeds(
     settings: &Settings,
     anisotropy: Anisotropy,
+    title: &str,
 ) -> Vec<(&'static str, crate::menu::Value)> {
     let text = |value: &str| crate::menu::Value::Text(value.to_string());
+    let profile = settings
+        .render_profiles
+        .get(title)
+        .cloned()
+        .unwrap_or_default();
     let mut out = vec![
         (
             "display.monitor",
@@ -783,23 +774,20 @@ pub fn menu_seeds(
         ),
         (
             "graphics.render_scale",
-            text(&settings.graphics.render_scale.to_string()),
+            text(&profile.render_scale.to_string()),
         ),
-        (
-            "graphics.upscaler",
-            text(&settings.graphics.upscaler.to_string()),
-        ),
+        ("graphics.upscaler", text(&profile.upscaler.to_string())),
         (
             "graphics.upscale_sharpness",
-            text(&settings.graphics.upscale_sharpness.to_string()),
+            text(&profile.upscale_sharpness.to_string()),
         ),
         (
             "graphics.anti_aliasing",
-            text(&settings.graphics.anti_aliasing.to_string()),
+            text(&profile.anti_aliasing.to_string()),
         ),
         (
             "graphics.motion_blur",
-            text(&settings.graphics.motion_blur.to_string()),
+            text(&profile.motion_blur.to_string()),
         ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),

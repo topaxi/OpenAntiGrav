@@ -283,17 +283,26 @@ impl Stage {
     /// the offscreen target rather than the surface. Getting it from the window
     /// is right only at a render scale of 100 % on an unshaped aspect, which is
     /// exactly the case that would let it ship looking correct.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn race(
         gpu: &Gpu,
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
         settings: &settings::Settings,
+        render_profile: &settings::RenderProfile,
         scheme: ControlScheme,
         autopilot: bool,
     ) -> Result<Self> {
         Ok(Self::Race(Self::build_race_stage(
-            gpu, loaded, size, anisotropy, settings, scheme, autopilot,
+            gpu,
+            loaded,
+            size,
+            anisotropy,
+            settings,
+            render_profile,
+            scheme,
+            autopilot,
         )?))
     }
 
@@ -324,6 +333,14 @@ impl Stage {
         // exception is `anisotropy`, which stays its own parameter precisely
         // because `--anisotropy` *can* override it.
         settings: &settings::Settings,
+        // The one relocated `[render_profiles.<title>]` field this scene build
+        // reads (`anti_aliasing`). Its own parameter rather than folded into
+        // `settings` above: which title's entry applies is not this
+        // function's question to answer - a caller with a `Session` resolves
+        // it from `self.shell`'s title, one with none (the `--race` direct
+        // launch, which never opens a `Shell`) falls back to
+        // [`settings::RenderProfile::default`].
+        render_profile: &settings::RenderProfile,
         scheme: ControlScheme,
         // `--autopilot`, its own parameter for the same reason `anisotropy` is:
         // it is a run flag rather than a stored preference, and nothing in the
@@ -374,7 +391,7 @@ impl Stage {
             anisotropy,
             settings.graphics.bloom,
             visibility,
-            settings.graphics.anti_aliasing,
+            render_profile.anti_aliasing,
             fog_volumes,
             light,
             authored_fog,

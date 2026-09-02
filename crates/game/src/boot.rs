@@ -22,6 +22,11 @@ use crate::screen::Screens;
 
 /// A loaded boot sequence and the pieces the renderer needs alongside it.
 pub struct Boot {
+    /// Which title this is, carried from [`Shell::title`] by [`assemble`]
+    /// rather than re-derived. `--menu-page` reads its `name` to resolve
+    /// `crate::settings::menu_seeds`' five per-title render-profile rows
+    /// against the one title open here.
+    pub title: &'static oag_title::Title,
     /// The sequence itself.
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
@@ -281,6 +286,12 @@ pub fn load(options: &Options) -> Result<Boot> {
 /// separately, because the next phase takes them onto a worker thread and
 /// this half stays on the one that owns the window.
 pub struct Shell {
+    /// Which title this is, settled by the serial before any XML was parsed.
+    /// Also returned alongside this struct by [`load_shell`] for a caller
+    /// that needs it before a `Shell` exists at all; carried here too so
+    /// [`assemble`] does not have to be handed a third, easy-to-mismatch
+    /// argument for a value this struct was already built from.
+    pub title: &'static oag_title::Title,
     /// The front-end XML. Cloned for the media worker, moved into
     /// [`Frontend::booting`] by [`assemble`].
     pub screens: Screens,
@@ -652,6 +663,7 @@ pub fn load_shell(
 
     Ok((
         Shell {
+            title,
             screens,
             entries: chosen_language(&languages, options.language.as_deref())
                 .and_then(|language| language.entries.clone()),
@@ -999,6 +1011,7 @@ impl MediaWorker {
 #[must_use]
 pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
+        title,
         screens,
         entries,
         loading: _,
@@ -1187,6 +1200,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 
     Boot {
+        title,
         entries,
         menu_skin,
         frame,

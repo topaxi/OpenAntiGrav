@@ -158,8 +158,11 @@ fn a_mode_label_falls_back_rather_than_printing_prose() {
 #[test]
 fn the_mode_row_is_seeded_by_the_settings_module() {
     let settings = crate::settings::Settings::default();
-    let seeds =
-        crate::settings::menu_seeds(&settings, oag_render::mesh_render::Anisotropy::default());
+    let seeds = crate::settings::menu_seeds(
+        &settings,
+        oag_render::mesh_render::Anisotropy::default(),
+        oag_pulse::TITLE.name,
+    );
     assert!(
         seeds.iter().any(|(key, _)| *key == "race.mode"),
         "nothing seeds race.mode, so the menu cannot open on the saved mode"
@@ -186,6 +189,7 @@ fn every_controls_row_is_seeded_by_the_settings_module() {
     let seeds = crate::settings::menu_seeds(
         &crate::settings::Settings::default(),
         oag_render::mesh_render::Anisotropy::default(),
+        oag_pulse::TITLE.name,
     );
 
     for entry in &page.entries {
@@ -505,11 +509,14 @@ fn every_settings_row_is_one_the_game_seeds() {
         language: Some("English".to_string()),
         ..Default::default()
     };
-    let seeded: Vec<&str> =
-        crate::settings::menu_seeds(&settings, oag_render::mesh_render::Anisotropy::default())
-            .into_iter()
-            .map(|(setting, _)| setting)
-            .collect();
+    let seeded: Vec<&str> = crate::settings::menu_seeds(
+        &settings,
+        oag_render::mesh_render::Anisotropy::default(),
+        oag_pulse::TITLE.name,
+    )
+    .into_iter()
+    .map(|(setting, _)| setting)
+    .collect();
 
     for page in &definition.pages {
         for entry in &page.entries {

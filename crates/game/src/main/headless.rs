@@ -373,6 +373,11 @@ pub(crate) fn run_race(
             settings.audio.music_source,
             &boot::default_audio_cache_dir(),
         );
+        // No title in hand on this leg: `--race` skips the boot sequence and
+        // `race::load` above never hands a resolved title back, so there is
+        // nothing to key `settings.render_profiles` on. The same fallback
+        // `Session::render_profile` uses on a shell-less run.
+        let render_profile = settings::RenderProfile::default();
         race::capture(
             loaded,
             &race::CaptureOptions {
@@ -405,18 +410,18 @@ pub(crate) fn run_race(
                 bloom: settings.graphics.bloom,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
-                anti_aliasing: settings.graphics.anti_aliasing,
-                motion_blur: settings.graphics.motion_blur,
+                anti_aliasing: render_profile.anti_aliasing,
+                motion_blur: render_profile.motion_blur,
                 camera_jitter: cli.camera_jitter,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
                 presented: cli.presented.then_some(race::Presented {
-                    render_scale: settings.graphics.render_scale,
+                    render_scale: render_profile.render_scale,
                     presentation: oag_game::upscale::Presentation {
-                        upscaler: settings.graphics.upscaler,
-                        sharpness: settings.graphics.upscale_sharpness.stops(),
-                        anti_aliasing: settings.graphics.anti_aliasing,
+                        upscaler: render_profile.upscaler,
+                        sharpness: render_profile.upscale_sharpness.stops(),
+                        anti_aliasing: render_profile.anti_aliasing,
                         brightness: settings.display.brightness,
                         gamma: settings.display.gamma,
                     },

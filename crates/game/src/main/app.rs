@@ -122,10 +122,15 @@ impl App {
         )?;
 
         // Built before the stage, because a race's depth attachment has to match
-        // this rather than the window.
+        // this rather than the window. Too early to know which leg this run
+        // takes - the launcher, `--race`, or a boot - so too early to know a
+        // title to resolve `settings.render_profiles` against; falls back to
+        // the same default a shell-less `Session::render_profile` would.
+        // `Session::frame` resizes this against the real per-title value on
+        // its first frame once a `Shell` exists.
         let target = upscale::target_size(
             display::viewport(gpu.size(), self.settings.display.aspect),
-            self.settings.graphics.render_scale,
+            settings::RenderProfile::default().render_scale,
             gpu.device.limits().max_texture_dimension_2d,
         );
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
@@ -192,6 +197,12 @@ impl App {
                 framebuffer.allocation(),
                 self.anisotropy,
                 &self.settings,
+                // No `Shell` on this leg at all - `--race` skips the boot
+                // sequence outright (see the comment on this leg in
+                // `main.rs`), so there is no title in hand to resolve
+                // `render_profiles` against. Falls back to the same default
+                // a shell-less `Session::render_profile` would.
+                &settings::RenderProfile::default(),
                 self.scheme,
                 self.autopilot,
             )?
