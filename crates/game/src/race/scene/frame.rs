@@ -15,8 +15,9 @@ impl Scene {
     /// One render pass with one clear: a second pass would either wipe the first's
     /// colour or need its own decision about the depth buffer.
     ///
-    /// `cull` is `[graphics] frustum_culling` - off by default, see that
-    /// setting's own doc comment for the measurement behind that default.
+    /// `cull` is `[graphics] frustum_culling` - **on** by default, see that
+    /// setting's own doc comment for the measurement behind that default and
+    /// for the cost the test itself carries.
     ///
     /// Returns what the track's frustum culling did, for the performance
     /// overlay - see [`SceneStats`].

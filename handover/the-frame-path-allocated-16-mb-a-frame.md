@@ -148,17 +148,33 @@ on pristine `157a4666`** and neither is in a crate this work touches.
   ~50 KiB `rockets+plumes` stage.
 - **The per-drawable `write_anims`/`write_node_anims` pair costs 70
   allocations and 29 KiB a frame** across five drawables. Unread further.
-- **`smaa::render` builds three bind groups a frame and `fxaa`/`fsr1` one
-  each.** SMAA's own comment argues the rebuild is deliberate ("a bind group
-  is cheap next to the draw it feeds"); the motion blur measurement above is
-  the counter-evidence, at 194 allocations for seven groups. The AA chain runs
-  in the presentation path, which the capture harness above does not reach, so
-  **these were not measured** - only read. Instrumenting the presented path is
-  the next step there.
+- **The presentation path builds bind groups per frame, and none of it is
+  measured.** `smaa::render` builds three a frame, `fxaa` and `fsr1` one each,
+  and `upscale::Framebuffer::resolve` **one more** whenever a post-process or
+  an FSR 1 output is bound - the two `bind(device, ..)` calls in
+  `crates/game/src/upscale.rs`. That sixth site is easy to miss: it is in
+  `oag-game`, where the other five are in `oag-render`, so a sweep of the post
+  chain alone does not find it. SMAA's own comment argues the rebuild is
+  deliberate ("a bind group is cheap next to the draw it feeds"); the motion
+  blur measurement above is the counter-evidence, at 194 allocations for seven
+  groups.
 
-**A stale comment**: `race/scene/frame.rs`'s `render` doc says `cull` is
-"off by default"; `settings::default_frustum_culling` returns `true` and has
-since the measurement in `Graphics::frustum_culling`'s own doc comment landed.
+  **All of it is read rather than measured**, and closing that wants two
+  things, not one:
+
+  - *A counter on the `Framebuffer` pair.* The five `oag-render` sites carry
+    `perfprobe::bind_group`; these two, being in `oag-game`, do not. Left
+    unwritten deliberately rather than overlooked: `upscale.rs` is being
+    restructured on `worktree-handover-fsr-1s-default-is-open`, where
+    ADR-0036 splits `resolve` into `resolve_scene` and `composite`, and two
+    probe lines added here now would do nothing but conflict with it. That
+    thread has been told which two lines they are.
+  - *A harness that presents N frames.* `--presented` on the race capture does
+    drive the real path, but for **one** frame, and the question here is
+    per-frame churn - a single-frame total cannot answer it. The front-end
+    capture has no `Framebuffer` at all. So this wants the presented-path
+    equivalent of `OAG_RENDER_BENCH`'s re-record loop, which is its own piece
+    of work and belongs to neither thread yet.
 
 ## Not measurable here
 
@@ -202,8 +218,9 @@ after touching anything in this list.
 
 ## Next Steps
 
-1. Instrument the presented path so the AA chain's per-frame bind groups get a
-   number rather than a reading - the counters are placed, the harness is not.
-2. Fix the stale "off by default" in `race/scene/frame.rs`.
-3. `Race::rocket_model_matrices`' per-frame `Vec`, then the
+1. Instrument the presented path: a counter on `upscale.rs`'s two `bind` calls
+   once the FSR 1 thread's `resolve_scene`/`composite` split lands, and a
+   harness that presents N frames. See the Open item for why `--presented` is
+   not that harness.
+2. `Race::rocket_model_matrices`' per-frame `Vec`, then the
    `write_anims`/`write_node_anims` pair at 70 allocations a frame.
