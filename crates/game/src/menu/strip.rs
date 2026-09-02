@@ -91,6 +91,7 @@ pub(super) fn draw(
     let gap = skin.strip_gap();
     let (tab_left_pad, tab_top_pad) = skin.tab_pad();
     let tab_height = skin.tab_height();
+    let (chamfer_width, chamfer_height) = skin.tab_chamfer();
     let (underline_width, underline_height, underline_offset_y) = skin.underline();
 
     let mut out = Vec::new();
@@ -100,23 +101,40 @@ pub(super) fn draw(
         let selected = index == menu.selected();
         let width = measure(label) * scale;
 
-        // The tab behind the label. **Approximated**: the real one has its
-        // top-right corner chamfered, which this build's `Draw`/`Quad`
-        // pipeline cannot draw without a new primitive - see `Skin`'s
-        // `TAB_LEFT_PAD` doc for the measurement this rectangle is standing
-        // in for and the confidence it carries.
+        // The tab behind the label, in two bands rather than one rectangle:
+        // the real tab's top-right corner is chamfered, and a diagonal cut
+        // needs a primitive this build's `Draw`/`Quad` pipeline does not
+        // have. A staircase of one step - the full tab below the chamfer's
+        // height, a second band above it short by the chamfer's width - draws
+        // the true measured size and position of the cut with the primitive
+        // that already exists. See `Skin`'s `TAB_LEFT_PAD` doc for the raw
+        // measurement and the render comparison that checked this was worth
+        // shipping.
         let fill = if selected {
             frame.tab_selected
         } else {
             frame.ink
         };
         if let Some(color) = fill {
+            let tab_width = tab_left_pad + width;
+            out.push(Draw::Fill {
+                rect: [
+                    x - tab_left_pad,
+                    strip.y - tab_top_pad + chamfer_height,
+                    tab_width,
+                    tab_height - chamfer_height,
+                ],
+                color,
+            });
+            // A label short enough that its tab is narrower than the chamfer
+            // itself would otherwise flip this band's width negative - the
+            // chamfer only ever eats up to the whole top band, never past it.
             out.push(Draw::Fill {
                 rect: [
                     x - tab_left_pad,
                     strip.y - tab_top_pad,
-                    tab_left_pad + width,
-                    tab_height,
+                    (tab_width - chamfer_width).max(0.0),
+                    chamfer_height,
                 ],
                 color,
             });

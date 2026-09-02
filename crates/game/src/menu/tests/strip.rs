@@ -180,9 +180,14 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     let frame = frame_with_fills();
     let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame).flatten();
 
-    // Four entries: one selected tab, three unselected, plus the underline.
+    // Four entries, two fills each (the chamfer band and the rest of the
+    // tab - see `strip::draw`), plus one underline.
     let tabs = fills(&list);
-    assert_eq!(tabs.len(), 5, "four tabs and one underline: {tabs:?}");
+    assert_eq!(
+        tabs.len(),
+        9,
+        "four tabs of two fills, one underline: {tabs:?}"
+    );
     let accents = tabs
         .iter()
         .filter(|(_, color)| *color == frame.tab_selected.unwrap())
@@ -192,10 +197,10 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
         .filter(|(_, color)| *color == frame.ink.unwrap())
         .count();
     // The underline is drawn in `skin.normal()`, not either fill colour, so
-    // it counts toward neither bucket and the two sum to four rather than
-    // five.
-    assert_eq!(accents, 1, "one selected tab: {tabs:?}");
-    assert_eq!(inks, 3, "three unselected tabs: {tabs:?}");
+    // it counts toward neither bucket and the two sum to eight rather than
+    // nine.
+    assert_eq!(accents, 2, "one selected tab, two bands: {tabs:?}");
+    assert_eq!(inks, 6, "three unselected tabs, two bands each: {tabs:?}");
 }
 
 /// A frame with neither colour draws no tabs and no underline - only the

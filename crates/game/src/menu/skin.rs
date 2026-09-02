@@ -102,17 +102,32 @@ const STRIP_GAP: f32 = 5.3;
 /// below the label's own top (`8` below its cap-height baseline, cap height
 /// `14`), starting flush with the label's own left edge.
 ///
-/// **Deliberately not modelled**: the tab's top-right corner is chamfered,
-/// `17` wide by `7` tall in the same capture - cut, not rounded, and small
-/// against the tab's own `188`-`232` width, with the left edge staying
-/// vertical throughout. Landed as a plain rectangle instead of the true shape
-/// because reproducing the cut needs a primitive this build does not have:
-/// **not a shear** (a shear moves both right corners and turns the whole
-/// rectangle into a parallelogram, which is not this shape) but an
-/// independent offset on the one top-right corner alone, which is a render
-/// primitive change and a session of its own. `rect` plus a whole-quad
-/// `rotation` (see `crates/game/src/ui.wgsl`) is what exists today, and
-/// neither draws a per-corner cut. See
+/// **The chamfer is a one-step band, not a diagonal cut.** The tab's
+/// top-right corner is chamfered in the capture, `17` wide by `7` tall - cut,
+/// not rounded, and small against the tab's own `188`-`232` width, with the
+/// left edge staying vertical throughout. A true diagonal cut needs a
+/// primitive this build's `Quad`/`ui.wgsl` pipeline does not have: an
+/// independent offset on the one top-right corner alone, which `rect` plus a
+/// whole-quad `rotation` cannot express (**not a shear** either - a shear
+/// moves both right corners into a parallelogram, which is not this shape).
+/// That primitive is real work with a blast radius past this widget - every
+/// `Quad` instance in the game rides the same vertex layout - and one 6x3-unit
+/// corner on one widget is not the reason to add it.
+///
+/// [`crate::menu::strip::draw`] draws the same cut instead as two
+/// [`crate::frontend::Draw::Fill`] rectangles - the full tab below
+/// [`TAB_CHAMFER_HEIGHT`], and a second one above it, narrower by
+/// [`TAB_CHAMFER_WIDTH`] on the right. Checked by rendering both and
+/// comparing against the capture, not assumed - and the honest result is a
+/// step, not a disguised diagonal: cropped at 1:1 next to the capture the two
+/// read the same, a small cut corner, but a close zoom on either shows this
+/// one is a right angle where the capture's is a bevel. The cut's size and
+/// position are the measured ones; only its slope is unmodelled, because the
+/// primitive that would draw a true diagonal - the per-corner offset above -
+/// is not worth its blast radius across every `Quad` in the game for one
+/// 6x3-unit corner. Two `Fill`s were already what the tab draws with, so this
+/// closes the position/size gap with no pipeline change and no risk to
+/// anything else `Quad` draws; the slope stays open, see
 /// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
 const TAB_LEFT_PAD: f32 = 2.3;
 /// See [`TAB_LEFT_PAD`].
@@ -143,6 +158,12 @@ const UNDERLINE_HEIGHT: f32 = 1.9;
 /// is checked by eye against that render: clear of the label, inside the
 /// tab.
 const UNDERLINE_OFFSET_Y: f32 = 9.0;
+/// How far the chamfer band's right edge sits short of the tab's own right
+/// edge. See [`TAB_LEFT_PAD`]: `17` raw px `* 0.3756`.
+const TAB_CHAMFER_WIDTH: f32 = 6.4;
+/// How tall the chamfer band is, measured down from the tab's own top edge.
+/// See [`TAB_LEFT_PAD`]: `7` raw px `* 0.3756`.
+const TAB_CHAMFER_HEIGHT: f32 = 2.6;
 
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
@@ -302,6 +323,16 @@ impl Skin {
     #[must_use]
     pub(super) fn tab_height(&self) -> f32 {
         TAB_HEIGHT * self.from_ours.1
+    }
+
+    /// Every entry's chamfer band: how far it sits short of the tab's own
+    /// right edge, and how tall the band is. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_chamfer(&self) -> (f32, f32) {
+        (
+            TAB_CHAMFER_WIDTH * self.from_ours.0,
+            TAB_CHAMFER_HEIGHT * self.from_ours.1,
+        )
     }
 
     /// The selected entry's underline mark: its own size, and how far below
