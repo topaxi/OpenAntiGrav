@@ -227,10 +227,20 @@ intact - the diff against upstream gets closer, not further. FSR 1 is spatial,
 holds no history, and so absorbs a resolution change on the frame it happens.
 
 **FSR 3.1, when it lands, is where DRS pays properly**: a temporal upscaler
-takes a per-frame render size as a first-class input. Note the coupling now
-rather than discovering it then - the jitter sequence's phase count is
-conventionally a function of the scale factor, so *camera jitter*, the other
-"Absent" row in modern-features.md, has to be told the scale each frame too.
+takes a per-frame render size as a first-class input.
+
+**Half of the coupling this used to warn about is already satisfied.** Camera
+jitter landed 2026-09-02
+([ADR-0039](../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md))
+and it is handed the render target's extent every frame -
+`oag_render::jitter::matrix(frame, (viewport.2, viewport.3))`, off
+`Framebuffer::size()` - so a scale that moves several times a second already
+reaches it with no change here. What is *not* satisfied is the second half: the
+**phase count** is a fixed sixteen and deliberately so, because deriving it
+from the presentation-to-render ratio is the FSR 3.1 port's decision to make,
+not this thread's and not `jitter`'s. When that port lands, a moving scale means
+a moving phase count, and `oag_render::jitter::PHASES` is the one place it
+changes.
 
 ## Traps
 

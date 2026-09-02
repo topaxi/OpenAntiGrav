@@ -1151,9 +1151,14 @@ recipe and its three traps.
       [modern features](modern-features.md). **Spatial upscaling (FSR 1) is
       done**; FSR 3.1 is a WGSL port per
       [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
-      and still wants camera jitter and a scene with no UI in it. **The
-      readable depth buffer and the per-draw motion vectors it also wanted
-      are both done**, delivered by
+      and **now wants no renderer-side prerequisite at all**: the scene with
+      no UI in it landed with
+      [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+      and [ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md),
+      and sub-pixel camera jitter with
+      [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md),
+      both on 2026-09-02. **The readable depth buffer and the per-draw motion
+      vectors it also wanted are both done**, delivered by
       [motion blur](../rendering/motion-blur.md)'s two tiers - camera
       reprojection first as the stepping stone, then the designed per-object
       velocity buffer and reconstruction filter, both built 2026-08-25

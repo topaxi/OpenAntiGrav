@@ -133,7 +133,11 @@ pub struct CaptureOptions {
     /// live at all: two `--screenshot` runs differing only by this flag differ
     /// by well under a pixel, which is invisible in a window and obvious in a
     /// byte diff. The phase is [`Scene`]'s own frame counter, which starts at
-    /// zero, so a capture at a given tick count is reproducible. See
+    /// zero and advances on every `Scene::render` - **including the primer
+    /// render above and each `OAG_RENDER_BENCH` iteration**, so it is a
+    /// function of the whole invocation rather than of the tick count alone.
+    /// The same command is reproducible; the same tick count reached a
+    /// different way is not necessarily the same phase. See
     /// [`oag_render::jitter`].
     pub camera_jitter: bool,
     /// Force the exhaust into the state it holds this many seconds after a

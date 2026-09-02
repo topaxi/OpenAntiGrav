@@ -128,7 +128,7 @@ file does not need to carry its own.
   which reaches further back than either `main` baseline does.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,731 tests (2026-09-02)** in 3.8s,
+- **Gate status:** last measured green at **2,740 tests (2026-09-02)** in 5.4s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
