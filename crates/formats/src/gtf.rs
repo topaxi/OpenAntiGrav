@@ -70,16 +70,24 @@
 //! | 527 | `0x87` | `DXT23` | yes |
 //! | 126 | `0xa5` | `A8R8G8B8`, linear | yes |
 //! | 37 | `0x85` | `A8R8G8B8`, **swizzled** | **yes** |
-//! | 9 | `0x81` | `B8`, swizzled | no |
+//! | 9 | `0x81` | `B8`, **swizzled** | **yes** |
 //! | 7 | `0x9e` | `A8B8G8R8`, **swizzled** | **yes** |
 //! | 3 | `0xa8` | `DXT45`, linear | yes |
 //! | 1 | `0xa6` | `DXT1`, linear | yes |
 //! | 1 | `0xa7` | `DXT23`, linear | yes |
 //!
-//! 7,324 of 7,333 decode. The 9 that do not are `B8`: one channel, swizzled on
-//! every file that carries it, and what the one byte itself means is unread.
+//! **All 7,333 decode.**
 //!
-//! **The other 44 - swizzled `A8R8G8B8`/`A8B8G8R8` - decode through
+//! The last 9 were `B8`, and what settled them was their own names: every one
+//! is a ship's `textures/ambient_shadow.gtf`, 128x64, one per team. Read in
+//! Morton order each is that team's craft in silhouette, soft-edged - Feisar's
+//! delta and tailfin, Qirex's blunt oval - where a raster read is horizontal
+//! banding. The single stored byte is that shadow's coverage, and the
+//! descriptor's own [`Remap`] is what broadcasts it to four channels rather
+//! than anything here deciding to; see that type, and
+//! `gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap`.
+//!
+//! **The 44 swizzled `A8R8G8B8`/`A8B8G8R8` decode through
 //! [`decode::morton_index`]**, the RSX's Morton-order texel address: no `0x20`
 //! bit and no block compression, so the texels are tiled rather than raster,
 //! and a linear read of one is a recognisable picture in scrambled tiles -
@@ -129,12 +137,6 @@ pub const DESCRIPTOR_LEN: usize = 36;
 
 /// Bit `0x20` of the format byte: the texels are in raster order.
 const LINEAR: u8 = 0x20;
-
-/// The `remap` value that forces the blue channel to `0xff` rather than
-/// reading it from the texel - see [`Texture::remap`]'s own doc for the
-/// distribution and confidence. All 7 of the disc's `A8B8G8R8` files carry
-/// exactly this value; nothing else does.
-const REMAP_FORCES_BLUE: u32 = 0xa9e4;
 
 /// Bit `0x40` of the format byte: texture coordinates are in texels.
 const UNNORMALISED: u8 = 0x40;
@@ -295,6 +297,115 @@ impl Format {
     }
 }
 
+/// What one output channel does, from a [`Remap`]'s control table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Control {
+    /// Force `0x00`.
+    Zero,
+    /// Force `0xff`.
+    One,
+    /// Read the source channel [`Remap::source`] names.
+    Read,
+}
+
+/// Pair index (`A`, `R`, `G`, `B`, as the word packs them) to the slot that
+/// channel occupies in an RGBA texel.
+const CHANNEL_SLOT: [usize; 4] = [3, 0, 1, 2];
+
+/// The descriptor's `+0x10` channel remap, decomposed.
+///
+/// Two per-channel tables packed into sixteen bits, laid out the way the RSX's
+/// own `NV4097_SET_TEXTURE_CONTROL1` register reads them: the **low** byte
+/// holds four 2-bit *source* selectors and the **high** byte four 2-bit
+/// *controls*, both in `A`, `R`, `G`, `B` order from the least significant
+/// pair up. A source names which of the texel's own channels an output reads
+/// (`0` = A, `1` = R, `2` = G, `3` = B); a control says whether that read
+/// happens at all, or the output is forced to zero or one instead.
+///
+/// # The packing is corroborated by the disc, not only published
+///
+/// Three distinct words appear on the HD disc, and each decomposes into
+/// something the file carrying it independently agrees with - which a wrong
+/// reading of the bit layout would not produce three times over:
+///
+/// | Word | Files | Decomposes to | Agrees with |
+/// | --- | ---: | --- | --- |
+/// | `0xaae4` | 7,317 | every control `Read`, sources `A<-A, R<-R, G<-G, B<-B` | the identity, which is what decoding a texel straight already does |
+/// | `0xa9e4` | 7 | the same, but alpha forced to one | `fealphaluminancetexture.gtf` is **100% grayscale** - all four of every texel's bytes equal - so its RGB is a luminance and its alpha is not stored art |
+/// | `0xa9ff` | 9 | alpha forced to one, and **every** other output reading the *blue* source | these are exactly the disc's 9 [`Format::B8`] files, whose one stored byte **is** the blue channel |
+///
+/// The third row is the load-bearing one: the low byte `0xff` selects source
+/// `3` four times, `3` is blue under the same table that makes `0xe4` the
+/// identity, and the format that carries it stores one byte in blue and
+/// nothing else. Format and remap were read from different halves of the
+/// descriptor and say the same thing.
+///
+/// **Confidence 85.** Up from the 75 this carried while it was a bare
+/// constant matched by value: the layout now predicts three distributions
+/// rather than asserting one, and one of the three (`0xa9ff`) is
+/// cross-checked against an unrelated field. Still not corroborated against
+/// the executable, which is the ceiling. See `docs/formats/gtf.md`.
+///
+/// **This corrected a real bug.** The constant this replaced forced *blue* to
+/// one for `0xa9e4`, on a reading of the high byte that put alpha's control
+/// pair where blue's is. It rendered all 7 `A8B8G8R8` files - one of them a
+/// texture whose own name says luminance - solid blue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Remap {
+    /// Which slot of the decoded texel each output reads, in R, G, B, A order.
+    pub source: [usize; 4],
+    /// What each output does, in R, G, B, A order.
+    pub control: [Control; 4],
+}
+
+impl Remap {
+    /// Decomposes one `+0x10` word.
+    #[must_use]
+    pub fn decode(word: u32) -> Self {
+        let mut source = [0usize; 4];
+        let mut control = [Control::Read; 4];
+        for pair in 0..4 {
+            let slot = CHANNEL_SLOT[pair];
+            source[slot] = CHANNEL_SLOT[((word >> (pair * 2)) & 3) as usize];
+            control[slot] = match (word >> (8 + pair * 2)) & 3 {
+                0 => Control::Zero,
+                1 => Control::One,
+                _ => Control::Read,
+            };
+        }
+        Self { source, control }
+    }
+
+    /// Whether this leaves a decoded texel exactly as it is.
+    #[must_use]
+    pub fn is_identity(&self) -> bool {
+        self.source == [0, 1, 2, 3] && self.control.iter().all(|c| *c == Control::Read)
+    }
+
+    /// Rewrites each texel's four channels in place.
+    ///
+    /// Public for the same reason [`decode_level`] is: a caller that decoded a
+    /// level itself still has to apply the descriptor's remap, and comparing a
+    /// remapped buffer against a non-remapped one is not a comparison of
+    /// anything. That mistake is why `0xa9e4` was read as forcing blue - see
+    /// this type's own doc.
+    pub fn apply(&self, out: &mut [[u8; 4]]) {
+        if self.is_identity() {
+            return;
+        }
+        for texel in out {
+            let read = *texel;
+            for (slot, channel) in texel.iter_mut().enumerate() {
+                *channel = match self.control[slot] {
+                    Control::Zero => 0x00,
+                    Control::One => 0xff,
+                    Control::Read => read[self.source[slot]],
+                };
+            }
+        }
+    }
+}
+
 /// One texture descriptor, and where its texels are.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Texture {
@@ -310,17 +421,12 @@ pub struct Texture {
     pub dimension: u8,
     /// Whether six faces follow one another.
     pub cubemap: bool,
-    /// `+0x10`, a channel permutation.
+    /// `+0x10`, a per-channel source-and-force table.
     ///
-    /// Three distinct values on the HD disc: `0xaae4` on 7,317 of 7,333, which
-    /// is the identity (`A<-A, R<-R, G<-G, B<-B` under `CELL_GCM_REMAP_MODE`'s
-    /// packing) and needs no action; `0xa9ff` on the 9 `B8` files, which
-    /// [`Texture::to_rgba`] still refuses outright, so still moot; and
-    /// [`REMAP_FORCES_BLUE`] on the 7 `A8B8G8R8` files, which
-    /// [`Texture::to_rgba`] now decodes and does act on - see there.
-    /// **Confidence 75** on the bit packing, a published-header reading rather
-    /// than something measured against behaviour; the *distribution* (which
-    /// files carry which value) is measured. See `docs/formats/gtf.md`.
+    /// Kept as the raw word; [`Remap::decode`] is what reads it, and both
+    /// [`Self::to_rgba`] and [`Self::face_to_rgba`] act on all three of the
+    /// values the disc carries. See [`Remap`] for the packing, the
+    /// distribution and the confidence.
     pub remap: u32,
     /// Width of the base level, in texels.
     pub width: u16,
@@ -359,14 +465,9 @@ impl Texture {
     }
 
     /// Applies [`Self::remap`]'s effect to an already-decoded RGBA8 buffer, in
-    /// place. A no-op for every value but [`REMAP_FORCES_BLUE`] - see that
-    /// constant's own doc.
+    /// place. A no-op on the 7,317 files whose word is the identity.
     fn apply_remap(&self, out: &mut [[u8; 4]]) {
-        if self.remap == REMAP_FORCES_BLUE {
-            for texel in out {
-                texel[2] = 0xff;
-            }
-        }
+        Remap::decode(self.remap).apply(out);
     }
 
     /// Faces stored: 6 for a cubemap, 1 otherwise.
@@ -470,8 +571,7 @@ impl Texture {
     /// # Errors
     ///
     /// [`Error::Cubemap`] for a texture that is *not* one, since a face index is
-    /// meaningless there; [`Error::UnknownFormat`] for `B8`, as
-    /// [`Self::to_rgba`]; and [`Error::DataOutOfBounds`] for a face past the six.
+    /// meaningless there, and [`Error::DataOutOfBounds`] for a face past the six.
     pub fn face_to_rgba(&self, blob: &[u8], face: usize) -> Result<Vec<[u8; 4]>> {
         if !self.cubemap {
             return Err(Error::Cubemap);
@@ -484,11 +584,6 @@ impl Texture {
                 got: blob.len(),
             });
         }
-        if self.format == Format::B8 {
-            return Err(Error::UnknownFormat {
-                format: self.format_byte,
-            });
-        }
         let range = self.face_range(face, 0);
         let texels = blob.get(range.clone()).ok_or(Error::DataOutOfBounds {
             offset: range.start as u32,
@@ -496,14 +591,12 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** `B8` is refused above and every other format
-        // this reads decodes regardless of layout, so a `None` here is the
-        // decoder running out of texels - a truncated blob - and reporting
-        // that as "swizzled, not implemented" sent the reader looking for a
-        // Morton order that is not the problem. Finding F7 of the 2026-08-18
-        // review, in a codebase that prizes honest errors; the comment
-        // predates the swizzle decoder and the reasoning still holds for the
-        // one format it did not cover.
+        // **Not `Swizzled`.** Every format this reads now decodes regardless
+        // of layout, so a `None` here is the decoder running out of texels - a
+        // truncated blob - and reporting that as "swizzled, not implemented"
+        // sent the reader looking for a Morton order that is not the problem.
+        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
+        // honest errors.
         let mut out = decode::level(
             self.format,
             texels,
@@ -528,21 +621,13 @@ impl Texture {
     ///
     /// # Errors
     ///
-    /// [`Error::UnknownFormat`] for `B8`, [`Error::Cubemap`] for a cubemap, and
-    /// [`Error::DataOutOfBounds`] if the level does not fit - which `parse` has
-    /// already ruled out, so it means the wrong blob was passed, or a blob whose
-    /// texels stop short of what the descriptor declares.
+    /// [`Error::Cubemap`] for a cubemap, and [`Error::DataOutOfBounds`] if the
+    /// level does not fit - which `parse` has already ruled out, so it means
+    /// the wrong blob was passed, or a blob whose texels stop short of what the
+    /// descriptor declares.
     pub fn to_rgba(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         if self.cubemap {
             return Err(Error::Cubemap);
-        }
-        // `B8` has one channel and every one on the disc is swizzled, so there is
-        // nothing to test a reading of. No linear `B8` file ships; named here
-        // rather than left to be guessed.
-        if self.format == Format::B8 {
-            return Err(Error::UnknownFormat {
-                format: self.format_byte,
-            });
         }
         let range = self.level_range(0);
         let texels = blob.get(range.clone()).ok_or(Error::DataOutOfBounds {
@@ -551,14 +636,12 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** `B8` is refused above and every other format
-        // this reads decodes regardless of layout, so a `None` here is the
-        // decoder running out of texels - a truncated blob - and reporting
-        // that as "swizzled, not implemented" sent the reader looking for a
-        // Morton order that is not the problem. Finding F7 of the 2026-08-18
-        // review, in a codebase that prizes honest errors; the comment
-        // predates the swizzle decoder and the reasoning still holds for the
-        // one format it did not cover.
+        // **Not `Swizzled`.** Every format this reads now decodes regardless
+        // of layout, so a `None` here is the decoder running out of texels - a
+        // truncated blob - and reporting that as "swizzled, not implemented"
+        // sent the reader looking for a Morton order that is not the problem.
+        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
+        // honest errors.
         let mut out = decode::level(
             self.format,
             texels,
@@ -591,8 +674,8 @@ impl Texture {
 /// which ignores it, so `true` is a safe default where the descriptor is not
 /// at hand.
 ///
-/// Returns `None` for a layout this does not read - `B8`, still - or texels
-/// that stop short of the dimensions given.
+/// Returns `None` for texels that stop short of the dimensions given; every
+/// format this module names now decodes.
 #[must_use]
 pub fn decode_level(
     format: Format,

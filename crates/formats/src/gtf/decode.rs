@@ -68,13 +68,13 @@ pub fn level(
             linear_texels(texels, width, height, pitch, &mut out, [3, 2, 1, 0])?
         }
         (Format::A8B8G8R8, false) => swizzled(texels, width, height, &mut out, [3, 2, 1, 0])?,
-        // `B8` is one channel and every one on the disc is swizzled, so there
-        // is nothing to test a reading of - the swizzle *address* is the same
-        // Morton order as the two formats above, but what the one channel
-        // byte itself means is still unread. See `Texture::remap`'s doc: its
-        // own value differs on exactly these files, which is a reason to
-        // expect the byte is not a plain alpha, not a measurement that it is.
-        (Format::B8, _) => return None,
+        // One byte per texel, landing in **blue** and nothing else. The
+        // broadcast that makes it a picture is the descriptor's own `remap`,
+        // which on all 9 of the disc's `B8` files selects the blue source for
+        // every output channel - see [`super::Remap`]. Doing it here instead
+        // would be inventing what the file already says.
+        (Format::B8, true) => single(texels, width, height, pitch, &mut out)?,
+        (Format::B8, false) => swizzled_single(texels, width, height, &mut out)?,
     }
     Some(out)
 }
@@ -115,9 +115,10 @@ fn linear_texels(
 /// bit of `y`, one pair at a time, shifting each pair out as it is consumed,
 /// until the *narrower* dimension's bits run out - then let the wider
 /// dimension's remaining high bits continue linearly rather than interleave
-/// with nothing. A square power-of-two texture (every swizzled file this
-/// module reads happens to be one) never reaches that second phase, since both
-/// dimensions run out together.
+/// with nothing. A square power-of-two texture never reaches that second
+/// phase, since both dimensions run out together - which was every swizzled
+/// file this read until the 9 `B8` ambient shadows joined them at 128x64, the
+/// only textures on the disc that exercise it.
 fn morton_index(x: u32, y: u32, width: u32, height: u32) -> usize {
     let (mut bits_x, mut bits_y) = (width.trailing_zeros(), height.trailing_zeros());
     let (mut x, mut y) = (x, y);
@@ -161,6 +162,40 @@ fn swizzled(
                 texel[order[2]],
                 texel[order[3]],
             ];
+        }
+    }
+    Some(())
+}
+
+/// One byte per texel in raster order, into blue.
+///
+/// No `B8` file on the disc is linear, so this path is exercised by
+/// [`super::tests`] and nothing else. It is here rather than refused because a
+/// one-byte row is the same arithmetic [`linear_texels`] already does, not a
+/// reading that would need its own evidence.
+fn single(texels: &[u8], width: u32, height: u32, pitch: usize, out: &mut [[u8; 4]]) -> Option<()> {
+    let row_bytes = width as usize;
+    let stride = if pitch == 0 { row_bytes } else { pitch };
+    for y in 0..height as usize {
+        let row = texels.get(y * stride..y * stride + row_bytes)?;
+        for x in 0..width as usize {
+            out[y * width as usize + x][2] = row[x];
+        }
+    }
+    Some(())
+}
+
+/// One byte per texel in the RSX's Morton order, into blue.
+///
+/// The same address function [`swizzled`] uses - a texel index, so at one byte
+/// per texel it is the byte offset outright. **`128x64` is where the
+/// non-square branch of [`morton_index`] first carries weight**: every other
+/// swizzled texture on the disc is square, and all 9 `B8` files are not.
+fn swizzled_single(texels: &[u8], width: u32, height: u32, out: &mut [[u8; 4]]) -> Option<()> {
+    for y in 0..height {
+        for x in 0..width {
+            let at = morton_index(x, y, width, height);
+            out[(y * width + x) as usize][2] = *texels.get(at)?;
         }
     }
     Some(())

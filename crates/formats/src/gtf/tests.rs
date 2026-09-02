@@ -227,6 +227,79 @@ fn an_odd_sized_texture_keeps_only_the_texels_it_has() {
 }
 
 #[test]
+fn a_remap_word_decomposes_into_the_three_the_disc_carries() {
+    let identity = Remap::decode(0xaae4);
+    assert!(identity.is_identity(), "{identity:?}");
+
+    // The 7 `A8B8G8R8` files. Alpha is forced; nothing else moves.
+    let forces_alpha = Remap::decode(0xa9e4);
+    assert_eq!(forces_alpha.source, [0, 1, 2, 3]);
+    assert_eq!(
+        forces_alpha.control,
+        [Control::Read, Control::Read, Control::Read, Control::One]
+    );
+
+    // The 9 `B8` files. Every output reads blue - slot 2 of an RGBA texel -
+    // and alpha is forced on top of that.
+    let broadcasts_blue = Remap::decode(0xa9ff);
+    assert_eq!(broadcasts_blue.source, [2, 2, 2, 2]);
+    assert_eq!(
+        broadcasts_blue.control,
+        [Control::Read, Control::Read, Control::Read, Control::One]
+    );
+}
+
+/// The disc's own `B8` shape: one byte per texel, swizzled, and **not
+/// square** - all 9 are 128x64, where every other swizzled file on the disc is
+/// square and so never reaches `decode::morton_index`'s second phase.
+#[test]
+fn a_single_channel_texture_is_broadcast_by_its_own_remap() {
+    // 4x2. `morton_index` interleaves one bit each way, then lets x's
+    // remaining high bit continue on its own: raster order maps to
+    // 0,1,4,5,2,3,6,7 rather than 0..7.
+    const Z_ORDER: [usize; 8] = [0, 1, 4, 5, 2, 3, 6, 7];
+    let mut texels = [0u8; 8];
+    for (raster, &z) in Z_ORDER.iter().enumerate() {
+        texels[z] = (raster * 0x10) as u8;
+    }
+
+    // With the identity remap the byte lands in blue and stays there, which is
+    // all the decoder alone does.
+    let plain = blob(&descriptor(0x01, 4, 2, 8), &texels);
+    let gtf = Gtf::parse(&plain).expect("parses");
+    let rgba = gtf.only().expect("one").to_rgba(&plain).expect("decodes");
+    for (raster, texel) in rgba.iter().enumerate() {
+        assert_eq!(*texel, [0, 0, (raster * 0x10) as u8, 0], "at {raster}");
+    }
+
+    // With the word the disc actually carries, the same decode broadcasts.
+    let mut d = descriptor(0x01, 4, 2, 8);
+    d[16..20].copy_from_slice(&0x0000_a9ffu32.to_be_bytes());
+    let data = blob(&d, &texels);
+    let gtf = Gtf::parse(&data).expect("parses");
+    let rgba = gtf.only().expect("one").to_rgba(&data).expect("decodes");
+    for (raster, texel) in rgba.iter().enumerate() {
+        let v = (raster * 0x10) as u8;
+        assert_eq!(*texel, [v, v, v, 0xff], "at {raster}");
+    }
+}
+
+/// No `B8` file on the disc sets the `0x20` bit, so this is the only thing
+/// that exercises the raster path for one.
+#[test]
+fn a_linear_single_channel_texture_reads_rows_in_order() {
+    let texels: Vec<u8> = (0..8u8).map(|i| i * 0x10).collect();
+    let data = blob(&descriptor(0x21, 4, 2, 8), &texels);
+    let gtf = Gtf::parse(&data).expect("parses");
+    let texture = gtf.only().expect("one");
+    assert!(texture.is_linear());
+    let rgba = texture.to_rgba(&data).expect("decodes");
+    for (raster, texel) in rgba.iter().enumerate() {
+        assert_eq!(*texel, [0, 0, (raster * 0x10) as u8, 0], "at {raster}");
+    }
+}
+
+#[test]
 fn a_cubemap_parses_and_is_not_decoded() {
     let mut d = descriptor(0x86, 4, 4, 48);
     d[15] = 1;
