@@ -63,17 +63,31 @@ file does not need to carry its own.
      only that nothing was *filtered out*. Reading it as coverage is what
      produced a since-deleted claim in this file that the missing traces were
      back, when `ls` says they are not.
-  3. **A filter can select none of the tests you meant and still report a
-     confident green.** `-E 'test(...)'` matches a test's own name and module
-     path, **not** the binary it lives in - so `test(race_finish)` selects
-     nothing, `race_finish_ground_truth` being the binary, while
-     `test(rcsmodel)` quietly selects `oag-formats`'s `rcsmodel::tests::*` unit
-     tests and none of the ground-truth ones. A re-run of "the failures" this
-     way came back **39 passed**, of 39 tests that were not the failures. And
-     because all six are `#[ignore]`d, dropping `--run-ignored all` runs zero of
-     them and reports `0 tests run` as success. Filter by **exact test name**
-     and keep `--run-ignored all`; then all four fail alone exactly as they do
-     in the sweep, which is what the reproduction below is.
+  3. **A filter can select a different set of tests than you meant and report a
+     confident green on it.** `-E 'test(...)'` matches a test's own name and
+     module path, **not** the binary it lives in. So `test(rcsmodel)` selects
+     `oag-formats`'s `rcsmodel::tests::*` and `rcsmodel::vertex_decl::tests::*`
+     unit tests and none of the ground-truth ones; and `test(race_finish)`
+     selects exactly one test - `race::results::tests::the_board_is_taken_on_the_tick_the_race_finishes`,
+     whose *name* contains "race_finishes" - which passes. **That is worse than
+     selecting nothing**, because `0 tests run` is visibly wrong on the console
+     and one green test is not. A re-run of "the failures" this way came back
+     **39 passed**, of 39 tests, none of which was a failure.
+
+     **Use `binary(...)`, not `test(...)`, to re-run a ground-truth failure**:
+     `-E 'binary(race_finish_ground_truth)'` lists all three of that binary's
+     tests including both reds. Keep `--run-ignored all` with it - all six are
+     `#[ignore]`d, so an exact-name filter *without* that flag is a second,
+     independent route to the same false green, reporting
+     `0 tests run: 0 passed, 3304 skipped` as success.
+
+     **The habit that catches this is `cargo nextest list` on the filter before
+     trusting the run.** It is one cheap command, and this face of the mistake
+     is the one that most needed it: the other three were each caught by
+     somebody simply re-running the thing, while this one survived *two* people
+     reasoning forward from it - one to a shared-state hypothesis, the other all
+     the way to going and looking for the shared state. Neither asked what the
+     filter had selected.
 
   **So a red count means nothing without the variable's state attached.** The
   same tree, same commit, same day: **6 failed / 0 skipped** plain, and
