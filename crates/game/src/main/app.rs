@@ -189,7 +189,7 @@ impl App {
             Stage::race(
                 &gpu,
                 loaded,
-                framebuffer.size(),
+                framebuffer.allocation(),
                 self.anisotropy,
                 &self.settings,
                 self.scheme,

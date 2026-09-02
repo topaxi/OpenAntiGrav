@@ -483,7 +483,7 @@ impl Session {
                 let mut built = Stage::build_race_stage(
                     &self.gpu,
                     loaded,
-                    self.framebuffer.size(),
+                    self.framebuffer.allocation(),
                     self.anisotropy,
                     &self.settings,
                     self.scheme,
@@ -501,7 +501,10 @@ impl Session {
                 // `RaceStage::warm_up`.
                 if let Ok(race_stage) = &mut built {
                     let warm_up_start = std::time::Instant::now();
-                    let size = self.framebuffer.size();
+                    // The extent: this is a viewport, not an attachment
+                    // size. `build_race_stage` above took the allocation, for
+                    // the opposite reason.
+                    let size = self.framebuffer.extent();
                     race_stage.warm_up(
                         &self.gpu,
                         self.framebuffer.view(),

@@ -98,7 +98,7 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
                 &mut encoder,
                 oag_render::post::fsr1::Frame {
                     source: framebuffer.perceptual(),
-                    input: framebuffer.size(),
+                    input: framebuffer.allocation(),
                     output: (4, 4),
                     sharpness: oag_render::post::fsr1::Sharpness::DEFAULT,
                 },
@@ -364,13 +364,22 @@ fn the_grade_moves_the_picture_in_the_direction_the_setting_names() {
 /// neutral grade has to be the one that changes nothing - `set_grade`
 /// compares against it to decide whether to write at all, so a wrong
 /// neutral would leave a fresh install grading its own picture.
+///
+/// **Thirty-two bytes since ADR-0037**, not the sixteen a uniform binding
+/// needs at minimum: the blit's source rectangle rides the same buffer, being
+/// written on the same condition and read by the same shader. Still an exact
+/// assertion rather than a `>= 16`, because the number is what the WGSL
+/// mirror's own field offsets are validated against.
 #[test]
 fn the_neutral_grade_changes_nothing_and_fills_a_uniform_binding() {
-    assert_eq!(std::mem::size_of::<Grade>(), 16);
+    assert_eq!(std::mem::size_of::<Grade>(), 32);
     let neutral = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
     assert_eq!(neutral.brightness, 1.0);
     assert_eq!(neutral.exponent, 1.0);
     assert_eq!(neutral.padding, 0.0);
+    // And it reads all of whatever is bound, exactly - see `Source::WHOLE`.
+    assert_eq!(neutral.uv_scale, [1.0, 1.0]);
+    assert_eq!(neutral.uv_max, [1.0, 1.0]);
     // And it is what `Default` gives, which is what an untouched settings
     // file loads as.
     assert_eq!(

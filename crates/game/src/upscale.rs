@@ -67,7 +67,7 @@
 //! way to *see* what an upscaler did, and therefore no way to choose one. A
 //! comparison wants a picture of a window; a bug report does not.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::warn;
 
 use oag_render::post::{fsr1, fullscreen_layout, fxaa, smaa};
@@ -91,43 +91,9 @@ pub struct Presentation {
     pub gamma: Gamma,
 }
 
-/// What the blit does to the picture on its way onto the surface, as the
-/// shader's uniform expects it.
-///
-/// `repr(C)` and sixteen bytes: a uniform binding has a minimum size, and the
-/// two floats alone are half of it.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
-struct Grade {
-    brightness: f32,
-    exponent: f32,
-    /// Whether the blit's source holds sRGB-encoded values the shader has to
-    /// decode itself, as `1.0` or `0.0`.
-    ///
-    /// One only when `self.format.is_srgb()` - the offscreen target is bound
-    /// through an sRGB view and arrives already decoded by the sampler, while
-    /// an upscaler's or FXAA/SMAA's output is deliberately read through the
-    /// *non*-sRGB twin because that pass works in perceptual space and a
-    /// decode on every internal read would be both wrong and paid twice. See
-    /// `oag_render::post`. Since [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
-    /// forced every real `format` here non-sRGB, `twin == format` and this is
-    /// always zero in production - "a post-process ran" is not the same fact
-    /// as "the source needs decoding", and treating them as one is the bug
-    /// that made FXAA, SMAA and a magnifying FSR 1 darken the picture.
-    decode: f32,
-    padding: f32,
-}
+mod blit;
 
-impl Grade {
-    fn new(brightness: Brightness, gamma: Gamma, decode: bool) -> Self {
-        Self {
-            brightness: brightness.factor(),
-            exponent: gamma.exponent(),
-            decode: f32::from(u8::from(decode)),
-            padding: 0.0,
-        }
-    }
-}
+use blit::{Grade, Source, grade_buffer};
 
 /// The offscreen target and the pipeline that puts it on screen.
 pub struct Framebuffer {
@@ -164,7 +130,20 @@ pub struct Framebuffer {
     /// frame `[graphics] anti_aliasing` asks for them. Lazy for the same
     /// reason `fsr1` is.
     smaa: Option<Result<smaa::Smaa>>,
-    size: (u32, u32),
+    /// The scene texture's real dimensions, and what every size-matched
+    /// attachment is built against.
+    ///
+    /// `target_size` off the **ceiling** - `[graphics] render_scale` - so it
+    /// moves when the window, the aspect or that row moves, and not otherwise.
+    /// See [ADR-0037](../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md).
+    allocation: (u32, u32),
+    /// How much of [`Framebuffer::allocation`] this frame is drawn into,
+    /// anchored at the origin and never larger than it.
+    ///
+    /// The viewport, in other words, as against the texture. Equal to the
+    /// allocation on every frame the game currently draws - nothing moves it
+    /// yet - and the value a dynamic-resolution controller will write.
+    extent: (u32, u32),
     format: wgpu::TextureFormat,
     /// Where the scene lands at presentation size, and where the UI composites
     /// on top of it before one graded pass writes the surface. See [`Output`]
@@ -285,7 +264,12 @@ impl Framebuffer {
             fsr1: None,
             fxaa: None,
             smaa: None,
-            size,
+            allocation: size,
+            // The whole target to begin with, which is what keeps every caller
+            // that predates the split correct with no change: a capture, a
+            // `--presented` capture and the window all draw the full
+            // rectangle until something calls `set_extent`.
+            extent: size,
             format,
             output,
         })
@@ -303,7 +287,24 @@ impl Framebuffer {
         gamma: Gamma,
         decode: bool,
     ) {
-        let wanted = Grade::new(brightness, gamma, decode);
+        self.set_blit(queue, brightness, gamma, decode, Source::WHOLE);
+    }
+
+    /// The same, plus how much of the bound source to read.
+    ///
+    /// One buffer and one comparison for both, because they are one uniform:
+    /// see [`Grade`]. Only [`Framebuffer::resolve_scene`] has anything but
+    /// [`Source::WHOLE`] to pass, and only when the render extent is below the
+    /// allocation.
+    fn set_blit(
+        &mut self,
+        queue: &wgpu::Queue,
+        brightness: Brightness,
+        gamma: Gamma,
+        decode: bool,
+        source: Source,
+    ) {
+        let wanted = Grade::new(brightness, gamma, decode).reading(source);
         if wanted == self.graded {
             return;
         }
@@ -344,6 +345,11 @@ impl Framebuffer {
         presentation: &Presentation,
     ) {
         let output_size = (rect.2 as u32, rect.3 as u32);
+        // **The extent, not the allocation**: every pass below is asking
+        // "what was drawn", and since ADR-0037 the texture can be larger than
+        // that. The two are equal on every frame the game draws today - see
+        // [`Framebuffer::set_extent`] for what bounds that.
+        let extent = self.extent;
 
         let post_process: Option<&wgpu::TextureView> = match presentation.anti_aliasing {
             AntiAliasing::Fxaa => {
@@ -358,7 +364,7 @@ impl Framebuffer {
                             encoder,
                             fxaa::Frame {
                                 source: &self.perceptual,
-                                size: self.size,
+                                size: extent,
                             },
                         );
                         fxaa.output()
@@ -384,7 +390,7 @@ impl Framebuffer {
                             encoder,
                             smaa::Frame {
                                 source: &self.perceptual,
-                                size: self.size,
+                                size: extent,
                             },
                         );
                         smaa.output()
@@ -402,7 +408,7 @@ impl Framebuffer {
         };
         let upscale_source = post_process.unwrap_or(&self.perceptual);
 
-        let source = (presentation.upscaler == Upscaler::Fsr1 && magnifies(self.size, output_size))
+        let source = (presentation.upscaler == Upscaler::Fsr1 && magnifies(extent, output_size))
             .then(|| {
                 let fsr = self
                     .fsr1
@@ -423,7 +429,7 @@ impl Framebuffer {
                     encoder,
                     fsr1::Frame {
                         source: upscale_source,
-                        input: self.size,
+                        input: extent,
                         output: output_size,
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
@@ -459,11 +465,21 @@ impl Framebuffer {
         // here would grade the scene and leave the HUD and the menus outside
         // the calibration, which is the arrangement ADR-0036 exists to end. The
         // `decode` flag still belongs here, being about what *this* pass reads.
-        self.set_grade(
+        //
+        // The source rectangle rides the same write. It is the whole texture
+        // whenever a post-process or an upscaler produced the frame - those
+        // targets are exactly the size they were asked for - and the drawn
+        // sub-rectangle only when the scene target itself is being blitted.
+        let read = match source {
+            Some(_) => Source::WHOLE,
+            None => Source::of(extent, self.allocation),
+        };
+        self.set_blit(
             queue,
             Brightness::NEUTRAL,
             Gamma::NEUTRAL,
             source.is_some() && self.format.is_srgb(),
+            read,
         );
         self.present(encoder, &self.output.view, rect, source.as_ref());
     }
@@ -529,15 +545,21 @@ impl Framebuffer {
         self.present(encoder, surface, rect, Some(&self.output.bind_group));
     }
 
-    /// Makes sure the target is `size`, rebuilding it if it is not.
+    /// Makes sure the **allocation** is `size`, rebuilding it if it is not.
     ///
     /// Returns whether it was rebuilt, which is what tells a caller with its own
     /// size-matched attachments - the race's depth buffer - to rebuild too. A
     /// depth attachment whose size does not match the colour one is a validation
     /// error rather than a bad picture.
+    ///
+    /// `size` is the **ceiling**: `target_size` off `[graphics] render_scale`,
+    /// which moves when the window, the aspect or that row moves. A
+    /// dynamic-resolution controller does not call this - it calls
+    /// [`Framebuffer::set_extent`], which allocates nothing. See
+    /// [ADR-0037](../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md).
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) -> bool {
         let size = (size.0.max(1), size.1.max(1));
-        if size == self.size {
+        if size == self.allocation {
             return false;
         }
         let (texture, view, perceptual, bind_group) = target(
@@ -552,8 +574,50 @@ impl Framebuffer {
         self.view = view;
         self.perceptual = perceptual;
         self.bind_group = bind_group;
-        self.size = size;
+        self.allocation = size;
+        // **Reset, not preserved.** A window resize that shrinks the
+        // allocation while a stale larger extent survived would set a viewport
+        // past the attachment, which is a validation error rather than a bad
+        // picture. A controller re-applies its own value on the next frame,
+        // which costs it one frame at full size and costs nothing to reason
+        // about.
+        self.extent = size;
         true
+    }
+
+    /// Moves the render extent - how much of the allocation this frame is
+    /// drawn into - without allocating anything.
+    ///
+    /// Clamped into `1..=allocation` on each axis, so the invariant the
+    /// viewport depends on cannot be broken from outside. This is the whole
+    /// per-frame cost of dynamic resolution: a uniform write and two viewport
+    /// calls, against the six texture creations [`Framebuffer::resize`] pays.
+    ///
+    /// # Nothing outside a test may set an extent below the allocation yet
+    ///
+    /// **No per-frame scene post-process is viewport-aware**, and the list is
+    /// longer than the upscaler: FXAA, SMAA and FSR 1 are handed the extent as
+    /// their input size while reading a view of the allocation-sized texture,
+    /// which is correct exactly while the two are equal, and their own targets
+    /// would be rebuilt on every extent change besides; and `bloom` and
+    /// `hd_bloom` take **no** size and no viewport at all, so a short extent
+    /// would have them blurring the undrawn region inward as a dark edge.
+    /// Bloom is its own setting and is on in an ordinary race, so "turn the
+    /// upscaler and the anti-aliasing off" is *not* a safe configuration -
+    /// nothing outside a test, full stop.
+    ///
+    /// `motion_blur` is the one pass already shaped right, and is the shape the
+    /// others need: `motion_blur::Frame` carries the attachments' `size` and
+    /// the drawn `viewport` separately and takes the correct one for each. The
+    /// restoration that starts the rest is un-folding
+    /// `fsr1::Constants::new`'s viewport and size arguments back to the two
+    /// `ffx_fsr1.h` has. See
+    /// [`docs/rendering/dynamic-resolution.md`](../../../docs/rendering/dynamic-resolution.md).
+    pub fn set_extent(&mut self, extent: (u32, u32)) {
+        self.extent = (
+            extent.0.clamp(1, self.allocation.0),
+            extent.1.clamp(1, self.allocation.1),
+        );
     }
 
     /// The view every stage draws into.
@@ -562,10 +626,26 @@ impl Framebuffer {
         &self.view
     }
 
-    /// How big the target currently is.
+    /// How big the scene texture actually is.
+    ///
+    /// What an attachment builder wants: a depth or multisampled attachment
+    /// has to match this, not [`Framebuffer::extent`]. There is no `size()`
+    /// deliberately - since ADR-0037 the two questions have different answers
+    /// and a caller has to say which it meant.
     #[must_use]
-    pub fn size(&self) -> (u32, u32) {
-        self.size
+    pub fn allocation(&self) -> (u32, u32) {
+        self.allocation
+    }
+
+    /// How much of it this frame is drawn into.
+    ///
+    /// What a viewport wants, and therefore what anything normalising against
+    /// the frame's pixels wants - the projection, and the sub-pixel camera
+    /// jitter of [ADR-0039](../../../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md),
+    /// which takes the viewport it is handed rather than reading a size here.
+    #[must_use]
+    pub fn extent(&self) -> (u32, u32) {
+        self.extent
     }
 
     /// Stretches the target into `rect` on `surface`, clearing the rest.
@@ -618,27 +698,6 @@ impl Framebuffer {
         pass.set_bind_group(0, Some(source.unwrap_or(&self.bind_group)), &[]);
         pass.draw(0..3, 0..1);
     }
-}
-
-/// A grade uniform, filled at creation rather than through the queue.
-///
-/// Through the mapping because [`Framebuffer::new`] has no queue and should not
-/// need one: building a framebuffer stays a device-only operation, which is
-/// what lets a capture path build one without a frame loop around it.
-fn grade_buffer(device: &wgpu::Device, label: &str, graded: Grade) -> Result<wgpu::Buffer> {
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some(label),
-        size: std::mem::size_of::<Grade>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: true,
-    });
-    buffer
-        .slice(..)
-        .get_mapped_range_mut()
-        .context("mapping the grade buffer")?
-        .copy_from_slice(bytemuck::bytes_of(&graded));
-    buffer.unmap();
-    Ok(buffer)
 }
 
 /// Builds the presentation-sized target and the bind group that reads it.
@@ -818,7 +877,8 @@ pub fn target_size(rect: (f32, f32, f32, f32), scale: Scale, limit: u32) -> (u32
 impl std::fmt::Debug for Framebuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Framebuffer")
-            .field("size", &self.size)
+            .field("allocation", &self.allocation)
+            .field("extent", &self.extent)
             .field("format", &self.format)
             .field("texture", &self.texture.size())
             .finish_non_exhaustive()
@@ -827,3 +887,8 @@ impl std::fmt::Debug for Framebuffer {
 
 #[cfg(test)]
 mod tests;
+
+// A second test file rather than more of `tests`, which is already 874 lines
+// against `just check-size`'s 1,000-line ratchet.
+#[cfg(test)]
+mod extent_tests;

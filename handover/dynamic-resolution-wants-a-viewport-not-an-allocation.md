@@ -74,11 +74,12 @@ the scaled target, which matters here for its own sake: it is the row a player
 reads to tell DRS from a stutter, and it can now be read while the scale moves.
 The HUD and the menus have not moved, so this is still a blocker.
 
-**2. Every scale change is a reallocation.** A controller that steps the scale
-2 % per frame would rebuild a texture, two views, a bind group, a depth
-attachment and (under MSAA) the multisampled attachments, several times a
-second - paying a cost to save a cost. The standard answer, and the one this
-plan proposes: **allocate once at the ceiling and vary the viewport.**
+**2. Every scale change was a reallocation. It is not any more.** A controller
+that stepped the scale 2 % per frame would have rebuilt a texture, two views, a
+bind group, a depth attachment and (under MSAA) the multisampled attachments,
+several times a second - paying a cost to save a cost. Phase 1 below took the
+standard answer: **allocate once at the ceiling and vary the viewport.** Moving
+the extent is now a uniform write and two `set_viewport` calls.
 
 **3. The wall-clock interval carries no headroom.** Under `Vsync::On` it is
 pinned to the refresh; under any `FrameLimit` it is pinned to the limit,
@@ -121,39 +122,84 @@ is needed - none of this is reverse-engineering, all of it is this project's
 own enhancement, on the same footing as FSR 1 and SMAA. Phase 0 above is
 already done; these five are what is left.
 
-### Phase 1 - a fixed allocation and a moving viewport
+### Phase 1 landed 2026-09-02: a fixed allocation and a moving viewport
 
-**Roughly a day and a half.** Split `Framebuffer`'s one `size` into an
-**allocation** (the ceiling, resized only when the window or `render_scale`
-ceiling changes) and a **render extent** (this frame's pixels, a sub-rect
-anchored at the origin). Then:
+**Done.** [ADR-0037](../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)
+records the decision and
+[dynamic-resolution.md](../docs/rendering/dynamic-resolution.md) carries the
+audit of every consumer. What is now true:
 
-- `view()`'s consumers set viewport and scissor to the render extent; the
-  stages' `inside` at `frame.rs:490` becomes the extent, not the allocation.
-- `present`'s fullscreen triangle scales its UVs by `extent / allocation`, and
-  the sampler must **clamp at the extent's edge**, or the blit pulls in stale
-  pixels from outside the rect - the classic DRS artefact, a bright fringe on
-  the right and bottom.
-- The race's depth attachment, and MSAA's attachments, are allocated at the
-  ceiling and viewport-restricted like the colour one. `Framebuffer::resize`'s
-  `true` return then fires far less often, which is the point.
-- `race/capture.rs:317` calls `target_size` itself and needs the same split, or
-  it silently keeps the old meaning.
+- `Framebuffer` has `allocation()` and `extent()` and **no `size()`** - the
+  removal is the point, so a new caller has to say which it means. `resize`
+  moves the allocation off the `render_scale` ceiling and still returns whether
+  it reallocated; `set_extent` moves the extent, clamps into `1..=allocation`
+  and allocates nothing. **Any reallocation resets the extent**, or a window
+  resize under a stale larger extent sets a viewport past the attachment.
+- `frame.rs`'s `inside` and `warm_up`'s rectangle take the extent, so the
+  projection and ADR-0039's jitter follow it with no change of their own. The
+  three `scene.resize` arms, the suspended race, `app.rs` and `load.rs`'s
+  `build_race_stage` take the allocation.
+- The blit reads the extent: `Source` rides the grade uniform as a UV scale
+  plus a clamp half a texel inside the drawn edge. `Source::WHOLE` is exactly
+  `1.0` on both **by construction**, which is what keeps the change
+  structurally inert - measured, not asserted: `--presented` captures at
+  `--render-scale 50 --upscaler fsr1` and at `--render-scale 100 --upscaler
+  off` are byte-identical across the commit (`sha256`, 1440x816).
+- `race/capture.rs` needed no change after all. It never called
+  `Framebuffer::size()`; it computes `target_size` into its own
+  `PresentedState::scene_size` and hands that to `Framebuffer::new`, which sets
+  both sizes equal. Likewise `race/scene/frame.rs:874`'s `self.depth.size()`:
+  `motion_blur::Frame` already separates `size` from `viewport` and was already
+  taking the right one for each.
 
-This is what a new ADR-0037 should record - the number is free as of
-2026-09-02, see the [ADR index](../docs/architecture/adr/README.md), 0036
-having been taken by Phase 0's own decision: *dynamic
-resolution varies a viewport, not an allocation* -
-with the memory cost stated honestly, since the target is always the ceiling's
-size even when rendering below it.
+**What Phase 1 did *not* do, and it bounds what may set an extent.** No
+per-frame scene post-process is viewport-aware, and the list is longer than the
+upscaler. FXAA, SMAA and FSR 1 are handed the extent as their input size while
+reading a view of the allocation-sized texture - correct only while the two are
+equal, and their own targets would be rebuilt on every extent change besides.
+**And `bloom` and `hd_bloom` take no size and no viewport at all**, so a short
+extent would have them blurring the undrawn region inward as a dark edge; bloom
+is its own setting and is on in an ordinary race, so there is no combination of
+menu rows that makes a sub-extent safe. Nothing outside a test may set one, full
+stop; the two tests that do build a bare `Framebuffer` with no `Scene` behind
+it. `Framebuffer::set_extent` says so on itself.
+
+`motion_blur` is the one pass already shaped right and is the shape the others
+need - `motion_blur::Frame` carries `size` and `viewport` separately and takes
+the correct one for each.
+
+Two things worth carrying forward that were not in the plan: the memory cost is
+against a *hypothetical* reallocating DRS and **not** against today (the
+allocation is exactly what `target_size` already allocated), and `LoadOp::Clear`
+is not viewport-restricted in wgpu, so a scaled frame still pays a ceiling-sized
+clear - which bounds what DRS can save at low scales and belongs in Phase 2's
+budget rather than in a surprise.
 
 ### Phase 2 - a cost signal worth controlling on
 
-**Roughly a day.** `wgpu::Features::TIMESTAMP_QUERY`, behind an adapter probe
-with the fallback chain ADR-0012 already mandates for FSR 3.1: a missing
-feature degrades, never fails to boot. Write a timestamp either side of the
-scene passes so the measurement is *the part that scales* - the UI composite
-after Phase 0 does not scale and must not be in the budget.
+**This is the next one to pick up, and its probe is done.**
+`oag_render::timing::Timing` reports what an adapter offers without requesting
+a device, and `Timing::features` turns that back into what a `request_device`
+may safely ask for. **Nothing enables it**:
+`mesh_render::optional_features` is the one line that changes when a consumer
+exists, and turning a feature on with nothing reading it buys a driver
+behaviour change for nothing.
+
+Measured 2026-09-02 on the development machine, both adapters, end to end - a
+real query pair resolved around a cleared pass, not a feature bit read. Both
+support all three timestamp features over Vulkan; the Intel iGPU's tick is
+**52.083332 ns** and the NVIDIA dGPU's is **1 ns**. The table and what it
+settles are on
+[dynamic-resolution.md](../docs/rendering/dynamic-resolution.md#what-the-probe-actually-found);
+the two consequences to carry into the rest of Phase 2 are that a budget must
+be computed from `Queue::get_timestamp_period` every run and never from a
+constant, and that **the no-timestamp fallback path cannot be exercised on this
+machine** - both adapters have the feature, so a green run here is not evidence
+that the degraded path works.
+
+**Roughly a day for the rest.** Write a timestamp either side of the scene
+passes so the measurement is *the part that scales* - the UI composite after
+Phase 0 does not scale and must not be in the budget.
 
 Two things to say out loud in the doc page:
 
@@ -218,7 +264,12 @@ kind of statement; overloading one warning with both was judged worse than no
 warning at all. Do not re-open this as an oversight - it is a decision. The DRS
 pairing above is the first kind of statement and does still want a warning.
 
-### Phase 5 - tell the upscaler the size changed
+### Phase 5 - tell the upscaler, and the bloom, the size changed
+
+**Half a day for FSR 1, and bloom is a second job beside it** - `bloom::render`
+and `hd_bloom::run` take neither a size nor a viewport today, so they need one
+added rather than un-folded. Both have to land before a controller may move the
+extent at all; see the caveat under Phase 1.
 
 **Half a day for FSR 1.** Un-collapse `fsr1::Constants::new`'s viewport and
 size arguments back to upstream's two, which is a *restoration* of
@@ -246,11 +297,15 @@ changes.
 
 - **Every capture path must force DRS off, and there are two of them with
   different shapes.** `crates/game/src/race/capture.rs` builds its own
-  `Framebuffer` (line 380, conditional on `presented`) and calls `target_size`
-  itself (line 317); `crates/game/src/capture.rs`'s front-end path has no
-  `Framebuffer` at all (line 28) - which since ADR-0038 is correct rather than
-  a gap, because the front end has no scene to scale; what it still lacks is
-  the grade and the aspect bars, not a render target.
+  `Framebuffer` (conditional on `presented`) and calls `target_size` itself;
+  `crates/game/src/capture.rs`'s front-end path has no `Framebuffer` at all -
+  which since ADR-0038 is correct rather than a gap, because the front end has
+  no scene to scale; what it still lacks is the grade and the aspect bars, not
+  a render target. **Phase 1 makes the first of the two safe by construction**:
+  the capture builds its `Framebuffer` at `scene_size` and never calls
+  `set_extent`, so its extent is its allocation for the life of the run. That
+  holds only while nothing wires a controller into the capture path, which is
+  what this trap is now guarding.
   Fixing only the first leaves the second reacting to machine load. This
   project's comparisons are byte-identical screenshot diffs - thirty captures
   came out byte-identical when the PVS tiers were validated - and a controller
@@ -286,16 +341,19 @@ changes.
 
 ## Next Steps
 
-1. Read `Framebuffer`'s five consumers of `size()` end to end (`resolve`,
-   `present`, `frame.rs:490`, `session/load.rs:486`, `race/capture.rs:317`) and
-   write down which of them means "the allocation" and which means "what was
-   drawn". That list *is* the Phase 1 diff.
-2. Probe `Features::TIMESTAMP_QUERY` on the development machines and record
-   what is actually available - the fallback chain's shape depends on the
-   answer, and a probe is twenty lines.
-3. Write ADR-0037 for the viewport-not-allocation decision before the code, and
-   `docs/rendering/dynamic-resolution.md` alongside it. Neither may link back
-   into this file: a `docs/` page must never link into `handover/`.
-4. Update [modern-features.md](../docs/overview/modern-features.md)'s
-   prerequisite table and the M7 "Modern features" row in
-   [roadmap.md](../docs/overview/roadmap.md) when the first phase lands.
+Steps 1, 3 and 4 of the original list are done: the audit is written up in
+[dynamic-resolution.md](../docs/rendering/dynamic-resolution.md), ADR-0037 is
+written, and `modern-features.md`'s first prerequisite row plus the M7 rows in
+[roadmap.md](../docs/overview/roadmap.md) name the split.
+
+1. Bracket the scene passes with a timestamp pair and feed the resolved
+   duration to a meter, off `Timing` (already built, see Phase 2). The reading
+   resolves a frame or more late, so whatever holds it has to say which frame it
+   belongs to rather than assume the last one.
+2. Measure the ceiling-sized clear before designing a policy around a budget.
+   `LoadOp::Clear` is not viewport-restricted, so the scene pass's fixed cost
+   does not fall with the extent; how much of a frame that is decides whether a
+   floor below (say) 60 % buys anything at all.
+3. Measure the ceiling allocation's memory on a Steam-Deck-class target. It is
+   the one number ADR-0037 states as unmeasured, and the answer could argue for
+   a per-title ceiling rather than a per-title floor.

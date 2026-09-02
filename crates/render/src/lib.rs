@@ -46,5 +46,6 @@ pub mod pvs;
 pub mod shield;
 pub mod sparks;
 pub mod texgen;
+pub mod timing;
 pub mod track;
 pub mod weapon_pad;
