@@ -704,11 +704,75 @@ the `__FILE__` attribution trick, one already named
 checked and ruled out - it is the **track sponsor-signage** system
 `<TrackStartup>` declares, unrelated to the ship's own effects.
 
-**The function that turns `Flare Radius` into a world-space quad remains
-unlocated** after both a static and a live pass. This is the same wall
-`engineflare_vp`/`fp` resolving through no registry read already put up two
-rows above; two sessions did not get further than confirming where it is
-not.
+**The function that turns `Flare Radius` into a world-space quad remained
+unlocated after both a static and a live pass** across two sessions - this is
+the same wall `engineflare_vp`/`fp` resolving through no registry read already
+put up two rows above.
+
+### Third session: it was on `EngineFlare`'s own vtable, not a separate manager
+
+**2026-09-02.** Both untried angles from the second session's writeup pointed
+at the same place from different directions - "the manager `EngineFlare` calls
+into" and "the draw's own vertex-array command" turned out to be the same
+function, reached by reading the object's **other** vtable slots rather than
+hunting a second object. `EngineFlare_Update`'s own vtable (`0x00869d30`,
+bound in both constructors via `PTR_PTR_008b2f14`) has two class-specific
+slots neither prior session opened: slot 3 is the already-known
+`EngineFlare_Update` (`0x002a3100`); the two that matter are **slot 5** and
+**slot 7** - the identical two slots `TrailEffectManager`'s vtable uses for
+`Trail_Enqueue` and `Trail_RenderTick` (see "the manager, in the executable"
+above). Both were read live off the vtable at fixed 8-byte OPD-entry stride,
+not decompiled from a symbol Ghidra had already named, since neither had one.
+
+**Slot 5, `EngineFlare_Enqueue` (`0x002a06e0`), confidence 84.** Byte-for-byte
+the same function as `Trail_Enqueue` (`0x002e2610`) with only the sort-key
+literal changed (`0x4d000000` vs. Trail's `0x4d100000`, both masked `&
+0xfffff` against a depth field at `+0x11c` of the render-queue object): same
+three-line body, same offsets (`+0x630` the object pointer, `+0x634` the sort
+key, `+0x44b0` the running count). **Not just the same shape - the same
+object**: `Trail_Enqueue` reaches it through `PTR_DAT_008b4438` and
+`EngineFlare_Enqueue` through `PTR_DAT_008b2f5c`, two different TOC slots that
+both hold the identical pointer value `0x00ae9c94`, read directly
+(`read_memory` on each TOC slot, not decompiled). Both functions enqueue into
+the one shared render queue Pulse's `Gfx_Enqueue` also uses, at the layer
+`EngineFlare` picks for itself.
+
+**Slot 7, `EngineFlare_RenderTick` (`0x002a08a8`), confidence 78.** This is
+the function two sessions were looking for - it is gated, like
+`Trail_RenderTick`, on a flag inside the *same* global object (`0x00aea540`,
+confirmed live: `PTR_DAT_008b2f20` in this function and `PTR_DAT_008b44d0` in
+`Trail_RenderTick` both hold `0x00aea540`), just at a different byte offset -
+`+0x494` here, `+0x4b8` there. Past the gate it loads a dozen floats out of
+that same object (`+0x470`..`+0x4a8`, unidentified past "shared render-frame
+state") and reaches a chain of small TOC-fixup trampolines (`std
+r2,0x28(r1)` / `addis`/`subi r2` / `b <target>`, jumping into a
+different code region entirely - the two-TOC pattern
+[memory.md](memory.md) documents) that lands on **`Rsx_SetMethod`**, an
+already-named function, plus several more in the same `0x005a4000`-`0x005f1000`
+neighbourhood that are not yet named but clearly build and submit a quad (one
+of them, `0x005a40f8`, takes six pointer arguments shaped like a screen-space
+rect plus per-corner UV/colour blend flags, and ends by calling
+`Rsx_SetMethod` itself). Capped at 84 for decompilation-only per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md); not
+runtime-verified, and scored a few points under that cap because the internal
+float loads (the dozen fields off `0x00aea540`) and the exact vertex/UV
+submission are not yet read - only that this is the function that reaches the
+draw call is established, not what values it draws with.
+
+**What is still open, now scoped tighter than "find the draw call":** which
+of `EngineFlare_RenderTick`'s loads is `Flare Radius` (or its
+`Flare Fadeout Dist`/`Range`/`Flare Size Clamp` companions from "all 41 rows"
+above) is unread - the function's body is long (`0x002a08a8`-`0x002a1500`+)
+and most of it is vector/RSX submission plumbing rather than the tuning
+values themselves. The two ruled-out things from session two - the six
+RSX-range pointers inside the `EngineFlare` object being occlusion-query
+buffers, not vertex data, and `Billboard.cpp` being unrelated track signage -
+still stand; this session did not need either. **Two destructor-shaped
+slots on the same vtable were read and left unnamed**: slot 12 (`0x002a0470`)
+and slot 13 (`0x0029f680`) both reset the vtable pointer to the shared base
+(`PTR_PTR_008b2f14`) and call a free routine - consistent with a plain and a
+virtual destructor pair, not investigated further because neither is on the
+draw path.
 
 ### Checked: no separate trail for HD vs. Fury, and no zone-specific one
 
@@ -885,20 +949,23 @@ Open, in rough order of visible cost:
   against the original at ordinary chase distance - "All 41 rows" above has
   the evidence and the ruled-out causes; `Flare Fadeout Dist/Range` (15/15)
   is the leading candidate and still unread, so `hd::Sprite`'s radius is
-  unchanged rather than fitted to the screenshots. **A 2026-09-01 follow-up
-  spent a static and a live pass hunting the draw call specifically and did
-  not find it** - see "What two sessions' worth of reading could not settle"
-  above for the full account: `+0xe4` turned out to be intensity, not
-  radius storage (a correction to this page); neither
+  unchanged rather than fitted to the screenshots. **Two 2026-09-01 sessions
+  hunted the draw call and did not find it** (`+0xe4` turned out to be
+  intensity, not radius storage - a correction to this page; neither
   `EngineFlare_PlaceShapes` nor `_Update` reads any radius-shaped field back
   out; live-dumped RSX pointers inside the object read as occlusion-query
-  buffers, not vertex data; and `Billboard.cpp` is the unrelated track-
-  signage system. Two candidates are now on the table for what to try next:
-  find the manager `EngineFlare` calls into rather than owning geometry
-  itself (the same shape `TrailEffectManager` has for the ribbon, and the
-  reason RSX pointers were being hunted *inside* the wrong object), or scan
-  the RSX pushbuffer directly for the `NV4097` vertex-array command this
-  draw issues, which needs no CPU-side handle at all.
+  buffers, not vertex data; `Billboard.cpp` is the unrelated track-signage
+  system) - **and a third, 2026-09-02, found it**: "Third session: it was on
+  `EngineFlare`'s own vtable, not a separate manager" above.
+  `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78) is the function; it
+  is neither `EngineFlare` owning geometry directly nor a call into a
+  separate manager but a third shape neither session had framed yet - a
+  sibling virtual method on the same object, found by reading the two
+  still-unopened vtable slots rather than hunting a second object or
+  scanning the pushbuffer. What it draws the quad *with* - which of its
+  loads is `Flare Radius`, `Flare Fadeout Dist/Range`, or `Flare Size
+  Clamp` - remains unread; most of the function past its gate is RSX
+  submission plumbing rather than the tuning values themselves.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
@@ -937,6 +1004,18 @@ uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-params --p
 uv run --with evdev python3 scripts/hd-flare-sprite-dump.py /tmp/hd-flare-sprite-dump
 python3 scripts/ps3-toc.py attrib 0x0079bdd8   # who loads Engine_Flare_Rich.gtf
 python3 scripts/ps3-toc.py map | grep -i flare  # Billboard.cpp etc., ruled out
+# EngineFlare_RenderTick, found on the object's own vtable rather than a
+# separate manager - via the ghidra-mcp read_memory tool, no script:
+#   read_memory 0x008b2f14 16    # PTR_PTR_008b2f14, the vtable pointer slot
+#   read_memory 0x00869d30 128   # the vtable itself, 8-byte OPD-entry stride;
+#                                 # slot 5 (+0x28) and slot 7 (+0x38) are the
+#                                 # two class-specific entries besides slot 3
+#                                 # (EngineFlare_Update); read each slot's OPD
+#                                 # pair the same way to get the real function
+#                                 # address the two generic-vtable pointers
+#                                 # (401/386/etc.-xref shared stubs) are not
+python3 scripts/ps3-toc.py toc 0x002a08a8      # confirms the render function's
+                                                 # TOC matches EngineFlare_Update's
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
