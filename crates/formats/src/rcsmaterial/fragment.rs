@@ -29,6 +29,61 @@ fn word(data: &[u8], at: usize) -> Option<u32> {
     Some(u32::from(hi) << 16 | u32::from(lo))
 }
 
+/// The 16-byte code slots one parameter's `fslot` patches, or `[]` for a
+/// chain that runs off the end of the data - a malformed block still
+/// decodes, it just patches nothing.
+///
+/// A fragment program has no constant registers of its own: a source that
+/// selects `CONST` takes its four floats from the 16 bytes right after the
+/// instruction, so a parameter with no hardware register is instead patched
+/// straight into that inline slot. Following the chain from `fslot` is what
+/// turns a printed `0.0` into the parameter that put it there:
+///
+/// ```text
+/// u16 index     at  at + fslot
+/// u32 entry_off at  at + program_at + 0x18 + 4 * index   (rel. to at+program_at)
+/// u16 count     at  at + program_at + entry_off
+/// u16 slot[i]   at  at + program_at + entry_off + 2 + 2*i
+/// ```
+///
+/// Port of `scripts/ps3-microcode.py`'s `fp_patch_slots`, the reference this
+/// mirrors and which `docs/formats/rcsmaterial.md`'s "The glass family's
+/// second slot" validated first against `diffuse_with_specular_from_alpha`'s
+/// already-published const slots (`0x9`, `0x13`) before trusting it more
+/// widely. Confidence 82, inherited from that reading.
+fn patch_slots(data: &[u8], at: usize, program_at: usize, fslot: u16) -> Vec<u16> {
+    (|| {
+        let base = at + program_at;
+        let index = usize::from(u16::from_be_bytes(
+            data.get(at + usize::from(fslot)..at + usize::from(fslot) + 2)?
+                .try_into()
+                .ok()?,
+        ));
+        let entries = u32::from_be_bytes(data.get(base + 0x14..base + 0x18)?.try_into().ok()?);
+        if index as u32 >= entries {
+            return Some(Vec::new());
+        }
+        let entry_off = usize::try_from(u32::from_be_bytes(
+            data.get(base + 0x18 + 4 * index..base + 0x18 + 4 * index + 4)?
+                .try_into()
+                .ok()?,
+        ))
+        .ok()?;
+        let count = usize::from(u16::from_be_bytes(
+            data.get(base + entry_off..base + entry_off + 2)?
+                .try_into()
+                .ok()?,
+        ));
+        (0..count)
+            .map(|i| {
+                let o = base + entry_off + 2 + 2 * i;
+                Some(u16::from_be_bytes(data.get(o..o + 2)?.try_into().ok()?))
+            })
+            .collect()
+    })()
+    .unwrap_or_default()
+}
+
 /// Where one of an instruction's operands comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
@@ -105,6 +160,13 @@ pub struct Instruction {
     pub swizzles: [[u8; 4]; 3],
     /// The inline constant that followed, when a source selected one.
     pub constant: Option<[f32; 4]>,
+    /// The constant's own 16-byte code slot, when [`Self::constant`] is
+    /// `Some` - always this instruction's own slot plus one, since the
+    /// constant occupies the 16 bytes immediately after it. This is the slot
+    /// number [`Program::patches`]'s parameter-patch table names, so a caller
+    /// can tell a real file-authored literal from one the engine overwrites
+    /// at draw time.
+    pub const_slot: Option<u16>,
     /// Whether this instruction ends the program.
     pub end: bool,
 }
@@ -207,6 +269,11 @@ pub struct Program {
     pub instructions: Vec<Instruction>,
     /// What the block declares it is fed.
     pub declared: Declared,
+    /// Every parameter patched straight into the code, as `(code slot, name
+    /// hash)` pairs - resolved once at parse time, since the chain needs the
+    /// block's raw bytes [`Self::declared`] no longer carries. See
+    /// [`Self::patches`].
+    parameter_patches: Vec<(u16, u32)>,
 }
 
 impl Program {
@@ -255,6 +322,13 @@ impl Program {
                 }
                 out
             });
+            // The constant, when there is one, occupies the very next 16-byte
+            // slot - the one a parameter's patch list names.
+            let const_slot = if constant.is_some() {
+                u16::try_from((pos - start) / 16 + 1).ok()
+            } else {
+                None
+            };
             let insn = Instruction {
                 opcode: ((d0 >> 24) & 0x3f) as u8,
                 dst: ((d0 >> 1) & 0x3f) as u8,
@@ -266,6 +340,7 @@ impl Program {
                 sources,
                 swizzles,
                 constant,
+                const_slot,
                 end: d0 & 1 != 0,
             };
             let done = insn.end;
@@ -275,10 +350,51 @@ impl Program {
                 break;
             }
         }
+        let parameter_patches = declared
+            .parameter_patches
+            .iter()
+            .filter(|&&(_, vreg, _)| vreg == 0xffff)
+            .flat_map(|&(hash, _, fslot)| {
+                patch_slots(data, at, program_at, fslot)
+                    .into_iter()
+                    .map(move |slot| (slot, hash))
+            })
+            .collect();
         Some(Self {
             instructions,
             declared,
+            parameter_patches,
         })
+    }
+
+    /// Every code slot the parameter named `hash` patches directly into the
+    /// code, at draw time - `[]` when it is not patched that way (bound to a
+    /// hardware constant register instead, or not declared at all).
+    ///
+    /// **What this is for.** [`Self::specular_exponent`] can read a literal
+    /// `0.0` off the file honestly and still be reporting a value the file
+    /// itself never uses - `pow(x, 0) = 1` is not a plausible authored
+    /// shininess, and a disc-wide sweep found this the largest single
+    /// bucket. Checking whether [`Instruction::const_slot`] of that chain's
+    /// `MUL` is in the list this returns for [`crate::rcsmaterial::SPECULAR_POWER`]
+    /// is what tells "the file really says zero" apart from "the engine
+    /// overwrites this before it is ever zero on screen" - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Ships have no
+    /// Lambert diffuse either".
+    ///
+    /// **Two different parameters patching the same slot is not excluded by
+    /// this method** - it answers only "does `hash` patch `slot`", not "is
+    /// `hash` the only one that does". Checked rather than assumed:
+    /// `crates/render/examples/hd_specular_patch_census.rs` sweeps every
+    /// pair of a resolved block's own declared parameters and found no two
+    /// distinct ones ever sharing a slot, over 4,586 resolved blocks across
+    /// 16 circuits - a one-to-one relation holds disc-wide as measured, not
+    /// by construction.
+    pub fn patches(&self, hash: u32) -> impl Iterator<Item = u16> + '_ {
+        self.parameter_patches
+            .iter()
+            .filter(move |&&(_, h)| h == hash)
+            .map(|&(slot, _)| slot)
     }
 
     /// Which interpolators the program reads at all.
@@ -411,6 +527,26 @@ impl Program {
     /// read by hand so far, but not ruled out either.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
+        self.specular_exponent_chain().map(|(value, _)| value)
+    }
+
+    /// The code slot [`Self::specular_exponent`]'s own chain's `MUL` constant
+    /// occupies, when that chain exists - regardless of whether the value
+    /// survived the method's `log2(e)` exclusion, so a caller distinguishing
+    /// "the file really authors this exponent" from "the engine overwrites it
+    /// at draw time" sees the slot even on the `0.0` bucket
+    /// [`Self::specular_exponent`]'s own doc comment names. Feed it to
+    /// [`Self::patches`] with [`crate::rcsmaterial::SPECULAR_POWER`] to ask
+    /// that question.
+    #[must_use]
+    pub fn specular_exponent_slot(&self) -> Option<u16> {
+        self.specular_exponent_chain().and_then(|(_, slot)| slot)
+    }
+
+    /// The shared search behind [`Self::specular_exponent`] and
+    /// [`Self::specular_exponent_slot`] - see the former's doc comment for
+    /// the three filters and why each is load-bearing.
+    fn specular_exponent_chain(&self) -> Option<(f32, Option<u16>)> {
         for i in (0..self.instructions.len()).rev() {
             if self.instructions[i].name() != Some("LG2") || !self.lg2_reads_a_saturated_dot(i) {
                 continue;
@@ -458,7 +594,7 @@ impl Program {
                 // `1.4427`. Skip and keep looking, rather than returning a
                 // value that is not the exponent this method promises.
                 if (value - std::f32::consts::LOG2_E).abs() > 1e-3 {
-                    return Some(value);
+                    return Some((value, mul.const_slot));
                 }
             }
         }

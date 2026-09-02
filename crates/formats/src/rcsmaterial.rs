@@ -426,6 +426,21 @@ pub struct Declared {
     pub parameters: Vec<u32>,
     /// Every sampler name hash, with the texture unit it binds.
     pub samplers: Vec<(u32, u32)>,
+    /// Every parameter's own record, past the hash [`Self::parameters`]
+    /// already carries: `(hash, vreg, fslot)`, in table order.
+    ///
+    /// `vreg` is `0xffff` when the parameter has no hardware constant
+    /// register of its own and is patched straight into the fragment code
+    /// instead - see
+    /// [`crate::rcsmaterial::fragment::Program::patches`], which walks
+    /// `fslot` the rest of the way: a byte offset (from this block's own
+    /// start) to a `u16` index into an offset table in the program
+    /// sub-header, each entry a list of the 16-byte code slots that
+    /// parameter overwrites. Read on
+    /// `docs/formats/rcsmaterial.md`, "The glass family's second slot:
+    /// traced, not solved", and ported from `scripts/ps3-microcode.py`'s
+    /// `fp_patch_slots`/`fp_patch_map`, the reference this mirrors.
+    pub parameter_patches: Vec<(u32, u16, u16)>,
 }
 
 /// `~crc32("lightmap")`, the sampler a prelit surface's atlas binds to.
@@ -437,6 +452,12 @@ pub const CONSTANT_AMBIENT: u32 = 0x81db_67ea;
 pub const SUN_COLOUR: u32 = 0x2dba_643d;
 /// `~crc32("directionalLight0DirectionWorldSpace")`, the sun's direction.
 pub const SUN_DIRECTION: u32 = 0x02df_31e5;
+/// `~crc32("SpecularPower")`, the specular exponent -
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have no
+/// Lambert diffuse either" names it as the parameter a resolved `0.0`
+/// specular-exponent chain is the strongest candidate for having been
+/// patched from, at draw time, rather than baked in the file.
+pub const SPECULAR_POWER: u32 = 0x81e0_e773;
 
 impl Declared {
     /// Reads one `SHO` block's declaration tables, or `None` if `at` does not
@@ -452,21 +473,33 @@ impl Declared {
         let u32_at = |o: usize| -> Option<u32> {
             Some(u32::from_be_bytes(data.get(o..o + 4)?.try_into().ok()?))
         };
+        let u16_at_abs = |o: usize| -> Option<u16> {
+            Some(u16::from_be_bytes(data.get(o..o + 2)?.try_into().ok()?))
+        };
         let (attrs, params, samplers) = (u16_at(0x0a), u16_at(0x0c), u16_at(0x0e));
         let (o0, o1, o2) = (u16_at(0x10), u16_at(0x12), u16_at(0x14));
         // The framing check: each table starts where the previous one ended.
         if o1 != o0 + 8 * attrs || o2 != o1 + 12 * params {
             return None;
         }
-        let parameters = (0..params)
-            .filter_map(|i| u32_at(at + o1 + i * 12))
+        // One record is `u32 hash, u16 ty, u16 count, u16 vreg, u16 fslot` -
+        // `parameters` and `parameter_patches` read the same 12 bytes, kept as
+        // two fields rather than one so every existing reader of the bare
+        // hash list stays untouched.
+        let parameter_patches: Vec<(u32, u16, u16)> = (0..params)
+            .filter_map(|i| {
+                let r = at + o1 + i * 12;
+                Some((u32_at(r)?, u16_at_abs(r + 8)?, u16_at_abs(r + 10)?))
+            })
             .collect();
+        let parameters = parameter_patches.iter().map(|&(h, ..)| h).collect();
         let samplers = (0..samplers)
             .filter_map(|i| Some((u32_at(at + o2 + i * 8)?, u32_at(at + o2 + i * 8 + 4)?)))
             .collect();
         Some(Self {
             parameters,
             samplers,
+            parameter_patches,
         })
     }
 

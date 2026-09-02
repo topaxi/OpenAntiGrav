@@ -43,6 +43,7 @@ fn insn(opcode: u8) -> Instruction {
         sources: [Source::Input; 3],
         swizzles: [[0, 1, 2, 3]; 3],
         constant: None,
+        const_slot: None,
         end: false,
     }
 }
@@ -465,6 +466,7 @@ fn emissive_program(combine: u8, accumulate_into_self: bool) -> Program {
 
     Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions: vec![tex, tint, add],
     }
 }
@@ -578,6 +580,7 @@ fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
 
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(40.0));
@@ -589,6 +592,7 @@ fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
 fn a_pow_chain_never_read_again_returns_none() {
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions: pow_chain(1, 40.0, 0xf),
     };
     assert_eq!(program.specular_exponent(), None);
@@ -623,6 +627,7 @@ fn a_dead_pow_chain_after_the_real_one_does_not_win() {
 
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(40.0));
@@ -664,6 +669,7 @@ fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
 
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions: vec![tex, lg2, mul, ex2, mad],
     };
     assert_eq!(
@@ -691,6 +697,7 @@ fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {
 
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions,
     };
     assert_eq!(
@@ -716,7 +723,115 @@ fn a_pow_chain_whose_exponent_is_merely_close_to_log2_e_is_still_returned() {
 
     let program = Program {
         declared: Declared::default(),
+        parameter_patches: Vec::new(),
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(1.5));
+}
+
+/// A synthetic block carrying one parameter with `vreg = 0xffff` - patched
+/// straight into the code rather than bound to a hardware register - and the
+/// `fslot -> index -> offset table -> code slot` chain that names.
+///
+/// Verified against the real disc before this test was written:
+/// `diffuse_with_specular_from_alpha.rcsmaterial`'s block at `0x7410` patches
+/// `directionalLight0DirectionWorldSpace` (`0x02df31e5`) into slots `0x9` and
+/// `0x10`, matching `scripts/ps3-microcode.py`'s independently-implemented
+/// `fp_patch_slots` exactly - this test pins the same chain on data this
+/// module owns rather than on a disc image.
+fn synthetic_with_one_patch(hash: u32, patched_slot: u16) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes()); // fragment
+    for v in [
+        2u16, 0, 1, 0, // version, 0 attributes, 1 parameter, 0 samplers
+        0x18, 0x18, 0x24, 0x24, // offsets: attrs, params, samplers, program
+    ] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    // The one parameter record: hash, ty, count, vreg (0xffff - code-patched),
+    // fslot (0x2c, the absolute offset of the index this test writes below).
+    b.extend_from_slice(&hash.to_be_bytes());
+    b.extend_from_slice(&0u16.to_be_bytes());
+    b.extend_from_slice(&1u16.to_be_bytes());
+    b.extend_from_slice(&0xffffu16.to_be_bytes());
+    b.extend_from_slice(&0x2cu16.to_be_bytes());
+    assert_eq!(
+        b.len(),
+        0x24,
+        "the program sub-header starts where declared"
+    );
+
+    // Program sub-header, at +0x24 (`base`): code length, then an unrelated
+    // gap this test uses to carry the patch chain's own `index` before the
+    // documented `code_off` field at `+0x10`, then the entry-offset table.
+    b.extend_from_slice(&0u32.to_be_bytes()); // code_len - no code, not needed
+    b.resize(0x24 + 0x08, 0);
+    b.extend_from_slice(&0u16.to_be_bytes()); // the index `fslot` points at
+    b.resize(0x24 + 0x10, 0);
+    b.extend_from_slice(&0x50u32.to_be_bytes()); // code_off, past everything
+    b.extend_from_slice(&1u32.to_be_bytes()); // entries
+    b.extend_from_slice(&0x20u32.to_be_bytes()); // entry_off[0], relative to base
+    b.resize(0x24 + 0x20, 0);
+    b.extend_from_slice(&1u16.to_be_bytes()); // this entry patches one slot
+    b.extend_from_slice(&patched_slot.to_be_bytes());
+    b.resize(0x24 + 0x50, 0); // code starts here, empty
+    b
+}
+
+#[test]
+fn a_code_patched_parameter_names_its_slot() {
+    let hash = 0x02df_31e5; // directionalLight0DirectionWorldSpace
+    let data = synthetic_with_one_patch(hash, 7);
+    let program = Program::parse(&data, 0).expect("the block decodes");
+    assert_eq!(program.patches(hash).collect::<Vec<_>>(), vec![7]);
+    assert_eq!(
+        program.patches(0x1234_5678).collect::<Vec<_>>(),
+        Vec::<u16>::new(),
+        "a hash this block never declares patches nothing"
+    );
+}
+
+/// A parameter bound to a real hardware register (`vreg != 0xffff`) is not
+/// code-patched at all - the chain this module walks is specifically for a
+/// parameter with no register of its own.
+#[test]
+fn a_register_bound_parameter_is_not_in_the_patch_table() {
+    let hash = 0x02df_31e5;
+    let mut data = synthetic_with_one_patch(hash, 7);
+    // The `vreg` field sits at the parameter record's +8, i.e. `at + 0x20`.
+    data[0x20..0x22].copy_from_slice(&5u16.to_be_bytes());
+    let program = Program::parse(&data, 0).expect("the block still decodes");
+    assert_eq!(program.patches(hash).collect::<Vec<_>>(), Vec::<u16>::new());
+}
+
+/// The exact case `mesh::rcs::skin::roles` now checks: a `pow` chain
+/// resolving to a literal `0.0`, whose constant's own code slot is the one
+/// `SpecularPower` patches. [`specular_exponent_slot`] is what lets a caller
+/// ask that question without re-deriving which instruction supplied the
+/// literal.
+///
+/// [`specular_exponent_slot`]: Program::specular_exponent_slot
+#[test]
+fn the_zero_bucket_names_the_slot_specular_power_patches() {
+    const SPECULAR_POWER: u32 = crate::rcsmaterial::SPECULAR_POWER;
+    let mut instructions = pow_chain(1, 0.0, 0xf);
+    // `pow_chain`'s `MUL` is instruction index 2 - see its own doc comment.
+    instructions[2].const_slot = Some(9);
+    let mut mad = insn(0x04);
+    mad.dst = 0;
+    mad.dst_half = true;
+    mad.mask = 0b0111;
+    mad.sources = [reg(1, false), Source::Input, Source::Input];
+    mad.end = true;
+    instructions.push(mad);
+
+    let program = Program {
+        declared: Declared::default(),
+        parameter_patches: vec![(9, SPECULAR_POWER)],
+        instructions,
+    };
+    assert_eq!(program.specular_exponent(), Some(0.0));
+    assert_eq!(program.specular_exponent_slot(), Some(9));
+    assert_eq!(program.patches(SPECULAR_POWER).collect::<Vec<_>>(), vec![9]);
 }
