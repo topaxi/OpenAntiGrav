@@ -313,6 +313,35 @@ page needs:
 Confidence **84** for both names, **70** for the respawn-cost reading: the
 value is computed and stored, and what consumes `entity->0x44` is not read.
 
+### The full nine-arm table, and a race-start hypothesis for states 6 and 7
+
+2026-09-02, read while chasing the race-start countdown / launch-boost handover
+thread. `zone-mode.md`'s own account of `Ship_SetState`'s jump table (`0x08a7bc18`,
+nine arms, `0x0884416c` through `0x088446ec`) only carries states 4 and 5 to
+instruction level. The other seven, disassembled the same way (the decompiler
+still gives up on the whole function, so every arm below is read as raw
+instructions, not decompiled):
+
+| State | Address | What it does |
+| --- | --- | --- |
+| 0, 1, 2 | `0x0884416c`, `0x0884417c`, `0x0884418c` | Identical: call `FUN_0003aae8(entity)`, then fall into the common tail at `0x08844720`. Three states sharing one body with no state-specific work of their own - plausibly grid/lights/racing, the three the countdown walks through before anything else diverges, but nothing here names which is which. |
+| 6 | `0x088445a0` | **Sets `entity->0x874` to `2.0` if `entity->0x368 == 0` (the local player - confirmed field, see below), or `0.8` otherwise.** `entity->0x874` is the *same field* states 4/5 use as the destruction timer (`0.5` then `1.5` seconds, per the table above this section). Then zeroes a byte at `craft->0x794->0x3bc->0x68`, calls `FUN_0018dd94` on that sub-object, and calls `FUN_0003a624(entity)` - a shape (silence something, then call one more function on the entity itself) that reads as "stop the engine, arm a timer" rather than anything shield- or damage-related. **Hypothesis, confidence 55: this is the false-start engine stall** `race-modes.md`'s "What no mode has yet" section already asserts from the user's own play knowledge ("silently kills the engine if you hold thrust before the lights") but had never traced. The local/remote timer split (2.0s vs 0.8s) would make sense as a harsher, visible penalty for the human and a shorter one that only needs to desync an AI/remote craft's own thrust briefly. Not yet runtime-verified - nothing has watched `entity->0x874` or `entity->0x368` during an actual false start. |
+| 7 | `0x088445ec` | Zeroes the same `craft->0x794->0x3bc->0x68` byte state 6 does, then reads a global byte (`0x002ac7e3` computed off `lui a1,0x2b; lbu a1,-0x381d(a1)` - **address unverified, `inspect_memory_content` could not read it back; needs re-derivation before it is trusted**) to pick between `0` and a value read off `*(*(0x577f8)+0xb8)` (a global race/mode-descriptor pointer, unidentified). That value is then range-checked (`< 0x13`, i.e. **fewer than 19**) and used to index a *second*, inner jump table at an address that has the same read-back problem. **Hypothesis, confidence 40 (deliberately below the rename threshold): state 7 dispatches on race mode**, up to 19 arms. If the address resolves, this is the single best lead for "does Zone's countdown differ from a circuit race's" from the logic side, distinct from the asset-side evidence below. Not chased further this session - the address math needs redoing, most likely against the same `+0x08804000`-class relocation gap `billboards.md`'s trap already names for `jal` targets, here possibly affecting `lui`/`addiu`-pair absolute addresses too, which would be new if confirmed. |
+| 8 | `0x088446ec` | Sets `entity->0x874` to `1.0` (not networked) or `2.0` (networked, per the same `entity->0x368` test) - **the opposite ratio from state 6** (there the local player got the *longer* timer; here the non-local craft does) - then calls `FUN_0018dd94` again on the `0x3bc`-relative sub-object. Falls into the same common tail. Not enough here to guess what distinguishes state 8 from state 6 beyond the timer and the inverted local/remote ratio - both look like "some kind of timed lockout, direction of the asymmetry depends on which state" rather than one being clearly the false start and the other something else. |
+
+`entity->0x368` itself is not re-derived here - `shield.md`'s own
+["`entity + 0x368` is `Craft_Construct_q`'s own second argument"](#entity--0x368-is-craft_construct_qs-own-second-argument)
+section already puts it at confidence 80 as "zero for the local player, set
+for everyone else", and states 6 and 8 above both read cleanly against that.
+
+**What would raise every confidence number in this table**: a live PPSSPP
+capture of an actual false start (hold thrust before the lights, per the
+user's own description of the original) with a watchpoint on `entity->0x874`
+and `entity->0x8c` (the state field `Ship_State`/`Ship_SetState` read and
+write) for the player's own entity. That would show which state number the
+engine actually enters, settle whether it is 6 or 8, and read the true timer
+value off real hardware rather than a decompiled float bit-pattern.
+
 ## The runtime leg, and what it did not reach
 
 Measured 2026-08-10 against the USA disc in PPSSPP, `steer-left.inputs`
