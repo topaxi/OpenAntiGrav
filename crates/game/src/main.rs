@@ -140,6 +140,10 @@ fn init_logging() {
     .init();
 }
 
+/// **Debug instrumentation for the render-performance review. Not for merge.**
+#[global_allocator]
+static ALLOCATOR: oag_render::perfprobe::Counting = oag_render::perfprobe::Counting;
+
 fn main() -> Result<()> {
     init_logging();
     let cli = Cli::parse();

@@ -575,14 +575,26 @@ impl Exhaust {
     /// [`trail_stretch`] - about 3.5 world units at the tail.
     #[must_use]
     pub fn trail_vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
+        let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
+        self.extend_trail_vertices(&mut out, right, up);
+        out
+    }
+
+    /// [`Self::trail_vertices`], appended to a list the caller owns.
+    ///
+    /// The form the renderer uses, because a fixed 648 vertices per craft
+    /// returned by value is a 36 KiB allocation per craft per frame - eight of
+    /// them on a full grid, and none of them living past the upload. See
+    /// `race::Scene::scratch`.
+    pub fn extend_trail_vertices(&self, out: &mut Vec<GpuVertex>, right: Vec3, up: Vec3) {
         if !self.trail_ready() {
-            return Vec::new();
+            return;
         }
         let ramps = self.layer_alphas();
         let samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
         let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
 
-        let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
+        out.reserve(TRAIL_VERTICES_PER_CRAFT);
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
         // the tube; `v` runs 0..1 once around it in quarters.
         let rim = [up, right, -up, -right, up];
@@ -625,7 +637,6 @@ impl Exhaust {
                 }
             }
         }
-        out
     }
 
     /// Sets the intensity straight to where a steady state at this thrust and
