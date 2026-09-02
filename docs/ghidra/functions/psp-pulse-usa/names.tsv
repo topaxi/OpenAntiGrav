@@ -162,6 +162,9 @@
 0x08849ed4	function	Ship_CastHoverProbes	90	engine.md
 0x0883e5fc	function	Ship_MagFloorEnter	82	engine.md
 0x0883e624	function	Ship_MagFloorExit	82	engine.md
+0x088590a8	function	MagFloorFx_Construct	90	magfloor-fx.md
+0x088598ac	function	MagFloorFx_Show	88	magfloor-fx.md
+0x088598d8	function	MagFloorFx_Hide	88	magfloor-fx.md
 0x0884d4c8	function	Body_AddForceWorld	82	engine.md
 0x08839c68	function	HandlingXml_ParseAirbrakeGraphics	80	engine.md
 0x08848b78	function	Ship_ApplyLateralGrip	80	engine.md

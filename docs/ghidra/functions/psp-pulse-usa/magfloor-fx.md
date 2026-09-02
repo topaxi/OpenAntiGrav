@@ -11,14 +11,17 @@
 Two ordinary `.vex` models ship on Pulse's disc and preload every race:
 `Data\visual_effects\MagEffect1.vex` and `Data\visual_effects\MagEffect2.vex`,
 separate from both the collision mesh (`Mag Floor Collision`, class `0x3e6`)
-and the track's own glowing strip texture. Separately, the tail of
+and the track's own glowing strip texture. `MagFloorFx_Construct`
+(`0x088590a8`) loads both by exact string address into a per-entity object's
+`+0xac`/`+0xb0` fields and starts them hidden; the tail of
 `Ship_CastHoverProbes` edge-detects the mag-floor contact bool it already
 computes and calls `Ship_MagFloorEnter`/`Ship_MagFloorExit`
 ([engine.md](engine.md#the-tail-of-ship_casthoverprobes-fires-the-mag-floor-gfxsfx-2026-09-02)),
-which show/hide two child scene nodes on rising/falling edge. **That the two
-assets and the two shown/hidden nodes are the same two is inferred from
-proximity and shape, not located** - see [The trigger](#the-trigger) for
-exactly how far the evidence goes.
+which call `MagFloorFx_Show`/`MagFloorFx_Hide` (`0x088598ac`/`0x088598d8`) on
+those same two fields on the rising/falling edge. **The node-identity
+question this page originally left open is closed**: the constructor proves
+`+0xac` is `MagEffect1.vex` and `+0xb0` is `MagEffect2.vex`, not an inference
+from proximity - see [The trigger](#the-trigger).
 
 **Found starting from an `AskUserQuestion` to the maintainer** (they play these
 games): both a visible spark/glow below the craft and an audible hum were
@@ -72,26 +75,82 @@ Short version: `Ship_CastHoverProbes` writes `craft+0x240` (the same byte
 mag floor - and edge-detects the write, calling `Ship_MagFloorEnter`
 (`0x0883e5fc`) or `Ship_MagFloorExit` (`0x0883e624`) with the craft's entity
 pointer. Those two gate on an unidentified `entity+0x8bc` condition and then
-call a shared, unnamed enable/disable pair (`0x088598ac`/`0x088598d8`, not a
-recognised Ghidra function boundary) that flips a byte at `entity+0xb4` and
-ORs/ANDs bit `0x4` on a field at `+0x2c` of two objects reached through
-`entity+0xac`/`entity+0xb0`.
+call `MagFloorFx_Show`/`MagFloorFx_Hide` (`0x088598ac`/`0x088598d8`), which
+flip a byte at `entity+0xb4` and OR/AND bit `0x4` on a field at `+0x2c` of two
+objects reached through `entity+0xac`/`entity+0xb0`.
 
-**Not proven**: that `entity+0xac`/`+0xb0` are specifically the two MagEffect
-nodes. No constructor writing those two fields was traced - the identification
-rests on the two assets existing, being effect-shaped, and having no other
-found consumer, which is circumstantial rather than a located write. This is
-why `0x088598ac`/`0x088598d8` are cited by address rather than named:
-confidence on the node-identity claim is **55**, below the 70 line for a
-plain name and arguably below the 50 line for any name at all on the *specific*
-mag-floor reading, even though the mechanical behaviour of the pair (flip a
-flag, OR/AND a bit on two children) is read at high confidence.
+**The node identity is proven, 2026-09-02.** `MagFloorFx_Construct`
+(`0x088590a8`) is the constructor for this same object (it initialises
+`+0x28`, `+0x38`, `+0x40`, `+0xac`, `+0xb0`, `+0xb4` - exactly the fields the
+trigger and the show/hide pair touch). It loads two resources by **exact
+string address**, not by inference:
+
+```c
+// entity+0xac:
+Load(obj1, 0x08a7bfa8 /* "Data\visual_effects\MagEffect1.vex" */, 0x4d000000, 0xfdb2, 0x3e9, 0);
+*(entity + 0xac) = obj1;
+
+// entity+0xb0:
+Load(obj2, 0x08a7bfcc /* "Data\visual_effects\MagEffect2.vex" */, 0x4d000000, 0xfdb2, 0x3e9, 0);
+*(entity + 0xb0) = obj2;
+
+// both start hidden, matching MagFloorFx_Show/Hide's bit 0x4 on the same +0x2c field:
+*(int*)(entity->0xac + 0x2c) &= ~4;
+*(int*)(entity->0xb0 + 0x2c) &= ~4;
+entity->0xb4 = 0;   // the same "active" byte Show/Hide flip
+```
+
+Both objects also get a colour written through a shared helper
+(`func_0x0010e2b4`, packed from the same four global floats for both, likely
+a shared tint) before construction finishes. **Confidence 90** for the
+identity chain end to end: the string addresses are exact matches (not
+proximity, not a guess), and the field-offset overlap with the trigger and
+show/hide pair (`+0xac`, `+0xb0`, `+0xb4`, the `+0x2c` bit) is total. Not yet
+runtime-verified (no `just play` capture), and the containing object's
+identity - whether `entity` here is literally the same "ship entity" pointer
+`engine.md` documents elsewhere at `craft+0x1c4`, or a distinct sub-object
+that happens to share field offsets - was not independently confirmed;
+`MagFloorFx_Construct` was not traced back to a caller (no direct caller
+found, consistent with the indirect/vtable-driven construction this codebase
+has already documented for other node-class constructors, e.g. `Engine
+Flare`'s on [exhaust.md](exhaust.md#the-engine-flare-constructor)).
+
+## The anchor transform exists but its numbers were not read
+
+After loading and hiding both objects, `MagFloorFx_Construct` builds a
+16-float (0x40-byte) block from a run of globals (`_DAT_0028c7a0`..`_DAT_0028c7dc`,
+with one element - the second float of the last row - sourced from a
+*different* global, `_DAT_002acef0`, breaking the otherwise-sequential
+addresses) and passes it to `FUN_08945284` twice, once per object
+(`param_3` `1`/`0` distinguishing them). That function copies the 16 floats
+verbatim into a lazily-allocated transform-cache slot on the target object
+and then sets two bits in the *same* `+0x2c` field `MagFloorFx_Show`/`Hide`
+already use - `0x01000000` when `param_3 == 0`, `0x08000000` when it is not -
+which reads as a draw-key/layer selector in the same high-byte position
+`draw-order.md` already decoded for the mesh-layer discriminator, not
+anything positional.
+
+**Shape only, not the numbers.** This is very plausibly the authored anchor
+- a fixed local transform placing the effect relative to the craft, matching
+"below the craft" - and a per-object render-mode/layer bit, but this session
+could not read the sixteen floats: `inspect_memory_content` on
+`0x08a90ba0` (`0x0028c7a0 + 0x08804000`, the same image-relative convention
+`missile.md` documents for `jal` targets) lands on unrelated C++ runtime
+string data, not the expected floats, and the address as Ghidra prints it
+(`0x0028c7a0`) is not itself a valid load address in the `ram` space (the
+only non-overlay space this program has) or any of the standard PSP virtual
+mirrors. This project's own project-level notes record at least one other
+case of a global reached through `$gp` carrying an instruction displacement
+unrelated to its printed address - this may be the same class of trap rather
+than a one-off, and is worth checking against that method before spending
+more time on it.
 
 ## The sfx half is open
 
 No call to any sound-play function was found in `Ship_MagFloorEnter`,
-`Ship_MagFloorExit`, or the enable/disable pair - the whole visible chain is
-scene-graph flag flips, nothing that looks like `Sound_Play`.
+`Ship_MagFloorExit`, `MagFloorFx_Show`/`MagFloorFx_Hide`, or
+`MagFloorFx_Construct` - the whole visible chain is scene-graph flag flips
+and a resource load, nothing that looks like `Sound_Play`.
 
 **`oag-wad sounds` was run against the whole of `Data.wad`** (36 banks, 582
 cues, all named), closing off the more obvious version of "the cue was never
@@ -134,23 +193,31 @@ is wired until the emitter reading above is confirmed or refuted.
 - Which node class `MagEffect1`/`MagEffect2` register as, and whether that
   class's own update function is where a sound emitter would live - the same
   question `exhaust.md` answered for `Engine Flare`/`Trail`, unasked here yet.
-- Whether `entity+0xac`/`+0xb0` really are the two MagEffect nodes: needs the
-  constructor that writes those two fields, not yet located.
-- What `entity+0x8bc` gates (possibly per-player scoping, unconfirmed - see
-  `entity+0x368` on [shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
+- What `entity+0x8bc` gates in `Ship_MagFloorEnter`/`Ship_MagFloorExit`
+  (possibly per-player scoping, unconfirmed - see `entity+0x368` on
+  [shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
   for a similarly-shaped but distinct field this codebase has already chased).
+- Whether `MagFloorFx_Construct`'s `entity` parameter is literally the same
+  "ship entity" pointer documented at `craft+0x1c4` elsewhere on this page's
+  binary, or a distinct sub-object at the same relative offsets - no caller
+  was traced for the constructor.
 - The sfx mechanism - whether the hum is baked into one of the two `.vex`
   nodes' own emitter; no bank cue names it, but the node's own update
   function was not read.
+- What colour `func_0x0010e2b4` packs for the two objects, and whether it
+  differs between them (not decoded - the four source globals could not be
+  read from this session's Ghidra bridge).
 - Pure's code side (does it have an equivalent trigger over a different or
   absent asset, under a path this session did not hash?) and HD/Fury's
   mechanism, if any, are both unchecked.
 
 ## History
 
-- 2026-09-02: Assets found and parsed (90), trigger function tail read (85),
-  the enable/disable pair read mechanically (confidence on node identity 55,
-  left unnamed). All 582 cues across Pulse's 36 sound banks enumerated: no
+- 2026-09-02: Assets found and parsed (90), trigger function tail read (85).
+  Node identity closed (90): `MagFloorFx_Construct` loads both assets by
+  exact string address into the same `+0xac`/`+0xb0` fields the trigger and
+  `MagFloorFx_Show`/`Hide` (renamed from the unnamed enable/disable pair)
+  operate on. All 582 cues across Pulse's 36 sound banks enumerated: no
   per-craft magfloor cue in `SHIP`/`SHIP_ZM`, and the `MAG*`/`HUM`/`GRIND`
   hits elsewhere are track-ambience banks, not craft ones - narrows the sfx
   question to "is it baked into the vex node's own emitter", not answers it.

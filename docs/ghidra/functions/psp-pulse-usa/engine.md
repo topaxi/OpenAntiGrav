@@ -1828,11 +1828,11 @@ confidence 82.** Each is three instructions of substance: gate on
 `entity+0x8bc != 0` (an unidentified per-entity condition - possibly "has a
 scene presence" or "is the local player", per the `entity+0x368` local-player
 field this codebase already tracks elsewhere; not the same field, not
-resolved), then tail-call a shared enable/disable pair with no arguments
-of their own (the entity pointer rides in `a0` from the caller's convention).
-Neither is a proper Ghidra function boundary (no auto-analysed bounds, so
-`get_function_callers`/`decompile_function` fail on them) - read from raw
-disassembly at `0x088598ac` (enter) and `0x088598d8` (exit) instead:
+resolved), then tail-call `MagFloorFx_Show`/`MagFloorFx_Hide`
+(`0x088598ac`/`0x088598d8`, confidence 88 - created as proper Ghidra function
+boundaries this pass, previously read from raw disassembly only) with no
+arguments of their own (the entity pointer rides in `a0` from the caller's
+convention):
 
 ```text
 088598ac  a1 = 1 ;  entity+0xb4 = a1                      ; "active" flag, byte
@@ -1840,17 +1840,15 @@ disassembly at `0x088598ac` (enter) and `0x088598d8` (exit) instead:
 088598c4  a0 = *(entity+0xb0) ;  a0->0x2c |= 4 ; store back   ; (exit clears, ANDs ~4)
 ```
 
-So the enable/disable pair sets a byte flag at `entity+0xb4` and ORs (enter) or
-ANDs-out (exit) bit `0x4` on a field at `+0x2c` of two other objects reached
-through `entity+0xac` and `entity+0xb0`. **What those two objects are is
-inferred, not proven**: no constructor writing `entity+0xac`/`+0xb0` was
-traced. The inference is that they are the two `MagEffect1.vex`/`MagEffect2.vex`
-scene nodes - see [magfloor-fx.md](magfloor-fx.md) for the asset side and why
-that reading is plausible (two vex effect files, loaded per-race alongside
-every weapon effect, named nowhere else in the binary) but still open.
-Confidence on the *node-identity* claim specifically: **55**, well short of
-what a rename would need, which is why `0x088598ac`/`0x088598d8` are cited by
-address rather than renamed.
+So `MagFloorFx_Show`/`Hide` set a byte flag at `entity+0xb4` and OR (enter) or
+AND-out (exit) bit `0x4` on a field at `+0x2c` of two other objects reached
+through `entity+0xac` and `entity+0xb0`. **What those two objects are is now
+proven, not inferred**: `MagFloorFx_Construct` (`0x088590a8`, confidence 90)
+is the constructor for this same object - it initialises exactly
+`+0xac`/`+0xb0`/`+0xb4` by loading `Data\visual_effects\MagEffect1.vex` and
+`MagEffect2.vex` by their **exact string addresses**, not by inference from
+proximity. Full evidence on [magfloor-fx.md](magfloor-fx.md), which is now
+the primary page for this whole chain.
 
 ### The damper's point velocity is the conventional `omega x r`
 
