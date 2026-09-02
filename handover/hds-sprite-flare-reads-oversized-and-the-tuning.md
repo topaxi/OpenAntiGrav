@@ -112,20 +112,45 @@ under `PPU Decoder: Interpreter (static)`
 ([known to work](../docs/reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter),
 ~75s to boot against the default 30s) - not attempted this session.
 
+**2026-09-02, a fifth session ran that breakpoint trace - full account on
+engine-trail.md ("Fifth session: the breakpoint trace, and a new stub trap
+it cost").** `scripts/hd-flare-rendertick-break.py` (new) armed `Z0`
+breakpoints at the shared early-out landing and just past the `this+0x18c`
+store, under the interpreter. **12 of 12 hits across two separate races
+landed at the early-out; zero reached the fade store.** A simpler first
+version also confirmed the function's *entry* fires on the very first 0.4s
+poll, so `EngineFlare_RenderTick` is not dead code - it runs essentially
+every frame - but for the sampled craft it reliably bails before computing
+the fade this session traced statically. This is now the leading
+explanation for the fourth session's `0.0` reads: not the wrong function,
+but a gate that stayed closed both times sampled. **What it does not
+settle**: which of the branches converging on the early-out actually fired
+(the breakpoint answers "did not reach the fade store," not "which gate"),
+so the byte-flag/count-field reads from the fourth session are still
+unconfirmed as *the* cause. A new GDB-stub trap paid for this - resuming a
+thread parked on an armed breakpoint does not step over it, so the next
+unrelated command hangs for a full timeout - not yet added to
+`rpcs3-debugger.md` itself since one script's workaround isn't yet a
+general finding.
+
 ## Open
 
-- **The draw call is located and its fade formula is partly read, but
-  whether it executes for the visible sprite is not confirmed.**
-  `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78) computes
-  `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout Dist`/`Range`,
-  confirmed live at `+0x484`/`+0x488` of the shared tuning block) and stores
-  the result at `this+0x18c` - but that field read `0.0` on every one of four
-  live samples of a visibly-flared, thrusting, on-screen craft. The two
-  gates checked both read as open, so either this is not the branch that
-  draws the visible sprite, or `this+0x18c` feeds something other than the
-  quad's size/alpha (an occlusion-query parameter is plausible - see below).
-  A breakpoint trace under the PPU interpreter is the direct next step; see
-  engine-trail.md "Fourth session" for the full account.
+- **The draw call is located, its fade formula is read, and a breakpoint
+  trace confirms it runs but reliably skips the fade - which gate is closing
+  is what's left.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78)
+  computes `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout
+  Dist`/`Range`, confirmed live at `+0x484`/`+0x488` of the shared tuning
+  block) and stores the result at `this+0x18c` right before an early-out -
+  but 12 of 12 breakpoint hits across two races landed at that early-out,
+  never at the store past it, even though the function's entry fires every
+  frame. Two explanations remain open: the gate is legitimately closed for
+  ordinary chase-view racing (in which case the visible sprite's size/alpha
+  comes from somewhere else in the function, or from a wholly different
+  branch this session never traced), or the sampled craft/conditions happen
+  to always close it and a different craft or camera angle would open it.
+  Distinguishing which of the several branches converging on the early-out
+  fired - not just that one of them did - is the direct next step; see
+  engine-trail.md "Fifth session" for the full account.
 - `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
   fade result computed above (that clamp uses a *different* tuning-block
   field, `+0x4a8`, which reads `1.0` live and is more likely
@@ -155,20 +180,23 @@ under `PPU Decoder: Interpreter (static)`
 
 ## Next Steps
 
-- **Breakpoint trace, not more static reading.** Boot RPCS3 with `Core: PPU
-  Decoder` set to `Interpreter (static)` (~75s boot, confirmed working per
-  [rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter))
-  and set a `Z0` breakpoint at `EngineFlare_RenderTick` (`0x002a08a8`) mid-race
-  with a visibly-flared craft on screen. If it fires: read the float
-  registers at the point past the two gates to confirm which value is
-  `Flare Radius`/`Flare Radius Min`/`Max Radius Jitter` (the disassembly is
-  fully read now, "Fourth session" on engine-trail.md - it's a matter of
-  reading registers at a known point, not finding the code). If it does not
-  fire during visible drawing: this function is not the branch that draws
-  the sprite, and the search for the real one restarts from the vtable slots
-  or the RSX pushbuffer directly, per `rpcs3-debugger.md`'s own trap ("the
-  stub parks a thread at a breakpoint without announcing it" - use `wait_at`,
-  not `wait_for_stop`).
+- **Distinguish which gate is closing.** `scripts/hd-flare-rendertick-break.py`
+  answers "reaches the fade store or not" but not "why not" - the early-out
+  landing (`0x002a1110`) is shared by at least the byte-flag check
+  (`struct_base+0x494`) and the count-field check (`craft+0x5fa4`), and
+  possibly others past what this thread's sessions traced. Two ways to tell
+  them apart without more static reading: read the flag/count fields
+  *immediately before* the breakpoint fires in the same paused state (the
+  script already has the connection open at that point, just add the reads),
+  or set breakpoints on the individual `beq`/`ble` instructions themselves
+  (`0x002a0974` for the byte-flag branch, `0x002a0960` for the count-field
+  one) instead of their shared landing.
+- If the gate turns out to be legitimately closed for ordinary racing (not a
+  wrong-function or wrong-craft artefact), the visible sprite's size/alpha
+  is not what this function's traced fade computes, and the search restarts
+  for what does - possibly later in the same function, past what this
+  thread's sessions decompiled/disassembled so far
+  (`0x002a0d78`-`0x002a14ff`), or a genuinely different draw path.
 - Once the consumer's radius math is read, either confirm and implement the
   `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
 - Separately assess the trail's own accuracy against the original, per the
