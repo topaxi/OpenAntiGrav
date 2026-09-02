@@ -92,8 +92,9 @@ cleared the motion-vector row: every race draw writes an always-on
 setting so FSR 3.1 can rely on it. The blur touches the last row only
 partly: its chain runs before the HUD is drawn, so a UI-free scene
 demonstrably exists at that point in the frame without being handed
-downstream. What FSR 3.1 still lacks outright: sub-pixel camera jitter, and
-that UI-free scene as a consumable artefact.
+downstream. The UI-free scene has since been handed downstream for real -
+ADR-0036 and ADR-0038, the last row of the table above - so **what FSR 3.1
+still lacks outright is sub-pixel camera jitter, and nothing else.**
 
 ## Steam Input
 

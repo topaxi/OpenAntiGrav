@@ -81,8 +81,10 @@
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
   for the licensing picture and the pipeline prerequisites to design in from
   the start. Readable depth and per-draw motion vectors are both done, by
-  [motion blur](motion-blur.md)'s two tiers; sub-pixel camera jitter and a
-  UI-free scene artefact remain
+  [motion blur](motion-blur.md)'s two tiers, and the UI-free scene artefact by
+  [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+  and [ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
+  Sub-pixel camera jitter is the only prerequisite left
 
 ## The art is raster, and that has a consequence
 

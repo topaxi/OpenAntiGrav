@@ -72,6 +72,15 @@ there is no `Taa` row. A velocity buffer moves two of its five rows:
 | Camera jitter, sub-pixel per frame | Absent | Absent, unchanged |
 | A scene without UI in it | Absent | Partially - see below |
 
+**That table is the argument as it stood when this was designed, and the last
+row has moved since.** The UI-free scene is **Done** as of 2026-09-02, by
+[ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+and [ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+rather than by anything here - the scene now resolves into its own presentation
+target and the UI composites over it afterwards, so the seam this design only
+*demonstrated* is now exposed. Camera jitter is the one prerequisite still
+absent, and this design did not move it.
+
 That last row deserves precision rather than a tick. This design inserts its
 chain *inside* `race::Scene::render`, before the HUD is drawn, so at that point
 in the frame a UI-free scene demonstrably exists. What it does not do is hand
