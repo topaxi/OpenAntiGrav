@@ -4,8 +4,10 @@
 an allocation and a render extent separately, per
 [ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md),
 and every consumer of the old single `size` has been resolved to one or the
-other. Nothing moves the extent yet: there is no cost signal worth controlling
-on and no controller, so the extent equals the allocation on every frame the
+other. The cost signal exists too: the scene pass is timed on the GPU every frame in
+the window, and the reading names the frame it was taken on. Nothing moves the
+extent yet - there is no controller, and the scene-resolution post-processes
+still take no viewport - so the extent equals the allocation on every frame the
 game draws, and a build with this structure in it produces byte-identical frames
 to one without.
 
@@ -117,30 +119,112 @@ rectangle, so no draw can reach outside the extent without one. The one thing
 neither a viewport nor a scissor bounds is `LoadOp::Clear`, which clears the
 whole attachment either way - see ADR-0037's consequences.
 
-## What is still missing, in order of expense
+## The cost signal, which exists now
 
-**A cost signal.** The only frame measurement that exists is a wall-clock
-interval between loop iterations, fed to `perf::Meter`. Under `Vsync::On` it is
-pinned to the refresh and under any `FrameLimit` it is pinned to the limit,
-because the frame loop sleeps to it - so it tracks real work only with vsync off
-*and* no limit, which is a diagnostic configuration rather than a shipping one.
-A GPU timestamp written either side of the scene passes is the primary path, not
-a refinement. **The probe for it exists**: `oag_render::timing::Timing` reports
-what one adapter offers without requesting a device, and `Timing::features`
-turns that back into exactly what a `request_device` may safely ask for - the
-fallback discipline
-[ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
-mandates, since asking for a feature an adapter lacks fails the request outright
-rather than degrading. Nothing enables it yet;
-`mesh_render::optional_features` is the one line that changes when a consumer
-exists.
+**The scene pass is timed on the GPU, every frame, in the window.**
+`oag_render::timing::PassTimer` is a ring of four timestamp pairs;
+`Session::frame` claims one before the race stage encodes, hands it to the
+scene pass through the pass descriptor's own `timestamp_writes`, resolves it
+into the same encoder and reads it back after the submit without ever blocking.
+What comes back is fed to `Session::scene_cost`, a second `perf::Meter` beside
+the frame-interval one. **Nothing reads it yet** - there is no controller and
+no overlay row - and it is fed anyway, so the signal a controller will be built
+on is a measured thing rather than a planned one.
 
-Two things a controller built on it will need said out loud: the reading
+`mesh_render::optional_features` asks for `TIMESTAMP_QUERY` because of it,
+intersected with the adapter's own and never demanded, exactly as
+`TEXTURE_COMPRESSION_BC` already was. **Only the portable bit**: the two native
+ones are a driver behaviour change nothing here needs, and bracketing a pass
+through its own descriptor uses neither. That line reaches every
+`request_device` in the workspace, so it was checked against the instrument
+this project judges a renderer change with - the two `--presented` captures
+(`--render-scale 50 --upscaler fsr1`, `--render-scale 100 --upscaler off`,
+pulse-psp-usa, 300 ticks, 1440x816) are byte-identical either side of it.
+
+The wall-clock interval `perf::Meter` still holds is what this replaces for
+control purposes: under `Vsync::On` it is pinned to the refresh and under any
+`FrameLimit` to the limit, because the frame loop sleeps to it, so it tracks
+real work only with vsync off *and* no limit - a diagnostic configuration
+rather than a shipping one.
+
+### What is in the budget, and what is not
+
+**The scene pass and nothing else**, and this is an under-measurement that is
+recorded rather than hidden:
+
+| Pass | In the budget | Why |
+| --- | --- | --- |
+| The `race` pass (`race/scene/frame.rs`) | **Yes** | The one pass whose cost falls with the render extent |
+| `bloom`, `hd_bloom`, `motion_blur` | Not yet | They draw at scene resolution and belong in it. They take no viewport, which is the same thing that stops the extent moving at all - so they join the budget in Phase 5, when they gain one |
+| FXAA, SMAA, FSR 1, the blit | **No, permanently** | The resolve draws at presentation size whatever the scale is |
+| The HUD, the composite, the perf overlay | **No, permanently** | Presentation resolution since ADR-0036 and ADR-0038 |
+
+Folding a fixed cost into a budget that exists to be divided by a moving one is
+the error the split guards against, which is why the last two rows are
+permanent rather than pending. Each pass is timed and summed rather than the
+encoder being bracketed first-to-last: bracketing would need
+`TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is not WebGPU-portable, and would have
+to know which pass is last - which varies with the bloom, motion-blur and
+HD-chain settings.
+
+### What the signal does in a running race
+
+Measured 2026-09-02 in a window under Xvfb, NVIDIA RTX PRO 2000, `pulse-psp-usa
+--race`, `RUST_LOG=oag_game=debug`: 5,306 consecutive readings, every one
+resolving **exactly one frame late**. The mean scene pass over frames 100..400:
+
+| `--render-scale` | Mean scene pass |
+| --- | --- |
+| 50 | 0.226 ms |
+| 100 | 1.556 ms |
+| 200 | 2.893 ms |
+
+**The claim is the trend and not the exponent.** These are three separate runs,
+and a faster run is further along the track at the same frame number, so the
+world state differs between them - the three points do not admit one
+fixed-plus-per-pixel fit, which is evidence that the runs are not comparable
+rather than evidence about the renderer. What they do establish is that the
+timer measures the part that scales, which is what it was wired up to do. A
+controlled measurement needs the world pinned, and the capture path - which is
+deterministic per tick - deliberately gets no timer.
+
+Two things a controller built on this will need said out loud: the reading
 resolves a frame or more late, so it acts on stale cost and its cooldown must
 cover the frames in flight; and where there is no timestamp support dynamic
 resolution is off, and the menu row says so through the existing `disabled_by`
 mechanism rather than advertising a controller driven by a signal pinned to the
 refresh.
+
+### Three properties the timer holds, and why each is load-bearing
+
+- **A reading names its own frame**, rather than being assumed to describe the
+  last one. That is what makes the load guard possible at all: `meter.clear()`
+  cannot reach a measurement still somewhere between the queue and the map, so
+  `Session::stall_frame` drops every reading up to and including the frame that
+  carried the load. A controller reading only "the newest value" could not.
+- **Nothing blocks.** Waiting on the map would drain the pipeline being
+  measured. A frame with no free slot is simply not measured - a gap in the
+  samples, where a reused slot would be a wrong number in them.
+- **No capture path is timed.** A capture has to be reproducible rather than
+  fast; see the trap on the thread. `OAG_RENDER_BENCH`'s figure is the CPU-side
+  encode cost, which is a different number about a different thing.
+
+### The row that tells this from a stutter
+
+The `dev` performance overlay names the size the scene was drawn at, under the
+draw counts: `RENDER 1440x816` while the extent is the whole allocation - every
+frame today - and `RENDER 1216x688 OF 1440x816  84%` once something moves it.
+`perf::RenderSize`, and `None` on a stage with no scene, so the menus never
+name a texture nothing on screen came from.
+
+**Without it a controller is invisible in the one way that matters.** A frame
+rate that recovers because the resolution dropped and one that recovers because
+the load passed are the same graph; the row is the difference. It is readable
+*while* the scale moves, which is exactly what
+[ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+bought by taking this overlay out of the scaled target - under the old shape it
+would have been re-rasterised at a new size every few frames, which is the one
+element a player is reading rather than looking at.
 
 ### What the probe actually found
 
@@ -162,9 +246,16 @@ only the first is WebGPU-portable; a controller should ask for no more.
 Three things this settles:
 
 - **The fallback chain has a real branch and it is not hypothetical.** Both
-  adapters here support it, so the no-timestamp path cannot be exercised on this
-  machine - it needs a deliberately downgraded adapter or another machine to
-  test. A green run here is *not* evidence that the degraded path works.
+  adapters here support it, so the *adapter*-without-the-feature branch cannot
+  be exercised on this machine - it needs a deliberately downgraded adapter or
+  another machine, and a green run here is not evidence that it works. The
+  **device**-without-the-feature branch *is* covered, and by the simplest
+  possible means: `a_device_without_the_feature_gets_no_timer` requests a device
+  asking for nothing and asserts `PassTimer::new` hands back `None` rather than
+  a timer that would fail validation on its first pass. That is the distinction
+  `PassTimer::new` was built around - it checks the device it was given rather
+  than trusting what the adapter advertised. The greyed-out menu row is still
+  untested, because there is still no row.
 - **The tick period differs by 52x between two adapters in the same laptop**, so
   a cost budget must be computed from `Queue::get_timestamp_period` every run
   and never from a constant. It also means a probe on one adapter says nothing
@@ -174,11 +265,15 @@ Three things this settles:
   16.67 ms frame budget - about 320,000 ticks. What bounds a controller is the
   latency of the reading, not its resolution.
 
+## What is still missing, in order of expense
+
 **A controller.** A pure function of fed measurements, the way `perf::Meter`
 already is - `record(cost)` in, a scale out, never reading a clock or a GPU
 itself, which is what makes it testable without one. The conventional policy,
 and it should stay conventional: correct by `sqrt(budget / measured)` because
-cost scales with pixel count; a deadband so a frame sitting comfortably inside
+cost scales with pixel count - **which is assumed and not yet measured here**,
+see the caveat under the running-race table above; a deadband so a frame
+sitting comfortably inside
 budget does not twitch; a clamped per-frame delta that is asymmetric, falling
 fast because a dropped frame is already visible and rising slowly because a rise
 that overshoots costs a drop; quantized steps on a grid; and a cooldown after

@@ -45,9 +45,28 @@ pub mod zone;
 /// lacks fails the request outright rather than degrading. So this is what
 /// every `request_device` in the workspace asks for, and [`texture::upload`]
 /// decodes back to RGBA8 for whatever comes back without it.
+///
+/// `TIMESTAMP_QUERY` rides along on the same terms, for
+/// [`crate::timing::PassTimer`] - how long the scene pass took, which is the
+/// signal dynamic resolution is controlled on
+/// ([dynamic-resolution.md](../../../docs/rendering/dynamic-resolution.md)).
+/// **Only the portable bit**, and deliberately not
+/// [`crate::timing::Timing::features`], which would bring
+/// `TIMESTAMP_QUERY_INSIDE_ENCODERS` and `TIMESTAMP_QUERY_INSIDE_PASSES` with
+/// it: neither is WebGPU-portable, both are a driver behaviour change, and
+/// bracketing a pass through its own descriptor needs neither. A device that
+/// comes back without the bit gets no timer at all - [`crate::timing::PassTimer::new`]
+/// checks the device rather than trusting the probe.
+///
+/// This reaches **every** `request_device` in the workspace, the captures and
+/// the viewer included, which is why it is one line here rather than a
+/// per-site decision: a device descriptor that differs between the window and
+/// the capture is how a screenshot stops being comparable with what a player
+/// sees. Byte-identity of the `--presented` captures was checked either side
+/// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC
+    adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY)
 }
 
 /// The device descriptor every `request_device` in this workspace uses.

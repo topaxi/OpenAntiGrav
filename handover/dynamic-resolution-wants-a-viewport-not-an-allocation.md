@@ -54,15 +54,15 @@ day earlier cited five, and every one of them has moved since.
   as they were re-rasterised at a new size every few frames - the most visible
   artefact DRS could have produced, on the element a player reads rather than
   looks at. It structurally cannot happen now.
-- **GPU timestamps are probed but not enabled.** `oag_render::timing::Timing`
-  reports what an adapter offers without requesting a device; nothing in the
-  workspace asks for the feature, and `mesh_render::optional_features` is the
-  one line that changes when a consumer exists. The signal actually in use is
-  still `perf::Meter` over a wall-clock interval, which is pinned to the refresh
-  under `Vsync::On` and to the limit under any `FrameLimit` - it tracks real
-  work only with vsync `off` *and* no limit, a diagnostic configuration rather
-  than a shipping one. That is why a GPU timestamp is the primary path and not a
-  refinement.
+- **GPU timestamps are enabled and read, and nothing consumes the readings.**
+  `mesh_render::optional_features` asks for `TIMESTAMP_QUERY` - the portable
+  bit only - and `Session::scene_cost` is fed the `race` pass's cost every
+  frame in the window. There is no controller and no overlay row, so the meter
+  is written and never read; that is deliberate, and it is what makes the
+  signal a measured thing rather than a planned one. The wall-clock
+  `perf::Meter` is still what the overlay draws, and is still pinned to the
+  refresh under `Vsync::On` and to the limit under any `FrameLimit` - which is
+  why it was never the signal to control on.
 
 ## The three things that blocked it - all three are cleared
 
@@ -86,10 +86,10 @@ times a second - paying a cost to save a cost. Phase 1 took the standard answer:
 **allocate once at the ceiling and vary the viewport.** Moving the extent is now
 a uniform write and two `set_viewport` calls.
 
-**3. The wall-clock interval carries no headroom.** Cleared *as an unknown* by
-Phase 2's probe rather than solved: both development adapters support GPU
-timestamps end to end, so the signal is reachable and the shape of the fallback
-chain is known. Wiring one is the work that is left.
+**3. The wall-clock interval carries no headroom.** Cleared by Phase 2: the
+scene pass is timed on the GPU every frame in the window and the reading names
+the frame it was taken on. What is measured is the `race` pass alone, which is
+an under-measurement recorded rather than hidden - see the Phase 2 section.
 
 ## Phase 0 landed 2026-09-02: the UI composites at presentation resolution
 
@@ -123,9 +123,8 @@ change the first of those.
 
 Estimates assume the phase is picked up cold, and assume no ground-truth data
 is needed - none of this is reverse-engineering, all of it is this project's own
-enhancement, on the same footing as FSR 1 and SMAA. **Phases 0 and 1 are done
-and Phase 2's probe is done**; the rest of Phase 2, then 3, 4 and 5, are what is
-left. The phases are kept in place rather than deleted as they land, because
+enhancement, on the same footing as FSR 1 and SMAA. **Phases 0, 1 and 2 are
+done**; 3, 4 and 5 are what is left. The phases are kept in place rather than deleted as they land, because
 each one's reasoning is what the next is built on - a `## Open` question below
 is usually a question about a phase that has already shipped.
 
@@ -182,9 +181,57 @@ is not viewport-restricted in wgpu, so a scaled frame still pays a ceiling-sized
 clear - which bounds what DRS can save at low scales and belongs in Phase 2's
 budget rather than in a surprise.
 
-### Phase 2 - a cost signal worth controlling on
+### Phase 2 landed 2026-09-02: the scene pass is timed
 
-**This is the next one to pick up, and its probe is done.**
+**Done.** `oag_render::timing::PassTimer` is a ring of four timestamp pairs;
+`Session::frame` claims one before the race stage encodes, hands it to the
+scene pass through the pass descriptor's own `timestamp_writes`, resolves it
+into the same encoder and reads back after the submit without blocking. The
+reading goes into `Session::scene_cost`, a second `perf::Meter`. **Nothing
+reads it yet** - that is Phase 3 - and it is fed anyway, so the signal is
+measured rather than planned.
+[dynamic-resolution.md](../docs/rendering/dynamic-resolution.md) carries the
+budget table, the measurements and the three properties the timer holds.
+
+What is worth carrying forward, beyond what is on the doc page:
+
+- **The budget is the `race` pass and nothing else, deliberately and
+  incompletely.** `bloom`, `hd_bloom` and `motion_blur` draw at scene
+  resolution and belong in it; they take no viewport, which is the same thing
+  that stops the extent moving at all, so they join in Phase 5 when they gain
+  one. Timing each pass and summing is what makes that incremental - bracketing
+  the encoder first-to-last would need `TIMESTAMP_QUERY_INSIDE_ENCODERS` (not
+  WebGPU-portable) and would have to know which pass is last, which varies with
+  those very settings.
+- **`optional_features` was the right line, and it was checked rather than
+  assumed.** It reaches every `request_device` in the workspace including both
+  captures and the viewer, so the two `--presented` captures were taken either
+  side of the commit: byte-identical, `sha256`, 1440x816.
+- **A reading arriving late is not a nuisance, it is what the frame tag buys.**
+  `stalled` clears a meter, which cannot reach a measurement still between the
+  queue and the map; `Session::stall_frame` drops every reading up to and
+  including the frame that carried the load. A controller reading "the newest
+  value" could not do this.
+- **One stuck readback must not take the ring with it.** The first version took
+  the oldest in-flight slot outright, so a map that never completed would have
+  held up every slot behind it and killed the timer after four. `Ring::ready`
+  takes the oldest *ready* slot; the ordering it gives up in that one case
+  costs nothing, because a reading names its own frame.
+- **The commit message for the wiring overstates one thing.** It calls the
+  cost "sub-linear in pixel count" off 0.226 / 1.556 / 2.893 ms at 50 / 100 /
+  200 %. Those three points do not admit one fixed-plus-per-pixel fit (50 -> 100
+  is 6.9x for 4x the pixels), which is evidence that three uncontrolled runs
+  are not comparable rather than evidence about the renderer. The doc page says
+  only what they support: the signal moves strongly and monotonically with the
+  render scale. **The exponent Phase 3's `sqrt(budget / measured)` assumes is
+  still unmeasured** - and measuring it needs the world pinned, which the
+  capture path could do and deliberately has no timer.
+
+### Phase 2, as it was planned
+
+Kept for its reasoning, which Phase 3 is built on.
+
+**Its probe was done first.**
 `oag_render::timing::Timing` reports what an adapter offers without requesting
 a device, and `Timing::features` turns that back into what a `request_device`
 may safely ask for. **Nothing enables it**:
@@ -342,25 +389,41 @@ changes.
 - Whether the memory cost of allocating at the ceiling is acceptable on the
   Steam Deck, which [goals.md](../docs/overview/goals.md) names in the first
   tier. Unmeasured.
-- Whether the perf overlay should show the current scale. It is the only way a
-  player can tell DRS from a stutter, which argues yes, but it is a fourth line
-  on a `dev`-tier readout that is already dense.
+
+**Decided 2026-09-02: the perf overlay shows the render size, on the `dev`
+tier.** Asked directly, the maintainer chose to add it. The argument that won
+is the one this bullet already carried - it is the only way to tell dynamic
+resolution from a stutter, and a frame rate that recovers because the
+controller dropped the resolution looks identical to one that recovers because
+the load passed. The density objection is answered by the row saying less when
+there is less to say: with the extent equal to the allocation, which is every
+frame today, it is `RENDER 1440x816` and nothing more; below the ceiling it
+becomes `RENDER 1216x688 OF 1440x816  84%`. `perf::RenderSize`, and `None` on a
+stage with no scene rather than a size nothing on screen came from.
 
 ## Next Steps
 
-Steps 1, 3 and 4 of the original list are done: the audit is written up in
+The audit is written up in
 [dynamic-resolution.md](../docs/rendering/dynamic-resolution.md), ADR-0037 is
-written, and `modern-features.md`'s first prerequisite row plus the M7 rows in
-[roadmap.md](../docs/overview/roadmap.md) name the split.
+written, `modern-features.md`'s first prerequisite row plus the M7 rows in
+[roadmap.md](../docs/overview/roadmap.md) name the split, and **the cost signal
+is wired** - see the Phase 2 section above.
 
-1. Bracket the scene passes with a timestamp pair and feed the resolved
-   duration to a meter, off `Timing` (already built, see Phase 2). The reading
-   resolves a frame or more late, so whatever holds it has to say which frame it
-   belongs to rather than assume the last one.
-2. Measure the ceiling-sized clear before designing a policy around a budget.
+1. Measure the ceiling-sized clear before designing a policy around a budget.
    `LoadOp::Clear` is not viewport-restricted, so the scene pass's fixed cost
    does not fall with the extent; how much of a frame that is decides whether a
-   floor below (say) 60 % buys anything at all.
+   floor below (say) 60 % buys anything at all. **This is now measurable
+   directly** rather than by reasoning: `PassTimer` times the pass the clear is
+   in, so a build that clears a smaller region (or none) can be compared
+   against one that does not.
+2. Get a *controlled* cost-against-scale curve, which step 1 needs anyway and
+   which Phase 3's `sqrt(budget / measured)` assumes the shape of. The three
+   numbers on the doc page are three separate windowed runs at different points
+   on the track and cannot be fitted; what is needed is the same world state at
+   several scales. The capture path is deterministic per tick and deliberately
+   gets no timer, so this wants a deliberate decision about how - a timed
+   capture used as an instrument is not the same thing as a timed capture used
+   as a picture, and the trap below is about the second.
 3. Measure the ceiling allocation's memory on a Steam-Deck-class target. It is
    the one number ADR-0037 states as unmeasured, and the answer could argue for
    a per-title ceiling rather than a per-title floor.

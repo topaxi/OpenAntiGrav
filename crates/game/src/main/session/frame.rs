@@ -111,8 +111,19 @@ impl Session {
         // below here. Recording it would put one 1000 ms column across the
         // graph for the two seconds a player is most likely to be looking at
         // it, so the frame that carries a load is dropped instead.
+        // Counted here, before anything this frame is measured against it. A
+        // GPU reading names the frame it was taken on rather than the frame it
+        // arrives on, which is what `stall_frame` below is then able to
+        // exclude - see [`oag_render::timing::PassTimer`].
+        self.frame_index += 1;
         if self.stalled {
             self.meter.clear();
+            // The same guard, reaching a measurement that has not come back
+            // yet: `clear` empties what was recorded, and the reading for this
+            // frame is still somewhere between the queue and the map. Every
+            // reading up to and including this one is dropped when it lands.
+            self.scene_cost.clear();
+            self.stall_frame = self.frame_index;
             self.stalled = false;
         } else {
             self.meter.record(elapsed.as_secs_f32());
@@ -517,6 +528,14 @@ impl Session {
         // Whether this frame has anything for the upscaler to carry. Read
         // before the match, which borrows `self.stage` mutably.
         let has_scene = matches!(self.stage, Stage::Race(_));
+        // Claim a timestamp pair for the scene pass, on the frames that have
+        // one. Here rather than inside the match for the same reason
+        // `pvs_culling` is read here: the match borrows `self.stage`. Paired
+        // with exactly one `resolve` below, which is why the claim is gated on
+        // the same `has_scene` the pass itself is.
+        if has_scene && let Some(timer) = self.pass_timer.as_mut() {
+            timer.begin(self.frame_index);
+        }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Diagnostic only, and read before the match for the same reason
@@ -582,6 +601,9 @@ impl Session {
                     self.settings.graphics.motion_blur,
                     self.camera_jitter,
                     &zone_spectrum,
+                    self.pass_timer
+                        .as_ref()
+                        .and_then(oag_render::timing::PassTimer::writes),
                 );
                 if let Some(start) = start {
                     info!("first race frame: encoded in {:?}", start.elapsed());
@@ -685,6 +707,16 @@ impl Session {
             scene_stats,
             video_label,
             memory,
+            // Only where there was a scene: every other stage draws straight
+            // into the presentation target, so the scaled target's size would
+            // name a texture nothing on screen came from. Read after the draw
+            // rather than before, so the row is what this frame *was* drawn
+            // at - the resize above is the only thing that moves either size,
+            // and it happens before the stage renders.
+            has_scene.then(|| perf::RenderSize {
+                extent: self.framebuffer.extent(),
+                allocation: self.framebuffer.allocation(),
+            }),
         );
         if !list.is_empty() {
             self.overlay.overlay(
@@ -697,8 +729,32 @@ impl Session {
             );
         }
 
+        // Last thing into the encoder, and only when this frame claimed a pair:
+        // the copy has to follow the pass that wrote the timestamps and
+        // precede the submit that runs both.
+        if let Some(timer) = self.pass_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
+
         let submit_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
+        // **After the submit**, which is what makes it safe to start a map on
+        // the buffer this frame just copied into. What comes back is a frame or
+        // more old and says which frame it was - so a reading from a frame that
+        // carried a load is dropped rather than recorded as a 300 ms scene.
+        if let Some(timer) = self.pass_timer.as_mut()
+            && let Some(reading) = timer.read(&self.gpu.device)
+        {
+            if reading.frame > self.stall_frame {
+                self.scene_cost.record(reading.seconds);
+            }
+            debug!(
+                "scene pass: frame {} took {:.3} ms, read on frame {}",
+                reading.frame,
+                reading.seconds * 1000.0,
+                self.frame_index
+            );
+        }
         if let Some(start) = submit_start {
             info!("first race frame: submitted in {:?}", start.elapsed());
         }

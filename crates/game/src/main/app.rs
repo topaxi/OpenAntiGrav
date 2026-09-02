@@ -238,6 +238,25 @@ impl App {
         )
         .context("building the performance overlay")?;
 
+        // How long the scene pass takes on the GPU, which is the only signal
+        // dynamic resolution could be controlled on: the frame-loop interval
+        // is pinned to the refresh under vsync and to the limit under any
+        // frame limit. `None` on a device that came back without
+        // `TIMESTAMP_QUERY` - the feature is asked for in
+        // `mesh_render::optional_features` and intersected with the adapter's,
+        // so a device that lacks it still boots and simply cannot be asked.
+        // Said out loud either way: which of the two happened decides whether
+        // the eventual DRS row can be offered at all.
+        let pass_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        info!(
+            "GPU timing: {}",
+            if pass_timer.is_some() {
+                "the scene pass is timed"
+            } else {
+                "no timestamps on this device"
+            }
+        );
+
         Ok(Some(Session {
             gpu,
             framebuffer,
@@ -248,6 +267,10 @@ impl App {
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
+            scene_cost: perf::Meter::new(),
+            pass_timer,
+            frame_index: 0,
+            stall_frame: 0,
             memory: perf::memory::Probe::new(),
             overlay,
             stalled: true,

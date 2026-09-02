@@ -101,9 +101,10 @@ pub enum Overlay {
     Pacing,
     /// Everything [`Self::Pacing`] shows, plus a line of scene counts (draw
     /// calls submitted against the total, and triangles submitted - see
-    /// [`crate::race::SceneStats`]), a line of resident memory (see
-    /// [`memory::Probe`]), and a line naming the video decoder, each present
-    /// only when the caller actually has one to give it.
+    /// [`crate::race::SceneStats`]), the size the scene was drawn at (see
+    /// [`RenderSize`]), a line of resident memory (see [`memory::Probe`]), and
+    /// a line naming the video decoder, each present only when the caller
+    /// actually has one to give it.
     ///
     /// Its own tier rather than folded into `Pacing`, since the extra lines
     /// name renderer- and process-internal things (`[graphics] lod`, frustum
@@ -575,6 +576,54 @@ const SLACK: f32 = 1.05;
 /// itself sits exactly halfway up and the rule is easy to read against.
 const GRAPH_FRAMES: f32 = 2.0;
 
+/// What the scene was actually drawn at this frame.
+///
+/// Two sizes rather than one, per
+/// [ADR-0037](../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md):
+/// the **allocation** is the texture, sized off the `[graphics] render_scale`
+/// ceiling, and the **extent** is the sub-rectangle drawn into it this frame.
+/// They are equal on every frame the game draws today, because nothing moves
+/// the extent yet - and the whole point of putting this on screen is that when
+/// something does, a player can watch it move.
+///
+/// **This is the row that tells dynamic resolution from a stutter**, which is
+/// the argument for a fourth `Dev` line on an already dense readout. A frame
+/// rate that recovers because the controller dropped the resolution and one
+/// that recovers because the load passed look identical without it. It is also
+/// readable *while* the scale moves, which is what
+/// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+/// bought by taking this overlay out of the scaled target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderSize {
+    /// The rectangle drawn into - `upscale::Framebuffer::extent`.
+    pub extent: (u32, u32),
+    /// The texture behind it - `upscale::Framebuffer::allocation`.
+    pub allocation: (u32, u32),
+}
+
+impl RenderSize {
+    /// One line, and it says less when there is less to say.
+    ///
+    /// With the two equal - every frame today - it is the render size alone,
+    /// because "1440x816 of 1440x816, 100 %" is three ways of saying one
+    /// number. Below the ceiling it names both and the percentage between
+    /// them, which is the number a controller is moving.
+    ///
+    /// The percentage is off the **width**. Both axes are scaled by the same
+    /// factor, so either would do, and quoting one avoids a row that reads
+    /// `84% / 85%` because the two rounded differently.
+    #[must_use]
+    pub fn line(self) -> String {
+        let (w, h) = self.extent;
+        let (aw, ah) = self.allocation;
+        if (w, h) == (aw, ah) {
+            return format!("RENDER {w}x{h}");
+        }
+        let percent = f64::from(w) / f64::from(aw.max(1)) * 100.0;
+        format!("RENDER {w}x{h} OF {aw}x{ah}  {percent:.0}%")
+    }
+}
+
 /// The overlay, as plain data.
 ///
 /// The same [`Draw`] vocabulary the front end and the menus emit, so the
@@ -591,6 +640,13 @@ const GRAPH_FRAMES: f32 = 2.0;
 /// [`memory::Probe::sample`] - `None` when the platform has no reader or the
 /// probe has not sampled yet, in which case the line is left out the same way
 /// an absent `scene` or `video` already is.
+///
+/// `render` is what the scene was drawn at, and is `None` on a stage that has
+/// no scene - the launcher, the loading screen, the front end and the menus
+/// all draw straight into the presentation target and never touch the scaled
+/// one ([ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)),
+/// so a size there would name a texture nothing on screen came from. Same
+/// discipline as `scene`: absent rather than stale.
 #[must_use]
 pub fn draw_list(
     meter: &Meter,
@@ -599,6 +655,7 @@ pub fn draw_list(
     scene: Option<crate::race::SceneStats>,
     video: Option<&str>,
     memory: Option<u64>,
+    render: Option<RenderSize>,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -630,6 +687,15 @@ pub fn draw_list(
             "DRAWS {}/{total}  TRIS {}",
             scene.draws_submitted, scene.triangles
         ));
+    }
+    // Directly under the draw counts, because it is the denominator for them:
+    // a frame that got cheaper because the resolution fell and one that got
+    // cheaper because half the track was culled are the same two numbers
+    // otherwise. See [`RenderSize`].
+    if mode == Overlay::Dev
+        && let Some(render) = render
+    {
+        lines.push(render.line());
     }
     // Resident memory, not virtual: what the process is actually holding,
     // rather than address space it has merely reserved (a wgpu process's
