@@ -56,36 +56,181 @@ trick) was also checked and ruled out - track sponsor signage, unrelated.
 Artefacts (the object dump, the six candidate buffers, the meta) are under
 `data/reference/hd-capture/flare-size/sprite-dump/`.
 
+**2026-09-02, a third session found the draw call - full account on
+engine-trail.md ("Third session: it was on `EngineFlare`'s own vtable, not a
+separate manager").** Neither of the two untried angles the second session
+left open was quite it: not a separate manager object, and no pushbuffer scan
+was needed. `EngineFlare`'s own vtable (`0x00869d30`) has two class-specific
+slots besides `EngineFlare_Update` that neither prior session had opened -
+slot 5 and slot 7, the identical two slots `TrailEffectManager`'s vtable uses
+for `Trail_Enqueue`/`Trail_RenderTick`. Read live off the vtable (8-byte OPD
+stride, no symbol to decompile from since neither had a name yet): slot 5 is
+`EngineFlare_Enqueue` (`0x002a06e0`, confidence 84 - byte-for-byte
+`Trail_Enqueue`'s own function, confirmed to write into the *same* render-queue
+object via two different TOC slots holding an identical pointer value); slot 7
+is `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78 - gated on a flag in
+the same shared per-frame global `Trail_RenderTick` also gates on, at a
+different byte offset, and reaching `Rsx_SetMethod` through a chain of
+TOC-fixup trampolines). This is the missing consumer. What it does not yet
+settle: which of its loads is `Flare Radius` itself - most of the function's
+body past the gate is RSX submission plumbing, not the tuning values.
+
+**2026-09-02, a fourth session read that middle and confirmed the tuning
+block, but found a puzzle rather than closing it - full account on
+engine-trail.md ("Fourth session: the tuning block itself, and a puzzle it
+did not settle").** The "bad instruction data" Ghidra's decompiler reported
+in `EngineFlare_RenderTick`'s middle is a decompiler-analysis failure, not
+bad bytes - `disassemble_bytes` reads it as ordinary AltiVec. Read that way:
+a camera-relative inverse-length term feeds a `saturate()`-shaped linear
+fade, `1 - saturate((f30*f28 - f23)/f24)`, multiplied by a per-instance value
+and clamped, then stored at `this+0x18c` right before an early-out. A fixed
+and rerun `scripts/hd-flare-tuning-dump.py` (the first run had an
+un-followed second pointer dereference and read every offset as `0.0`)
+confirms `f23`/`f24` are **exactly** `Flare Fadeout Dist`/`Range` (15.0/15.0,
+at `+0x484`/`+0x488` of the tuning block) - the session-one hypothesis is now
+structural, not just numerical - and along the way pinned live runtime
+addresses for nine of the twelve previously-"unread" tuning rows at once
+(table on engine-trail.md), correcting the `Flare Size Clamp` guess: the
+clamp this formula actually applies is a **different** field reading `1.0`
+live, not `50.0`.
+
+**What it could not settle: the sprite visibly draws, but this function's
+own fade output never left `0.0`.** Four half-second-spaced live samples of
+`this+0x18c`, taken from a craft confirmed mid-race, thrusting and visibly
+flared in the same session's screenshot
+(`data/reference/hd-capture/flare-size/tuning-dump/race.png`), all read
+`0.0` - despite both gates this session could check reading as open (one
+corrects a session-three misreading: the count-style gate is an *unsigned*
+compare, so `craft+0x5fa4 == 1` passes it, not fails it as `count >= 7`
+would suggest). Either `EngineFlare_RenderTick` is not the branch drawing
+this craft's visible sprite (a third, untraced gate, or the wrong vtable
+slot), or it is the right function and `this+0x18c` feeds something other
+than the visible quad - an occlusion-query parameter is at least as
+plausible as a size or alpha term, given the clamp ceiling turned out to be
+`Flare Occluder Radius`'s own value. Settling this needs a breakpoint trace
+under `PPU Decoder: Interpreter (static)`
+([known to work](../docs/reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter),
+~75s to boot against the default 30s) - not attempted this session.
+
+**2026-09-02, a fifth session ran a first breakpoint trace, got one solid
+result and one wrong reading of a second - full account on engine-trail.md
+("Fifth session: a real result (the entry fires), and a wrong reading of a
+second one"), corrected there after an advisor review caught it before it
+went further.** `scripts/hd-flare-rendertick-break.py` (new) confirmed
+`EngineFlare_RenderTick`'s *entry* fires on the very first 0.4s poll of a
+driven race - real runtime verification the function is not dead code, it
+runs essentially every frame. It then armed a second breakpoint at
+`0x002a1110`, believing that address to be the landing both early-out gates
+share, and read "12 of 12 hits there" as "the gate stayed closed every
+time." **That reading is wrong: `0x002a1110` is the function's one shared
+epilogue**, returned through by every path including the full-draw one
+(`0x002a1434: b 0x002a1110` sits right after the RSX submission block that
+actually issues the draw calls) - so 12/12 hits there is equivalent to
+12/12 calls returning, which was never in question. What still stands: a
+*different* breakpoint in the same run, `0x002a0d78` (only reached if the
+fade value just computed is `> 0`), recorded zero hits - consistent with
+either a gate closing before the fade math runs, or the fade math running
+every time and evaluating to `<= 0`, which this session's checkpoint
+placement cannot distinguish. A separate bug in the same script
+(`step_off_breakpoint` not checking which address it stopped at before
+re-arming) means even that zero-count isn't fully trusted yet - a hit could
+have been silently swallowed. The GDB-stub trap the script found (resuming
+a thread parked on an armed breakpoint does not step over it, hanging the
+next command) is unaffected by any of this and still real.
+
+**Same session, the corrected rerun: a clean negative result.** Rewrote the
+script with a three-point ladder *inside* the fade math (`0x002a0bb8` where
+it begins, `0x002a0d70` the store itself, `0x002a0d78` only if positive)
+and fixed the swallowed-hit bug. **Zero hits at any of the three in 45
+seconds of active, visibly-flared racing** - roughly 2,500 calls at this
+function's every-frame rate, none of which reach `0x002a0bb8`. This is a
+real, trustworthy finding this time: `EngineFlare_RenderTick`'s fade math is
+not entered at all for this craft, not merely computing a non-positive
+result. See engine-trail.md ("Fifth session", the "corrected rerun"
+paragraph at its end) for the full account and the archived artefacts
+(`data/reference/hd-capture/flare-size/rendertick-break-v2/`).
+
+**2026-09-02, a sixth session found and confirmed which gate - full account
+on engine-trail.md ("Sixth session: the third gate, found and confirmed
+live").** Both known gates measured open (`scripts/hd-flare-gate-check.py`,
+new: 1 sample of `count_field_ble`, 4 of `byte_flag_beq`, all "would not
+skip"), so re-reading the stretch between the byte-flag gate and the fade
+math's own start found a **third** branch neither prior session had traced:
+`0x002a0b44`, a `beq` on `FUN_006765e8()`'s return value, branching to
+`0x002a1210` - genuinely different code, not the shared epilogue - when
+false. **Confirmed live, 2/2 samples: it is false every time**, which is
+what has been closing the fade math this whole thread. `FUN_006765e8`'s
+only other callers, `Game_PresentLoop_q` and `PhotoMode_Update`, and its
+own two-field compare-then-flag shape, read like a per-frame budget or
+throttle check - a hypothesis from the call-site pattern, not a traced
+value. **What reopens the question rather than closing it**: `0x002a1210`
+is not a dead branch - past two more gates of its own (which can loop back
+to the same entry the fade math's `r10` computation uses) it builds a small
+ring-buffer entry and reaches the same family of RSX-submission
+trampolines the fade path does. So the function has two branches that both
+touch the RSX pipeline, and which one (if either) actually builds the
+visible sprite's quad is now the real open question - not just "why does
+the fade math not run."
+
 ## Open
 
-- The consumer of `Flare Radius`/`Flare Radius Min`/`Max Radius Jitter` -
-  the function that builds the sprite's world-space quad - is unlocated
-  after both a static and a live pass. Ruled out: `EngineFlare_PlaceShapes`
-  and `_Update` (neither reads a radius-shaped field), `FUN_002a17e8` (the
-  engine-sound state machine), the six RSX pointers inside the
-  `EngineFlare` object itself (occlusion-query buffers, not vertex data),
-  and `Billboard.cpp` (track signage). Two untried angles: the sprite may
-  be owned by a separate manager `EngineFlare` calls into rather than
-  building geometry itself (the shape `TrailEffectManager` has for the
-  ribbon - worth searching for the same way, a TOC-neighbourhood sweep
-  rather than a struct dump); or scan the RSX pushbuffer directly for the
-  draw's own `NV4097` vertex-array command, which needs no CPU-side handle
-  to find.
-- `Flare Fadeout Dist`/`Range` (15.0/15.0): whether a near/far fade is what
-  is missing, and if so its curve - linear, smoothstep, or something else -
-  is unread. The leading candidate for the oversized-flare finding, but
-  unverified.
-- `Flare Size Clamp` (50.0): newly named, unread past the tuning file. The
-  order-of-magnitude gap against `Flare Radius` (3.0) suggests it clamps
-  something other than a raw world half-size, but that is a hypothesis from
-  the numbers alone.
+- **The gate that closes the fade math is found and confirmed live, and a
+  seventh session then ruled the fade math out as the oversized-flare cause
+  regardless.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78)
+  computes `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout
+  Dist`/`Range`, confirmed live at `+0x484`/`+0x488` of the shared tuning
+  block) but never reaches that computation for the sampled craft - the
+  byte-flag gate (`struct_base+0x494`) and count-field gate
+  (`craft+0x5fa4`) are both confirmed **open** (5 live samples, none skip),
+  and the actual gate is `0x002a0b44`, a branch on `FUN_006765e8()`'s
+  return value, confirmed **closed** (2/2 live), which sends execution to
+  `0x002a1210` instead. **But the fade's own numbers rule it out as the
+  size cause even if it did run**: a 15-unit fade start leaves anything
+  closer than 15 units - both engines' chase camera sits a few units out -
+  fully faded *in*, undiminished, so reaching this branch would not shrink
+  the sprite. Neither branch this thread has found writes the sprite's
+  half-size at all; that is a flat renderer-side constant
+  (`oag_render::exhaust::hd::SPRITE_RADIUS`, 3.0) with no distance term.
+  `0x002a1210`'s own shape - a `craft+0x270`-indexed ring buffer entry
+  reaching the same RSX-submission trampolines - reads more like the
+  occlusion query `Flare Occluder Radius`/`Flare Depth Bias` want than a
+  second draw path, and an occlusion query would not set the size either.
+  **The size question pointed at the renderer, and an eighth session found
+  and partly fixed which draw call.** A first isolation attempt (disabling
+  each additive layer in turn, counting pixels over a brightness threshold)
+  attributed the blob to the flame mesh instead of the sprite - wrong,
+  caught before it was written down: several layers already saturate the
+  same pixels, so a threshold count cannot see a layer's real extent once
+  the region is blown out. A pixel-diff isolation (one layer's own additive
+  contribution, subtracted rather than thresholded) reverses that reading:
+  the sprite is the dominant contributor (a 20,838-pixel footprint
+  difference in a 340x280 crop, reaching from the nozzle almost to the
+  cockpit), the flame mesh a small tight one (1,954 pixels), the boost
+  plume zero. **Fixed**: `race::effects::hd_sprite_quad` now scales the
+  sprite radius by `exhaust::CRAFT_ROW_SCALE` (0.75, matching the factor
+  already applied to the sprite's own position), measured to cut the
+  isolated footprint ~45% - real, not the "no visible change" a first,
+  unmeasured visual check wrongly concluded. Not confirmed to close the
+  gap outright: a flat half (radius 1.5) cuts the footprint further still
+  (~71%), so 0.75 may not be the original's own factor, only a
+  consistency fix in the right direction. See engine-trail.md "Sixth"
+  through "Eighth" sessions for the full account.
+- `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
+  fade result computed above (that clamp uses a *different* tuning-block
+  field, `+0x4a8`, which reads `1.0` live and is more likely
+  `Flare Occluder Radius` reused as a ceiling). `Flare Size Clamp` itself has
+  a confirmed runtime address (`+0x4b0`, still 50.0 live) but no traced
+  consumer.
 - `Engine Flare Particles` (`Enable`, `Min Alpha` 0.25): a third flare
   component distinct from the always-on flame model and the sprite, neither
   of which this project draws. The small bright dashes trailing under the
   nozzle in `original-rpcs3.png` are the leading candidate for what this
-  is. No `.pob` or emitter table has been matched to it.
+  is. No `.pob` or emitter table has been matched to it. Runtime storage for
+  `Min Alpha` confirmed live at `+0x464` of the tuning block, 2026-09-02.
 - `Flare Highlight Power`/`Boost` (32.0/1.0), `Spikes Thrust/Boost Max
-  Scale` (1.5/2.0), `Shockwave Cycle Speed` (0.01): named, unread.
+  Scale` (1.5/2.0), `Shockwave Cycle Speed` (0.01): all now have a confirmed
+  live runtime address in the shared tuning block (table on engine-trail.md,
+  "Fourth session") but no traced consumer past that.
 - The trail itself is also suspected inaccurate per the user's report.
   **Checked and refuted**: a separate HD-vs-Fury trail asset (no - one
   asset, disc-wide, colour-mixed by the already-implemented `engineTrail`
@@ -99,14 +244,49 @@ Artefacts (the object dump, the six candidate buffers, the meta) are under
 
 ## Next Steps
 
-- Find the sprite's actual draw call. Two sessions ruled out the obvious
-  places (both `EngineFlare` methods, the six RSX pointers the object
-  itself holds, `Billboard.cpp`) without finding it. Next: look for a
-  separate manager on `TrailEffectManager`'s pattern (a TOC-neighbourhood
-  sweep near `Engine_Flare_Rich.gtf`'s string, the way `Trails`'s block was
-  found), or scan the RSX pushbuffer for the draw's own vertex-array
-  command instead of chasing a CPU-side handle.
-- Once the consumer is read, either confirm and implement the
-  `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
+- **Calibration is done, and it landed on a decision point rather than a
+  number.** A brightness-threshold measurement of glow-width against
+  engine-bay width, matched to how "Seventh session" compared the three
+  RPCS3 captures, does not work on either side of the comparison: the
+  threshold cannot separate the flare's own glow from the metal turbine
+  housings' specular highlights in the original, or from the hull's own
+  white livery paint in this engine's frame - both read as "the box is
+  full" regardless of the true glow size. Reading the glow by eye instead
+  (a human can tell plasma from specular; a threshold could not) gives
+  glow-width/engine-bay-width ratios of ~0.42 (original), ~0.74 (this
+  engine unscaled), ~0.62 (this engine with the landed `CRAFT_ROW_SCALE`
+  fix) - so the fix closes roughly a third of the visual gap, not all of
+  it, matching what the pixel-diff footprint numbers already said. See
+  engine-trail.md "Eighth session"'s calibration addendum for the full
+  table and crops.
+- **The remaining ~0.62 -> ~0.42 gap is a decision, not a next action to
+  just take.** Reaching ~0.42 from ~0.74 by eye would need close to `0.57x`
+  the current (already-scaled) radius - but that number comes from fitting
+  two screenshots read by eye, not from any traced consumer in the
+  original, and this project holds the opposite standard everywhere else
+  (`crates/render/src/post/bloom.rs`'s own doc: "every constant here is
+  read out of the executable; none is fitted to a screenshot"). Landing an
+  eyeballed multiplier on top of the evidence-backed `CRAFT_ROW_SCALE` one
+  would quietly lower that bar. **Whoever picks this up next should choose,
+  explicitly, between**: (a) hold at the evidence-backed 0.75 and pursue
+  the RE side - find what the original's own draw call actually multiplies
+  `Flare Radius` by (nothing on engine-trail.md names a consumer for this
+  specific field yet; `0x002a1210`, past the third gate the sixth session
+  found, is the one untraced piece of `EngineFlare_RenderTick` still worth
+  a live read for this, low priority as it looked for the occlusion query
+  it now reads as more likely), or (b) accept a fitted multiplier as a
+  disclosed, visual-only approximation and land it as such - a real product
+  choice, not a default to make silently.
+- **Separately, check whether the original itself depth/occlusion-clips the
+  sprite against the craft's own hull mesh.** Not reached this session -
+  `crates/render/src/exhaust.rs` (~line 1062, "the flare's draw pipeline")
+  already documents depth test on/write off, issued after the opaque
+  hulls - correctly wired, per that code's own comments - so this is about
+  whether the sprite's *placement* sits inside enough hull geometry for
+  that test to matter, not about a missing test. Lower priority than the
+  decision above: the eyeball measurement's whole-glow-shape read (a
+  cone/teardrop reaching well past the engine bay on this engine, an
+  ellipse fully contained by it in the original) looks more like a size
+  difference than an occlusion one, but this was not directly tested.
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.

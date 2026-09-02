@@ -207,3 +207,6 @@
 0x0030ac48	function	SoundSystem_Init	84	zone-visualiser.md
 0x00307620	function	SoundSystem_OpenAudioPort	86	zone-visualiser.md
 0x0030a668	function	SoundSystem_StartMultiStream	80	zone-visualiser.md
+0x002a1528	function	EngineFlare_Init	85	engine-trail.md
+0x002a06e0	function	EngineFlare_Enqueue	84	engine-trail.md
+0x002a08a8	function	EngineFlare_RenderTick	78	engine-trail.md
