@@ -218,18 +218,16 @@ been read for this ladder either. See `crates/hd/tests/hd_title_ground_truth.rs`
 `the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index` for
 the ground truth.
 
-**Thirteen of the fourteen actually decode; `MR_SUZ` ("Super Zen") does not.**
-Checked by playing the bank, not just parsing its directory: both of `MR_SUZ`'s
-own waveforms land in the second, unidentified codec [below](#a-third-of-hds-waveforms-are-not-ps-adpcm)
-already names as a disc-wide gap, with no PS-ADPCM alternate to fall back to -
-unlike `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`, which each carry one PS-ADPCM take
-alongside two in the other codec and so still play. So a Zone race reaching
-Super Zen plays no class line today; the load report says so
-(`class announcer: MR_SUZ not loaded: ...`) rather than staying silent about
-it, and `crates/game/tests/sfx_ground_truth.rs`'s
-`wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues` pins the
-exact set so a codec fix - or a regression - shows up as a changed list rather
-than an unnoticed drift.
+**All fourteen decode.** Checked by playing the bank, not just parsing its
+directory. `MR_SUZ` ("Super Zen") used to be the one miss: both of its own
+waveforms land in [the second codec](#a-third-of-hds-waveforms-are-not-ps-adpcm-and-are-16-bit-pcm),
+with no PS-ADPCM alternate to fall back to - unlike `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`,
+which each carry one PS-ADPCM take alongside two in the other codec and so
+played regardless. Since `decode_pcm16` identified that codec, `MR_SUZ` plays
+too, and `crates/game/tests/sfx_ground_truth.rs`'s
+`wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues` pins the exact
+set so a codec regression shows up as a changed list rather than an unnoticed
+drift.
 
 **The two ladders can overlap, and nothing arbitrates it.** `ZONE_STAGES`
 steps at zones 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75;
@@ -723,13 +721,15 @@ bytes that are in PS-ADPCM spec:
 That is a clean split with nothing in between, over ~5,600 spans, from a field
 the byte census knows nothing about. The bit is a codec selector.
 
-### What the other codec is, is not known
+### What the other codec is
 
-It is not identified, and nothing decodes it. `oag_game::audio::sfx` **drops**
-a non-ADPCM waveform and says so in the load report rather than running the
-ADPCM decoder over it, which would produce 28 samples of noise per block -
-`CLAUDE.md`'s plausible-looking stand-in exactly. `oag_formats::sblk::Sound::is_adpcm`
-is the predicate.
+**Identified 2026-09-02 as 16-bit PCM, big-endian, behind a 16-byte header** -
+see [the fuller section below](#a-third-of-hds-waveforms-are-not-ps-adpcm-and-are-16-bit-pcm)
+for the evidence. `oag_formats::sblk::Sound::is_adpcm` is still the predicate
+that says which decoder applies; `oag_game::audio::sfx` used to **drop** a
+non-ADPCM waveform rather than run the ADPCM decoder over it, which would have
+produced 28 samples of noise per block - `CLAUDE.md`'s plausible-looking
+stand-in exactly - and now calls `oag_formats::sblk::decode_pcm16` instead.
 
 Confidence **90**: a decompiled argument whose only use is an error message,
 plus a 4-disc zero census, plus a near-perfect correlation on a fifth disc that
@@ -947,7 +947,7 @@ different console and a different generation, off arithmetic read out of a PSP
 executable. That is the strongest evidence this page has that the arithmetic is
 the format's rather than one build's.
 
-### A third of HD's waveforms are not PS-ADPCM
+### A third of HD's waveforms are not PS-ADPCM, and are 16-bit PCM
 
 Grouped by [the `0x80` flag](#0x80-means-not-adpcm-and-this-page-had-it-backwards):
 
@@ -956,20 +956,53 @@ Grouped by [the `0x80` flag](#0x80-means-not-adpcm-and-this-page-had-it-backward
 | 5,381 with `0x80` **clear** | **99.98%** |
 | 1,167 with `0x80` **set** | **7.19%** |
 
-**What that second codec is has not been identified.** The spans carry no magic
-at their head, and they are not 16-bit PCM in either byte order - read as
-either, the mean step over RMS is 0.94 and 1.04 against about 1.41 for white
-noise, where real PCM sits far below. MP3 and ATRAC3 are the obvious candidates
-on a PS3 and neither has been tested.
+**Identified 2026-09-02: the second codec is 16-bit PCM, big-endian, behind a
+16-byte header.** `oag_formats::sblk::decode_pcm16` is the decoder; its own
+doc comment carries the full evidence, repeated here:
 
-So nothing decodes them. `oag_formats::sblk::Sound::is_adpcm` is the predicate
-and `oag_game::audio::sfx` **drops** a waveform it rejects, with a line in the
-load report. Running the ADPCM decoder over one would produce 28 samples of
-noise per block - a plausible-looking stand-in, which
-[`CLAUDE.md`](../../CLAUDE.md) forbids and which would also destroy the
-evidence above by making the wrong thing sound like the right one.
+- The PS3 executable (`ps3-hdfury-eu/EBOOT.elf`, `0x007d0818`) holds the
+  string `"SCREAM: ERROR! Unknown voice type in bank - must be ADPCM or
+  PCM\n\tSCREAM does not know how to handle this data"` - SCREAM's own error
+  message names exactly two voice types. The function that owns the string
+  was not resolved (Ghidra found no code reference to the address, only the
+  data-table entry holding it), so this is not a decompiled read of the
+  decode path itself.
+- Skipping the 16-byte header and reading the rest as big-endian `i16`, every
+  one of the 1,167 not-PS-ADPCM spans has a mean roughness (mean absolute
+  sample-to-sample step, divided by the span's RMS) of **0.257** against about
+  1.41 for white noise, with only one span over 1.0 at all. This is the same
+  measurement this page's earlier "0.94 and 1.04... not 16-bit PCM in either
+  order" claim made, over the same corpus, and it does not reproduce: that
+  claim did not skip a header, and the header alone does not explain the gap
+  (the file's own scratch probe found the two figures equal whether or not
+  the header is skipped, since 8 header samples do not move a span-length
+  mean). What actually changed between the two measurements was not
+  re-derived; the newer one is a direct measurement against real data and is
+  what this page now stands on.
+- A labelled span - `weapons.bnk`'s `~SHIELD` cue, whose two not-PS-ADPCM
+  waveforms used to be dropped - decodes to a spectrogram of stable horizontal
+  harmonic bands, consistent with a sustained shield-hum effect and not with
+  noise.
+- For the 315 of 1,167 spans that also carry `LOOP_FLAG` (`+0x0e`'s `0x40`),
+  the header's second big-endian `u32` (bytes 4..8) equals the sample count
+  exactly on every one: `header_word * 2 + 16 == span length`. Spans without
+  the loop flag read zero there instead. What that word means when it is not
+  the sample count is not known, and decoding does not depend on it - the
+  other 12 header bytes are zero on every span sampled and are not otherwise
+  interpreted.
 
-### HD makes five of the six sounds
+**Confidence: 85.** Two independent quantitative measurements agree with each
+other and with a primary-source string in the shipping executable; not
+runtime-verified (no code reference to the string was found, only the data
+table holding it), so capped below the 95 band per the confidence rubric.
+Finding the function that actually dispatches on voice type - which would let
+this reach "Established" - is open.
+
+`oag_formats::sblk::Sound::is_adpcm` is still the predicate for which decoder
+applies; `oag_game::audio::sfx` now calls `decode_pcm16` rather than dropping
+what it rejects.
+
+### HD makes eight of the nine sounds
 
 The difference between HD and the other titles turned out to be **which file a
 cue is in**, and nothing else - the cue strings are identical across the
@@ -980,14 +1013,14 @@ lineage. That is a five-field path table per title
 | --- | --- | --- |
 | `SPEEDUPPAD` | `hud.bnk` | **`weapons.bnk`** - HD has no `hud.bnk` |
 | `.COLLISIONS` | `ship.bnk` | **`shiphd.bnk`** |
-| `ABSORB`, `~SHIELD` | `weapons.bnk` | `weapons.bnk` |
+| `ABSORB`, `~SHIELD`, `~ROCKLOCK` | `weapons.bnk` | `weapons.bnk` |
 | `shieldactive` | `speech.bnk` | `speech.bnk` |
 
 One spelling - `Data\Sound\...` - reaches a WAD and a PSARC alike, because
 `oag_assets::psarc` folds case and separators, so no caller branches on the
 container.
 
-**Two cues do not load on HD, and each says why in the race's own report:**
+**One cue does not load on HD, and says why in the race's own report:**
 
 ```text
 sfx: SPEEDUPPAD -> 7 waveform(s) from Data\Sound\weapons.bnk
@@ -995,9 +1028,15 @@ sfx: .COLLISIONS not loaded: .COLLISIONS binds no waveform: its 4 command(s) are
 sfx: .COLLISIONS -> 112 waveform(s) from Data\Sound\shiphd.bnk
 sfx: ABSORB -> 6 waveform(s) from Data\Sound\weapons.bnk
 sfx: ~ENGINE not loaded: "~ENGINE" names no cue in shipHD
-sfx: ~SHIELD -> 6 waveform(s) from Data\Sound\weapons.bnk, 2 skipped as not PS-ADPCM
+sfx: ~SHIELD -> 8 waveform(s) from Data\Sound\weapons.bnk
 sfx: shieldactive -> 2 waveform(s) from Data\Sound\speech.bnk
+sfx: ~ROCKLOCK -> 2 waveform(s) from Data\Sound\weapons.bnk
 ```
+
+`~ROCKLOCK` is the clearest end-to-end proof of the PCM decoder: **every** one
+of its waveforms was in the second codec, so before `decode_pcm16` existed the
+cue failed the loader's own `waveforms.is_empty()` check and did not resolve
+at all - it could not have loaded any other way.
 
 - **`~ENGINE` does not exist on HD.** Its ship audio is a per-event set -
   `c_CShipWall`, `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`,
@@ -1024,8 +1063,10 @@ sfx: shieldactive -> 2 waveform(s) from Data\Sound\speech.bnk
   either against these names would be a mapping invented here rather than one
   read off the disc.
 
-The `~SHIELD` line is also the not-PS-ADPCM path working end to end: six of
-HD's eight `~SHIELD` waveforms decode and two are dropped.
+The `~SHIELD` line is also the not-PS-ADPCM path working end to end: all eight
+of HD's `~SHIELD` waveforms decode now, where two used to be silently dropped.
+`~ROCKLOCK`, above, is the sharper version of the same proof - a cue that
+could not load at all until the second codec did.
 
 ### HD's cue edges are Pulse's, and that is an assumption
 
