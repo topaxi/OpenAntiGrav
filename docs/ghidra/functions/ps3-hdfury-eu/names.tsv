@@ -214,3 +214,9 @@
 0x002a06e0	function	EngineFlare_Enqueue	84	engine-trail.md
 0x002a08a8	function	EngineFlare_RenderTick	78	engine-trail.md
 0x005a9998	function	Texture_BuildGcmRegisters	75	renderer.md
+0x000196e8	function	Game_Main	88	game-boot.md
+0x00011c40	function	GameRoot_Construct	90	game-boot.md
+0x00310138	function	SpeechManager_Construct	90	game-boot.md
+0x003013f0	function	SoundManager_Construct	90	game-boot.md
+0x001641f0	function	FrontendRoot_Construct	90	game-boot.md
+0x002fb528	function	MusicManager_Construct	90	game-boot.md

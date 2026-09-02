@@ -1043,24 +1043,40 @@ Compared byte-for-byte against `pulse-psp-usa.chd`'s `Data.wad`, per
   language plugin, present on the USA disc but never offered as a picker
   choice there either). Confidence **90**.
 - **The boot-time plugin manifest confirms the same set from the executable
-  side.** `FUN_0888b980` (USA) walks an 11-pointer table at `0x08ab110c`
-  loading `PI012, PI010, PI008, PI009, PI011, PI001, PI004, grids, music,
-  loading, news` in that order (first entry = English, loaded first). Its EU
-  counterpart - found by positional correspondence through the already-matched
-  `Game_MainLoop`/`FUN_0888adcc`↔`FUN_0888ac28` chain (`diff_functions`:
-  258/277 and 65/70 instructions equal, every difference a relocated
-  immediate) - is `FUN_0888b7dc` at EU `0x0888b7dc`, whose own base-pointer
-  symbol and `strings_only_in_a/b` diff read `Data\Plugins\PI012` (USA) vs
-  `Data\Plugins\PI000` (EU): the executable's own manifest, not just the
-  disc's file layout, confirms English is `PI000` on EU and loads first.
-  Reading EU's manifest table directly (`08ab088c`, 11 pointers, `strings`
-  search) gives `PI000, PI008, PI009, PI010, PI011, PI001, PI004, grids,
-  music, loading, news` - same 11 entries, same first slot, French/German/
-  Spanish/Italian in a different sub-order than USA's. Confidence **80**
-  (`_q`-worthy evidence tier per the deep-sweep formula, but neither function
-  is yet formally renamed/documented under `psp-pulse-usa` or
-  `psp-pulse-eu` - that is left for a follow-up naming pass, see
-  `HANDOVER.md`).
+  side.** `Plugin_LoadManifest` (USA `0x0888b980`) walks an 11-pointer table at
+  `0x08ab110c` loading `PI012, PI010, PI008, PI009, PI011, PI001, PI004, grids,
+  music, loading, news` in that order (first entry = English, loaded first).
+  Its EU counterpart - found by positional correspondence through the
+  already-matched `Game_MainLoop`/`FUN_0888adcc`↔`FUN_0888ac28` chain
+  (`diff_functions`: 258/277 and 65/70 instructions equal, every difference a
+  relocated immediate) - is the same `Plugin_LoadManifest` at EU `0x0888b7dc`,
+  whose own base-pointer symbol and `strings_only_in_a/b` diff read
+  `Data\Plugins\PI012` (USA) vs `Data\Plugins\PI000` (EU): the executable's own
+  manifest, not just the disc's file layout, confirms English is `PI000` on EU
+  and loads first. Reading EU's manifest table directly (`08ab088c`, 11
+  pointers, `strings` search) gives `PI000, PI008, PI009, PI010, PI011, PI001,
+  PI004, grids, music, loading, news` - same 11 entries, same first slot,
+  French/German/Spanish/Italian in a different sub-order than USA's.
+  Confidence **80** on both addresses (`_q`-worthy evidence tier per the
+  deep-sweep formula, applied without the suffix since 80 clears the
+  threshold). Renamed 2026-09-02 and recorded in `psp-pulse-usa/names.tsv` and
+  `psp-pulse-eu/names.tsv` against this page. **A second, independent
+  confirmation of the walked table's address**: the function's own loop
+  starts at `piVar5 = &DAT_002ad10c` and walks it as a null-terminated pointer
+  list (`piVar5 = piVar5 + 1` each iteration until `*piVar5 == 0`) - resolving
+  the pseudo-address the same way this project's own `psp-pulse-usa` warts do
+  (`real = pseudo + 0x08804000`, [`workflow.md`](../ghidra/workflow.md#known-imperfect-and-why-it-does-not-block))
+  gives `0x002ad10c + 0x08804000 = 0x08ab110c` - the exact 11-pointer table
+  address this bullet already names from the string-search side, now also
+  read off the function's own instructions. No direct caller was found for
+  either renamed address (`get_function_callers`/`get_xrefs_to` both report
+  none on the USA side); the likely cause is the documented `jal`-target wart
+  on this binary (`workflow.md`'s "a narrower, related wart survives on `jal`
+  call targets" - `R_MIPS_26` relocations left unapplied), which drops the
+  call edge from Ghidra's own xref database entirely rather than implying an
+  indirect or table-driven call. `FUN_0888adcc`/`FUN_0888ac28`, the landmark
+  chain used to find the EU address, remain unrenamed - their own role beyond
+  "matched instruction-for-instruction" is unread.
 - **Live capture (PPSSPP, headless, cold boot, no input) shows the EU disc's
   `Language Selection` state is entered and then unconditionally exits to
   `LogoFMV` in under one frame** (516,292 of 222,000,000 PSP cycles/sec, ≈0.14

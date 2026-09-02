@@ -65,6 +65,10 @@ Two structural facts to expect, both different from every other binary here:
 - [memory.md](memory.md) - the allocator, its heap, the mutex around both, and
   **the per-function TOC defect this database has**. Read it before trusting
   any data or string reference in this program.
+- [game-boot.md](game-boot.md) - `Game_Main` and the `GameRoot`/`SpeechManager`/
+  `SoundManager`/`FrontendRoot`/`MusicManager` construction chain, cross-verified
+  literally (matching `.cpp` tags, not just role) against `vita-2048-eu-v104`'s
+  own boot chain.
 - [collision.md](collision.md) - `Collision.cpp`: the arena, the class, and the
   MeshAABB narrowphase.
 - [race-hud.md](race-hud.md) - the per-mode HUD definitions, their three retro
