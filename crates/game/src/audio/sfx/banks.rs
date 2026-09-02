@@ -81,7 +81,7 @@ impl Banks {
                     let undecoded = if skipped == 0 {
                         String::new()
                     } else {
-                        format!(", {skipped} skipped as not PS-ADPCM")
+                        format!(", {skipped} skipped: decoded to no samples")
                     };
                     report.push(format!(
                         "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
@@ -235,31 +235,30 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
     let mut waveforms = Vec::with_capacity(sounds.len());
     let mut skipped = 0;
     for sound in &sounds {
-        // **Not every waveform is PS-ADPCM, and the descriptor says which.**
-        // On Wipeout HD about a third set `+0x0e`'s `0x80`, a codec this
-        // project has not identified; decoding one as ADPCM would produce 28
-        // samples a block of noise, which is exactly the plausible-looking
-        // stand-in `CLAUDE.md` forbids. Dropped, and counted so the load
-        // report says so. See `oag_formats::sblk::NOT_ADPCM_FLAG`.
-        if !sound.is_adpcm() {
-            skipped += 1;
-            continue;
-        }
         let data = bank
             .waveform(sound)
             .ok_or_else(|| anyhow::anyhow!("{name} reaches outside the waveform section"))?;
+        // **Not every waveform is PS-ADPCM, and the descriptor says which.**
+        // On Wipeout HD about a third set `+0x0e`'s `0x80`: SCREAM's second
+        // voice type, 16-bit PCM behind a 16-byte header. See
+        // `oag_formats::sblk::{NOT_ADPCM_FLAG, decode_pcm16}`.
+        let pcm = if sound.is_adpcm() {
+            sblk::decode_adpcm(data)
+        } else {
+            sblk::decode_pcm16(data)
+        };
+        if pcm.is_empty() {
+            skipped += 1;
+            continue;
+        }
         waveforms.push((
-            Arc::new(Sound::new(
-                sblk::decode_adpcm(data),
-                1,
-                sblk::ASSUMED_SAMPLE_RATE,
-            )?),
+            Arc::new(Sound::new(pcm, 1, sblk::ASSUMED_SAMPLE_RATE)?),
             sound.is_looping(),
         ));
     }
     anyhow::ensure!(
         !waveforms.is_empty(),
-        "all {skipped} of {name}'s waveforms are in a codec this does not decode"
+        "all {skipped} of {name}'s waveforms decoded to nothing"
     );
     Ok((Loaded { waveforms }, skipped))
 }
