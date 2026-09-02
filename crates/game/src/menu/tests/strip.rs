@@ -109,7 +109,12 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
 fn fills(list: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
     list.iter()
         .filter_map(|draw| match draw {
-            Draw::Fill { rect, color } => Some((*rect, *color)),
+            // Both, because a tab is one of each: the full-width part below
+            // the cut is a `Fill` and the band above it a `ChamferedFill`.
+            // See `strip::draw`.
+            Draw::Fill { rect, color } | Draw::ChamferedFill { rect, color, .. } => {
+                Some((*rect, *color))
+            }
             _ => None,
         })
         .collect()
@@ -180,8 +185,8 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     let frame = frame_with_fills();
     let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame).flatten();
 
-    // Four entries, two fills each (the chamfer band and the rest of the
-    // tab - see `strip::draw`), plus one underline.
+    // Four entries, two fills each (the cut band and the rest of the tab -
+    // see `strip::draw`), plus one underline.
     let tabs = fills(&list);
     assert_eq!(
         tabs.len(),
@@ -201,6 +206,134 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     // nine.
     assert_eq!(accents, 2, "one selected tab, two bands: {tabs:?}");
     assert_eq!(inks, 6, "three unselected tabs, two bands each: {tabs:?}");
+}
+
+/// The tab's corner is a 45-degree cut with a flat landing after it, and the
+/// three pieces line up into one pentagon.
+///
+/// **The shape is the claim, not the constants.** Each of the three numbers
+/// could be right on its own and still not join up - the earlier one-step band
+/// had the cut's extent right and drew a right angle, and the diagonal built
+/// and reverted on 2026-09-01 had the slope right and ran it to the corner with
+/// no landing. So this asserts the relationships that make it a pentagon: the
+/// band sits directly on top of the body, its right edge is short of the body's
+/// by the landing, and its own cut is square (45 degrees) rather than any other
+/// slope. Measured on two captures three times apart in resolution - see
+/// `Skin::TAB_CHAMFER_CUT` and `docs/formats/hd-frontend.md`.
+#[test]
+fn the_tab_corner_is_a_45_degree_cut_followed_by_a_flat_landing() {
+    let mut menu = Menu::new(built_in());
+    menu.set_strip_layout(true);
+    let skin = hd_skin();
+    let list = draw_list(
+        &menu,
+        &skin,
+        &no_bindings,
+        &measure,
+        None,
+        &frame_with_fills(),
+    )
+    .flatten();
+
+    // The first entry's two pieces, in the order `strip::draw` pushes them.
+    let body = list
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Fill { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .expect("a tab body");
+    let (band, chamfer) = list
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, *chamfer)),
+            _ => None,
+        })
+        .expect("a cut band");
+
+    let (cut, landing, height) = skin.tab_chamfer();
+    assert!(cut > 0.0 && landing > 0.0, "both halves of the cut region");
+
+    // The band sits directly on the body, sharing its left edge - one shape,
+    // not two overlapping ones or two with a seam between them.
+    assert!((band[0] - body[0]).abs() < 0.001, "{band:?} vs {body:?}");
+    assert!(
+        (band[1] + band[3] - body[1]).abs() < 0.001,
+        "the band's bottom is the body's top: {band:?} vs {body:?}"
+    );
+    assert!(
+        (band[3] - height).abs() < 0.001,
+        "the band is the cut's own height: {band:?}"
+    );
+
+    // The landing: the band stops short of the body's right edge by exactly
+    // it, and nothing is drawn in the gap. That gap *is* the flat top edge at
+    // the lower level - it is the body's own top showing through.
+    let landing_gap = (body[0] + body[2]) - (band[0] + band[2]);
+    assert!(
+        (landing_gap - landing).abs() < 0.001,
+        "the band should stop {landing} short of the tab's right edge, not {landing_gap}"
+    );
+
+    // And the cut is 45 degrees: as far across as it is down. This is the one
+    // the reverted attempt got right and the shipped one-step band did not.
+    //
+    // **Within 2%, not exactly, and the slack is a real grid difference rather
+    // than float noise.** The constants live in this build's own 480x272 grid
+    // and `Skin` converts them per axis, but 480x272 is `1.765:1` where HD's
+    // 1920x1080 is `1.778:1` - so a square in one grid is 0.8% off square in
+    // the other, and the cut was measured in HD's. Asserting equality here
+    // failed at `9.0` against `8.93` for exactly that reason. Anything that
+    // actually broke the slope - reading the landing as the cut, or the old
+    // `2.6` height against a `2.25` cut - is 15% or more out and caught.
+    let slope = (chamfer - band[3]).abs() / band[3];
+    assert!(
+        slope < 0.02,
+        "a {chamfer}-wide cut over a {}-tall band is {:.1}% off 45 degrees",
+        band[3],
+        slope * 100.0
+    );
+}
+
+/// A label narrow enough that its tab is thinner than the landing shrinks the
+/// band to nothing rather than inverting it.
+///
+/// The tab's width follows `measure(label)`, so a short enough entry on a
+/// small enough skin genuinely reaches this - and a negative width is not a
+/// smaller quad, it is a back-facing one that may or may not be culled. The
+/// cut itself needs no guard here: `Draw::ChamferedFill` clamps it to the
+/// band's own width, so a zero-width band takes a zero-width cut.
+#[test]
+fn a_tab_narrower_than_the_landing_collapses_its_band_rather_than_inverting_it() {
+    let mut menu = Menu::new(built_in());
+    menu.set_strip_layout(true);
+    let skin = hd_skin();
+    let (_, landing, _) = skin.tab_chamfer();
+    let hairline = |_: &str| 0.0;
+    let list = draw_list(
+        &menu,
+        &skin,
+        &no_bindings,
+        &hairline,
+        None,
+        &frame_with_fills(),
+    )
+    .flatten();
+
+    let bands: Vec<_> = list
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::ChamferedFill { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(bands.len(), 4, "one band per entry: {bands:?}");
+    for band in &bands {
+        assert!(
+            band[2] >= 0.0,
+            "a tab narrower than the {landing}-unit landing must not invert: {band:?}"
+        );
+    }
 }
 
 /// A frame with neither colour draws no tabs and no underline - only the

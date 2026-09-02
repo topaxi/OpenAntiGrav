@@ -31,6 +31,39 @@ pub enum Draw {
         /// Colour.
         color: [f32; 4],
     },
+    /// A solid rectangle whose **top-right corner is cut back diagonally**.
+    ///
+    /// The cut runs the full height of `rect`: the top edge is `chamfer`
+    /// shorter than the bottom one, and the right edge is the diagonal joining
+    /// them. `chamfer` of `0.0` is exactly [`Self::Fill`], and a `chamfer`
+    /// wider than `rect`'s own width collapses the top edge to nothing rather
+    /// than inverting it.
+    ///
+    /// **A separate variant rather than a field on [`Self::Fill`]**, for the
+    /// reason [`Self::RotatedSprite`] is separate: fills are constructed in
+    /// dozens of places across the HUD, the front end and the menus, and every
+    /// one of them would carry a `0.0` for the single widget that needs this.
+    ///
+    /// # It draws a chamfer, not a whole tab
+    ///
+    /// HD's main-menu tab is **not** one of these. Its corner is a 45-degree
+    /// cut followed by a *flat landing* before the vertical right edge - a
+    /// pentagon, `---\\___|` - and a single chamfered rectangle spanning the
+    /// tab's own height would run the diagonal all the way to the corner
+    /// instead. That shape was built, shown next to the capture, and reverted
+    /// on 2026-09-01 for exactly that reason. What draws the real thing is
+    /// this applied to a *band* the height of the cut alone, narrowed by the
+    /// landing, with an ordinary [`Self::Fill`] below it - see
+    /// [`crate::menu::strip::draw`] and
+    /// [hd-frontend.md](../../../docs/formats/hd-frontend.md).
+    ChamferedFill {
+        /// Rectangle, before the corner is cut: `[x, y, width, height]`.
+        rect: [f32; 4],
+        /// How far the top edge falls short of the bottom one, in screen units.
+        chamfer: f32,
+        /// Colour.
+        color: [f32; 4],
+    },
     /// A movie's current frame, stretched to `rect`.
     Video {
         /// Rectangle.
@@ -776,9 +809,58 @@ impl Draw {
         match self {
             Self::Text { color, .. }
             | Self::Fill { color, .. }
+            | Self::ChamferedFill { color, .. }
             | Self::Sprite { color, .. }
             | Self::RotatedSprite { color, .. } => Some(color),
             Self::Video { .. } => None,
+        }
+    }
+
+    /// Scales this draw about a point and multiplies its alpha.
+    ///
+    /// The whole of the menu's page-change effect - see
+    /// [`crate::menu::Layers::zoomed`], which calls it once per body draw.
+    /// **It lives here rather than beside its one caller** for the reason
+    /// [`Self::colour_mut`] does: it spells the variant list out, so a new
+    /// variant that is not added here silently does not move with the page it
+    /// is on. Next to the type, that is one file to check.
+    ///
+    /// No variant needed adding for any of it: `Text`, `Fill` and `Sprite`
+    /// already carry a position, a size or a scale, and a colour whose fourth
+    /// channel is the alpha.
+    pub fn zoom(&mut self, origin: (f32, f32), scale: f32, alpha: f32) {
+        let about = |value: f32, from: f32| from + (value - from) * scale;
+        // The chamfer before the match, so the two fill variants stay one arm.
+        // It scales with its own quad: a fixed-size cut left on a shrinking
+        // corner would eat more of the tab the smaller the tab got.
+        if let Self::ChamferedFill { chamfer, .. } = self {
+            *chamfer *= scale;
+        }
+        match self {
+            Self::Text {
+                x,
+                y,
+                scale: size,
+                color,
+                ..
+            } => {
+                *x = about(*x, origin.0);
+                *y = about(*y, origin.1);
+                *size *= scale;
+                color[3] *= alpha;
+            }
+            Self::Fill { rect, color }
+            | Self::ChamferedFill { rect, color, .. }
+            | Self::Sprite { rect, color, .. }
+            | Self::RotatedSprite { rect, color, .. } => {
+                rect[0] = about(rect[0], origin.0);
+                rect[1] = about(rect[1], origin.1);
+                rect[2] *= scale;
+                rect[3] *= scale;
+                color[3] *= alpha;
+            }
+            // A movie has no alpha channel to fade and is never part of a page.
+            Self::Video { .. } => {}
         }
     }
 }
