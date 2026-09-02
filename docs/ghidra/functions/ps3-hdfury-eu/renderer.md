@@ -1927,14 +1927,35 @@ priced into that number. `mesh::rcs::skin::roles` now calls
 `specular_exponent()` per material slot, trusting every answer **except a
 literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
 that specific value keeps reading as `SpecularPower` patched at draw time
-(finding 1 above) rather than as a sixth real constant - so `0.0` and every
-material the decoder could not resolve at all fall back to the shared `32`
-stand-in (`mesh::vertex::GpuVertex::specular_exponent`,
-`mesh::DEFAULT_SPECULAR_EXPONENT`), and every other resolved value is
-carried straight into `mesh.wgsl`'s `pow(ndh, in.specular_exponent)`. The
-`patch fslot` to `const@slot` decoder would still let the `0.0` bucket close
-outright rather than fall back - that is the next step this leaves open, not
-a reason to hold up the read the disc already gives for the rest.
+(finding 1 above) rather than as a sixth real constant.
+
+**The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
+`const@slot` decoder this paragraph used to leave as a next step.**
+`fragment::Program::patches` ports it into Rust from
+`scripts/ps3-microcode.py`'s `fp_patch_slots`/`fp_patch_map` - the same chain
+`docs/formats/rcsmaterial.md`'s "The glass family's second slot" resolved by
+hand - and `specular_exponent_slot()` names the code slot a resolved chain's
+constant occupies, patched or not. `mesh::rcs::skin::roles` now checks that
+slot against `Program::patches(SPECULAR_POWER)` before discarding a `0.0`:
+where it is patched, the material's own `.rcsmodel` parameter table (the same
+table `Flame::from_material` reads) supplies the real value; only a `0.0`
+that is *not* patched, or a material the decoder cannot resolve at all, still
+falls back to the shared `32` stand-in
+(`mesh::vertex::GpuVertex::specular_exponent`,
+`mesh::DEFAULT_SPECULAR_EXPONENT`). Every other resolved value is unchanged,
+carried straight into `mesh.wgsl`'s `pow(ndh, in.specular_exponent)`.
+
+**Verified disc-wide before being trusted, not assumed from the mechanism
+alone.** `crates/render/examples/hd_specular_patch_census.rs` swept 16
+circuits and found the two questions this rests on both close together:
+every one of the 62 materials whose `0.0` chain is patched from
+`SpecularPower` also authors a non-zero value for it - at 30 to 100,
+non-round, a different population from the six shared-literal values above -
+and none of the other 233 materials in the `0.0` bucket does. Pinned as a
+disc invariant by
+`crates/formats/tests/specular_power_ground_truth.rs`, over the three models
+`rcsmodel_common::PAIRS` already shares with the other `.rcsmodel`
+ground-truth binaries.
 
 ### The sun is real and it is masked (2026-08-20)
 
