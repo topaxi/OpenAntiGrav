@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
-"""Breakpoint-trace `EngineFlare_RenderTick` to settle whether it ever
-reaches its own fade-store while a flare is visibly drawn.
+"""Breakpoint-trace `EngineFlare_RenderTick`'s fade math with a ladder of
+checkpoints, not just its two endpoints.
 
-`scripts/hd-flare-tuning-dump.py` (fourth session, see
-`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`) confirmed the
-formula's two tuning constants live, but the fade's own output at
-`this+0x18c` read `0.0` on every sample despite both static gates
-appearing open. This script sets `Z0` breakpoints at two points inside
-`EngineFlare_RenderTick` (`0x002a08a8`-`0x002a14ff`) - the shared early-out
-landing (`0x002a1110`, reached by both static gates and possibly others this
-session did not trace) and just past the `this+0x18c` store (`0x002a0d78`,
-right after the `stfs` and before its own `ble`) - and tallies which one
-each hit lands at over a stretch of a driven, thrusting race. **Measured
-2026-09-02: 11 of 11 consecutive hits landed at the early-out, none at the
-fade store** - `EngineFlare_RenderTick` runs (confirmed separately: a first
-version of this script also armed the entry point, `0x002a08a8`, and it
-fired on the very first 0.4s poll), but for the sampled craft it reliably
-takes the skip branch rather than reaching the fade computation this
-session's static reading traced. That is consistent with, and now explains,
-the live-memory finding above - it does not yet say whether this is simply
-what this craft's situation calls for (out of fade range, wrong LOD tier,
-whatever the gate actually tests) or whether the visible sprite draws
-through a branch this function never reaches for it at all.
+**This is the corrected second version.** The first tried to distinguish
+"a gate closed" from "the fade ran and evaluated to `<= 0`" using only two
+breakpoints, one of which (`0x002a1110`) turned out to be the function's
+*shared epilogue* - reached by every returning call, successful or not, not
+a gate landing at all. "12 of 12 hits there" in that version's run was
+never evidence of anything; see `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`
+("Fifth session") for the full account of the mistake and the review that
+caught it. This version arms three points *inside* the fade math instead,
+so their relative hit counts can actually tell the three cases apart:
+
+- `0x002a0bb8` (`FADE_START`) - the camera-relative length computation
+  begins. A hit here at all confirms the fade math runs.
+- `0x002a0d70` (`FADE_STORE`) - the `stfs f13,0x18c(r31)` instruction
+  itself, right before its own `ble`. Fires whatever value was just
+  computed, positive or not - reaching this but not the next checkpoint
+  means the fade ran and evaluated to `<= 0`.
+- `0x002a0d78` (`FADE_POSITIVE`) - only reached when that value is `> 0`.
+  A hit here is the fade producing something a draw call could use.
 
 **Needs `PPU Decoder: Interpreter (static)` in `config.yml`** - `Z0`
 breakpoints are silently dead under the default `Recompiler (LLVM)`
@@ -30,17 +28,15 @@ This is a shared, session-scoped config edit, not a permanent one - switch
 it back after this script exits, the same rule that page documents for
 `Assume External Debugger`.
 
-Uses `wait_at`'s own pattern generalised to several addresses at once
-(resume briefly, pause, check every thread's PC against the whole set) since
-the stub does not reliably announce a breakpoint hit on its own, plus
-`step_off_breakpoint` to make repeated hits actually work - **a trap this
-script found and `rpcs3-debugger.md` does not yet carry**: resuming a
-thread parked exactly on an armed breakpoint does not step over it first,
-so the thread never visibly moves and the *next* unrelated command hangs for
-a full socket timeout, indistinguishable from a dead emulator. It still
-happens eventually even with the fix (measured after 11 clean hits in one
-run, cause not settled) - the script saves whatever it caught rather than
-losing a whole run to it; rerun to pick up more samples from a fresh boot.
+Two GDB-stub traps from the first version carry over, both worked around:
+resuming a thread parked exactly on an armed breakpoint does not step over
+it first, so the thread never visibly moves and the next unrelated command
+hangs for a full socket timeout (`step_off_breakpoint` below); and a hit on
+a *different* armed breakpoint can land during that step-off window - the
+first version's `step_off_breakpoint` did not check for this and could
+silently drop a hit, which is why its "zero `past_fade_store` hits" result
+was never fully trusted. This version checks and carries any such hit
+forward into the main loop rather than discarding it.
 
     uv run --with evdev python3 scripts/hd-flare-rendertick-break.py [out_dir]
 """
@@ -63,54 +59,54 @@ from rpcs3_debugger import Debugger, REG_FPR, REG_PC  # noqa: E402
 
 IMAGE = ROOT / "data/images/hdfury-ps3-eu-dec.iso"
 
-ENTRY = 0x002A08A8
-GATE_LANDING = 0x002A1110       # both static gates branch here
-PAST_FADE_STORE = 0x002A0D78    # right after `stfs f13, 0x18c(r31)`
-# ENTRY is deliberately not armed: a first run confirmed it fires on the very
-# first 0.4s poll (this function runs at least once a frame), and arming it
-# alongside the other two just spends every attempt re-catching the same
-# already-answered question instead of the interesting one.
-TARGETS = {GATE_LANDING: "gate_landing", PAST_FADE_STORE: "past_fade_store"}
+FADE_START = 0x002A0BB8
+FADE_STORE = 0x002A0D70
+FADE_POSITIVE = 0x002A0D78
+TARGETS = {FADE_START: "fade_start", FADE_STORE: "fade_store", FADE_POSITIVE: "fade_positive"}
+
+
+def read_pc_hit(dbg, targets):
+    """`(tid, address, registers)` for any thread currently stopped at one
+    of `targets`, or `(None, None, None)`. Assumes the target is already
+    paused - does not resume/sleep/pause itself."""
+    for tid in dbg.threads():
+        regs = dbg.registers(tid)
+        if regs is None:
+            continue
+        pc = int.from_bytes(regs[REG_PC:REG_PC + 8], "big")
+        if pc in targets:
+            return tid, pc, regs
+    return None, None, None
 
 
 def wait_at_any(dbg, targets, tries, slice_seconds):
-    """Like `Debugger.wait_at`, generalised to a set of addresses.
-
-    Returns `(tid, address, registers)` for the first thread caught at any
-    of `targets`, or `(None, None, None)` if none hit within `tries`.
-    """
+    """Like `Debugger.wait_at`, generalised to a set of addresses."""
     for _ in range(tries):
         dbg.resume()
         time.sleep(slice_seconds)
         dbg.pause()
         dbg.drain()
-        for tid in dbg.threads():
-            regs = dbg.registers(tid)
-            if regs is None:
-                continue
-            pc = int.from_bytes(regs[REG_PC:REG_PC + 8], "big")
-            if pc in targets:
-                return tid, pc, regs
+        hit = read_pc_hit(dbg, targets)
+        if hit[0] is not None:
+            return hit
     return None, None, None
 
 
-def step_off_breakpoint(dbg, addr):
-    """Un-stick a thread parked exactly at `addr`.
-
-    **Undocumented trap, found running this script**: resuming a thread
-    whose PC sits exactly on an armed `Z0` breakpoint does not step over it
-    first - the thread never visibly moves, no further stop reply ever
-    arrives, and the next unrelated command hangs for a full socket timeout
-    (looks exactly like a dead emulator, and cost two crashed runs here).
-    The standard breakpoint-stepping fix: remove the breakpoint, resume just
-    long enough to clear the address, pause, drain, then re-arm.
+def step_off_breakpoint(dbg, hit_addr, targets):
+    """Un-stick a thread parked exactly at `hit_addr`, carrying forward any
+    *other* armed breakpoint's hit that lands during the step rather than
+    discarding it (see the module docstring - the first version's version
+    of this function did not check and its hit counts were never fully
+    trusted as a result). Returns a hit tuple or `(None, None, None)`.
     """
-    dbg.remove_breakpoint(addr)
+    dbg.remove_breakpoint(hit_addr)
     dbg.resume()
     time.sleep(0.05)
     dbg.pause()
     dbg.drain()
-    dbg.add_breakpoint(addr)
+    hit = read_pc_hit(dbg, {a: n for a, n in targets.items() if a != hit_addr})
+    dbg.add_breakpoint(hit_addr)
+    return hit
 
 
 def main():
@@ -140,39 +136,42 @@ def main():
                 dbg.add_breakpoint(addr)
             print("breakpoints armed: %s" % [hex(a) for a in TARGETS], flush=True)
 
-            deadline = time.time() + 45.0
-            while time.time() < deadline and len(details) < 20:
-                try:
-                    tid, addr, regs = wait_at_any(dbg, TARGETS, tries=1, slice_seconds=0.15)
-                except (TimeoutError, OSError) as exc:
-                    # A rare but real stub desync outlives `step_off_breakpoint`
-                    # itself - measured after 11 clean hits in one run. Save
-                    # what was already caught rather than lose it; a fresh
-                    # emulator relaunch (rerun this script) picks up from here.
-                    print("stub desync after %d hits: %r" % (len(details), exc),
-                          file=sys.stderr, flush=True)
-                    stub_desync = True
-                    break
-                if addr is None:
-                    continue
+            def record(tid, addr, regs):
                 name = TARGETS[addr]
                 hits[name] += 1
                 entry = {"tid": tid, "addr": "%#x" % addr, "which": name}
-                if name == "past_fade_store":
-                    # f13 (the value just stored to this+0x18c) as the
-                    # register dump's own byte offset: REG_FPR + 13*8.
+                if name in ("fade_store", "fade_positive"):
+                    # f13 (the value just computed, whatever it turned out to
+                    # be) as the register dump's own byte offset: REG_FPR + 13*8.
                     f13_bytes = regs[REG_FPR + 13 * 8: REG_FPR + 14 * 8]
                     entry["f13"] = struct.unpack(">d", f13_bytes)[0]
                 details.append(entry)
                 print(entry, flush=True)
-                if not stub_desync:
-                    try:
-                        step_off_breakpoint(dbg, addr)
-                    except (TimeoutError, OSError) as exc:
-                        print("stub desync stepping off %#x after %d hits: %r" %
-                              (addr, len(details), exc), file=sys.stderr, flush=True)
-                        stub_desync = True
-                        break
+
+            deadline = time.time() + 45.0
+            pending = None
+            while time.time() < deadline and len(details) < 30:
+                try:
+                    if pending is not None:
+                        tid, addr, regs = pending
+                        pending = None
+                    else:
+                        tid, addr, regs = wait_at_any(dbg, TARGETS, tries=1, slice_seconds=0.15)
+                    if addr is None:
+                        continue
+                    record(tid, addr, regs)
+                    pending_hit = step_off_breakpoint(dbg, addr, TARGETS)
+                    if pending_hit[0] is not None:
+                        pending = pending_hit
+                except (TimeoutError, OSError) as exc:
+                    # A rare but real stub desync that outlives
+                    # `step_off_breakpoint` itself - not fully characterised,
+                    # see the module docstring. Save whatever was already
+                    # caught rather than lose it; rerun to pick up more.
+                    print("stub desync after %d hits: %r" % (len(details), exc),
+                          file=sys.stderr, flush=True)
+                    stub_desync = True
+                    break
             if not stub_desync:
                 for addr in TARGETS:
                     dbg.remove_breakpoint(addr)

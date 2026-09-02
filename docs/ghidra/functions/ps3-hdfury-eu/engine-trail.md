@@ -862,42 +862,90 @@ Decoder: Interpreter (static)`
 about 75s to boot against the default recompiler's 30s, not attempted this
 session.
 
-### Fifth session: the breakpoint trace, and a new stub trap it cost
+### Fifth session: a real result (the entry fires), and a wrong reading of a second one
 
-**2026-09-02, same day.** `scripts/hd-flare-rendertick-break.py` (new) set
-`Z0` breakpoints under the interpreter at the shared early-out landing
-(`0x002a1110`) and just past the `this+0x18c` fade store (`0x002a0d78`), and
-tallied which one each hit landed at across a driven, thrusting race.
-**Measured: 12 of 12 hits across two separate races landed at the early-out,
-zero at the fade store.** A first, simpler version also armed the function's
-entry point (`0x002a08a8`) and it fired on the very first 0.4s poll, so the
-function is not dead code - it runs essentially every frame - but for the
-sampled craft it reliably takes the skip branch before reaching the fade
-computation this session traced statically. That is now the leading
-explanation for the `this+0x18c` `0.0` reads above: not that
-`EngineFlare_RenderTick` is the wrong function, but that the gate it takes
-is closed for ordinary chase-view racing, at least under whatever condition
-the sampled craft was in both times. **Which of the several branches that
-converge on `0x002a1110` fired is not distinguished** - the breakpoint only
-answers "did not reach the fade store," not "which gate," so the byte-flag
-and count-field reads from "Fourth session" remain unconfirmed as *the*
-cause even though both looked open when sampled separately.
+**2026-09-02, same day.** `scripts/hd-flare-rendertick-break.py` (new) ran
+`EngineFlare_RenderTick` under a breakpoint trace for the first time.
+**What actually holds**: an armed breakpoint at the function's own entry
+(`0x002a08a8`) fired on the very first 0.4s poll of a driven, thrusting
+race - real runtime verification, not decompilation, that the function
+executes essentially every frame rather than being dead code gated
+permanently off.
 
-**A new, undocumented GDB-stub trap paid for this**: resuming a thread
-parked exactly on an armed breakpoint does not step over it first - the
-thread never visibly advances, the stub never sends a further stop reply,
-and the next unrelated command hangs for a full socket timeout, reading
-exactly like a dead emulator. It cost two full crashed runs before the
-pattern was clear (remove the breakpoint, resume briefly, pause, drain,
-re-arm - the standard step-over fix, now `step_off_breakpoint` in the
-script) and it still recurs even with the fix, from one hit to eleven
-hits into a run in the two times it was measured - the trigger is not
-settled, only that a script built on this API should assume it will happen
-and save partial results rather than lose a whole race's worth of hits, as
-the script now does (`stub_desync` in its `meta.json`). Worth adding to
+**What this session got wrong, caught on review rather than in-session**:
+it then armed `0x002a1110` believing that address to be the shared landing
+for the function's two early-out *gates*, and read 12 of 12 hits landing
+there (across two races) as "the gate stayed closed both times." **`0x002a1110`
+is not a gate landing - it is the function's one epilogue**, the register
+restore and `blr` every path returns through, including the full-work path:
+`0x002a1434: b 0x002a1110` sits right after the RSX submission block
+(`0x002a1210`-`0x002a1424`, the `bl`s to `0x00679278`/`0x006792a8`/
+`0x006792b8`/`0x00323aa0`/`0x006792c8` that actually issue the draw). A
+breakpoint there fires on *every returning call*, successful or not - "12 of
+12 hits" is equivalent to "12 of 12 calls returned," which was never in
+doubt and says nothing about which branch ran. The doc previously claimed
+this as a measured finding; it was not one, and the "which gate is closing"
+framing this session left as the open question was chasing a distinction
+this data cannot make.
+
+**What does still stand, read correctly**: the *other* breakpoint,
+`0x002a0d78` (right after `stfs f13,0x18c(r31)` and its own `ble`, so only
+reached when the just-computed fade value is `> 0`), recorded zero hits in
+the same runs. That is consistent with either a gate closing before the
+fade math runs at all, *or* the fade math running every time and evaluating
+to `<= 0` - two different findings this session's breakpoint placement
+cannot tell apart, and next session needs a ladder of checkpoints rather
+than the two endpoints used here to do it: has the fade math started at all
+(`0x002a0bb8`, right where the camera-relative length computation begins),
+has the store itself executed (`0x002a0d70`, the `stfs` instruction, fires
+regardless of what value it stores), and only then whether it was positive
+(`0x002a0d78`).
+
+**A separate, real bug in the same script also undermines the "zero hits"
+count specifically**: `step_off_breakpoint` resumes, pauses and re-arms
+without checking which address the thread is actually stopped at - a hit
+on the *other* armed breakpoint landing inside that 0.05s window would be
+silently consumed and never tallied. So even "zero `0x002a0d78` hits" is
+not fully trustworthy as measured; it wants a rerun with the fix.
+
+**The GDB-stub trap the script found is unaffected by any of this and still
+stands**: resuming a thread parked exactly on an armed breakpoint does not
+step over it first - the thread never visibly advances, the stub never
+sends a further stop reply, and the next unrelated command hangs for a full
+socket timeout, reading exactly like a dead emulator. It cost two full
+crashed runs before the pattern was clear (remove the breakpoint, resume
+briefly, pause, drain, re-arm) and still recurs occasionally even with that
+fix - the trigger is not settled, only that a script built on this API
+should assume it will happen and save partial results rather than lose a
+whole race's worth of hits, as the script now does (`stub_desync` in its
+`meta.json`). Worth adding to
 [rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)'s own
-trap list once a session characterises it further; not done here since one
-script's workaround is not yet a general finding about the stub.
+trap list once a session characterises it further.
+
+**The corrected rerun, same session: zero hits anywhere inside the fade math
+in 45 seconds of active racing.** A rewritten `hd-flare-rendertick-break.py`
+arms three points *inside* the fade rather than its two endpoints -
+`0x002a0bb8` (the camera-relative length computation begins, confirming the
+fade math runs at all), `0x002a0d70` (the `stfs f13,0x18c(r31)` store
+itself, fires whatever value it computed), `0x002a0d78` (only if that value
+was `> 0`) - and also fixes the swallowed-hit bug in `step_off_breakpoint`
+(it now checks which address the thread is actually stopped at before
+re-arming, rather than assuming). **None of the three fired once** in a
+45-second window against a craft confirmed thrusting, racing and visibly
+flared in the run's own screenshot
+(`data/reference/hd-capture/flare-size/rendertick-break-v2/race.png`) - a
+materially longer and more sensitive observation than the flawed first
+attempt, since 45s at this function's every-frame call rate is on the order
+of 2,500 invocations, all of which apparently return before `0x002a0bb8`.
+This is now a real, clean finding, distinct from the discredited "12 of 12"
+one it replaces: **for this craft, `EngineFlare_RenderTick` consistently
+exits before the fade math it computes ever runs at all** - not "runs and
+evaluates to `<= 0`," but never entered. Which of the gates before
+`0x002a0bb8` is responsible (the byte-flag check at `struct_base+0x494`,
+the count-field check at `craft+0x5fa4`, or something else entirely between
+`0x002a08a8` and `0x002a0bb8` this thread's sessions have not yet isolated)
+is the question the next session inherits, and now has firm ground to stand
+on: the fade math is not running, not "might not be running."
 
 ### Checked: no separate trail for HD vs. Fury, and no zone-specific one
 
@@ -1093,12 +1141,21 @@ Open, in rough order of visible cost:
   submission plumbing rather than the tuning values themselves. **A fourth
   session (same day) confirmed `Flare Fadeout Dist`/`Range` (15.0/15.0) are
   exactly the two constants a `saturate()`-shaped fade inside the function
-  consumes, live; a fifth then breakpoint-traced the function and found it
-  runs every frame but, in 12 of 12 samples across two races, takes the
-  early-out before ever reaching that fade's own store** - see "Fourth
-  session" and "Fifth session" above. Which gate is actually closing, and
-  whether the visible sprite draws through this function at all under
-  conditions where the gate opens, is still open.
+  consumes, live; a fifth then breakpoint-traced the function and confirmed
+  the entry runs essentially every frame - real runtime verification the
+  function is not dead code - but misread its second breakpoint's target
+  (`0x002a1110`) as a gate landing when it is the function's one shared
+  epilogue, hit by every returning call including the full-draw path, so
+  "12 of 12 hits there" was never evidence of a closed gate** - see "Fourth
+  session" and "Fifth session" above, the latter corrected after review, and
+  then rerun with a fixed script and a three-point ladder inside the fade
+  math itself instead of the two endpoints originally tried. **That rerun
+  is a clean result**: zero hits at any of the three checkpoints in 45
+  seconds of active, visibly-flared racing - `EngineFlare_RenderTick`'s
+  fade math does not merely evaluate to a non-positive number, it is never
+  entered at all for this craft. Which gate before it (`struct_base+0x494`,
+  `craft+0x5fa4`, or an untraced third) is responsible is the open question
+  now, on solid ground rather than a discredited breakpoint.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
