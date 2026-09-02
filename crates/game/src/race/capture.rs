@@ -567,6 +567,7 @@ pub fn capture(
         options.motion_blur,
         options.camera_jitter,
         &spectrum,
+        // Untimed, as the primer above is and for the same reason.
         None,
     );
     oag_render::perfprobe::report_frame(race.world.tick);

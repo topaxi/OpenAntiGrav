@@ -112,7 +112,7 @@ impl Ring {
         }
     }
 
-    /// The oldest slot whose map has landed, by `ready`.
+    /// The oldest slot whose map has landed, judged by `ready`.
     ///
     /// **Oldest of the *ready* ones, not the oldest outright.** A backlog
     /// drains in the order the frames happened, which is what the ordinary
@@ -248,6 +248,12 @@ impl PassTimer {
     /// [`Self::resolve`]: a slot claimed and never resolved holds a frame
     /// index that will never come back, and after four of them nothing is
     /// measured again.
+    ///
+    /// **That is a caller error, and it is a different thing from a readback
+    /// that never lands.** The second is the GPU's to do and costs one slot
+    /// ([`Ring::ready`] steps over it); this one is a missing call, and there
+    /// is nothing the ring can do about a slot it was never told to let go of.
+    /// The two sit next to each other in the tests for exactly that reason.
     pub fn begin(&mut self, frame: u64) {
         self.writing = self.ring.claim(frame);
     }
