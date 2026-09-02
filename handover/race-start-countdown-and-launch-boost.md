@@ -8,7 +8,7 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
 | Countdown state machine + timing | open | **Zone's own read in detail** (below) | open                | open |
 | Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
-| Zone/view display variants       | open | logic axis: separate impl. confirmed, not yet *differing* (below) | strong evidence, asset axis (below) | strong evidence, asset axis (below) |
+| Zone/view display variants       | **model confirmed identical** (below) | **model confirmed identical** (below) | asset axis: distinct per-mode models exist (below) | asset axis: distinct per-mode models exist (below) |
 
 *(Focus as of 2026-09-02: display/logic only for now, per direction from the user -
 the launch-boost rows below are last session's record, not being chased further at
@@ -29,12 +29,11 @@ different searches, not one - see the Open section.
 **Zone/view display variants**: the user's memory is that HD/Fury's Zone races show a
 different countdown display/render than a circuit race; unsure about the other three
 titles. Two independent axes may both be true and must not be collapsed into one: a
-**mode** axis (the `321Go_*.vex` family already carries `StartFinish`/`Zone`/
-`HD_Zone_Battle`/`hd_detonator` variants per
-[a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)),
-and a **view** axis (`hud.md:622` already names two separate Pulse countdown models,
-`Pulse_Ready_Go` for the chase/external HUD and `Cockpit_321GO` for the cockpit view -
-independent of mode).
+**mode** axis (does the countdown *model* itself change per mode) and a **view** axis
+(chase/external vs cockpit - `hud.md` names two separate Pulse countdown models,
+`Pulse_Ready_Go` and `Cockpit_321GO`, confirmed real and mode-independent, see below).
+**Resolved for the mode axis, on the two PSP titles specifically: it does not vary.**
+See the 2026-09-02 disc-read entry below - this is no longer open for Pulse or Pure.
 
 2026-09-02, first pass, static only, both HD/Fury and Pulse, no live debugger this
 session: **the launch boost most likely is not a player-timing mechanic, and Zone's
@@ -149,6 +148,32 @@ XML-driven HUD-widget attribute names resolved through a hash lookup, the same s
 function references - so the nested countdown's tick counter is the closest thing to
 "what drives the display" found so far, not a confirmed direct link.
 
+2026-09-02, third pass: **the mode-display axis is settled for both PSP titles, off
+primary-source disc data, not inference.** Chasing the code-side dispatch tables
+proved unreliable this session (see above), so this went straight to the source
+instead: `oag-wad cat` against `pulse-psp-usa.chd` and `pure-psp-usa.chd`, every HUD
+layout each title ships. **Pulse's `Arcade_HUD.xml`, `TimeTrial_HUD.xml`,
+`Elimination_HUD.xml` and `Zone_HUD.xml` all carry an identical `<Mode3D>` countdown
+block** - `<Model name="ReadyGo">` → `Src="Data\HUD\Pulse_Ready_Go.vex"`, same `x`/`y`/
+`z`/`ztest`, plus an identical `Cockpit321Go` → `Data\HUD\Cockpit_321GO.vex` entry.
+**Pure's `Arcade_HUD.xml` and `Zone_HUD.xml` agree the same way** on one model,
+`Data\HUD\Ready_GO.vex` (no separate cockpit entry on Pure in either file - it may not
+carry that split at all). Full account, side by side, in
+[hud.md](../docs/ui/hud.md#deferred-and-known). **So on both PSP titles the countdown
+gantry model does not vary by mode - Zone's own `<Mode3D>` block differs only in its
+other widgets** (Pure's Zone layout swaps in `Zone_Bar_1/3.vex` and
+`Zone_outline_1.vex` for the speed/shield bars in place of Arcade's `Bar_1/3.vex`/
+`Bar_outline_1.vex` - a skin change to the HUD bars, nothing to do with the
+countdown). Confidence 95 - this is the literal XML the game ships, not decompiled or
+inferred. **This is the opposite of HD/Fury and 2048**, both of which carry a
+`321Go_<Mode>.vex` family with real per-mode variants (`StartFinish`/`Zone`/
+`HD_Zone_Battle`/`hd_detonator`, plus `2048`/`2048_Combat`) - so **the user's memory of
+a different Zone countdown almost certainly comes from HD/Fury or 2048, not from
+either PSP title.** Whether HD/2048 actually *render* the different model per mode
+(as opposed to merely shipping the asset unused) is still unconfirmed - see the
+billboard thread's own open items - but the asset-level asymmetry between title
+generations is now solid on both sides: PSP shares one model, PS3/Vita ships several.
+
 ## Open
 
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
@@ -167,8 +192,10 @@ function references - so the nested countdown's tick counter is the closest thin
 - **Pure (`psp-pure-usa`/`-eu`) was unreachable via ghidra-mcp this session** despite
   `list_instances` listing it as open - only 4 of 9-11 listed programs answered
   `search_strings`/`search_functions`/`switch_program` calls. Try a fresh MCP
-  connection, or check from the Ghidra GUI directly, before concluding anything
-  about Pure's own countdown assets.
+  connection, or check from the Ghidra GUI directly, before assuming Pure's own
+  *code* needs Ghidra at all for a given question, though - the mode-display axis
+  turned out answerable straight off the disc with `oag-wad`, no Ghidra needed, and
+  that workaround is worth trying first for anything else disc-XML-shaped.
 - **State 7's mode-class value is still unnamed.** `0x08aae7e3` and the global
   pointer's `+0xb8` field feeding the resolved per-mode table are read but not
   identified - which ~19 mode/network variants map to which of the two clear-bit
@@ -190,15 +217,22 @@ function references - so the nested countdown's tick counter is the closest thin
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
 - **No screenshot comparison of a Zone countdown against a circuit-race countdown has
-  been taken**, on any title. The asset-name evidence is strong; the render itself is
-  unconfirmed.
+  been taken, on HD/Fury or 2048** - the only two titles where it would show anything,
+  now that Pulse and Pure are settled by primary XML data instead (no render needed:
+  the HUD layouts share one model file literally). The asset-name evidence for HD/2048
+  is strong; whether either title's render actually differs is still unconfirmed.
 - HD/Fury's `TrackStartup_Load`-adjacent vocabulary sweep (`Countdown`, `StartLight`,
   `RaceStart`, `Grid`) found nothing under those exact names - only `321`/`Ready`/
   `Boost` searches paid off. Worth trying `Light`, `Klaxon`/`Lights`, `Sequence`
   next, since the engine may simply not use those words.
 - Pulse's `ready`/`321_GO`/`go` announcer cue set
   (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md:252`) is still unxrefed.
-- 2048 (`vita-2048-*`) and Pure (`psp-pure-*`) are completely unstarted here.
+- **Pure and 2048's own countdown *state machine*/logic (as opposed to the display
+  asset, now settled for Pure) are still completely unstarted** - Pure's code is
+  blocked on the ghidra-mcp gap above; 2048's is simply not attempted yet, though its
+  HD-lineage naming (`321Go`/`StartBoost`/`Cockpit321Go` all present, prior session)
+  makes it the more promising of the two to try first once the false-lead pattern
+  from `Race_CreateModeObject` above is worked out on Pulse.
 
 ## Next Steps
 
@@ -223,19 +257,24 @@ function references - so the nested countdown's tick counter is the closest thin
    call at substate 4 turned out to already be `RaceMode_SetState` itself.
 3. Resolve substate 1's second gate condition (the `fVar17` call) from the raw
    disassembly of `0x08829e6c` rather than a guessed address.
-4. Finish tracing the mode-descriptor pointer from
+4. **Mode-display axis is closed for Pulse and Pure** - no further work needed there
+   (see `hud.md`). For HD/Fury and 2048, **try the same primary-source approach that
+   worked here before returning to Ghidra**: both ship data as archives this project
+   already reads (`oag-tools`/`oag-wad`-equivalent per `docs/formats/README.md`) -
+   if either's HUD/front-end data names its countdown model per mode the way Pulse's
+   and Pure's XML does (even if the *file name* itself carries the mode, as
+   `321Go_Zone.vex` already suggests), reading that data file directly could settle
+   the display question without ever resolving the mode-descriptor pointer. Try this
+   before continuing the harder Ghidra trace below.
+5. Finish tracing the mode-descriptor pointer from
    [a-circuits-billboard-slots-are-a-9-entry.md](a-circuits-billboard-slots-are-a-9-entry.md)'s
-   open item 1 to a `321Go_*.vex` shape - still the best lead for the mode-display
-   axis on the asset side.
-5. Get a live screenshot of a Zone countdown next to a circuit-race one (any title)
-   before publishing either a positive or a negative claim about how they differ -
-   the billboard thread's own stated lesson, from a mistake made on this exact asset
-   family.
-6. Get Pure reachable through ghidra-mcp (fresh connection, or check the Ghidra GUI
-   directly for why only 4 of 9-11 listed programs answer this session) and then
-   run the same three-string sweep (`321Go`, `StartBoost`, `Cockpit321Go`) that
-   worked cleanly on both HD and 2048, plus the vocabulary from step 1 once it has
-   real names.
+   open item 1 to a `321Go_*.vex` shape, if step 4 doesn't settle it first - the
+   fallback lead for the mode-display axis on HD/2048.
+6. Get a live screenshot of a Zone countdown next to a circuit-race one on HD/Fury or
+   2048 before publishing either a positive or a negative claim about how they
+   render - the billboard thread's own stated lesson, from a mistake made on this
+   exact asset family. Not needed for Pulse/Pure any more (settled by XML, no render
+   ambiguity).
 
 **Launch boost, parked for now - not being chased at the moment:**
 

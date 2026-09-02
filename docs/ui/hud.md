@@ -622,6 +622,30 @@ Recorded so none of this reads as undiscovered work.
 - **The `<Mode3D>` layer: the countdown only, now.** `Pulse_Ready_Go` and
   `Cockpit_321GO` still need a second pass with its own projection.
 
+  **On Pulse and Pure, every layout's countdown `<Mode3D>` entry names the same
+  model file - confirmed 2026-09-02, `oag-wad cat` straight off both discs
+  rather than inferred.** Pulse's `Arcade_HUD.xml`, `TimeTrial_HUD.xml`,
+  `Elimination_HUD.xml` and `Zone_HUD.xml` all carry an identical
+  `<Model name="ReadyGo">` entry, `Src="Data\HUD\Pulse_Ready_Go.vex"`, same
+  `x`/`y`/`z`/`ztest`, plus an identical `Cockpit321Go` entry pointing at
+  `Data\HUD\Cockpit_321GO.vex` - Zone's own copy is byte-for-byte the same
+  block as Arcade's. Pure's `Arcade_HUD.xml` and `Zone_HUD.xml` agree the same
+  way on a single model, `Data\HUD\Ready_GO.vex` (Pure has no separate cockpit
+  entry in either file). **So on both PSP titles, the countdown gantry model
+  itself does not vary by mode or view** - Zone's `<Mode3D>` block differs only
+  in its *other* widgets (Pure's Zone layout swaps in `Zone_Bar_1/3.vex` and
+  `Zone_outline_1.vex` for the speed/shield bars, in place of Arcade's
+  `Bar_1/3.vex`/`Bar_outline_1.vex` - a skin change to the HUD bars, nothing to
+  do with the countdown). This is the opposite of HD/Fury and 2048, which both
+  carry a family of distinct `321Go_<Mode>.vex` countdown-gantry models
+  (`StartFinish`/`Zone`/`HD_Zone_Battle`/`hd_detonator`, plus `2048`/
+  `2048_Combat` on 2048), found by string search on both binaries.
+  **A player's memory of Zone showing a different countdown almost certainly
+  comes from HD/Fury (or 2048), not from either PSP title** - this is the
+  direct, disc-verified negative for Pulse and Pure that the general practice
+  of "get a screenshot before publishing a negative" would otherwise call for;
+  here the XML itself is the primary source, not a render inference.
+
   **The weapon sights came off this list on 2026-08-26** - they are drawn, and as
   2D quads rather than through a 3D pass. The three model names this entry used
   to list are right; what was missing is that they are **nine widgets over three
