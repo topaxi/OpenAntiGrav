@@ -572,6 +572,9 @@
 0x08ad0fb4	data	g_anim_transform_vtable	85	anim-transform.md
 0x088fe0a8	function	AnimTransform_Update	90	anim-transform.md
 0x08ab0818	data	g_ingame	85	anim-transform.md
+0x08b620f8	data	g_anim_transform_desc	85	anim-transform.md
+0x08813328	function	InGame_Update	85	anim-transform.md
+0x08ac7ab0	data	g_ingame_vtable	80	anim-transform.md
 0x08861568	function	Shield_Fire	88	shield-pickup.md
 0x08861630	function	Shield_Update	88	shield-pickup.md
 0x088614c4	function	Turbo_Fire	88	shield-pickup.md
