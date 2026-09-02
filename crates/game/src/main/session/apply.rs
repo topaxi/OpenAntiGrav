@@ -239,7 +239,7 @@ impl Session {
                 }
             },
             // `off`, `fxaa` and `smaa` are applied by the next frame, the
-            // same as the upscaler: `Framebuffer::resolve` reads this fresh
+            // same as the upscaler: `Framebuffer::resolve_scene` reads this fresh
             // and builds FXAA's pipeline lazily, the same way it does FSR 1's.
             // **Only moving to or between the two MSAA levels waits for the
             // next race**, because that is what rebuilds the scene pipelines

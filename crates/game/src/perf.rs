@@ -33,9 +33,9 @@
 //!
 //! # Where it is drawn
 //!
-//! Onto the **surface**, after `upscale::Framebuffer::resolve` has already put
-//! the frame there - so the overlay is rasterised at presentation resolution
-//! whatever the render scale is, per
+//! Onto the **surface**, after `upscale::Framebuffer::composite` has already
+//! put the frame there - so the overlay is rasterised at presentation
+//! resolution whatever the render scale is, per
 //! [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
 //! It still lays out in the same 480x272 space as the front end and the menus;
 //! that grid is mapped onto the aspect rectangle of the surface rather than of
@@ -51,10 +51,13 @@
 //! scales.
 //!
 //! Two consequences worth knowing. The overlay is **not graded** - brightness
-//! and gamma ride in the resolve it now comes after - which is deliberate for
-//! an instrument and is the one standing exception to ADR-0036. And it is no
-//! longer touched by FXAA, SMAA or FSR 1, so its glyphs stop being edge-detected
-//! and sharpened as though they were scene content.
+//! and gamma ride in the composite it comes after - which is deliberate for an
+//! instrument and is the one standing exception to ADR-0036: the HUD, which
+//! moved to presentation resolution in the same way, *is* graded, because it
+//! draws into the presentation target before that pass rather than onto the
+//! surface after it. And the overlay is no longer touched by FXAA, SMAA or
+//! FSR 1, so its glyphs stop being edge-detected and sharpened as though they
+//! were scene content.
 //!
 //! It is **window-only**. `--screenshot` runs the sequence as fast as it can
 //! with no presentation at all, so a frame time from it would be a real

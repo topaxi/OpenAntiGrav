@@ -1,9 +1,17 @@
 //! Rendering at a resolution the window is not, and blitting the result up.
 //!
 //! Every stage draws into an offscreen colour texture rather than straight onto
-//! the surface, and one pass afterwards stretches that texture into the
-//! [`display::viewport`](crate::display::viewport) rectangle. Below 100 % that
-//! is the usual internal-resolution knob; above it, it is supersampling.
+//! the surface, and [`Framebuffer::resolve_scene`] afterwards stretches that
+//! texture into the [`display::viewport`](crate::display::viewport) rectangle.
+//! Below 100 % that is the usual internal-resolution knob; above it, it is
+//! supersampling.
+//!
+//! It stretches it into a **presentation-sized target**, not onto the surface:
+//! the UI composites there, at the size a player actually has, and
+//! [`Framebuffer::composite`] then writes the surface. Two passes rather than
+//! one, and one more full-size texture, which
+//! [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+//! is the reasoning for.
 //!
 //! # Why a scale and not a resolution
 //!
@@ -25,11 +33,18 @@
 //!
 //! # Why brightness and gamma are here
 //!
-//! Because this is the one pass every frame goes through. The front end, the
-//! menus and a race are three renderers that share nothing else, and grading in
-//! each would be three places to get it wrong and three places to forget when a
-//! fourth stage lands. Here it is one shader, and a player calibrating the
-//! picture sees the menu they are standing on change as they do it.
+//! Because [`Framebuffer::composite`] is the one pass every frame goes through,
+//! and the last one. The front end, the menus and a race are three renderers
+//! that share nothing else, and grading in each would be three places to get it
+//! wrong and three places to forget when a fourth stage lands. Here it is one
+//! shader, and a player calibrating the picture sees the menu they are standing
+//! on change as they do it.
+//!
+//! **Being last is the load-bearing half of that**, and is why the grade sits
+//! in `composite` rather than in `resolve_scene`: the HUD is drawn between the
+//! two, so grading on the way in would grade the scene and leave the HUD
+//! outside the calibration. The performance overlay, drawn onto the surface
+//! after `composite`, is deliberately outside it - see `crate::perf`.
 //!
 //! **A screenshot is not graded, by default.** `--screenshot` and the race
 //! capture write the offscreen frame straight out without going through this
@@ -59,7 +74,7 @@ pub struct Presentation {
     pub upscaler: Upscaler,
     /// FSR 1's RCAS sharpness in stops. Ignored by the bilinear path.
     pub sharpness: f32,
-    /// FXAA or SMAA, run before the upscaler - see [`Framebuffer::resolve`]
+    /// FXAA or SMAA, run before the upscaler - see [`Framebuffer::resolve_scene`]
     /// and [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md).
     /// MSAA is not read here: its sample count is baked into the scene's own
     /// pipelines rather than being a blit-time choice - see `race::Scene`.
@@ -143,6 +158,36 @@ pub struct Framebuffer {
     smaa: Option<Result<smaa::Smaa>>,
     size: (u32, u32),
     format: wgpu::TextureFormat,
+    /// Where the scene lands at presentation size, and where the UI composites
+    /// on top of it before one graded pass writes the surface. See [`Output`]
+    /// and [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+    output: Output,
+}
+
+/// The presentation-sized target, between the upscale and the surface.
+///
+/// It exists so the UI can be drawn at presentation resolution **and** still be
+/// graded. The two are in tension without it: the grade rides in the pass that
+/// puts the frame on the surface, so a UI drawn onto the surface after that
+/// pass is sharp and ungraded, and a UI drawn before it is graded and
+/// resampled. With a target in between, the scene resolves into it ungraded,
+/// the UI draws into it at its own size, and the grade goes on the way out.
+///
+/// It costs one more colour texture at the surface's size and one more
+/// fullscreen pass a frame, which
+/// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+/// states rather than hides.
+///
+/// Its own grade buffer, separate from [`Framebuffer::grade`], because the two
+/// passes want different values in the same frame: neutral on the way in - the
+/// scene must not be graded twice - and the player's brightness and gamma on
+/// the way out. One buffer would have to hold both at once.
+struct Output {
+    view: wgpu::TextureView,
+    bind_group: wgpu::BindGroup,
+    grade: wgpu::Buffer,
+    graded: Grade,
+    size: (u32, u32),
 }
 
 impl Framebuffer {
@@ -208,24 +253,17 @@ impl Framebuffer {
 
         // Neutral to begin with, and moved by `set_grade` from the first frame
         // if the settings say otherwise: an untouched picture is what a fresh
-        // install draws. Filled at creation rather than through the queue,
-        // which keeps building a framebuffer a device-only operation.
+        // install draws.
         let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
-        let grade = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("upscale grade"),
-            size: std::mem::size_of::<Grade>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: true,
-        });
-        grade
-            .slice(..)
-            .get_mapped_range_mut()
-            .context("mapping the grade buffer")?
-            .copy_from_slice(bytemuck::bytes_of(&graded));
-        grade.unmap();
+        let grade = grade_buffer(device, "upscale grade", graded)?;
 
         let (texture, view, perceptual, bind_group) =
             target(device, &layout, &sampler, &grade, format, size);
+        // Built at the scene's size to begin with and corrected by
+        // `resize_output` on the first frame, exactly as the scene target
+        // itself is by `resize`: this constructor is handed the size the scene
+        // draws at and has no way to know the surface's.
+        let output = output(device, &layout, &sampler, format, size)?;
         Ok(Self {
             pipeline,
             layout,
@@ -241,6 +279,7 @@ impl Framebuffer {
             smaa: None,
             size,
             format,
+            output,
         })
     }
 
@@ -282,12 +321,17 @@ impl Framebuffer {
     /// at the scene's own size and handing their output on as what the
     /// upscaler reads instead - see [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md)
     /// for why the order is the reverse of a generic post-process-AA diagram.
-    pub fn resolve(
+    ///
+    /// This puts the frame in [`Framebuffer::output`], **not** on the surface,
+    /// and it does so *ungraded* - the caller draws the UI on top of it and
+    /// then calls [`Framebuffer::composite`], which is where the grade is and
+    /// where the surface is written. See
+    /// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+    pub fn resolve_scene(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        surface: &wgpu::TextureView,
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
     ) {
@@ -401,13 +445,80 @@ impl Framebuffer {
         // silently stopped afterwards, which is what made FXAA, SMAA and a
         // magnifying FSR 1 decode already-linear-in-name gamma values as if
         // they were sRGB-encoded, crushing the shadows and midtones.
+        //
+        // **Neutral**, not the player's brightness and gamma: this pass writes
+        // the presentation target, and the UI has not been drawn yet. Grading
+        // here would grade the scene and leave the HUD and the menus outside
+        // the calibration, which is the arrangement ADR-0036 exists to end. The
+        // `decode` flag still belongs here, being about what *this* pass reads.
         self.set_grade(
             queue,
-            presentation.brightness,
-            presentation.gamma,
+            Brightness::NEUTRAL,
+            Gamma::NEUTRAL,
             source.is_some() && self.format.is_srgb(),
         );
-        self.present(encoder, surface, rect, source.as_ref());
+        self.present(encoder, &self.output.view, rect, source.as_ref());
+    }
+
+    /// Makes sure the presentation target is `size` - the **surface's** size,
+    /// not the scene's.
+    ///
+    /// Separate from [`Framebuffer::resize`] because the two move
+    /// independently: the render scale changes the scene target while the
+    /// surface stands still, and a window resize changes both. Rebuilding on
+    /// every call would reallocate a surface-sized texture whenever a player
+    /// nudged the render-scale row.
+    pub fn resize_output(&mut self, device: &wgpu::Device, size: (u32, u32)) {
+        let size = (size.0.max(1), size.1.max(1));
+        if self.output.size == size {
+            return;
+        }
+        match output(device, &self.layout, &self.sampler, self.format, size) {
+            Ok(output) => self.output = output,
+            // The only failure here is a buffer that would not map, which is
+            // not something a window resize should end the game over: keeping
+            // the old target draws a stretched frame rather than no frame.
+            Err(why) => {
+                warn!("the presentation target did not resize ({why:#}); keeping the old one")
+            }
+        }
+    }
+
+    /// Where the UI composites: the resolved scene, at presentation size.
+    #[must_use]
+    pub fn output(&self) -> &wgpu::TextureView {
+        &self.output.view
+    }
+
+    /// Puts the presentation target on the surface, graded.
+    ///
+    /// The other half of [`Framebuffer::resolve_scene`], and the pass that has
+    /// to come last: everything a player sees, the UI included, is in the
+    /// target by now, so this is the one place brightness and gamma can be
+    /// applied to *all* of it. One to one, no resampling - the target is the
+    /// surface's own size, and the aspect bars are already in it from the
+    /// clear `resolve_scene` did.
+    pub fn composite(
+        &mut self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+        brightness: Brightness,
+        gamma: Gamma,
+    ) {
+        // Never a decode. The target is `self.format`, which ADR-0020 forces
+        // non-sRGB at every real call site, and it is read through an ordinary
+        // view rather than the perceptual twin an upscaler wants - so the bytes
+        // arrive in the space they were written in. The flag belongs to
+        // `resolve_scene`, which is the pass that reads a post-process output.
+        let wanted = Grade::new(brightness, gamma, false);
+        if wanted != self.output.graded {
+            queue.write_buffer(&self.output.grade, 0, bytemuck::bytes_of(&wanted));
+            self.output.graded = wanted;
+        }
+        let size = self.output.size;
+        let rect = (0.0, 0.0, size.0 as f32, size.1 as f32);
+        self.present(encoder, surface, rect, Some(&self.output.bind_group));
     }
 
     /// Makes sure the target is `size`, rebuilding it if it is not.
@@ -499,6 +610,68 @@ impl Framebuffer {
         pass.set_bind_group(0, Some(source.unwrap_or(&self.bind_group)), &[]);
         pass.draw(0..3, 0..1);
     }
+}
+
+/// A grade uniform, filled at creation rather than through the queue.
+///
+/// Through the mapping because [`Framebuffer::new`] has no queue and should not
+/// need one: building a framebuffer stays a device-only operation, which is
+/// what lets a capture path build one without a frame loop around it.
+fn grade_buffer(device: &wgpu::Device, label: &str, graded: Grade) -> Result<wgpu::Buffer> {
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size: std::mem::size_of::<Grade>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: true,
+    });
+    buffer
+        .slice(..)
+        .get_mapped_range_mut()
+        .context("mapping the grade buffer")?
+        .copy_from_slice(bytemuck::bytes_of(&graded));
+    buffer.unmap();
+    Ok(buffer)
+}
+
+/// Builds the presentation-sized target and the bind group that reads it.
+///
+/// No non-sRGB twin, unlike [`target`]: nothing samples this one in perceptual
+/// space. The upscalers and the post-process passes all read the *scene*
+/// target, upstream of here, and the only pass that reads this one is the
+/// graded blit onto the surface.
+fn output(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    format: wgpu::TextureFormat,
+    size: (u32, u32),
+) -> Result<Output> {
+    let size = (size.0.max(1), size.1.max(1));
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("presentation target"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
+    let grade = grade_buffer(device, "presentation grade", graded)?;
+    let bind_group = bind(device, layout, sampler, &grade, &view);
+    Ok(Output {
+        view,
+        bind_group,
+        grade,
+        graded,
+        size,
+    })
 }
 
 fn target(

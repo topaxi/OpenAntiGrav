@@ -47,7 +47,10 @@ impl RaceStage {
         // in on 2048, where it is called from the render update rather than the
         // simulation. See `race::Scene::sync_zone_grade`.
         self.scene.sync_zone_grade(&self.race);
-        let stats = self.scene.render(
+        // The scene and nothing else. The HUD used to follow it here, into the
+        // same target; it composites at presentation resolution now - see
+        // [`RaceStage::draw_hud`].
+        self.scene.render(
             &gpu.device,
             &gpu.queue,
             encoder,
@@ -60,15 +63,34 @@ impl RaceStage {
             anim_seconds,
             motion_blur,
             zone_spectrum,
-        );
+        )
+    }
 
-        // Over the scene and inside the same target, so the HUD is drawn at the
-        // render scale the game is and lands in a `--screenshot` too.
-        //
-        // **The HUD goes when the race does.** Once the flag is out the speed
-        // bar, the lap counter and the clock are all reporting a simulation
-        // nobody is stepping any more, and the original hides the HUD at its own
-        // race end too - see the `_BLOWUP` note in `race::tick`.
+    /// Draws the HUD, or the results table once the race has one.
+    ///
+    /// **Separate from [`RaceStage::render`], and drawn into a different target
+    /// than the scene.** It used to go over the scene inside the offscreen
+    /// target, which meant it was rasterised at the render scale and then
+    /// resampled - and, with `[graphics] upscaler` set, sharpened by FSR 1 as
+    /// though a coverage-atlas glyph were scene content. It now composites into
+    /// the presentation target after the resolve, so it is drawn in the pixels
+    /// the player has whatever the render scale is, and no upscaler ever sees
+    /// it. See
+    /// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md);
+    /// `viewport` is the aspect rectangle on the surface, not the offscreen
+    /// extent.
+    ///
+    /// **The HUD goes when the race does.** Once the flag is out the speed bar,
+    /// the lap counter and the clock are all reporting a simulation nobody is
+    /// stepping any more, and the original hides the HUD at its own race end
+    /// too - see the `_BLOWUP` note in `race::tick`.
+    pub(crate) fn draw_hud(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
         match self.race.results() {
             Some(board) => {
                 self.scoreboard
@@ -87,7 +109,6 @@ impl RaceStage {
                 }
             }
         }
-        stats
     }
 
     /// Forces the driver to actually compile every pipeline this scene
@@ -147,6 +168,12 @@ impl RaceStage {
             // Zone draw uses regardless of what the lookup holds.
             &[],
         );
+        // The HUD's own pipelines still need warming, and still into `target`
+        // even though the real frame now draws them into the presentation
+        // target instead. What a driver defers is a compile, and a pipeline is
+        // keyed on its format - which is the same for both targets - not on
+        // the size of the attachment it is first used against.
+        self.draw_hud(gpu, &mut encoder, target, viewport);
         gpu.queue.submit(Some(encoder.finish()));
         if let Err(e) = gpu.device.poll(wgpu::PollType::wait_indefinitely()) {
             // Not fatal: the worst outcome is the compile this call exists to

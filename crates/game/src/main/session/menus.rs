@@ -258,7 +258,7 @@ impl Session {
         // `Restart::in_effect`.
         //
         // **Not a single value.** Unlike the renderer, only the MSAA half of
-        // this row is baked into the scene's pipelines - `upscale::Framebuffer::resolve`
+        // this row is baked into the scene's pipelines - `upscale::Framebuffer::resolve_scene`
         // reads FXAA/SMAA/off fresh every frame, the same way it already
         // reads the upscaler. So every mode that shares the built scene's
         // sample count is equally "in effect": a race built at `off` can move

@@ -515,10 +515,36 @@ pub fn capture(
     // simulation that has stopped, so the board replaces it rather than sitting
     // under it. That is what makes `--screenshot` able to show a scoreboard at
     // all - see `crate::scoreboard`.
+    // The upscaler and the blit, through exactly the calls the window's frame
+    // loop makes - and in the same order, which is the point. Presented, the
+    // scene resolves into the presentation target *first* and the HUD goes on
+    // afterwards at presentation size, per
+    // [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md);
+    // the grade comes last, in `composite`, so the HUD is inside it.
+    if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+        framebuffer.resize_output(&device, (width, height));
+        framebuffer.resolve_scene(&device, &queue, &mut encoder, rect, &state.presentation);
+    }
+    // Where the HUD goes, which is not where the scene went. Presented, that is
+    // the presentation target at the aspect rectangle; otherwise it is the
+    // capture texture the scene drew straight into, which has no resolve in
+    // front of it and so was already at native size - an ordinary
+    // `--screenshot` is byte-for-byte what it was before the HUD moved.
+    let (hud_view, hud_viewport) = match framebuffer.as_ref() {
+        Some(framebuffer) => (framebuffer.output().clone(), rect),
+        None => (view.clone(), viewport),
+    };
     match race.results() {
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {
-                overlay.draw(&device, &queue, &mut encoder, &view, board, viewport);
+                overlay.draw(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &hud_view,
+                    board,
+                    hud_viewport,
+                );
             }
             Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
@@ -530,22 +556,26 @@ pub fn capture(
                 readout.zone_stage = scene.zone_stage().unwrap_or(0);
                 readout.zone_next_in =
                     scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
-                overlay.draw(&device, &queue, &mut encoder, &view, &readout, viewport)
+                overlay.draw(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &hud_view,
+                    &readout,
+                    hud_viewport,
+                )
             }
             Ok(None) => warn!("no HUD layout: capturing without one"),
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
     }
-    // The upscaler, the grade and the blit, through exactly the call the
-    // window's frame loop makes.
     if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
-        framebuffer.resolve(
-            &device,
+        framebuffer.composite(
             &queue,
             &mut encoder,
             &surface,
-            rect,
-            &state.presentation,
+            state.presentation.brightness,
+            state.presentation.gamma,
         );
     }
 

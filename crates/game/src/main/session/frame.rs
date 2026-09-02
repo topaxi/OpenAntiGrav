@@ -436,6 +436,12 @@ impl Session {
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        // The presentation target follows the *surface*, not the render scale -
+        // it is where the resolved frame and the UI meet, so it is sized in the
+        // pixels a player actually has. Cheap when nothing moved; a window
+        // resize is the only thing that reallocates it.
+        self.framebuffer
+            .resize_output(&self.gpu.device, self.gpu.size());
         let wanted = upscale::target_size(
             rect,
             self.settings.graphics.render_scale,
@@ -571,13 +577,14 @@ impl Session {
             _ => None,
         };
 
-        // The whole back half of the frame - the upscaler, the grade and the
-        // blit - so that this and a `--presented` capture cannot drift apart.
-        self.framebuffer.resolve(
+        // The upscaler and the blit, into the presentation target rather than
+        // onto the surface - so that this and a `--presented` capture cannot
+        // drift apart, and so the HUD below lands on a frame that is already at
+        // presentation size. Ungraded on purpose; `composite` grades.
+        self.framebuffer.resolve_scene(
             &self.gpu.device,
             &self.gpu.queue,
             &mut encoder,
-            &view,
             rect,
             &upscale::Presentation {
                 upscaler: self.settings.graphics.upscaler,
@@ -586,6 +593,32 @@ impl Session {
                 brightness: self.settings.display.brightness,
                 gamma: self.settings.display.gamma,
             },
+        );
+
+        // The HUD, after the resolve and at presentation size, laid out against
+        // the aspect rectangle rather than the offscreen extent - so it stays
+        // sharp at any render scale and an upscaler never sees it. It is still
+        // *inside* the grade, which is the whole reason the presentation target
+        // exists rather than the HUD simply going onto the surface the way the
+        // performance overlay does. See
+        // [ADR-0036](../../../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+        //
+        // Only the race has one. The menus, the front end and the loading
+        // screen are still drawn into the offscreen target by their stages
+        // above, and moving them is the rest of that ADR's work.
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.draw_hud(&self.gpu, &mut encoder, self.framebuffer.output(), rect);
+        }
+
+        // Last, and the only pass that writes the surface: everything a player
+        // sees is in the presentation target by now, so this is where
+        // brightness and gamma can reach all of it.
+        self.framebuffer.composite(
+            &self.gpu.queue,
+            &mut encoder,
+            &view,
+            self.settings.display.brightness,
+            self.settings.display.gamma,
         );
 
         // **After** the resolve, and onto the surface rather than the offscreen

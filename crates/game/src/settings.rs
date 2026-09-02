@@ -358,7 +358,7 @@ pub struct Graphics {
     ///
     /// Defaults to `off`. **Only `msaa4x` is baked into the scene's
     /// pipelines when a race starts** - `off`, `fxaa` and `smaa` are read
-    /// fresh every frame by `upscale::Framebuffer::resolve`, the same as
+    /// fresh every frame by `upscale::Framebuffer::resolve_scene`, the same as
     /// `upscaler` is, and moving among those three takes effect the frame
     /// they were chosen on. Moving to or from `msaa4x` takes effect the next
     /// time a race is launched, because that is what rebuilds the pipelines

@@ -123,9 +123,15 @@ motion at any frame rate.
 **The chain runs after bloom, inside `Scene::render`.** Both halves of that are
 load-bearing and both look wrong at a glance:
 
-- *Inside `Scene::render`, not `Framebuffer::resolve`.* The HUD and the perf
-  overlay are drawn into the same target immediately after the scene, so a pass
-  sitting alongside FXAA and SMAA in `oag_game::upscale` would smear them.
+- *Inside `Scene::render`, not `Framebuffer::resolve_scene`.* This was written
+  when the HUD and the perf overlay were drawn into the same target immediately
+  after the scene, so a pass sitting alongside FXAA and SMAA in
+  `oag_game::upscale` would have smeared them. Since
+  [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+  neither is in that target - both composite at presentation resolution - so
+  the smearing argument no longer holds. The placement stands on the *other*
+  reason it always had: the blur wants the scene's own depth and velocity
+  attachments, which exist inside `Scene::render` and nowhere downstream of it.
 - *After bloom, not before.* Physically, motion blur belongs before bloom.
   Here it must not: alpha is bloom's glow mask, stamped by the track ribbon and
   the exhaust flare, and blurring alpha corrupts the mask. The clear at the top
