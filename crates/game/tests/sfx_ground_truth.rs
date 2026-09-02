@@ -148,7 +148,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
     assert!(ran > 0, "no disc image was present");
 }
 
-/// Wipeout HD loads five of the six cues, and says why it misses the sixth.
+/// Wipeout HD loads eight of the nine cues, and says why it misses the ninth.
 ///
 /// Pinned as a *list* rather than a count, because the interesting part is
 /// which one and for which reason. `~ENGINE` does not exist on HD at all: its
@@ -160,9 +160,17 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// opcodes". Two of those four are `0x08`, which plays another cue by name -
 /// see `oag_formats::sblk::child` - so the cue now resolves through a tree of
 /// `c_CShipShip` and `c_CShipWall` to 112 waveforms.
+///
+/// `~ROCKLOCK` is the newest addition, and a different kind of gain from
+/// `~SHIELD` growing two waveforms: **every** one of its waveforms is in
+/// `oag_formats::sblk::NOT_ADPCM_FLAG`'s second codec, so before
+/// `oag_formats::sblk::decode_pcm16` existed it failed the loader's
+/// `waveforms.is_empty()` check entirely and did not even reach this list.
+/// Its presence here is the not-PS-ADPCM path's clearest end-to-end proof:
+/// a cue that could not have loaded any other way.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
+fn wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -186,10 +194,13 @@ fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
         .filter(|&c| banks.pick(c, &mut rng).is_some())
         .map(Cue::name)
         .collect();
-    // **Seven since 2026-08-24**, and both additions were free: `disengaging`
-    // and `~BLOWUP` resolve on HD's own banks with no per-title work at all,
-    // the same way the first five did. `~ENGINE` is still the one miss - HD's
-    // ship audio is a per-event `c_*` set - see `oag_title::SoundBanks`.
+    // **Eight since `oag_formats::sblk::decode_pcm16` identified HD's second
+    // codec**, up from seven on 2026-08-24: `disengaging` and `~BLOWUP`
+    // resolve on HD's own banks with no per-title work at all, the same way
+    // the first five did, and `~ROCKLOCK` newly resolves because its
+    // waveforms are all in the second codec and none decoded before. `~ENGINE`
+    // is still the one miss - HD's ship audio is a per-event `c_*` set - see
+    // `oag_title::SoundBanks`.
     //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
@@ -205,7 +216,8 @@ fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
             "~SHIELD",
             "shieldactive",
             "disengaging",
-            "~BLOWUP"
+            "~BLOWUP",
+            "~ROCKLOCK",
         ],
         "HD's loadable cue set changed"
     );
@@ -223,21 +235,30 @@ fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
     assert!(says(
         r".COLLISIONS -> 112 waveform(s) from Data\Sound\shiphd.bnk"
     ));
-    // The not-PS-ADPCM path, working end to end on the only disc that needs it.
+    // The not-PS-ADPCM path, working end to end: `~SHIELD` binds eight
+    // waveforms now, not the six it bound while the second codec was
+    // undecoded - the other two used to be silently dropped.
     assert!(
-        says("skipped as not PS-ADPCM"),
-        "no HD cue exercised the non-ADPCM skip"
+        says(r"~SHIELD -> 8 waveform(s) from Data\Sound\weapons.bnk"),
+        "no HD cue shows the second codec's waveforms decoding"
+    );
+    // `~ROCKLOCK` could not have loaded at all before `decode_pcm16`: every
+    // one of its waveforms is in the second codec, so `load_named_cue` would
+    // have found `waveforms` empty and refused it outright.
+    assert!(
+        says(r"~ROCKLOCK -> 2 waveform(s) from Data\Sound\weapons.bnk"),
+        "the all-PCM cue did not load"
     );
 }
 
 /// Structural checks - the bank names these cues, in this order, at these
 /// indices - are `hd_title_ground_truth.rs`'s job. This is the layer above,
-/// on the same terms as [`wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not`]:
+/// on the same terms as [`wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not`]:
 /// that a cue reported as loaded actually decodes to a waveform, not a report
 /// line that reads well and a silent voice.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues() {
+fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -266,23 +287,22 @@ fn wipeout_hd_s_speed_class_announcer_decodes_thirteen_of_fourteen_cues() {
     let decoded: Vec<u32> = (1..=14)
         .filter(|&stage| announcer.pick(stage, &mut rng).is_some())
         .collect();
-    // **Thirteen of fourteen, not all fourteen.** Stage 11 (`MR_SUZ`, "Super
-    // Zen") is the one miss: both of its waveforms are in the second,
-    // unidentified codec `docs/formats/psp-audio.md`'s "A third of HD's
-    // waveforms are not PS-ADPCM" section already names as a disc-wide gap,
-    // and unlike stages 12-14 it has no PS-ADPCM alternate to fall back to.
-    // So this class is silent in this port today - not a wiring bug, and not
-    // invented around; the report line says so and this pins that it keeps
-    // saying so.
+    // **All fourteen, since `oag_formats::sblk::decode_pcm16` identified HD's
+    // second codec.** Stage 11 (`MR_SUZ`, "Super Zen") used to be the one
+    // miss: both of its waveforms are in that codec, and unlike stages 12-14
+    // it has no PS-ADPCM alternate to fall back to, so it was silent until
+    // the second codec decoded - not a wiring bug, and not invented around.
+    // `docs/formats/psp-audio.md`'s "A third of HD's waveforms are not
+    // PS-ADPCM" section has the evidence.
     assert_eq!(
         decoded,
-        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14],
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
         "HD's speed-class announcer's decodable set changed"
     );
     let says = |needle: &str| announcer.report.iter().any(|l| l.contains(needle));
     assert!(
-        says("MR_SUZ"),
-        "the one silent class stopped being reported at all"
+        says("MR_SUZ (stage 11) -> 2 waveform(s)"),
+        "the once-silent class stopped decoding both its waveforms"
     );
 }
 
