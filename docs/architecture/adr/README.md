@@ -48,6 +48,7 @@ out to be wrong.
 | [0035](0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md) | A Race Remix craft pick may fall back to a title that reships the same roster | Accepted |
 | [0036](0036-ui-composites-at-presentation-resolution.md) | The UI composites at presentation resolution | Accepted; its seam item superseded by [ADR-0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) |
 | [0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) | A stage with no scene draws entirely at presentation resolution | Accepted; supersedes [ADR-0036](0036-ui-composites-at-presentation-resolution.md)'s seam item |
+| [0039](0039-camera-jitter-post-multiplies-onto-the-view-projection.md) | Camera jitter post-multiplies onto the view-projection, after the frustum and the motion snapshot | Accepted |
 
 ## Format
 

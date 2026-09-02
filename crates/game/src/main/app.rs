@@ -54,6 +54,8 @@ pub(crate) struct App {
     pub(crate) anim_seconds: Option<f32>,
     /// `--pvs`, carried to the session. See `Session::pvs_culling`.
     pub(crate) pvs_culling: Option<bool>,
+    /// `--camera-jitter`, carried to the session. See `Session::camera_jitter`.
+    pub(crate) camera_jitter: bool,
     /// A race loaded before the window opened, which is what `--race` does.
     pub(crate) race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
@@ -259,6 +261,7 @@ impl App {
             autopilot: self.autopilot,
             anim_seconds: self.anim_seconds,
             pvs_culling: self.pvs_culling,
+            camera_jitter: self.camera_jitter,
             zone_hold: oag_render::mesh_render::zone::Hold::default(),
             scheme: self.scheme,
             anisotropy: self.anisotropy,

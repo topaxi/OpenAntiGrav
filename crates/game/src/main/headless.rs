@@ -155,6 +155,7 @@ pub(crate) fn run_windowless(
                 until: cli.until.clone(),
                 ticks: cli.ticks,
                 anim_seconds: cli.anim_seconds,
+                camera_jitter: cli.camera_jitter,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 scheme,
@@ -406,6 +407,7 @@ pub(crate) fn run_race(
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                 anti_aliasing: settings.graphics.anti_aliasing,
                 motion_blur: settings.graphics.motion_blur,
+                camera_jitter: cli.camera_jitter,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
@@ -435,6 +437,7 @@ pub(crate) fn run_race(
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App {
         pvs_culling: cli.pvs,
+        camera_jitter: cli.camera_jitter,
         boot_shell: None,
         media: None,
         boot_overlay: false,

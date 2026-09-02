@@ -1,5 +1,5 @@
 use super::*;
-use oag_core::math::{Vec3, Vec4, camera};
+use oag_core::math::{Vec3, Vec4, camera, frustum::Frustum};
 
 /// A plain perspective to project through, standing in for a race camera.
 fn view_projection() -> Mat4 {
@@ -173,5 +173,34 @@ fn a_smaller_render_target_gets_a_proportionally_larger_offset() {
     assert!(
         (half - full * 2.0).abs() < 1e-6,
         "half-scale offset {half} is not twice the full-scale {full}"
+    );
+}
+
+#[test]
+fn a_jittered_matrix_moves_the_culling_planes_which_is_why_the_frustum_is_built_first() {
+    // The reason `race::Scene::render` builds its frustum *before* it applies
+    // the offset, and the failure that ordering prevents: the planes move with
+    // the matrix, so a bound sitting exactly on the screen edge would fall in
+    // and out of the visible set at the sequence's period - geometry flickering
+    // along the border, once every sixteen frames, only with jitter on.
+    //
+    // Exaggerated deliberately: a four-pixel-wide target makes a half-pixel
+    // offset a quarter of NDC, which moves a plane far enough to flip a bound
+    // that a real 1280-wide offset would move by a thousandth as much. The
+    // *direction* of the argument is what is being pinned, not its magnitude.
+    let plain = Frustum::from_view_projection(view_projection());
+    let jittered = Frustum::from_view_projection(matrix(2, (4.0, 4.0)) * view_projection());
+    // Frame 2 offsets by -0.25 px in x, which on a four-pixel target is -0.125
+    // NDC - so the whole image shifts left and a bound off the left edge is
+    // pushed out of view.
+    let edge = (-100..100)
+        .map(|step| Vec3::new(step as f32 * 0.2, 0.0, 0.0))
+        .find(|&centre| {
+            plain.intersects_sphere(centre, 0.05) != jittered.intersects_sphere(centre, 0.05)
+        });
+    assert!(
+        edge.is_some(),
+        "no bound along the horizon is classified differently, so the offset \
+         never reached the frustum's planes"
     );
 }

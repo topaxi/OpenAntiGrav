@@ -22,6 +22,10 @@ impl Scene {
     /// Returns what the track's frustum culling did, for the performance
     /// overlay - see [`SceneStats`].
     ///
+    /// `camera_jitter` is `--camera-jitter`, **off by default and not a
+    /// settings key**: nothing reconstructs from it yet, so on its own it is a
+    /// worse picture. See [`Scene::jittered`].
+    ///
     /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
     /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
     /// a frame. Empty outside a Zone race or with nothing to draw it into is
@@ -42,6 +46,7 @@ impl Scene {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: crate::display::MotionBlur,
+        camera_jitter: bool,
         zone_spectrum: &[f32],
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
@@ -57,6 +62,10 @@ impl Scene {
         );
         let prev_vp = prev.view_projection;
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
+        // Above this line the camera is unjittered, below it is not, and the
+        // frustum and the snapshot are above deliberately - see the call.
+        let (view_projection, prev_vp) =
+            self.jittered(camera_jitter, viewport, view_projection, prev_vp);
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
         // `section_id` is what the artists wrote, while a point-in-box test is

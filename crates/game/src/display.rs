@@ -668,33 +668,13 @@ pub enum Upscaler {
     /// the size of the rectangle it goes into, and the blit's sampler is
     /// bilinear - so `off` and "bilinear" are one option, not two.
     ///
-    /// **The default, and settled 2026-09-02 rather than still open.** It was
-    /// carried for a long time as a question - whether `[graphics] upscaler`
-    /// should default to `fsr1` - held up by a doubt about two kinds of content
-    /// a sharpener rings on: 480x272-era paletted raster with coverage-atlas
-    /// glyphs, and high-frequency additive scene effects. Both halves are now
-    /// closed, by different means.
-    ///
-    /// The first stopped being a question at all. Since
-    /// [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
-    /// no upscaler ever sees a menu, a front-end screen or the HUD - they
-    /// composite at presentation resolution, after the resolve.
-    ///
-    /// The second was play-tested. Two windowed races at `--render-scale 50`,
-    /// identical but for `--upscaler`, with `--give rocket` so the effects the
-    /// doubt was actually about were on screen - the earlier preference rested
-    /// on a *stationary* capture that never reached the particle path at all.
-    /// The maintainer's verdict on FSR 1 there was that it looks good. **They
-    /// nonetheless chose `off` at 100 % render scale as the shipped default**;
-    /// no reason was stated, and none is invented here.
-    ///
-    /// One thing that is a fact about the code rather than about the decision:
-    /// [`Scale::default`] is [`Scale::FULL`], and FSR 1 only runs where it is
-    /// actually magnifying (`magnifies` in
-    /// [`crate::upscale::Framebuffer::resolve_scene`]), so on a default install
-    /// this row is inert whichever way it points. It starts meaning something
-    /// the moment a player lowers the render scale, and at that point the
-    /// play-test above is what they should be told.
+    /// **The default, and settled on 2026-09-02 rather than still open** -
+    /// the account of what settled it, and of what was play-tested to get
+    /// there, is in `docs/overview/modern-features.md`. Note that
+    /// [`Scale::default`] is [`Scale::FULL`] and FSR 1 only runs where it is
+    /// magnifying, so on a default install this row is inert whichever way it
+    /// points; it starts meaning something once a player lowers the render
+    /// scale.
     #[default]
     Off,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.

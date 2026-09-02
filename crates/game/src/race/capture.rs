@@ -127,6 +127,15 @@ pub struct CaptureOptions {
     /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
     /// gets compared against itself off and against the running original.
     pub anti_aliasing: crate::display::AntiAliasing,
+    /// Offset the camera by a sub-pixel each frame. `--camera-jitter`.
+    ///
+    /// Honoured here because a capture is the only way to *see* that jitter is
+    /// live at all: two `--screenshot` runs differing only by this flag differ
+    /// by well under a pixel, which is invisible in a window and obvious in a
+    /// byte diff. The phase is [`Scene`]'s own frame counter, which starts at
+    /// zero, so a capture at a given tick count is reproducible. See
+    /// [`oag_render::jitter`].
+    pub camera_jitter: bool,
     /// Force the exhaust into the state it holds this many seconds after a
     /// speed pad entry, at saturated intensity, before the frame is drawn.
     ///
@@ -456,6 +465,7 @@ pub fn capture(
             options.pvs_culling,
             options.anim_seconds,
             options.motion_blur,
+            options.camera_jitter,
             &spectrum,
         );
         queue.submit(Some(primer.finish()));
@@ -508,6 +518,7 @@ pub fn capture(
                 options.pvs_culling,
                 options.anim_seconds,
                 options.motion_blur,
+                options.camera_jitter,
                 &spectrum,
             );
             samples.push(start.elapsed().as_secs_f64() * 1e6);
@@ -539,6 +550,7 @@ pub fn capture(
         // the smear a player sees is the smear the PNG shows. Off, the pass
         // never observed a previous camera and encodes nothing.
         options.motion_blur,
+        options.camera_jitter,
         &spectrum,
     );
     oag_render::perfprobe::report_frame(race.world.tick);

@@ -500,6 +500,7 @@ fn main() -> Result<()> {
 
     let mut app = App {
         pvs_culling: cli.pvs,
+        camera_jitter: cli.camera_jitter,
         boot_shell,
         media,
         boot_overlay,

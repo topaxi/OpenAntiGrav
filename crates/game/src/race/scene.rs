@@ -219,6 +219,8 @@ pub struct Scene {
     /// is: promoting a tick's snapshot is per-frame state `render`'s `&self`
     /// has to move.
     motion: std::cell::RefCell<Option<motion::MotionState>>,
+    /// The camera-jitter phase: frames, not ticks. See [`Scene::jittered`].
+    frame_index: std::cell::Cell<u32>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -875,6 +877,7 @@ impl Scene {
             motion_blur,
             velocity,
             motion: std::cell::RefCell::new(None),
+            frame_index: std::cell::Cell::new(0),
             track,
             visibility,
             ships,

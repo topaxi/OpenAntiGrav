@@ -64,7 +64,7 @@ section has always listed, now with their status:
 | Render resolution decoupled from presentation | **Done** - the render scale, and the offscreen target it draws into |
 | A depth buffer the upscaler can consume | **Done** - `StoreOp::Store` and `TEXTURE_BINDING`, read every frame by the motion blur pass ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)) |
 | Per-pixel motion vectors from every draw | **Done** - the race writes an always-on `Rg16Float` velocity attachment from every draw's premultiplied previous-tick matrices ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)); motion blur is its first consumer |
-| Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
+| Camera jitter, sub-pixel per frame | **Done** - a 16-phase Halton(2,3) offset post-multiplied onto the view-projection *after* the frustum and the motion snapshot, so neither culling nor the velocity buffer sees it ([ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)). Behind `--camera-jitter`, off by default: nothing reconstructs from it yet, so on its own it is a shimmer and a worse picture |
 | A scene without UI in it | **Done** - the UI composites at presentation resolution ([ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)) and a stage with no scene never enters the offscreen target at all ([ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)). The HUD and the scoreboard draw into the presentation target after the resolve, the performance overlay onto the surface after the grade, and the menus, front end, launcher and loading screen bypass the offscreen target entirely. What FXAA, SMAA and an upscaler now see is the race's 3D scene and nothing else |
 
 That last row was the expensive one, and it is not on the original list because
@@ -72,7 +72,12 @@ it only became visible once something downstream needed a scene it could reason
 about. FSR must consume a frame with no UI in it, and the UI must then be
 composited at presentation resolution. **It is now done**, and it cost a
 presentation-sized colour target plus one more fullscreen pass a frame - stated
-in ADR-0036 rather than hidden. **Camera jitter is the only row left.**
+in ADR-0036 rather than hidden.
+
+**Every row is now filled.** Camera jitter, the last of them, landed on
+2026-09-02 - see [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md).
+What FSR 3.1 needs from the renderer, the renderer now has; what remains is the
+port itself.
 
 It paid for itself twice over on the way. The HUD and the menus are no longer
 resampled at all, which was a picture-quality complaint in its own right; and it
@@ -93,8 +98,9 @@ setting so FSR 3.1 can rely on it. The blur touches the last row only
 partly: its chain runs before the HUD is drawn, so a UI-free scene
 demonstrably exists at that point in the frame without being handed
 downstream. The UI-free scene has since been handed downstream for real -
-ADR-0036 and ADR-0038, the last row of the table above - so **what FSR 3.1
-still lacks outright is sub-pixel camera jitter, and nothing else.**
+ADR-0036 and ADR-0038 - and sub-pixel camera jitter followed it on the same day
+([ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)),
+so **FSR 3.1 lacks no renderer-side prerequisite at all now.**
 
 ## Steam Input
 
@@ -176,7 +182,7 @@ be most of the win for a fraction of the machinery.
 | Feature | Licence status | Early decision |
 | --- | --- | --- |
 | FSR 1 upscaling | MIT, ported | **Built.** `oag_render::post::fsr1`, off by default, magnification only |
-| FSR 3.1 upscaling | MIT, open | Port to WGSL ([ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)); still needs motion vectors, readable depth, jitter and a UI-free scene |
+| FSR 3.1 upscaling | MIT, open | Port to WGSL ([ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)); every renderer-side prerequisite - motion vectors, readable depth, jitter, a UI-free scene - is now in place |
 | FSR3 frame generation | MIT, open | Skip - interpolated presentation from the 60 Hz simulation is the better fit |
 | FSR4 | Signed DLLs, no source; driver upgrade is Windows-only | Ship nothing proprietary and hard-code nothing FSR4-specific. Do not plan around inheriting it |
 | Steam Input | Proprietary SDK | `gilrs`/SDL baseline in `oag-input`; optional non-vendored `steamworks` feature; keep the input layer action-shaped |

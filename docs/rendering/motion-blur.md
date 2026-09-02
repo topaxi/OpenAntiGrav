@@ -78,8 +78,11 @@ row has moved since.** The UI-free scene is **Done** as of 2026-09-02, by
 and [ADR-0038](../architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
 rather than by anything here - the scene now resolves into its own presentation
 target and the UI composites over it afterwards, so the seam this design only
-*demonstrated* is now exposed. Camera jitter is the one prerequisite still
-absent, and this design did not move it.
+*demonstrated* is now exposed. Camera jitter followed on the same day
+([ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)),
+and it is this design's `prev_mvp` that constrained where the offset could go:
+the same phase has to reach the previous tick's matrix, or the jitter lands in
+every motion vector this buffer writes.
 
 That last row deserves precision rather than a tick. This design inserts its
 chain *inside* `race::Scene::render`, before the HUD is drawn, so at that point

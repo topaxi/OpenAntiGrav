@@ -43,6 +43,16 @@ pub struct Options {
     /// Pins the animation clock, in seconds, instead of deriving it from the
     /// tick. `None` derives it. See `Cli::anim_seconds`.
     pub anim_seconds: Option<f32>,
+    /// Offset the camera by a sub-pixel each frame, on the race this hands off
+    /// to. `--camera-jitter`; see `race::CaptureOptions::camera_jitter`.
+    ///
+    /// Carried rather than dropped because `--screenshot` reaching a race
+    /// through `Launch Game` is one of the two ways a capture gets a race at
+    /// all, and a flag honoured on one route and silently ignored on the other
+    /// is how a comparison ends up differing by something nobody named. It
+    /// reaches nothing on the front end itself: no stage there draws a 3D
+    /// scene, per ADR-0038.
+    pub camera_jitter: bool,
     /// Buttons held on every tick.
     pub held: u32,
     /// Buttons pressed and released on alternating ticks.
@@ -501,6 +511,7 @@ pub fn run(
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
                 anim_seconds: options.anim_seconds,
+                camera_jitter: options.camera_jitter,
                 bloom: options.settings.graphics.bloom,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,

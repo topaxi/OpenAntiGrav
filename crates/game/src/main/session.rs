@@ -137,6 +137,16 @@ pub(crate) struct Session {
     /// persisted into a settings file would keep answering it long after the
     /// question was closed.
     pub(crate) pvs_culling: Option<bool>,
+    /// `--camera-jitter`: offsets the camera by a sub-pixel each frame.
+    ///
+    /// **Not in [`Self::settings`], on purpose**, and for a stronger reason
+    /// than [`Self::anim_seconds`] and [`Self::pvs_culling`] are not: those are
+    /// harness knobs, where this is infrastructure for an upscaler that does
+    /// not exist yet. On its own it strictly worsens the picture, so there is
+    /// no version of it a player should be offered a row for - and a value
+    /// persisted now would still be set when the real gate ("is a temporal
+    /// upscaler selected") arrives to replace it. See `oag_render::jitter`.
+    pub(crate) camera_jitter: bool,
     /// The Zone visualiser's per-band peak-hold.
     ///
     /// On the session rather than on the race stage because it is ballistics

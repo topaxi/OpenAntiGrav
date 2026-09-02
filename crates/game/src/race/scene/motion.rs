@@ -114,3 +114,39 @@ pub(super) fn velocity_texture(
         view_formats: &[],
     })
 }
+
+impl super::Scene {
+    /// Applies this frame's camera jitter, or nothing when it is off.
+    ///
+    /// **Here rather than inline in `Scene::render` because the ordering is the
+    /// decision** ([ADR-0039](../../../../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)),
+    /// and a named call is harder to move by accident than four lines of matrix
+    /// arithmetic. It must be called *after* the frustum is built and after
+    /// [`MotionState::advance`] has stored the tick's snapshot, so that neither
+    /// culling nor the previous-tick matrix a future frame measures against ever
+    /// sees a sub-pixel wobble.
+    ///
+    /// Both matrices take the **same** phase, which is what cancels the offset out
+    /// of the velocity target - `oag_render::jitter`'s own tests carry that claim.
+    /// The counter advances whether or not jitter is on, so turning it on does not
+    /// restart the sequence.
+    ///
+    /// Returned as a pair for the caller to shadow its own bindings with: the
+    /// dozen use sites downstream then pick the jittered matrices up without one
+    /// of them being missed, and a miss would be wrong only with jitter on.
+    pub(super) fn jittered(
+        &self,
+        on: bool,
+        viewport: (f32, f32, f32, f32),
+        view_projection: Mat4,
+        prev_vp: Mat4,
+    ) -> (Mat4, Mat4) {
+        let frame = self.frame_index.get();
+        self.frame_index.set(frame.wrapping_add(1));
+        if !on {
+            return (view_projection, prev_vp);
+        }
+        let jitter = oag_render::jitter::matrix(frame, (viewport.2, viewport.3));
+        (jitter * view_projection, jitter * prev_vp)
+    }
+}

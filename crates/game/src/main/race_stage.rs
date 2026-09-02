@@ -40,6 +40,7 @@ impl RaceStage {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
+        camera_jitter: bool,
         zone_spectrum: &[f32],
     ) -> race::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
@@ -62,6 +63,7 @@ impl RaceStage {
             pvs_cull,
             anim_seconds,
             motion_blur,
+            camera_jitter,
             zone_spectrum,
         )
     }
@@ -165,6 +167,13 @@ impl RaceStage {
             // previous camera and nothing the blur pipelines add to warm -
             // they are fullscreen passes with no per-scene variants.
             display::MotionBlur::Off,
+            // Off for the same reason, and one more: jitter is a matrix, not a
+            // pipeline variant, so there is nothing here for it to warm. It
+            // still costs this frame a phase - `Scene::frame_index` advances on
+            // every render - so with `--camera-jitter` on, the first frame a
+            // player sees is phase one rather than phase zero. Deterministic,
+            // and noted in ADR-0039 so a shifted capture is not a mystery.
+            false,
             // Empty: this frame is discarded, and the Zone visualiser
             // pipeline variant it would warm is the same one every other
             // Zone draw uses regardless of what the lookup holds.

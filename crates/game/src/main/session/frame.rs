@@ -575,6 +575,7 @@ impl Session {
                     pvs_culling,
                     self.anim_seconds,
                     self.settings.graphics.motion_blur,
+                    self.camera_jitter,
                     &zone_spectrum,
                 );
                 if let Some(start) = start {

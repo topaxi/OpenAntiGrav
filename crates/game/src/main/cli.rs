@@ -618,6 +618,33 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) render_scale: Option<u32>,
 
+    /// Offset the camera by a sub-pixel each frame, from a 16-phase Halton
+    /// sequence.
+    ///
+    /// **This makes the picture worse, and is here anyway.** Camera jitter is
+    /// the last renderer-side thing FSR 3.1 needs
+    /// (`docs/overview/modern-features.md`), and nothing consumes it yet - with
+    /// a spatial resolve or none, all it does is move every edge a fraction of
+    /// a pixel a frame, which reads as a shimmer with no reconstruction behind
+    /// it. It is built ahead of its consumer because the constraint it has to
+    /// satisfy - not perturbing the culling frustum or the velocity buffer - is
+    /// a property of *where* the offset is applied, and that is far cheaper to
+    /// get right now than to retrofit under a temporal upscaler that is already
+    /// ghosting.
+    ///
+    /// A flag rather than a `[graphics]` key deliberately: a settings key
+    /// implies a choice a player should be making, and there is no version of
+    /// this that a player wants until something reconstructs from it. The real
+    /// gate, when it exists, is "is a temporal upscaler selected".
+    ///
+    /// Two `--screenshot` runs differing only by this differ by well under a
+    /// pixel - invisible in a window, obvious in a byte diff, which is how to
+    /// check it is live. Only the race's 3D scene moves: the HUD, the reticle
+    /// and the menus are all drawn at presentation resolution and are not
+    /// jittered. See `oag_render::jitter`.
+    #[arg(long)]
+    pub(crate) camera_jitter: bool,
+
     /// Anti-aliasing mode: off, fxaa, smaa or msaa4x.
     ///
     /// Overrides `[graphics] anti_aliasing` in the settings file
