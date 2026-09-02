@@ -947,7 +947,65 @@ the count-field check at `craft+0x5fa4`, or something else entirely between
 is the question the next session inherits, and now has firm ground to stand
 on: the fade math is not running, not "might not be running."
 
-### Checked: no separate trail for HD vs. Fury, and no zone-specific one
+### Sixth session: the third gate, found and confirmed live
+
+**2026-09-02, same day.** Both known gates measured open (five live samples
+across `count_field_ble` and `byte_flag_beq`, all "would not skip" - see
+below), yet the fade math still never ran. Re-reading the stretch between
+the byte-flag gate (`0x002a0974`) and the fade math's own start
+(`0x002a0bb8`) found a third branch neither prior session had traced:
+
+```
+002a0b34: bl  0x006765e8            ; a boolean query, args none
+002a0b3c: rlwinm r3,r3,0x0,0x18,0x1f
+002a0b40: cmpwi cr7,r3,0x0
+002a0b44: beq cr7,0x002a1210        ; false -> a DIFFERENT code path, not the epilogue
+002a0b48: lwz r11,0x134(r31)        ; true -> falls into the r10 computation,
+...                                  ; itself gated again at 0x002a0bb4 before
+002a0bb8: ...                        ; finally reaching the fade math
+```
+
+**`scripts/hd-flare-gate-check.py` (new) breakpoints each gate individually
+and decodes `cr7` at the hit, rather than inferring the outcome from a
+separate memory poll.** Single-breakpoint runs proved markedly more stable
+than arming several at once (two- and three-breakpoint attempts got zero
+hits before an immediate stub desync; single ones reliably got several).
+Measured, `PPU Decoder: Interpreter (static)`, switched back after:
+
+| Gate | Address | Samples | Result |
+| --- | --- | --- | --- |
+| `count_field_ble` | `0x002a0960` | 1 | open (`GT` set - does not skip) |
+| `byte_flag_beq` | `0x002a0974` | 4 | open (`EQ` clear - does not skip) |
+| **`alt_path_beq`** | **`0x002a0b44`** | **2** | **closed - `EQ` set, branches to `0x002a1210` every time** |
+
+**This is the gate.** `FUN_006765e8()` (a two-instruction trampoline into
+`0x003c7dd8`, which compares two 8-byte fields of a global at
+`PTR_DAT_008b7838` and, only if the first is less than the second, reads a
+byte flag at `+0x38` of the same object) returns false for the sampled
+craft on both calls caught, sending execution to `0x002a1210` - genuinely
+different code, not the shared epilogue this thread mistook a different
+address for in "Fifth session" above. `FUN_006765e8`'s other call sites -
+`Game_PresentLoop_q` (three calls) and `PhotoMode_Update` (three calls), no
+other caller anywhere in the image - are consistent with a **per-frame
+budget or throttle check** (the two 8-byte fields reading like a spent/limit
+pair), though that is a hypothesis from the call-site pattern and the
+comparison shape, not a traced value.
+
+**What `0x002a1210` itself does is not fully resolved, and it changes the
+picture again.** It is not dead weight or a simple bail-out: past two more
+gates of its own (`bl 0x006765f8` and a byte flag at `struct_base+0x5aac`,
+both of which can loop **back** to `0x002a0b48` - the same entry the r10
+computation uses, so this is not strictly one-way), it builds a small
+ring-buffer entry (`craft+0x270`, modulo 3, matching the same indexing
+shape `0x002a1234`-`0x002a12b4` used before) and reaches the same family of
+RSX-submission trampolines (`0x00677ff8`, `0x00679298`, `0x00679288`) this
+thread already traced as far as `Rsx_SetMethod`. **So the function has (at
+least) two branches that both eventually touch the RSX pipeline - the fade
+math this thread has been tracing, and this one - and which of them (if
+either) actually builds the visible sprite's quad is now the open question,
+not simply "does the fade math run."** A live read of `0x002a1210`'s own
+work - whether it touches the sprite's radius, the occlusion query, or
+something this thread hasn't named yet - is next.
 
 The user's report also suspected the trail itself, and named two possible
 splits: a different trail between classic HD and Fury, and a Zone-race-
@@ -1153,9 +1211,16 @@ Open, in rough order of visible cost:
   is a clean result**: zero hits at any of the three checkpoints in 45
   seconds of active, visibly-flared racing - `EngineFlare_RenderTick`'s
   fade math does not merely evaluate to a non-positive number, it is never
-  entered at all for this craft. Which gate before it (`struct_base+0x494`,
-  `craft+0x5fa4`, or an untraced third) is responsible is the open question
-  now, on solid ground rather than a discredited breakpoint.
+  entered at all for this craft. **A sixth session then found and confirmed
+  which gate**: not the byte-flag check (`struct_base+0x494`, open, 4/4
+  live) or the count-field one (`craft+0x5fa4`, open, 1/1 live), but a third,
+  previously-untraced branch on `FUN_006765e8()`'s return value
+  (`0x002a0b44`) - closed, 2/2 live, routing to `0x002a1210` instead of the
+  fade math. That address is real code, not the shared epilogue, and itself
+  reaches the same RSX-submission trampolines the fade path does - so which
+  branch (if either) actually builds the visible sprite's quad is now the
+  open question, not just "why does the fade math not run." See "Sixth
+  session" above.
 - `Flare Size Clamp` (50.0) and `Engine Flare Particles`
   (`Enable`/`Min Alpha` 1/0.25) are named for the first time this session -
   "All 41 rows" above - and neither is read past the tuning file.
@@ -1214,6 +1279,11 @@ uv run --with evdev python3 scripts/hd-flare-tuning-dump.py /tmp/hd-flare-tuning
 # config.yml first (shared, session-scoped edit, switch back after), see
 # "Fifth session" above:
 uv run --with evdev python3 scripts/hd-flare-rendertick-break.py /tmp/hd-flare-rendertick-break
+# which of the three gates before the fade math is closing - one at a time,
+# see "Sixth session" above for why not all together:
+uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check byte
+uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check count
+uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-check alt
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one

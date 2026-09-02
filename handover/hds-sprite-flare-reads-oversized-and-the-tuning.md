@@ -150,24 +150,47 @@ result. See engine-trail.md ("Fifth session", the "corrected rerun"
 paragraph at its end) for the full account and the archived artefacts
 (`data/reference/hd-capture/flare-size/rendertick-break-v2/`).
 
+**2026-09-02, a sixth session found and confirmed which gate - full account
+on engine-trail.md ("Sixth session: the third gate, found and confirmed
+live").** Both known gates measured open (`scripts/hd-flare-gate-check.py`,
+new: 1 sample of `count_field_ble`, 4 of `byte_flag_beq`, all "would not
+skip"), so re-reading the stretch between the byte-flag gate and the fade
+math's own start found a **third** branch neither prior session had traced:
+`0x002a0b44`, a `beq` on `FUN_006765e8()`'s return value, branching to
+`0x002a1210` - genuinely different code, not the shared epilogue - when
+false. **Confirmed live, 2/2 samples: it is false every time**, which is
+what has been closing the fade math this whole thread. `FUN_006765e8`'s
+only other callers, `Game_PresentLoop_q` and `PhotoMode_Update`, and its
+own two-field compare-then-flag shape, read like a per-frame budget or
+throttle check - a hypothesis from the call-site pattern, not a traced
+value. **What reopens the question rather than closing it**: `0x002a1210`
+is not a dead branch - past two more gates of its own (which can loop back
+to the same entry the fade math's `r10` computation uses) it builds a small
+ring-buffer entry and reaches the same family of RSX-submission
+trampolines the fade path does. So the function has two branches that both
+touch the RSX pipeline, and which one (if either) actually builds the
+visible sprite's quad is now the real open question - not just "why does
+the fade math not run."
+
 ## Open
 
-- **The draw call is located, its fade formula is read, and a breakpoint
-  trace (the corrected version, after one flawed attempt) confirms the fade
-  math is never entered for the sampled craft - not "evaluates to zero," not
-  entered.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78) computes
-  `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout Dist`/`Range`,
-  confirmed live at `+0x484`/`+0x488` of the shared tuning block) and stores
-  the result at `this+0x18c` right before its own branch - but a
-  three-point breakpoint ladder inside that math (start, store, positive
-  branch) recorded zero hits at any of the three across 45 seconds of
-  active, visibly-flared racing, while the function's own entry fires every
-  frame. So a gate *before* the fade math is closing every single time for
-  this craft - which one (`struct_base+0x494`'s byte flag, `craft+0x5fa4`'s
-  count field, or an untraced third between the entry and `0x002a0bb8`) is
-  the open question now, on solid footing rather than the discredited "12
-  of 12" reading an earlier version of this note carried. See
-  engine-trail.md "Fifth session" for the full corrected account.
+- **The gate that closes the fade math is found and confirmed live - it is
+  a third, previously-untraced branch, not either of the two originally
+  suspected.** `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78)
+  computes `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout
+  Dist`/`Range`, confirmed live at `+0x484`/`+0x488` of the shared tuning
+  block) but never reaches that computation for the sampled craft. The
+  byte-flag gate (`struct_base+0x494`) and count-field gate
+  (`craft+0x5fa4`) are both confirmed **open** (5 live samples, none skip).
+  The actual gate is `0x002a0b44`, a branch on `FUN_006765e8()`'s return
+  value - confirmed **closed**, 2/2 live - which sends execution to
+  `0x002a1210` instead, a real and separate code path (not the shared
+  epilogue `0x002a1110` an earlier version of this note mistook for a gate
+  landing). `0x002a1210` itself reaches the same family of RSX-submission
+  calls the fade path does, so **whether the visible sprite's quad comes
+  from that branch, the fade branch, or neither is now the open question** -
+  narrower and better-evidenced than "which gate," but not yet answered.
+  See engine-trail.md "Sixth session" for the full account.
 - `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
   fade result computed above (that clamp uses a *different* tuning-block
   field, `+0x4a8`, which reads `1.0` live and is more likely
@@ -197,31 +220,30 @@ paragraph at its end) for the full account and the archived artefacts
 
 ## Next Steps
 
-- **Isolate which gate before `0x002a0bb8` is closing.** The corrected
-  breakpoint trace confirmed the fade math never runs at all for the
-  sampled craft, but not why. `0x002a1110` (the point every version so far
-  believed was a gate landing) is actually the function's shared epilogue -
-  useless for this. Breakpoint the individual `beq`/`ble` instructions
-  themselves instead: `0x002a0974` for the byte-flag branch
-  (`struct_base+0x494`) and `0x002a0960` for the count-field one
-  (`craft+0x5fa4`); a hit at one but not the other settles it directly. If
-  neither ever fires either, there is a third, untraced gate between
-  `0x002a08a8` and `0x002a0bb8` this thread's five sessions have not read
-  yet - the function was only fully disassembled up to `0x002a0be8`
-  ("Fourth session" on engine-trail.md), so the exact instruction sequence
-  from entry to `0x002a0bb8` is not itself fully confirmed, only its two
-  known gates.
-- **Once the closing gate is identified, check whether it is legitimately
-  closed for ordinary chase-view racing** (in which case this fade is not
-  what the user's screenshot comparison is seeing, and the search for the
-  real size/alpha consumer restarts - possibly a wholly different draw path
-  this thread has not considered) **or whether it is a condition this
-  driven-race harness happens to always trigger** (autopilot state, camera
-  mode, or something else specific to how `rpcs3-drive.py`/`scripts/hd-flare-*`
-  put the game in this state) that a human playing normally would not hit -
-  in which case the fade law is real and just needs the right conditions to
-  observe it computing a positive value.
-- Once the consumer's radius math is confirmed, either implement the
-  `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
+- **Read what `0x002a1210` actually does with the sprite, live.** It is
+  reached (confirmed, 2/2) instead of the fade math for the sampled craft,
+  and it is not a bail-out - it builds a small `craft+0x270`-indexed
+  ring-buffer entry and reaches RSX-submission trampolines
+  (`0x00677ff8`/`0x00679298`/`0x00679288`, the same family the fade path's
+  own later code reaches). Static reading alone was not enough to tell
+  whether this is the occlusion query, the actual sprite draw, or something
+  else this thread hasn't named - it needs the same live-register technique
+  `hd-flare-gate-check.py` used, at a point past its own two further gates
+  (themselves untraced: one on `bl 0x006765f8`'s result, one on a byte flag
+  at `struct_base+0x5aac`, both of which can loop back to `0x002a0b48`).
+- **Separately, find out what `FUN_006765e8()`/`0x003c7dd8` actually reads**
+  - the global at `PTR_DAT_008b7838`, two 8-byte fields compared then a flag
+  byte at `+0x38`. If it really is a frame-budget throttle (the hypothesis
+  from its call sites - `Game_PresentLoop_q` and `PhotoMode_Update`, no
+  others), that reframes the whole open question: **the fade math might be
+  a genuine, correct law that simply doesn't get its turn under a driven
+  autopilot session's frame timing**, in which case a human playing
+  normally - or a differently-paced capture - might see it fire. Reading
+  live values of both 8-byte fields while thrusting would settle whether
+  this is really a budget check or something else entirely (a per-frame
+  toggle unrelated to timing, say).
+- Once whichever branch actually builds the sprite is confirmed, either
+  implement the `Flare Fadeout Dist/Range` law (if it's the fade branch) or
+  read `0x002a1210`'s own quad math (if it's that one).
 - Separately assess the trail's own accuracy against the original, per the
   user's report - not investigated this session.
