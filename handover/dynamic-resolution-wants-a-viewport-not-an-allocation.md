@@ -9,83 +9,87 @@ swappable piece, and this repository already ships one.
 **Both halves DRS sits between exist.** `[graphics] render_scale`
 (`display::Scale`, 25-200 % of the aspect rectangle) already decouples render
 resolution from presentation, and `upscale::target_size` +
-`Framebuffer::resize` already act on it every frame at
-`crates/game/src/main/session/frame.rs:439`. `[graphics] upscaler` already
+`Framebuffer::resize` already act on it every frame in
+`crates/game/src/main/session/frame.rs`. `[graphics] upscaler` already
 resolves that frame with FSR 1 (`oag_render::post::fsr1`, per
 [ADR-0012](../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)).
-What is missing is the controller, a frame-cost signal it can trust, and two
-structural facts without which DRS is *visibly worse* than a fixed scale.
+What is left is the controller and the wiring that feeds it.
 
-## What is verified about the current shape
+## What is true of the tree, as of 2026-09-02
 
-Read out of the tree on 2026-09-02, not assumed:
+Rewritten after Phase 1 and Phase 2's probe landed. **The three structural
+blockers this file was written around are cleared**; what is left is not
+structure. Deliberately no line numbers - the version of this section written a
+day earlier cited five, and every one of them has moved since.
 
-- **The scale is a per-frame quantity already.** `frame.rs:439` recomputes
-  `target_size(rect, settings.graphics.render_scale, max_texture_dimension_2d)`
-  every frame and calls `Framebuffer::resize`, which returns `true` when it
-  rebuilt so the race's depth attachment, a race parked in
-  `Session::suspended_race` and a scene still building in
-  `LoadingStage::built_race` can all follow. A controller has a place to write
-  into; it does not have to invent the plumbing.
-- **`Framebuffer::resize` reallocates.** `crates/game/src/upscale.rs:419`
-  early-returns only when the size is unchanged; otherwise it rebuilds the
-  texture, both views and the bind group. It was written for a menu row moved
-  once, not for a value moving several times a second.
-- **The whole frame is one extent.** `frame.rs:490` hands each stage
-  `inside = (0.0, 0.0, size.0, size.1)` off `Framebuffer::size()`, and
-  `Framebuffer::resolve` reads `self.size` for both `magnifies` and FSR 1's
-  `Frame { input }`. Nothing in the type distinguishes "how big the texture is"
-  from "how much of it was drawn this frame".
-- **FSR 1 was deliberately told they are the same rectangle.**
-  `post/fsr1.rs:46`: *"The input viewport and the input resource are the same
-  rectangle here - so the viewport and size arguments collapse into one."*
-  Upstream's `FsrEasuCon` takes them separately; this port folded them.
-- **No UI is drawn at the render scale any more, and that removes a real DRS
-  hazard.** Since ADR-0036 and ADR-0038 the HUD and scoreboard composite into
-  the presentation target after the resolve, the performance overlay goes onto
-  the surface after the grade, and the menus, front end, launcher and loading
-  screen skip the scaled target entirely. Under the old shape a controller
-  moving the scale several times a second would have made HUD glyphs and menu
-  text shimmer as they were re-rasterised at a new size every few frames -
-  the most visible artefact DRS could have produced, on the element a player
-  reads rather than looks at. It structurally cannot happen now. `perf.rs` used
-  to argue "the overlay should cost what the game costs"; its own module doc
-  records why that is right for a scale set once and wrong for one that moves.
-- **The frame-cost signal that exists is a wall-clock interval, not a GPU
-  cost.** `frame.rs:118` feeds `perf::Meter::record(elapsed)` the duration
-  between loop iterations. The device is created with `Features::empty()`
-  (ADR-0012 records this and makes any addition an adapter probe with a
-  fallback chain).
+- **Two sizes, not one.** `Framebuffer` carries an `allocation()` - the
+  `render_scale` ceiling, what the texture actually is, what every size-matched
+  attachment follows - and an `extent()`, the sub-rectangle drawn into this
+  frame. `set_extent` moves the second for a uniform write, allocating nothing.
+  There is deliberately **no `size()`**, so a new caller has to say which it
+  means. [ADR-0037](../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md);
+  the per-consumer audit is on
+  [dynamic-resolution.md](../docs/rendering/dynamic-resolution.md).
+- **Nothing moves the extent.** Every frame the game draws has extent equal to
+  allocation, so no behaviour changed and no capture's bytes moved. A controller
+  is the thing that would move it, and there is no controller.
+- **No per-frame scene post-process is viewport-aware, and that bounds who may
+  move it.** FXAA, SMAA and FSR 1 take the extent as an input size while reading
+  a view of the allocation; `bloom` and `hd_bloom` take neither a size nor a
+  viewport at all. Bloom is its own setting and is on in an ordinary race, so
+  there is **no combination of menu rows that makes a sub-extent safe** - see
+  Phase 5, which owns both halves. `motion_blur` is the one pass already shaped
+  right and is the shape the others need.
+- **FSR 1 was deliberately told the viewport and the resource are the same
+  rectangle.** `post/fsr1.rs`: *"The input viewport and the input resource are
+  the same rectangle here - so the viewport and size arguments collapse into
+  one."* Upstream's `FsrEasuCon` takes them separately; this port folded them,
+  and Phase 5 un-folds them - which moves the port *closer* to upstream.
+- **No UI is drawn at the render scale, and that removes a real DRS hazard.**
+  Since ADR-0036 and ADR-0038 the HUD and scoreboard composite into the
+  presentation target after the resolve, the performance overlay goes onto the
+  surface after the grade, and the menus, front end, launcher and loading screen
+  skip the scaled target entirely. Under the old shape a controller moving the
+  scale several times a second would have made HUD glyphs and menu text shimmer
+  as they were re-rasterised at a new size every few frames - the most visible
+  artefact DRS could have produced, on the element a player reads rather than
+  looks at. It structurally cannot happen now.
+- **GPU timestamps are probed but not enabled.** `oag_render::timing::Timing`
+  reports what an adapter offers without requesting a device; nothing in the
+  workspace asks for the feature, and `mesh_render::optional_features` is the
+  one line that changes when a consumer exists. The signal actually in use is
+  still `perf::Meter` over a wall-clock interval, which is pinned to the refresh
+  under `Vsync::On` and to the limit under any `FrameLimit` - it tracks real
+  work only with vsync `off` *and* no limit, a diagnostic configuration rather
+  than a shipping one. That is why a GPU timestamp is the primary path and not a
+  refinement.
 
-## The three things that block it, in order of expense
+## The three things that blocked it - all three are cleared
 
-**1. The UI lived inside the scaled target - and this was a blocker, not a
-caveat. It is done.** A *static* 50 % is a choice the player sees once. A scale
-changing every few frames would have made HUD glyphs off a coverage atlas crawl
-continuously, on the one element being read mid-race. Phase 0 below removed it:
-no UI is drawn at the render scale any more, and
-[modern-features.md](../docs/overview/modern-features.md)'s *a scene without UI
-in it* row is **Done**.
+Kept as a record of what the work was, not as a list of open items.
 
-**Decided in
+**1. The UI lived inside the scaled target.** Cleared by Phase 0. A *static*
+50 % is a choice the player sees once; a scale changing every few frames would
+have made HUD glyphs off a coverage atlas crawl continuously, on the one element
+being read mid-race. Decided in
 [ADR-0036](../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md)
-and part-built** - see Phase 0 below. The performance overlay has moved out of
-the scaled target, which matters here for its own sake: it is the row a player
-reads to tell DRS from a stutter, and it can now be read while the scale moves.
-The HUD and the menus have not moved, so this is still a blocker.
+and [ADR-0038](../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md);
+[modern-features.md](../docs/overview/modern-features.md)'s *a scene without UI
+in it* row is **Done**. The performance overlay moving out matters here for its
+own sake: it is the row a player reads to tell DRS from a stutter, and it can
+now be read while the scale moves.
 
-**2. Every scale change was a reallocation. It is not any more.** A controller
-that stepped the scale 2 % per frame would have rebuilt a texture, two views, a
-bind group, a depth attachment and (under MSAA) the multisampled attachments,
-several times a second - paying a cost to save a cost. Phase 1 below took the
-standard answer: **allocate once at the ceiling and vary the viewport.** Moving
-the extent is now a uniform write and two `set_viewport` calls.
+**2. Every scale change was a reallocation.** Cleared by Phase 1. A controller
+stepping the scale 2 % per frame would have rebuilt a texture, two views, a bind
+group, a depth attachment and (under MSAA) the multisampled attachments, several
+times a second - paying a cost to save a cost. Phase 1 took the standard answer:
+**allocate once at the ceiling and vary the viewport.** Moving the extent is now
+a uniform write and two `set_viewport` calls.
 
-**3. The wall-clock interval carries no headroom.** Under `Vsync::On` it is
-pinned to the refresh; under any `FrameLimit` it is pinned to the limit,
-because `schedule_next_frame` sleeps to it. It only tracks work with vsync
-`off` *and* no limit - a diagnostic configuration, not a shipping one. So a
-GPU timestamp is the primary path, not a refinement.
+**3. The wall-clock interval carries no headroom.** Cleared *as an unknown* by
+Phase 2's probe rather than solved: both development adapters support GPU
+timestamps end to end, so the signal is reachable and the shape of the fallback
+chain is known. Wiring one is the work that is left.
 
 ## Phase 0 landed 2026-09-02: the UI composites at presentation resolution
 
@@ -118,9 +122,12 @@ change the first of those.
 ## The plan
 
 Estimates assume the phase is picked up cold, and assume no ground-truth data
-is needed - none of this is reverse-engineering, all of it is this project's
-own enhancement, on the same footing as FSR 1 and SMAA. Phase 0 above is
-already done; these five are what is left.
+is needed - none of this is reverse-engineering, all of it is this project's own
+enhancement, on the same footing as FSR 1 and SMAA. **Phases 0 and 1 are done
+and Phase 2's probe is done**; the rest of Phase 2, then 3, 4 and 5, are what is
+left. The phases are kept in place rather than deleted as they land, because
+each one's reasoning is what the next is built on - a `## Open` question below
+is usually a question about a phase that has already shipped.
 
 ### Phase 1 landed 2026-09-02: a fixed allocation and a moving viewport
 
