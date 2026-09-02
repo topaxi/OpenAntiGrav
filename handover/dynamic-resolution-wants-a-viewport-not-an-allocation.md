@@ -389,9 +389,17 @@ changes.
 - Whether the memory cost of allocating at the ceiling is acceptable on the
   Steam Deck, which [goals.md](../docs/overview/goals.md) names in the first
   tier. Unmeasured.
-- Whether the perf overlay should show the current scale. It is the only way a
-  player can tell DRS from a stutter, which argues yes, but it is a fourth line
-  on a `dev`-tier readout that is already dense.
+
+**Decided 2026-09-02: the perf overlay shows the render size, on the `dev`
+tier.** Asked directly, the maintainer chose to add it. The argument that won
+is the one this bullet already carried - it is the only way to tell dynamic
+resolution from a stutter, and a frame rate that recovers because the
+controller dropped the resolution looks identical to one that recovers because
+the load passed. The density objection is answered by the row saying less when
+there is less to say: with the extent equal to the allocation, which is every
+frame today, it is `RENDER 1440x816` and nothing more; below the ceiling it
+becomes `RENDER 1216x688 OF 1440x816  84%`. `perf::RenderSize`, and `None` on a
+stage with no scene rather than a size nothing on screen came from.
 
 ## Next Steps
 

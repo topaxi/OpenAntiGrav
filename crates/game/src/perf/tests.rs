@@ -2,10 +2,9 @@
 //! remembers and what the percentile reports, what each overlay mode draws and
 //! where, and the frame limit's own spelling and range.
 //!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `perf.rs`: the tests are 295 lines, past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! Its own file rather than a `#[cfg(test)]` block at the end of `perf.rs`:
+//! the tests are well past the 200 lines an inline test module may hold. See
+//! `scripts/check-file-size.py`, which is the rule as a gate.
 
 use super::*;
 
@@ -21,7 +20,7 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
     let meter = Meter::new();
     assert!(meter.is_empty());
     assert_eq!(meter.stats(), None);
-    assert!(draw_list(&meter, Overlay::Pacing, 60, None, None, None).is_empty());
+    assert!(draw_list(&meter, Overlay::Pacing, 60, None, None, None, None).is_empty());
 }
 
 #[test]
@@ -111,7 +110,7 @@ fn clearing_forgets_the_load_that_was_not_a_frame() {
 fn off_draws_nothing_however_full_the_meter_is() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
-    assert!(draw_list(&meter, Overlay::Off, 60, None, None, None).is_empty());
+    assert!(draw_list(&meter, Overlay::Off, 60, None, None, None, None).is_empty());
 }
 
 /// The counter is one panel and one line; the pacing view adds a second
@@ -121,12 +120,12 @@ fn each_mode_draws_exactly_what_it_promises() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let fps = draw_list(&meter, Overlay::Fps, 60, None, None, None);
+    let fps = draw_list(&meter, Overlay::Fps, 60, None, None, None, None);
     assert_eq!(fps.len(), 2);
     assert!(matches!(fps[0], Draw::Fill { .. }));
     assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
 
-    let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None, None);
+    let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None, None, None);
     // panel + two lines + the rule + one column per frame
     assert_eq!(pacing.len(), 4 + WINDOW);
     assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
@@ -141,7 +140,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let bare = draw_list(&meter, Overlay::Dev, 60, None, None, None);
+    let bare = draw_list(&meter, Overlay::Dev, 60, None, None, None, None);
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
     // rule + one column per frame.
     assert_eq!(bare.len(), 4 + WINDOW);
@@ -151,21 +150,37 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         draws_culled: 3,
         triangles: 4096,
     };
-    let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None, None);
+    let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None, None, None);
     assert!(
         with_scene
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "DRAWS 12/15  TRIS 4096"))
     );
 
-    let with_memory = draw_list(&meter, Overlay::Dev, 60, None, None, Some(64 * 1024 * 1024));
+    let with_memory = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        None,
+        Some(64 * 1024 * 1024),
+        None,
+    );
     assert!(
         with_memory
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "MEM 64.0 MB"))
     );
 
-    let with_video = draw_list(&meter, Overlay::Dev, 60, None, Some("gstreamer"), None);
+    let with_video = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        Some("gstreamer"),
+        None,
+        None,
+    );
     assert!(
         with_video
             .iter()
@@ -179,6 +194,10 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         Some(scene),
         Some("av1 cache"),
         Some(64 * 1024 * 1024),
+        Some(RenderSize {
+            extent: (1440, 816),
+            allocation: (1440, 816),
+        }),
     );
     assert!(
         with_all
@@ -194,6 +213,89 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         with_all
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "MEM 64.0 MB"))
+    );
+}
+
+/// The render row says one number when there is one to say, and three when
+/// there are.
+///
+/// The short form is what every frame draws today - nothing moves the extent -
+/// so it is the form that has to not be noise. The long form is the whole
+/// reason the row exists: it is what a moving controller looks like on screen,
+/// and the only way to tell dynamic resolution from a stutter.
+#[test]
+fn the_render_row_names_the_ceiling_only_when_it_is_below_it() {
+    let full = RenderSize {
+        extent: (1440, 816),
+        allocation: (1440, 816),
+    };
+    assert_eq!(full.line(), "RENDER 1440x816");
+
+    let scaled = RenderSize {
+        extent: (1216, 688),
+        allocation: (1440, 816),
+    };
+    assert_eq!(scaled.line(), "RENDER 1216x688 OF 1440x816  84%");
+}
+
+/// A stage with no scene gets no row rather than a stale or zeroed one - the
+/// same discipline `scene` and `video` already follow, and it matters more
+/// here because since ADR-0038 the menus genuinely do not draw at that size.
+#[test]
+fn a_stage_with_no_scene_draws_no_render_row() {
+    let mut meter = Meter::new();
+    steady(&mut meter, WINDOW, 1.0 / 60.0);
+
+    let none = draw_list(&meter, Overlay::Dev, 60, None, None, None, None);
+    assert!(
+        !none
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.starts_with("RENDER"))),
+        "a stage with no scene named a render size"
+    );
+
+    let race = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        None,
+        None,
+        Some(RenderSize {
+            extent: (1440, 816),
+            allocation: (1440, 816),
+        }),
+    );
+    assert!(
+        race.iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "RENDER 1440x816"))
+    );
+}
+
+/// Not on `Pacing`, and that is the same call the draw counts and the memory
+/// line already make: somebody reaching for `pacing` wants frame timing, not a
+/// renderer-internal size.
+#[test]
+fn the_render_row_is_dev_only() {
+    let mut meter = Meter::new();
+    steady(&mut meter, WINDOW, 1.0 / 60.0);
+
+    let pacing = draw_list(
+        &meter,
+        Overlay::Pacing,
+        60,
+        None,
+        None,
+        None,
+        Some(RenderSize {
+            extent: (1440, 816),
+            allocation: (1440, 816),
+        }),
+    );
+    assert!(
+        !pacing
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.starts_with("RENDER"))),
     );
 }
 
@@ -216,7 +318,7 @@ fn nothing_is_drawn_outside_the_panel() {
         triangles: 4096,
     };
     for list in [
-        draw_list(&meter, Overlay::Pacing, 60, None, None, None),
+        draw_list(&meter, Overlay::Pacing, 60, None, None, None, None),
         draw_list(
             &meter,
             Overlay::Dev,
@@ -224,6 +326,12 @@ fn nothing_is_drawn_outside_the_panel() {
             Some(scene),
             Some("av1 cache"),
             Some(64 * 1024 * 1024),
+            // The longest form of the row, which is the one that has to fit:
+            // a sub-extent names both sizes and the percentage between them.
+            Some(RenderSize {
+                extent: (1216, 688),
+                allocation: (1440, 816),
+            }),
         ),
     ] {
         let Draw::Fill { rect: panel, .. } = list[0] else {
@@ -257,7 +365,7 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
     steady(&mut meter, WINDOW, 1.0 / 240.0);
 
     let heights = |target| {
-        draw_list(&meter, Overlay::Pacing, target, None, None, None)
+        draw_list(&meter, Overlay::Pacing, target, None, None, None, None)
             .into_iter()
             .skip(4) // the panel, two lines of text and the rule
             .filter_map(|draw| match draw {

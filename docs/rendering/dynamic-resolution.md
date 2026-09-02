@@ -209,6 +209,23 @@ refresh.
   fast; see the trap on the thread. `OAG_RENDER_BENCH`'s figure is the CPU-side
   encode cost, which is a different number about a different thing.
 
+### The row that tells this from a stutter
+
+The `dev` performance overlay names the size the scene was drawn at, under the
+draw counts: `RENDER 1440x816` while the extent is the whole allocation - every
+frame today - and `RENDER 1216x688 OF 1440x816  84%` once something moves it.
+`perf::RenderSize`, and `None` on a stage with no scene, so the menus never
+name a texture nothing on screen came from.
+
+**Without it a controller is invisible in the one way that matters.** A frame
+rate that recovers because the resolution dropped and one that recovers because
+the load passed are the same graph; the row is the difference. It is readable
+*while* the scale moves, which is exactly what
+[ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
+bought by taking this overlay out of the scaled target - under the old shape it
+would have been re-rasterised at a new size every few frames, which is the one
+element a player is reading rather than looking at.
+
 ### What the probe actually found
 
 Measured 2026-09-02 on this project's development machine, both adapters, by

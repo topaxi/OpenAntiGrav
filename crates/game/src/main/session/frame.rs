@@ -707,6 +707,16 @@ impl Session {
             scene_stats,
             video_label,
             memory,
+            // Only where there was a scene: every other stage draws straight
+            // into the presentation target, so the scaled target's size would
+            // name a texture nothing on screen came from. Read after the draw
+            // rather than before, so the row is what this frame *was* drawn
+            // at - the resize above is the only thing that moves either size,
+            // and it happens before the stage renders.
+            has_scene.then(|| perf::RenderSize {
+                extent: self.framebuffer.extent(),
+                allocation: self.framebuffer.allocation(),
+            }),
         );
         if !list.is_empty() {
             self.overlay.overlay(
