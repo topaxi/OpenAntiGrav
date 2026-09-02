@@ -483,9 +483,33 @@ accident. Confidence **88**.
 **This holds only while `VECTOR` is authored first.** Authored last it would
 corrupt `PHANTOM` in the original and not here.
 
-Whether a fifth class exists anywhere else in Pulse - Wipeout HD's class ladder
-does begin at Vector - is **not** answered by this file and is not chased here.
-It is an open question on [HANDOVER.md](../../HANDOVER.md), not a finding.
+**Two more independent subsystems carry the same shape, and neither is
+authored either.** [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-class-index-and-the-dead-vector-branch)
+found this page's own bug pattern a second time, in unrelated code: the
+`AIStats` per-class loader recognises a `VectorStats` element name but never
+assigns its match an index, so the class pointer would compute to a negative
+offset if a shipped file ever authored one - and none does; `AIControlStats.xml`
+and every `AIRaceStats_<class>.xml` carry only the four real classes.
+Confidence 88, same page.
+
+A third, checked while chasing this: the front-end's loading-screen message
+keys run `MSC_LOAD_VENOM`, `MSC_LOAD_FLASH`, `MSC_LOAD_RAPIER`,
+`MSC_LOAD_PHANTOM` (`0x08a827c0`-`0x08a827f0` on `pulse-psp-usa`) - four
+entries, contiguous, immediately after a `"...Class Help"` key and before
+`"Event Help"`, with no `MSC_LOAD_VECTOR` in the gap. Same completeness
+argument as the WAD offset chain and the `<Misc>` stats-base range: not proof,
+but a missing fifth key would have to sit somewhere else entirely rather than
+in the run built for exactly this purpose. Confidence 85 - a string-table
+completeness reading, not a traced consumer.
+
+So three independently-recovered subsystems - ship handling globals, AI
+per-class stats, and front-end message keys - all show the same four classes
+and nothing shipped for a fifth. **Still not a runtime answer**: none of the
+three has been confirmed by tracing a live consumer under PPSSPP, only by
+exhausting the shipped data each one reads. Whether a fifth class exists
+anywhere else in Pulse - Wipeout HD's class ladder does begin at Vector - is
+**not** answered by this file and is not chased here. It is an open question on
+[HANDOVER.md](../../HANDOVER.md), not a finding.
 
 ## Related files
 
