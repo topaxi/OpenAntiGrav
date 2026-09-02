@@ -1813,7 +1813,7 @@ pub fn draw_list(
     // nothing to put in a value column. Everything else is a row list, which is
     // every page on both PSP titles and all but the root on Wipeout HD.
     layers.body = match skin.strip().filter(|_| strip::suits(page)) {
-        Some(strip) => strip::draw(menu, skin, strip, measure),
+        Some(strip) => strip::draw(menu, skin, strip, measure, frame),
         None => rows::draw(menu, skin, bindings),
     };
 

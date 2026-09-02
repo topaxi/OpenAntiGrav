@@ -72,40 +72,109 @@ pub(super) fn suits(page: &Page) -> bool {
 /// renderer and the layout belongs here, so neither has to hold the other. A
 /// column never needed it - rows start at one x - and a strip cannot be laid out
 /// without it.
+///
+/// `frame` supplies the two colours a capture settled: [`super::Frame::ink`]
+/// (`HD_Grey`) for an unselected tab and [`super::Frame::tab_selected`]
+/// (`HD_Blue`) for the selected one. A colour that is `None` - a title with no
+/// frame at all, or a served archive whose globals do not carry the name -
+/// skips its own fill rather than inventing one, the same rule
+/// [`super::read_frame`] already applies to a mark whose texture did not
+/// decode.
 pub(super) fn draw(
     menu: &Menu,
     skin: &Skin,
     strip: Strip,
     measure: &dyn Fn(&str) -> f32,
+    frame: &super::Frame,
 ) -> Vec<Draw> {
     let scale = skin.row_scale();
     let gap = skin.strip_gap();
+    let (tab_left_pad, tab_top_pad) = skin.tab_pad();
+    let tab_height = skin.tab_height();
+    let (chamfer_width, chamfer_height) = skin.tab_chamfer();
+    let (underline_width, underline_height, underline_offset_y) = skin.underline();
 
     let mut out = Vec::new();
     let mut x = strip.x;
     for (index, entry) in menu.page().entries.iter().enumerate() {
         let label = entry.label();
+        let selected = index == menu.selected();
+        let width = measure(label) * scale;
+
+        // The tab behind the label, in two bands rather than one rectangle:
+        // the real tab's top-right corner is chamfered, and a diagonal cut
+        // needs a primitive this build's `Draw`/`Quad` pipeline does not
+        // have. A staircase of one step - the full tab below the chamfer's
+        // height, a second band above it short by the chamfer's width - draws
+        // the true measured size and position of the cut with the primitive
+        // that already exists. See `Skin`'s `TAB_LEFT_PAD` doc for the raw
+        // measurement and the render comparison that checked this was worth
+        // shipping.
+        let fill = if selected {
+            frame.tab_selected
+        } else {
+            frame.ink
+        };
+        if let Some(color) = fill {
+            let tab_width = tab_left_pad + width;
+            out.push(Draw::Fill {
+                rect: [
+                    x - tab_left_pad,
+                    strip.y - tab_top_pad + chamfer_height,
+                    tab_width,
+                    tab_height - chamfer_height,
+                ],
+                color,
+            });
+            // A label short enough that its tab is narrower than the chamfer
+            // itself would otherwise flip this band's width negative - the
+            // chamfer only ever eats up to the whole top band, never past it.
+            out.push(Draw::Fill {
+                rect: [
+                    x - tab_left_pad,
+                    strip.y - tab_top_pad,
+                    (tab_width - chamfer_width).max(0.0),
+                    chamfer_height,
+                ],
+                color,
+            });
+        }
+
         out.push(Draw::Text {
             x,
             y: strip.y,
             scale,
-            // The same two states a row has, and the same reasoning: the
-            // original brightens the selected entry rather than putting a bar
-            // behind it. What "brightened" is on this title is unmeasured, so
-            // `Skin::selected` supplies this build's white - see its docs. The
-            // unselected colour is the widget's own and is not this build's
-            // choice at all.
-            color: if index == menu.selected() {
-                skin.selected()
-            } else {
-                strip.color
-            },
+            // Every entry is this same colour, selected or not - a 2026-09-01
+            // capture found no text brightening at all, only the tab fill
+            // above changing. See `Strip::color`'s own doc for the reading
+            // this replaced.
+            color: skin.normal(),
             border: None,
             align: Align::Left,
             text: label.to_string(),
             wrap_width: None,
         });
-        x += measure(label) * scale + gap;
+
+        // The underline mark, selected entry only, and only alongside its
+        // own tab fill: the mark reads as underlining the tab, so on a title
+        // with no frame colours to fill the tab with, drawing the mark alone
+        // would be a floating dash under nothing rather than the absence
+        // `super::read_frame` already chose. Its own colour is measured
+        // rather than assumed: the one capture with a visible mark shows it
+        // in the label's own white, not the tab's `HD_Blue`.
+        if selected && fill.is_some() {
+            out.push(Draw::Fill {
+                rect: [
+                    x,
+                    strip.y + underline_offset_y,
+                    underline_width,
+                    underline_height,
+                ],
+                color: skin.normal(),
+            });
+        }
+
+        x += width + gap;
     }
     out
 }

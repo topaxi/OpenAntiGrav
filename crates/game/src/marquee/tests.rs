@@ -126,6 +126,7 @@ fn a_framed_page_still_clips_the_value_and_not_the_frame() {
             color: [1.0, 1.0, 1.0, 1.0],
         }],
         ink: Some([1.0, 1.0, 1.0, 1.0]),
+        tab_selected: None,
     };
     let before =
         crate::menu::draw_list(&menu, &skin(), &|_| Vec::new(), &measure, None, &framed).flatten();

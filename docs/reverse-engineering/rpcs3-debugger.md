@@ -470,6 +470,32 @@ Same disconnect, different state: if the target was paused, the log adds
 *resumed* leaves the game running, debugger-less but alive. So a script that
 means to hand a live emulator back should `vCont;c` before dropping the socket.
 
+### The shared Xvfb never clears, so an old window's pixels can ghost into a new screenshot
+
+**Found 2026-09-01**, capturing HD/Fury's Main Menu. `start_display()` reuses
+`:77` whenever it is already listening rather than restarting it, which is
+right for not paying a ~1 s Xvfb boot on every run - but Xvfb itself never
+repaints a region once the window that owned it closes, so whatever was drawn
+there last stays in the root window's framebuffer forever, or until something
+else overdraws it. `screenshot(trim=True)` only crops the outer
+`#000000`-on-`#000000` border, so a leftover window sitting beside the new one
+survives the crop intact and reads as part of the frame. Two boots of the same
+`browse --screen "Main Menu"` command an hour apart came back with the real
+menu on the right both times and **two completely different, unrelated
+images** on the left - a race HUD once, a blue architectural render the next -
+neither of which HD/Fury's front end draws at all. Both were leftovers from
+some earlier, already-exited RPCS3 window that Xvfb had never been told to
+forget. **A screenshot from this harness is only trustworthy up to the real
+window's own rectangle**, and nothing here currently reports where that is;
+until it does, treat an unexplained region beside the expected content as
+ghosting first, not as a feature, and crop it out by hand (the real content in
+both cases started at a consistent x-offset from the left edge of the
+trimmed image). Restarting Xvfb (`pkill Xvfb`, then let `start_display()`
+spawn a fresh one) is the sure fix but costs every other script sharing `:77`
+its state; finding the live RPCS3 window's own geometry (`xdotool` or
+`xwininfo` against the game's window, not the root) and cropping to exactly
+that would fix it without the blast radius.
+
 ### `Z0` breakpoints fire, but only under the interpreter
 
 **Settled 2026-08-19**, once a race gave an address that provably executes. This

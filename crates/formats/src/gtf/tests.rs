@@ -128,14 +128,38 @@ fn a_linear_a8r8g8b8_texture_reads_alpha_first() {
 }
 
 #[test]
-fn a_swizzled_texture_is_refused_rather_than_read_linearly() {
-    // The same descriptor without the `0x20` bit.
-    let data = blob(&descriptor(0x85, 1, 1, 4), &[0x40, 0x10, 0x20, 0x30]);
+fn a_swizzled_texture_reads_the_rsx_z_order_not_raster_order() {
+    // 4x4, so both dimensions carry two bits each and the Z-order genuinely
+    // departs from raster order past the second texel - a 2x2 texture's
+    // Z-order and raster order coincide, which would pass with the addressing
+    // simply not implemented. Sixteen texels, each `[index*0x10, 0, 0, 0xff]`
+    // in *raster* position, then permuted into `.gtf`'s own on-disk Z-order so
+    // decoding and re-flattening to raster order recovers `index*0x10` in R.
+    //
+    // The permutation (raster index -> Z-order index) is the textbook
+    // sequence for a 4x4 tile: 0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15.
+    const Z_ORDER: [usize; 16] = [0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15];
+    let mut texels = [[0u8; 4]; 16];
+    for (raster, &z) in Z_ORDER.iter().enumerate() {
+        texels[z] = [0xff, (raster * 0x10) as u8, 0x00, 0x00];
+    }
+    let bytes: Vec<u8> = texels.iter().flatten().copied().collect();
+    let data = blob(&descriptor(0x85, 4, 4, 64), &bytes);
     let texture = Gtf::parse(&data).expect("parses");
-    assert_eq!(
-        texture.only().expect("one").to_rgba(&data),
-        Err(Error::Swizzled { format: 0x85 })
-    );
+    assert!(!texture.only().expect("one").is_linear());
+
+    let rgba = texture
+        .only()
+        .expect("one")
+        .to_rgba(&data)
+        .expect("decodes");
+    for (raster, texel) in rgba.iter().enumerate() {
+        assert_eq!(
+            *texel,
+            [(raster * 0x10) as u8, 0x00, 0x00, 0xff],
+            "raster position {raster}"
+        );
+    }
 }
 
 #[test]

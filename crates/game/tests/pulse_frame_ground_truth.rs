@@ -153,6 +153,7 @@ fn the_frame_samples_its_own_patch_of_the_shared_sheet() {
         &sheet,
         space,
         Some(oag_pulse::frontend::states::FE_SCREEN),
+        None,
     );
 
     assert!(!frame.is_empty(), "Pulse's own frame draws something");

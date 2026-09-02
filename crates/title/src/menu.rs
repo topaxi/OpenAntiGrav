@@ -61,7 +61,7 @@ pub type Argb = u32;
 /// | --- | --- | ---: | ---: | ---: |
 /// | `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
 /// | `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
-/// | `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+/// | `pulse-ps2-eu.chd` | `WADSP.WAD`, `WADS2.WAD` | 7,393 | 76 | **0** |
 /// | `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
 /// | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 ///
@@ -74,10 +74,13 @@ pub type Argb = u32;
 /// The census is a string search on purpose: the PSP dialect shortens element
 /// names per file and writes the full name into that file's own `<code>`
 /// dictionary, so a `HorizMenu` anywhere would put the literal `HorizMenu` in
-/// the blob that used it. See `oag_formats::fexml`. **What it does not cover**
-/// is the PS2 pressing's other three archives - `WADS2.WAD`, `PRERACE.WAD` and
-/// `PS2MUSIC.WAD` - which were not swept; `WADSP.WAD` is where that disc's front
-/// end is.
+/// the blob that used it. See `oag_formats::fexml`. **The PS2 pressing's other
+/// two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are swept too** (2026-09-01),
+/// with zero hits for `Menu` or `HorizMenu` either, but not because the
+/// vocabulary is absent: both are `oag_formats::ps2_music`-shaped raw-PCM
+/// containers, not `oag_formats::fexml` at all, so neither can hold an XML
+/// widget by format. `WADSP.WAD`/`WADS2.WAD` are the whole of that disc's
+/// front end.
 ///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -97,11 +100,33 @@ pub struct MenuStrip {
     pub y: f32,
     /// The entries' own colour. Authored, the widget's own `color`.
     ///
-    /// **Not [`MenuSkin::text`], and the two really do differ**: Wipeout HD's
-    /// `FEGlobals->TextColor` is `0xFFFFFFFF` while its `<HorizMenu>` widgets
-    /// say `0xff705070`. A strip drawn in `TextColor` would be drawing a colour
-    /// its own widget overrides.
+    /// **Not what a strip's text is drawn in - a 2026-09-01 capture settled
+    /// that.** The reasoning once here was that this must override
+    /// [`MenuSkin::text`], since a widget declaring its own colour would
+    /// otherwise be pointless - plausible, and wrong: an RPCS3 capture of the
+    /// real menu shows every entry, selected or not, in the same white
+    /// `FEGlobals->TextColor`, not in this widget's `0xff705070`. What that
+    /// literal *is* for is still open - it names neither the text nor either
+    /// style's tab fill (`HD_Grey`/`HD_Blue`, see [`Self::selected_fill`]) - and
+    /// the field stays because it is still what the widget authors, just no
+    /// longer read as the text colour. See `docs/formats/hd-frontend.md`.
     pub color: Argb,
+    /// The name of the global a *selected* entry's own tab fills with, when
+    /// the disc states one. `None` on a title with no strip at all.
+    ///
+    /// A name, not a colour, for the reason [`crate::loading::Palette`] is:
+    /// the value is the FE style rather than a fixed table.
+    /// `FEGlobals->HD_Blue` is `0xffac0717` (Fury, red) on `DATA00` and
+    /// `0xff8ac0ca` (HD, teal) on `DATA06` - a colour recorded here would pin
+    /// one archive's look into a build that has to draw both. The unselected
+    /// fill needs no equivalent field: it is `FEGlobals->HD_Grey`, which
+    /// `oag_game::menu::frame::Frame::ink` already resolves per served
+    /// archive off the frame screen's own marks. Both fills are **confirmed
+    /// exact reads**, not approximations: a 2026-09-01 capture's own pixels
+    /// are `HD_Grey`/`HD_Blue` to the byte on the served archive. The tab's
+    /// *shape* is a separate, much rougher measurement - see
+    /// `docs/formats/hd-frontend.md`.
+    pub selected_fill: Option<&'static str>,
 }
 
 /// One title's menu presentation.

@@ -1,4 +1,5 @@
-//! Texel decoding: block compression, and the one linear layout that ships.
+//! Texel decoding: block compression, the linear layout, and the RSX's
+//! Morton-order tiling.
 //!
 //! # The colour endpoints are little-endian inside a big-endian file
 //!
@@ -16,6 +17,18 @@
 //!
 //! The 2-bit index word is read a byte per row, which is the same answer either
 //! way round and so needs no such argument.
+//!
+//! # The Morton order is the RSX's standard `cellGcm` tiling, not a guess
+//!
+//! [`morton_index`]'s bit-interleave is the documented PS3 SDK swizzle used
+//! everywhere the platform tiles a 2D surface, not something reverse-engineered
+//! from this disc alone - it is the same address function RPCS3's own texture
+//! cache and every other PS3 homebrew GCM reader use. What *is* measured against
+//! this disc, rather than assumed from the platform, is that it is the right one
+//! *here*: `docs/formats/gtf.md` runs the same roughness comparison the DXT
+//! endianness question above used, over every swizzled `A8R8G8B8`/`A8B8G8R8`
+//! texture on the disc, against a deliberately wrong permutation (row-major, as
+//! if the `0x20` linear bit had been misread). See that page for the numbers.
 
 use crate::bcn;
 
@@ -24,25 +37,44 @@ use super::Format;
 /// Decodes one mip level to straight RGBA8, or `None` for a layout this does
 /// not read.
 ///
-/// `pitch` is the descriptor's, in bytes, and 0 means tightly packed.
+/// `pitch` is the descriptor's, in bytes, and 0 means tightly packed. Consulted
+/// for the linear layouts only - a swizzled texture's addressing has no notion
+/// of a row stride, and block compression is a tiling of its own that the
+/// `0x20` bit is not read for either; see [`Format::is_block_compressed`].
+///
+/// `linear` is the descriptor's `0x20` bit, and only the two uncompressed
+/// formats consult it - a compressed one is block-order regardless, so a
+/// caller with nothing to say about linearity (`oag_render`'s block-only
+/// decode fallback, [`super::decode_level`]) can pass either.
 pub fn level(
     format: Format,
     texels: &[u8],
     width: u32,
     height: u32,
     pitch: usize,
+    linear: bool,
 ) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];
-    match format {
-        Format::Dxt1 | Format::Dxt23 | Format::Dxt45 => {
+    match (format, linear) {
+        (Format::Dxt1 | Format::Dxt23 | Format::Dxt45, _) => {
             blocks(format, texels, width, height, pitch, &mut out)?;
         }
-        Format::A8R8G8B8 => linear(texels, width, height, pitch, &mut out, [1, 2, 3, 0])?,
-        Format::A8B8G8R8 => linear(texels, width, height, pitch, &mut out, [3, 2, 1, 0])?,
-        // `B8` is one channel and every one on the disc is swizzled, so there is
-        // nothing to test a reading of.
-        Format::B8 => return None,
+        (Format::A8R8G8B8, true) => {
+            linear_texels(texels, width, height, pitch, &mut out, [1, 2, 3, 0])?
+        }
+        (Format::A8R8G8B8, false) => swizzled(texels, width, height, &mut out, [1, 2, 3, 0])?,
+        (Format::A8B8G8R8, true) => {
+            linear_texels(texels, width, height, pitch, &mut out, [3, 2, 1, 0])?
+        }
+        (Format::A8B8G8R8, false) => swizzled(texels, width, height, &mut out, [3, 2, 1, 0])?,
+        // `B8` is one channel and every one on the disc is swizzled, so there
+        // is nothing to test a reading of - the swizzle *address* is the same
+        // Morton order as the two formats above, but what the one channel
+        // byte itself means is still unread. See `Texture::remap`'s doc: its
+        // own value differs on exactly these files, which is a reason to
+        // expect the byte is not a plain alpha, not a measurement that it is.
+        (Format::B8, _) => return None,
     }
     Some(out)
 }
@@ -51,7 +83,7 @@ pub fn level(
 ///
 /// `A8R8G8B8` is a big-endian `u32` with alpha on top, so the bytes arrive A, R,
 /// G, B and red is byte 1.
-fn linear(
+fn linear_texels(
     texels: &[u8],
     width: u32,
     height: u32,
@@ -70,6 +102,64 @@ fn linear(
                 row[at + order[1]],
                 row[at + order[2]],
                 row[at + order[3]],
+            ];
+        }
+    }
+    Some(())
+}
+
+/// The RSX's Morton-order texel index for `(x, y)` in a `width x height`
+/// swizzled surface.
+///
+/// The standard `cellGcm` tiling: interleave the low bit of `x` then the low
+/// bit of `y`, one pair at a time, shifting each pair out as it is consumed,
+/// until the *narrower* dimension's bits run out - then let the wider
+/// dimension's remaining high bits continue linearly rather than interleave
+/// with nothing. A square power-of-two texture (every swizzled file this
+/// module reads happens to be one) never reaches that second phase, since both
+/// dimensions run out together.
+fn morton_index(x: u32, y: u32, width: u32, height: u32) -> usize {
+    let (mut bits_x, mut bits_y) = (width.trailing_zeros(), height.trailing_zeros());
+    let (mut x, mut y) = (x, y);
+    let mut index = 0u32;
+    let mut shift = 0u32;
+    while bits_x > 0 || bits_y > 0 {
+        if bits_x > 0 {
+            index |= (x & 1) << shift;
+            x >>= 1;
+            shift += 1;
+            bits_x -= 1;
+        }
+        if bits_y > 0 {
+            index |= (y & 1) << shift;
+            y >>= 1;
+            shift += 1;
+            bits_y -= 1;
+        }
+    }
+    index as usize
+}
+
+/// Four bytes per texel, in the RSX's Morton order rather than raster order -
+/// see [`morton_index`]. `order` is the same per-format channel permutation
+/// [`linear_texels`] takes; swizzling moves where a texel's four bytes sit,
+/// not what they mean.
+fn swizzled(
+    texels: &[u8],
+    width: u32,
+    height: u32,
+    out: &mut [[u8; 4]],
+    order: [usize; 4],
+) -> Option<()> {
+    for y in 0..height {
+        for x in 0..width {
+            let at = morton_index(x, y, width, height).checked_mul(4)?;
+            let texel = texels.get(at..at + 4)?;
+            out[(y * width + x) as usize] = [
+                texel[order[0]],
+                texel[order[1]],
+                texel[order[2]],
+                texel[order[3]],
             ];
         }
     }

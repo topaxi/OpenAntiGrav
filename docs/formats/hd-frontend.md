@@ -635,6 +635,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         x: 160.0,
         y: 125.0,
         color: 0xFF70_5070,
+        // Confirmed live, 2026-09-01 - see "The FE Style switch is live"
+        // below.
+        selected_fill: Some("HD_Blue"),
     }),
 };
 ```
@@ -653,9 +656,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 | `menu_font` | **no** | `None` | 90 | No `Menu` slot in any language plugin. |
 | `text` | yes | `0xFFFFFFFF` | 92 | `TextColor`, all six - one of the globals the FE style does *not* move. |
 | `title` | yes | `0xFF646464` | 90 | `TitleColor`, all six - but see the caveat. |
-| `selected` | measured field | `None` | - | No capture - and the authored `highlightColor` is `HD_Blue`, whose value is the style. |
+| `selected` | measured field | `None`, unchanged | 88 | Capture (2026-09-01): text does not brighten on selection at all on the strip idiom, so `strip::draw` no longer reads this field for a strip's text - see below. Still `None` in the title package; `rows::draw` (both PSP titles) still reads it and is untouched. |
 | `transition_secs` | yes | `0.5` | 70 | Dominant `<LeftLayer transition=>`; see the warning. |
-| `strip` | yes | `(160, 125, 0xff705070)` | 92 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml`. |
+| `strip` | yes | `(160, 125, 0xff705070, Some("HD_Blue"))` | 92 / 90 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml` (92); `selected_fill`'s name is the same capture as `selected` above (90). |
 
 ### `first_row_y` is absent, and why
 
@@ -746,15 +749,17 @@ assumed - every blob of the named archives was extracted and searched, and the
 | --- | --- | ---: | ---: | ---: |
 | `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
 | `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
-| `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+| `pulse-ps2-eu.chd` | `WADSP.WAD`, `WADS2.WAD` | 7,393 | 76 | **0** |
 | `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
 | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 
 A string search finds a shortened element because the PSP dialect writes the
 full name into each file's own `<code>` dictionary - see `oag_formats::fexml`.
-The PS2 pressing's other three archives (`WADS2.WAD`, `PRERACE.WAD`,
-`PS2MUSIC.WAD`) were **not** swept; `WADSP.WAD` is where that disc's front end
-is.
+The PS2 pressing's other two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are
+swept too (2026-09-01) and also come back **0** for both columns - but not
+because the vocabulary is absent from them. Both are `oag_formats::ps2_music`-
+shaped raw-PCM containers, not `fexml`, so neither can hold an XML widget by
+format at all. `WADSP.WAD`/`WADS2.WAD` are the whole of that disc's front end.
 
 Within HD it is an idiom rather than one screen's exception: eight files carry
 ten `<HorizMenu>` widgets against seventeen vertical `<Menu>`, all ten at
@@ -903,6 +908,167 @@ the same reason: HD's `Main Menu` authors its title `color="FEGlobals->HD_Grey"`
 and the frame's three widgets carry that same global, so "the title is the
 colour of the rules" is read off the disc, and taking it from the marks makes it
 resolve to whichever archive was served instead of being pinned to one.
+
+### The FE Style switch is live, works, and is not an archive swap - confirmed by capture
+
+**2026-09-01, `scripts/rpcs3-drive.py`, RPCS3 booted the real disc.** The
+previous section's open question - "what is not read is the code that chooses"
+- is now answered for the practical case: **"Menu Style" (the on-disc label
+for `OPT_FE_STYLE`) is a real, working, in-game setting**, reached from `Main
+Menu` -> `OPTIONS` -> `GAME`, the last row of a nine-row list. Selecting it
+repaints the whole `Game Options` screen from the Fury palette (black field,
+`0xff969696` grey, `0xffac0717` red) to the HD one (white field, `0xff646464`
+grey, `0xff8ac0ca` teal) in the same frame the value changes - no reload, no
+loading screen. `global="FE Style" save="true"` is not decorative either: a
+completely fresh boot, no navigation at all, came back with `Main Menu` itself
+in the HD palette, so the choice is a persisted profile value the front end
+reads on every screen it draws, not a per-session toggle. **Confidence 90** -
+a runtime capture showing the exact behaviour claimed, on the one binary this
+project has; the two-archive reading from the previous section corroborates it
+independently. Screenshots (gitignored, not committed - `data/reference/` on
+the machine that captured them):
+`hd-main-menu-screenshot/00.png` and `hd-menu-highlight-shift/00-campaign.png`
+are the same screen, Fury and HD side by side.
+
+**What this also settles: `additional_definition.xml` is not served from
+`DATA00`, and not from `DATA02` either.** `DATA00` carries no copy of the file
+at all (`mainmenu_definition.xml` and `Skin.xml` are the only two front-end
+XMLs it ships), and `DATA02`'s copy declares five rows under `Settings` -
+`Camera`, `Safe Area Setting`, `Multiplayer Tags`, `Ghost Ship Visible`,
+`Pilot Assist` - with no `HUD Style` and no `FE Style` at all. The live
+`Game Options` screen has nine, in this exact order: `Camera`, `Screen Size`,
+`Multiplayer Tags`, `Ghost Ships Visible`, `Pilot Assist - Player 1`,
+`Pilot Assist - Player 2`, `HUD Style`, `HUD Effects`, `Menu Style` - which is
+`DATA06`'s copy, field for field (`CameraP1`, `Safe Area Setting`,
+`Multiplayer Tags`, `GhostOption`, `Pilot Assist`, `Pilot Assist 2`,
+`HUD Style`, `HUD Effects`, `FE Style`, in that order; `CameraP2` sits between
+the two camera rows with `StartEnabled="false"` and does not show). So **the
+served front end is not one archive** - `DATA00` overrides the root screens
+(`mainmenu_definition.xml`, `Skin.xml`) and `DATA06` supplies files `DATA00`
+does not carry at all, `additional_definition.xml` among them. Which rule
+picks `DATA06` over `DATA02` for this one file, and whether it is the same
+rule that picks `DATA00` for the root, is still open - what changed is that
+"the archive" is now known to be a *per-file* question, not a single answer
+that resolves everything downstream of it.
+
+**`MenuSkin::selected` is resolved, and it is not what the field was for -
+and this is now implemented, not just documented.** The capture shows
+unselected and selected entries in the *identical* white `TextColor` -
+"CAMPAIGN" (selected) and "RACEBOX" (not) read as the same white, at the same
+weight, in both the Fury and the HD shot. What changes is the entry's own
+background: a tab, filled `HD_Grey` when unselected and `HD_Blue` when
+selected (red on Fury, teal on HD - exactly the archive's own value, matching
+the 25 `highlightColor` attributes already read as `HD_Blue`), plus a short
+underline mark under the selected label alone, in the label's own white
+rather than either fill colour. **So brightening the text was the wrong
+mechanism**: `strip::draw` no longer reads `Skin::selected()` for a strip's
+text at all - every entry draws in `Skin::normal()` - and the highlight moved
+entirely onto a new background fill. `Skin::selected()` itself is untouched:
+`rows::draw` (both PSP titles) still reads it, and nothing here says whether
+its own "brighten toward white" reading is right for a column, only that it
+is wrong for a strip. **Confidence 88** for the finding; the fill and
+underline colours (`HD_Grey`/`HD_Blue`, read live off the served archive's
+own globals - `oag_title::MenuStrip::selected_fill`, resolved the same way
+`crate::loading`'s own palette is) are **confirmed exact reads**, matched to
+the capture's own pixels to the byte. The tab's *shape* is not: nothing on
+disc states one at all, and what shipped is a rectangle sized from
+`measure(label)` plus a left/top pad, at **confidence 55** - the real tab's
+top-right corner is chamfered, `17`x`7` pixels in a `1278`-wide capture
+against a `188`-`232`-pixel-wide tab, left edge vertical throughout, and
+reproducing that cut as a true diagonal needs a primitive this build's
+`Draw`/`Quad` pipeline does not have. **Not a shear** - a shear moves both
+right corners into a parallelogram, which is the wrong shape - but an offset
+on the one top-right corner alone (a whole-quad `rotation` only exists today,
+see `crates/game/src/ui.wgsl`), and that primitive's blast radius (every
+`Quad` in the game shares its vertex layout) was judged not worth paying for
+one small corner. **2026-09-02: shipped anyway, as a one-step band rather
+than a plain rectangle** - `strip::draw` now draws the tab as two
+`Draw::Fill`s, the full tab below the chamfer's height and a second band
+above it short by the chamfer's width, using the same raw measurement. A
+render comparison against the capture found the honest result: at a normal
+crop the step and the real bevel read the same, but a close zoom shows the
+step is a right angle where the capture is a diagonal - a resolution limit
+from drawing the true cut with an existing primitive, not an invented shape.
+`crates/game/src/menu/strip.rs`, `crates/game/src/menu/frame.rs`,
+`crates/game/src/menu/skin.rs`.
+
+**2026-09-02: what `0xff705070` is for, from a wider sweep rather than the one instance already read.** Every `<HorizMenu>`/`<VertMenu>` widget's own top-level `<Values>` across `mainmenu_definition.xml`, `additional_definition.xml` (two `<HorizMenu>`, one `<VertMenu>`) and all four `manual_definition*.xml` copies carries this exact literal - eight instances, matching the table row above, all the *widget's own* declared colour and none of them reached through `FEGlobals->`, unlike every colour already established as live (`HD_Grey`, `HD_Blue`, `TitleColor`...). The already-captured case (`strip`, this section, above) shows this exact mechanism - a menu-family widget's own `color=` - going unread, text drawing in `TextColor` regardless. Structurally the same widget field on the other seven instances, unconfirmed individually - **confidence 70**, one capture generalised across a consistent pattern rather than seven more captures.
+
+**`online_definition.xml` (`DATA02`/`DATA05`/`DATA06`, fourteen instances per copy) is a different picture, and argues the literal is not simply dead everywhere it appears.** Past the `OnlineMenu` `<HorizMenu>` itself (which *does* use `0xffffffff`, the two-of-ten exception the table above already counts), the same `0xff705070` recurs on five ordinary `<Menu>` widgets (`LoginMenu`, `UserList` x2, `FriendOptions`, `BlockOptions`, `PendingOptions`) and six standalone `<Text>` widgets carrying community/friends status strings (`friendRequests`, `FriendInfo`, `SkinInfo`, `blockedInfo`, `statusInfo`, `pendingInfo`) - every one an info/status label, not a navigation entry. A `<Text>` widget is a materially different draw than a menu entry in this build's own equivalent code (`Frontend::draw_screen_at` reads a parsed `Text`'s own `color` directly, unlike `strip::draw`/`rows::draw` which read a skin-level colour instead) - so nothing here says a `<Text>` widget's own colour goes unread the way a menu entry's does, and the online/community screens are not implemented in this project to check against a capture either way. **Confidence 55** for "this is likely a real, deliberately-chosen secondary/muted text colour on `<Text>` widgets specifically, and likely inert on the `<Menu>`-family widgets beside it the same way it is on the captured strip" - plausible from the pattern and from this build's own analogous code split, not verified against the executable or a capture of the online screen, which does not exist in this project's evidence.
+
+**No carousel, confirmed rather than assumed.** Stepping the highlight to
+`RECORDS` - the last of the five main-menu entries - leaves it sitting at its
+own natural position at the right end of the strip; nothing re-centres it and
+nothing scrolls. That is the reading `strip::draw` already implements, now
+with a capture behind it instead of only the widget's own silence on the
+question. **Confidence 90.**
+
+**The menu backdrop's mechanism gets one more anchor, and one caution.**
+`renderer.md`'s shader-registry census (a fixed cost of reading the whole
+`EBOOT.elf`, not new work for this) names nine `FEBackgroundAnim*` programs,
+two of them `FEBackgroundAnimFuryWave` and `FEBackgroundAnimFuryBlend` -
+sharing the `<BackgroundAnim>` widget's own name and, in two of the nine,
+naming Fury specifically. The Fury-style capture shows a dense, animated
+red-and-gold particle/ember field with no discernible mesh silhouette in it
+anywhere; two captures a boot apart differ in exact shape, so it is animated
+rather than a static image, consistent with a real-time render. **The HD-style
+capture shows nothing at all** - a flat white field, no particle motion,
+nothing where the Fury capture is busy. Read together with the shader names,
+the more precise hypothesis is that `FrontEndScene_HD_ATG.vex`/`.rcsmodel`
+supply geometry a **style-specific shader** draws (a `*Wave`/`*Blend` pair for
+Fury, something else or nothing for HD) rather than one mesh rendered the same
+way regardless of style - which the previous confidence-88 reading, written
+before either style had been seen running, could not have distinguished from
+"the scene simply is not authored for HD." **Still open**: which of the seven
+non-Fury `FEBackgroundAnim*` names (if any) HD's style resolves to, and
+whether HD genuinely draws nothing or draws something this capture's settle
+time was too short to catch mid-transition (`Skin.xml`'s
+`<ScreenSetting name="Main Menu" ... blur="0">` at least says HD's own author
+also thought the Main Menu screen ought to be sharp, for what that is worth).
+Neither this build nor `oag-render` draws any of it today - open
+implementation work, not yet done.
+
+**2026-09-02: the geometry decodes, and its own material argues against the
+"style-specific shader draws it" hypothesis above.** `.rcsmodel`/`.vex`
+decoding landed elsewhere since that paragraph was written - the chunk-header
+and per-chunk-space findings on [rcsmodel.md](rcsmodel.md) - which unblocked
+reading the file directly:
+
+```sh
+cargo run -q -p oag-view --bin oag-view -- \
+  "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC" \
+  --mesh 'Data\FE\FrontEndScene\FrontEndScene_HD_ATG.vex' \
+  --screenshot /tmp/fescene.png
+```
+
+parses and draws clean: 56 of 56 mesh nodes, 9,184 triangles, 18,315 authored
+vertex normals, radius 333.10 - a ring-shaped lattice of small repeating
+segments, unlit and untextured (the shipped lit-race pass does not resolve a
+shader for it - see below). It has exactly **one** material, named by
+`PS3_GAME/USRDIR/DATA02.PSARC`'s own manifest:
+`/data/materials/frontendscene/basic_vertexemissive.rcsmaterial`. That is an
+ordinary per-surface `.rcsmaterial` - the same container every track and ship
+material ships - and **not** one of the 121 engine-owned `_vp`/`_fp` names
+`renderer.md`'s shader-registry census reads out of `EBOOT.elf`, `FEBackgroundAnim*`
+among them. It carries exactly one variant: class `RigidBody`, feature set
+`HalfBrightAmbientSunSpot0SVC0` - the plain sun-plus-ambient lit-race
+permutation [`oag_formats::rcsmaterial::Features::chunk_word`]'s own doctest
+names for "no lightmap coordinate, no vertex colour set" (`LIT_RACE_PASS`,
+`decl: None`), despite the file's own name promising a vertex-driven emissive
+term. Read together, this favours a different picture than "a style-specific
+`FEBackgroundAnim*` shader draws this same mesh": the mesh's own material asks
+to be lit like an ordinary in-race `RigidBody` - sun colour, sun direction,
+ambient - which a front-end screen has no `.envsettings` to supply at all, so
+even a build that shipped this exact variant would have no authored light to
+feed it. The `FEBackgroundAnimFuryWave`/`FEBackgroundAnimFuryBlend` pair
+sharing the `<BackgroundAnim>` widget's name is more likely a **separate**
+full-screen effect layered over or instead of this geometry than the shader
+this geometry's own material asks for. **Confidence 60** - the variant key is
+read off the file, not guessed, but which pass actually draws this scene
+in-game (and whether the key this project computes is the one the executable
+would) is not traced from the executable side. Neither this build nor
+`oag-render` draws any of it - still open implementation work, now with a
+narrower and more specific blocker than "the decoder doesn't exist yet".
 
 ### `menu_font` is `None`, and that is a measurement
 
@@ -1105,7 +1271,10 @@ a camera pose and per-screen blur**, not a video - and `.vex` is the format
 [hd-status](hd-status.md) already reads byte-swapped, with the caveat that its
 mesh batches have moved to `.rcsmodel`. **Confidence 88**: the widget, the
 attributes and both files are all present and consistent; nothing shows the
-engine drawing it.
+engine drawing it. A live capture now confirms *something* real-time and
+animated draws there on the Fury style and nothing does on the HD style - see
+"The FE Style switch is live, works, and is not an archive swap" below, which
+also refines what that something more likely is.
 
 The only `.bik` files on the disc that are not per-track previews or UI icons
 are the two Studio Liverpool logos. There is nothing a `menu_backdrop` could

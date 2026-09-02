@@ -42,8 +42,7 @@
 //!
 //! 92 rather than higher because **nothing has been compared against the running
 //! original**, which is the ceiling this project's rubric puts on a static
-//! reading, and because two of the three swizzled formats are refused rather
-//! than decoded.
+//! reading.
 //!
 //! # `pitch` does not halve down the mip chain
 //!
@@ -70,20 +69,39 @@
 //! | 2,485 | `0x86` | `DXT1` | yes |
 //! | 527 | `0x87` | `DXT23` | yes |
 //! | 126 | `0xa5` | `A8R8G8B8`, linear | yes |
-//! | 37 | `0x85` | `A8R8G8B8`, **swizzled** | no |
+//! | 37 | `0x85` | `A8R8G8B8`, **swizzled** | **yes** |
 //! | 9 | `0x81` | `B8`, swizzled | no |
-//! | 7 | `0x9e` | `A8B8G8R8`, swizzled | no |
+//! | 7 | `0x9e` | `A8B8G8R8`, **swizzled** | **yes** |
 //! | 3 | `0xa8` | `DXT45`, linear | yes |
 //! | 1 | `0xa6` | `DXT1`, linear | yes |
 //! | 1 | `0xa7` | `DXT23`, linear | yes |
 //!
-//! 7,280 of 7,333 decode. The 53 that do not are the ones with **no `0x20`
-//! bit** and no block compression, which means the texels are in the RSX's
-//! Morton order; that permutation is not implemented, and a linear read of a
-//! swizzled texture is a recognisable picture in scrambled tiles, which is
-//! exactly the kind of wrong answer that survives review. [`Texture::to_rgba`]
-//! refuses them by name instead. Block-compressed formats are never swizzled -
-//! the block layout is the tiling - so the `0x20` bit is not consulted for them.
+//! 7,324 of 7,333 decode. The 9 that do not are `B8`: one channel, swizzled on
+//! every file that carries it, and what the one byte itself means is unread.
+//!
+//! **The other 44 - swizzled `A8R8G8B8`/`A8B8G8R8` - decode through
+//! [`decode::morton_index`]**, the RSX's Morton-order texel address: no `0x20`
+//! bit and no block compression, so the texels are tiled rather than raster,
+//! and a linear read of one is a recognisable picture in scrambled tiles -
+//! exactly the kind of wrong answer that survives review, which is why this
+//! was refused by name rather than misread for as long as it was. The address
+//! function is the platform's own documented `cellGcm` tiling, not reversed
+//! from this disc - **confidence 88**: an exact match on a 4x4 synthetic
+//! fixture (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`),
+//! and on the disc, 33 of 34 judgeable swizzled `A8R8G8B8`/`A8B8G8R8` files
+//! decode smoother than a deliberately wrong linear misread - the same
+//! roughness test the DXT endianness question above uses, clearing the same
+//! 90 percent bar with room to spare - with the one exception individually
+//! inspected by eye rather than waved through: a coherent, already-blocky
+//! test chart that defeats a within-row roughness metric, not scrambled
+//! tiles. See
+//! `docs/formats/gtf.md` for the numbers and
+//! `crates/formats/tests/gtf_ground_truth.rs`. Not corroborated against the
+//! executable's own texture upload code - `EBOOT.elf` carries no `swizzle`
+//! string to search for, and no upload routine has been located - which is
+//! why this stops at 88 rather than reaching for a runtime-verified score.
+//! Block-compressed formats are never swizzled - the block layout is the
+//! tiling - so the `0x20` bit is not consulted for them.
 //!
 //! # And 23 cubemaps, which decode face by face
 //!
@@ -111,6 +129,12 @@ pub const DESCRIPTOR_LEN: usize = 36;
 
 /// Bit `0x20` of the format byte: the texels are in raster order.
 const LINEAR: u8 = 0x20;
+
+/// The `remap` value that forces the blue channel to `0xff` rather than
+/// reading it from the texel - see [`Texture::remap`]'s own doc for the
+/// distribution and confidence. All 7 of the disc's `A8B8G8R8` files carry
+/// exactly this value; nothing else does.
+const REMAP_FORCES_BLUE: u32 = 0xa9e4;
 
 /// Bit `0x40` of the format byte: texture coordinates are in texels.
 const UNNORMALISED: u8 = 0x40;
@@ -177,14 +201,6 @@ pub enum Error {
         /// Length it declares.
         declared: u32,
     },
-    /// The texels are in the RSX's Morton order, which is not implemented.
-    ///
-    /// See this module's format table: 53 files on the HD disc, none of them a
-    /// HUD or a circuit texture.
-    Swizzled {
-        /// The whole format byte.
-        format: u8,
-    },
     /// A cubemap, whose face layout is parsed but not decoded.
     Cubemap,
 }
@@ -213,12 +229,6 @@ impl std::fmt::Display for Error {
                 write!(
                     f,
                     "declared {declared} texel bytes, the descriptor implies {expected}"
-                )
-            }
-            Self::Swizzled { format } => {
-                write!(
-                    f,
-                    "format 0x{format:02x} is swizzled, which is not implemented"
                 )
             }
             Self::Cubemap => write!(f, "cubemap faces are parsed but not decoded"),
@@ -300,14 +310,17 @@ pub struct Texture {
     pub dimension: u8,
     /// Whether six faces follow one another.
     pub cubemap: bool,
-    /// `+0x10`, a channel permutation this does not act on.
+    /// `+0x10`, a channel permutation.
     ///
-    /// Three distinct values on the HD disc - `0xaae4` on 7,317 of 7,333,
-    /// `0xa9ff` on 9 and `0xa9e4` on 7 - and what they select has not been
-    /// read, so nothing here consults it. The 16 that differ are all
-    /// single-channel or swizzled formats that [`Texture::to_rgba`] refuses
-    /// anyway, so the gap costs nothing today and would matter the day `B8` is
-    /// decoded.
+    /// Three distinct values on the HD disc: `0xaae4` on 7,317 of 7,333, which
+    /// is the identity (`A<-A, R<-R, G<-G, B<-B` under `CELL_GCM_REMAP_MODE`'s
+    /// packing) and needs no action; `0xa9ff` on the 9 `B8` files, which
+    /// [`Texture::to_rgba`] still refuses outright, so still moot; and
+    /// [`REMAP_FORCES_BLUE`] on the 7 `A8B8G8R8` files, which
+    /// [`Texture::to_rgba`] now decodes and does act on - see there.
+    /// **Confidence 75** on the bit packing, a published-header reading rather
+    /// than something measured against behaviour; the *distribution* (which
+    /// files carry which value) is measured. See `docs/formats/gtf.md`.
     pub remap: u32,
     /// Width of the base level, in texels.
     pub width: u16,
@@ -343,6 +356,17 @@ impl Texture {
     #[must_use]
     pub const fn is_unnormalised(&self) -> bool {
         self.format_byte & UNNORMALISED != 0
+    }
+
+    /// Applies [`Self::remap`]'s effect to an already-decoded RGBA8 buffer, in
+    /// place. A no-op for every value but [`REMAP_FORCES_BLUE`] - see that
+    /// constant's own doc.
+    fn apply_remap(&self, out: &mut [[u8; 4]]) {
+        if self.remap == REMAP_FORCES_BLUE {
+            for texel in out {
+                texel[2] = 0xff;
+            }
+        }
     }
 
     /// Faces stored: 6 for a cubemap, 1 otherwise.
@@ -447,8 +471,7 @@ impl Texture {
     ///
     /// [`Error::Cubemap`] for a texture that is *not* one, since a face index is
     /// meaningless there; [`Error::UnknownFormat`] for `B8`, as
-    /// [`Self::to_rgba`]; [`Error::Swizzled`] for a layout this does not read;
-    /// and [`Error::DataOutOfBounds`] for a face past the six.
+    /// [`Self::to_rgba`]; and [`Error::DataOutOfBounds`] for a face past the six.
     pub fn face_to_rgba(&self, blob: &[u8], face: usize) -> Result<Vec<[u8; 4]>> {
         if !self.cubemap {
             return Err(Error::Cubemap);
@@ -459,11 +482,6 @@ impl Texture {
                 offset: range.start as u32,
                 length: (range.end - range.start) as u32,
                 got: blob.len(),
-            });
-        }
-        if !self.format.is_block_compressed() && !self.is_linear() {
-            return Err(Error::Swizzled {
-                format: self.format_byte,
             });
         }
         if self.format == Format::B8 {
@@ -478,19 +496,29 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** The swizzled and `B8` cases are both refused
-        // above, so a `None` here is the decoder running out of texels - a
-        // truncated blob - and reporting that as "swizzled, not implemented"
-        // sent the reader looking for a Morton order that is not the problem.
-        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
-        // honest errors.
-        decode::level(self.format, texels, width, height, self.pitch as usize).ok_or(
-            Error::DataOutOfBounds {
-                offset: range.start as u32,
-                length: (range.end - range.start) as u32,
-                got: blob.len(),
-            },
+        // **Not `Swizzled`.** `B8` is refused above and every other format
+        // this reads decodes regardless of layout, so a `None` here is the
+        // decoder running out of texels - a truncated blob - and reporting
+        // that as "swizzled, not implemented" sent the reader looking for a
+        // Morton order that is not the problem. Finding F7 of the 2026-08-18
+        // review, in a codebase that prizes honest errors; the comment
+        // predates the swizzle decoder and the reasoning still holds for the
+        // one format it did not cover.
+        let mut out = decode::level(
+            self.format,
+            texels,
+            width,
+            height,
+            self.pitch as usize,
+            self.is_linear(),
         )
+        .ok_or(Error::DataOutOfBounds {
+            offset: range.start as u32,
+            length: (range.end - range.start) as u32,
+            got: blob.len(),
+        })?;
+        self.apply_remap(&mut out);
+        Ok(out)
     }
 
     /// Decodes the base mip level to straight RGBA8.
@@ -500,24 +528,17 @@ impl Texture {
     ///
     /// # Errors
     ///
-    /// [`Error::Swizzled`] for a texture in the RSX's Morton order,
-    /// [`Error::Cubemap`] for a cubemap, and [`Error::DataOutOfBounds`] if the
-    /// level does not fit - which `parse` has already ruled out, so it means the
-    /// wrong blob was passed, or a blob whose texels stop short of what the
-    /// descriptor declares.
+    /// [`Error::UnknownFormat`] for `B8`, [`Error::Cubemap`] for a cubemap, and
+    /// [`Error::DataOutOfBounds`] if the level does not fit - which `parse` has
+    /// already ruled out, so it means the wrong blob was passed, or a blob whose
+    /// texels stop short of what the descriptor declares.
     pub fn to_rgba(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         if self.cubemap {
             return Err(Error::Cubemap);
         }
-        if !self.format.is_block_compressed() && !self.is_linear() {
-            return Err(Error::Swizzled {
-                format: self.format_byte,
-            });
-        }
         // `B8` has one channel and every one on the disc is swizzled, so there is
-        // nothing to test a reading of - and a *linear* one would fall past the
-        // guard above and be reported as swizzled, which would be the wrong
-        // reason. No such file ships; named here rather than left to be guessed.
+        // nothing to test a reading of. No linear `B8` file ships; named here
+        // rather than left to be guessed.
         if self.format == Format::B8 {
             return Err(Error::UnknownFormat {
                 format: self.format_byte,
@@ -530,19 +551,29 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** The swizzled and `B8` cases are both refused
-        // above, so a `None` here is the decoder running out of texels - a
-        // truncated blob - and reporting that as "swizzled, not implemented"
-        // sent the reader looking for a Morton order that is not the problem.
-        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
-        // honest errors.
-        decode::level(self.format, texels, width, height, self.pitch as usize).ok_or(
-            Error::DataOutOfBounds {
-                offset: range.start as u32,
-                length: (range.end - range.start) as u32,
-                got: blob.len(),
-            },
+        // **Not `Swizzled`.** `B8` is refused above and every other format
+        // this reads decodes regardless of layout, so a `None` here is the
+        // decoder running out of texels - a truncated blob - and reporting
+        // that as "swizzled, not implemented" sent the reader looking for a
+        // Morton order that is not the problem. Finding F7 of the 2026-08-18
+        // review, in a codebase that prizes honest errors; the comment
+        // predates the swizzle decoder and the reasoning still holds for the
+        // one format it did not cover.
+        let mut out = decode::level(
+            self.format,
+            texels,
+            width,
+            height,
+            self.pitch as usize,
+            self.is_linear(),
         )
+        .ok_or(Error::DataOutOfBounds {
+            offset: range.start as u32,
+            length: (range.end - range.start) as u32,
+            got: blob.len(),
+        })?;
+        self.apply_remap(&mut out);
+        Ok(out)
     }
 }
 
@@ -554,8 +585,14 @@ impl Texture {
 /// the disc's own DXT blocks where it can and decodes them here where it
 /// cannot. `pitch` is the descriptor's, in bytes, and 0 means tightly packed.
 ///
-/// Returns `None` for a layout this does not read - a swizzled or `B8` one, or
-/// texels that stop short of the dimensions given.
+/// `linear` is the descriptor's `0x20` bit - see [`Texture::is_linear`] - and
+/// only matters for the two uncompressed formats; every caller today only
+/// ever passes a block-compressed `format` (see [`Format::is_block_compressed`]),
+/// which ignores it, so `true` is a safe default where the descriptor is not
+/// at hand.
+///
+/// Returns `None` for a layout this does not read - `B8`, still - or texels
+/// that stop short of the dimensions given.
 #[must_use]
 pub fn decode_level(
     format: Format,
@@ -563,8 +600,9 @@ pub fn decode_level(
     width: u32,
     height: u32,
     pitch: usize,
+    linear: bool,
 ) -> Option<Vec<[u8; 4]>> {
-    decode::level(format, texels, width, height, pitch)
+    decode::level(format, texels, width, height, pitch, linear)
 }
 
 /// The unexplained tail on a cubemap that carries a mip chain.

@@ -41,6 +41,7 @@ fn the_clear_is_read_and_resolved() {
         &Sheet::default(),
         crate::frontend::Space::HD,
         Some("Frame"),
+        None,
     );
     let Some(Draw::Fill { rect, color }) = frame.clear else {
         panic!("the screen clears: {frame:?}");
@@ -65,6 +66,7 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
         &Sheet::default(),
         crate::frontend::Space::HD,
         Some("Frame"),
+        None,
     );
     assert!(frame.marks.is_empty(), "no placements, so no marks");
     assert!(frame.clear.is_some(), "and the clear is unaffected");
@@ -76,15 +78,61 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
 #[test]
 fn no_name_and_a_wrong_name_both_read_as_no_frame() {
     let space = crate::frontend::Space::HD;
-    let unnamed = crate::menu::read_frame(&screens(), &Sheet::default(), space, None);
+    let unnamed = crate::menu::read_frame(&screens(), &Sheet::default(), space, None, None);
     assert!(unnamed.is_empty());
     let missing = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
         space,
         Some("A Screen This Disc Has Not Got"),
+        None,
     );
     assert!(missing.is_empty());
+}
+
+/// The selected fill is read straight off the globals table, by name - not
+/// off any widget's own marks, unlike the clear or `ink` above.
+///
+/// Two cases in one: the name resolves when the disc's globals carry it, and
+/// `None` (no strip, or a title-package name this disc's globals do not
+/// carry) reads as no highlight rather than a wrong colour.
+#[test]
+fn the_selected_fill_is_read_from_the_globals_table_by_name() {
+    let frame = crate::menu::read_frame(
+        &screens(),
+        &Sheet::default(),
+        crate::frontend::Space::HD,
+        Some("Frame"),
+        Some("Ink"),
+    );
+    let Some(color) = frame.tab_selected else {
+        panic!("Ink is one of the fixture's own globals: {frame:?}");
+    };
+    // `0xff445566`, as straight-alpha RGBA - the fixture's `Ink` global.
+    assert!((color[0] - 68.0 / 255.0).abs() < 0.001, "{color:?}");
+    assert!((color[1] - 85.0 / 255.0).abs() < 0.001, "{color:?}");
+    assert!((color[2] - 102.0 / 255.0).abs() < 0.001, "{color:?}");
+
+    let no_name = crate::menu::read_frame(
+        &screens(),
+        &Sheet::default(),
+        crate::frontend::Space::HD,
+        Some("Frame"),
+        None,
+    );
+    assert!(no_name.tab_selected.is_none(), "no name, nothing to read");
+
+    let unknown_name = crate::menu::read_frame(
+        &screens(),
+        &Sheet::default(),
+        crate::frontend::Space::HD,
+        Some("Frame"),
+        Some("HD_Blue"),
+    );
+    assert!(
+        unknown_name.tab_selected.is_none(),
+        "the fixture carries no HD_Blue"
+    );
 }
 
 /// The screen's `<Text>` widgets are not part of the frame.
@@ -103,6 +151,7 @@ fn the_frames_text_widgets_are_left_alone() {
         &Sheet::default(),
         crate::frontend::Space::HD,
         Some("Frame"),
+        None,
     );
     let drawn = frame.clear.iter().chain(frame.marks.iter()).count();
     assert!(

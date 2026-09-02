@@ -38,16 +38,132 @@ const OUR_LEADING: f32 = 6.0;
 /// The gap between two entries of a horizontal strip, **written in 480x272**
 /// and read through [`Skin::strip_gap`].
 ///
-/// **Ours, and it has to be**: a `<HorizMenu>` states a position and a colour
-/// and nothing about spacing - no `gap`, no second anchor to derive one from,
-/// and no capture of the original's own strip exists to measure one off. So an
-/// entry is advanced past by its own measured width plus this, which is the one
-/// rule that cannot put two labels on top of each other whatever they say.
+/// **Ours** in the sense that a `<HorizMenu>` states a position and a colour
+/// and nothing about spacing at all - no `gap`, no second anchor to derive one
+/// from. Measured in the same 2026-09-01 capture as the tab group below, at
+/// the same ruler (`480 / 1278 = 0.3756`): four tab-to-tab gaps, taken fill-
+/// right-edge to fill-left-edge below the chamfer (where the rectangle is
+/// full width, so no per-row narrowing skews it), came back `7`, `8`, `8`,
+/// `8` raw px across `CAMPAIGN`/`ONLINE`/`RECORDS` and the two entries past
+/// them - call it `8`.
 ///
-/// Deliberately larger than [`OUR_LEADING`]: entries sit side by side with no
-/// column edge to separate them, so the gap is the only thing that says where
-/// one ends and the next begins.
-const STRIP_GAP: f32 = 24.0;
+/// **That `8` is the visible gap, not [`STRIP_GAP`] itself.**
+/// [`super::strip::draw`] steps `x` by `width + gap` from one label's own pen
+/// position to the next, and a tab's fill starts [`TAB_LEFT_PAD`] left of its
+/// own label - so the fill-to-fill gap is `STRIP_GAP - TAB_LEFT_PAD`, and
+/// `STRIP_GAP` is the visible gap plus `TAB_LEFT_PAD`'s own raw `6`:
+/// `8 + 6 = 14` raw, `14 * 0.3756 = 5.3` converted. An earlier version of this
+/// doc read the visible gap (`9`, a coarser measurement than this one) as
+/// `STRIP_GAP` directly and got `3.4` - the same missing step the tab group's
+/// own ruler bug came from, a formula gap here rather than a units one, and
+/// left unfixed at the time deliberately, to keep that pass to the geometry
+/// bug alone. This value is now smaller than [`OUR_LEADING`], which an
+/// earlier note here called deliberate on the reasoning that a strip needs
+/// more separation than a column does with no edge between entries - that
+/// reasoning does not survive a real measurement, and a capture read at this
+/// group's own ruler outranks a readability guess. Confidence 55, same as the
+/// tab group: one capture, four gaps agreeing to within a pixel.
+const STRIP_GAP: f32 = 5.3;
+
+/// A strip entry's own background tab, and the mark under a selected one -
+/// both **ours**, and both approximated rather than authored.
+///
+/// Nothing on disc states any of this: a `<HorizMenu>` gives a position and a
+/// colour and nothing about a tab shape at all - see [`Strip::color`]. A
+/// 2026-09-01 RPCS3 capture (`data/reference/hd-menu-highlight-shift/00-campaign.png`,
+/// 1278x718, HD style) is what these six numbers come from.
+///
+/// **The ruler is the capture's own resolution against HD's own grid**
+/// (`oag_hd::frontend::MENU_SKIN.space`, confidence 95, `1920x1080`), not
+/// [`STRIP_GAP`]: `480 / 1278 = 0.3756`
+/// ours-units per capture pixel - the capture is a downscaled photo of HD's
+/// own 1920-wide grid, and this build's own figures are written in the PSP's
+/// 480-wide one, so a raw pixel crosses both scalings on its way in. **A first
+/// version of this group used `24 / 9 = 2.667` instead** - `STRIP_GAP`'s own
+/// invented value divided by the capture's tab-to-tab gap, on the reasoning
+/// that the capture's gap stood in for `STRIP_GAP` since nothing else in the
+/// same image could calibrate against. It cannot: `STRIP_GAP` is invented, not
+/// measured, so dividing by it computes the ratio between two unrelated
+/// numbers, not a scale. It produced a tab seven times too tall (`101` where
+/// `14.3` renders right) and every other number in the group proportionately
+/// wrong with it - self-consistent, since everything went through the same
+/// wrong ruler, and wrong regardless, since a render is what caught it: the
+/// oversized tab was tall enough to clip the screen title above it, in a
+/// region the ruler mistake never touched. Confirmed by re-rendering at the
+/// corrected ruler and matching the capture's own proportions again.
+/// **Confidence 55** - one capture, one entry measured twice (`CAMPAIGN` and
+/// `RACEBOX` agreed to the pixel).
+///
+/// Raw pixel measurements, for whoever revisits this: tab `188x38` (`RACEBOX`)
+/// and `232x38` (`CAMPAIGN`), left padding before the label `6`, top padding
+/// above it `5`, right padding **`~0`** (a tab's flat width is its label's own
+/// measured width plus the left padding and nothing past it - the chamfer
+/// below eats what would otherwise be a right pad). Underline `13x5`, `21`
+/// below the label's own top (`8` below its cap-height baseline, cap height
+/// `14`), starting flush with the label's own left edge.
+///
+/// **The chamfer is a one-step band, not a diagonal cut.** The tab's
+/// top-right corner is chamfered in the capture, `17` wide by `7` tall - cut,
+/// not rounded, and small against the tab's own `188`-`232` width, with the
+/// left edge staying vertical throughout. A true diagonal cut needs a
+/// primitive this build's `Quad`/`ui.wgsl` pipeline does not have: an
+/// independent offset on the one top-right corner alone, which `rect` plus a
+/// whole-quad `rotation` cannot express (**not a shear** either - a shear
+/// moves both right corners into a parallelogram, which is not this shape).
+/// That primitive is real work with a blast radius past this widget - every
+/// `Quad` instance in the game rides the same vertex layout - and one 6x3-unit
+/// corner on one widget is not the reason to add it.
+///
+/// [`crate::menu::strip::draw`] draws the same cut instead as two
+/// [`crate::frontend::Draw::Fill`] rectangles - the full tab below
+/// [`TAB_CHAMFER_HEIGHT`], and a second one above it, narrower by
+/// [`TAB_CHAMFER_WIDTH`] on the right. Checked by rendering both and
+/// comparing against the capture, not assumed - and the honest result is a
+/// step, not a disguised diagonal: cropped at 1:1 next to the capture the two
+/// read the same, a small cut corner, but a close zoom on either shows this
+/// one is a right angle where the capture's is a bevel. The cut's size and
+/// position are the measured ones; only its slope is unmodelled, because the
+/// primitive that would draw a true diagonal - the per-corner offset above -
+/// is not worth its blast radius across every `Quad` in the game for one
+/// 6x3-unit corner. Two `Fill`s were already what the tab draws with, so this
+/// closes the position/size gap with no pipeline change and no risk to
+/// anything else `Quad` draws; the slope stays open, see
+/// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
+const TAB_LEFT_PAD: f32 = 2.3;
+/// See [`TAB_LEFT_PAD`].
+const TAB_TOP_PAD: f32 = 1.9;
+/// See [`TAB_LEFT_PAD`].
+const TAB_HEIGHT: f32 = 14.3;
+/// See [`TAB_LEFT_PAD`].
+const UNDERLINE_WIDTH: f32 = 4.9;
+/// See [`TAB_LEFT_PAD`].
+const UNDERLINE_HEIGHT: f32 = 1.9;
+/// How far below the label's own `y` the underline mark starts. See
+/// [`TAB_LEFT_PAD`] for the group; this one number needed a further, small,
+/// eyeballed correction on top of the ruler's `7.9` (`21` raw px `* 0.3756`).
+/// The ruler assumes the label's own `y` sits at the glyph's cap top, true in
+/// the capture (its top padding was measured as tab-top-to-cap-top directly)
+/// but not in this build's own render - **confirmed, not just inferred from
+/// the mismatch**: a one-off print of `push_text`'s own `rect` for `R` in
+/// `RACE` gave `y=125, h=32` against a measured cap top at row 134 and
+/// baseline at row 156, so the glyph's cell reserves about 9px above the cap
+/// that carries no ink, and 1px below the baseline. `Cell::height` comes
+/// straight off each glyph's own `.fnt` metrics
+/// ([`crate::font::Atlas::from_font`]), so this is the disc's own font
+/// keeping every glyph's box tall enough for the face's ascenders and
+/// descenders, not padding this build added - `R`, `A`, `C` and `E` all
+/// report the same `32`, despite none of the four having either. At `7.9`
+/// the mark sat inside the label's own ink instead of below it - visible
+/// immediately on `--menu-page main --screenshot`, not a subtle miss. `9.0`
+/// is checked by eye against that render: clear of the label, inside the
+/// tab.
+const UNDERLINE_OFFSET_Y: f32 = 9.0;
+/// How far the chamfer band's right edge sits short of the tab's own right
+/// edge. See [`TAB_LEFT_PAD`]: `17` raw px `* 0.3756`.
+const TAB_CHAMFER_WIDTH: f32 = 6.4;
+/// How tall the chamfer band is, measured down from the tab's own top edge.
+/// See [`TAB_LEFT_PAD`]: `7` raw px `* 0.3756`.
+const TAB_CHAMFER_HEIGHT: f32 = 2.6;
 
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
@@ -180,8 +296,8 @@ impl Skin {
         self.skin.strip.map(|strip| Strip {
             x: strip.x * self.from_theirs.0,
             y: strip.y * self.from_theirs.1,
-            // The widget's own colour, not `TextColor`: HD authors
-            // `0xff705070` here against a white `TextColor`.
+            // The widget's own colour - see `Strip::color`'s own doc for what
+            // this is not, corrected 2026-09-01 by a capture.
             color: argb(strip.color),
         })
     }
@@ -191,6 +307,43 @@ impl Skin {
     #[must_use]
     pub(super) fn strip_gap(&self) -> f32 {
         STRIP_GAP * self.from_ours.0
+    }
+
+    /// A strip entry's own tab: how far its fill extends left of the label and
+    /// above it, and how tall it stands. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_pad(&self) -> (f32, f32) {
+        (
+            TAB_LEFT_PAD * self.from_ours.0,
+            TAB_TOP_PAD * self.from_ours.1,
+        )
+    }
+
+    /// A strip entry's own tab height. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_height(&self) -> f32 {
+        TAB_HEIGHT * self.from_ours.1
+    }
+
+    /// Every entry's chamfer band: how far it sits short of the tab's own
+    /// right edge, and how tall the band is. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn tab_chamfer(&self) -> (f32, f32) {
+        (
+            TAB_CHAMFER_WIDTH * self.from_ours.0,
+            TAB_CHAMFER_HEIGHT * self.from_ours.1,
+        )
+    }
+
+    /// The selected entry's underline mark: its own size, and how far below
+    /// the label's `y` it starts. Ours; see [`TAB_LEFT_PAD`].
+    #[must_use]
+    pub(super) fn underline(&self) -> (f32, f32, f32) {
+        (
+            UNDERLINE_WIDTH * self.from_ours.0,
+            UNDERLINE_HEIGHT * self.from_ours.1,
+            UNDERLINE_OFFSET_Y * self.from_ours.1,
+        )
     }
 
     /// The right-hand edge a row's value is anchored to. Ours; see
@@ -344,8 +497,16 @@ pub struct Strip {
     pub x: f32,
     /// Top of the entries' line box. Authored.
     pub y: f32,
-    /// What an unselected entry is drawn in. Authored, and **not**
-    /// [`Skin::normal`].
+    /// The widget's own colour. Authored, and **not what an entry's text is
+    /// drawn in.**
+    ///
+    /// It was read that way until a 2026-09-01 capture: every entry, selected
+    /// or not, is the same white [`Skin::normal`] (`FEGlobals->TextColor`),
+    /// and what this widget's own colour is *for* is still open - it names
+    /// neither the text nor either style's tab fill (`HD_Grey`/`HD_Blue`, see
+    /// [`super::Frame::ink`] and [`super::Frame::tab_selected`]). Kept because
+    /// it is still what the widget authors, not because anything still reads
+    /// it for text or fill.
     pub color: [f32; 4],
 }
 
