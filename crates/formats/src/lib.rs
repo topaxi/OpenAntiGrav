@@ -41,6 +41,7 @@ pub mod fexml;
 pub mod fnt;
 pub mod fog;
 pub mod gtf;
+pub mod gxp;
 pub mod gxt;
 pub mod handling;
 pub mod hd_pvs;

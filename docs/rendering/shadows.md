@@ -229,12 +229,23 @@ What 2048 does instead, on the evidence of its own names:
 
 - **A track-proximity projection.** `track_proximity_shadow_vp`/`_fp` is a
   shader pair, and the name says the shadow is placed by *proximity to the
-  track* rather than by sampling a depth map. **Reading it is blocked on
-  tooling, not on evidence**: the programs are PS Vita GXP microcode, and this
-  repository has a PS3 fragment-microcode decoder
-  ([`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py), which decodes
-  37,461 of 37,461 HD blocks) and no GXP equivalent. That decoder is the single
-  thing standing between this page and 2048's actual shadow shader.
+  track* rather than by sampling a depth map. The **container** is now read -
+  [`docs/formats/gxp.md`](../formats/gxp.md), 97,899 of 97,899 GXP programs
+  decoding across the executable and all three packages - and it says two
+  things this page could not say before. `track_proximity_shadow_fp` is one of
+  `eboot.elf`'s 67 programs and **binds no parameter whose name contains
+  "shadow"**, so whatever it draws it does not sample a named shadow texture.
+  And the *track's* shadow term is a **single-channel sampler called
+  `shadowMap` at texture unit 3**, bound on 1,799 fragment programs
+  immediately beside `lightmap` (4,467, unit 1, four channels) and
+  `occlusionMap` (1,895, unit 2) - so it is a one-channel texture sampled per
+  pixel with the lightmap, not a depth map the renderer projects and compares.
+  That is a mechanism, and it is inconsistent with HD's shadow-map pipeline in
+  the same direction the string comparison above already pointed. **What the
+  shader itself computes is still unread**: the USSE instruction stream is
+  located exactly and not decoded, which is where the PS3 pair
+  ([`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py), 37,461 of
+  37,461 HD blocks) still goes further than the Vita one.
 - **A second, separate kind**, precomputed per circuit: the memory budget line
   `**** PRECOMPUTED TRACK (SHIP ENV SHADOWS) (main uncache=%.2fkb, vram=%.2fkb) ****`
   reports its own cost, and `Lighting.Debug.Draw Ship Env Shadows` toggles it
