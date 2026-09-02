@@ -520,7 +520,8 @@ Located alongside, same naming pattern, not yet decoded:
 | `Data\Ships\<Team>\Ship.vex` | The [model](vex.md) |
 | `Data\Ships\<Team>\ship_FE.vex` | Front-end preview model |
 | `Data\Ships\<Team>\<Team>shield.vex` | Shield effect |
-| `Data\Ships\<Team>\ship_eliminator.dat` | Unknown |
+| `Data\Ships\<Team>\ship_alt.dat` | Not a mesh - **confidence ~65**, shape read 2026-09-02 off `Assegai\ship_alt.dat`: a team-name string, a two-byte `"ms"` tag, sixteen `RGBA8` entries at `0x20` (a palette), then a payload whose bytes are all in `0..15` - paletted image data, no loader traced, dimensions unresolved. `PI_TeamModel`'s `PI_ModelSkin name="Alternative"` names it; see [`dlc-pack.md`](dlc-pack.md#entry-0-is-a-manifest) for the declaring schema |
+| `Data\Ships\<Team>\ship_eliminator.dat` | Same reading as `ship_alt.dat` above - identical header shape, named by `PI_ModelSkin name="Eliminator"`. **A lead for whoever traces the loader next**: `docs/formats/vex.md:1388` records the literal format string `%s\ship_eliminator.dat` at `0x08a7ff7c`; xref-ing that string is the fastest way into whichever function loads both `.dat` files |
 | `Data\Ships\<Team>\Definition.xml` | Unknown |
 
 ## Open questions

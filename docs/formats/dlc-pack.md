@@ -48,13 +48,69 @@ under the same `<Screen name="Top">` root:
       <PI_ModelSkin name="Alternative">
         <Values location="Data\Ships\...\ship_alt.dat"/>
         <Unlock Team="..." loyalty="" Exclusive="true"/>
+        <Unlock Team="any" loyalty="" Exclusive="true"/>
       </PI_ModelSkin>
+      <PI_ModelSkin name="Eliminator">
+        <Values location="Data\Ships\...\ship_eliminator.dat"/>
+        <Unlock Team="..." loyalty="" Exclusive="true"/>
+        <Unlock Team="any" loyalty="" Exclusive="true"/>
+      </PI_ModelSkin>
+    </PI_TeamModel>
+    <PI_TeamModel name="Concept">
+      <Values location="extra"/>
+      <Unlock Team="..." loyalty="" Exclusive="true"/>
+      <Unlock Team="any" loyalty="" Exclusive="true"/>
+    </PI_TeamModel>
+    <PI_TeamModel name="Zone">
+      <Values location="zone01"/>
+      <Unlock Team="..." loyalty="" Exclusive="true"/>
+      <Unlock Team="any" loyalty="" Exclusive="true"/>
     </PI_TeamModel>
   </PI_Team>
   <PI_Track name="..."><Values type="Race" location="Data\Environments\..."/></PI_Track>
   <LoadXML><Values Src="downloadNN.xml"/></LoadXML>
 </Screen>
 ```
+
+**`Unlock` is not only a `PI_ModelSkin` child.** Confirmed against all eight of
+the disc's own teams and, separately, a mounted pack's own manifest
+(`PACK3.edat` entry 0, Harimau): `Concept` and `Zone` carry `Unlock` directly
+under `PI_TeamModel`, with no `PI_ModelSkin` nested inside them at all -
+`Normal` is the one variant with skins, and `Concept`/`Zone` are each a single
+unlockable model in their own right. **Read this schema, not the fragment
+above alone**: every `PI_TeamModel` a team declares owns one or more `Unlock`s,
+either directly or through its `PI_ModelSkin` children, never both at once.
+
+**Every one of the eight disc teams and the one pack manifest checked declares
+exactly this shape**, so it is read as the whole schema rather than one
+sample:
+
+- `PI_TeamModel name="Normal"`, `Values location="ship"` (a **file stem**, not
+  a path - the disc builds the raceable hull from the team's own `location` and
+  `Ship.vex`, never from this field; see `crates/game/src/livery.rs`'s module
+  docs for the trap this avoided). Two nested `PI_ModelSkin`s:
+  - `name="Alternative"`, `Values location="Data\Ships\<Team>\ship_alt.dat"`
+  - `name="Eliminator"`, `Values location="Data\Ships\<Team>\ship_eliminator.dat"`
+
+  each with two `Unlock`s: one keyed to the team's own id, one keyed to the
+  literal `Team="any"` - a two-tier threshold, the team's own `loyalty` always
+  the lower of the pair. Both carry `Exclusive="true"` on every instance seen.
+- `PI_TeamModel name="Concept"`, `Values location="extra"`, with the same
+  own-team/`any` `Unlock` pair directly beneath it - no skin.
+- `PI_TeamModel name="Zone"`, `Values location="zone01"`, same shape again.
+
+**The `loyalty` numbers themselves are not reproduced here** - shipped tuning
+data, the same rule `docs/formats/handling-stats.md` already applies to the
+handling globals. The *relationship* above (two tiers, own team below `any`)
+is a format fact and is what's recorded.
+
+**`ship_alt.dat`/`ship_eliminator.dat` are not meshes.** Read directly off
+`Data\Ships\Assegai\ship_alt.dat`: a team-name string, a two-byte `"ms"` tag,
+sixteen `RGBA8` palette entries at offset `0x20`, and a payload whose bytes are
+all in `0..15` - paletted image data, most likely a decal/livery texture
+layered onto the same `Normal` hull rather than a second model. No loader
+traced, so this is a shape reading (confidence ~65), not a decoded format; see
+`docs/formats/handling-stats.md`'s own entry for the lead to the loader.
 
 The main archive's manifest is populated and plain (`<?xml`, unshortened); the
 three UI archives carry an empty `<Screen name="Top">` stub as
@@ -234,9 +290,13 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
 - **`downloadNN.xml`**, entry 1 of each main archive: the pack's `PI_Grid`
   championship ladder. Parsed by nothing; progression is a later milestone.
 - **`PI_TeamModel` / `PI_ModelSkin`**, the concept, zone and unlockable
-  liveries, with their `loyalty` unlock thresholds. Declared in the manifest and
-  deliberately not collected into `catalogue::Team` while nothing draws a second
-  hull.
+  liveries. **The XML schema is read and documented above** (2026-09-02) - what
+  is left is the `.dat` payload format (`ship_alt.dat`/`ship_eliminator.dat`,
+  shape-read as paletted image data but no loader traced) and drawing a second
+  hull at all. `catalogue::Team` deliberately still does not collect these
+  fields, for the same reason it never did: nothing consumes them yet, and a
+  public field no caller reads is worse than one that appears when it is
+  needed. See `HANDOVER.md`'s open threads for the in-flight work.
 - **`PARAM.pbp`**, and the `.edat` files' relationship to the PSN download that
   produced them.
 

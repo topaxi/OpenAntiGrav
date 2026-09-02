@@ -328,7 +328,9 @@ impl Team {
 /// unlockable liveries) are deliberately **not** read. They are declared right
 /// here and would be easy to collect, but nothing draws a second hull yet, and
 /// a public field no caller reads is worse than one that appears when it is
-/// needed. See `HANDOVER.md`.
+/// needed. The schema itself is documented rather than re-derived from
+/// scratch here - see `docs/formats/dlc-pack.md`'s "Entry 0 is a manifest"
+/// section - and `HANDOVER.md`.
 #[must_use]
 pub fn teams(definition_xml: &str) -> Vec<Team> {
     let root = parse(definition_xml);
