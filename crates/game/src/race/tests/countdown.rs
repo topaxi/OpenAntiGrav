@@ -63,3 +63,33 @@ fn an_untouched_pad_produces_no_thrust_through_or_past_the_gate() {
         assert_eq!(evaluated.engine.thrust, 0.0);
     }
 }
+
+/// The opponents are held at the line for the same span as the player.
+///
+/// Before this, `Race::step_opponents` never consulted `RaceState` at all -
+/// `oag-ai` has no dependency on `oag-race` and cannot, so the gate has to
+/// live in the `game` crate that already owns both - and an opponent held
+/// full throttle from tick 0 while the player sat through "3, 2, 1, go" on
+/// screen, which reads as the AI cheating off the line rather than as a
+/// missing feature.
+#[test]
+fn opponents_are_held_at_the_line_through_the_gated_span() {
+    let mut race = race_with_a_grid();
+    for tick in 0..oag_race::COUNTDOWN_TICKS {
+        race.tick(&InputSnapshot::default());
+        for slot in 1..race.ship_count() as usize {
+            assert_eq!(
+                race.world.ships[slot].physics.thrust, 0.0,
+                "opponent {slot} was moving on tick {tick}, before the gate released"
+            );
+        }
+    }
+    race.tick(&InputSnapshot::default());
+    for slot in 1..race.ship_count() as usize {
+        assert_eq!(
+            race.world.ships[slot].physics.thrust,
+            oag_physics::controls::CONTROL_RANGE,
+            "opponent {slot} did not release at the same tick as the player"
+        );
+    }
+}

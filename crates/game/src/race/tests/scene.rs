@@ -69,6 +69,13 @@ fn the_uniform_block_matches_the_shaders() {
 #[test]
 fn each_craft_s_exhaust_follows_its_own_throttle() {
     let mut race = race_with_a_grid();
+    // Past the start-line countdown first - see `oag_race::RaceState::thrust_gated`
+    // - which now holds every opponent's throttle at zero exactly like the
+    // player's, so the field would show no engine at all if this test ran
+    // inside the gated span.
+    for _ in 0..=oag_race::COUNTDOWN_TICKS {
+        race.tick(&InputSnapshot::default());
+    }
     // Long enough for `INTENSITY_RISE` to separate a burning engine from a
     // cold one - the ramp takes four seconds end to end, so a quarter of a
     // second is plenty to order the two and far short of saturating.

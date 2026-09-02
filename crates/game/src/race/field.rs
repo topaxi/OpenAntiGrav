@@ -268,7 +268,7 @@ impl Race {
             let ship = &mut self.world.ships[slot];
             let handling = ship.handling;
             let position = ship.physics.body.position;
-            let controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
+            let mut controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
                 ship.driver.drive(
                     &ship.physics,
                     &oag_ai::Context {
@@ -281,6 +281,14 @@ impl Race {
             } else {
                 oag_physics::ShipControls::default()
             };
+            // The same start-line hold the player gets in `Race::tick` - see
+            // `RaceState::thrust_gated`. Without this an opponent storms off the
+            // line the instant the race loads while the player is still held for
+            // the "3, 2, 1, go" countdown, which is not a driving skill gap, just
+            // an ungated AI path.
+            if RaceState::thrust_gated(self.world.tick) {
+                controls.thrust = 0.0;
+            }
 
             // The pads, measured from where the craft starts the tick, exactly as
             // slot 0's are. Both classes: a speed pad boosts an opponent and a

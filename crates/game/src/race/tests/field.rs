@@ -264,11 +264,17 @@ fn a_craft_on_the_grid_can_see_somebody() {
 /// opponents and zeroes the throttle on the tick it does - a real failure of the
 /// fixture, not of either mechanism. Any synthetic race test that wants to run
 /// longer than this has to give its craft handling that moves them.
+///
+/// The run also has to clear [`oag_race::COUNTDOWN_TICKS`] first: opponents are
+/// held at zero thrust through the start-line countdown exactly like the
+/// player, per `oag_race::RaceState::thrust_gated`, and `stalled` only starts
+/// counting a stopped craft once its commanded thrust reads above zero - so the
+/// gated span costs nothing against the [`STALL_TICKS`] horizon above.
 #[test]
 fn the_opponents_are_driven_rather_than_parked() {
     let mut race = race_with_a_grid();
     assert_eq!(race.ship_count(), 8);
-    for _ in 0..STALL_TICKS / 2 {
+    for _ in 0..oag_race::COUNTDOWN_TICKS + u64::from(STALL_TICKS / 2) {
         race.tick(&InputSnapshot::default());
     }
 
@@ -378,7 +384,13 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
 #[test]
 fn a_destroyed_opponent_stops_driving() {
     let mut race = race_with_a_grid();
-    race.tick(&InputSnapshot::default());
+    // Past the start-line countdown first - see `oag_race::RaceState::thrust_gated`
+    // - so the opponent is actually driving, not just still held at the line,
+    // when the first assertion below checks its throttle. `COUNTDOWN_TICKS`
+    // calls still land on the last gated tick; one more releases it.
+    for _ in 0..=oag_race::COUNTDOWN_TICKS {
+        race.tick(&InputSnapshot::default());
+    }
     assert_eq!(
         race.world.ships[1].physics.thrust,
         oag_physics::controls::CONTROL_RANGE
