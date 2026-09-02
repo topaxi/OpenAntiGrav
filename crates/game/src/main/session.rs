@@ -58,6 +58,39 @@ pub(crate) struct Session {
     /// the only wall clock in the process. Nothing the simulation reads comes
     /// back out of it - see [`perf`].
     pub(crate) meter: perf::Meter,
+    /// What the race's scene pass cost on the **GPU**, in the same seconds
+    /// [`Session::meter`] is fed.
+    ///
+    /// A second meter rather than a second number in the first one, because it
+    /// measures a different thing: `meter` is the interval between loop
+    /// iterations, which under `Vsync::On` is the refresh and under any
+    /// `FrameLimit` is the limit. This one is work, and it is the only signal a
+    /// resolution controller could be built on - see
+    /// [`oag_render::timing::PassTimer`] and
+    /// [dynamic-resolution.md](../../../../docs/rendering/dynamic-resolution.md).
+    ///
+    /// **Nothing reads it yet.** There is no controller and no overlay row; it
+    /// is fed so that the signal is a measured thing rather than a planned one.
+    pub(crate) scene_cost: perf::Meter,
+    /// The timer behind [`Session::scene_cost`], or `None` on a device that
+    /// cannot be asked - in which case dynamic resolution has no signal at all
+    /// and the eventual menu row says so rather than offering a controller
+    /// driven by the refresh rate.
+    pub(crate) pass_timer: Option<oag_render::timing::PassTimer>,
+    /// Which frame the loop is on, counted rather than timed.
+    ///
+    /// Exists because a GPU reading arrives a frame or more after the frame it
+    /// describes, so it has to name one: see
+    /// [`oag_render::timing::Reading::frame`] and [`Session::stall_frame`].
+    pub(crate) frame_index: u64,
+    /// The most recent frame that carried a load.
+    ///
+    /// A reading from that frame or earlier is thrown away rather than
+    /// recorded, which is [`Session::stalled`]'s guard applied to a
+    /// measurement that arrives late: `meter.clear()` cannot reach a reading
+    /// that has not come back yet, and a track load measured as a frame would
+    /// drive a controller to the floor and take seconds to climb back.
+    pub(crate) stall_frame: u64,
     /// The `Dev` overlay's memory line, throttled - see [`perf::memory::Probe`].
     pub(crate) memory: perf::memory::Probe,
     /// Draws the overlay over whatever the stage drew.

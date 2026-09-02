@@ -471,6 +471,12 @@ pub fn capture(
             options.motion_blur,
             options.camera_jitter,
             &spectrum,
+            // **No timestamps on any capture path**, deliberately: this
+            // project compares captures byte for byte, and a measurement is
+            // the input a resolution controller would eventually act on. See
+            // `oag_render::timing::PassTimer` and `perf.rs`'s own argument for
+            // why the overlay is window-only.
+            None,
         );
         queue.submit(Some(primer.finish()));
         advance_one_tick(&mut race, &mut held, audio, options, tick);
@@ -524,6 +530,11 @@ pub fn capture(
                 options.motion_blur,
                 options.camera_jitter,
                 &spectrum,
+                // `OAG_RENDER_BENCH` measures the CPU side of encoding this
+                // pass and says so; a GPU timestamp is a different number
+                // about a different thing, and mixing them into one loop's
+                // output is how a bench stops meaning anything.
+                None,
             );
             samples.push(start.elapsed().as_secs_f64() * 1e6);
             drop(bench);
@@ -556,6 +567,7 @@ pub fn capture(
         options.motion_blur,
         options.camera_jitter,
         &spectrum,
+        None,
     );
     oag_render::perfprobe::report_frame(race.world.tick);
 

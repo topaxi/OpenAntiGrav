@@ -42,6 +42,7 @@ impl RaceStage {
         motion_blur: display::MotionBlur,
         camera_jitter: bool,
         zone_spectrum: &[f32],
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> race::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs
@@ -65,6 +66,7 @@ impl RaceStage {
             motion_blur,
             camera_jitter,
             zone_spectrum,
+            timestamps,
         )
     }
 
@@ -178,6 +180,10 @@ impl RaceStage {
             // pipeline variant it would warm is the same one every other
             // Zone draw uses regardless of what the lookup holds.
             &[],
+            // Untimed: a warmup frame is the pipeline compiles this call
+            // exists to pay, so its cost is the one measurement that would
+            // mislead a controller most.
+            None,
         );
         // The HUD's own pipelines still need warming, and still into `target`
         // even though the real frame now draws them into the presentation

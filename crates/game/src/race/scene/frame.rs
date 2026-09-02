@@ -26,6 +26,17 @@ impl Scene {
     /// settings key**: nothing reconstructs from it yet, so on its own it is a
     /// worse picture. See [`Scene::jittered`].
     ///
+    /// `timestamps` brackets this pass with a GPU timestamp pair, and is
+    /// `Some` only on the window's own frame loop - see
+    /// [`oag_render::timing::PassTimer`]. **This pass and no other**, because
+    /// it is the one whose cost falls with the render extent: the upscaler and
+    /// the composite draw at presentation size whatever the scale is, so
+    /// folding them in would put a fixed cost into a budget that exists to be
+    /// divided by a moving one. The scene-resolution post-processes belong in
+    /// it and are not in it yet - they take no viewport, which is the same
+    /// thing that stops the extent moving at all. See
+    /// [dynamic-resolution.md](../../../../../docs/rendering/dynamic-resolution.md).
+    ///
     /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
     /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
     /// a frame. Empty outside a Zone race or with nothing to draw it into is
@@ -48,6 +59,7 @@ impl Scene {
         motion_blur: crate::display::MotionBlur,
         camera_jitter: bool,
         zone_spectrum: &[f32],
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -707,7 +719,13 @@ impl Scene {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            // The one pass whose cost falls with the render extent, and so the
+            // one a resolution controller will be driven by - see
+            // `oag_render::timing::PassTimer` and this function's own doc.
+            // `None` on every path that is not the window's frame loop: a
+            // capture measures nothing, because a capture has to be
+            // reproducible rather than fast.
+            timestamp_writes: timestamps,
             occlusion_query_set: None,
             multiview_mask: None,
         });
