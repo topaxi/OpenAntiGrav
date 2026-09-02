@@ -4,12 +4,12 @@
 
 ## Open
 
-- Slot assignment (which team flies which grid slot) is not recovered - the racer list `Race_SpawnAiRacer` reads its `id` from has never been read
+- Slot assignment (which team flies which grid slot) is narrowed, not recovered: `id` is a genuine per-entrant field on an eight-entry struct at `&DAT_000577f8`, read by `Race_SpawnAiRacer` via `FUN_08806bbc` (confidence 90 on the struct layout and accessors - see `docs/ghidra/functions/psp-pulse-usa/grid.md#which-team-flies-which-slot-the-id-is-a-real-field-on-a-struct-of-eight`). What still isn't found: the write site for `racer[racer_index].id` itself, reached only through a menu callback table this session's tools could not resolve by a direct `jal` (checked exhaustively via `search_instructions`, zero matches)
 - `PI_TeamModel`/`PI_ModelSkin` (alternate paints with `loyalty` unlock thresholds) are still unread
 - With all four DLC packs mounted, the catalogue is twelve teams for eight slots and the extras do not race
 - Sparks use slot 0's (the player's) anchors alone, not the full grid
 
 ## Next Steps
 
-- Read what builds the racer list upstream of `Race_SpawnAiRacer`'s `id` to recover the real slot assignment
+- Find `racer[racer_index].id`'s write site. Static tracing hit a computed-call wall (the `0x0894d8d0`-`0x0894dc18` cluster that reads/writes the same struct is never reached by a direct `jal` anywhere in the binary); next is the live read the grid.md section above already names: `DAT_00057c44` (team-catalogue pointer array) sits at `0x0885BC44` and the `id` array at `0x0885BD00` once the image base is added back (these are pre-relocation addresses per `HANDOVER.md`'s "Traps that are live" - `0x08804000 + 0x000577f8 + 0x508`). Watch both across a real 8-craft race via `scripts/psp-drive.py` and cross-check against what the front end's team-select screen actually shows on screen.
 - Read `PI_TeamModel`/`PI_ModelSkin` for the alternate paints and loyalty thresholds - watch the file-stem trap (`PI_TeamModel`'s `location` is the literal `"ship"`)
