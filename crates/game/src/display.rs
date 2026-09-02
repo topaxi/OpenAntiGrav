@@ -670,11 +670,18 @@ pub enum Upscaler {
     ///
     /// **The default.** The comparison that would move it has been run once,
     /// at 50 % on one frame of one track, and FSR 1 won it clearly - but one
-    /// frame of one track is not the sample a default flip is held to here,
-    /// and the doubt that motivated the caution is specifically about content
-    /// this frame did not contain: the menus and the HUD are 480x272-era
-    /// paletted raster and glyphs off a coverage atlas, and a sharpener rings
-    /// on those in a way it does not on track geometry. See HANDOVER.
+    /// frame of one track is not the sample a default flip is held to here.
+    ///
+    /// The caution used to be about two kinds of content: 480x272-era paletted
+    /// raster and coverage-atlas glyphs, which a sharpener rings on, and
+    /// high-frequency scene effects. **Half of that is now moot rather than
+    /// unmeasured**: since
+    /// [ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)
+    /// no upscaler ever sees a menu, a front-end screen or the HUD - they
+    /// composite at presentation resolution, after the resolve. What is still
+    /// unmeasured is a race frame with particle effects, a rocket and a shield
+    /// in it, which the one stationary capture behind this default did not
+    /// contain. See HANDOVER.
     #[default]
     Off,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.
