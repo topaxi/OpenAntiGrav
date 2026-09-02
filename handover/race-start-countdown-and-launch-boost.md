@@ -9,12 +9,15 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 | Countdown state machine + timing | open | **Zone's own read in detail** (below) | open                | open |
 | Launch reaction speedboost       | open | no lead found yet (below)      | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
 | Zone display: HUD overlay        | **confirmed identical** (below) | **confirmed identical** (below) | **confirmed identical** (below) | untried |
-| Zone display: track-side gantry  | untried | see billboard thread (open)    | **real difference, disc-confirmed** (below) | asset family exists, untried past a string search |
+| Zone display: track-side gantry  | untried | see billboard thread (open)    | **matches the user's own description, rendered and confirmed** (below) | asset family exists, untried past a string search |
 
 *(Focus as of 2026-09-02: display/logic only for now, per direction from the user -
 the launch-boost rows below are last session's record, not being chased further at
 the moment. The display row split in two mid-session: "the countdown display" turned
-out to name two different objects, conflated here at first - see below.)*
+out to name two different objects, conflated here at first - see below. **The user
+then confirmed directly, from playing**: Zone's gantry "draws a small rectangular
+track, instead of the 3 2 1 GO" - and that is now rendered straight off the disc and
+matches exactly, see the second 2026-09-02 entry below.)*
 
 **Countdown state machine + timing**: what drives `ReadyText`/`GoText`/`CountdownTime`
 and the `<Mode3D>` models (`Pulse_Ready_Go`, `Cockpit_321GO`) from race load to green -
@@ -194,6 +197,26 @@ very likely 2048), still open on whether it actually renders per mode at runtime
 That reframing also answers why this thread's earlier passes felt like they were
 chasing two different things at once - they were.
 
+2026-09-02, fourth pass: **the user confirmed directly, from playing** - "it's the
+text on the gantry/billboard, or lack thereof, in a zone race, it draws a small
+rectangular track, instead of the 3 2 1 GO". That is exactly the track-side gantry
+from the pass above, and rendering `321Go_Zone.vex` straight off the disc matches it
+precisely. `oag-view "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC"
+--mesh "/data/billboards/hd_adverts/321go/321go_zone.vex" --screenshot out.png`
+renders a small flat rectangular panel carrying a stylised red/green/blue track-loop
+icon - no digits, no light arch. `321go_startfinish.vex` rendered the same way is a
+large 19-node, 1,530-triangle structure with a checkered-flag/sponsor banner, sized
+for a full gantry - 222 triangles on 3 nodes for Zone's, by contrast. The texture
+alone predicted this before the render did: `321_go_zone.gtf` is 2048x1024, dwarfing
+the 64x128 digit-strip texture (`321_go_64.gtf`) the circuit gantry's actual
+countdown numbers use. Full account, screenshots included, in
+[billboards.md](../docs/ghidra/functions/ps3-hdfury-eu/billboards.md#the-four-321go_vex-shapes-are-confirmed-as-genuinely-different-content-by-rendering-them).
+Confidence 90 that this is what the user remembers - the content match is exact and
+the mesh is the only Zone-specific object of this shape on the disc; **confidence
+still low (unchanged from the pass above) on the runtime mechanism** that actually
+selects it during a real race, which is `mode_descriptor`'s own unresolved pointer
+in `billboards.md`, not settled by a render.
+
 ## Open
 
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
@@ -236,11 +259,11 @@ chasing two different things at once - they were.
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
-- **No screenshot comparison of a Zone countdown against a circuit-race countdown has
-  been taken, on HD/Fury or 2048** - the only two titles where it would show anything,
-  now that Pulse and Pure are settled by primary XML data instead (no render needed:
-  the HUD layouts share one model file literally). The asset-name evidence for HD/2048
-  is strong; whether either title's render actually differs is still unconfirmed.
+- ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
+  **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
+  pass above. **Still open**: an actual in-game screenshot (this session rendered
+  the standalone `.vex`, not a running race, so lighting/scale/camera framing as
+  seen in a real race is unconfirmed) and the same check on 2048.
 - HD/Fury's `TrackStartup_Load`-adjacent vocabulary sweep (`Countdown`, `StartLight`,
   `RaceStart`, `Grid`) found nothing under those exact names - only `321`/`Ready`/
   `Boost` searches paid off. Worth trying `Light`, `Klaxon`/`Lights`, `Sequence`
