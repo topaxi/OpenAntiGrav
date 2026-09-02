@@ -220,3 +220,7 @@
 0x003013f0	function	SoundManager_Construct	90	game-boot.md
 0x001641f0	function	FrontendRoot_Construct	90	game-boot.md
 0x002fb528	function	MusicManager_Construct	90	game-boot.md
+0x00156d88	function	Repulser_Construct	88	weapons.md
+0x001254c8	function	Rocket_Construct	88	weapons.md
+0x0014aea8	function	RocketManager_Construct	85	weapons.md
+0x00128ab0	function	WeaponExplosions_Construct	85	weapons.md
