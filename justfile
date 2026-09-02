@@ -47,9 +47,15 @@ lint:
 test:
     cargo nextest run --workspace
 
-# Behavioural / ground-truth tests that need data/images populated
+# Behavioural / ground-truth tests that need data/images populated.
+#
+# `--no-fail-fast` because this run's job is to produce a *list*. Without it the
+# sweep stops at the first failure - and the two `oag-formats` ones sort early
+# enough to stop it at 138 of 3,300, which reads as a far worse tree than it is
+# and hides the rest entirely. Six pre-existing reds sat documented as one
+# because of exactly that; see HANDOVER.md's "Read this first".
 test-data:
-    cargo nextest run --workspace --run-ignored all
+    cargo nextest run --workspace --run-ignored all --no-fail-fast
 
 # Symlinks the main checkout's data/ subdirectories into this worktree.
 # `data/` is gitignored, so it does not travel into a `git worktree add` and

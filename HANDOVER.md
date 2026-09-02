@@ -41,15 +41,44 @@ file does not need to carry its own.
   citations inside `wall.rs` pointing at files that were not there. Anything
   under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
   committed `verification/scenarios/*.inputs` are what reproduce it.
-  **Both traces this bullet used to name as absent are back (2026-09-02):**
-  `pad0-boost.csv` and `talons-junction-time-trial-lap-omega.csv` are present,
-  and a full `--run-ignored all` sweep now reports **0 skipped** - so a run that
-  skips any of them is a `data/` problem to fix with `just link-data`, not the
-  documented state.
+  **Three are absent as of 2026-09-02**, confirmed by `/bin/ls data/traces/`
+  rather than inferred: `pad0-boost.csv` (cited from `race/scene.rs` and
+  `race/effects.rs`), `talons-junction-time-trial-lap-omega.csv`, and
+  `talons-junction-standing-start.csv` - which `crates/trace/tests/wall_contact_ground_truth.rs`
+  names as its `CAPTURE` and which no earlier note listed. Beware
+  `talons-junction-time-trial-lap.csv`, which *is* present and is a different
+  file from the `-omega` one.
+- **Three numbers about this suite look green and are not, and each hid the
+  next. Read all three before believing any red count.** Every one of them was
+  believed by somebody on 2026-09-02 before being checked:
+  1. **`just test-data` reported one failure and there were six.** The recipe
+     had no `--no-fail-fast`, and the two `oag-formats` reds sort early enough
+     to stop the run at 138 of 3,300. Fixed in the `justfile`; a truncated run
+     reads as a far worse tree than it is *and* hides everything after it.
+  2. **`0 skipped` is not evidence any data was exercised.** nextest counts a
+     test that early-returns on a missing file as **passed**, so the count says
+     only that nothing was *filtered out*. Reading it as coverage is what
+     produced a since-deleted claim in this file that the missing traces were
+     back, when `ls` says they are not.
+  3. **A filtered re-run of a failure is not evidence either.** Four of the six
+     below pass when run alone and fail in the full sweep - reproducibly, on an
+     idle machine, on `main`. "It passed on its own, so it was load" is the
+     reasoning that kept five of them undocumented; it was believed and
+     retracted in the same session. The sensitivity is undiagnosed
+     (parallelism, or shared state under `data/cache/`).
+
+  **So a red count means nothing without the variable's state attached.** The
+  same tree, same commit, same day: **6 failed / 0 skipped** plain, and
+  **17 failed / 0 skipped** under `OAG_REQUIRE_GAME_DATA=1`. The extra eleven
+  are the derived-data suites - `chase_camera` (3), `wall_contact` (3),
+  `yaw_authority` (2), `pure_dlc` (2), `maglock` (1) - failing because that
+  variable turns "silently pass on missing data" into a failure. They are
+  missing captures and DLC packs, not broken code.
 - **Six reds are pre-existing, and only one of them was written down.** Measured
   2026-09-02 by running `cargo nextest run --workspace --run-ignored all
   --no-fail-fast` twice: once on a branch and once on a detached worktree at
-  `main` with no changes in it. **The same six fail in both**, so any of them
+  `main` with no changes in it, and independently reproduced by a second session
+  on a third checkout. **The same six fail in all of them**, so any of them
   turning up in your own sweep is not yours:
   - `oag-formats::rcsmodel_decl_ground_truth::the_disc_declares_more_widths_than_the_search_looks_for`
   - `oag-formats::rcsmodel_material_ground_truth::a_third_of_a_circuits_chunks_are_see_through`
@@ -60,14 +89,9 @@ file does not need to carry its own.
     the one that was already recorded, failing with "nothing recovered the
     craft". All six are undiagnosed.
 
-  **The trap inside the trap: four of them pass when run filtered and fail in
-  the full sweep.** Re-running the failures alone comes back green, which reads
-  exactly like "it was a flake, the tree is fine" and is how this set stayed
-  undocumented. It is not a flake - the full sweep reproduces them run after
-  run, on an idle machine, on `main`. Whatever the sensitivity is (load,
-  parallelism, or shared state under `data/cache/`), a filtered re-run is not
-  evidence of anything here, and the two `oag-formats` ones were separately
-  traced to pristine `157a4666`.
+  Four of them are the filtered-re-run trap above. The two `oag-formats` ones
+  were separately traced to pristine `157a4666`, which reaches further back than
+  either `main` baseline does.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
 - **Gate status:** last measured green at **2,724 tests (2026-09-02)** in 3.8s,
