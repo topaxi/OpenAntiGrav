@@ -275,13 +275,13 @@ pub(super) struct Scratch {
     /// The span of vertices whichever recolour or reshape is running has just
     /// built, on its way to a `write_buffer`.
     ///
-    /// **One buffer for all four of them** - the airbrake flaps, the shield
-    /// shell, the cockpit sphere and each weapon pad - because
-    /// [`Scene::render`] runs them one after another and none of them reads
-    /// what the last one wrote. Four buffers would be four high-water marks
-    /// kept alive to save nothing.
+    /// **One buffer for all five of them** - the airbrake flaps, the shield
+    /// shell, the cockpit sphere, each weapon pad and each speed pad -
+    /// because [`Scene::render`] runs them one after another and none of
+    /// them reads what the last one wrote. Five buffers would be five
+    /// high-water marks kept alive to save nothing.
     ///
-    /// Each of the four cleared and refilled it every frame before this
+    /// Each of the five cleared and refilled it every frame before this
     /// existed: 85 KiB a frame for the pads alone on Talon's Junction, plus a
     /// pair of flap writes on every frame of every race and a whole shell's
     /// vertices for every craft with its shield up.

@@ -542,10 +542,7 @@ impl Scene {
         }
         // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
         // and `oag_render::weapon_pad` for the recovered mechanism this
-        // reproduces. This is gameplay state rather than scenery, which used
-        // to matter because a setting could freeze the scenery clock without
-        // freezing this one; both now run off `seconds` and there is nothing
-        // left to keep apart.
+        // reproduces. Gameplay state, driven off `seconds` like the scenery.
         if let Some(weapon_pads) = &self.weapon_pads {
             pads_ready.extend(
                 race.weapon_pad_refresh_left()
@@ -553,6 +550,10 @@ impl Scene {
                     .map(|&left| left <= 0.0),
             );
             weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
+        }
+        // Flat, not `race`-driven - see `oag_render::speedup_pad`.
+        if let Some(pads) = &self.pads {
+            pads.tint_speedup_pads(queue, recoloured);
         }
 
         oag_render::perfprobe::mark("pads+tint");

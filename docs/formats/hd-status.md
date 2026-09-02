@@ -405,6 +405,45 @@ spline horizontally - which is a check on the *transform chain* rather than on
 the payload, since a pad's own box is in local space and only the parent chain
 puts it on a circuit.
 
+### Talon's Junction's own `Speedup Pad` chunks are a content donor its own file never baked
+
+**Found 2026-08-25, wiring pad illumination.** The trigger volumes above are
+one thing; the *drawable* chunk each pad node names at its mesh payload's own
+`+0x30` is another, and on this one circuit the two diverge for one class
+only. `oag_render::mesh::rcs::build_pads` (the PS3 counterpart of
+`mesh::build_pads`, added the same day) walks all 18 `Speedup Pad` nodes,
+reads a well-formed, non-zero chunk hash off every one, and finds **none of
+the 18** in `talons_junction/track.rcsmodel` - `model.mesh(hash)` returns
+`None` every time. `Weapon Pad`'s own 9 nodes, same file, same payload
+layout, resolve **9 of 9**.
+
+**Not a reader bug - checked against a second circuit.** `12_sol_2`'s own
+`track.rcsmodel` resolves all ten of its `Speedup Pad` chunks and all eight
+of its `Weapon Pad` ones, through the identical code path. So the class-id
+resolution, the payload offset and the hash lookup are all sound; what is
+absent is specific to Talon's Junction's own baked chunk set.
+
+**Read as the same "content donor" pattern this page's `--mesh` section
+already names**, not a new phenomenon: `mesh/rcs.rs`'s own doc comment
+records that 56 of Talon's Junction's ordinary prop nodes name a hash found
+only in *other* circuits' models (`tanker1aShape` among them), because the
+hash is content-derived and this circuit's own bake simply never included
+that donor's copy. The 18 `Speedup Pad` hashes read exactly the same way -
+well-formed, structurally in the right place, absent from this one file. No
+second circuit's `.rcsmodel` has been checked for a matching hash, so
+whether Talon's Junction's speed pad plates are baked *somewhere* on the disc
+is open; what is closed is that they are not in this circuit's own file.
+
+**Consequence for the render**: `oag_game::race::load` reports "0 of 18 mesh
+node(s) drawn... 18 addressed no chunk" for Talon's Junction's speed pads and
+leaves `Loaded::pad_model` at `None` - an honest absence rather than an
+invented plate, the same choice `CLAUDE.md` names for every other unrecovered
+surface. `Weapon Pad` draws fully on the same circuit (9 of 9, 4527
+triangles) and both classes draw fully on `12_sol_2`, so pad illumination
+(`oag_render::speedup_pad`, `oag_render::weapon_pad`) is exercised end to end
+by `crates/game/tests/hd_pad_illumination_ground_truth.rs` against
+`12_sol_2` rather than the default track for the speed pad half.
+
 `Start Position` `0x3bc` is one 64-byte matrix per circuit, 28 of 28, with the
 translation in row 3 and `w = 1.0` - the row-major layout every `.vex` uses.
 Whether HD lays its grid out from that node the way

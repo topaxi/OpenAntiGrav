@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &path, &data) else {
                 continue;
             };
-            let Ok((model, _pads, _report)) =
+            let Ok((model, _report)) =
                 mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
                     mesh::read_blob(&spec, name).ok()
                 })

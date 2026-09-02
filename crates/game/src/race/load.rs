@@ -11,6 +11,7 @@ mod audio;
 mod cameras;
 mod environment;
 mod geometry;
+mod pads;
 mod roster;
 mod surfaces;
 use crate::remix::craft_of;
@@ -492,7 +493,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // what made the distinction matter: it ships one beside every circuit and
     // the container is not HD's, so this used to be a hard error that stopped
     // the race. The report names which of the two happened.
-    let (rcs_model, rcs_weapon_pad_model) = geometry::track_model(
+    let rcs_model = geometry::track_model(
         &mut archives,
         &track,
         &track_blob,
@@ -501,18 +502,29 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     let ribbon = options.ribbon || (mesh::geometry_is_external(&track_blob) && rcs_model.is_none());
     // **Everything else built out of the track `.vex` is PSP-shaped geometry.**
-    // The sky, the two pad classes and the per-node visibility all read a
-    // `Mesh`-layout payload, which a PS3 file does not have - its `Skycube` and
-    // pad geometry are in the `.rcsmodel` too, keyed by a hash this project has
-    // not tied back to those classes. So they are skipped on a PS3 source for
-    // the same reason they are skipped on a ribbon build, and reported the same
-    // way: absent, not invented.
+    // The sky and the per-node visibility read a `Mesh`-layout payload, which a
+    // PS3 file does not have - its `Skycube` is in the `.rcsmodel` too, keyed
+    // by a hash this project has not tied back to that class. So they are
+    // skipped on a PS3 source for the same reason they are skipped on a
+    // ribbon build, and reported the same way: absent, not invented.
     let vex_geometry = !ribbon && rcs_model.is_none();
     // Whether the `.rcsmodel` *built*, not merely whether one was found - the
     // report below says which surface is on screen, and since a sibling that
     // will not decode now falls back to the ribbon, "found" is the wrong
     // question to ask.
     let rcs_drawn = rcs_model.is_some();
+    // Both pad classes, decoded once and shared between the two blocks below -
+    // mirrors `sky_model`'s own HD/Wipeout 2048 split just past it, since only
+    // HD's node tree has a recovered `Speedup Pad`/`Weapon Pad` class id;
+    // Wipeout 2048's `.rcsmodel` carries no comparable node tree yet, so a
+    // 2048 source stays `(None, None)` here exactly as it did before this
+    // pair existed.
+    let (ps3_pad_model, ps3_weapon_pad_model) = match &ps3_geometry {
+        Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => {
+            pads::ps3_pad_models(&mut archives, &track, &track_blob, geometry, &mut report)?
+        }
+        _ => (None, None),
+    };
 
     let track_model = if let Some(model) = rcs_model {
         model
@@ -617,8 +629,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
 
     // Same reasoning as the sky: a ribbon build shows an invented surface, so it
-    // shows none of the disc's art meshes, pads included.
-    let pad_model = if !vex_geometry {
+    // shows none of the disc's art meshes, pads included. The PS3 path is
+    // `ps3_pad_model`, decoded above beside `ps3_weapon_pad_model` - see
+    // `pads::ps3_pad_models`' own doc comment for why HD needs a pass of its
+    // own rather than reusing `mesh::build_pads`' PSP-shaped one.
+    let pad_model = if ps3_pad_model.is_some() {
+        ps3_pad_model
+    } else if !vex_geometry {
         None
     } else {
         let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.clone())?;
@@ -651,7 +668,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
     let weapon_pad_model = if rcs_drawn {
-        geometry::weapon_pad_model(rcs_weapon_pad_model, options.mode, &mut report)
+        geometry::weapon_pad_model(ps3_weapon_pad_model, options.mode, &mut report)
     } else if !vex_geometry {
         None
     } else {

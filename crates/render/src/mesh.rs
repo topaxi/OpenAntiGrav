@@ -289,14 +289,8 @@ pub struct Model {
     /// file with the same class id - [`Flap::vertices`] generalised from two
     /// fixed slots to however many nodes a class authors, for a caller that
     /// wants trigger *i*'s own geometry and has only its position to reach it
-    /// by. Empty outside [`build_class`] (a ribbon, a collision overlay, a
-    /// merge) - **and on Wipeout HD's own weapon-pad model**
-    /// (`mesh::rcs::pads`), whose chunks come off a world-space pass with no
-    /// per-node correspondence to build this from. `Drawable::tint_weapon_pads`
-    /// zips against this field, so an HD weapon pad draws in the mode gate now
-    /// covers it but never cycles the ready/cooling-down colour a PSP-shaped
-    /// one does - a silent no-op rather than a panic, and an honest absence
-    /// rather than an invented cycle, in the sense `CLAUDE.md` means by that.
+    /// by. Populated by [`build_class`] and `mesh::rcs::build_pad_class`;
+    /// empty otherwise (a ribbon, a collision overlay, a merge).
     pub node_vertex_ranges: Vec<std::ops::Range<u32>>,
     /// The `Anim Transform` nodes this model's geometry hangs under, indexed by
     /// [`GpuVertex::xform`] minus one.

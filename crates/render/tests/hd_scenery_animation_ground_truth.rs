@@ -257,7 +257,7 @@ fn a_circuits_anchored_scenery_is_placed_and_moves() {
     assert!(moved > 0, "no anchor's matrix changes between 0 s and 1 s");
 
     // Claim 4, end to end through the builder the race uses.
-    let (model, _pads, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
         mesh::read_blob(&spec, name).ok()
     })
     .expect("the scene builds");
@@ -377,7 +377,7 @@ fn build_anywhere(image: &Path, path: &str) -> Option<(oag_render::mesh::Model, 
             continue;
         };
         let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
-        let (model, _pads, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
             mesh::read_blob(&spec, name).ok()
         })
         .expect("the scene builds");
