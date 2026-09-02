@@ -75,34 +75,73 @@ TOC-fixup trampolines). This is the missing consumer. What it does not yet
 settle: which of its loads is `Flare Radius` itself - most of the function's
 body past the gate is RSX submission plumbing, not the tuning values.
 
+**2026-09-02, a fourth session read that middle and confirmed the tuning
+block, but found a puzzle rather than closing it - full account on
+engine-trail.md ("Fourth session: the tuning block itself, and a puzzle it
+did not settle").** The "bad instruction data" Ghidra's decompiler reported
+in `EngineFlare_RenderTick`'s middle is a decompiler-analysis failure, not
+bad bytes - `disassemble_bytes` reads it as ordinary AltiVec. Read that way:
+a camera-relative inverse-length term feeds a `saturate()`-shaped linear
+fade, `1 - saturate((f30*f28 - f23)/f24)`, multiplied by a per-instance value
+and clamped, then stored at `this+0x18c` right before an early-out. A fixed
+and rerun `scripts/hd-flare-tuning-dump.py` (the first run had an
+un-followed second pointer dereference and read every offset as `0.0`)
+confirms `f23`/`f24` are **exactly** `Flare Fadeout Dist`/`Range` (15.0/15.0,
+at `+0x484`/`+0x488` of the tuning block) - the session-one hypothesis is now
+structural, not just numerical - and along the way pinned live runtime
+addresses for nine of the twelve previously-"unread" tuning rows at once
+(table on engine-trail.md), correcting the `Flare Size Clamp` guess: the
+clamp this formula actually applies is a **different** field reading `1.0`
+live, not `50.0`.
+
+**What it could not settle: the sprite visibly draws, but this function's
+own fade output never left `0.0`.** Four half-second-spaced live samples of
+`this+0x18c`, taken from a craft confirmed mid-race, thrusting and visibly
+flared in the same session's screenshot
+(`data/reference/hd-capture/flare-size/tuning-dump/race.png`), all read
+`0.0` - despite both gates this session could check reading as open (one
+corrects a session-three misreading: the count-style gate is an *unsigned*
+compare, so `craft+0x5fa4 == 1` passes it, not fails it as `count >= 7`
+would suggest). Either `EngineFlare_RenderTick` is not the branch drawing
+this craft's visible sprite (a third, untraced gate, or the wrong vtable
+slot), or it is the right function and `this+0x18c` feeds something other
+than the visible quad - an occlusion-query parameter is at least as
+plausible as a size or alpha term, given the clamp ceiling turned out to be
+`Flare Occluder Radius`'s own value. Settling this needs a breakpoint trace
+under `PPU Decoder: Interpreter (static)`
+([known to work](../docs/reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter),
+~75s to boot against the default 30s) - not attempted this session.
+
 ## Open
 
-- **The sprite's draw call is now located: `EngineFlare_RenderTick`
-  (`0x002a08a8`, confidence 78, on `EngineFlare`'s own vtable - see
-  engine-trail.md).** What remains open is narrower than "find the consumer":
-  which of `EngineFlare_RenderTick`'s loads corresponds to `Flare Radius` /
-  `Flare Radius Min` / `Max Radius Jitter`, and separately to
-  `Flare Fadeout Dist/Range` and `Flare Size Clamp`. The function is long
-  (`0x002a08a8`-`0x002a1500`+) and most of it past its per-frame gate is RSX
-  vertex/state submission (a chain of TOC-fixup trampolines reaching
-  `Rsx_SetMethod` and several not-yet-named helpers in the
-  `0x005a4000`-`0x005f1000` region) rather than the tuning reads themselves -
-  not yet traced to the specific float that becomes the quad's half-size.
-- `Flare Fadeout Dist`/`Range` (15.0/15.0): whether a near/far fade is what
-  is missing, and if so its curve - linear, smoothstep, or something else -
-  is unread. The leading candidate for the oversized-flare finding, but
-  unverified.
-- `Flare Size Clamp` (50.0): newly named, unread past the tuning file. The
-  order-of-magnitude gap against `Flare Radius` (3.0) suggests it clamps
-  something other than a raw world half-size, but that is a hypothesis from
-  the numbers alone.
+- **The draw call is located and its fade formula is partly read, but
+  whether it executes for the visible sprite is not confirmed.**
+  `EngineFlare_RenderTick` (`0x002a08a8`, confidence 78) computes
+  `1 - saturate((dist_term*k - 15.0)/15.0)` (`Flare Fadeout Dist`/`Range`,
+  confirmed live at `+0x484`/`+0x488` of the shared tuning block) and stores
+  the result at `this+0x18c` - but that field read `0.0` on every one of four
+  live samples of a visibly-flared, thrusting, on-screen craft. The two
+  gates checked both read as open, so either this is not the branch that
+  draws the visible sprite, or `this+0x18c` feeds something other than the
+  quad's size/alpha (an occlusion-query parameter is plausible - see below).
+  A breakpoint trace under the PPU interpreter is the direct next step; see
+  engine-trail.md "Fourth session" for the full account.
+- `Flare Size Clamp` (50.0): **corrected 2026-09-02** - not what clamps the
+  fade result computed above (that clamp uses a *different* tuning-block
+  field, `+0x4a8`, which reads `1.0` live and is more likely
+  `Flare Occluder Radius` reused as a ceiling). `Flare Size Clamp` itself has
+  a confirmed runtime address (`+0x4b0`, still 50.0 live) but no traced
+  consumer.
 - `Engine Flare Particles` (`Enable`, `Min Alpha` 0.25): a third flare
   component distinct from the always-on flame model and the sprite, neither
   of which this project draws. The small bright dashes trailing under the
   nozzle in `original-rpcs3.png` are the leading candidate for what this
-  is. No `.pob` or emitter table has been matched to it.
+  is. No `.pob` or emitter table has been matched to it. Runtime storage for
+  `Min Alpha` confirmed live at `+0x464` of the tuning block, 2026-09-02.
 - `Flare Highlight Power`/`Boost` (32.0/1.0), `Spikes Thrust/Boost Max
-  Scale` (1.5/2.0), `Shockwave Cycle Speed` (0.01): named, unread.
+  Scale` (1.5/2.0), `Shockwave Cycle Speed` (0.01): all now have a confirmed
+  live runtime address in the shared tuning block (table on engine-trail.md,
+  "Fourth session") but no traced consumer past that.
 - The trail itself is also suspected inaccurate per the user's report.
   **Checked and refuted**: a separate HD-vs-Fury trail asset (no - one
   asset, disc-wide, colour-mixed by the already-implemented `engineTrail`
@@ -116,17 +155,20 @@ body past the gate is RSX submission plumbing, not the tuning values.
 
 ## Next Steps
 
-- Trace `EngineFlare_RenderTick` (`0x002a08a8`) past its per-frame gate to
-  find which load is the quad half-size. It reads a dozen floats out of the
-  shared render-frame global at `0x00aea540` (`+0x470`..`+0x4a8`,
-  unidentified past "shared state") before reaching the RSX submission
-  chain - one of those, or a field read later in the function past what this
-  session decompiled, is the candidate. A live read (breakpoint or memory
-  poll while the sprite is on screen, the way `hd-flare-sprite-dump.py`
-  polled the object) on the function's float registers at the point it
-  builds the quad corners would settle it faster than more static reading -
-  runtime verification is worth more than any amount of decompiling per the
-  [confidence rubric](../docs/reverse-engineering/confidence-rubric.md).
+- **Breakpoint trace, not more static reading.** Boot RPCS3 with `Core: PPU
+  Decoder` set to `Interpreter (static)` (~75s boot, confirmed working per
+  [rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter))
+  and set a `Z0` breakpoint at `EngineFlare_RenderTick` (`0x002a08a8`) mid-race
+  with a visibly-flared craft on screen. If it fires: read the float
+  registers at the point past the two gates to confirm which value is
+  `Flare Radius`/`Flare Radius Min`/`Max Radius Jitter` (the disassembly is
+  fully read now, "Fourth session" on engine-trail.md - it's a matter of
+  reading registers at a known point, not finding the code). If it does not
+  fire during visible drawing: this function is not the branch that draws
+  the sprite, and the search for the real one restarts from the vtable slots
+  or the RSX pushbuffer directly, per `rpcs3-debugger.md`'s own trap ("the
+  stub parks a thread at a breakpoint without announcing it" - use `wait_at`,
+  not `wait_for_stop`).
 - Once the consumer's radius math is read, either confirm and implement the
   `Flare Fadeout Dist/Range` law or find what actually scales the sprite.
 - Separately assess the trail's own accuracy against the original, per the

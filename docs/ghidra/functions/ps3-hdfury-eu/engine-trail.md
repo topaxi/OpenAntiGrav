@@ -620,18 +620,18 @@ decryption step beyond the disc's own layer-1 key:
 
 | Key | Value | Where it went |
 | --- | ---: | --- |
-| `Spikes Thrust Max Scale` | 1.5 | unread - the five spike shapes' own throttle scale, separate from `EF_Main`'s |
-| `Spikes Boost Max Scale` | 2.0 | unread - the spikes' boost scale |
-| `Engine Flare Particles Min Alpha` | 0.25 | unread - see below |
+| `Spikes Thrust Max Scale` | 1.5 | runtime storage found (`+0x490` of the tuning block, "Fourth session" below) - no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
+| `Spikes Boost Max Scale` | 2.0 | runtime storage found (`+0x480`) - no consumer read; the spikes' boost scale |
+| `Engine Flare Particles Min Alpha` | 0.25 | runtime storage found (`+0x464`) - no consumer read; see below |
 | `Enable Engine Flare Particles` | 1 | unread - see below |
-| `Shockwave Cycle Speed` | 0.01 | unread, no shockwave node identified yet |
-| `Flare Highlight Power` | 32.0 | unread - a specular-looking exponent, not `flame_test.rcsmaterial`'s own `power1` (10.0, already read on engine-flare.md) |
-| `Flare Highlight Boost` | 1.0 | unread, paired with the above |
-| `Flare Fadeout Dist` | 15.0 | unread - see below |
-| `Flare Fadeout Range` | 15.0 | unread - see below |
-| `Flare Occluder Radius` | 1.0 | unread (already named on hd.rs's `Sprite` doc) |
-| `Flare Size Clamp` | 50.0 | unread, newly named - see below |
-| `Flare Depth Bias` | -0.46 | unread (already named on hd.rs's `Sprite` doc) |
+| `Shockwave Cycle Speed` | 0.01 | runtime storage found (`+0x46c`) - no consumer read, no shockwave node identified yet |
+| `Flare Highlight Power` | 32.0 | runtime storage found (`+0x470`) - no consumer read; a specular-looking exponent, not `flame_test.rcsmaterial`'s own `power1` (10.0, already read on engine-flare.md) |
+| `Flare Highlight Boost` | 1.0 | runtime storage found, ambiguous (`+0x474`, tied three ways with `Enable Engine Flare Particles` and `Flare Occluder Radius`, all `1.0`) |
+| `Flare Fadeout Dist` | 15.0 | **read**: `+0x484` of the tuning block, consumed by `EngineFlare_RenderTick`'s linear fade as `f23` - "Fourth session" below |
+| `Flare Fadeout Range` | 15.0 | **read**: `+0x488`, the same fade's `f24` |
+| `Flare Occluder Radius` | 1.0 | runtime storage found, ambiguous (`+0x4a8`/`+0x4ac`, same three-way `1.0` tie; `+0x4a8` is the fade's clamp ceiling `f26` - see "Fourth session", which corrects the `Flare Size Clamp` guess below) |
+| `Flare Size Clamp` | 50.0 | runtime storage found (`+0x4b0`) - **not** the fade's clamp ceiling (that is `+0x4a8` = `1.0`, "Fourth session" below); no consumer read |
+| `Flare Depth Bias` | -0.46 | runtime storage found (`+0x4b4`, already named on hd.rs's `Sprite` doc) - no consumer read |
 
 **`Engine Flare Particles` is a third component, not a variant of the two
 already drawn.** The flare is a `.rcsmodel` (the always-on flame, read on
@@ -773,6 +773,94 @@ and slot 13 (`0x0029f680`) both reset the vtable pointer to the shared base
 (`PTR_PTR_008b2f14`) and call a free routine - consistent with a plain and a
 virtual destructor pair, not investigated further because neither is on the
 draw path.
+
+### Fourth session: the tuning block itself, and a puzzle it did not settle
+
+**2026-09-02, same day.** Two things: `EngineFlare_RenderTick`'s middle
+(`0x002a0be8`-`0x002a1110`) turned out to be readable after all - Ghidra's
+*decompiler* bails there ("Control flow encountered bad instruction data"),
+but the raw bytes are ordinary AltiVec, confirmed with `disassemble_bytes`
+against the plain instruction decoder rather than the function-level
+analysis. And the shared global both `EngineFlare_RenderTick` and
+`Trail_RenderTick` read (`0x00AEA540`) is the tuning file's own runtime
+storage, live-confirmed by exact value.
+
+**What the middle does, read at the instruction level.** Past the two
+already-known gates it computes a normalised inverse-length from a vector at
+`(this+0x38)+0x20` against the camera-context basis `FUN_00679278` returns -
+the `vrsqrtefp` / Newton-Raphson-refine sequence a distance or 1/distance
+term takes - extracts one lane to a scalar (`f25`), then runs a **linear
+fade**: `saturate((f30*f28 - f23) / f24)`, inverted (`1 - x`), multiplied by
+`f25` and by a per-instance value at `this+0x194` (or a shared `1.0` default
+when a flag is clear) times a global scale, clamped to at most one further
+global float, and the result stored at `this+0x18c` right before an
+early-out (`ble` if `<= 0`, skipping the rest of the function).
+
+**The live dump (`scripts/hd-flare-tuning-dump.py`) confirms which tuning
+rows `f23`/`f24` are.** `0x00AEA540` is a pointer *variable*, not the struct
+base - a first run of the script skipped the second dereference
+(`lwz r9,0x5a48(r2)` resolves the TOC slot to this address;
+`lwz r9,0x0(r9)` loads the pointer it actually holds, a heap allocation whose
+address moves between runs) and read every offset as `0.0`. Fixed,
+`struct_base + 0x460`..`0x4b4` matches the tuning file's remaining unread
+rows almost one for one, live and exact
+(`data/reference/hd-capture/flare-size/tuning-dump/`):
+
+| Offset | Live value | Tuning row |
+| --- | ---: | --- |
+| `+0x464` | 0.25 | `Engine Flare Particles Min Alpha` |
+| `+0x46c` | 0.01 | `Shockwave Cycle Speed` |
+| `+0x470` | 32.0 | `Flare Highlight Power` |
+| `+0x474` | 1.0 | ambiguous - `Flare Highlight Boost`, `Enable Engine Flare Particles` and `Flare Occluder Radius` are all `1.0` |
+| `+0x480` | 2.0 | `Spikes Boost Max Scale` |
+| **`+0x484`** | **15.0** | **`Flare Fadeout Dist` - this is `f23` in the formula above** |
+| **`+0x488`** | **15.0** | **`Flare Fadeout Range` - this is `f24`** |
+| `+0x490` | 1.5 | `Spikes Thrust Max Scale` |
+| `+0x4a8`/`+0x4ac` | 1.0 | ambiguous, same three-way tie as `+0x474` - `+0x4a8` is `f26`, the clamp ceiling the fade result is `min()`-ed against right before the store |
+| `+0x4b0` | 50.0 | `Flare Size Clamp` |
+| `+0x4b4` | -0.46 | `Flare Depth Bias` |
+
+This settles two things at once: **the leading hypothesis from session one is
+now structural, not just numerical** - `Flare Fadeout Dist`/`Range` are read
+at exactly the offsets the disassembly consumes in a `saturate()`-shaped
+linear fade, not merely present somewhere in a block that also happens to
+hold them. And **`Flare Size Clamp` (50.0) is not what clamps the fade
+result** - that clamp uses `f26` at `+0x4a8`, which reads `1.0` live, so the
+"order-of-magnitude gap against `Flare Radius`" reading from session one's
+writeup does not hold up; `+0x4a8` is more likely `Flare Occluder Radius`
+reused as a generic ceiling, or a distinct always-`1.0` field the three-way
+tie cannot separate. `Flare Size Clamp` itself is read from the tuning file
+into this struct (confirmed, `+0x4b0` = 50.0) but this session found no
+consumer for it.
+
+**What this session could not settle: whether any of this executes for the
+sprite that is actually on screen.** `this+0x18c` - the fade's own output,
+stored right before the early-out - read `0.0` across four samples taken a
+half-second apart, from a craft confirmed mid-race, thrusting, and visibly
+flared in the same session's own screenshot
+(`data/reference/hd-capture/flare-size/tuning-dump/race.png`). Both gates
+this session could check read as passing: the byte flag at `struct_base +
+0x494` was `1` (live), and the count-style field at `craft+0x5fa4` was `1` -
+which looks like it should fail the `ble` gate at face value, but that
+compare is **unsigned** (`cmplwi`), so `1 - 4` wraps to `0xfffffffd` and
+reads as far greater than `2`, meaning the gate is skipped only for
+`craft+0x5fa4` in `{4, 5, 6}` and passes for everything else including `1` -
+not the `count >= 7` reading session three's writeup implied. With both
+checked gates open, `this+0x18c` should have taken a nonzero value at some
+point in four samples if this is the code path that draws the visible
+sprite. It did not. Two readings, neither confirmed: `EngineFlare_RenderTick`
+is not the branch that reaches the draw call for this craft this session
+(a third, untraced gate, or the wrong vtable slot entirely), or it is the
+right function but the fade genuinely evaluates to `0` at the sampled
+distance and `this+0x18c` feeds something other than the visible quad's
+size or alpha (an occlusion-query parameter would fit `+0x4a8`'s likely
+identity as `Flare Occluder Radius` just as well as a fade ceiling does).
+**Settling this needs a breakpoint trace, not more reading** - a `Z0`
+breakpoint at `EngineFlare_RenderTick`'s entry only fires under `PPU
+Decoder: Interpreter (static)`
+([rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md#z0-breakpoints-fire-but-only-under-the-interpreter)),
+about 75s to boot against the default recompiler's 30s, not attempted this
+session.
 
 ### Checked: no separate trail for HD vs. Fury, and no zone-specific one
 
@@ -1016,6 +1104,10 @@ python3 scripts/ps3-toc.py map | grep -i flare  # Billboard.cpp etc., ruled out
 #                                 # (401/386/etc.-xref shared stubs) are not
 python3 scripts/ps3-toc.py toc 0x002a08a8      # confirms the render function's
                                                  # TOC matches EngineFlare_Update's
+# the shared tuning block EngineFlare_RenderTick and Trail_RenderTick both
+# read, plus the fade-scale storage at the flare's own +0x18c/+0x194 - see
+# "Fourth session" above:
+uv run --with evdev python3 scripts/hd-flare-tuning-dump.py /tmp/hd-flare-tuning-dump
 # "does another craft disturb the ribbon": the default dump, then the split
 python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
