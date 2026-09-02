@@ -192,6 +192,28 @@ fn the_predictor_history_carries_across_a_block_boundary() {
 }
 
 #[test]
+fn pcm16_skips_the_header_and_reads_big_endian() {
+    let mut data = vec![0u8; PCM16_HEADER_LEN];
+    data.extend_from_slice(&1i16.to_be_bytes());
+    data.extend_from_slice(&(-2i16).to_be_bytes());
+    data.extend_from_slice(&32767i16.to_be_bytes());
+    assert_eq!(decode_pcm16(&data), vec![1, -2, 32767]);
+}
+
+#[test]
+fn pcm16_ignores_a_trailing_odd_byte() {
+    let mut data = vec![0u8; PCM16_HEADER_LEN];
+    data.extend_from_slice(&7i16.to_be_bytes());
+    data.push(0xff);
+    assert_eq!(decode_pcm16(&data), vec![7]);
+}
+
+#[test]
+fn pcm16_on_a_span_shorter_than_the_header_decodes_to_nothing() {
+    assert_eq!(decode_pcm16(&[0u8; 4]), Vec::<i16>::new());
+}
+
+#[test]
 fn the_key_on_commands_resolve_to_their_waveform_spans() {
     let data = scored_bank(
         &[(0x01, 0, 272), (0x09, 272, 912), (0x01, 1184, 848)],
