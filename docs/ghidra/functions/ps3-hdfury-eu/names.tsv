@@ -151,6 +151,9 @@
 0x00623770	function	Scream_DoGrainMarker	78	sound.md
 0x006255f8	function	Scream_DoGrainGoto	80	sound.md
 0x00625e88	function	Scream_DoGrainAlternate	80	sound.md
+0x00626728	function	Scream_OpKeyOn	90	sound.md
+0x00630310	function	Scream_KeyOnVoice	90	sound.md
+0x00633c80	function	CellMs_QueueVoice	90	sound.md
 0x003d6dc8	function	Environment_LoadStageTextures	72	zone-effectsettings-loader.md
 0x005dde98	function	Resource_GetOrCreateByName	72	zone-effectsettings-loader.md
 0x005de2d0	function	Texture_LoadWithFallback	80	zone-effectsettings-loader.md
