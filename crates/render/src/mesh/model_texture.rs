@@ -222,12 +222,16 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(std::borrow::Cow::Borrowed(rgba)),
             Texels::Blocks { format, levels } => {
+                // `linear` is inert here: `Texels::Blocks` only ever wraps a
+                // block-compressed `format`, which the decoder does not
+                // consult the flag for.
                 let decoded = oag_formats::gtf::decode_level(
                     format.as_gtf(),
                     levels.first()?,
                     self.width,
                     self.height,
                     0,
+                    true,
                 )?;
                 Some(std::borrow::Cow::Owned(
                     decoded.into_iter().flatten().collect(),

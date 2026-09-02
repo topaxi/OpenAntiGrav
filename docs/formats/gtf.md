@@ -18,8 +18,9 @@ OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
 
 92 rather than higher because **nothing has been compared against the running
 original**, which is where the [confidence
-rubric](../reverse-engineering/confidence-rubric.md) caps a static reading, and
-because 53 of the 7,333 are refused rather than decoded.
+rubric](../reverse-engineering/confidence-rubric.md) caps a static reading.
+9 of the 7,333 (swizzled `B8`) are still refused rather than decoded - see
+below, where the other 44 swizzled files stopped being part of that count.
 
 ## Layout
 
@@ -91,9 +92,9 @@ fails the length check, which is how this was found.
 | 2,485 | `0x86` | `DXT1` (BC1) | - | yes |
 | 527 | `0x87` | `DXT23` (BC2) | - | yes |
 | 126 | `0xa5` | `A8R8G8B8` | yes | yes |
-| 37 | `0x85` | `A8R8G8B8` | **no** | no |
+| 37 | `0x85` | `A8R8G8B8` | **no** | **yes** |
 | 9 | `0x81` | `B8` | **no** | no |
-| 7 | `0x9e` | `A8B8G8R8` | **no** | no |
+| 7 | `0x9e` | `A8B8G8R8` | **no** | **yes** |
 | 3 | `0xa8` | `DXT45` | yes | yes |
 | 1 | `0xa6` | `DXT1` | yes | yes |
 | 1 | `0xa7` | `DXT23` | yes | yes |
@@ -103,11 +104,59 @@ covers almost the whole disc. Block compression *is* a tiling, so the `0x20`
 "linear" bit is not consulted for those; it is consulted for the uncompressed
 ones, and the 53 without it are in the RSX's Morton order.
 
-**Those 53 are refused by name rather than read linearly.** A linear read of a
-swizzled texture is a recognisable picture in scrambled tiles - exactly the kind
-of wrong answer that survives a review, because it looks like a bug in something
-else. `Texture::to_rgba` returns `Error::Swizzled` instead. None of them is a
-HUD or a circuit texture.
+**44 of those 53 - the swizzled `A8R8G8B8`/`A8B8G8R8` - decode now, 2026-09-02.**
+A linear read of a swizzled texture is a recognisable picture in scrambled
+tiles - exactly the kind of wrong answer that survives a review, because it
+looks like a bug in something else - which is why `Texture::to_rgba` refused
+them by name for as long as it did, rather than risk it. What unblocked it:
+`corner2.gtf` (`Data\FE\Images\corner2.gtf`, `DATA06`, 16x16 `A8R8G8B8`
+swizzled), a corner mask for `<Bracket corner="true">` widgets, needed
+decoding to check a hypothesis about the main menu's own tab shape (see
+[hd-frontend.md](hd-frontend.md)) - and once one file needed reading, reading
+all 44 properly was the right size of fix, not a one-off workaround for that
+file alone.
+
+**The address function is `decode::morton_index`: the RSX's own documented
+`cellGcm` tiling** (interleave the low bit of `x` then of `y`, one pair at a
+time, until the narrower dimension's bits run out), not reverse-engineered
+from this disc - it is the platform's standard 2D-surface swizzle. What *is*
+measured here is that it is the right permutation for these files specifically,
+by the same method the DXT endianness question below uses: decode every
+swizzled `A8R8G8B8`/`A8B8G8R8` file two ways - the real Morton order, and a
+deliberately wrong linear misread - and compare how smooth each comes out.
+**33 of 34 judgeable files are smoother under the Morton reading**, well past
+the same >90% bar the DXT question settles on, with the other 10 too flat (a
+uniform-RGB alpha mask, `corner2.gtf` among them) to judge either way. The one
+exception was inspected by eye rather than folded into "close enough":
+`fealphaluminancetexture.gtf` decodes to a coherent blocky test chart whose
+rows are individually uniform, which defeats a roughness metric that only
+looks within a row - not scrambled tiles, the failure this test exists to
+catch. Two more (`feburneffect_test.gtf`, a dissolve noise texture;
+`fetesttexture_001.gtf`, a scratch/detail map) looked like exceptions before
+the `remap` fix below landed, and cleared the bar once real blue-channel
+garbage stopped leaking into the comparison - see
+`crates/formats/tests/gtf_ground_truth.rs`.
+
+**`Texture::remap` forces blue to `0xff` on all 7 `A8B8G8R8` files, and this
+decode now acts on it rather than reading blue off the texel.** The "Not done"
+list below already read `0xa9e4`'s bit packing at confidence 75, off the
+published `CELL_GCM_REMAP_MODE` layout, and called the gap moot because
+`to_rgba` refused every file it could apply to anyway. It stopped being moot
+the moment those 7 files started decoding: two of the three roughness
+exceptions above were this, not the address function - real, un-ignorable
+blue-channel bytes on disc that the descriptor says to discard, contaminating
+the "native" reading until `Texture::apply_remap` started discarding them
+too. `B8`'s own `0xa9ff` remains unread; `to_rgba` still refuses that format
+outright, so it stays moot.
+
+**Confidence 88** - an exact match on a synthetic 4x4 fixture plus a
+corpus-wide statistical result, both real evidence, but nothing corroborated
+against the executable: `EBOOT.elf` carries no `swizzle` string and no
+texture-upload routine has been located to check the address function
+against a decompiled read. `B8` (9 files, still refused) is the one format
+this leaves undecoded - one channel, swizzled on every file that carries it,
+and what the byte itself means is unread, a separate question from the
+address function this section settles.
 
 ## The DXT endpoints are little-endian inside a big-endian file
 
@@ -267,23 +316,28 @@ diverges. It is pinned in the test rather than tolerated.
 
 ## Not done
 
-- **The 53 swizzled textures.** RSX Morton order, unimplemented.
+- **9 `B8` files, swizzled.** One channel, and what the byte itself means is
+  unread - the Morton *address* function is the same one the 44
+  `A8R8G8B8`/`A8B8G8R8` files above now decode with, but reading further into
+  `B8`'s single byte needs its own reasoning `to_rgba` does not have yet.
 - **A cubemap's mip levels.** `face_range` addresses one and nothing decodes one,
   the same gap the flat textures have.
 - **The 360 bytes** on the 20 multi-level cubemaps. Their face layout is read;
   this tail is not.
-- **`remap`, and it is the identity almost everywhere.** Three values on the
-  disc. `0xaae4` on **7,317 of 7,333** unpacks, under libgcm's
+- **`remap`, mostly the identity, and no longer entirely unread.** Three
+  values on the disc. `0xaae4` on **7,317 of 7,333** unpacks, under libgcm's
   `CELL_GCM_REMAP_MODE` packing, to all four output channels taking "remap"
   rather than a forced 0 or 1, with sources `A<-A, R<-R, G<-G, B<-B` - the
-  identity permutation. So not acting on the field changes nothing on those.
-  The 16 that differ are `0xa9ff` on 9 files, every one of them `B8`, whose
-  low byte broadcasts one channel to all four - which is what a single-channel
-  texture wants and is moot while `to_rgba` refuses `B8`; and `0xa9e4` on 7
-  files of format `0x9e`, which forces blue to one. **Confidence 75** on the
-  bit packing, which is a published-header reading rather than something
-  measured against behaviour; the *distribution* is measured and is what says
-  the gap costs nothing.
+  identity permutation, acted on by construction since that is what decoding
+  a texel's four bytes straight already does. `0xa9e4`, on all 7 `A8B8G8R8`
+  files, forces blue to one and **is** acted on now, by
+  `Texture::apply_remap` - see above. `0xa9ff`, on all 9 `B8` files, broadcasts
+  one channel to all four, which is moot for as long as `to_rgba` refuses
+  `B8` outright. **Confidence 75** on the bit packing, which is a
+  published-header reading rather than something measured against behaviour;
+  the *distribution* (which files carry which value) is measured, and now so
+  is `0xa9e4`'s effect - see the roughness numbers above, which dropped from
+  three exceptions to one exactly when this was wired in.
 - **Mip levels of a cubemap, and of a texture that declares a pitch.**
   `face_range` addresses the first and nothing decodes one; the second is 5
   files on the disc and takes the decode-and-box-filter path. Flat, tightly

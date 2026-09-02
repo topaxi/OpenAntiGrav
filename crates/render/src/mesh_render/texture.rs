@@ -132,7 +132,17 @@ pub(super) fn upload(
         // an empty chain built elsewhere should decode to nothing and bind a
         // blank rather than panic here. `skin::blocks` never produces one.
         let decoded = levels.first().and_then(|base| {
-            oag_formats::gtf::decode_level(format.as_gtf(), base, texture.width, texture.height, 0)
+            // `linear` is inert here: `format.as_gtf()` is always one of the
+            // three block-compressed formats this arm exists for, which the
+            // decoder does not consult the flag for.
+            oag_formats::gtf::decode_level(
+                format.as_gtf(),
+                base,
+                texture.width,
+                texture.height,
+                0,
+                true,
+            )
         });
         let rgba: Vec<u8> = decoded.into_iter().flatten().flatten().collect();
         // A chain that decoded to nothing binds a blank rather than sending

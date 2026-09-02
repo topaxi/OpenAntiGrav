@@ -147,7 +147,7 @@ fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
     let Some(image) = image() else {
         return;
     };
-    let (mut decoded, mut swizzled, mut cubemaps) = (0usize, 0usize, 0usize);
+    let (mut decoded, mut unknown_format, mut cubemaps) = (0usize, 0usize, 0usize);
     for_every_gtf(&image, |path, blob| {
         let parsed = Gtf::parse(blob).expect("parses");
         let texture = parsed.only().expect("one");
@@ -163,16 +163,108 @@ fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
                 assert_eq!(rgba.len(), (w * h) as usize, "{path}");
                 decoded += 1;
             }
-            Err(gtf::Error::Swizzled { .. }) => swizzled += 1,
+            // `B8`, still - the swizzle decoder covers `A8R8G8B8` and
+            // `A8B8G8R8`, not the one-channel format, and every `B8` file on
+            // the disc is swizzled. See `docs/formats/gtf.md`.
+            Err(gtf::Error::UnknownFormat { .. }) => unknown_format += 1,
             Err(gtf::Error::Cubemap) => cubemaps += 1,
             Err(e) => panic!("{path}: {e}"),
         }
     });
 
-    // The refusals are the 53 Morton-order textures and the 23 cubemaps, minus
-    // whatever is over the size cut.
-    println!("{decoded} decoded, {swizzled} swizzled, {cubemaps} cubemaps");
-    assert_eq!((decoded, swizzled, cubemaps), (4479, 34, 8));
+    // The refusals are the 9 `B8` files and the 23 cubemaps, minus whatever is
+    // over the size cut. The 44 swizzled `A8R8G8B8`/`A8B8G8R8` files that used
+    // to refuse here now decode - see `docs/formats/gtf.md`.
+    println!("{decoded} decoded, {unknown_format} unknown format, {cubemaps} cubemaps");
+    assert_eq!((decoded, unknown_format, cubemaps), (4504, 9, 8));
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_swizzle_order_is_smoother_than_a_linear_misread() {
+    let Some(image) = image() else {
+        return;
+    };
+    // Only 44 files on the whole disc are swizzled `A8R8G8B8`/`A8B8G8R8`
+    // (the 9 swizzled `B8` ones are not decoded either way, and everything
+    // else is either linear or block-compressed), so the whole disc is a
+    // small enough sweep - no archive sampling needed, unlike the DXT
+    // endianness question this mirrors.
+    //
+    // One named exception, inspected by eye rather than assumed wrong:
+    // `fealphaluminancetexture.gtf` decodes to a coherent blocky test chart
+    // whose rows happen to be internally uniform, which `roughness`'s own
+    // within-row-only metric cannot see past. It does not read as scrambled
+    // tiles - the failure mode this test exists to catch - so it is named
+    // rather than folded into the flat bucket. Two more `A8B8G8R8` files
+    // (`feburneffect_test.gtf`, a dissolve noise texture; `fetesttexture_001.gtf`,
+    // a scratch/detail map) looked like exceptions before `Texture::remap`'s
+    // `REMAP_FORCES_BLUE` correction landed - real blue-channel garbage in the
+    // undecoded reading masquerading as signal - and clear the bar now that
+    // it does not.
+    const KNOWN_EXCEPTIONS: &[&str] = &["/data/tex/fealphaluminancetexture.gtf"];
+    let (mut smoother, mut flat, mut rougher, mut unexpected) = (0usize, 0usize, 0usize, 0usize);
+    for_every_gtf(&image, |path, blob| {
+        let parsed = Gtf::parse(blob).expect("parses");
+        let texture = parsed.only().expect("one");
+        if texture.format.is_block_compressed()
+            || texture.is_linear()
+            || texture.cubemap
+            || texture.format == Format::B8
+        {
+            return;
+        }
+        let (width, height) = texture.level_size(0);
+        let native = texture.to_rgba(blob).expect("decodes");
+        // The wrong reading: the same bytes, addressed as if the `0x20` bit
+        // had been misread and this were raster order after all - the
+        // mistake `Error::Swizzled` used to guard against by refusing outright
+        // rather than risk. `linear` forced regardless of what the descriptor
+        // says, which is exactly the bug being checked was never shipped.
+        let range = texture.level_range(0);
+        let texels = &blob[range];
+        let wrong = gtf::decode_level(
+            texture.format,
+            texels,
+            width,
+            height,
+            texture.pitch as usize,
+            true,
+        )
+        .expect("decodes");
+        let (a, b) = (
+            roughness(&native, width as usize),
+            roughness(&wrong, width as usize),
+        );
+        // A handful of these are flat single-colour masks - `corner2.gtf`'s
+        // own RGB plane among them, alpha carrying the shape instead - which
+        // say nothing either way.
+        if a < 0.005 && b < 0.005 {
+            flat += 1;
+        } else if a <= b {
+            smoother += 1;
+        } else if KNOWN_EXCEPTIONS.contains(&path) {
+            rougher += 1;
+        } else {
+            unexpected += 1;
+            eprintln!("{path}: native roughness {a:.2} >= misread {b:.2}, not a known exception");
+        }
+    });
+
+    let judged = smoother + rougher;
+    println!(
+        "{smoother} smoother, {rougher} known exceptions, {flat} flat, {unexpected} unexpected, {judged} judged"
+    );
+    assert!(judged > 20, "only {judged} textures had anything to say");
+    assert_eq!(
+        rougher,
+        KNOWN_EXCEPTIONS.len(),
+        "a known exception stopped reproducing"
+    );
+    assert_eq!(
+        unexpected, 0,
+        "the Morton reading was not the smoother one somewhere new"
+    );
 }
 
 /// Mean absolute difference between horizontally adjacent RGB texels.
