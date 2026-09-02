@@ -28,6 +28,8 @@ under fixed geometry. This one moves the geometry.
 | `0x08ad0fb4` | `g_anim_transform_vtable` | 85 | data |
 | `0x08ab0818` | `g_ingame` | 85 | data - the in-game object, whose `+0x40` is the animation clock |
 | `0x08b620f8` | `g_anim_transform_desc` | 85 | data - the `desc` local `AnimTransform_Register` builds and passes to `Vex_RegisterClass`; see below |
+| `0x08813328` | `InGame_Update` | 85 | `int (float dt in f12, InGame *this in a0)` - advances `this->0x40` once its own boot sequence (`this->0x3c` < 3) has run |
+| `0x08ac7ab0` | `g_ingame_vtable` | 80 | data - `InGame`'s own class vtable, three of its slots corroborated (`InGame_Update`, `InGame_UpdatePauseInput`, `InGame_Destruct`) |
 
 **A trap first, because every address above depends on it.** This program's
 `jal` targets and `lui`/`addiu` immediates are **link-time**, not runtime: the
@@ -242,8 +244,56 @@ clock a model gets was not traced". **The rule is that there is no per-model
 rule**: both mechanisms read one clock off one object. Its census saw eleven
 world meshes on the race clock and one on `4.80`; the odd one out is a model
 whose `+0x40` was written by something other than the tree walk, not a model on
-a different clock source. Confidence **85** - the writers and readers are read,
-what advances `g_ingame->0x40` itself is not.
+a different clock source. Confidence **85** - the writers and readers are read.
+
+A third reader turned up while chasing the advancer below, at
+`0890cefc`/`0890cf4c` - same fallback-then-primary pattern, feeding a `dt`
+into an object with its own cache at `+0x194` and pause flag at `+0xc0` (the
+`Mesh_SetAnimTime` field shapes). Ghidra has no function covering that
+address (`get_function_by_address` returns nothing for it), so it is not
+named - one more instance of the decompiler gaps this binary already has open
+elsewhere, not investigated further here.
+
+#### What advances `g_ingame->0x40`
+
+Found: **`InGame_Update`** (`0x08813328`), dispatched through the object's own
+class vtable (`g_ingame_vtable`, `0x08ac7ab0` - the same `+0x38` slot pattern
+`AnimTransform_Register` uses for `g_anim_transform_vtable`, confirmed by three
+of its slots resolving to already-named functions: `InGame_UpdatePauseInput`
+and `InGame_Destruct` sit at two other slots in the same table). Its own
+disassembly:
+
+```c
+int InGame_Update(float dt in f12, InGame *this in a0) {  // 0x08813328
+    if (this->0x3c < 3) {
+        if (this->0x3c == 1) { /* one large one-time setup pass */ }
+        // this->0x3c == 0 or == 2: nothing, just count
+    } else {
+        this->0x40 = this->0x40 + dt;   // <- the advancer
+    }
+    this->0x3c += 1;
+    return 1;
+}
+```
+
+`this->0x3c` is a call counter, not a game-time phase: the first three calls
+are consumed bringing the race up (call 0 and call 2 do nothing but count,
+call 1 does one large allocation-and-registration pass for the race's HUD and
+managers - the block already partly read as a plain decompile in the earlier
+draft of this investigation), and only from the fourth call onward does the
+function do anything to `+0x40` at all - a straight `+= dt` with no clamping,
+looping or pausing of its own (the `+0x84` pause flag other readers test is a
+per-*node* flag, not read here). This matches the field being zero-initialized
+in `InGame_Construct` and never written except here and by construction/
+destruction. Confidence **85**: the field offsets match `InGame_Construct`'s
+own initialization exactly (`+0x3c`, `+0x40`), the dispatch site is
+corroborated by two independently-named sibling slots in the same table, and
+the write instruction sequence (`lwc1`/`add.s`/`swc1` on `+0x40`, `f12` as the
+first float argument) is unambiguous. What is not traced: who calls
+`InGame_Update` itself (presumably a generic per-frame Update dispatch through
+the same `+0x38` vtable slot other classes may also populate), so the actual
+frame-to-frame `dt` value's own provenance is one level further out than this
+page goes.
 
 #### The second relocation base is found: it is per-segment, not per-image
 
@@ -331,8 +381,12 @@ matching them case-insensitively would be a departure.
 - **`AnimEnd`** is read into `node+0x58` and nothing was traced reading it back.
   `LoopEnd` is the field that governs playback; this one may be authoring-time
   only.
-- **What advances `g_ingame->0x40`.** The clock object is identified and its
-  writers are named; the per-frame increment of the field itself is not traced.
 - **The two alternate evaluators**, `0x088ff6ec` and `0x088fe934`, unreachable
   on this disc.
 - **The third `Node_SetAnimTimeTree` class**, `0x08a6bd18`.
+- **Who calls `InGame_Update`.** The write site for `g_ingame->0x40` is found
+  (above); the driver that calls it once per frame with a `dt`, presumably a
+  generic per-frame dispatch through the same class-vtable slot other classes
+  may also populate, is not traced.
+- **The third reader at `0890cefc`/`0890cf4c`**, found chasing the advancer
+  above, has no Ghidra function covering it and is not named.

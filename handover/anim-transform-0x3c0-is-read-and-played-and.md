@@ -16,16 +16,32 @@ own `desc` local resolves to `0x08b620f8` under the segment-1 base (not
 `0x0888c960`, which lands inside an unrelated function under the single-base
 reading) - named `g_anim_transform_desc`, confidence 85, in `names.tsv`.
 
+**What advances `g_ingame->0x40` is found, same session.** `InGame_Update`
+(`0x08813328`), dispatched through `InGame`'s own class vtable
+(`g_ingame_vtable`, `0x08ac7ab0`), does a plain `this->0x40 += dt` once its
+internal boot-sequence counter (`this->0x3c`) passes 3. Confidence 85: the
+field offsets match `InGame_Construct`'s own zero-initialization exactly, and
+the dispatch table is corroborated by two other slots resolving to
+already-named sibling functions. Not traced: who calls `InGame_Update` itself
+(presumably a generic per-frame dispatch through the same vtable slot other
+classes may also populate) - that is one level further out than this thread
+scoped. A third reader of the clock turned up in the same pass, at
+`0890cefc`/`0890cf4c`, uncovered by any Ghidra function and not named. Full
+account: [anim-transform.md](../docs/ghidra/functions/psp-pulse-usa/anim-transform.md#what-advances-g_ingame-0x40).
+
 ## Open
 
-- What advances `g_ingame->0x40` is not established.
 - `AnimEnd` is read by the binder and by nothing else.
 - The rate multiplier `AnimTransform_Update` can apply is inert because nothing writes its `+0x5c` numerator.
+- Who calls `InGame_Update` (the generic per-frame dispatch, one level out
+  from this thread) is not traced.
+- The third clock reader at `0890cefc`/`0890cf4c` has no covering Ghidra
+  function and is not named.
 
 ## Next Steps
 
-- `g_ingame->0x40`'s advancer and the `+0x5c` numerator are each a fresh
-  Ghidra trace, not blocked on anything above - `g_ingame`'s address is
-  established, so a search for what writes its `+0x40` (or a live watchpoint)
-  is the direct route; `+0x5c` needs finding what, if anything, ever writes a
-  node's own `+0x5c` rather than the shared clock.
+- The `+0x5c` numerator needs finding what, if anything, ever writes a node's
+  own `+0x5c` rather than the shared clock - a fresh Ghidra trace, not
+  blocked on anything above.
+- `AnimEnd`'s reader (if any) is a `search_instructions`/xref sweep for
+  `node+0x58`, same technique as the rest of this thread.
