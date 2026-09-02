@@ -102,33 +102,21 @@ const STRIP_GAP: f32 = 5.3;
 /// below the label's own top (`8` below its cap-height baseline, cap height
 /// `14`), starting flush with the label's own left edge.
 ///
-/// **The chamfer is a one-step band, not a diagonal cut.** The tab's
-/// top-right corner is chamfered in the capture, `17` wide by `7` tall - cut,
-/// not rounded, and small against the tab's own `188`-`232` width, with the
-/// left edge staying vertical throughout. A true diagonal cut needs a
-/// primitive this build's `Quad`/`ui.wgsl` pipeline does not have: an
-/// independent offset on the one top-right corner alone, which `rect` plus a
-/// whole-quad `rotation` cannot express (**not a shear** either - a shear
-/// moves both right corners into a parallelogram, which is not this shape).
-/// That primitive is real work with a blast radius past this widget - every
-/// `Quad` instance in the game rides the same vertex layout - and one 6x3-unit
-/// corner on one widget is not the reason to add it.
+/// **The chamfer is a 45-degree cut followed by a flat landing.** The tab's
+/// top-right corner is cut, not rounded, `17` raw px of cut region against
+/// the tab's own `188`-`232` width, left edge vertical throughout - and that
+/// `17` divides: a `6`-px diagonal at exactly 45 degrees, then `11.7` px of
+/// *flat top edge at the lower level* before the vertical right edge. A
+/// pentagon, `---\___|`. See [`TAB_CHAMFER_CUT`] for the measurement and for
+/// the two earlier readings it corrects.
 ///
-/// [`crate::menu::strip::draw`] draws the same cut instead as two
-/// [`crate::frontend::Draw::Fill`] rectangles - the full tab below
-/// [`TAB_CHAMFER_HEIGHT`], and a second one above it, narrower by
-/// [`TAB_CHAMFER_WIDTH`] on the right. Checked by rendering both and
-/// comparing against the capture, not assumed - and the honest result is a
-/// step, not a disguised diagonal: cropped at 1:1 next to the capture the two
-/// read the same, a small cut corner, but a close zoom on either shows this
-/// one is a right angle where the capture's is a bevel. The cut's size and
-/// position are the measured ones; only its slope is unmodelled, because the
-/// primitive that would draw a true diagonal - the per-corner offset above -
-/// is not worth its blast radius across every `Quad` in the game for one
-/// 6x3-unit corner. Two `Fill`s were already what the tab draws with, so this
-/// closes the position/size gap with no pipeline change and no risk to
-/// anything else `Quad` draws; the slope stays open, see
-/// `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`.
+/// [`crate::menu::strip::draw`] draws it as [`crate::frontend::Draw::Fill`]
+/// for the tab below [`TAB_CHAMFER_HEIGHT`], and
+/// [`crate::frontend::Draw::ChamferedFill`] for the band above it - the band
+/// narrowed by [`TAB_CHAMFER_LANDING`] so its right edge is where the diagonal
+/// lands, and chamfered by [`TAB_CHAMFER_CUT`] so its own top edge is where
+/// the diagonal starts. The landing is then simply the gap between the band's
+/// right edge and the tab's, needing nothing drawn at all.
 const TAB_LEFT_PAD: f32 = 2.3;
 /// See [`TAB_LEFT_PAD`].
 const TAB_TOP_PAD: f32 = 1.9;
@@ -158,12 +146,37 @@ const UNDERLINE_HEIGHT: f32 = 1.9;
 /// is checked by eye against that render: clear of the label, inside the
 /// tab.
 const UNDERLINE_OFFSET_Y: f32 = 9.0;
-/// How far the chamfer band's right edge sits short of the tab's own right
-/// edge. See [`TAB_LEFT_PAD`]: `17` raw px `* 0.3756`.
-const TAB_CHAMFER_WIDTH: f32 = 6.4;
-/// How tall the chamfer band is, measured down from the tab's own top edge.
-/// See [`TAB_LEFT_PAD`]: `7` raw px `* 0.3756`.
-const TAB_CHAMFER_HEIGHT: f32 = 2.6;
+/// The diagonal's own horizontal extent - how far left of the landing the tab's
+/// top edge starts.
+///
+/// **Measured 2026-09-02 on a `3840x2160` framebuffer capture, three times HD's
+/// own output resolution**, and cross-checked at `1280x720` on a separate boot;
+/// the two agree within a pixel. See
+/// [hd-frontend.md](../../../../docs/formats/hd-frontend.md) for the row-by-row
+/// numbers and
+/// [rpcs3-capture.md](../../../../docs/reverse-engineering/rpcs3-capture.md)
+/// for why a root-window grab could not have produced them.
+///
+/// **This replaces a single `TAB_CHAMFER_WIDTH` of `6.4`, which was not wrong
+/// so much as undivided**: `17` raw px was the whole cut region, and the cut is
+/// a `6`-px diagonal followed by an `11.7`-px *flat landing* at the lower
+/// level. The tab's corner is a pentagon, `---\___|`. Reading all `17` as the
+/// diagonal is what made the 2026-09-01 `Draw::ChamferedFill` attempt look
+/// wrong next to the capture and get reverted; reading none of it as one is
+/// what made the one-step band that shipped instead a right angle where the
+/// original has a bevel. Both were right about what they saw.
+const TAB_CHAMFER_CUT: f32 = 2.25;
+/// The flat run between the diagonal's foot and the tab's own right edge.
+/// See [`TAB_CHAMFER_CUT`]: `35` px at `3840` wide, `11.7` at `1280`,
+/// `* 0.3756`.
+const TAB_CHAMFER_LANDING: f32 = 4.4;
+/// How tall the cut is, measured down from the tab's own top edge.
+///
+/// Equal to [`TAB_CHAMFER_CUT`] because **the cut is 45 degrees**: `18` across
+/// in `19` down at `3840`, `6` in `6` at `1280`. The `2.6` this replaces came
+/// from counting `7` rows on the `1280` capture, both antialiased edge rows
+/// included; the `3840` one resolves the same edge to `18/3 = 6`.
+const TAB_CHAMFER_HEIGHT: f32 = TAB_CHAMFER_CUT;
 
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
@@ -325,12 +338,14 @@ impl Skin {
         TAB_HEIGHT * self.from_ours.1
     }
 
-    /// Every entry's chamfer band: how far it sits short of the tab's own
-    /// right edge, and how tall the band is. Ours; see [`TAB_LEFT_PAD`].
+    /// Every entry's cut corner: the diagonal's horizontal extent, the flat
+    /// run between its foot and the tab's right edge, and the cut's height.
+    /// Ours; see [`TAB_LEFT_PAD`] and [`TAB_CHAMFER_CUT`].
     #[must_use]
-    pub(super) fn tab_chamfer(&self) -> (f32, f32) {
+    pub(super) fn tab_chamfer(&self) -> (f32, f32, f32) {
         (
-            TAB_CHAMFER_WIDTH * self.from_ours.0,
+            TAB_CHAMFER_CUT * self.from_ours.0,
+            TAB_CHAMFER_LANDING * self.from_ours.0,
             TAB_CHAMFER_HEIGHT * self.from_ours.1,
         )
     }

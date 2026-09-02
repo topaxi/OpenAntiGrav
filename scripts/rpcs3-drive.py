@@ -74,7 +74,18 @@ DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 # does not scroll, so at 1280x720 the last three - `SaveState` among them - are
 # simply not on screen, and the highlight walking off the bottom reads exactly
 # like a dead d-pad.
-DISPLAY_GEOMETRY = "1600x1200x24"
+#
+# **This is a ceiling on what a capture can measure, not only a menu fix.** The
+# frame that lands in a screenshot is whatever RPCS3 presents into its own
+# window, and with `Start games in fullscreen mode` that is the display's size
+# capped by the game's `Resolution Scale`. HD's own output is 1280x720, so a
+# capture at scale 100 is 1278x718 after the black trim - fine for reading a
+# colour, and too coarse to measure a 17x7-pixel widget corner, which is the
+# measurement `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`
+# actually needed and could not get. Raise both this and `Resolution Scale`
+# together when a capture has to resolve geometry; raising either alone does
+# nothing, since the smaller of the two is what the frame ends up at.
+DISPLAY_GEOMETRY = os.environ.get("OAG_RPCS3_GEOMETRY", "1600x1200x24")
 SCREEN_LINE = re.compile(r'Switching Screen "(.*?)" to "(.*?)"')
 
 # RPCS3's *own* home menu, opened by the PS button - not the game's. Measured
@@ -324,6 +335,22 @@ class Session:
             self.pad.press("up", 0.12)
             time.sleep(settle)
 
+    def take_screenshot(self):
+        """RPCS3's own frame grab, which is not the same picture as `screenshot`.
+
+        `screenshot` grabs the X root window, so what it returns is whatever
+        the emulator *presented* into its own window - 1278x718 after the black
+        trim, because the window is 1280x720 and stays that size on a bare
+        Xvfb with no window manager to fullscreen it, whatever the display's
+        own geometry or `Resolution Scale` say. This one goes through the home
+        menu instead and writes the *framebuffer*, which is the picture to
+        measure a widget's geometry off. It lands in
+        `~/.config/rpcs3/screenshots/<TITLE_ID>/`.
+        """
+        self.home_menu_select("Take Screenshot")
+        self.pad.press("cross", 0.15)
+        time.sleep(3.0)
+
     def toggle_recording(self):
         """Start or stop RPCS3's own capture. The overlay item is a toggle."""
         self.home_menu_select("Start/Stop Recording")
@@ -433,6 +460,38 @@ def cmd_boot(args):
         print("Main Menu. Holding for %g s." % args.hold, flush=True)
         time.sleep(args.hold)
     return 0
+
+
+def cmd_shot(args):
+    """Boot to a named screen and take RPCS3's own framebuffer screenshot.
+
+    For the case a root-window grab cannot serve: measuring a widget's own
+    geometry, where the question is what the console rasterised rather than
+    what colour it came out. See `Session.take_screenshot`.
+    """
+    before = set(emulator_screenshots())
+    with Session(args.image, args.log_dir) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen_pressing(args.screen, args.timeout):
+            print("never reached %r (last screen: %s)"
+                  % (args.screen, current_screen()), file=sys.stderr)
+            return 1
+        time.sleep(args.settle)
+        session.take_screenshot()
+    new = [p for p in emulator_screenshots() if p not in before]
+    if not new:
+        print("the home menu did not write a screenshot", file=sys.stderr)
+        return 1
+    for path in new:
+        print("wrote %s" % path, flush=True)
+    return 0
+
+
+def emulator_screenshots(title_id="BCES00664"):
+    """Every screenshot RPCS3 has written for a title, oldest first."""
+    root = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    pattern = os.path.join(root, "rpcs3", "screenshots", title_id, "*.png")
+    return sorted(glob.glob(pattern), key=os.path.getmtime)
 
 
 def cmd_race(args):
@@ -840,6 +899,12 @@ def main(argv=None):
     boot.add_argument("--timeout", type=float, default=180.0)
     boot.add_argument("--hold", type=float, default=30.0)
     boot.set_defaults(run=cmd_boot)
+
+    shot = sub.add_parser("shot")
+    shot.add_argument("--screen", default="Main Menu")
+    shot.add_argument("--timeout", type=float, default=180.0)
+    shot.add_argument("--settle", type=float, default=12.0)
+    shot.set_defaults(run=cmd_shot)
 
     race = sub.add_parser("race")
     race.add_argument("--timeout", type=float, default=180.0)

@@ -84,10 +84,59 @@ Forcing alternate pads to cooldown (a temporary override, since removed) with
 *different* picture and no assertion failure: the branch reaches the reused
 buffer, and the reused buffer still uploads exactly its pad's span.
 
-`just` passes. `just test-data` fails two `oag-formats` ground-truth tests
-(`a_third_of_a_circuits_chunks_are_see_through`,
-`the_disc_declares_more_widths_than_the_search_looks_for`) - **both reproduce
-on pristine `157a4666`** and neither is in a crate this work touches.
+`just` passes. **`just test-data` reports six pre-existing failures, and an
+earlier version of this line said two** - a count taken from a run that stopped
+early. Corrected 2026-09-02, and the way it was wrong is worth keeping, because
+four separate wrong numbers came out of this one afternoon and **every one was
+a green-looking figure produced by a run that had not exercised the thing**:
+
+- `just test-data` is `cargo nextest run --workspace --run-ignored all` with no
+  `--no-fail-fast`, so nextest stops on failure. The run behind "two" executed
+  **138 of 3,298 tests** and never reached the other four. The identity of the
+  two was right and their trace back to `157a4666` holds; the implied
+  completeness did not. **A `test-data` run cannot enumerate what is red** -
+  add `--no-fail-fast` when that is the question.
+- With `--no-fail-fast` on `5e212d1b`: 3,304 run, **6 failed, 0 skipped**. None
+  is in a crate this work touches, and the FSR 1 thread reproduced the same six
+  independently on a clean worktree.
+- **Setting `OAG_REQUIRE_GAME_DATA=1` gives 17, and the extra 11 are not code.**
+  That variable turns "silently pass on missing data" into a failure, and
+  `data/traces/` is *derived* evidence this checkout is missing three files of -
+  `talons-junction-standing-start.csv`, `pad0-boost.csv` and
+  `talons-junction-time-trial-lap-omega.csv`. The 11 are `chase_camera`,
+  `maglock`, `pure_dlc`, `wall_contact` and `yaw_authority` ground truth, all
+  trace-backed. Quote a red count with the variable's state attached or it means
+  nothing.
+- **`0 skipped` does not mean the data was there.** nextest counts a test that
+  early-returns on a missing file as *passed*; the 17-failure run reported
+  `0 skipped` too. It says nothing was filtered out, not that anything was
+  exercised.
+- **They do not pass when re-run filtered, and a report that they do is a
+  fourth version of the same mistake.** With `--run-ignored all` and an
+  exact-name filter, the four fail **4 of 4**, the same as in the sweep. There
+  is no filtered-versus-sweep sensitivity and no shared-state hypothesis to
+  chase: they fail deterministically whenever they run.
+
+  **Two independent ways to get a false green out of a filtered re-run here,
+  and the second is the one that actually happened.**
+
+  *`nextest`'s `test()` predicate matches a test's own name and module path,
+  never its binary.* Every one of these lives in a `*_ground_truth` binary
+  whose name appears in no test name, so a filter written off the binary
+  quietly selects a different set and reports confidently on it -
+  `test(rcsmodel)` picks up `rcsmodel::tests::*` and
+  `rcsmodel::vertex_decl::tests::*` unit tests, and `test(race_finish)` picks
+  up exactly one unrelated unit test,
+  `race::results::tests::the_board_is_taken_on_the_tick_the_race_finishes`.
+  Thirty-nine tests genuinely passed; not one was a failure being re-run.
+  **`binary(race_finish_ground_truth)` is the predicate that selects what the
+  name suggests** - verified, it lists all three of that binary's tests.
+
+  *And they are all `#[ignore]`d*, so even a correct exact-name filter runs
+  none of them without `--run-ignored all`, in a shape that reads as success:
+
+      Starting 0 tests across 166 binaries (3304 tests skipped)
+      Summary 0 tests run: 0 passed, 3304 skipped
 
 ## Fixed
 
@@ -135,6 +184,29 @@ on pristine `157a4666`** and neither is in a crate this work touches.
    so four high-water marks would be kept alive to save nothing. Each clears it
    itself rather than trusting what it is handed.
 
+7. **The particle systems allocated 1.99 MB in a frame with rockets in the
+   air**, and this page had them ranked as nothing - because the quiet capture
+   every earlier number came from measured them at **199 bytes**, no effect
+   playing. `psys::System::vertices` returned a growing pair of `Vec`s per
+   playing instance and `psys::Stage::vertices` appended each pair into a third
+   growing pair. Both gained an `extend_vertices` form writing into the
+   caller's lists, which are `Scene::scratch`'s. 1,990,674 -> 594 bytes,
+   128 -> 12 allocations.
+
+   **The lesson is about the capture, not the code**: a stationary `--race`
+   frame plays no effects, fires no weapons and raises no shield, so it reads
+   as quiet on exactly the paths that cost the most when they run. Every figure
+   on this page from here on is taken from `--autopilot --give <weapon>
+   --press square`.
+
+   **It is not only a measurement trap.** The FSR 1 thread found the same blind
+   spot settling a *default*: the one FSR 1 versus bilinear comparison this
+   project has made was taken from a stationary `--race` frame, so it contained
+   no spark burst, no rocket and no shield shell - none of the high-frequency
+   additive content a sharpener rings hardest on, which was the doubt the
+   comparison existed to answer. Any capture-backed claim about a **picture**
+   is exposed to this the same way a claim about a cost is.
+
 ## Open
 
 **Not fixed, with numbers, in the order they are worth fixing:**
@@ -144,21 +216,63 @@ on pristine `157a4666`** and neither is in a crate this work touches.
   is now the single largest line in the frame. Finding 4 above reduces what is
   recorded into it. Whether it can be reduced further is a question about
   reusing an encoder across frames, which this project has never tried.
-- **`Race::rocket_model_matrices` returns a `Vec` per frame**, inside the
-  ~50 KiB `rockets+plumes` stage.
-- **The per-drawable `write_anims`/`write_node_anims` pair costs 70
-  allocations and 29 KiB a frame** across five drawables. Unread further.
-- **`smaa::render` builds three bind groups a frame and `fxaa`/`fsr1` one
-  each.** SMAA's own comment argues the rebuild is deliberate ("a bind group
-  is cheap next to the draw it feeds"); the motion blur measurement above is
-  the counter-evidence, at 194 allocations for seven groups. The AA chain runs
-  in the presentation path, which the capture harness above does not reach, so
-  **these were not measured** - only read. Instrumenting the presented path is
-  the next step there.
+- **What is left is `wgpu::Queue::write_buffer`, and it is not this code's to
+  remove with another scratch buffer.** The two items that used to sit here -
+  `Race::rocket_model_matrices`' per-frame `Vec` and the
+  `write_anims`/`write_node_anims` pair - were both measured and both turned
+  out to be the *call count*, not the arguments. `rocket_model_matrices` is
+  exactly **one** allocation of the 515 its loop makes.
 
-**A stale comment**: `race/scene/frame.rs`'s `render` doc says `cull` is
-"off by default"; `settings::default_frustum_culling` returns `true` and has
-since the measurement in `Graphics::frustum_culling`'s own doc comment landed.
+  Counted at three sites (`Drawable::write` and the two anim writers): **155
+  `write_buffer` calls a frame**, and the allocations track them at roughly
+  4 to 7 each - 126 rocket writes cost 515 allocations, 10 scenery-anim writes
+  cost 69. They happen inside wgpu's staging path, not here.
+
+  So the lever is *fewer calls*, not smaller ones: one uniform buffer with
+  dynamic offsets in place of one buffer per drawable. That is an architecture
+  change and wants its own thread, not a line in this one.
+
+  **Do not read the rocket figure as a real-race cost.** It comes from
+  `--give rocket --press square`, which puts **126** rockets in the air; a
+  race has a handful. It is a magnifier for the per-call cost, not a
+  measurement of a frame anybody plays.
+- **The presentation path builds bind groups per frame, and none of it is
+  measured.** `smaa::render` builds three a frame, `fxaa` and `fsr1` one each,
+  and `upscale.rs`'s `fn bind` **one more** per frame whenever a post-process
+  or an FSR 1 output is bound. Cite `fn bind` and not a line number: the
+  callers moved when ADR-0036 split `resolve` into `resolve_scene` and
+  `composite`, and `bind` is where the counter hangs off anyway. Three callers
+  reach it, of which only `resolve_scene`'s two are per frame - `target` and
+  `output` fire once per resize, so a resize shows as a spike rather than as
+  churn. That sixth site is easy to miss: it is in
+  `oag-game`, where the other five are in `oag-render`, so a sweep of the post
+  chain alone does not find it. SMAA's own comment argues the rebuild is
+  deliberate ("a bind group is cheap next to the draw it feeds"); the motion
+  blur measurement above is the counter-evidence, at 194 allocations for seven
+  groups.
+
+  **All of it is read rather than measured**, and closing that wants two
+  things, not one:
+
+  - ~~*A counter on the `Framebuffer` pair.*~~ **Done**, on
+    `worktree-handover-fsr-1s-default-is-open` rather than here, because that
+    thread owned `upscale.rs` while ADR-0036 was landing: `bind` now goes
+    through `perfprobe::bind_group`. One line, since all three callers funnel
+    through it.
+  - *A harness that presents N frames.* `--presented` on the race capture does
+    drive the real path, but for **one** frame, and the question here is
+    per-frame churn - a single-frame total cannot answer it. The front-end
+    capture has no `Framebuffer` at all. So this wants the presented-path
+    equivalent of `OAG_RENDER_BENCH`'s re-record loop, which is its own piece
+    of work and belongs to neither thread yet.
+
+    **The shape, so it is not re-derived** (the FSR 1 thread's reading, which
+    owns that path): it is N presented frames from *one* process, and the
+    cheapest route is a loop inside the existing capture rather than a new
+    binary - `resolve_scene` and `composite` are already called from
+    `race/capture.rs`, so the frame body exists and only the repetition does
+    not. That is the same shape `OAG_RENDER_BENCH` already has around
+    `Scene::render` in the same file.
 
 ## Not measurable here
 
@@ -202,8 +316,10 @@ after touching anything in this list.
 
 ## Next Steps
 
-1. Instrument the presented path so the AA chain's per-frame bind groups get a
-   number rather than a reading - the counters are placed, the harness is not.
-2. Fix the stale "off by default" in `race/scene/frame.rs`.
-3. `Race::rocket_model_matrices`' per-frame `Vec`, then the
-   `write_anims`/`write_node_anims` pair at 70 allocations a frame.
+1. A harness that presents N frames, so the AA chain's and `fn bind`'s
+   per-frame bind groups get a number rather than a reading. The counters are
+   all placed now; see the Open item for why `--presented` alone is not that
+   harness.
+2. If the `write_buffer` call count is worth attacking, it wants its own
+   thread: one uniform buffer with dynamic offsets rather than one per
+   drawable. Nothing smaller will move it.

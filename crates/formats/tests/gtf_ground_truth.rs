@@ -163,20 +163,21 @@ fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
                 assert_eq!(rgba.len(), (w * h) as usize, "{path}");
                 decoded += 1;
             }
-            // `B8`, still - the swizzle decoder covers `A8R8G8B8` and
-            // `A8B8G8R8`, not the one-channel format, and every `B8` file on
-            // the disc is swizzled. See `docs/formats/gtf.md`.
+            // Nothing on the disc reaches this any more - every format byte
+            // in `FORMATS` decodes. Kept so that a format this reader does
+            // not know shows up as a count rather than a panic.
             Err(gtf::Error::UnknownFormat { .. }) => unknown_format += 1,
             Err(gtf::Error::Cubemap) => cubemaps += 1,
             Err(e) => panic!("{path}: {e}"),
         }
     });
 
-    // The refusals are the 9 `B8` files and the 23 cubemaps, minus whatever is
-    // over the size cut. The 44 swizzled `A8R8G8B8`/`A8B8G8R8` files that used
-    // to refuse here now decode - see `docs/formats/gtf.md`.
+    // The only refusals left are cubemaps, which need `face_to_rgba`. The 9
+    // `B8` files that used to sit in `unknown_format` now decode, as the 44
+    // swizzled `A8R8G8B8`/`A8B8G8R8` did before them - see
+    // `docs/formats/gtf.md`.
     println!("{decoded} decoded, {unknown_format} unknown format, {cubemaps} cubemaps");
-    assert_eq!((decoded, unknown_format, cubemaps), (4504, 9, 8));
+    assert_eq!((decoded, unknown_format, cubemaps), (4513, 0, 8));
 }
 
 #[test]
@@ -185,33 +186,22 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
     let Some(image) = image() else {
         return;
     };
-    // Only 44 files on the whole disc are swizzled `A8R8G8B8`/`A8B8G8R8`
-    // (the 9 swizzled `B8` ones are not decoded either way, and everything
-    // else is either linear or block-compressed), so the whole disc is a
-    // small enough sweep - no archive sampling needed, unlike the DXT
+    // Only 53 files on the whole disc are swizzled and not block-compressed -
+    // 37 `A8R8G8B8`, 7 `A8B8G8R8` and the 9 `B8` ambient shadows - so the whole
+    // disc is a small enough sweep, no archive sampling needed, unlike the DXT
     // endianness question this mirrors.
     //
-    // One named exception, inspected by eye rather than assumed wrong:
-    // `fealphaluminancetexture.gtf` decodes to a coherent blocky test chart
-    // whose rows happen to be internally uniform, which `roughness`'s own
-    // within-row-only metric cannot see past. It does not read as scrambled
-    // tiles - the failure mode this test exists to catch - so it is named
-    // rather than folded into the flat bucket. Two more `A8B8G8R8` files
-    // (`feburneffect_test.gtf`, a dissolve noise texture; `fetesttexture_001.gtf`,
-    // a scratch/detail map) looked like exceptions before `Texture::remap`'s
-    // `REMAP_FORCES_BLUE` correction landed - real blue-channel garbage in the
-    // undecoded reading masquerading as signal - and clear the bar now that
-    // it does not.
-    const KNOWN_EXCEPTIONS: &[&str] = &["/data/tex/fealphaluminancetexture.gtf"];
-    let (mut smoother, mut flat, mut rougher, mut unexpected) = (0usize, 0usize, 0usize, 0usize);
+    //
+    // **No named exceptions, and there used to be.** Three files were carried
+    // as ones the metric could not see past; all three were an artefact of
+    // measuring roughness along rows only, and [`roughness_2d`] retires them.
+    // A list of files a test is allowed to fail on is the thing to remove
+    // when a better metric makes it removable.
+    let (mut smoother, mut flat, mut rougher) = (0usize, 0usize, 0usize);
     for_every_gtf(&image, |path, blob| {
         let parsed = Gtf::parse(blob).expect("parses");
         let texture = parsed.only().expect("one");
-        if texture.format.is_block_compressed()
-            || texture.is_linear()
-            || texture.cubemap
-            || texture.format == Format::B8
-        {
+        if texture.format.is_block_compressed() || texture.is_linear() || texture.cubemap {
             return;
         }
         let (width, height) = texture.level_size(0);
@@ -223,7 +213,7 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
         // says, which is exactly the bug being checked was never shipped.
         let range = texture.level_range(0);
         let texels = &blob[range];
-        let wrong = gtf::decode_level(
+        let mut wrong = gtf::decode_level(
             texture.format,
             texels,
             width,
@@ -232,9 +222,15 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
             true,
         )
         .expect("decodes");
+        // **The same remap on both sides.** `to_rgba` applies the descriptor's
+        // own; a `wrong` that skipped it would be a different picture for a
+        // second reason, and comparing the two would measure the remap rather
+        // than the addressing. Getting this wrong is what made `0xa9e4` look
+        // like it forced blue - see `gtf::Remap`.
+        gtf::Remap::decode(texture.remap).apply(&mut wrong);
         let (a, b) = (
-            roughness(&native, width as usize),
-            roughness(&wrong, width as usize),
+            roughness_2d(&native, width as usize),
+            roughness_2d(&wrong, width as usize),
         );
         // A handful of these are flat single-colour masks - `corner2.gtf`'s
         // own RGB plane among them, alpha carrying the shape instead - which
@@ -243,28 +239,124 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
             flat += 1;
         } else if a <= b {
             smoother += 1;
-        } else if KNOWN_EXCEPTIONS.contains(&path) {
-            rougher += 1;
         } else {
-            unexpected += 1;
-            eprintln!("{path}: native roughness {a:.2} >= misread {b:.2}, not a known exception");
+            rougher += 1;
+            eprintln!("{path}: morton roughness {a:.2} >= raster misread {b:.2}");
         }
     });
 
     let judged = smoother + rougher;
-    println!(
-        "{smoother} smoother, {rougher} known exceptions, {flat} flat, {unexpected} unexpected, {judged} judged"
-    );
+    println!("{smoother} smoother, {rougher} rougher, {flat} flat, {judged} judged");
     assert!(judged > 20, "only {judged} textures had anything to say");
     assert_eq!(
-        rougher,
-        KNOWN_EXCEPTIONS.len(),
-        "a known exception stopped reproducing"
+        (judged, rougher),
+        (43, 0),
+        "the Morton reading was the smoother one on every judgeable file"
     );
-    assert_eq!(
-        unexpected, 0,
-        "the Morton reading was not the smoother one somewhere new"
-    );
+    assert_eq!(flat, 10, "the flat bucket moved");
+}
+
+/// Every `B8` file on the disc, and what each one is.
+///
+/// Nine, one per ship team, all the same shape. Named rather than counted
+/// because the *names* are what settled the format: a one-channel 128x64
+/// texture called `ambient_shadow` is a craft's contact shadow, which is what
+/// makes a soft blob the right answer and horizontal banding the wrong one.
+const AMBIENT_SHADOWS: &[&str] = &[
+    "/data/ships/ag_systems/textures/ambient_shadow.gtf",
+    "/data/ships/assegai/textures/ambient_shadow.gtf",
+    "/data/ships/egx/textures/ambient_shadow.gtf",
+    "/data/ships/feisar/textures/ambient_shadow.gtf",
+    "/data/ships/goteki/textures/ambient_shadow.gtf",
+    "/data/ships/piranha/textures/ambient_shadow.gtf",
+    "/data/ships/qirex/textures/ambient_shadow.gtf",
+    "/data/ships/triakis/textures/ambient_shadow.gtf",
+    "/data/ships/zone/textures/ambient_shadow.gtf",
+];
+
+/// The one-channel format decodes, and comes out as a shadow rather than as
+/// noise.
+///
+/// Three claims at once, none of which a wrong reading satisfies together:
+///
+/// 1. The 9 `B8` files are exactly [`AMBIENT_SHADOWS`] - the format is a ship
+///    contact shadow and nothing else on the disc.
+/// 2. The descriptor's own `remap` broadcasts the stored byte, so every texel
+///    comes back grey with opaque alpha. Nothing in the decoder decides that;
+///    `Remap` reads it off `+0x10`.
+/// 3. A shadow is a soft blob, so the Morton reading has to be markedly
+///    smoother than the raster misread - and it is, by better than 1.6x on
+///    every one of the nine. See `docs/formats/gtf.md` for the picture, which
+///    is the evidence this number stands in for.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut found = Vec::new();
+    for_every_gtf(&image, |path, blob| {
+        let parsed = Gtf::parse(blob).expect("parses");
+        let texture = parsed.only().expect("one");
+        if texture.format != Format::B8 {
+            return;
+        }
+        found.push(path.to_string());
+        assert_eq!((texture.width, texture.height), (128, 64), "{path}");
+        assert!(!texture.is_linear(), "{path}");
+        assert_eq!(texture.remap, 0xa9ff, "{path}");
+
+        let (width, height) = texture.level_size(0);
+        let native = texture.to_rgba(blob).expect("decodes");
+        for texel in &native {
+            assert_eq!(texel[0], texel[1], "{path}: not grey");
+            assert_eq!(texel[1], texel[2], "{path}: not grey");
+            assert_eq!(texel[3], 0xff, "{path}: alpha not forced opaque");
+        }
+
+        let texels = &blob[texture.level_range(0)];
+        let mut wrong =
+            gtf::decode_level(texture.format, texels, width, height, 0, true).expect("decodes");
+        // The same remap on both sides - see the note in
+        // `the_swizzle_order_is_smoother_than_a_linear_misread`. Without it
+        // the broadcast alone makes the Morton reading three times rougher.
+        gtf::Remap::decode(texture.remap).apply(&mut wrong);
+        let (a, b) = (
+            roughness_2d(&native, width as usize),
+            roughness_2d(&wrong, width as usize),
+        );
+        println!("{path}: morton {a:.3}, raster misread {b:.3}");
+        assert!(
+            b > a * 1.6,
+            "{path}: morton {a:.3} is not markedly smoother than raster {b:.3}"
+        );
+    });
+    assert_eq!(found, AMBIENT_SHADOWS);
+}
+
+/// [`roughness`], plus the same thing down columns.
+///
+/// **The swizzle question needs both axes and the endianness question does
+/// not.** A byte-swapped `R5G6B5` endpoint is wrong the same way in every
+/// direction, so one axis measures it. A Morton misread is not: reading a
+/// tiled surface as raster order lays each tile out as a run of consecutive
+/// texels, which comes out as *horizontal stripes* - and stripes are uniform
+/// along a row, so a within-row metric scores the wrong reading as the smooth
+/// one. Three of the disc's swizzled files were named exceptions for exactly
+/// that reason, all three visibly correct under Morton and visibly striped
+/// under the misread; adding the vertical axis retires all three rather than
+/// keeping a list of files the metric cannot see. See `docs/formats/gtf.md`.
+fn roughness_2d(rgba: &[[u8; 4]], width: usize) -> f64 {
+    let across = roughness(rgba, width);
+    let mut total = 0u64;
+    let mut count = 0u64;
+    for (index, texel) in rgba.iter().enumerate().take(rgba.len() - width) {
+        for (top, below) in texel.iter().zip(&rgba[index + width]).take(3) {
+            total += u64::from(top.abs_diff(*below));
+            count += 1;
+        }
+    }
+    across + total as f64 / count.max(1) as f64
 }
 
 /// Mean absolute difference between horizontally adjacent RGB texels.

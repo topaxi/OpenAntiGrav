@@ -141,6 +141,7 @@ around `0x006bxxxx`:
 | `0x005cd990` | `ShaderRegistry_LoadAll` | 86 |
 | `0x005cd8c0` | `ShaderRegistry_UnloadAll` | 84 |
 | `0x008bf1ac` | `g_ShaderRegistryHead` (data) | 84 |
+| `0x005a9998` | `Texture_BuildGcmRegisters` | 75 |
 
 ### `RenderManager_CreateInstance`, and the size of a `RenderManager`
 
@@ -2725,3 +2726,61 @@ Confidence 85. The eleven call sites are an exhaustive `bl` enumeration, and
 the two globals' offsets were walked with real function boundaries; what is
 *not* established is the blend state at each site, which is why the argument
 above is made on the arguments rather than on the fragment program.
+
+### `Texture_BuildGcmRegisters`, and what it settles about a `.gtf`'s `remap`
+
+`0x005a9998`, **confidence 75**. Found 2026-09-02 while corroborating
+[`gtf.md`](../../../formats/gtf.md)'s reading of the `+0x10` `remap` field,
+which until then rested on the published `CELL_GCM_REMAP_MODE` packing plus
+what it predicted about the disc's own files - nothing from the executable.
+
+Seven texture-creation wrappers call it (`0x005a9d28`, `0x005aa1d8`,
+`0x005aa3a0`, `0x005aa598`, `0x005aa998`, `0x005aab88`, `0x005aad30`), and it
+writes a fixed block of register-shaped words into the texture object at
+`+0x20` through `+0x4c`. Two of those writes are the interesting ones:
+
+```c
+uVar4 = (ushort)(param_7 >> 0x10);      // the packed word's high half
+uVar3 = (uint)param_7;
+...
+*(uint *)(param_1 + 0x24) = ... | uVar4 & 0x1f00 | ...;   // format's low 5 bits
+*(uint *)(param_1 + 0x30) = uVar3 & 0x1ffff;              // remap, 16 bits + order
+```
+
+**`param_7` is one packed `(format << 16) | remap` word**, and its low
+seventeen bits - the sixteen-bit remap plus the `order` bit above it - go to
+one slot of their own. `& 0x1f00` on the high half is the same low-five-bits
+format extraction `oag_formats::gtf::Format::from_byte` does.
+
+**The engine constructs these words in code, it does not only copy them out of
+files.** Searching the whole binary for the three values a `.gtf` carries:
+
+| Word | `ori` sites | Where |
+| --- | ---: | --- |
+| `0xaae4` | 40+ (truncated) | `Hud_LoadDefinition`, `Environment_LoadStageTextures`, and much else |
+| `0xa9ff` | 6 | `FUN_00174a30`, `FUN_00175798` (x4), `FUN_005a8df8` |
+| `0xa9e4` | 1 | `FUN_0040dc08` |
+
+`FUN_00175798` builds four **single-channel** runtime surfaces per iteration,
+each with the packed word `0x0100a9ff` - low half `0xa9ff`, high half `0x0100`,
+whose low five bits are `0x01`, `B8`. That is the same pairing the disc's own
+9 `B8` files carry, arrived at independently: the engine's own one-channel
+surfaces and the disc's one-channel textures use the same remap.
+
+**A fourth word settles the pair order, which the disc's three could not.**
+The function compares its argument against two literals, `0x1b00aae4` and
+`0x1c0009e4`. Decomposing `0x09e4` under `gtf::Remap`'s reading - controls in
+the high byte, `A`, `R`, `G`, `B` from the least significant pair up - gives
+alpha forced to one, red read, **green and blue forced to zero**: a
+single-channel-in-red texture, which is a thing. Under the opposite pair order
+the same word reads as green alone with blue forced on and alpha off, which is
+not. The same test applied to `0xa9ff` on a `B8` texture is starker: the
+opposite order forces *blue* to one, and blue is the only channel a `B8`
+stores, so the reading would discard the texture's entire content.
+
+75 rather than higher because the register *slots* are identified by their
+shape and their contents rather than against a decompiled `cellGcmSetTexture` -
+`+0x30` taking exactly the remap word is why it reads as
+`NV4097_SET_TEXTURE_CONTROL1`, and nothing here proves the command-buffer write
+that follows. The remap *packing* itself is the better-supported half; see
+[`gtf.md`](../../../formats/gtf.md).

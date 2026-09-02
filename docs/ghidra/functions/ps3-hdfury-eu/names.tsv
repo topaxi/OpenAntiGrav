@@ -210,3 +210,4 @@
 0x002a1528	function	EngineFlare_Init	85	engine-trail.md
 0x002a06e0	function	EngineFlare_Enqueue	84	engine-trail.md
 0x002a08a8	function	EngineFlare_RenderTick	78	engine-trail.md
+0x005a9998	function	Texture_BuildGcmRegisters	75	renderer.md

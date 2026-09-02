@@ -1640,52 +1640,13 @@ impl Layers {
     #[must_use]
     pub fn zoomed(mut self, origin: (f32, f32), scale: f32, alpha: f32) -> Self {
         for draw in &mut self.body {
-            zoom(draw, origin, scale, alpha);
+            draw.zoom(origin, scale, alpha);
         }
         for draw in &mut self.chrome {
             // Faded but not moved, which is the split the capture shows.
             fade(draw, alpha);
         }
         self
-    }
-}
-
-/// Scales one draw about a point and multiplies its alpha.
-///
-/// No new [`Draw`] variant is needed for any of this: `Text`, `Fill` and
-/// `Sprite` already carry a position, a size or a scale, and a colour whose
-/// fourth channel is the alpha.
-fn zoom(draw: &mut Draw, origin: (f32, f32), scale: f32, alpha: f32) {
-    let about = |value: f32, from: f32| from + (value - from) * scale;
-    match draw {
-        Draw::Text {
-            x,
-            y,
-            scale: size,
-            color,
-            ..
-        } => {
-            *x = about(*x, origin.0);
-            *y = about(*y, origin.1);
-            *size *= scale;
-            color[3] *= alpha;
-        }
-        Draw::Fill { rect, color } => {
-            rect[0] = about(rect[0], origin.0);
-            rect[1] = about(rect[1], origin.1);
-            rect[2] *= scale;
-            rect[3] *= scale;
-            color[3] *= alpha;
-        }
-        Draw::Sprite { rect, color, .. } | Draw::RotatedSprite { rect, color, .. } => {
-            rect[0] = about(rect[0], origin.0);
-            rect[1] = about(rect[1], origin.1);
-            rect[2] *= scale;
-            rect[3] *= scale;
-            color[3] *= alpha;
-        }
-        // A movie has no alpha channel to fade and is never part of a page.
-        Draw::Video { .. } => {}
     }
 }
 

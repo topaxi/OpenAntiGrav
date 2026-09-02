@@ -19,8 +19,8 @@ OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
 92 rather than higher because **nothing has been compared against the running
 original**, which is where the [confidence
 rubric](../reverse-engineering/confidence-rubric.md) caps a static reading.
-9 of the 7,333 (swizzled `B8`) are still refused rather than decoded - see
-below, where the other 44 swizzled files stopped being part of that count.
+**All 7,333 decode as of 2026-09-02**; the last 9, swizzled `B8`, are the
+section below.
 
 ## Layout
 
@@ -36,7 +36,7 @@ then `count` descriptors, 36 bytes each:
 +0x0d  u8    mip levels           1 to 12
 +0x0e  u8    dimension            2 in all 7,333
 +0x0f  u8    cubemap              1 in 23 of 7,333
-+0x10  u32   remap                a channel permutation, not acted on
++0x10  u32   remap                per-channel source and force table; acted on
 +0x14  u16   width                3 to 2048
 +0x16  u16   height               1 to 2048
 +0x18  u16   depth                1 in all 7,333
@@ -93,7 +93,7 @@ fails the length check, which is how this was found.
 | 527 | `0x87` | `DXT23` (BC2) | - | yes |
 | 126 | `0xa5` | `A8R8G8B8` | yes | yes |
 | 37 | `0x85` | `A8R8G8B8` | **no** | **yes** |
-| 9 | `0x81` | `B8` | **no** | no |
+| 9 | `0x81` | `B8` | **no** | **yes** |
 | 7 | `0x9e` | `A8B8G8R8` | **no** | **yes** |
 | 3 | `0xa8` | `DXT45` | yes | yes |
 | 1 | `0xa6` | `DXT1` | yes | yes |
@@ -104,7 +104,7 @@ covers almost the whole disc. Block compression *is* a tiling, so the `0x20`
 "linear" bit is not consulted for those; it is consulted for the uncompressed
 ones, and the 53 without it are in the RSX's Morton order.
 
-**44 of those 53 - the swizzled `A8R8G8B8`/`A8B8G8R8` - decode now, 2026-09-02.**
+**All 53 decode as of 2026-09-02.**
 A linear read of a swizzled texture is a recognisable picture in scrambled
 tiles - exactly the kind of wrong answer that survives a review, because it
 looks like a bug in something else - which is why `Texture::to_rgba` refused
@@ -124,39 +124,122 @@ measured here is that it is the right permutation for these files specifically,
 by the same method the DXT endianness question below uses: decode every
 swizzled `A8R8G8B8`/`A8B8G8R8` file two ways - the real Morton order, and a
 deliberately wrong linear misread - and compare how smooth each comes out.
-**33 of 34 judgeable files are smoother under the Morton reading**, well past
-the same >90% bar the DXT question settles on, with the other 10 too flat (a
-uniform-RGB alpha mask, `corner2.gtf` among them) to judge either way. The one
-exception was inspected by eye rather than folded into "close enough":
-`fealphaluminancetexture.gtf` decodes to a coherent blocky test chart whose
-rows are individually uniform, which defeats a roughness metric that only
-looks within a row - not scrambled tiles, the failure this test exists to
-catch. Two more (`feburneffect_test.gtf`, a dissolve noise texture;
-`fetesttexture_001.gtf`, a scratch/detail map) looked like exceptions before
-the `remap` fix below landed, and cleared the bar once real blue-channel
-garbage stopped leaking into the comparison - see
-`crates/formats/tests/gtf_ground_truth.rs`.
+**43 of 43 judgeable files are smoother under the Morton reading, with no
+exceptions at all**, the other 10 being too flat (a uniform-RGB alpha mask,
+`corner2.gtf` among them) to judge either way.
 
-**`Texture::remap` forces blue to `0xff` on all 7 `A8B8G8R8` files, and this
-decode now acts on it rather than reading blue off the texel.** The "Not done"
-list below already read `0xa9e4`'s bit packing at confidence 75, off the
-published `CELL_GCM_REMAP_MODE` layout, and called the gap moot because
-`to_rgba` refused every file it could apply to anyway. It stopped being moot
-the moment those 7 files started decoding: two of the three roughness
-exceptions above were this, not the address function - real, un-ignorable
-blue-channel bytes on disc that the descriptor says to discard, contaminating
-the "native" reading until `Texture::apply_remap` started discarding them
-too. `B8`'s own `0xa9ff` remains unread; `to_rgba` still refuses that format
-outright, so it stays moot.
+That is up from *33 of 34 with one named exception*, and the improvement is
+two corrections to the measurement rather than a change to the decode:
+
+1. **The remap was applied to one side only.** `to_rgba` applies the
+   descriptor's `remap`; the deliberately-wrong reading it was compared
+   against did not. So forcing a channel to a constant lowered the native
+   reading's roughness and nothing else's - which is the whole of the evidence
+   that previously appeared to support reading `0xa9e4` as forcing *blue*.
+   Both sides get the same remap now.
+2. **Roughness was measured along rows only.** Reading a tiled surface as
+   raster order lays each tile out as a run of consecutive texels, so the
+   *wrong* reading comes out as horizontal stripes - and stripes are uniform
+   along a row. A within-row metric scores the misread as the smooth one on
+   exactly the blocky test charts that were carried as exceptions. Adding the
+   vertical axis (`roughness_2d`) retires all three named files, which is
+   better than keeping a list of files the metric cannot see.
 
 **Confidence 88** - an exact match on a synthetic 4x4 fixture plus a
 corpus-wide statistical result, both real evidence, but nothing corroborated
 against the executable: `EBOOT.elf` carries no `swizzle` string and no
 texture-upload routine has been located to check the address function
-against a decompiled read. `B8` (9 files, still refused) is the one format
-this leaves undecoded - one channel, swizzled on every file that carries it,
-and what the byte itself means is unread, a separate question from the
-address function this section settles.
+against a decompiled read.
+
+## The 9 `B8` files are ship shadows, and their own `remap` broadcasts them
+
+The last format to decode, 2026-09-02, and its **names** were what settled it:
+all 9 are `/data/ships/<team>/textures/ambient_shadow.gtf`, 128x64, one each
+for `ag_systems`, `assegai`, `egx`, `feisar`, `goteki`, `piranha`, `qirex`,
+`triakis` and `zone`. A one-channel texture called `ambient_shadow` is a
+craft's contact shadow, so there is a right answer to look for rather than a
+plausible-looking one to settle for: read in Morton order each is that team's
+craft in soft silhouette - Feisar's delta with its tailfin, Qirex's blunt oval
+- and read in raster order each is horizontal banding. Morton is also 1.6x to
+2.5x smoother on every one of the nine, but the picture is the evidence and
+the number is what
+[`the_single_channel_textures_are_ship_shadows_and_read_in_morton_order`](../../crates/formats/tests/gtf_ground_truth.rs)
+pins.
+
+**These are also the only textures on the disc that exercise `morton_index`'s
+non-square branch.** Every other swizzled file is square, so both dimensions'
+bits run out together and the "let the wider dimension continue linearly"
+phase never runs. `128x64` runs it, and
+`gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap` pins a
+4x2 case against the hand-derived order.
+
+**Nothing in the decoder decides that one byte means grey.** It lands in blue
+and stays there; the descriptor's own `remap` is what broadcasts it - see
+below.
+
+## `remap` is a per-channel source and force table, and it is read now
+
+`+0x10` is two tables packed into sixteen bits, laid out the way the RSX's
+`NV4097_SET_TEXTURE_CONTROL1` register reads them: the **low** byte holds four
+2-bit *source* selectors and the **high** byte four 2-bit *controls*, both in
+`A`, `R`, `G`, `B` order from the least significant pair up. A source names
+which channel an output reads (`0` = A, `1` = R, `2` = G, `3` = B); a control
+says whether that read happens at all, or the output is forced to zero or one.
+
+Three words appear on the disc, and **each decomposes into something the file
+carrying it independently agrees with** - which is why this is a reading and
+not an assertion:
+
+| Word | Files | Decomposes to | Agrees with |
+| --- | ---: | --- | --- |
+| `0xaae4` | 7,317 | every control "read", sources `A<-A, R<-R, G<-G, B<-B` | the identity, which is what decoding a texel straight already does - the value a wrong reading of the packing would *not* land on |
+| `0xa9e4` | 7 | the same, with **alpha** forced to one | `fealphaluminancetexture.gtf` is 100% grey - all four of every texel's bytes equal - so its RGB is a luminance and its alpha is not stored art |
+| `0xa9ff` | 9 | alpha forced to one, every other output reading the **blue** source | these are exactly the 9 `B8` files, whose one stored byte *is* the blue channel |
+
+The third row is the load-bearing one. The low byte `0xff` selects source `3`
+four times; `3` is blue under the same table that makes `0xe4` the identity;
+and the format that carries `0xa9ff` stores one byte in blue and nothing else.
+Format and remap are read from different halves of the descriptor and say the
+same thing.
+
+### Corroborated against the executable, 2026-09-02
+
+The engine **constructs** these words in code rather than only copying them out
+of files, and `Texture_BuildGcmRegisters` (`0x005a9998`, see
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#texture_buildgcmregisters-and-what-it-settles-about-a-gtfs-remap))
+is where they land: it takes one packed `(format << 16) | remap` word, extracts
+the format's low five bits from the high half exactly as `Format::from_byte`
+does, and writes the low **seventeen** bits - the sixteen-bit remap plus the
+`order` bit above it - into a register slot of their own.
+
+Two things follow that the disc's files alone could not give:
+
+- **`0xa9ff` is the engine's own one-channel remap.** `FUN_00175798` builds
+  four single-channel runtime surfaces per iteration with the packed word
+  `0x0100a9ff`, whose format nibble is `0x01`, `B8`. The engine's own scratch
+  surfaces and the disc's 9 shadow textures arrive at the same pairing
+  independently.
+- **A fourth word settles the pair order.** The same function compares against
+  the literal `0x1c0009e4`. Under this reading `0x09e4` is alpha forced to one,
+  red read, green and blue forced to zero - a single-channel-in-red texture.
+  Under the opposite pair order it is green alone with blue forced on and alpha
+  off, which is not a thing. Starker on `0xa9ff`: the opposite order forces
+  *blue* to one, and blue is the only channel a `B8` stores, so it would
+  discard the texture's whole content.
+
+**Confidence 88**, up from the 75 this carried as a bare constant matched by
+value. The layout predicts three distributions on disc, one of them
+cross-checks against an unrelated field, and a fourth word in the executable
+decomposes sensibly under this pair order and nonsensically under the other.
+Short of 92 because the command-buffer write that consumes `+0x30` is not
+traced - the slot is identified by taking exactly the remap word, not against a
+decompiled `cellGcmSetTexture`.
+
+**This corrected a real bug.** `0xa9e4` was previously read as forcing *blue*
+to one - the alpha control pair mistaken for blue's - which rendered all 7
+`A8B8G8R8` files solid blue, `fealphaluminancetexture.gtf` among them. The
+roughness numbers that appeared to confirm it were the one-sided-remap
+artefact described above.
 
 ## The DXT endpoints are little-endian inside a big-endian file
 
@@ -316,28 +399,19 @@ diverges. It is pinned in the test rather than tolerated.
 
 ## Not done
 
-- **9 `B8` files, swizzled.** One channel, and what the byte itself means is
-  unread - the Morton *address* function is the same one the 44
-  `A8R8G8B8`/`A8B8G8R8` files above now decode with, but reading further into
-  `B8`'s single byte needs its own reasoning `to_rgba` does not have yet.
+- **Where a ship's ambient shadow is *drawn*.** The 9 `B8` files decode; what
+  places the quad under a craft, at what size and blend, is a renderer
+  question this format layer says nothing about and nothing here does yet.
 - **A cubemap's mip levels.** `face_range` addresses one and nothing decodes one,
   the same gap the flat textures have.
 - **The 360 bytes** on the 20 multi-level cubemaps. Their face layout is read;
   this tail is not.
-- **`remap`, mostly the identity, and no longer entirely unread.** Three
-  values on the disc. `0xaae4` on **7,317 of 7,333** unpacks, under libgcm's
-  `CELL_GCM_REMAP_MODE` packing, to all four output channels taking "remap"
-  rather than a forced 0 or 1, with sources `A<-A, R<-R, G<-G, B<-B` - the
-  identity permutation, acted on by construction since that is what decoding
-  a texel's four bytes straight already does. `0xa9e4`, on all 7 `A8B8G8R8`
-  files, forces blue to one and **is** acted on now, by
-  `Texture::apply_remap` - see above. `0xa9ff`, on all 9 `B8` files, broadcasts
-  one channel to all four, which is moot for as long as `to_rgba` refuses
-  `B8` outright. **Confidence 75** on the bit packing, which is a
-  published-header reading rather than something measured against behaviour;
-  the *distribution* (which files carry which value) is measured, and now so
-  is `0xa9e4`'s effect - see the roughness numbers above, which dropped from
-  three exceptions to one exactly when this was wired in.
+- **`remap`'s packing against the executable.** All three of the disc's words
+  are read and acted on - see [the section above](#remap-is-a-per-channel-source-and-force-table-and-it-is-read-now)
+  - but the bit layout is corroborated by what it predicts about the files,
+  not by a decompiled read of the code that writes the register. That is the
+  gap between confidence 85 and higher, and it is the same gap the Morton
+  address function has.
 - **Mip levels of a cubemap, and of a texture that declares a pitch.**
   `face_range` addresses the first and nothing decodes one; the second is 5
   files on the disc and takes the decode-and-box-filter path. Flat, tightly

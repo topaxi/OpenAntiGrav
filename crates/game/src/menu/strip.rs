@@ -91,7 +91,7 @@ pub(super) fn draw(
     let gap = skin.strip_gap();
     let (tab_left_pad, tab_top_pad) = skin.tab_pad();
     let tab_height = skin.tab_height();
-    let (chamfer_width, chamfer_height) = skin.tab_chamfer();
+    let (chamfer_cut, chamfer_landing, chamfer_height) = skin.tab_chamfer();
     let (underline_width, underline_height, underline_offset_y) = skin.underline();
 
     let mut out = Vec::new();
@@ -101,15 +101,16 @@ pub(super) fn draw(
         let selected = index == menu.selected();
         let width = measure(label) * scale;
 
-        // The tab behind the label, in two bands rather than one rectangle:
-        // the real tab's top-right corner is chamfered, and a diagonal cut
-        // needs a primitive this build's `Draw`/`Quad` pipeline does not
-        // have. A staircase of one step - the full tab below the chamfer's
-        // height, a second band above it short by the chamfer's width - draws
-        // the true measured size and position of the cut with the primitive
-        // that already exists. See `Skin`'s `TAB_LEFT_PAD` doc for the raw
-        // measurement and the render comparison that checked this was worth
-        // shipping.
+        // The tab behind the label, in two pieces: the real tab's top-right
+        // corner is a 45-degree cut followed by a flat landing before the
+        // vertical right edge - a pentagon, not a rectangle and not a single
+        // diagonal to the corner. The full-width part below the cut is an
+        // ordinary rectangle; the band above it is one `ChamferedFill`,
+        // narrowed by the landing so its right edge is where the diagonal
+        // lands and chamfered by the cut so its top edge is where the diagonal
+        // starts. The landing itself is then just the gap between the band's
+        // right edge and the tab's, and nothing draws it. See `Skin`'s
+        // `TAB_CHAMFER_CUT` doc for the measurement.
         let fill = if selected {
             frame.tab_selected
         } else {
@@ -126,16 +127,18 @@ pub(super) fn draw(
                 ],
                 color,
             });
-            // A label short enough that its tab is narrower than the chamfer
-            // itself would otherwise flip this band's width negative - the
-            // chamfer only ever eats up to the whole top band, never past it.
-            out.push(Draw::Fill {
+            // A label short enough that its tab is narrower than the landing
+            // would otherwise flip the band's width negative. `ChamferedFill`
+            // clamps its own cut to the band's width, so the two together
+            // shrink the band to nothing rather than inverting it.
+            out.push(Draw::ChamferedFill {
                 rect: [
                     x - tab_left_pad,
                     strip.y - tab_top_pad,
-                    (tab_width - chamfer_width).max(0.0),
+                    (tab_width - chamfer_landing).max(0.0),
                     chamfer_height,
                 ],
+                chamfer: chamfer_cut,
                 color,
             });
         }
