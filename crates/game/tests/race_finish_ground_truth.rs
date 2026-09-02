@@ -18,7 +18,7 @@
 //! off the disc, and no synthetic fixture has all three. `race::results`' own
 //! unit tests cover the *rule* - when the board is taken and what goes on it -
 //! against standings written by hand. This is the one that shows a craft
-//! actually driving three laps and the game noticing.
+//! actually driving a single race and the game noticing how it ends.
 //!
 //! The player is flown by [`race::Race::set_autopilot`], which is a verification
 //! aid and says so: nothing else can reach a finished race without a human at
@@ -29,8 +29,23 @@
 //! simulation: this builds `Options::default()`, where the CLI resolves the AI
 //! difficulty out of the settings file - `elite` against `ace` on this machine,
 //! which is a different field and so a different race. Repeated runs of this
-//! file print the same tick every time (7,717 on `pulse-psp-usa.chd`,
-//! 2026-08-17), which is the property that matters.
+//! file print the same tick every time, which is the property that matters.
+//!
+//! # A single race has two legitimate endings, not one
+//!
+//! Until 2026-08-26 the autopiloted player always reached the flag - the
+//! recorded tick was 7,717 on `pulse-psp-usa.chd`, 2026-08-17. The AI gained
+//! working weapons that day (the Mine, the Bomb, missile lock-on) and the
+//! autopilot has no defence of its own - no shield, no dodge - so on `Options::default()`'s
+//! full grid it is now shot down first, deterministically, on tick 3315: the
+//! fixed seed (`crate::race::load`'s `SEED`) makes every run of this file kill
+//! the same craft on the same tick. That is not a bug in the finish rule.
+//! [`oag_race::RaceState::eliminate`] ending a single race is the disc's own
+//! rule - a destroyed craft takes "Ship destroyed" instead of a place on the
+//! results screen and does not respawn, confidence 75 off `0x08a82dfc` in
+//! `psp-pulse-usa`'s `BOOT.BIN` - see `docs/gameplay/race-modes.md` for the full
+//! argument. So both tests below check whichever ending actually happened
+//! rather than assuming the player crossed the line.
 
 use std::path::{Path, PathBuf};
 
@@ -91,7 +106,7 @@ fn race_to_the_flag(race: &mut race::Race) {
 
 #[test]
 #[ignore = "needs a disc image under data/images/"]
-fn a_single_race_ends_when_the_player_completes_its_laps() {
+fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
     let Some(mut race) = autopiloted_race() else {
         return;
     };
@@ -99,21 +114,34 @@ fn a_single_race_ends_when_the_player_completes_its_laps() {
     race_to_the_flag(&mut race);
 
     println!(
-        "the race finished on tick {} ({:.1} s), the player {} of 8",
+        "the race finished on tick {} ({:.1} s), the player {} of 8, craft state {:?}",
         race.world.tick,
         race.world.tick as f32 / 60.0,
-        race.player_place()
+        race.player_place(),
+        race.world.ships[0].physics.craft_state
     );
-    assert_eq!(
-        race.world.ships[0].standing.finish_tick,
-        Some(race.world.tick),
-        "the player's own standing has to agree with the race's finish condition"
-    );
-    assert_eq!(
-        race.world.race.lap,
-        target + 1,
-        "a finished race is one lap past its target"
-    );
+    match race.world.ships[0].standing.finish_tick {
+        Some(finish_tick) => {
+            assert_eq!(
+                finish_tick, race.world.tick,
+                "the player's own standing has to agree with the race's finish condition"
+            );
+            assert_eq!(
+                race.world.race.lap,
+                target + 1,
+                "a finished race is one lap past its target"
+            );
+        }
+        // The other legitimate ending, since the AI gained working weapons and
+        // the autopilot has no defence of its own - see this file's module
+        // doc. A craft destroyed in a single race is out, not respawned, so it
+        // never earns a `finish_tick`.
+        None => assert_eq!(
+            race.world.ships[0].physics.craft_state,
+            oag_physics::CraftState::Eliminated,
+            "the race ended without the player finishing or being eliminated"
+        ),
+    }
 }
 
 #[test]
@@ -145,20 +173,32 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
     assert_eq!(places, (1..=8).collect::<Vec<_>>());
 
     let player = board.player().expect("the player is on the board");
-    assert!(player.finished(), "the race ends on the player's crossing");
-    assert_eq!(player.laps_completed, board.laps_target.unwrap_or(0));
     assert_eq!(player.place, race.player_place());
 
-    // Everyone who finished did so before the player, because the player
-    // finishing is what ended it.
-    for row in board.rows.iter().filter(|row| row.finished()) {
-        assert!(
-            row.finish_tick <= player.finish_tick,
-            "slot {} finished after the race ended",
-            row.slot + 1
+    if player.finished() {
+        assert_eq!(player.laps_completed, board.laps_target.unwrap_or(0));
+        // Everyone who finished did so before the player, because the player
+        // finishing is what ended it.
+        for row in board.rows.iter().filter(|row| row.finished()) {
+            assert!(
+                row.finish_tick <= player.finish_tick,
+                "slot {} finished after the race ended",
+                row.slot + 1
+            );
+        }
+    } else {
+        // The race's other legitimate ending - see this file's module doc.
+        // The player never crosses, so none of the above holds for their own
+        // row, but a craft destroyed in a single race is still out rather than
+        // still racing.
+        assert_eq!(
+            race.world.ships[0].physics.craft_state,
+            oag_physics::CraftState::Eliminated,
+            "the race ended without the player finishing or being eliminated"
         );
     }
-    // And the finishers are ahead of everyone who did not, in that order.
+    // Whichever ending it was, the finishers are ahead of everyone who did
+    // not finish, in that order.
     let finishers = board.rows.iter().take_while(|row| row.finished()).count();
     assert!(
         board.rows[finishers..].iter().all(|row| !row.finished()),

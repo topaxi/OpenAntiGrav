@@ -237,18 +237,37 @@ original), and the forward-grid live comparison
 afterward, so the fix cost nothing on the one number that *is* checked against
 the original.
 
-**A separate, pre-existing gap this incidentally found and did not fix.**
+**A separate, pre-existing gap this incidentally found, and still open.**
 Relocating exactly where an opponent first meets trouble on `05_Track` - a
-circuit `docs/gameplay/ai.md` already measures as having 134 racing-line samples
-with no collision surface under them - moved
-`crates/game/tests/stall_rescue_ground_truth.rs::a_craft_that_stops_on_the_disc_is_put_back`
-onto a spot where the craft gets wedged bouncing rather than sitting still: a
-tick-by-tick trace shows its position frozen for thousands of ticks while its
-speed oscillates between about 0.2 and 10 units/s, never staying below
+circuit `docs/gameplay/ai.md` already measured as having 134 racing-line
+samples with no collision surface under them - moved
+`crates/game/tests/stall_rescue_ground_truth.rs`'s ground-truth craft onto a
+spot where it got wedged bouncing rather than sitting still: a tick-by-tick
+trace showed its position frozen for thousands of ticks while its speed
+oscillated between about 0.2 and 10 units/s, never staying below
 `STALL_SPEED` for long enough to trip the rescue's three-term "stalled" test,
-which requires *sustained* low speed. That gap in the rescue predicate predates
-this fix and is not touched here; the test is left failing rather than adjusted
-to hide it, since it is evidence of a real, different, open problem.
+which requires *sustained* low speed. That gap in the rescue predicate
+predated this fix and was not touched here.
+
+**Partly closed 2026-09-02, and the surviving half is this same bounce.**
+`docs/gameplay/ai.md`'s "the last three, with a mechanism the original does
+not have" fixed a real cause underneath some of the falling-through: a craft
+crossing the track between one hover-probe test and the next.
+`oag_physics::hover::sweep` catches that crossing mid-tick now, and a sweep
+of all twelve circuits at all four difficulties found no cell reaching
+`STALL_TICKS` by *sustained* dwell any more - the specific failure this page
+first measured (a wedge that sits still and sustains low speed) is gone.
+**The bounce itself is not**, re-traced the same day on `05_Track` at novice:
+position frozen at `(-717.0, 19.3, -512.3)` from roughly tick 5,000 through
+12,000 - over 7,000 ticks stationary - while per-200-tick speed still ranges
+0.00-0.04 up to 11-13 units/s throughout, so the dwell counter keeps resetting
+and the rescue never fires. One lap completed in a 12,000-tick run, zero
+respawns. `07_Track` at novice shows the same shape, milder (3 of 4 laps).
+Every other circuit/difficulty cell in the same sweep completes cleanly, so
+this is specific to those two circuits at novice, not disc-wide. The gap in
+the rescue predicate - it catches sustained low speed, not a craft bouncing
+in place - is exactly as open as when it was found; what changed is only
+which mechanism produces the bounce underneath it.
 
 ## Names landed
 
@@ -286,9 +305,16 @@ not named**: it is only inferred from the call site's position in the
 - **The stall rescue does not catch a craft bouncing in place.** Found while
   fixing the reversed grids, above, and not this page's subsystem - tracked
   against `crates/game/tests/stall_rescue_ground_truth.rs`, not here.
+  **Re-confirmed open 2026-09-02**: `oag_physics::hover::sweep` closed the
+  *sustained*-stall shape of this failure disc-wide but not the bounce
+  itself, which still reproduces on `05_Track` and `07_Track` at novice. See
+  "Reversed grids" above.
 
 ## History
 
+- 2026-09-02: `oag_physics::hover::sweep` (`docs/gameplay/ai.md`) closed the
+  *sustained*-stall shape of the failure below disc-wide; the bounce-in-place
+  gap itself re-confirmed open on `05_Track` and `07_Track` at novice.
 - 2026-08-19: reversed grids fixed - `grid_poses` walks the track's own spline
   instead of extrapolating a straight line from the anchor, closing 8 of 9
   broken reversed grids a sweep of Wipeout HD's circuits found. See "Reversed

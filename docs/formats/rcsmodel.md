@@ -326,9 +326,14 @@ wrong, and both are visible in a frame:
   atlas-packed coordinates smears it into streaks, which is what a quarter of
   Talon's Junction looked like.
 - **There are more strides than three.** The disc declares 10, 14, 18, 22, 26,
-  34 and 38. [The search](#the-vertex-stride-is-not-in-the-submesh-descriptor) knows three, so
-  it gives up on 3,382 of the disc's 39,372 described chunks and they draw
-  nothing at all.
+  34 and 38. [The search](#the-vertex-stride-is-not-in-the-submesh-descriptor)
+  knew three, and it gave up on 3,382 of the disc's 39,372 described chunks,
+  which drew nothing at all. **Fixed 2026-08-25**: `rcsmodel::STRIDES` now
+  carries all seven, widening the disc's read coverage from 96.06% to 97.69%
+  and cutting undecodable surfaces from 371 to 115 - see
+  [`rcsmodel_stride_ground_truth.rs`](../../crates/formats/tests/rcsmodel_stride_ground_truth.rs),
+  which pins the invariant that broke. The remaining 115 have no declaration
+  either and are concentrated in the `fe/` track previews, unchased.
 
 ### Layout
 

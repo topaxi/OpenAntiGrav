@@ -96,83 +96,72 @@ file does not need to carry its own.
   `yaw_authority` (2), `pure_dlc` (2), `maglock` (1) - failing because that
   variable turns "silently pass on missing data" into a failure. They are
   missing captures and DLC packs, not broken code.
-- **Six reds are pre-existing, and only one of them was written down.** Measured
-  2026-09-02 by running `cargo nextest run --workspace --run-ignored all
-  --no-fail-fast` twice: once on a branch and once on a detached worktree at
-  `main` with no changes in it, and independently reproduced by a second session
-  on a third checkout. **The same six fail in all of them**, so any of them
-  turning up in your own sweep is not yours:
-  - `oag-formats::rcsmodel_decl_ground_truth::the_disc_declares_more_widths_than_the_search_looks_for`
-  - `oag-formats::rcsmodel_material_ground_truth::a_third_of_a_circuits_chunks_are_see_through`
-  - `oag-game::race_finish_ground_truth::a_single_race_ends_when_the_player_completes_its_laps`
-  - `oag-game::race_finish_ground_truth::the_finished_race_leaves_a_board_with_the_whole_grid_on_it`
-  - `oag-game::difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`
-  - `oag-game::stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back`,
-    the one that was already recorded, failing with "nothing recovered the
-    craft".
+- **The six reds above are fixed, 2026-09-02, all six premise expiry rather
+  than a code bug** - each was a test whose assumption stopped being true
+  under a real, separately-verified improvement, and none of the six needed
+  its underlying subsystem touched:
+  - **Both `race_finish_ground_truth` ones**: the disc's own results-screen
+    field list gives a destroyed craft "Ship destroyed" instead of a place
+    (confidence 75, `0x08a82dfc`), so a single race ending by elimination is
+    the disc's second legitimate ending, not a bug - already recorded above.
+    Both tests now branch on which ending happened and assert the matching
+    one; see `crates/game/tests/race_finish_ground_truth.rs`'s module doc.
+  - **`stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back`**:
+    only *half* premise expiry, and worth reading carefully rather than
+    trusting the first pass on it - an earlier version of this entry claimed
+    the disc no longer beaches a craft anywhere and that was wrong, caught by
+    re-tracing the fix's own claim rather than trusting it. `docs/gameplay/ai.md`'s
+    hover-probe sweep (the "last three" fix) closed the *sustained*-stall
+    shape of the failure disc-wide - swept all twelve circuits at all four
+    difficulties, no cell reaches `STALL_TICKS` by sustained dwell any more
+    (closest: `07_Track` novice at 46 of 120) - which is real and is what the
+    original test measured. **It did not close the bounce-in-place gap**
+    `docs/ghidra/functions/psp-pulse-usa/grid.md` already had open: re-traced
+    2026-09-02, `05_Track` at novice sits frozen near `(-717, 19, -512)` from
+    roughly tick 5,000 to 12,000 while its speed keeps flicking 0-13 units/s,
+    never sustained low enough to trip the dwell counter - one lap in 12,000
+    ticks, zero respawns. `07_Track` novice shows the same shape, milder.
+    Renamed to `no_circuit_sustains_a_stall_past_the_rescue_threshold`,
+    scoped to the claim that actually holds, and now prints laps rather than
+    hiding the ones that stay low. The dwell-counter mechanism itself moved to
+    a direct unit test,
+    `crates/game/src/race/tests/respawn.rs::a_stopped_opponent_is_flagged_after_the_dwell`,
+    which proves the counter fires exactly at its threshold - it was never in
+    question, the open part is a craft that never describes the state it
+    watches for. `grid.md`'s "bounce in place" open item is re-confirmed open,
+    not closed.
+  - **`difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`**:
+    the same AI-gained-weapons change as the race-finish pair, one level up -
+    `ace`'s opponents now shoot each other (3 of 5 seeds put one out of the
+    race), which the old `wrecked == 0` assertion read as a bug. It is not:
+    the leader-distance metric this test actually measures is unaffected
+    either way (`Standing::distance` on a wrecked craft just stops advancing
+    and falls out of contention), the ordering still holds on the same runs,
+    and a wreck is now printed rather than asserted against.
+  - **Both `oag-formats` ones**: leftovers from `3ce4e5ac`'s `STRIDES` fix
+    (2026-08-25, three widths to the disc's own seven) that the commit landing
+    the fix did not update. `the_disc_declares_more_widths_than_the_search_looks_for`
+    asserted the pre-fix gap by name and could not survive it closing -
+    deleted, since `rcsmodel_stride_ground_truth.rs` (the same commit) already
+    pins the correct invariant with more rigor. `a_third_of_a_circuits_chunks_are_see_through`'s
+    pinned count moved `(257, 560)` to `(251, 553)`, confirmed rather than
+    assumed as `STRIDES`'s doing - setting it back to `[14, 18, 22]` locally
+    reproduces `(257, 560)` exactly. Likely mechanism, from reading rather than
+    tracing every changed chunk: `solve_stride_without_a_box`'s three rules
+    each pick a winner by its margin over the runner-up among `STRIDES`, and
+    four more candidates give a few chunks that used to win by default a
+    closer contender to tie or lose against. The share barely moved (31.4% to
+    31.2%) - same disc, more carefully measured.
 
-  **The two `race_finish_ground_truth` ones are diagnosed as of 2026-09-02, and
-  the cause is not a bug in the finish rule.** The autopiloted player is *shot
-  to death* on lap 2 of 3. Measured by instrumenting `damage::apply_contact` and
-  `damage::apply_weapon`: every drop is a weapon hit at the disc's own authored
-  amounts - 15, 15, 5, 5, 5, 15, 10 - and wall contact contributes under 2.0 a
-  time and never matters. The craft reaches `CraftState::Destroyed` on tick
-  3285, `Eliminated` on 3315, and `RaceState::eliminate` ends the race with the
-  player's `standing.finish_tick` still `None`, which is exactly what both
-  assertions report. Wall contact is a red herring; so are the opponents as a
-  *collision* source, since `pair` never fires here.
-
-  **The premise expired rather than the code regressing.** The file's own
-  comment records tick **7,717** and a clean crossing on 2026-08-17. The AI
-  gained working weapons on **2026-08-26** (`40877621` the Mine, `b02f4a48` the
-  Bomb, `6ca44754`/`1928a42d` missile lock-on, `dac4c4a3` drivers steering
-  around charges). An autopilot has no defence - it does not use a shield, does
-  not dodge - so on a full grid at Venom it now dies before the flag. Nothing
-  noticed because these two tests are `#[ignore]`d and disc-backed and so never
-  run in CI.
-
-  **The rule was then recovered, and it says the code is right.** A craft
-  destroyed in a single race is **out** - it takes "Ship destroyed" as its
-  result instead of a finishing place, and does not respawn. Confidence 75, off
-  the results screen's own field list at `0x08a82dfc` in `psp-pulse-usa`'s
-  `BOOT.BIN` (`ER_RACING` / `ER_SHIP_DES` / `ER_1STP`..`ER_8THP` as the three
-  per-row statuses) plus the language tables in `Data.wad`. Respawn belongs to
-  Eliminator, the mode with an `ER_DEATHS` "Deaths:" row. Full argument, and the
-  reason a *status* only means something if its alternatives exclude each other,
-  in [race-modes.md](docs/gameplay/race-modes.md). Two comments that flatly
-  asserted "only Zone can reach this" are corrected in place
-  (`oag_race::RaceState::eliminate`, `race::tick`); they were true when written
-  and stopped being true without anyone editing them.
-
-  **So the fix is to the two tests, and it is not written yet.** They assert
-  that an autopiloted player finishes three laps, which stopped being reachable
-  and is not going to become reachable again by fixing the rules. Whoever picks
-  this up: the choice is between racing them somewhere nothing shoots back and
-  asserting the elimination as a second legitimate ending. Note that
-  `Options::opponents` will **not** help - it is `false`-follows-the-mode and
-  only *adds* a grid to the single-ship modes; a single race grids eight either
-  way, which is why a solo probe reproduced the death tick for tick.
-
-  The other four are undiagnosed.
-
-  **They reproduce alone, and there is no parallelism or shared-state effect** -
-  an earlier version of this entry claimed one, on the strength of the bad
-  filter above, and sent a reader after a `data/cache/` bug that does not exist.
-  Four of four fail on their own with:
-
-  ```sh
-  cargo nextest run --workspace --run-ignored all --no-fail-fast \
-    -E 'test(a_single_race_ends_when_the_player_completes_its_laps) or
-        test(the_finished_race_leaves_a_board_with_the_whole_grid_on_it) or
-        test(every_difficulty_is_quicker_than_the_one_below_it) or
-        test(a_craft_that_stops_on_the_disc_is_put_back)'
-  ```
-
-  The two `oag-formats` ones were separately traced to pristine `157a4666`,
-  which reaches further back than either `main` baseline does.
+  Verified together and against the rest of the disc-backed suite: `cargo
+  nextest run --workspace --run-ignored all --no-fail-fast -E
+  'binary(race_finish_ground_truth) or binary(stall_rescue_ground_truth) or
+  binary(difficulty_ground_truth) or binary(rcsmodel_decl_ground_truth) or
+  binary(rcsmodel_material_ground_truth) or binary(rcsmodel_stride_ground_truth)'`
+  - 29 of 29 pass, 76s.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,740 tests (2026-09-02)** in 5.4s,
+- **Gate status:** last measured green at **2,756 tests (2026-09-02)** in 4.6s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -

@@ -105,6 +105,23 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
 /// print the spread before touching the scale**: an ordering that holds on the
 /// mean and not on one seed is the measurement being noisy, not the setting
 /// being broken.
+///
+/// # A wreck is no longer evidence of a bug
+///
+/// This used to assert `wrecked == 0` on every seed, back when nothing an
+/// opponent did to another opponent could destroy one - a wreck meant a
+/// physics fault corrupting the distance measurement, and it was right to
+/// fail loudly on it. The AI gained working weapons on 2026-08-26 and now
+/// aggressively uses them at `ace` - `1.00` on the appetite scale in
+/// `docs/gameplay/ai.md#difficulty` - so a craft going down to a rival's
+/// missile is the setting working as tuned, not a bug. Measured 2026-09-02:
+/// 3 of 5 `ace` seeds put exactly one opponent out of the race, and the
+/// ordering above still holds on the same run. A wreck is now printed rather
+/// than asserted against, and it does not corrupt the leader-distance metric
+/// either way: [`leader_distance`] takes the max over every slot's own
+/// `Standing::distance`, and a wrecked craft's position (and so its distance)
+/// simply stops advancing and falls out of contention for the lead, which is
+/// what actually happens to it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_difficulty_is_quicker_than_the_one_below_it() {
@@ -115,10 +132,9 @@ fn every_difficulty_is_quicker_than_the_one_below_it() {
             let Some((distance, wrecked)) = leader_distance(level, seed) else {
                 return;
             };
-            assert_eq!(
-                wrecked, 0,
-                "{name} put craft out of the race on seed {seed}"
-            );
+            if wrecked > 0 {
+                println!("{name} seed {seed}: {wrecked} craft out of the race");
+            }
             runs.push(distance);
         }
         let mean = runs.iter().sum::<f32>() / runs.len() as f32;

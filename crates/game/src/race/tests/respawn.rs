@@ -141,6 +141,58 @@ fn a_player_inside_the_threshold_is_left_alone() {
     assert_eq!(race.respawns(), 0, "a craft on the track was recovered");
 }
 
+/// **The other dwell, on an opponent rather than the player.**
+///
+/// This used to be a ground-truth test driving a real opponent into a
+/// *sustained* stall: `05_Track`'s racing line ran above its own collision
+/// surface, and a craft that came off there wedged and sat below
+/// `STALL_SPEED` continuously. `oag_physics`' hover sweep closed that
+/// specific shape of the gap - see `docs/gameplay/ai.md`, "the last three,
+/// with a mechanism the original does not have" - and a sweep of every
+/// circuit at every difficulty afterwards found no cell reaching
+/// [`STALL_TICKS`] by sustained dwell any more (the closest, `07_Track` at
+/// novice, tops out at 46). `crates/game/tests/stall_rescue_ground_truth.rs`
+/// records that measurement and, separately, that `05_Track` and `07_Track`
+/// at novice still make almost no progress - a *bounce-in-place* failure the
+/// sustained-dwell counter cannot see by construction, and which is not
+/// closed. So this drives [`Race::stalled`] directly rather than through a
+/// real circuit either way: it proves the dwell counter itself does what it
+/// was built to do, which was never in question - the open question is a
+/// craft that never describes the state the counter watches for, and no
+/// direct call to `stalled` can demonstrate that either way.
+#[test]
+fn a_stopped_opponent_is_flagged_after_the_dwell() {
+    let mut race = Race::start(setup(hulled_handling()));
+    let ship = &mut race.world.ships[1];
+    ship.physics.craft_state = oag_physics::CraftState::Racing;
+    ship.physics.thrust = 100.0;
+    ship.physics.body.linear_velocity = Vec3::ZERO;
+
+    for _ in 0..STALL_TICKS - 1 {
+        assert!(!race.stalled(1), "flagged before the dwell elapsed");
+    }
+    assert!(race.stalled(1), "the dwell elapsed and nothing happened");
+}
+
+/// **The control**: a craft asking nothing of the throttle is never flagged,
+/// however long it sits - the grid before the lights being the case this
+/// excludes.
+#[test]
+fn an_opponent_holding_no_throttle_never_stalls() {
+    let mut race = Race::start(setup(hulled_handling()));
+    let ship = &mut race.world.ships[1];
+    ship.physics.craft_state = oag_physics::CraftState::Racing;
+    ship.physics.thrust = 0.0;
+    ship.physics.body.linear_velocity = Vec3::ZERO;
+
+    for _ in 0..STALL_TICKS * 3 {
+        assert!(
+            !race.stalled(1),
+            "a craft holding no throttle was flagged as stalled"
+        );
+    }
+}
+
 /// **Where the craft is put back is where it left, not where it ended up.**
 ///
 /// By the time the dwell expires the craft is a long way from the circuit, and

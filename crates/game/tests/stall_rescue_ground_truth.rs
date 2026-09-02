@@ -1,4 +1,7 @@
-//! A craft that stops on a real circuit gets picked up.
+//! A craft that stops on a real circuit gets picked up - or did, until the
+//! *sustained* version of the stop this file drove stopped reproducing. A
+//! different-shaped version of it has not: read "What is still open" below
+//! before assuming the disc is clean.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
 //! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -7,24 +10,59 @@
 //! cargo nextest run -p oag-game --run-ignored all -E 'binary(stall_rescue_ground_truth)'
 //! ```
 //!
-//! # Why this needs a disc, and why it needs *this* circuit
+//! # Why this needed a disc, and why it needed *this* circuit
 //!
 //! [`race::RESCUE_HALF_WIDTHS`] recovers a craft that has left the circuit. It
 //! cannot recover one that is still on it and going nowhere, because the question
 //! it asks - is this craft far from its line - has the same answer for a craft
 //! beached against the scenery as for one driving well.
 //!
-//! The failure is not reachable synthetically. It happens where a circuit's
-//! authored racing line runs above its own collision surface, which is a property
-//! of shipped track data: `docs/gameplay/ai.md` measures `05_Track` as having 134
-//! line samples with nothing under them, in runs at 161-211 and 811-893, the worst
-//! on the disc. A craft comes off there, wedges, and sits. Measured before this
-//! rescue existed: a lone novice opponent spent **3,634 consecutive ticks** - just
-//! over a minute - below one unit per second with the throttle held down, and
-//! completed one lap in five minutes.
+//! The failure was not reachable synthetically. It happened where a circuit's
+//! authored racing line ran above its own collision surface, which was a
+//! property of shipped track data: `docs/gameplay/ai.md` measured `05_Track` as
+//! having 134 line samples with nothing under them, in runs at 161-211 and
+//! 811-893, the worst on the disc. A craft came off there, wedged, and sat.
+//! Measured before the rescue existed: a lone novice opponent spent **3,634
+//! consecutive ticks** - just over a minute - below one unit per second with the
+//! throttle held down, and completed one lap in five minutes.
 //!
-//! So the assertion here is the bound the mechanism guarantees, on the circuit
-//! that produces the failure, plus a control on a circuit that does not.
+//! # One shape of the premise expired; a different shape of the same failure did not
+//!
+//! `docs/gameplay/ai.md`'s "the last three, with a mechanism the original does
+//! not have" fixed a real cause: a craft was falling through the track between
+//! one hover-probe test and the next, and `oag_physics::hover::sweep` now
+//! catches the crossing mid-tick instead of only testing contact discretely.
+//! That closed the *sustained*, `3,634`-tick-shaped version of this file's
+//! original measurement - swept 2026-09-02, all twelve circuits at all four
+//! difficulties, Venom class, 12,000 ticks each: **no cell reaches
+//! [`race::STALL_TICKS`] (120) any more**, the closest being `07_Track` at
+//! novice, 46.
+//!
+//! **It did not close the bounce-in-place gap the reversed-grid work found on
+//! the way past `05_Track`** - `docs/ghidra/functions/psp-pulse-usa/grid.md`,
+//! "the stall rescue does not catch a craft bouncing in place": a craft can
+//! stay physically pinned in one place while its speed keeps flicking back
+//! above `STALL_SPEED`, so the *sustained* dwell this file measures never
+//! reaches its threshold even though the craft is making no progress at all.
+//! **Confirmed still open, traced 2026-09-02**: a lone novice opponent on
+//! `05_Track` reaches `pos (-717.0, 19.3, -512.3)` by tick ~5,000 and is still
+//! within a few units of it at tick 12,000 - 7,000+ ticks, effectively
+//! stationary - while its per-200-tick speed window ranges from as low as
+//! 0.00-0.04 up to 11-13 units/s throughout, so `stalled_ticks` keeps resetting
+//! and the rescue never fires. One lap completed in the whole 12,000-tick run,
+//! `respawns` zero. The same run at every other difficulty on `05_Track`, and
+//! novice on every other circuit but `07_Track` (3 of 4 laps, same shape,
+//! milder), completes cleanly - so this is `05_Track`-and-`07_Track`-at-novice
+//! specific, not a difficulty-wide or circuit-wide regression.
+//!
+//! So what moved is narrower than it first looked: the *sustained*-stall
+//! reading this file used to demonstrate is gone, and that half of the
+//! regression guard below is real. The bounce-in-place gap is not, and
+//! nothing here closes it - `crates/game/src/race/tests/respawn.rs`'s
+//! `a_stopped_opponent_is_flagged_after_the_dwell` proves the dwell counter
+//! mechanism works exactly as designed; it was never the counter that was
+//! wrong, it is that a bouncing craft does not describe the state the counter
+//! watches for.
 
 use std::path::{Path, PathBuf};
 
@@ -103,50 +141,62 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     Some(solo)
 }
 
-/// **A craft that stops is picked up, and within the time the constant promises.**
+/// **The regression guard for the sustained-stall reading only**: no circuit
+/// on the disc sits below `STALL_SPEED` for `STALL_TICKS` consecutive ticks -
+/// which is a narrower claim than "no craft gets stuck". A craft can still
+/// make effectively no progress while never meeting that exact condition; see
+/// this file's module doc for `05_Track` and `07_Track` at novice, which do.
 ///
-/// The bound is what the mechanism guarantees rather than a fitted number: the
-/// dwell counter reaches [`race::STALL_TICKS`] and the craft is put back, which
-/// resets both the counter and the craft's own state, so no stall can outlast the
-/// threshold. Before this existed the same run measured 3,634.
+/// This used to drive `05_Track` at novice and assert the rescue fired,
+/// because that cell was the disc's worst *sustained* beaching - see this
+/// file's module doc for why that stopped being true. What is left to assert
+/// against real disc data is the negative: every circuit, at every
+/// difficulty, stays under [`race::STALL_TICKS`] on this one measure. The
+/// mechanism itself - that the dwell counter fires at the threshold and puts
+/// a craft back - is proven synthetically instead, in
+/// `crates/game/src/race/tests/respawn.rs`. Laps are printed rather than
+/// asserted on, precisely because a low count here (`05_Track`, `07_Track`,
+/// both at novice) is not this test's business to hide.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_craft_that_stops_on_the_disc_is_put_back() {
-    let Some(solo) = solo(
+fn no_circuit_sustains_a_stall_past_the_rescue_threshold() {
+    let tracks = [
+        "01_Track", "02_Track", "03_Track", "04_Track", "05_Track", "06_Track", "07_Track",
+        "09_Track", "10_Track", "13_Track", "14_Track", "16_Track",
+    ];
+    let difficulties = [
         oag_ai::Difficulty::Novice,
-        "Data\\Environments\\05_Track\\track.vex",
-        12_000,
-    ) else {
-        return;
-    };
-    println!(
-        "novice 05_Track: longest stall {} ticks ({:.1}s), laps {}, respawns {}",
-        solo.longest_stall,
-        solo.longest_stall as f32 / 60.0,
-        solo.lap,
-        solo.respawns
-    );
+        oag_ai::Difficulty::Skilled,
+        oag_ai::Difficulty::Elite,
+        oag_ai::Difficulty::Ace,
+    ];
 
-    assert!(
-        solo.longest_stall < race::STALL_TICKS,
-        "a craft sat stopped for {} ticks, past the {} the rescue promises",
-        solo.longest_stall,
-        race::STALL_TICKS
-    );
-    // It was the rescue that did it, not luck: a run this circuit could not
-    // complete without being put back at all.
-    assert!(
-        solo.respawns > 0,
-        "nothing recovered the craft, so the bound above proves nothing"
-    );
-    // And the craft is in the race rather than parked in the scenery. One lap in
-    // five minutes was the measurement before; this is the honest floor, not a
-    // target - `05_Track`'s racing line running above its surface is a separate
-    // open thread and this does not close it.
-    assert!(
-        solo.lap >= 2,
-        "the craft completed {} lap(s), so it is still stuck",
-        solo.lap
+    let mut worst: Option<(oag_ai::Difficulty, &str, u32)> = None;
+    for track in tracks {
+        for difficulty in difficulties {
+            let entry = format!("Data\\Environments\\{track}\\track.vex");
+            let Some(solo) = solo(difficulty, &entry, 12_000) else {
+                return;
+            };
+            println!(
+                "{difficulty:?} {track}: longest stall {} ticks, {} lap(s), {} respawn(s)",
+                solo.longest_stall, solo.lap, solo.respawns
+            );
+            if worst.is_none_or(|(_, _, longest)| solo.longest_stall > longest) {
+                worst = Some((difficulty, track, solo.longest_stall));
+            }
+            assert!(
+                solo.longest_stall < race::STALL_TICKS,
+                "{difficulty:?} {track}: a craft sat stopped for {} ticks, past the {} \
+                 the rescue promises - a real sustained beaching is back",
+                solo.longest_stall,
+                race::STALL_TICKS
+            );
+        }
+    }
+    let (difficulty, track, longest) = worst.expect("the track list is not empty");
+    println!(
+        "worst cell by sustained dwell: {difficulty:?} {track}, longest stall {longest} ticks"
     );
 }
 

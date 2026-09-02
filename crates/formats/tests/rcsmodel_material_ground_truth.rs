@@ -520,6 +520,23 @@ fn a_lightmap_and_a_lightmap_coordinate_come_together() {
 /// The number that says why this matters: a third of Talon's Junction's
 /// world-space chunks are surfaces the original does not draw solid, and this
 /// project draws every one of them solid because it has no alpha for them.
+///
+/// **The pinned pair moved from `(257, 560)` to `(251, 553)` on 2026-09-02,
+/// and it is the stride search getting more honest, not less accurate.**
+/// `rcsmodel::STRIDES` widened from three candidates to the disc's own seven
+/// on 2026-08-25 (`docs/formats/rcsmodel.md`, "there are more strides than
+/// three"), and that is the cause - confirmed rather than assumed: setting
+/// `STRIDES` back to `[14, 18, 22]` locally and re-running this test
+/// reproduces `(257, 560)` exactly. The likely mechanism, from reading
+/// [`solve_stride_without_a_box`]'s three rules rather than from tracing every
+/// changed chunk: each picks a winner by its margin over the runner-up among
+/// `STRIDES`, and four more candidates give a few chunks that used to win by
+/// default against two rivals a closer contender to lose or tie against,
+/// so a few more chunks correctly come back `None` instead of a guess. The
+/// share itself barely moved (31.4% to 31.2%), which reads as the same disc
+/// measured more carefully rather than a different disc.
+///
+/// [`solve_stride_without_a_box`]: rcsmodel::Mesh::solve_stride_without_a_box
 #[test]
 #[ignore]
 fn a_third_of_a_circuits_chunks_are_see_through() {
@@ -558,7 +575,7 @@ fn a_third_of_a_circuits_chunks_are_see_through() {
         }
     }
     println!("{see_through} see-through, {opaque} opaque");
-    assert_eq!((see_through, opaque), (257, 560));
+    assert_eq!((see_through, opaque), (251, 553));
     assert!(
         see_through * 4 > opaque,
         "this is not a rounding error on the picture"

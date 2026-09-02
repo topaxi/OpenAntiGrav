@@ -7,9 +7,12 @@
 //! painted). Split for the same reason they are: one file per claim family
 //! keeps each under the size ratchet and keeps a failure legible.
 //!
-//! **These claims are what retired two inferences**: the stride search over
-//! three widths, and the assumption that a texture coordinate is the last four
-//! bytes of a vertex. See `docs/formats/rcsmodel.md`.
+//! **These claims are what retired the assumption that a texture coordinate is
+//! the last four bytes of a vertex.** See `docs/formats/rcsmodel.md`. The other
+//! inference this format's declaration retired - the stride search only knowing
+//! three widths of the seven the disc declares - is `rcsmodel_stride_ground_truth.rs`'s
+//! now: `rcsmodel::STRIDES` was widened to match on 2026-08-25, and that file
+//! pins the invariant against the declarations rather than a snapshot of them.
 //!
 //! `#[ignore]`d because it needs `data/images/hdfury-ps3-eu-dec.iso`; run with
 //! `just test-data`.
@@ -252,43 +255,6 @@ fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
              which is the claim the renderer's per-submesh gate rests on"
         );
     }
-}
-
-/// **The widths the disc declares, against the three the search knows.**
-///
-/// `rcsmodel::STRIDES` is `[14, 18, 22]`, measured off authored bounding boxes.
-/// The disc declares four more, and a chunk at one of those is one the search
-/// cannot fit by construction - which is the mechanism behind the count the
-/// test above asserts.
-#[test]
-#[ignore]
-fn the_disc_declares_more_widths_than_the_search_looks_for() {
-    if image().is_none() {
-        return;
-    }
-    let mut widths: BTreeMap<usize, usize> = BTreeMap::new();
-    for (_, _, model) in every_model() {
-        for mesh in &model.meshes {
-            if let Some(decl) = &mesh.decl {
-                *widths.entry(decl.stride).or_default() += 1;
-            }
-        }
-    }
-    println!("declared strides: {widths:?}");
-    for width in rcsmodel::STRIDES {
-        assert!(
-            widths.contains_key(width),
-            "the search's width {width} should be one the disc declares"
-        );
-    }
-    let extra: Vec<_> = widths
-        .keys()
-        .filter(|w| !rcsmodel::STRIDES.contains(w))
-        .collect();
-    assert!(
-        !extra.is_empty(),
-        "the point of this test is the widths the search does not know"
-    );
 }
 
 /// **Which types the disc uses, so a new one is a finding rather than a
