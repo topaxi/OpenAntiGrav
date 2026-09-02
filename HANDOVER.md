@@ -454,6 +454,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Ghidra names owed from the camera/matrix corroboration](handover/ghidra-names-owed-from-the-camera-matrix-corroboration.md)
 - [The ghost-ship renderer is read and written down nowhere else](handover/the-ghost-ship-renderer-is-read-and-written.md)
 - [Magstrip leftovers, none load-bearing](handover/magstrip-leftovers-none-load-bearing.md)
+- [Magfloor gfx/sfx: two real `.vex` effects found, the trigger is read, sfx and the other two titles are open](handover/magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md)
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
 - [Weapons: seven of thirteen, and two doc pages had two of them swapped](handover/weapons-seven-of-thirteen-and-two-pages-were.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
