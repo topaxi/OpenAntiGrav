@@ -202,10 +202,38 @@ and the format that carries `0xa9ff` stores one byte in blue and nothing else.
 Format and remap are read from different halves of the descriptor and say the
 same thing.
 
-**Confidence 85**, up from the 75 this carried as a bare constant matched by
-value: the layout now predicts three distributions rather than asserting one,
-and one of the three is cross-checked against an unrelated field. Not
-corroborated against the executable, which is the ceiling.
+### Corroborated against the executable, 2026-09-02
+
+The engine **constructs** these words in code rather than only copying them out
+of files, and `Texture_BuildGcmRegisters` (`0x005a9998`, see
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#texture_buildgcmregisters-and-what-it-settles-about-a-gtfs-remap))
+is where they land: it takes one packed `(format << 16) | remap` word, extracts
+the format's low five bits from the high half exactly as `Format::from_byte`
+does, and writes the low **seventeen** bits - the sixteen-bit remap plus the
+`order` bit above it - into a register slot of their own.
+
+Two things follow that the disc's files alone could not give:
+
+- **`0xa9ff` is the engine's own one-channel remap.** `FUN_00175798` builds
+  four single-channel runtime surfaces per iteration with the packed word
+  `0x0100a9ff`, whose format nibble is `0x01`, `B8`. The engine's own scratch
+  surfaces and the disc's 9 shadow textures arrive at the same pairing
+  independently.
+- **A fourth word settles the pair order.** The same function compares against
+  the literal `0x1c0009e4`. Under this reading `0x09e4` is alpha forced to one,
+  red read, green and blue forced to zero - a single-channel-in-red texture.
+  Under the opposite pair order it is green alone with blue forced on and alpha
+  off, which is not a thing. Starker on `0xa9ff`: the opposite order forces
+  *blue* to one, and blue is the only channel a `B8` stores, so it would
+  discard the texture's whole content.
+
+**Confidence 88**, up from the 75 this carried as a bare constant matched by
+value. The layout predicts three distributions on disc, one of them
+cross-checks against an unrelated field, and a fourth word in the executable
+decomposes sensibly under this pair order and nonsensically under the other.
+Short of 92 because the command-buffer write that consumes `+0x30` is not
+traced - the slot is identified by taking exactly the remap word, not against a
+decompiled `cellGcmSetTexture`.
 
 **This corrected a real bug.** `0xa9e4` was previously read as forcing *blue*
 to one - the alpha control pair mistaken for blue's - which rendered all 7
