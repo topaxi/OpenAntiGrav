@@ -105,3 +105,37 @@ pub fn fullscreen_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupL
         entries: &[texture_entry(0), sampler_entry(1), uniform_entry(2)],
     })
 }
+
+/// The UV scale and clamp for a `viewport` drawn inside a resource of `size`.
+///
+/// Every scene-resolution pass here reads a texture that since
+/// [ADR-0037](../../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)
+/// may be larger than the rectangle drawn into it: the target is allocated at
+/// the `render_scale` ceiling and a controller draws a sub-rectangle of it.
+/// The scale maps the fullscreen triangle's `0..1` onto that rectangle; the
+/// clamp keeps a tap half a texel inside its outer edge, because the texels
+/// past it hold whatever the clear left there rather than picture.
+///
+/// **Exactly `1.0` on both when the two are equal, by construction**, which is
+/// what keeps every pass byte-identical while nothing moves the extent. An
+/// unconditional `(viewport - 0.5) / size` would compress the read by half a
+/// texel across the whole frame even at the ceiling, shifting every interior
+/// sample. `oag_game::upscale::blit::Source` makes the same argument for the
+/// final blit and is where this shape was first written.
+#[must_use]
+pub fn sub_rectangle(viewport: (u32, u32), size: (u32, u32)) -> ([f32; 2], [f32; 2]) {
+    // Per axis, because only one of the two may be short: the allocation is
+    // clamped against the device's maximum texture dimension independently on
+    // each, so a wide window at a high scale can hit the ceiling on one and
+    // not the other.
+    let axis = |drawn: u32, allocated: u32| {
+        if drawn >= allocated || allocated == 0 {
+            return (1.0, 1.0);
+        }
+        let allocated = allocated as f32;
+        (drawn as f32 / allocated, (drawn as f32 - 0.5) / allocated)
+    };
+    let (scale_x, max_x) = axis(viewport.0, size.0);
+    let (scale_y, max_y) = axis(viewport.1, size.1);
+    ([scale_x, scale_y], [max_x, max_y])
+}

@@ -64,6 +64,7 @@ fn all_three_passes_build_and_draw_on_a_real_device() {
         Frame {
             source: &source,
             size: (64, 64),
+            viewport: (64, 64),
         },
     );
     queue.submit(Some(encoder.finish()));
@@ -130,6 +131,7 @@ fn a_flat_colour_is_untouched() {
         Frame {
             source: &source,
             size: (SIZE, SIZE),
+            viewport: (SIZE, SIZE),
         },
     );
 
@@ -243,6 +245,7 @@ fn a_staircase_step_blends_at_the_corner_and_nowhere_else() {
         Frame {
             source: &source,
             size: (SIZE, SIZE),
+            viewport: (SIZE, SIZE),
         },
     );
 
