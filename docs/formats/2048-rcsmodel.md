@@ -99,6 +99,40 @@ HD; here it is the only one needed, and it is exact rather than a search.
 The strides that come out are **16 to 64 in steps of four**, 24 and 20 the
 commonest.
 
+### A second record shape closes every previously-unpaired pointer
+
+**2026-09-02, confidence 92.** The 28-byte gap above is not the *only* shape a
+submesh record takes - `oag_formats::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP`
+is a second, **184 bytes**, found on `SkyCube/skycube.rcsmodel` (see
+[2048-sky.md](2048-sky.md)) and tried alongside the first rather than instead
+of it. Both have to pass the same arithmetic `one` already checks - a
+divisible-by-three index count, a buffer whose byte length matches, a stride
+the vertex count divides evenly - so a coincidental 184-byte gap elsewhere in
+the corpus is rejected on the same terms a coincidental 28-byte one always
+was; nothing about the check itself changed, only how many gaps this reading
+tries per candidate pair did.
+
+**The effect on the corpus is total, not incremental.** Before this reading,
+`altima` alone left 5,294 GPU-pointer entries unpaired - "about one in a
+hundred corpus-wide", the ["What is not decoded"](#what-is-not-decoded)
+section below used to say. Adding the second gap and re-running the same
+993-file sweep: submesh count rises from 244,889 to **247,536**, and
+`psp2::Model::unpaired_pointers` sums to **zero across every shipped file**.
+Every one of the corpus's previously-unaccounted GPU pointers turns out to be
+this same second record shape - not a sky-only phenomenon (skies account for
+only a few dozen of the 2,647 newly-found submeshes; the rest are ordinary
+props and craft parts that happened to use the larger record), which is why
+the constant is not named after skies despite where it was first found. The
+existing per-submesh checks (arithmetic closure, unit-length normals, in-range
+positions) all still pass at their usual bar over the enlarged corpus - see
+`crates/formats/tests/psp2_rcsmodel_ground_truth.rs`.
+
+**What the extra bytes hold is still unread.** This finding says where the
+vertex-buffer pointer sits in the second shape, not what fills the 156 bytes
+between it and the first shape's own tail - a bounding box, like HD's `Mesh`
+node carries, is the obvious guess and is exactly that, a guess; nothing here
+confirms it.
+
 ### Positions are the model's own space, and no transform is composed
 
 A circuit's positions come out in world coordinates and a craft's about its own
@@ -368,7 +402,13 @@ cannot do that.
 `feisar2048\3`'s sixteen submeshes resolve to five of its six materials:
 `2048_ship_tech` on seven, `2048_ship_paint_shiny_final` (the team livery) on
 four, `2048_ship_plastic` on three, `2048_ship_lights` on one, and
-`2048_ship_glass_dg` on **exactly one**.
+`2048_ship_glass_dg` on **exactly one**. **Re-measured 2026-09-02**, after
+`SKY_BUFFER_POINTER_GAP` found six more submeshes on this same craft (22 in
+total): `2048_ship_tech` on eight, `2048_ship_paint_shiny_final` on four still,
+`2048_ship_plastic` on five, `2048_ship_lights` on three,
+`2048_ship_glass_dg` still on **exactly one**, and `2048_engine_additive` -
+absent from the count before, not merely under-counted - on one. All six of
+the craft's materials are used now, not five.
 
 That last one is the canary. The submesh a name match would have guessed at -
 the one authored `GlassShape` - is the one this index independently lands on,
@@ -415,10 +455,11 @@ see [gxt.md](gxt.md).
 
 Named here rather than left to be rediscovered:
 
-- **Section B's object graph**, past the declaration above. 5,294 of
-  `altima`'s GPU-pointer entries - about one in a hundred corpus-wide - are not
-  half of a submesh pair, and are counted and reported rather than dropped in
-  silence (`psp2::Model::unpaired_pointers`).
+- **Section B's object graph**, past the declaration above and past the
+  second record shape [now closes every GPU pointer the corpus
+  names](#a-second-record-shape-closes-every-previously-unpaired-pointer) -
+  `psp2::Model::unpaired_pointers` is a real field for a file this reading has
+  not yet met, not evidence of a gap left in the 993 it has.
 - **`tangent`'s SceGxm type code** (`t5`, 4 components) - HD's RSX encodings
   are confirmed not to apply to this format at all, so it is not a safe guess
   from HD's own reading. `normal` and `Uv1`, the format's other two `t5`/`t8`

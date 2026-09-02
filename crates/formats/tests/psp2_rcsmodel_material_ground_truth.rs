@@ -231,7 +231,14 @@ fn every_material_resolves_to_real_paths() {
 ///
 /// Measured 2026-08-27 over the three EU packages: 244,889 submeshes, 0 out of
 /// range, 0 non-zero on a one-material model, 86 of 414 multi-material models
-/// naming every material they declare.
+/// naming every material they declare. **Re-measured 2026-09-02** after
+/// `oag_formats::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP` found 2,647 more
+/// submeshes the single-gap reading missed entirely (see
+/// `docs/formats/2048-rcsmodel.md`): 247,536 submeshes, still 0 out of range
+/// and 0 non-zero on a one-material model, and now 428 of 428 multi-material
+/// models naming every material they declare - the newly-found submeshes are
+/// disproportionately on multi-material models, which is what moves the
+/// second number so much further than the first.
 #[test]
 #[ignore = "needs the decrypted Vita packages in data/extracted/vita/"]
 fn every_submesh_names_a_material_and_multi_material_models_use_their_whole_table() {
@@ -284,7 +291,7 @@ fn every_submesh_names_a_material_and_multi_material_models_use_their_whole_tabl
          whole table, {mean:.1} distinct materials each on average"
     );
     assert_eq!(files, 993, "the three EU packages ship 993 .rcsmodel");
-    assert_eq!(submeshes, 244_889, "submeshes across them");
+    assert_eq!(submeshes, 247_536, "submeshes across them");
     assert_eq!(unresolved, 0, "submeshes with no resolvable material index");
     assert_eq!(
         single_material_nonzero, 0,
@@ -305,13 +312,18 @@ fn every_submesh_names_a_material_and_multi_material_models_use_their_whole_tabl
 /// The craft a race actually loads, read out in full - the case a human can
 /// check by eye, and the one that shows the binding is not a name match.
 ///
-/// `feisar2048\3`'s sixteen submeshes resolve to five of its six materials,
-/// and **exactly one** of them takes `2048_ship_glass_dg`. That submesh is
+/// `feisar2048\3`'s submeshes resolve to five of its six materials, and
+/// **exactly one** of them takes `2048_ship_glass_dg`. That submesh is
 /// the one whose own authored name is `GlassShape` - which this reading never
 /// looks at. `psp2::material`'s module doc explains why that distinction is
 /// the whole point: matching a submesh's name to a material's is the invented-
 /// not-measured failure `CLAUDE.md` forbids, and it is exactly what the index
 /// independently agrees with here.
+///
+/// **Re-measured 2026-09-02**: `SKY_BUFFER_POINTER_GAP` finds six more
+/// submeshes on this same craft (16 to 22) than the single-gap reading did -
+/// among them the canopy, which is why "five of six materials" above is now
+/// six of six. See `docs/formats/2048-rcsmodel.md`.
 #[test]
 #[ignore = "needs the decrypted Vita packages in data/extracted/vita/"]
 fn the_raced_crafts_submeshes_resolve_to_a_sensible_set_of_materials() {
@@ -325,7 +337,7 @@ fn the_raced_crafts_submeshes_resolve_to_a_sensible_set_of_materials() {
         .expect("the raced craft");
     let model = psp2::parse(&blob).expect("parses");
 
-    assert_eq!(model.submeshes.len(), 16);
+    assert_eq!(model.submeshes.len(), 22);
     assert_eq!(model.materials.len(), 6);
 
     let mut by_material: std::collections::BTreeMap<usize, usize> =
@@ -336,7 +348,7 @@ fn the_raced_crafts_submeshes_resolve_to_a_sensible_set_of_materials() {
             .or_default() += 1;
     }
     println!("{by_material:?}");
-    assert_eq!(by_material.len(), 5, "five of the six materials are used");
+    assert_eq!(by_material.len(), 6, "all six materials are used");
 
     let named = |index: usize| model.materials[index].name.to_ascii_lowercase();
     let glass: Vec<usize> = by_material
