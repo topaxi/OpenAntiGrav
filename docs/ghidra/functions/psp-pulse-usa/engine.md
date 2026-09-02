@@ -1798,6 +1798,60 @@ Three things fall out, and each corrects something:
   make the spring one-sided - compression only, never a pull. **The captures
   refute that; see the next subsection.**
 
+### The tail of `Ship_CastHoverProbes` fires the mag-floor gfx/sfx, 2026-09-02
+
+The function does not stop at writing `craft+0x240`, the byte flag documented
+above. It reads the *old* value first, casts a fourth probe restricted to
+surface type 3 (the mag floor - matches `oag_formats::collision::SurfaceKind::MagFloor`'s
+`surface_type() == Some(3)`), writes the new value, and then edge-detects:
+
+```c
+cVar1 = *(char *)(craft + 0x240);                       // old gate
+...
+iVar18 = func_0x00012ac0(craft+0x300, &probe, &dir, craft+0x250,
+                          craft->section+0x3a8, 0, local_3c);   // the 4th raycast
+uVar16 = 0;
+if ((iVar18 != 0) && (surface_type_of(hit) == 3)) uVar16 = 1;
+*(char *)(craft + 0x240) = uVar16;                       // new gate
+
+if (cVar1 == 0 && craft+0x240 != 0) Ship_MagFloorEnter(craft+0x1c4);  // rising edge
+else if (cVar1 != 0 && craft+0x240 == 0) Ship_MagFloorExit(craft+0x1c4);  // falling edge
+```
+
+Both handlers take the craft's **entity** (`craft+0x1c4`), not the craft
+struct itself. Confidence **85**: the edge-detect shape is unambiguous in the
+decompilation and matches the `cVar1`/new-value pattern used for the mag-lock
+blend elsewhere on this page; not runtime-verified.
+
+**`Ship_MagFloorEnter` (`0x0883e5fc`) / `Ship_MagFloorExit` (`0x0883e624`),
+confidence 82.** Each is three instructions of substance: gate on
+`entity+0x8bc != 0` (an unidentified per-entity condition - possibly "has a
+scene presence" or "is the local player", per the `entity+0x368` local-player
+field this codebase already tracks elsewhere; not the same field, not
+resolved), then tail-call a shared enable/disable pair with no arguments
+of their own (the entity pointer rides in `a0` from the caller's convention).
+Neither is a proper Ghidra function boundary (no auto-analysed bounds, so
+`get_function_callers`/`decompile_function` fail on them) - read from raw
+disassembly at `0x088598ac` (enter) and `0x088598d8` (exit) instead:
+
+```text
+088598ac  a1 = 1 ;  entity+0xb4 = a1                      ; "active" flag, byte
+088598b4  a1 = *(entity+0xac) ;  a1->0x2c |= 4 ; store back
+088598c4  a0 = *(entity+0xb0) ;  a0->0x2c |= 4 ; store back   ; (exit clears, ANDs ~4)
+```
+
+So the enable/disable pair sets a byte flag at `entity+0xb4` and ORs (enter) or
+ANDs-out (exit) bit `0x4` on a field at `+0x2c` of two other objects reached
+through `entity+0xac` and `entity+0xb0`. **What those two objects are is
+inferred, not proven**: no constructor writing `entity+0xac`/`+0xb0` was
+traced. The inference is that they are the two `MagEffect1.vex`/`MagEffect2.vex`
+scene nodes - see [magfloor-fx.md](magfloor-fx.md) for the asset side and why
+that reading is plausible (two vex effect files, loaded per-race alongside
+every weapon effect, named nowhere else in the binary) but still open.
+Confidence on the *node-identity* claim specifically: **55**, well short of
+what a rename would need, which is why `0x088598ac`/`0x088598d8` are cited by
+address rather than renamed.
+
 ### The damper's point velocity is the conventional `omega x r`
 
 `crates/physics/src/hover.rs` carries a flagged unresolved sign here - the page

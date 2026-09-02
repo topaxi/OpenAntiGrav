@@ -160,6 +160,8 @@
 0x08848d08	function	Ship_UpdatePitch	82	engine.md
 0x0884870c	function	Ship_UpdateHover	82	engine.md
 0x08849ed4	function	Ship_CastHoverProbes	90	engine.md
+0x0883e5fc	function	Ship_MagFloorEnter	82	engine.md
+0x0883e624	function	Ship_MagFloorExit	82	engine.md
 0x0884d4c8	function	Body_AddForceWorld	82	engine.md
 0x08839c68	function	HandlingXml_ParseAirbrakeGraphics	80	engine.md
 0x08848b78	function	Ship_ApplyLateralGrip	80	engine.md
