@@ -1,7 +1,7 @@
 # Dynamic resolution
 
-**Status: it works, and it is off by default.** `dynamic_resolution` names a
-target frame rate, `dynamic_resolution_floor` bounds how far the picture may
+**Status: it works, and it is off by default.** `target_fps` names a
+target frame rate, `minimum_resolution` bounds how far the picture may
 shrink, and `render_scale` becomes the ceiling. All three live in
 `[render_profiles.<title>]` and so are **per title**, which is the right table
 for them: a target Pulse holds comfortably is not one HD/Fury holds, and the
@@ -372,10 +372,10 @@ than a cleverer policy.
 
 ### The rows
 
-`[render_profiles.<title>] dynamic_resolution` names the rate and `off` is one
+`[render_profiles.<title>] target_fps` names the rate and `off` is one
 of its values -
 one row, one answer, and no second key that can disagree with it.
-`dynamic_resolution_floor` is a `display::Scale` off the same list
+`minimum_resolution` is a `display::Scale` off the same list
 `render_scale` offers, so the two read against each other.
 
 The floor row warns when it is at or above the render scale, and the pairs are
@@ -389,6 +389,49 @@ where the two first meet, because the warning tells a player rather than
 stopping them and `Ord::clamp` panics when `min > max`.
 
 **RENDER SCALE gets no warning**, decided 2026-09-02 and still true.
+
+### A ceiling is not a drawn size, and three warnings had to learn that
+
+`render_scale` used to be the size the frame was drawn at, and three warnings
+on the graphics page were written against that reading. Once a controller can
+go below it they are wrong, and one of them wrong in the worst direction -
+UPSCALER at a 100 % ceiling with a 50 % minimum says *"NO EFFECT AT RENDER
+SCALE 100 OR ABOVE"* while FSR 1 magnifies every frame. A working setting
+reported as dead.
+
+What each really wants is *the lowest size the frame may be drawn at*, which is
+`render_scale` when the controller is off and the floor when it is not.
+`Condition.all` is an AND and that is an OR, so each is **two entries sharing
+one message**: one requiring `target_fps = off`, one requiring the floor high
+enough that the statement holds anyway.
+
+| Row | Was wrong when | Now |
+| --- | --- | --- |
+| UPSCALER, *"no effect at 100 or above"* | The controller drops below 100 from a 100+ ceiling | Fires only with the controller off, or a floor at 100+ |
+| ANTI-ALIASING, *"fights the upscaler below 100"* | The ceiling is 100+ but the floor is not - a **missing** warning rather than a wrong one | A second entry for a running controller with a floor under 100 |
+| ANTI-ALIASING, *"redundant on top of 200 % supersampling"* | The controller stops supersampling | Fires only with the controller off, or a floor at 200 |
+
+`a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling` pins the
+floor halves against `upscale::magnifies`, the same guard the `off` halves were
+already pinned to.
+
+### The target is held to the frame limiter
+
+Aiming above the limiter asks for frames the loop is not allowed to produce. At
+`target_fps = 144` behind a 60 limit the budget is 2.4x too tight, so the
+controller drops the resolution permanently to hold a rate the limiter forbids
+whatever it does - every pixel given up buys nothing.
+
+`drs::Target::at_most` is the clamp and the menu row's own `warn_when` is the
+visible half: the row says what was asked for, the clamp holds the controller
+to what will actually be produced. Neither would be honest alone.
+
+**Both stop at `Vsync::On`.** There the *display* is the bound and this build
+cannot ask a surface what its refresh is. The only fallback available is the
+simulation's 60 - which `Session::presentation_hz` does take for the overlay's
+graph scale, and says so - and taking it here would silently cap a 144 Hz
+panel's target at 60 while the row still read 144. A wrong clamp is worse than
+none.
 
 **On an adapter with no `TIMESTAMP_QUERY` there is no signal and the extent
 never moves, and the row cannot say so by greying out.** `disabled_by` names a

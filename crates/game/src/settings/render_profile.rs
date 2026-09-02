@@ -27,13 +27,13 @@ pub(super) const KNOWN_TITLES: &[&str] = &[
     oag_2048::TITLE.name,
 ];
 
-/// See [`RenderProfile::dynamic_resolution_floor`]: **50 %**.
+/// See [`RenderProfile::minimum_resolution`]: **50 %**.
 ///
 /// Its own function rather than `Default::default()`, which for a
 /// [`crate::display::Scale`] is 100 - a floor equal to the ceiling, which is
 /// the one value that means "the controller has nowhere to go" and would fire
 /// the menu's own warning out of the box.
-fn default_dynamic_resolution_floor() -> crate::display::Scale {
+fn default_minimum_resolution() -> crate::display::Scale {
     crate::display::Scale::OFFERED[0]
 }
 
@@ -63,18 +63,18 @@ pub struct RenderProfile {
     /// holds, and the point of dynamic resolution is that the answer depends
     /// on how expensive the scene is.
     #[serde(default)]
-    pub dynamic_resolution: crate::drs::Target,
+    pub target_fps: crate::drs::Target,
     /// The lowest render scale the controller may fall to.
     ///
     /// A percentage of the aspect rectangle, exactly as `render_scale` is, so
     /// the two are directly comparable and a floor at or above the ceiling
     /// means the controller has nowhere to go. Ignored while
-    /// `dynamic_resolution` is `off`. See [`crate::display::Scale`].
+    /// `target_fps` is `off`. See [`crate::display::Scale`].
     ///
     /// **Defaults to 50 %**, the lowest value the render-scale row itself
     /// offers, so the floor and the ceiling read against the same list.
-    #[serde(default = "default_dynamic_resolution_floor")]
-    pub dynamic_resolution_floor: crate::display::Scale,
+    #[serde(default = "default_minimum_resolution")]
+    pub minimum_resolution: crate::display::Scale,
     /// Which resampler carries the frame onto the surface: `off` or
     /// `fsr1`.
     ///
@@ -135,11 +135,11 @@ impl Default for RenderProfile {
     fn default() -> Self {
         Self {
             render_scale: crate::display::Scale::default(),
-            dynamic_resolution: crate::drs::Target::default(),
+            target_fps: crate::drs::Target::default(),
             // The one field whose default is not its type's - see
-            // `default_dynamic_resolution_floor`, and the reason this impl is
+            // `default_minimum_resolution`, and the reason this impl is
             // written out rather than derived.
-            dynamic_resolution_floor: default_dynamic_resolution_floor(),
+            minimum_resolution: default_minimum_resolution(),
             upscaler: crate::display::Upscaler::default(),
             upscale_sharpness: crate::display::Sharpness::default(),
             anti_aliasing: crate::display::AntiAliasing::default(),
@@ -166,7 +166,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// A **superset** of [`MOVED_TO_RENDER_PROFILES`], and the distinction is not
 /// pedantry: a setting added to the profile *after* the split never lived flat
 /// in `[graphics]`, so there is nothing to migrate for it and listing it as
-/// migratable would claim a history it does not have. `dynamic_resolution` and
+/// migratable would claim a history it does not have. `target_fps` and
 /// its floor are the first two of those - they landed straight here, beside
 /// the `render_scale` ceiling they are compared against.
 ///
@@ -176,8 +176,8 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 #[cfg(test)]
 pub(super) const PROFILE_KEYS: [&str; 7] = [
     "render_scale",
-    "dynamic_resolution",
-    "dynamic_resolution_floor",
+    "target_fps",
+    "minimum_resolution",
     "upscaler",
     "upscale_sharpness",
     "anti_aliasing",

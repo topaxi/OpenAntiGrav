@@ -472,13 +472,50 @@ values = ["50", "75", "100", "125", "150", "200"]
 # thing `restart_required` already means.
 [[page.entry]]
 kind = "choice"
-label = "DYNAMIC RESOLUTION"
-setting = "graphics.dynamic_resolution"
+label = "TARGET FPS"
+setting = "graphics.target_fps"
 values = ["off", "30", "60", "90", "120", "144"]
+warn_when = [
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "60" },
+        { setting = "display.frame_limit", values = ["30"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "90" },
+        { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "120" },
+        { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75", "90", "100"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "144" },
+        { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75", "90", "100", "120"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+]
+
+# Warned *and* clamped when it is above the frame limiter, which are two halves
+# of one answer: the row says what was asked for, and `drs::Target::at_most`
+# holds the controller to what the loop will actually produce. Without the
+# clamp a 144 target behind a 60 limit would drop the resolution permanently to
+# buy frames the limiter forbids; without the warning the row would silently
+# mean something other than what it says.
+#
+# Only where the limiter is in force. Under `vsync = on` the *display* is the
+# bound and this build cannot ask a surface what its refresh is, so neither
+# half fires - a wrong clamp at 60 on a 144 Hz panel is worse than none. The
+# pairs are enumerated because `Condition` has no ordering, the same as the
+# MINIMUM RESOLUTION row below, and
+# `the_target_warns_at_exactly_the_frame_limits_it_is_above` generates the same
+# set from `Target::OFFERED` and `FrameLimit::OFFERED`.
 
 # The lowest the controller may fall to, as a percentage of the aspect
 # rectangle - the same unit and the same list RENDER SCALE uses, so a player
-# can read the two rows against each other. Greyed while DYNAMIC RESOLUTION is
+# can read the two rows against each other. Greyed while TARGET FPS is
 # off, because there is then nothing to bound.
 #
 # Warned rather than refused at a floor that is not below the ceiling: the
@@ -490,33 +527,33 @@ values = ["off", "30", "60", "90", "120", "144"]
 # same set from `Scale::OFFERED` so this list cannot quietly stop matching.
 [[page.entry]]
 kind = "choice"
-label = "DYNAMIC RESOLUTION FLOOR"
-setting = "graphics.dynamic_resolution_floor"
+label = "MINIMUM RESOLUTION"
+setting = "graphics.minimum_resolution"
 values = ["50", "75", "100", "125", "150", "200"]
-disabled_by = { setting = "graphics.dynamic_resolution", value = "off" }
+disabled_by = { setting = "graphics.target_fps", value = "off" }
 warn_when = [
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "50" },
+        { setting = "graphics.minimum_resolution", value = "50" },
         { setting = "graphics.render_scale", values = ["50"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "75" },
+        { setting = "graphics.minimum_resolution", value = "75" },
         { setting = "graphics.render_scale", values = ["50", "75"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "100" },
+        { setting = "graphics.minimum_resolution", value = "100" },
         { setting = "graphics.render_scale", values = ["50", "75", "100"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "125" },
+        { setting = "graphics.minimum_resolution", value = "125" },
         { setting = "graphics.render_scale", values = ["50", "75", "100", "125"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "150" },
+        { setting = "graphics.minimum_resolution", value = "150" },
         { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
-        { setting = "graphics.dynamic_resolution_floor", value = "200" },
+        { setting = "graphics.minimum_resolution", value = "200" },
         { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150", "200"] },
     ] },
 ]
@@ -543,9 +580,22 @@ label = "UPSCALER"
 setting = "graphics.upscaler"
 values = ["off", "fsr1"]
 warn_when = [
+    # Two entries for one statement, because `Condition.all` is an AND and
+    # this needs an OR: FSR 1 does nothing when the frame can never be drawn
+    # smaller than it is presented, and since dynamic resolution that is a
+    # question about the **floor** rather than about RENDER SCALE. At a 100 %
+    # ceiling with a 50 % minimum the controller drops the extent below the
+    # presentation rectangle and FSR 1 magnifies - so warning here would be
+    # telling a player a working setting is dead.
     { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
         { setting = "graphics.upscaler", value = "fsr1" },
         { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
+        { setting = "graphics.target_fps", value = "off" },
+    ] },
+    { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
+        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
+        { setting = "graphics.minimum_resolution", values = ["100", "125", "150", "200"] },
     ] },
 ]
 
@@ -599,14 +649,32 @@ setting = "graphics.anti_aliasing"
 values = ["off", "fxaa", "smaa", "msaa4x"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 warn_when = [
+    # The same reading of RENDER SCALE the UPSCALER row makes, and wrong in
+    # both directions once it is a ceiling. This fires below 100 - and also
+    # at any ceiling whose floor is below 100, because that is where the
+    # controller will spend its time.
     { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
         { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
         { setting = "graphics.upscaler", value = "fsr1" },
         { setting = "graphics.render_scale", values = ["50", "75"] },
     ] },
+    { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
+        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.target_fps", values = ["30", "60", "90", "120", "144"] },
+        { setting = "graphics.minimum_resolution", values = ["50", "75"] },
+    ] },
+    # And "redundant on top of supersampling" stops being true the moment the
+    # controller may stop supersampling, so it needs the target off.
     { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
         { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
         { setting = "graphics.render_scale", value = "200" },
+        { setting = "graphics.target_fps", value = "off" },
+    ] },
+    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
+        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+        { setting = "graphics.render_scale", value = "200" },
+        { setting = "graphics.minimum_resolution", value = "200" },
     ] },
 ]
 
