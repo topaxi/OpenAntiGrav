@@ -332,6 +332,23 @@ pub struct Graphics {
     /// [`crate::display::Scale`].
     #[serde(default)]
     pub render_scale: crate::display::Scale,
+    /// The frame rate a resolution controller aims for, or `off`.
+    ///
+    /// The target *is* the enable, so there is no second key that can
+    /// disagree with it. While it is on, `render_scale` above becomes the
+    /// **ceiling** and keeps its meaning when it is off - the controller reads
+    /// it and never writes it, so a loaded machine cannot make a chosen
+    /// quality drift downward between sessions. See [`crate::drs`].
+    #[serde(default)]
+    pub dynamic_resolution: crate::drs::Target,
+    /// The lowest render scale the controller may fall to.
+    ///
+    /// A percentage of the aspect rectangle, exactly as `render_scale` is, so
+    /// the two are directly comparable and a floor at or above the ceiling
+    /// means the controller has nowhere to go. Ignored while
+    /// `dynamic_resolution` is `off`. See [`crate::display::Scale`].
+    #[serde(default = "default_dynamic_resolution_floor")]
+    pub dynamic_resolution_floor: crate::display::Scale,
     /// Which resampler carries the frame onto the surface: `off` or
     /// `fsr1`.
     ///
@@ -575,6 +592,16 @@ fn default_camera_view() -> crate::display::CameraView {
     crate::display::CameraView::default()
 }
 
+/// See [`Graphics::dynamic_resolution_floor`]: **50 %**.
+///
+/// Half is the lowest of the render-scale row's own offered values, so the
+/// floor and the ceiling read against the same list. Whether it is right for
+/// every title is unmeasured - HD/Fury's scenes and Pulse's are not the same
+/// cost - and this is not per-title until somebody has taken that reading.
+fn default_dynamic_resolution_floor() -> crate::display::Scale {
+    crate::display::Scale::OFFERED[0]
+}
+
 /// See [`Graphics::bloom`]: **off** until its magnitude is calibrated.
 fn default_bloom() -> bool {
     false
@@ -585,6 +612,8 @@ impl Default for Graphics {
         Self {
             renderer: crate::display::Renderer::default(),
             render_scale: crate::display::Scale::default(),
+            dynamic_resolution: crate::drs::Target::default(),
+            dynamic_resolution_floor: default_dynamic_resolution_floor(),
             upscaler: crate::display::Upscaler::default(),
             upscale_sharpness: crate::display::Sharpness::default(),
             anti_aliasing: crate::display::AntiAliasing::default(),
@@ -784,6 +813,14 @@ pub fn menu_seeds(
         (
             "graphics.render_scale",
             text(&settings.graphics.render_scale.to_string()),
+        ),
+        (
+            "graphics.dynamic_resolution",
+            text(&settings.graphics.dynamic_resolution.to_string()),
+        ),
+        (
+            "graphics.dynamic_resolution_floor",
+            text(&settings.graphics.dynamic_resolution_floor.to_string()),
         ),
         (
             "graphics.upscaler",

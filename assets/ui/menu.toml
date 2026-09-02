@@ -454,6 +454,70 @@ label = "RENDER SCALE"
 setting = "graphics.render_scale"
 values = ["50", "75", "100", "125", "150", "200"]
 
+# The frame rate a resolution controller aims for, and the row that turns it
+# on: `off` is one of the values rather than a toggle beside it, because two
+# keys that can disagree is a state somebody has to define behaviour for.
+# Directly under RENDER SCALE because the pairing is the point - while this
+# names a rate, that row is the **ceiling**, and the controller reads it and
+# never writes it, so a loaded machine cannot make a chosen quality drift
+# downward between sessions.
+#
+# **On an adapter with no GPU timer there is no signal and the extent never
+# moves**, whatever this row says. It cannot be greyed out for that:
+# `disabled_by` names a *setting*, and an adapter capability is not one - see
+# `docs/architecture/menus.md`. The row is stored and inert, which is the same
+# thing `restart_required` already means.
+[[page.entry]]
+kind = "choice"
+label = "DYNAMIC RESOLUTION"
+setting = "graphics.dynamic_resolution"
+values = ["off", "30", "60", "90", "120", "144"]
+
+# The lowest the controller may fall to, as a percentage of the aspect
+# rectangle - the same unit and the same list RENDER SCALE uses, so a player
+# can read the two rows against each other. Greyed while DYNAMIC RESOLUTION is
+# off, because there is then nothing to bound.
+#
+# Warned rather than refused at a floor that is not below the ceiling: the
+# setting is stored and starts working the moment the other row moves, which is
+# exactly what UPSCALER's own warning means. `Condition` compares values and
+# has no ordering - deliberately, it is what keeps the menu module ignorant of
+# what any setting means - so the pairs are enumerated, and
+# `the_floor_warns_at_exactly_the_scales_it_cannot_fall_below` generates the
+# same set from `Scale::OFFERED` so this list cannot quietly stop matching.
+[[page.entry]]
+kind = "choice"
+label = "DYNAMIC RESOLUTION FLOOR"
+setting = "graphics.dynamic_resolution_floor"
+values = ["50", "75", "100", "125", "150", "200"]
+disabled_by = { setting = "graphics.dynamic_resolution", value = "off" }
+warn_when = [
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "50" },
+        { setting = "graphics.render_scale", values = ["50"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "75" },
+        { setting = "graphics.render_scale", values = ["50", "75"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "100" },
+        { setting = "graphics.render_scale", values = ["50", "75", "100"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "125" },
+        { setting = "graphics.render_scale", values = ["50", "75", "100", "125"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "150" },
+        { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.dynamic_resolution_floor", value = "200" },
+        { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150", "200"] },
+    ] },
+]
+
 # Which resampler carries the frame onto the surface. Directly below the render
 # scale because only that pairing means anything: at 100 % there is nothing to
 # upscale and the choice is between a blit and a sharpen. Applies from the next

@@ -775,3 +775,75 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
         );
     }
 }
+
+/// The floor warns at exactly the render scales it cannot fall below.
+///
+/// Two places encode "a floor at or above the ceiling leaves the controller
+/// nowhere to go": `drs::Limits::new`, which collapses the floor onto the
+/// ceiling so the frame loop cannot panic on it, and this warning, which tells
+/// the player. `Condition` compares values and has no ordering - deliberately,
+/// it is what keeps the menu module ignorant of what a setting means - so the
+/// pairs are enumerated in `menu.toml` by hand, and a hand-written list of
+/// thirty-six comparisons is exactly the kind that drifts silently. This
+/// generates the same list from `Scale::OFFERED` and demands they match.
+///
+/// A missing pair warns nobody about a floor that does nothing; a spare one
+/// warns about a pairing that works.
+#[test]
+fn the_floor_warns_at_exactly_the_scales_it_cannot_fall_below() {
+    let definition = built_in();
+    let entry = definition
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("graphics.dynamic_resolution_floor"))
+        .expect("nothing edits graphics.dynamic_resolution_floor");
+
+    // What the TOML says: floor -> the scales it is warned against.
+    let mut declared: Vec<(crate::display::Scale, Vec<crate::display::Scale>)> = Vec::new();
+    for warning in entry.warnings() {
+        let parse = |c: &Condition| -> Vec<crate::display::Scale> {
+            c.values
+                .iter()
+                .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
+                .collect()
+        };
+        let floor = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.dynamic_resolution_floor")
+            .map(parse)
+            .expect("the warning must name its own row's value");
+        let scales = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.render_scale")
+            .map(parse)
+            .expect("the warning must name the scales");
+        assert_eq!(floor.len(), 1, "one warning names one floor: {floor:?}");
+        declared.push((floor[0], scales));
+    }
+
+    for floor in crate::display::Scale::OFFERED {
+        let conflicting: Vec<crate::display::Scale> = crate::display::Scale::OFFERED
+            .into_iter()
+            .filter(|ceiling| ceiling.percent() <= floor.percent())
+            .collect();
+        let found = declared.iter().find(|(named, _)| *named == floor);
+        match found {
+            Some((_, scales)) => assert_eq!(
+                *scales, conflicting,
+                "{floor} is warned against the wrong set of render scales"
+            ),
+            None => assert!(
+                conflicting.is_empty(),
+                "{floor} conflicts with {conflicting:?} and has no warning"
+            ),
+        }
+    }
+    assert_eq!(
+        declared.len(),
+        crate::display::Scale::OFFERED.len(),
+        "every offered floor conflicts with at least itself, so every one warns"
+    );
+}

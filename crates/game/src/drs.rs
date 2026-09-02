@@ -44,7 +44,9 @@ use serde::{Deserialize, Serialize};
 
 pub mod policy;
 
-pub use policy::{COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_STEPS, STEP};
+pub use policy::{
+    COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
+};
 
 /// What fraction of a frame the scene pass alone is allowed to take.
 ///

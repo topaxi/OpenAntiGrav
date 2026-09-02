@@ -612,25 +612,24 @@ impl Framebuffer {
     /// per-frame cost of dynamic resolution: a uniform write and two viewport
     /// calls, against the six texture creations [`Framebuffer::resize`] pays.
     ///
-    /// # Nothing outside a test may set an extent below the allocation yet
+    /// # Who may call this
     ///
-    /// **No per-frame scene post-process is viewport-aware**, and the list is
-    /// longer than the upscaler: FXAA, SMAA and FSR 1 are handed the extent as
-    /// their input size while reading a view of the allocation-sized texture,
-    /// which is correct exactly while the two are equal, and their own targets
-    /// would be rebuilt on every extent change besides; and `bloom` and
-    /// `hd_bloom` take **no** size and no viewport at all, so a short extent
-    /// would have them blurring the undrawn region inward as a dark edge.
-    /// Bloom is its own setting and is on in an ordinary race, so "turn the
-    /// upscaler and the anti-aliasing off" is *not* a safe configuration -
-    /// nothing outside a test, full stop.
+    /// **The frame loop, once a frame, from `drs::Controller::extent`** - and
+    /// deliberately every frame rather than only when the value moves, because
+    /// [`Framebuffer::resize`] resets the extent whenever it reallocates.
     ///
-    /// `motion_blur` is the one pass already shaped right, and is the shape the
-    /// others need: `motion_blur::Frame` carries the attachments' `size` and
-    /// the drawn `viewport` separately and takes the correct one for each. The
-    /// restoration that starts the rest is un-folding
-    /// `fsr1::Constants::new`'s viewport and size arguments back to the two
-    /// `ffx_fsr1.h` has. See
+    /// **Not the capture paths.** `race/capture.rs` builds its own
+    /// `Framebuffer` at its own `--render-scale` and must never gain a
+    /// controller: this project's comparisons are byte-identical screenshot
+    /// diffs, and a rectangle that follows how busy the machine is makes every
+    /// one of them irreproducible. The front-end capture has no `Framebuffer`
+    /// at all, which since ADR-0038 is correct rather than a gap.
+    ///
+    /// Every scene-resolution pass takes a resource size and a viewport
+    /// separately now - FSR 1 back to `ffx_fsr1.h`'s own two arguments, FXAA
+    /// and SMAA sizing their targets off the allocation so a moving extent
+    /// never rebuilds them, and both blooms reading a sub-rectangle and
+    /// writing into one. See
     /// [`docs/rendering/dynamic-resolution.md`](../../../docs/rendering/dynamic-resolution.md).
     pub fn set_extent(&mut self, extent: (u32, u32)) {
         self.extent = (

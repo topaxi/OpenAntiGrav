@@ -67,6 +67,22 @@ pub const STEP: f32 = 1.0 / GRID as f32;
 /// timer's own four-slot ring.
 pub const COOLDOWN: u32 = 4;
 
+/// How many consecutive under-budget readings a rise needs.
+///
+/// **The cooldown is not enough on its own, and the run that proved it is on
+/// the record.** With a cooldown alone, a 4K race aiming at 144 flipped
+/// between 100 % and 95 % 143 times in a minute - not because the policy was
+/// wrong about either reading, but because the scene pass genuinely costs
+/// 0.75 to 1.07 of its budget at one fixed scale as the camera moves. Every
+/// individual decision was right and the picture still changed size twice a
+/// second, which is the one artefact a player would notice.
+///
+/// So a fall answers a single frame - it has already been seen - and a rise
+/// has to be *earned* by a run of frames that all had room. Anything in the
+/// deadband or over budget breaks the run, which is what makes this hysteresis
+/// rather than a longer cooldown.
+pub const RISE_PATIENCE: u32 = 8;
+
 /// The closed loop, as a pure function of fed measurements.
 ///
 /// `record` in, a rectangle out. It never reads a clock, a GPU or a settings
@@ -79,6 +95,9 @@ pub struct Controller {
     steps: u32,
     /// Readings still to be ignored after the last step.
     cooldown: u32,
+    /// Consecutive readings with room to spare, counted toward
+    /// [`RISE_PATIENCE`]. Reset by anything that is not one.
+    under: u32,
 }
 
 impl Default for Controller {
@@ -94,6 +113,7 @@ impl Controller {
         Self {
             steps: GRID,
             cooldown: 0,
+            under: 0,
         }
     }
 
@@ -120,7 +140,18 @@ impl Controller {
         }
         let ratio = scene_seconds / budget;
         if DEADBAND.contains(&ratio) {
+            // Comfortable, and comfortable is not headroom: a frame in the
+            // band breaks the run a rise has to earn.
+            self.under = 0;
             return None;
+        }
+        if ratio < *DEADBAND.start() {
+            self.under += 1;
+            if self.under < RISE_PATIENCE {
+                return None;
+            }
+        } else {
+            self.under = 0;
         }
 
         // Cost is per-pixel and the scale is per-axis, so the correction that
@@ -142,6 +173,7 @@ impl Controller {
         }
         self.steps = next;
         self.cooldown = COOLDOWN;
+        self.under = 0;
         Some(limits.pixels(self.scale()))
     }
 
@@ -156,6 +188,7 @@ impl Controller {
     /// cooldown is what does it.
     pub fn reset(&mut self) {
         self.cooldown = COOLDOWN;
+        self.under = 0;
     }
 
     /// The extent to draw at, re-derived from the bounds in force now.

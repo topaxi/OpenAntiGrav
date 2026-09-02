@@ -295,3 +295,57 @@ fn a_fresh_install_has_no_controller_running() {
     assert_eq!(Target::DEFAULT, Target::OFF);
     assert!(!Target::default().is_on());
 }
+
+/// One cheap frame is not headroom, and a run of them is.
+///
+/// The regression this pins was found in a running game rather than here: a
+/// 4K race aiming at 144 flipped between 100 % and 95 % 143 times in a minute,
+/// because the scene pass genuinely costs 0.75 to 1.07 of its budget at one
+/// fixed scale as the camera moves. Every decision was individually right and
+/// the picture still changed size twice a second.
+#[test]
+fn a_rise_has_to_be_earned_by_a_run_of_frames_with_room() {
+    let target = Target::OFFERED[2];
+    let limits = limits(target);
+    let budget = on_budget(target);
+    let mut drs = Controller::new();
+
+    // Drive it down first, so there is somewhere to rise to.
+    for _ in 0..200 {
+        drs.record(budget * 4.0, limits);
+    }
+    let held = drs.scale();
+    assert!(held < 1.0);
+
+    // A run of cheap frames one short of what a rise costs, then a single
+    // comfortable one, which breaks it.
+    for _ in 0..(RISE_PATIENCE - 1) {
+        assert_eq!(drs.record(budget * 0.5, limits), None);
+    }
+    // In the deadband: comfortable, not headroom.
+    assert_eq!(drs.record(budget * 0.9, limits), None);
+    for _ in 0..(RISE_PATIENCE - 1) {
+        assert_eq!(
+            drs.record(budget * 0.5, limits),
+            None,
+            "the run restarted, so this must not be enough"
+        );
+    }
+    assert_eq!(drs.scale(), held, "nothing earned a rise");
+
+    // And one more completes an unbroken run.
+    assert!(drs.record(budget * 0.5, limits).is_some());
+    assert!(drs.scale() > held);
+}
+
+/// An overrun answers the very next frame, unlike a rise.
+#[test]
+fn a_fall_needs_no_patience_at_all() {
+    let target = Target::OFFERED[2];
+    let limits = limits(target);
+    let mut drs = Controller::new();
+    assert!(
+        drs.record(on_budget(target) * 4.0, limits).is_some(),
+        "a dropped frame has already been seen; there is nothing to wait for"
+    );
+}

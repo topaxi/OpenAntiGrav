@@ -5,7 +5,7 @@ use log::{debug, error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::keys;
-use oag_game::{boot, display, font, menu, movie, perf, race, report, settings, upscale};
+use oag_game::{boot, display, drs, font, menu, movie, perf, race, report, settings, upscale};
 use oag_gameplay::input::Button;
 
 use crate::hints::SHELL_KEYS;
@@ -14,6 +14,27 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
+    /// What bounds the dynamic-resolution controller this frame.
+    ///
+    /// The floor is a [`display::Scale`] and so a percentage of the **aspect
+    /// rectangle**, exactly as `render_scale` is - not a fraction of the
+    /// allocation. Read the other way it would mean a different pixel count at
+    /// every render scale, which is not what a row spelled `50` beside a row
+    /// spelled `100` says.
+    fn drs_limits(&self) -> drs::Limits {
+        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        let floor = upscale::target_size(
+            rect,
+            self.settings.graphics.dynamic_resolution_floor,
+            self.gpu.device.limits().max_texture_dimension_2d,
+        );
+        drs::Limits::new(
+            self.framebuffer.allocation(),
+            floor,
+            self.settings.graphics.dynamic_resolution,
+        )
+    }
+
     pub(crate) fn frame(&mut self) -> Result<()> {
         // Whatever the audio callback could not render while this thread held
         // the mixer lock, said out loud from a thread that can afford to
@@ -123,6 +144,10 @@ impl Session {
             // frame is still somewhere between the queue and the map. Every
             // reading up to and including this one is dropped when it lands.
             self.scene_cost.clear();
+            // The controller's own half of the same guard. It holds the scale
+            // rather than resetting it - see `drs::Controller::reset` for why
+            // snapping back to the ceiling on a load is the wrong move.
+            self.drs.reset();
             self.stall_frame = self.frame_index;
             self.stalled = false;
         } else {
@@ -502,6 +527,19 @@ impl Session {
             }
         }
 
+        // **The controller's own rectangle, re-applied every frame and not
+        // only when it moves.** `Framebuffer::resize` above resets the extent
+        // to the allocation whenever it reallocates, so a scale applied once
+        // would silently return to full size on the next window resize - and
+        // it has to land *after* that block and *before* `extent()` is read
+        // below, or the projection and ADR-0039's jitter follow a stale
+        // rectangle. Both failure modes are silent.
+        //
+        // Off, and on every capture path, `drs::Controller::extent` is the
+        // allocation and this is inert.
+        let drs_limits = self.drs_limits();
+        self.framebuffer.set_extent(self.drs.extent(drs_limits));
+
         // **Two targets, and which one a stage draws into is whether it has a
         // scene**, per [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
         //
@@ -747,6 +785,19 @@ impl Session {
         {
             if reading.frame > self.stall_frame {
                 self.scene_cost.record(reading.seconds);
+                // The same reading, inside the same guard: a load lands in one
+                // frame's timing and would otherwise drive the scale to the
+                // floor and take seconds to climb back.
+                if let Some(extent) = self.drs.record(reading.seconds, drs_limits) {
+                    debug!(
+                        "dynamic resolution: {}x{} ({:.0}% of {}x{})",
+                        extent.0,
+                        extent.1,
+                        self.drs.scale() * 100.0,
+                        drs_limits.ceiling().0,
+                        drs_limits.ceiling().1
+                    );
+                }
             }
             debug!(
                 "scene pass: frame {} took {:.3} ms, read on frame {}",

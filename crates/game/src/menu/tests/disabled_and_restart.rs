@@ -395,6 +395,13 @@ fn a_restart_note_is_drawn_in_the_margin_and_under_the_rows() {
     menu.supply(ValueSource::Renderers, &adapters);
     menu.seed("graphics.renderer", &Value::Text("default".to_string()));
     menu.in_effect("graphics.renderer", &[Value::Text("default".to_string())]);
+    // An unseeded `choice` opens on its list's *first* option, and this page
+    // now holds a pair of rows that warn about each other: RENDER SCALE would
+    // read 50 and DYNAMIC RESOLUTION FLOOR would read 50, which is a genuine
+    // warning about a floor with nowhere to fall. The game seeds every row -
+    // `every_settings_row_is_one_the_game_seeds` proves it - so this is the
+    // harness owing the page a starting state, not a warning worth silencing.
+    menu.seed("graphics.render_scale", &Value::Text("100".to_string()));
 
     let amber = |menu: &Menu| {
         list(menu, &|_| vec!["X"], None)

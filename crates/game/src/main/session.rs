@@ -8,7 +8,9 @@
 use oag_core::TickClock;
 
 use oag_game::render::Renderer;
-use oag_game::{audio, catalogue, loading, menu, movie, perf, prefetch, race, settings, upscale};
+use oag_game::{
+    audio, catalogue, drs, loading, menu, movie, perf, prefetch, race, settings, upscale,
+};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
@@ -69,13 +71,22 @@ pub(crate) struct Session {
     /// [`oag_render::timing::PassTimer`] and
     /// [dynamic-resolution.md](../../../../docs/rendering/dynamic-resolution.md).
     ///
-    /// **Nothing reads it yet.** There is no controller and no overlay row; it
-    /// is fed so that the signal is a measured thing rather than a planned one.
+    /// It feeds the `dev` overlay's own reading and, since the controller
+    /// landed, sits beside the reading [`Session::drs`] is given - the same
+    /// number, kept as a window here and as a policy input there.
     pub(crate) scene_cost: perf::Meter,
+    /// The dynamic-resolution controller, fed the same GPU reading
+    /// [`Session::scene_cost`] is.
+    ///
+    /// Runs only while `[graphics] dynamic_resolution` names a rate; off, it
+    /// is asked for the ceiling every frame and returns it. See
+    /// [`oag_game::drs`], which owns the whole policy and reads nothing.
+    pub(crate) drs: drs::Controller,
     /// The timer behind [`Session::scene_cost`], or `None` on a device that
     /// cannot be asked - in which case dynamic resolution has no signal at all
-    /// and the eventual menu row says so rather than offering a controller
-    /// driven by the refresh rate.
+    /// and never moves the extent, whatever the menu row says. The row cannot
+    /// be greyed for it: `disabled_by` names a *setting* and an adapter
+    /// capability is not one. See `docs/architecture/menus.md`.
     pub(crate) pass_timer: Option<oag_render::timing::PassTimer>,
     /// Which frame the loop is on, counted rather than timed.
     ///
