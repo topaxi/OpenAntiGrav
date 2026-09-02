@@ -187,7 +187,7 @@ impl Weapon {
 
 mod stats;
 
-pub use stats::{BombStats, MineStats, MissileStats, RocketStats, Simple};
+pub use stats::{BombStats, MineStats, MissileStats, PlasmaStats, RocketStats, Simple};
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
@@ -254,6 +254,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::missile`].
     missile: Option<MissileStats>,
+    /// The Plasma's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::plasma`].
+    plasma: Option<PlasmaStats>,
     /// The Mine's own block, or `None` for a file that omits it.
     ///
     /// Read it through [`Self::mine`].
@@ -312,6 +316,16 @@ impl WeaponStats {
     #[must_use]
     pub fn missile(&self) -> Option<MissileStats> {
         self.missile
+    }
+
+    /// The Plasma's `<Stats>`, or `None` when the file authors no Plasma.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped Pulse tables do author one, and Pure's does not - see
+    /// `docs/formats/pure-status.md`.
+    #[must_use]
+    pub fn plasma(&self) -> Option<PlasmaStats> {
+        self.plasma
     }
 
     /// The Mine's `<Stats>`, or `None` when the file authors no Mine.
@@ -436,6 +450,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut simple: [Option<Simple>; 3] = [None; 3];
     let mut rocket = None;
     let mut missile = None;
+    let mut plasma = None;
     let mut mine = None;
     let mut bomb = None;
     let mut absorb = Vec::new();
@@ -486,6 +501,28 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 lock_max_dist: number(block, "Stats", "lock_max_dist")?,
                 speeds: class_speeds(block)?,
             });
+            continue;
+        }
+        if weapon_kind == Weapon::Plasma {
+            // **Optional for the reason the Bomb's block is**: a title that
+            // tunes the Plasma on attributes this build does not read loses
+            // the Plasma and keeps the rest of its table.
+            //
+            // Both dialects do decode. Measured 2026-09-02 on
+            // `pure-psp-usa.chd`: Pure's `Data\XML\weaponstats.xml` authors
+            // `speed="900"` and no `launchSpeed`, which `class_speeds` and the
+            // `optional` below already handle, so Pure gets a Plasma too.
+            // `charge_time` is deliberately not read - see `PlasmaStats`.
+            plasma = optional_block(&mut skipped, weapon_kind, || {
+                Ok(PlasmaStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    blastforce: number(block, "Stats", "blastforce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    damage: number(block, "Stats", "damage")?,
+                    launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
+                    speeds: class_speeds(block)?,
+                })
+            })?;
             continue;
         }
         if weapon_kind == Weapon::Bomb {
@@ -574,6 +611,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         simple,
         rocket,
         missile,
+        plasma,
         mine,
         bomb,
         absorb,

@@ -43,11 +43,21 @@
 //! # Only what has an effect is handed out
 //!
 //! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
-//! Autopilot, Mine and Bomb.
+//! Autopilot, Mine, Bomb and Plasma.
 //!
-//! Of the seven still out, most need a beam, track deformation or the slowdown
+//! Of the five still out, most need a beam, track deformation or the slowdown
 //! mechanic behind `<Global slowdown_limit>` - Quake needs to deform the track,
-//! LeachBeam needs a beam and a victim.
+//! LeachBeam needs a beam and a victim, and the Cannon's fire bit `0x2000` is
+//! set by `Weapon_RequestFire` and dispatched by nothing at all.
+//!
+//! **The Plasma left that list on 2026-09-02**, and it is the cheapest weapon
+//! since the Bomb for the mirror-image reason: the Bomb reused the Mine's whole
+//! module and the Plasma reuses the Rocket's whole flight model.
+//! `Plasma_Update` (`0x0885c6cc`) is `Rocket_Update`'s floor follower - the same
+//! 12-unit probe along the carried surface normal, the same speed-preserving
+//! redirect, the same fall, the same detonate on a wall - and
+//! `Weapon_FirePlasma` (`0x0886a868`) spawns exactly one where the Rocket
+//! spawns three. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
 //!
 //! **The Mine left that list on 2026-08-26**, and it is the third in a row that
 //! a *reading* let through rather than a mechanic - and the first where the
@@ -127,6 +137,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Autopilot,
     Weapon::Mine,
     Weapon::Bomb,
+    Weapon::Plasma,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

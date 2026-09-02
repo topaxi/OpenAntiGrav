@@ -166,6 +166,91 @@ impl MissileStats {
     }
 }
 
+/// The Plasma's `<Stats>`: the Rocket's, less `spread`, plus `charge_time`.
+///
+/// # The offsets are read, and they close a gap the Mine's page left open
+///
+/// `WeaponStats_ParsePlasma` (`0x0880cc2c`) is the same shape as the Rocket's
+/// and the Mine's - match an attribute name, store the parsed float at a fixed
+/// offset. Eleven attributes, eleven offsets, confidence **92**:
+///
+/// | Offset | Attribute |
+/// | --- | --- |
+/// | `+0x9c` | `charge_time` |
+/// | `+0xa0` | `damage` |
+/// | `+0xa4` | `blastradius` |
+/// | `+0xa8` | `blastforce` |
+/// | `+0xac`..`+0xb8` | `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed` |
+/// | `+0xbc` | `launchspeed` |
+/// | `+0xc0` | `absorb` |
+/// | `+0xc4` | `slowdown_time` |
+///
+/// **That block lands exactly where the Mine's page predicted it would.**
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md` derived the layout of the
+/// `0xa4` unread bytes between the Missile's block and the Mine's from nothing
+/// but attribute counts - "Plasma's eleven" at four bytes each - and put the
+/// Plasma at `+0x9c`..`+0xc4`. Measuring it there turns that arithmetic from a
+/// supported claim into a checked one. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+///
+/// # One shot, not three, and that is read rather than inferred
+///
+/// The absence of `spread` says it and so does the handler:
+/// `Weapon_FirePlasma` (`0x0886a868`), the bit-`0x4` handler, takes one pool
+/// slot, calls `Plasma_Init` once and clears its own request bit in the same
+/// breath. There is no fan, no round counter and no reload timer - the three
+/// shapes the Rocket and the Mine respectively have.
+///
+/// # `charge_time` is authored and is **not** a field here
+///
+/// The file authors `charge_time="3"` and this build spends it nowhere, so by
+/// the module's own rule it gets no field - the same treatment
+/// [`BombStats`] gives `damageradius`.
+///
+/// **This is the one open question on the weapon, and it is open in an
+/// uncomfortable direction.** `Weapon_FirePlasma` spawns immediately;
+/// `Plasma_Update` (`0x0885c6cc`) reads `+0x54` as a plain age and gates
+/// nothing on it; `Ship_FireHeldWeapon` (`0x08844ae8`) calls
+/// `Weapon_RequestFire` with no timer in front of it. Three functions on the
+/// press-to-flight path, and none of them holds a shot back. A maintainer who
+/// plays Pulse, asked cold, says the Plasma *does* wind up before it fires -
+/// so the consumer exists and has not been found, rather than the attribute
+/// being vestigial. Firing instantly is what the read code does and is what
+/// this build does; see `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PlasmaStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// The impulse the blast pushes a craft with.
+    pub blastforce: f32,
+    /// How far from the impact the blast reaches.
+    pub blastradius: f32,
+    /// Energy the blast costs a craft inside that radius.
+    ///
+    /// The largest of any weapon on both shipped tables, which is what a
+    /// weapon that fires one bolt where the Rocket fires three needs.
+    pub damage: f32,
+    /// Added to the class's own speed at launch.
+    pub launch_speed: f32,
+    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
+    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
+    ///
+    /// Not public for the reason [`RocketStats::speeds`] is: the index *is* the
+    /// meaning. Read it through [`PlasmaStats::speed_for`].
+    pub(super) speeds: [f32; 4],
+}
+
+impl PlasmaStats {
+    /// How fast a plasma bolt flies in one speed class, in km/h.
+    ///
+    /// The unit is the Rocket's, for the Rocket's reason - see
+    /// [`RocketStats::speed_for`] and `oag_gameplay::projectile::plasma::launch`.
+    #[must_use]
+    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
+        self.speeds[class as usize]
+    }
+}
+
 /// The Mine's `<Stats>`: seven attributes, and none of them a speed.
 ///
 /// # The offsets are read, not guessed

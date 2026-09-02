@@ -371,6 +371,24 @@ pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
 /// two instances are attached and followed.
 pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 
+/// The effect the original attaches to every plasma bolt at launch.
+///
+/// **Recovered, confidence 90.** `Plasma_Init` (`0x0885bd18`) spawns it with
+/// the fourcc `PLHE` - the same slot `Missile_Init` puts `MIEX` in - and the
+/// name string is at `0x08a7c0c0`, read directly out of `.rodata` rather than
+/// inferred from a plausible name. It sits one entry away from the `PLASMA`
+/// cue name at `0x08a7c0ac`, which the same constructor plays.
+///
+/// **One instance, at the bolt's own position.** `Plasma_Init` makes a single
+/// spawn call, unlike the Missile's pair - so nothing here needs the orbiting
+/// second anchor `weapons::missile_flare_anchors` derives.
+///
+/// `WO_PLASMA_FLASH` is authored on the same disc and is **not** wired: no
+/// read call site plays it, so whether it is the muzzle flash, the detonation
+/// or something else is open. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
+
 /// The explosion a rocket that hits **track geometry** plays.
 ///
 /// **Recovered, confidence 72.** Both of `Rocket_Update`'s (`0x0885d2a8`)

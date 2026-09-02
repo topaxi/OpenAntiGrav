@@ -373,6 +373,73 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
     );
 }
 
+/// Firing a Plasma puts **one** in the air, ahead of the craft, straight down
+/// its own forward axis - and spends the pickup.
+///
+/// One is recovered rather than chosen, twice over: `Weapon_FirePlasma`
+/// (`0x0886a868`) takes one pool slot and clears its own request bit in the
+/// same breath, and the `<Stats>` author no `spread` to fan a volley with. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+///
+/// **Deliberately the Rocket's test with the count changed**, because that is
+/// what the weapon is: one bolt where the Rocket throws three, off the same
+/// flight model. The "no fan" assertion is the one that is not a mirror image -
+/// a Plasma flying off-axis would mean the Rocket's `launch` had been reused
+/// wholesale rather than the single-shot one written.
+#[test]
+fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
+    let mut buttons = Buttons::new();
+
+    race.tick(&buttons.tick(0));
+    assert_eq!(
+        race.ship_pickup(),
+        Some(oag_formats::weapons::Weapon::Plasma)
+    );
+    assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
+
+    let before = race.ship().physics.body.position;
+    let forward = race.ship().physics.body.forward();
+    race.tick(&buttons.tick(SQUARE));
+
+    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.world.projectiles.live(),
+        1,
+        "one press is one bolt, not a volley"
+    );
+
+    let bolt = race.world.projectiles.slots[0];
+    assert_eq!(bolt.kind, Some(oag_formats::weapons::Weapon::Plasma));
+    assert_eq!(bolt.owner, 0);
+    assert!(
+        (bolt.position - before).dot(forward) > 0.0,
+        "the bolt spawned behind the craft: {:?}",
+        bolt.position
+    );
+    // Venom's authored speed plus `launchSpeed`, both km/h in the file, so the
+    // velocity is the sum over `KMH_PER_UNIT_PER_SECOND` - spelled as the
+    // arithmetic so the unit stays legible, as the Rocket's test does.
+    let expected = (650.0 + 26.0) / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+    assert!(
+        (bolt.velocity.length() - expected).abs() < 1e-2,
+        "expected (650 + 26) km/h as units per second, got {}",
+        bolt.velocity.length()
+    );
+    // Straight down the nose: no fan, so no lateral component at all.
+    let right = race.ship().physics.body.right();
+    assert!(
+        bolt.velocity.dot(right).abs() < 1e-2,
+        "the bolt was fanned: lateral component {}",
+        bolt.velocity.dot(right)
+    );
+    assert!(
+        bolt.velocity.dot(forward) > 0.0,
+        "the bolt must fly forwards"
+    );
+}
+
 /// Firing a Rocket puts **three** in the air at once, ahead of the craft,
 /// at the class's own speed - and spends the pickup.
 ///
@@ -601,6 +668,7 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         Weapon::Autopilot,
         Weapon::Mine,
         Weapon::Bomb,
+        Weapon::Plasma,
     ];
 
     assert_eq!(

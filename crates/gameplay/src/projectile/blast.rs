@@ -32,6 +32,9 @@ pub(super) fn blast_stats(
         Weapon::Missile => weapons
             .missile()
             .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        Weapon::Plasma => weapons
+            .plasma()
+            .map(|s| (s.blastradius, s.damage, s.blastforce)),
         Weapon::Mine => weapons
             .mine()
             .map(|s| (s.blastradius, s.damage, s.blastforce)),

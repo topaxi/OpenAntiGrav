@@ -388,6 +388,7 @@ pub(in crate::race) fn flare_effect_for(
     match kind? {
         oag_formats::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
         oag_formats::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
+        oag_formats::weapons::Weapon::Plasma => Some(PLASMA_FLARE_EFFECT),
         _ => None,
     }
 }

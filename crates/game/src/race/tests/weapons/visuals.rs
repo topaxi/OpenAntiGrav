@@ -8,9 +8,10 @@
 
 use super::*;
 
-/// Only the Rocket and the Missile ride a flare, and each rides its **own**:
-/// `WO_ROCKET_FLARE` and `WO_MISSILE_HEAD` are two separate authored files,
-/// not one generic "something is in the air" marker.
+/// Only the Rocket, the Missile and the Plasma ride a flare, and each rides
+/// its **own**: `WO_ROCKET_FLARE`, `WO_MISSILE_HEAD` and `WO_PLASMA_HEAD` are
+/// three separate authored files, not one generic "something is in the air"
+/// marker.
 ///
 /// **Regression test for a real bug, not a speculative one.** This gate used
 /// to be `kind.is_none()`, true for *every* live projectile, which attached
@@ -28,6 +29,7 @@ fn each_projectile_rides_only_its_own_flare() {
         let expected = match weapon {
             Weapon::Rocket => Some(crate::race::ROCKET_FLARE_EFFECT),
             Weapon::Missile => Some(crate::race::MISSILE_FLARE_EFFECT),
+            Weapon::Plasma => Some(crate::race::PLASMA_FLARE_EFFECT),
             _ => None,
         };
         assert_eq!(

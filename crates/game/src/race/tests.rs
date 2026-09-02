@@ -440,6 +440,30 @@ fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
+/// The Plasma's own fixture: the Rocket's schema with `spread` swapped for
+/// `charge_time`, which is what both shipped tables author. Invented numbers,
+/// all distinct from the Rocket fixture's, and the four class speeds ascending
+/// for [`one_rocket_table`]'s reason.
+///
+/// `charge_time` is present and unread on purpose - the file authors it, this
+/// build spends it nowhere, and a fixture that omitted it would stop looking
+/// like the document.
+fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
+               charge_time="3" damage="24" slowdown_time="25" venomspeed="650"
+               flashspeed="750" rapierspeed="850" phantomspeed="950"
+               launchSpeed="26"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Plasma"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
 /// A parameter set with a real hull, so the reset probes have something to
 /// probe with, and no gravity, so a ship only moves when a test moves it.
 fn hulled_handling() -> Handling {

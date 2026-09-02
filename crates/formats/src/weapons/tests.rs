@@ -17,6 +17,7 @@ const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
 <Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
 <Weapon type="Missile"><Stats absorb="22" blastforce="23" blastradius="24" damage="25" slowdown_time="26" venomspeed="500" flashspeed="600" rapierspeed="700" phantomspeed="800" launchSpeed="27" lock_min_dist="28" lock_max_dist="29"/></Weapon>
+<Weapon type="Plasma"><Stats absorb="52" blastforce="53" blastradius="54" charge_time="55" damage="56" slowdown_time="57" venomspeed="900" flashspeed="1000" rapierspeed="1100" phantomspeed="1200" launchSpeed="58"/></Weapon>
 <Weapon type="Bomb"><Stats absorb="40" blastforce="41" blastradius="42" damage="43" damageradius="44" slowdown_time="45" timetodie="46" trigger_radius="47"/></Weapon>
 <Weapon type="Mine"><Stats absorb="30" blastforce="31" blastradius="32" damage="33" slowdown_time="34" timetodie="35" trigger_radius="36"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
@@ -445,4 +446,69 @@ fn every_type_name_round_trips() {
     }
     assert_eq!(Weapon::from_type("Global"), None);
     assert_eq!(Weapon::from_type("Nonsense"), None);
+}
+
+#[test]
+fn the_plasma_reads_the_rockets_schema_without_the_fan() {
+    let plasma = parse(FIXTURE)
+        .expect("the fixture parses")
+        .plasma()
+        .expect("the fixture authors a Plasma");
+    assert_eq!(
+        plasma,
+        PlasmaStats {
+            absorb: 52.0,
+            blastforce: 53.0,
+            blastradius: 54.0,
+            damage: 56.0,
+            launch_speed: 58.0,
+            speeds: [900.0, 1000.0, 1100.0, 1200.0],
+        }
+    );
+}
+
+/// The Plasma's own block, not the Rocket's, and the fixture gives them
+/// disjoint numbers so a parse arm that read the wrong `<Weapon type>` fails
+/// here. Their schemas differ by exactly one attribute each way - `spread`
+/// against `charge_time` - which is the shape a copy-paste gets wrong quietly.
+#[test]
+fn the_plasma_and_the_rocket_read_their_own_blocks() {
+    let stats = parse(FIXTURE).expect("parses");
+    let plasma = stats.plasma().expect("a Plasma");
+    let rocket = stats.rocket().expect("a Rocket");
+    assert_ne!(plasma.damage, rocket.damage);
+    assert_ne!(plasma.blastradius, rocket.blastradius);
+    assert_ne!(
+        plasma.speed_for(crate::handling::SpeedClass::Venom),
+        rocket.speed_for(crate::handling::SpeedClass::Venom)
+    );
+}
+
+/// Pure's dialect: one `speed` for every class and no `launchSpeed`, which is
+/// what `Data\XML\weaponstats.xml` authors. Measured 2026-09-02 on
+/// `pure-psp-usa.chd`; the *shape* is reproduced here, not its values.
+#[test]
+fn a_plasma_authored_with_one_speed_reads_it_for_every_class() {
+    let one = concat!(
+        "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon>",
+        "<Weapon type=\"Plasma\"><Stats absorb=\"1\" blastforce=\"2\" blastradius=\"3\" ",
+        "charge_time=\"4\" damage=\"5\" slowdown_time=\"6\" speed=\"700\"/></Weapon></WeaponStats>"
+    );
+    let plasma = parse(one).expect("parses").plasma().expect("a Plasma");
+    for class in crate::handling::SpeedClass::ALL {
+        assert_eq!(plasma.speed_for(class), 700.0, "{class:?}");
+    }
+    assert_eq!(
+        plasma.launch_speed, 0.0,
+        "a file that omits `launchSpeed` adds nothing rather than failing"
+    );
+}
+
+/// A file with no Plasma is not an error, for
+/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+#[test]
+fn a_file_without_a_plasma_has_no_plasma_stats() {
+    let none =
+        "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
+    assert_eq!(parse(none).expect("parses").plasma(), None);
 }

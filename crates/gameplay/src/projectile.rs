@@ -73,6 +73,7 @@
 mod blast;
 pub mod mine;
 pub mod missile;
+pub mod plasma;
 mod rocket;
 
 pub use blast::blast;

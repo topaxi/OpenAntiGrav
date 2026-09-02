@@ -226,6 +226,34 @@ impl Race {
                         return;
                     }
                 }
+                oag_formats::weapons::Weapon::Plasma => {
+                    let Some(stats) = weapons.plasma() else {
+                        // As the Rocket: nothing to put in the air.
+                        return;
+                    };
+                    let ship = &self.world.ships[0];
+                    // **One bolt, not three.** `Weapon_FirePlasma`
+                    // (`0x0886a868`) spawns once and clears its own request
+                    // bit; the `<Stats>` carry no `spread` to fan a volley
+                    // with. See `oag_gameplay::projectile::plasma::launch`.
+                    let (position, velocity) = oag_gameplay::projectile::plasma::launch(
+                        &ship.physics,
+                        &ship.handling.dimensions,
+                        &stats,
+                        to_format_class(self.class),
+                    );
+                    if !self.world.projectiles.spawn(
+                        oag_formats::weapons::Weapon::Plasma,
+                        position,
+                        velocity,
+                        0,
+                    ) {
+                        // Every slot was taken. Keep the pickup rather than
+                        // spend it on a shot that never left - the same rule
+                        // the Rocket's arm follows for an empty volley.
+                        return;
+                    }
+                }
                 oag_formats::weapons::Weapon::Missile => {
                     let Some(stats) = weapons.missile() else {
                         // As the Rocket: nothing to put in the air.

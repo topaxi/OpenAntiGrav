@@ -225,6 +225,32 @@ impl Race {
             .and_then(oag_formats::weapons::WeaponStats::mine)
     }
 
+    /// The Rocket's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Rocket.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/plasma_ground_truth.rs`, which compares the two
+    /// blocks against each other to prove they are two rather than one read
+    /// twice.
+    #[must_use]
+    pub fn rocket_stats(&self) -> Option<oag_formats::weapons::RocketStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::rocket)
+    }
+
+    /// The Plasma's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Plasma.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/plasma_ground_truth.rs`.
+    #[must_use]
+    pub fn plasma_stats(&self) -> Option<oag_formats::weapons::PlasmaStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::plasma)
+    }
+
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Bomb.
     #[must_use]
