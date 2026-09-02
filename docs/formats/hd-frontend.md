@@ -971,18 +971,30 @@ underline colours (`HD_Grey`/`HD_Blue`, read live off the served archive's
 own globals - `oag_title::MenuStrip::selected_fill`, resolved the same way
 `crate::loading`'s own palette is) are **confirmed exact reads**, matched to
 the capture's own pixels to the byte. The tab's *shape* is not: nothing on
-disc states one at all, and what shipped is a plain rectangle sized from
+disc states one at all, and what shipped is a rectangle sized from
 `measure(label)` plus a left/top pad, at **confidence 55** - the real tab's
 top-right corner is chamfered, `17`x`7` pixels in a `1278`-wide capture
 against a `188`-`232`-pixel-wide tab, left edge vertical throughout, and
-reproducing that cut needs a primitive this build's `Draw`/`Quad` pipeline
-does not have. **Not a shear** - a shear moves both right corners into a
-parallelogram, which is the wrong shape - but an offset on the one top-right
-corner alone (a whole-quad `rotation` only exists today, see
-`crates/game/src/ui.wgsl`) - deferred rather than approximated further, with
-the raw measurements left in `crates/game/src/menu/skin.rs`'s own doc comment
-for whoever adds it. `crates/game/src/menu/strip.rs`,
-`crates/game/src/menu/frame.rs`, `crates/game/src/menu/skin.rs`.
+reproducing that cut as a true diagonal needs a primitive this build's
+`Draw`/`Quad` pipeline does not have. **Not a shear** - a shear moves both
+right corners into a parallelogram, which is the wrong shape - but an offset
+on the one top-right corner alone (a whole-quad `rotation` only exists today,
+see `crates/game/src/ui.wgsl`), and that primitive's blast radius (every
+`Quad` in the game shares its vertex layout) was judged not worth paying for
+one small corner. **2026-09-02: shipped anyway, as a one-step band rather
+than a plain rectangle** - `strip::draw` now draws the tab as two
+`Draw::Fill`s, the full tab below the chamfer's height and a second band
+above it short by the chamfer's width, using the same raw measurement. A
+render comparison against the capture found the honest result: at a normal
+crop the step and the real bevel read the same, but a close zoom shows the
+step is a right angle where the capture is a diagonal - a resolution limit
+from drawing the true cut with an existing primitive, not an invented shape.
+`crates/game/src/menu/strip.rs`, `crates/game/src/menu/frame.rs`,
+`crates/game/src/menu/skin.rs`.
+
+**2026-09-02: what `0xff705070` is for, from a wider sweep rather than the one instance already read.** Every `<HorizMenu>`/`<VertMenu>` widget's own top-level `<Values>` across `mainmenu_definition.xml`, `additional_definition.xml` (two `<HorizMenu>`, one `<VertMenu>`) and all four `manual_definition*.xml` copies carries this exact literal - eight instances, matching the table row above, all the *widget's own* declared colour and none of them reached through `FEGlobals->`, unlike every colour already established as live (`HD_Grey`, `HD_Blue`, `TitleColor`...). The already-captured case (`strip`, this section, above) shows this exact mechanism - a menu-family widget's own `color=` - going unread, text drawing in `TextColor` regardless. Structurally the same widget field on the other seven instances, unconfirmed individually - **confidence 70**, one capture generalised across a consistent pattern rather than seven more captures.
+
+**`online_definition.xml` (`DATA02`/`DATA05`/`DATA06`, fourteen instances per copy) is a different picture, and argues the literal is not simply dead everywhere it appears.** Past the `OnlineMenu` `<HorizMenu>` itself (which *does* use `0xffffffff`, the two-of-ten exception the table above already counts), the same `0xff705070` recurs on five ordinary `<Menu>` widgets (`LoginMenu`, `UserList` x2, `FriendOptions`, `BlockOptions`, `PendingOptions`) and six standalone `<Text>` widgets carrying community/friends status strings (`friendRequests`, `FriendInfo`, `SkinInfo`, `blockedInfo`, `statusInfo`, `pendingInfo`) - every one an info/status label, not a navigation entry. A `<Text>` widget is a materially different draw than a menu entry in this build's own equivalent code (`Frontend::draw_screen_at` reads a parsed `Text`'s own `color` directly, unlike `strip::draw`/`rows::draw` which read a skin-level colour instead) - so nothing here says a `<Text>` widget's own colour goes unread the way a menu entry's does, and the online/community screens are not implemented in this project to check against a capture either way. **Confidence 55** for "this is likely a real, deliberately-chosen secondary/muted text colour on `<Text>` widgets specifically, and likely inert on the `<Menu>`-family widgets beside it the same way it is on the captured strip" - plausible from the pattern and from this build's own analogous code split, not verified against the executable or a capture of the online screen, which does not exist in this project's evidence.
 
 **No carousel, confirmed rather than assumed.** Stepping the highlight to
 `RECORDS` - the last of the five main-menu entries - leaves it sitting at its
