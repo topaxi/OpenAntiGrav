@@ -152,12 +152,21 @@ audit of every consumer. What is now true:
   `motion_blur::Frame` already separates `size` from `viewport` and was already
   taking the right one for each.
 
-**What Phase 1 did *not* do, and it bounds what may set an extent.** FXAA, SMAA
-and FSR 1 are handed the extent as their input size while reading a view of the
-allocation-sized texture - correct only while the two are equal, and FXAA's and
-SMAA's own targets would be rebuilt on every extent change besides. So nothing
-outside a test may set a sub-extent until Phase 5, and the two tests that do
-stay on the bilinear path. `Framebuffer::set_extent` says so on itself.
+**What Phase 1 did *not* do, and it bounds what may set an extent.** No
+per-frame scene post-process is viewport-aware, and the list is longer than the
+upscaler. FXAA, SMAA and FSR 1 are handed the extent as their input size while
+reading a view of the allocation-sized texture - correct only while the two are
+equal, and their own targets would be rebuilt on every extent change besides.
+**And `bloom` and `hd_bloom` take no size and no viewport at all**, so a short
+extent would have them blurring the undrawn region inward as a dark edge; bloom
+is its own setting and is on in an ordinary race, so there is no combination of
+menu rows that makes a sub-extent safe. Nothing outside a test may set one, full
+stop; the two tests that do build a bare `Framebuffer` with no `Scene` behind
+it. `Framebuffer::set_extent` says so on itself.
+
+`motion_blur` is the one pass already shaped right and is the shape the others
+need - `motion_blur::Frame` carries `size` and `viewport` separately and takes
+the correct one for each.
 
 Two things worth carrying forward that were not in the plan: the memory cost is
 against a *hypothetical* reallocating DRS and **not** against today (the
@@ -239,7 +248,12 @@ kind of statement; overloading one warning with both was judged worse than no
 warning at all. Do not re-open this as an oversight - it is a decision. The DRS
 pairing above is the first kind of statement and does still want a warning.
 
-### Phase 5 - tell the upscaler the size changed
+### Phase 5 - tell the upscaler, and the bloom, the size changed
+
+**Half a day for FSR 1, and bloom is a second job beside it** - `bloom::render`
+and `hd_bloom::run` take neither a size nor a viewport today, so they need one
+added rather than un-folded. Both have to land before a controller may move the
+extent at all; see the caveat under Phase 1.
 
 **Half a day for FSR 1.** Un-collapse `fsr1::Constants::new`'s viewport and
 size arguments back to upstream's two, which is a *restoration* of

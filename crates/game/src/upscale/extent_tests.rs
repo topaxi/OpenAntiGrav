@@ -207,10 +207,11 @@ fn blit_a_short_extent(source: Source) -> Option<[[u8; 4]; 4]> {
 
 /// The blit reads the drawn rectangle and nothing outside it.
 ///
-/// **Bilinear only, deliberately**: no upscaler and no post-process pass runs
-/// here, because until `fsr1::Constants::new`'s viewport and size arguments are
-/// un-folded, FXAA, SMAA and FSR 1 are only correct while the extent equals the
-/// allocation. `Framebuffer::set_extent` says so on itself.
+/// **A bare `Framebuffer` and no `Scene`, deliberately**: there is no post
+/// chain here to reach at all. No pass in one is viewport-aware yet - not the
+/// upscaler, not FXAA or SMAA, and not bloom, which takes no size or viewport
+/// whatsoever - so a sub-extent is a test-only thing until Phase 5.
+/// `Framebuffer::set_extent` says so on itself.
 #[test]
 fn a_short_extent_is_read_without_the_pixels_outside_it() {
     let Some(read) = blit_a_short_extent(Source::of((2, 2), (4, 4))) else {

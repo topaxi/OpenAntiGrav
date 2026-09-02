@@ -77,21 +77,45 @@ Two sites deliberately unaffected:
 
 ## The caveat that bounds what may set an extent
 
-FXAA, SMAA and FSR 1 are handed the **extent** as their input size while reading
-a view of the **allocation**-sized texture. That is correct exactly while the
-two are equal, and wrong the moment they are not: those passes derive a texel
-size from the size they were given, so an extent below the allocation would have
-them stepping the wrong distance across a texture that is larger than they think
-it is - and FXAA's and SMAA's own targets would be rebuilt on every extent
-change, which is the cost this whole structure exists to avoid.
+**No per-frame scene post-process is viewport-aware yet, and there is no safe
+configuration of the settings that makes one.** Two different shapes of not
+knowing:
 
-So, until the upscale and post-process passes take a viewport and a resource
-size separately: **nothing outside a test may set an extent below the
-allocation, and a test that does must stay on the bilinear path** - `upscaler:
-Off`, `anti_aliasing: Off`. `Framebuffer::set_extent` says so on itself. The
-restoration that lifts this is un-folding `fsr1::Constants::new`'s viewport and
-size arguments back to the two `ffx_fsr1.h` has, which moves the port *closer*
-to upstream and so keeps ADR-0012's transliteration property intact.
+- **FXAA, SMAA and FSR 1** are handed the **extent** as their input size while
+  reading a view of the **allocation**-sized texture. Correct exactly while the
+  two are equal, and wrong the moment they are not: each derives a texel size
+  from the size it was given, so an extent below the allocation has them
+  stepping the wrong distance across a texture larger than they think it is -
+  and FXAA's and SMAA's own targets would be rebuilt on every extent change,
+  which is the cost this whole structure exists to avoid.
+- **`bloom` and `hd_bloom` take no size and no viewport at all.** They are
+  handed the scene view and nothing else, so a short extent would have them
+  blurring the undrawn region inward as a dark edge along the extent's own
+  boundary. Bloom is its own setting and is on in an ordinary race - which is
+  why "turn the upscaler and the anti-aliasing off" is **not** a safe
+  configuration, and why the rule below is unconditional rather than a list of
+  rows to set to `off`.
+
+So, until those passes take a viewport and a resource size separately:
+**nothing outside a test may set an extent below the allocation.** The two
+tests that do build a bare `Framebuffer` with no `Scene` behind it, so there is
+no post chain for them to reach. `Framebuffer::set_extent` says so on itself.
+
+`motion_blur` is the one pass already shaped right, and is the shape the others
+need: `motion_blur::Frame` carries the attachments' `size` and the drawn
+`viewport` as separate fields and takes the correct one for each. The
+restoration that starts on the rest is un-folding `fsr1::Constants::new`'s
+viewport and size arguments back to the two `ffx_fsr1.h` has, which moves the
+port *closer* to upstream and so keeps ADR-0012's transliteration property
+intact.
+
+## There is no scissor, and that is not an omission
+
+The extent is applied with `set_viewport` alone. A scissor would add nothing:
+NDC clipping already bounds every rasterized fragment to the viewport
+rectangle, so no draw can reach outside the extent without one. The one thing
+neither a viewport nor a scissor bounds is `LoadOp::Clear`, which clears the
+whole attachment either way - see ADR-0037's consequences.
 
 ## What is still missing, in order of expense
 

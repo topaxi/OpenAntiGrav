@@ -595,14 +595,23 @@ impl Framebuffer {
     ///
     /// # Nothing outside a test may set an extent below the allocation yet
     ///
-    /// FXAA, SMAA and FSR 1 are handed the extent as their input size while
-    /// reading a view of the allocation-sized texture, which is correct
-    /// exactly while the two are equal: those passes derive a texel step from
-    /// the size they are given, and FXAA's and SMAA's own targets would be
-    /// rebuilt on every extent change - the cost this structure exists to
-    /// avoid. Until `fsr1::Constants::new`'s viewport and size arguments are
-    /// un-folded back to the two `ffx_fsr1.h` has, a sub-extent belongs only on
-    /// the bilinear path (`Upscaler::Off`, `AntiAliasing::Off`). See
+    /// **No per-frame scene post-process is viewport-aware**, and the list is
+    /// longer than the upscaler: FXAA, SMAA and FSR 1 are handed the extent as
+    /// their input size while reading a view of the allocation-sized texture,
+    /// which is correct exactly while the two are equal, and their own targets
+    /// would be rebuilt on every extent change besides; and `bloom` and
+    /// `hd_bloom` take **no** size and no viewport at all, so a short extent
+    /// would have them blurring the undrawn region inward as a dark edge.
+    /// Bloom is its own setting and is on in an ordinary race, so "turn the
+    /// upscaler and the anti-aliasing off" is *not* a safe configuration -
+    /// nothing outside a test, full stop.
+    ///
+    /// `motion_blur` is the one pass already shaped right, and is the shape the
+    /// others need: `motion_blur::Frame` carries the attachments' `size` and
+    /// the drawn `viewport` separately and takes the correct one for each. The
+    /// restoration that starts the rest is un-folding
+    /// `fsr1::Constants::new`'s viewport and size arguments back to the two
+    /// `ffx_fsr1.h` has. See
     /// [`docs/rendering/dynamic-resolution.md`](../../../docs/rendering/dynamic-resolution.md).
     pub fn set_extent(&mut self, extent: (u32, u32)) {
         self.extent = (
