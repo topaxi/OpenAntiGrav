@@ -1,4 +1,4 @@
-# Both titles' Zone grade escalates and draws now; three narrow render questions remain
+# Both titles' Zone grade escalates and draws now; two narrow render questions remain
 
 2026-08-28. Surfaced while chasing the 2048 Zone bugs this session also fixed
 (`oag_title::ZoneCraft::PlayerShip`, `oag_title::ZoneCircuit::SameCircuit` -
@@ -34,8 +34,11 @@ see the section below) **and its recolour is confirmed drawing**
 (`Environment_UpdateStageBlend` writes all seven Zone vec4s, `mesh.wgsl`
 draws the subset - twenty-fifth pass, `## Open` below). **2026-09-01: the
 visualiser (`zoneTexVis`) closed too and is already implemented** -
-`oag_audio::spectrum` + `mesh.wgsl`. What remains is three narrow render
-questions, not a missing trigger; see Open and Next Steps.
+`oag_audio::spectrum` + `mesh.wgsl`. **2026-09-03: the Scene/Track selection
+mechanism and `zoneOrigin`'s writer are both found too** (see the two newest
+sections below). What remains is two narrow render questions - the sphere
+radius and `zoneAnisoPalette` - not a missing trigger; see Open and Next
+Steps.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -278,18 +281,26 @@ no longer disagree.
 
   **What that leaves open, all of it narrow:**
 
-  1. **Which of the two parallel feeds a material sees - half answered.**
-     The *pairing* is settled (twenty-fifth pass, confidence 86): HD publishes
-     the Zone parameters twice and the two publications are one routine with
-     two prologues, sharing their tail. One prologue binds `zoneMode*` beside
-     the `Scene.*` colours, the other `zoneModeTrack*` beside the `Track.*`
-     ones - so "which texture set" and "which colour group" are a single
-     choice. Reading, confidence 78: `Scene` is scenery, `Track` is the track
-     surface. `oag_render` binds the track set, so it now takes
-     `Track.Texture Colour`, which matters: `Start` authors `Scene` black and
-     `Track` at `9.0`. **What is left open is only which prologue a given draw
-     enters through**, and that needs control-flow reconstruction over
-     `FUN_003ff860` rather than peephole reading.
+  1. ~~Which of the two parallel feeds a material sees~~ **Answered,
+     2026-09-03 - and the framing was wrong.** The pairing (twenty-fifth
+     pass, confidence 86: `zoneMode*`/Scene and `zoneModeTrack*`/Track are
+     a single choice, not two independent feeds) still stands. What doesn't
+     is "which prologue a draw enters through" - `FUN_003ff860` has no
+     second entry point at all. It's a **loop** over a per-context table of
+     draw entries, and each entry's own flag bit picks Scene or Track for
+     that entry, cached per call so the underlying parameter block is
+     written at most once per group. Confidence 80 on the mechanism
+     (control-flow-reconstructed decompile, offsets cross-checked against
+     the twenty-second pass's own parameter formula); confidence 55 on what
+     the flag bit means about the entry (plausibly per-material, not traced
+     to the `.rcsmaterial` compiler to confirm). Full trace: twenty-eighth
+     pass of
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+     `oag_render` binds the track set unconditionally, which matters: `Start`
+     authors `Scene` black and `Track` at `9.0`, and this pass doesn't
+     change which one a port should bind - it explains the mechanism the
+     disc itself uses to choose, for whoever wires per-material selection
+     later.
   2. **`zoneOrigin` (`0x00c81550`) - writer found, 2026-09-03; the radius is
      the one piece still open.** `Scene_PrepareFrame` writes it every frame,
      one call frame above `Environment_UpdateStageBlend` (which is why the
@@ -804,16 +815,13 @@ no longer disagree.
   next step in that direction is the *selection*, not the layout: read which of
   the eight parameter publishers a material's draw goes through, the same
   question that decides `zoneMode*` versus `zoneModeTrack*`.
-- **Settle whether the two Zone publications are sequential or alternative** -
-  and note the question is *not* "which branch chooses". Neither prologue in
-  `FUN_003ff860` has a guarding branch; both are reached by fall-through, with
-  only a local null check on the texture handle in between. So they are more
-  likely two draw states built one after the other. The concrete check: both
-  publish through `*(*(arg0) + 0xd8)`, so establish whether `*(arg0)` is the
-  same object at `0x400348` and `0x4007d8`. Confidence 60 on the sequential
-  reading; recorded so the next reader does not repeat the search for a
-  selector that is not there. Each of the seven publishers has exactly one
-  direct caller, so the split is inside each publisher, not between them.
+- ~~Settle whether the two Zone publications are sequential or
+  alternative~~ **Answered, 2026-09-03, and it was neither.** Both readings
+  assumed `FUN_003ff860` is entered once per draw and chooses a path. It
+  isn't - it loops over a per-context draw-entry table, and each entry's
+  own flag bit independently picks Scene or Track, cached so the
+  underlying parameter block writes at most once per group per call. See
+  the corresponding item in `## Open` above.
 - ~~Find `zoneOrigin`'s writer, or establish it has none~~ **Found,
   2026-09-03** - one call frame above `Environment_UpdateStageBlend`, in
   `Scene_PrepareFrame`. See the corresponding item in `## Open` above. What

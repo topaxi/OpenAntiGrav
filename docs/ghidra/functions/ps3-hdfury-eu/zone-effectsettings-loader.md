@@ -4367,6 +4367,95 @@ llvm-objdump -d --mcpu=pwr6 --start-address=0x3ad830 --stop-address=0x3ad8e0 $EL
 
 None - see "What this does not settle" above.
 
+## 2026-09-03, a twenty-eighth pass: `FUN_003ff860`'s "two prologues" are one loop's own per-entry branch, not two entry points a caller picks between
+
+The twenty-fifth pass framed the open question as "which of the two parallel
+feeds a material sees" and flagged it as needing full control-flow
+reconstruction - "not attempted; no claim made." This pass reconstructs it,
+by decompiling the whole function rather than the peephole reads the rest of
+this page relies on. Now that the TOC defect is fixed image-wide (this page's
+own earlier section), a 1,130-instruction function decompiles cleanly enough
+to read as one piece.
+
+**The premise was wrong in a useful way.** `FUN_003ff860` is not two entry
+points - it has exactly one, and no caller was ever found because it needs
+none: it is a **loop** over a per-context draw-entry table, and the "two
+prologues" (block 1 at `0x400358`, block 2 at `0x4007ec`) are both reachable
+from **every** iteration, chosen by a bit each entry carries.
+
+```c
+puVar36 = (ushort *)(PTR_DAT_008b8264 + 0x491f8);          // table base
+local_e0 = base + count * 6;                                 // 6 bytes/entry
+do {
+    uVar5  = puVar36[0];              // an index into a per-effect array
+    uVar6  = puVar36[1];              // a sub-index
+    uVar20 = puVar36[2] >> 1;         // this entry's own flag word
+    ...
+    if ((uVar20 & 1) == 0) {          // bit 1 of the raw flag word
+        if (local_b0 != 2) {          // publish Scene once per call
+            ... g_ZoneStageTextures, PTR_DAT_008b82e0.. (block 1's own constants)
+            local_b0 = 2;
+            goto LAB_00400560;        // the shared tail (0x400560)
+        }
+    } else if (local_b0 != 1) {       // publish Track once per call
+        ... g_ZoneStageTrackTextures, PTR_DAT_008b82e8.. (block 2's own constants)
+        local_b0 = 1;
+        goto LAB_00400560;
+    }
+    ...
+    puVar36 += 3;
+} while (puVar36 < local_e0);
+```
+
+Three things this settles:
+
+1. **The choice is per draw-table entry, not per call.** Each entry's own
+   third `u16` carries the Scene/Track bit; a single call to
+   `FUN_003ff860` can and does see both kinds of entry as it walks the
+   table.
+2. **`local_b0` is a publish-once cache, not a state machine choosing
+   between alternatives.** Once either group has been written this call, a
+   further entry wanting the *same* group skips straight past the `if` and
+   falls through to the entries' own per-entry work below the shared tail -
+   the underlying global parameter block is written at most once per group
+   per call, however many entries want it.
+3. **The Scene/Track constants match the already-named globals exactly.**
+   Block 1 loads from `PTR_DAT_008b82e0`..`PTR_DAT_008b8320`-shaped
+   pointers ending in `g_ZoneStageTextures` (`0x00c81368`); block 2's
+   mirror ends in `g_ZoneStageTrackTextures` (`0x00c813e0`) - the same
+   texture-set split this project already had from the file side, now
+   traced to the exact branch that picks between them. The offsets both
+   blocks write (`0x6b8`, `0x6d8`, `0x6f8`, `0x718`, `0x738`, `0x758`,
+   `0x878`) land exactly on the twenty-second
+   pass's own `N*0x20+0x18` value-pointer formula for parameters 53-58 and
+   67 - independent confirmation that this is the same publication
+   mechanism that page already measured, seen this time from the branch
+   that decides which half runs.
+
+**What this does not settle.** What the flag bit *means* about the entry -
+whether it is authored per material, per surface type, or something else -
+is not traced past "bit 1 of a `u16` this project has not otherwise
+attributed." The table itself (`PTR_DAT_008b8264 + 0x491f8`, length from
+`PTR_DAT_008b8264 + 0x4f1f8`) is read only for its shape, not identified as
+belonging to a named subsystem. Confidence **80** on the loop/branch
+structure and the offset cross-check; confidence **55** on "the bit is an
+authored per-material choice" - plausible given
+[zone-shader.md](zone-shader.md)'s own finding that materials compile in two
+distinct shapes, but not traced back to the `.rcsmaterial` compiler to
+confirm it is the *same* choice.
+
+Also settles, in passing: the "sequential, not chosen between" reading the
+twenty-fifth pass carried at confidence 60 was right about the *mechanism*
+(no guarding branch between the two blocks) for the wrong reason (it is not
+that both always run in one call - it is that either can run on any given
+iteration, and the loop's own entries decide which, independently of
+control flow between the two blocks themselves).
+
+### Names applied
+
+None. The table at `PTR_DAT_008b8264 + 0x491f8` and its flag-bit convention
+are read only for their shape.
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
