@@ -235,3 +235,6 @@
 0x0013d520	function	LeachBeamManager_Construct	85	weapons.md
 0x00113288	function	EMPManager_Construct	85	weapons.md
 0x00118dc0	function	LightBarrierManager_Construct	85	weapons.md
+0x0025a8b0	function	TrackSelectionScreen_RegisterType	82	track-selection-screen.md
+0x0025a0b8	function	TrackSelectionScreen_OnConfirm	80	track-selection-screen.md
+0x0025d070	function	TrackSelectionScreen_OnEnter	68	track-selection-screen.md

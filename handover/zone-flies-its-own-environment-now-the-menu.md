@@ -62,5 +62,65 @@ same way and there is now none pointing the other way.
 ## Next Steps
 
 - ~~Wire `zonemode.effectsettings`/`zonemodedlc3.effectsettings` into rendering for the ordinary circuits now offered~~ **Done, landed on the sibling thread, not this one.** `2048-and-hd-ship-an-unread-effectsettings-table.md` records the render-application half landing 2026-08-30 ("a Zone race now grades its circuit off this table") and the HD trigger closing 2026-08-31 (`oag_hd::race::ZONE_STAGES`, "an HD Zone race escalates its colour grade"). That thread is now twenty-plus Ghidra passes deep into a single narrow shader-parameter question (which of two parallel publications a given material draw enters through) and blocked on vector-store write watchpoints in the patched RPCS3 build - not something to wander into from here.
-- ~~Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true`~~ **Reframed, 2026-09-03: there is no dedicated screen to decompile** (see the new section above) - the open question is who populates the *shared* `Track` list's contents for `Mode=Zone`, and the fastest route to an answer is the `rpcs3-drive.py browse` capture above, once `/dev/uinput` is fixed on this machine. Two independent play recollections now agree with the wide reading and none disagrees, so this is lower priority than it was - worth closing when the machine fix happens anyway, not worth a dedicated session. A Ghidra dig (find the `Track` list's population/filter code) is the fallback if the capture is ever ambiguous, not the first move - this front-end subsystem is completely unexplored in the Ghidra project (one named function total) and would be a fresh, unbounded search otherwise.
+- ~~Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true`~~ **Reframed, 2026-09-03: there is no dedicated screen to decompile** (see the new section above) - the open question is who populates the *shared* `Track` list's contents for `Mode=Zone`. **A first Ghidra dig happened this session and did not settle it** - see the new section below. The `rpcs3-drive.py browse` capture is still the fastest route to a decisive answer, once `/dev/uinput` is fixed on this machine; two independent play recollections already agree with the wide reading and none disagrees.
 - The remaining two Open items above are both read-the-executable work - the `%s\%strack%s.vex` selector branch and HD's own Zone-counter widgets - not an engine change with a next step to name yet.
+
+## 2026-09-03, a Ghidra dig into the front end: `TrackSelection_Screen` found and read, no mode filter located in it
+
+First pass into this binary's front-end/GUI layer at all (previously one named function
+total, `FrontendRoot_Construct`). Full evidence and three new names on
+[`docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`](../docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
+
+Found the C++ class implementing the `Track Creation` screen (`TrackSelection_Screen`,
+via the same `.cpp`-filename-allocator-tag trick `memory.md`/`mode-manager.md` already
+established) and read its constructor pair, static type-registrar, `OnConfirm` handler
+(confirmed: persists the selected row into game state keyed by the literal string
+`"Track"`), and what is very likely its `OnEnter`/show handler (`_q`-suffixed, 68 -
+reached only via an indirect vtable slot, no direct caller to confirm *when* it fires).
+
+**The `OnEnter` candidate builds a fixed 32-row visual widget pool and, separately, reads
+an already-resolved item count off the Track list widget object - it does not compute or
+filter that count itself, and no mode/Zone check appears anywhere in the population
+loop.** The only Zone-adjacent code found anywhere in this class reads `g_GameState`'s
+mode field for two purely cosmetic decisions (hiding one unidentified sub-widget for
+Zone-Battle/Elimination specifically, and picking which record-panel labels to draw for
+the focused row) - never for which tracks are listed. So: the actual population/binding
+of the Track list's contents is **not in `TrackSelection_Screen`'s own code** - it is
+either inside a generic, shared `List`-widget framework class (unexplored, no name or
+string handle found yet - this would be a fresh, unbounded search, the framework layer
+underneath every screen's `<List>`, not just this one), or primed by something upstream of
+this screen's construction. `RaceBox_Screen` (the `Single Player` screen, where `Mode` is
+actually chosen) was checked lightly and ruled out as the filter site too - its "confirm"
+handler reads the final Mode/Track/laps selections to derive weapon-class/HUD flags for
+race launch, not to populate a list.
+
+**Net effect on confidence: unchanged (94), but the shape of the remaining uncertainty
+narrowed.** Absence of a filter in the one class that plausibly would have carried it is
+consistent with the wide `also_race_circuits: true` reading (nothing here would produce a
+narrower Zone-only list), but it is not proof - the generic List-widget framework is still
+unread and could yet carry mode-aware filtering the screen-level code never touches.
+
+**A new, unrelated trap surfaced and is recorded in the scratchpad in full**: this
+`ghidra-mcp` instance is shared across concurrent sessions, and `switch_program` sets a
+global pointer any concurrent call can move - three renames without an explicit `program`
+argument silently "succeeded" against a different, wrong program (`ps2-pulse-eu`, not
+`ps3-hdfury-eu`) before this was caught by a follow-up `get_current_program_info` check
+and redone correctly with `program` passed explicitly on every mutating call. All three
+renames now verified landed on `ps3-hdfury-eu`.
+
+Working notes with every address checked and every dead end: not committed
+(untracked scratchpad, deleted along with this thread file when the work lands, per this
+project's own convention for `handover-scratch/`-style working files) -
+`handover-scratch/hd-zone-tracklist-re-notes.md` in the worktree this session ran in, for
+anyone picking this up in the same checkout.
+
+**Next concrete lead**: find the generic `List`-widget framework class's own item-count /
+data-binding code. No name or string handle for it is known yet - the search would start
+from the vtable read technique this page's evidence used (`PTR_PTR_008b1ecc` and its
+neighbouring shared slots, which are the *inherited*, not per-screen, methods this pass
+deliberately skipped over), or from a fresh string search for whatever XML attribute name
+racebox_definition.xml's `<List>` elements use to name their data source (not yet grepped
+against the disc's own `racebox_definition.xml` for a `Data=`/`Source=`-shaped attribute).
+Otherwise, the `rpcs3-drive.py browse` capture already written above remains the direct
+route once the machine's `/dev/uinput` permission is fixed - still the faster and more
+decisive path if a maintainer's session has that fixed before the next Ghidra pass.
