@@ -105,7 +105,7 @@ The `0x50` header, as far as it is read:
 | `+0x0c`..`+0x24` | bounding box, min then max, packed 3+3 floats | a real box on 129/129 |
 | `+0x24` | `u32` `5` | **129/129** |
 | `+0x28` | `f32` `1.0` | **129/129** |
-| `+0x30`..`+0x50` | the same box again as two padded `vec4`s | 97/129; what the other 32 hold there is open |
+| `+0x30`..`+0x50` | a **shadow-purpose** box: `min.y` floored to the ground plane, `max` patched where the packed box is invalid | 97/129 match the packed box exactly; the other 32 are explained on the named population (`Shadow_RenderOccluderVolume` reads this one, not the packed one, for exactly this reason), open on the 10 unnamed/track-side nodes' `X`/`Z` handling - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
 | `+0x50` | `n` records of 32 bytes, **each beginning with a unit vector** | 129/129 |
 | `+0x50 + 32n` | `m` records of 16 bytes; not unit, not points inside the box | open |
 

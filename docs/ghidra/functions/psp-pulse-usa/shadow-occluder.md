@@ -59,6 +59,41 @@ reads them was already strong evidence on its own; the class-ID dispatch
 chain traced below (registration call site to method-table slot) confirms it
 statically rather than by structural inference alone.
 
+### Why it reads the padded box and not the packed one
+
+The 32 nodes where `+0x30`/`+0x40` does *not* just repeat `+0x0c`/`+0x18`
+were unread until 2026-09-03. They are not noise:
+
+- **On the 119-strong named/local-space population, `+0x30`'s `min.y`
+  always equals `f32::min(header_min.y, 0.0)`** - floored to the ground
+  plane on Y even when the hull's own geometry sits entirely above it (a
+  locator-mounted craft shadow shape, say). A raw copy of the hull's own
+  extent would not give `Shadow_RenderOccluderVolume` a box that reaches the
+  ground; this one does. Where `+0x18`'s `max.y` is the denormal authoring
+  sentinel `0x00800000` (the same one `BEData.wad#20`'s flat hull declares,
+  already known from the payload-closure work), `+0x40`'s `max.y` carries
+  the true vertex-derived value instead of repeating the sentinel - a fix,
+  not a copy.
+- **The 10 unnamed, track-side occluders don't follow that rule on X/Z.**
+  Where their header carries the same denormal sentinel on those axes, the
+  padded copy is a hard `0.0`, not the vertex-derived value the named
+  population gets. Some of these have as few as two face records, which may
+  mean they are not full closed hulls in the same sense - not chased
+  further.
+
+So the padded field this function reads is a **shadow-purpose box**, not a
+geometry cache: floored to the ground on the vertical axis, and patched
+where the packed header's own box is invalid. That is exactly the box a
+support-point step for a ground-projected shadow volume wants, and it is
+further, independent evidence that `self+0x50`'s structure really is this
+payload and that this function really is what consumes it for shadow
+purposes specifically - a generic bounding-box reader would have no reason
+to prefer the ground-floored copy over the packed one. See
+`PSP_OCCLUDERS_WITH_PADDED_BBOX`'s doc comment in
+[`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)
+for the read; not pinned as an assertion there, since the split depends on
+`vertex_extent`'s own correctness and would be circular as a test.
+
 ## What it does
 
 1. **Builds the node's own world matrix** from `self+0x30` (a source 4x3/4x4
@@ -207,3 +242,8 @@ asserted either way.
 - **No runtime trace exists for any of this.** A PPSSPP watchpoint on
   `self+0x50` during a lap that passes a known occluder-bearing circuit
   section would be the fastest way into the 95-100 band.
+- **The 10 unnamed/track-side occluders' `X`/`Z` padding rule.** They hard-zero
+  a denormal axis rather than substituting the vertex-derived value the named
+  population gets; not explained, and it may mean these low-face-count hulls
+  (`n=2` on at least two) aren't full closed hulls in the sense the named
+  population's are.

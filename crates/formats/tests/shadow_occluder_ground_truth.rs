@@ -115,9 +115,28 @@ const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 
 /// How many repeat their bounding box as two padded `vec4`s at `+0x30`.
 ///
-/// **Not all of them**, which is the interesting part: what the other 32 carry
-/// there is unread. Pinned so that a decode which explains them shows up as
-/// this number moving.
+/// **Not all of them, and the 32 that don't are not noise.** Read by hand,
+/// 2026-09-03 (not asserted here - the exact split would make this test
+/// depend on `vertex_extent`'s own correctness circularly):
+///
+/// - On the 119-strong named/local-space population, `+0x30`'s `min.y`
+///   always equals `f32::min(header_min.y, 0.0)` - the padded box is
+///   floored to the ground plane on Y even when the hull's own geometry
+///   sits entirely above it, which is exactly what a shadow volume that has
+///   to reach the ground needs and a raw copy of the hull's own extent does
+///   not give it. Where `+0x18`'s `max.y` is the denormal authoring
+///   sentinel `0x00800000` (the same one `BEData.wad#20`'s flat hull
+///   declares), `+0x40`'s `max.y` carries the true vertex-derived value
+///   instead of repeating the sentinel - a fix, not a copy.
+/// - The 10 unnamed, track-side occluders (some with as few as two faces)
+///   do not follow that rule on `X`/`Z`: where their header carries the
+///   same denormal sentinel on those axes, the padded copy is a hard
+///   `0.0`, not the vertex-derived value. Not explained.
+///
+/// See `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the
+/// full readout - `Shadow_RenderOccluderVolume` reads this exact field to
+/// pick a support point, which is why it wants the ground-floored box
+/// rather than the packed one at `+0x0c`/`+0x18`.
 const PSP_OCCLUDERS_WITH_PADDED_BBOX: usize = 97;
 
 /// Every distinct node name across the named population, sorted.
