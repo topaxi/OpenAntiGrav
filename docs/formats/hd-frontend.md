@@ -347,6 +347,54 @@ the disc's strings joined, rather than a word this build made up, and nothing
 at all on either PSP title, whose tables already name the two directions
 separately.
 
+## Zone is a `Mode` list entry, not a separate screen - and the walk that would settle whether it widens is blocked on hardware access
+
+**Confidence 94 (authored value, per this page's own cap) - 2026-09-03.**
+`data/plugins/frontend/gui/racebox_definition.xml`'s `Single Player` screen
+(reached from `Main Menu`'s `FE_RACEBOX` tab) carries one `<List name="Mode">`
+with five entries - `Arcade`, `Time Trial`, `Speed Lap`, `Tournament`, `Zone` -
+and one `<Redirect>`: `Tournament` alone branches, to `Tournament C`; every
+other choice, `Zone` included, falls through the same `Default goto="Track
+Creation"`. There is no `ZoneTrackSelection` screen type and no Zone-specific
+branch in this redirect - whatever circuits Zone mode offers, it offers them
+through the identical `Track Creation` carousel every other single-player mode
+uses, the one [measured against the real front end above](#a-circuits-name-is-in-a-different-archive-from-the-circuit-list).
+That carousel's own `<List name="Track">` block authors a `Padlock` and three
+`ReverseIcon*` images per row and nothing else - no Zone-only pendant or badge
+widget is declared in the layout at all.
+
+**What this does and does not settle.** It rules out the shape where Zone gets
+its own dedicated, narrower screen - a real alternative that had to stay open
+when `oag_title::ZoneCircuit::Separate`'s `also_race_circuits: true` was
+implemented from a play recollection, not a decompile or a capture. It
+does **not** settle what the shared `Track` list's *contents* are once `Mode`
+is `Zone` - that is built by code this project has not located (the only named
+front-end function anywhere in this database is `FrontendRoot_Construct`,
+`game-boot.md`; nothing about list population or per-row mode filtering has
+been read), and the one existing capture of this exact carousel
+(`#a-circuits-name-is-in-a-different-archive-from-the-circuit-list`, above)
+walked it **without ever selecting Zone mode**, so its "only 24 base entries,
+wrapped" result describes Arcade's list, not Zone's, and settles nothing about
+whether Zone widens to all 28 or narrows to its own four.
+
+**The walk that would settle it directly is written and currently blocked, not
+run.** `scripts/rpcs3-drive.py browse --nav "Main Menu=right" --nav "Single
+Player=down,down,down,down,cross" --screen "Track Creation" --button right
+--steps 28` would select `Zone` in the `Mode` list (four `down`s off its
+`default="Arcade"`) before confirming into the same carousel the existing
+capture already knows how to read, and either result is decisive: four rows
+naming `PRO TOZO`/`MALLAVOL`/`CORRIDON 12`/`SYNCOPIA` and nothing else settles
+`Separate`-only; 28 rows including all twelve ordinary environments
+corroborates `also_race_circuits: true` outright. It has not been run this
+session: `just rpcs3-preflight` reports `/dev/uinput` is mode `0600` group
+`root` with no udev rule granting it to a group, and `sudo -n true` confirms
+no passwordless sudo is available, so the one-time fix
+(`echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee
+/etc/udev/rules.d/99-uinput.rules && sudo udevadm control --reload-rules &&
+sudo udevadm trigger /dev/uinput`) needs the machine's own user, not a
+session running unprivileged. This is a one-time, per-machine fix - once
+applied, the walk above is the whole remaining step.
+
 ## Sixteen languages, four of which the disc misnames
 
 All sixteen plugins parse. Fifteen did until 2026-08-18, and the sixteenth was

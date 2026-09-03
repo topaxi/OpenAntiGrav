@@ -16,8 +16,37 @@
 
 **2026-08-28, same session, later still: the pendant question is implemented, on the user's explicit call to do so without the executable read first - and the "Moa Therma isn't on HD" claim two paragraphs up is wrong, corrected here.** Checking it required looking a `PI_Track` id up in the *right* string table, not guessing from its directory name: HD's own `03_Track` (a numerically-named, non-descriptive folder, unlike `15_Anulpha_Pass`) resolves to `MOA THERMA` against `DATA06`'s `entries.xml` - the copy that names all 28 ids, per `oag_game::language::CircuitNames`'s own docs. It is on HD/Fury after all, plainly missed by grepping the disc's folder names for a substring instead of reading the id through the string table the game itself uses. Two things corroborate the wider mechanism this session then implemented: first, the four `zone="true"` circuits are not generic placeholders either - read the same way, `25_Track`..`28_Track` are **Pro Tozo, Mallavol, Corridon 12 and Syncopia**, four real, distinct tracks that never carry a `reversed="true"` sibling the way all twelve ordinary circuits do, consistent with being Zone-exclusive rather than a substrate an effect would run over. Second, `zonemode.effectsettings` is real, title-wide, unread content already found on this thread's sibling. `oag_title::ZoneCircuit::Separate` now carries a second field, `also_race_circuits: bool` - `false` on Pure (still exactly its own four, verified), `true` on HD (unverified: `menu_tracks` appends every ordinary race circuit after the four zone-exclusive ones, and `variant_of` stops substituting entirely on this title, so picking Anulpha Pass in Zone mode now races Anulpha Pass itself rather than being silently rewritten to `Zone_1` - the load-time half of the fix, without which a widened menu would have quietly lied about what it would race, the exact bug class `variant_of`'s own fix closed for the narrow case). Ten `zone_ground_truth` tests and the full `just` gate pass against the real discs, including a new HD-specific load test proving the geometry is genuinely unsubstituted. **This is explicitly the unverified branch of the fork the paragraph above left open** - no executable selector was read, no `zonemode.effectsettings` was wired into rendering, and the confidence this carries is a play-based recollection plus two corroborating disc facts, not a decompiled dispatch. See `2048-and-hd-ship-an-unread-effectsettings-table.md`'s Open item for exactly what would raise it.
 
+**2026-09-03: `also_race_circuits: true` is narrowed but still unverified - the front end's own layout rules out one whole shape, and the walk that would settle the rest is written and blocked on machine setup, not on this session.** Full account and the exact confidence in
+[hd-frontend.md](../docs/formats/hd-frontend.md#zone-is-a-mode-list-entry-not-a-separate-screen---and-the-walk-that-would-settle-whether-it-widens-is-blocked-on-hardware-access);
+summary here. `racebox_definition.xml`'s `Single Player` screen puts `Zone` in
+the same five-entry `Mode` list as `Arcade`/`Time Trial`/`Speed Lap`/`Tournament`,
+and its `Redirect` sends every mode but `Tournament` to the identical `Track
+Creation` screen - **no dedicated Zone circuit-select screen exists**, and the
+shared `Track` list's own layout authors a `Padlock` and `ReverseIcon`s per row,
+no Zone pendant/badge widget. That rules out a structurally separate,
+narrower Zone screen (a real alternative this thread's `also_race_circuits`
+guess had to leave open). It does **not** settle what the shared list's
+*contents* are once `Mode` is `Zone` - the code that builds/filters that list
+is unlocated (this Ghidra database names exactly one front-end function,
+`FrontendRoot_Construct`), and the one existing capture of this carousel
+(`hd-frontend.md`'s `DATA06` section) walked it without ever selecting `Zone`,
+so it describes Arcade's list, not Zone's. **The decisive experiment is an
+emulator capture, not a decompile, and it is already written**:
+`scripts/rpcs3-drive.py browse --nav "Main Menu=right" --nav "Single
+Player=down,down,down,down,cross" --screen "Track Creation" --button right
+--steps 28` selects `Zone` (four `down`s off the list's `default="Arcade"`)
+then walks the exact carousel already known how to read. **Blocked this
+session on `/dev/uinput` permissions**, not a repository or code problem:
+`just rpcs3-preflight` reports it mode `0600` group `root` with no udev rule,
+and `sudo -n true` confirms no passwordless sudo, so the one-time fix
+(`echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee
+/etc/udev/rules.d/99-uinput.rules && sudo udevadm control --reload-rules &&
+sudo udevadm trigger /dev/uinput`) needs the machine's own user to run it
+once. After that, running the command above and reading `data/` for either
+four rows or 28 closes this thread's central open question outright.
+
 ## Next Steps
 
 - ~~Wire `zonemode.effectsettings`/`zonemodedlc3.effectsettings` into rendering for the ordinary circuits now offered~~ **Done, landed on the sibling thread, not this one.** `2048-and-hd-ship-an-unread-effectsettings-table.md` records the render-application half landing 2026-08-30 ("a Zone race now grades its circuit off this table") and the HD trigger closing 2026-08-31 (`oag_hd::race::ZONE_STAGES`, "an HD Zone race escalates its colour grade"). That thread is now twenty-plus Ghidra passes deep into a single narrow shader-parameter question (which of two parallel publications a given material draw enters through) and blocked on vector-store write watchpoints in the patched RPCS3 build - not something to wander into from here.
-- Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true` against the executable rather than a recollection - the loader trail for `zonemode.effectsettings` is already found and stuck on a TOC defect, per the same thread. **2026-09-03: the TOC defect itself is a separate, already-fixed thing (`memory.md`, fixed project-wide 2026-08-28) - the "stuck" note here is about a *different*, still-unfound function (whoever populates HD's Zone-mode track list), not the general per-function TOC issue.**
+- ~~Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true`~~ **Reframed, 2026-09-03: there is no dedicated screen to decompile** (see the new section above) - the open question is who populates the *shared* `Track` list's contents for `Mode=Zone`, and the fastest route to an answer is the `rpcs3-drive.py browse` capture above, once `/dev/uinput` is fixed on this machine. A Ghidra dig (find the `Track` list's population/filter code) is the fallback if the capture is ambiguous, not the first move - this front-end subsystem is completely unexplored in the Ghidra project (one named function total) and would be a fresh, unbounded search otherwise.
 - The remaining two Open items above are both read-the-executable work - the `%s\%strack%s.vex` selector branch and HD's own Zone-counter widgets - not an engine change with a next step to name yet.
