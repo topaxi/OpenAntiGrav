@@ -34,7 +34,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::{collision, track, vex};
+use oag_formats::{collision, fexml, fog, track, vex};
 
 const PURE: &str = "data/images/pure-psp-usa.chd";
 const PULSE: &str = "data/images/pulse-psp-usa.chd";
@@ -451,4 +451,179 @@ fn the_predicted_classes_are_in_pures_own_files() {
         .is_empty(),
         "no Ship Collision Fx locators"
     );
+}
+
+/// Every circuit Pure's own front-end plugin declares, as `.vex` entry names.
+///
+/// Read off the disc rather than listed here, for the same reason
+/// `collision_classes_ground_truth.rs`'s own `circuits` helper is: a track
+/// list in this repository would be shipped content.
+fn circuits(archives: &mut oag_assets::Archives) -> Vec<String> {
+    let Ok(blob) = archives.read_name(oag_pure::names::GAME_PLUGIN_DEFINITION) else {
+        return Vec::new();
+    };
+    let Ok(xml) = fexml::text(&blob) else {
+        return Vec::new();
+    };
+    let root = fexml::parse(&xml);
+    let mut out = Vec::new();
+    fn collect(node: &fexml::Node, out: &mut Vec<String>) {
+        if node.name.eq_ignore_ascii_case("PI_Track") {
+            for child in &node.children {
+                if let Some(location) = child.value("location") {
+                    out.push(format!(r"{location}\track.vex"));
+                }
+            }
+        }
+        for child in &node.children {
+            collect(child, out);
+        }
+    }
+    collect(&root, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `airbrake` and `lod_group`, structurally recovered (2026-09-03): neither is
+/// in the class-name table's string run, so neither could be checked by table
+/// index. Six of Pure's eight team ships are reachable on this pressing under
+/// the Pulse-derived directory names - the other two are an open naming
+/// question, not evidence against the ids - and every reachable one carries
+/// the exact node shape `crates/render/src/mesh.rs` already assumes: two
+/// `0x377` nodes named `Airbrake_Left`/`Airbrake_Right` (case-insensitively),
+/// each with one `Mesh` child, and one `0x2de` node named for a `LodGroup`
+/// with exactly two `Transform` children. See `vex::classes::V4`'s own field
+/// comments for the confidence scores.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn airbrake_and_lod_group_are_on_every_reachable_pure_ship() {
+    let Some(source) = image(PURE) else { return };
+    let mut archives = oag_pure::open(&source).expect("Pure's disc opens as Pure");
+    let v4 = vex::classes::V4;
+    let airbrake = v4.airbrake.expect("recovered");
+    let lod_group = v4.lod_group.expect("recovered");
+
+    let mut ships_checked = 0;
+    for team in oag_pulse::race::TEAMS {
+        let ship = oag_pulse::race::ships::entry_name(team, "Ship");
+        let Ok(blob) = archives.read_name(&ship) else {
+            continue;
+        };
+        let nodes = vex::nodes(&blob).unwrap_or_else(|e| panic!("{ship}: {e}"));
+
+        let brakes: Vec<_> = nodes.iter().filter(|n| n.class_id == airbrake).collect();
+        assert_eq!(brakes.len(), 2, "{ship}: expected one Airbrake pair");
+        for brake in &brakes {
+            let name = brake.name.as_deref().unwrap_or_default();
+            assert!(
+                name.eq_ignore_ascii_case("Airbrake_Left")
+                    || name.eq_ignore_ascii_case("Airbrake_Right"),
+                "{ship}: {name:?} is not an airbrake side name"
+            );
+            assert_eq!(
+                brake.child_count, 1,
+                "{ship}: {name:?} should hang one flap Mesh"
+            );
+        }
+
+        let lods: Vec<_> = nodes.iter().filter(|n| n.class_id == lod_group).collect();
+        assert_eq!(lods.len(), 1, "{ship}: expected exactly one LodGroup");
+        assert_eq!(
+            lods[0].child_count, 2,
+            "{ship}: LodGroup should hold detail + alternate"
+        );
+
+        ships_checked += 1;
+    }
+    assert!(
+        ships_checked >= 6,
+        "expected at least 6 of Pure's ships to be reachable"
+    );
+}
+
+/// `fogcube`, structurally recovered (2026-09-03): also outside the string
+/// run. Every fogcube instance across every circuit that authors one decodes
+/// to [`fog::PAYLOAD_LEN`] bytes with `edge == 500.0` - the exact figure
+/// `oag_formats::fog`'s own doc comment already records for Pulse.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn fogcube_decodes_to_the_same_edge_length_pulse_authors() {
+    let Some(source) = image(PURE) else { return };
+    let mut archives = oag_pure::open(&source).expect("Pure's disc opens as Pure");
+    let v4 = vex::classes::V4;
+    let fogcube = v4.fogcube.expect("recovered");
+
+    let circuits = circuits(&mut archives);
+    assert!(!circuits.is_empty(), "Pure declares circuits");
+
+    let mut tracks_with_fog = 0;
+    let mut volumes_seen = 0;
+    for circuit in &circuits {
+        let Ok(blob) = archives.read_name(circuit) else {
+            continue;
+        };
+        let nodes = vex::nodes(&blob).unwrap_or_else(|e| panic!("{circuit}: {e}"));
+        let volumes = fog::volumes(&blob, &nodes);
+        if volumes.is_empty() {
+            continue;
+        }
+        tracks_with_fog += 1;
+        for volume in &volumes {
+            assert_eq!(
+                volume.edge, 500.0,
+                "{circuit}: fogcube edge should match Pulse's own"
+            );
+            assert!(volume.near_end.near.is_finite() && volume.near_end.far.is_finite());
+            volumes_seen += 1;
+        }
+        let raw_nodes = nodes.iter().filter(|n| n.class_id == fogcube).count();
+        assert_eq!(
+            raw_nodes,
+            volumes.len(),
+            "{circuit}: every fogcube node should decode"
+        );
+    }
+    assert!(
+        tracks_with_fog >= 7,
+        "expected at least 7 circuits to author a fogcube"
+    );
+    assert!(volumes_seen >= 10);
+}
+
+/// `anim_transform`, recovered by the table index (2026-09-03) like the ten
+/// ids above it but never checked against real data before now: every
+/// `0x372` node across every one of Pure's 16 shipped circuits - 332 in
+/// total - parses as a valid [`vex::anim_transform`] payload, a decoder that
+/// fails loudly on a key array running past the payload's own end.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn anim_transform_parses_on_every_pure_circuit() {
+    let Some(source) = image(PURE) else { return };
+    let mut archives = oag_pure::open(&source).expect("Pure's disc opens as Pure");
+    let v4 = vex::classes::V4;
+    let anim_transform = v4.anim_transform.expect("recovered");
+
+    let circuits = circuits(&mut archives);
+    assert!(!circuits.is_empty(), "Pure declares circuits");
+
+    let mut total = 0;
+    let mut parsed = 0;
+    for circuit in &circuits {
+        let Ok(blob) = archives.read_name(circuit) else {
+            continue;
+        };
+        let nodes = vex::nodes(&blob).unwrap_or_else(|e| panic!("{circuit}: {e}"));
+        for node in nodes.iter().filter(|n| n.class_id == anim_transform) {
+            total += 1;
+            if vex::anim_transform_of(&blob, node).is_some() {
+                parsed += 1;
+            }
+        }
+    }
+    assert!(
+        total >= 300,
+        "expected several hundred Anim Transform nodes, found {total}"
+    );
+    assert_eq!(parsed, total, "every Anim Transform node should parse");
 }
