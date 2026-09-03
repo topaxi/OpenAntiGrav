@@ -2208,6 +2208,33 @@ own semantics in that instance are not actually a cross-vector dot. Leaving
 possibly-wrong reading - is the correct choice until `op3B` itself resolves,
 not a gap to route around.
 
+**The 96 % `specular_exponent_unresolved` fallback rate `Report` now counts
+(2026-09-04) turns out to have a mostly mundane explanation, checked disc-wide
+rather than assumed - `op3B` is a real but minority cause.**
+`crates/render/examples/hd_specular_unresolved_reasons.rs` categorises every
+one of 76,358 fragment blocks: `63.3 %` have an `LG2` whose feeding register
+is not last written by a saturated, literally-named `DP3` (`op3B`-fed among
+them, but not the majority of it - see below); `27.6 %` have no `LG2` at all,
+genuinely no `pow`/`exp` curve; `8.0 %` resolve (matching the six-plus-four
+value population this page already measured, `6,141` blocks exactly); `1.1 %`
+pass the `DP3` gate but still fail (`MUL`/`EX2` absent, `log2(e)`, or dead
+code). **Within the 63.3 %, what actually feeds the `LG2` is mostly ordinary
+arithmetic, not `op3B`**: `ADD`/`MUL`/`MOV`/`TEX`/other named opcodes
+together are roughly three quarters of it, `op3B`/`op3B_SAT` combined only
+`~13.6 %`, and a plain **unsaturated** `DP3` - a real `DP3` by name, only
+missing the saturate bit this gate also requires - `~2.8 %`. `LG2` is a
+general-purpose primitive shared by fog curves, rim falloffs and other
+combines that share the identical `LG2`/`MUL`/`EX2` shape over an unrelated
+saturated dot or none at all (this page's own Zone-rim and `log2(e)`
+exclusions are evidence the bare shape already over-matches), so most of the
+63.3 % reads as "this `LG2` was never a specular term" rather than as further
+confirmed misses. The unsaturated-`DP3` slice is the narrower, better-founded
+candidate for ever widening the gate, but the one block sampled
+(`amphiseum/base_diffusespecular.rcsmaterial`) carries four differently-fed
+`LG2`s in one program - a real per-material read, not a shape assumed to
+generalise, which is exactly what this page's own methodology already insists
+on for every material family it has read so far.
+
 **2. The colour set's fourth byte is that occlusion scalar**, which closes an
 open question above. The vertex program routes `v[colourSet].w` to a spare
 channel - `o[TC5].x`, or `o[TC6].z` on `track_wall` - and the fragment program
