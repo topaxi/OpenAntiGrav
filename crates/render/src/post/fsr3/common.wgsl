@@ -52,9 +52,10 @@ struct Fsr3Constants {
     shading_change_scale: f32,
     accumulation_added_per_frame: f32,
     min_disocclusion_accumulation: f32,
+    // Ours, in upstream's padding - see `constants::Constants::rcas_sharpness`.
+    rcas_sharpness: f32,
     _pad0: f32,
     _pad1: f32,
-    _pad2: f32,
 }
 
 @group(0) @binding(0) var<uniform> constants: Fsr3Constants;
@@ -118,6 +119,7 @@ fn reactiveness_scale() -> f32 { return constants.reactiveness_scale; }
 fn shading_change_scale() -> f32 { return constants.shading_change_scale; }
 fn accumulation_added_per_frame() -> f32 { return constants.accumulation_added_per_frame; }
 fn min_disocclusion_accumulation() -> f32 { return constants.min_disocclusion_accumulation; }
+fn rcas_sharpness() -> f32 { return constants.rcas_sharpness; }
 
 // `Exposure()`, and **a constant one rather than a resource**.
 //
@@ -391,47 +393,59 @@ struct RectificationBox {
     box_center_weight: f32,
 }
 
+// **By value, where upstream takes `inout`.** naga's SPIR-V backend cannot
+// take a `ptr<function, _>` to a struct nested inside another struct - it
+// panics with "Expression is not cached" rather than rejecting the shader - and
+// the rectification box lives inside `AccumulationPassData`. Returning the box
+// is the same arithmetic through a different calling convention; nothing about
+// what these compute changes.
 fn rectification_box_add_initial_sample(
-    b: ptr<function, RectificationBox>,
+    b: RectificationBox,
     color_sample: vec3<f32>,
     sample_weight: f32,
-) {
-    (*b).aabb_min = color_sample;
-    (*b).aabb_max = color_sample;
+) -> RectificationBox {
+    var out = b;
+    out.aabb_min = color_sample;
+    out.aabb_max = color_sample;
 
     let weighted = color_sample * sample_weight;
-    (*b).box_center = weighted;
-    (*b).box_vec = color_sample * weighted;
-    (*b).box_center_weight = sample_weight;
+    out.box_center = weighted;
+    out.box_vec = color_sample * weighted;
+    out.box_center_weight = sample_weight;
+    return out;
 }
 
 fn rectification_box_add_sample(
     initial_sample: bool,
-    b: ptr<function, RectificationBox>,
+    b: RectificationBox,
     color_sample: vec3<f32>,
     sample_weight: f32,
-) {
+) -> RectificationBox {
     if initial_sample {
-        rectification_box_add_initial_sample(b, color_sample, sample_weight);
-    } else {
-        (*b).aabb_min = min((*b).aabb_min, color_sample);
-        (*b).aabb_max = max((*b).aabb_max, color_sample);
-
-        let weighted = color_sample * sample_weight;
-        (*b).box_center += weighted;
-        (*b).box_vec += color_sample * weighted;
-        (*b).box_center_weight += sample_weight;
+        return rectification_box_add_initial_sample(b, color_sample, sample_weight);
     }
+
+    var out = b;
+    out.aabb_min = min(out.aabb_min, color_sample);
+    out.aabb_max = max(out.aabb_max, color_sample);
+
+    let weighted = color_sample * sample_weight;
+    out.box_center += weighted;
+    out.box_vec += color_sample * weighted;
+    out.box_center_weight += sample_weight;
+    return out;
 }
 
-fn rectification_box_compute_variance_box_data(b: ptr<function, RectificationBox>) {
-    var weight = (*b).box_center_weight;
+fn rectification_box_compute_variance_box_data(b: RectificationBox) -> RectificationBox {
+    var out = b;
+    var weight = out.box_center_weight;
     if abs(weight) <= FSR3UPSCALER_FP32_MIN {
         weight = 1.0;
     }
-    (*b).box_center_weight = weight;
-    (*b).box_center /= weight;
-    (*b).box_vec /= weight;
-    let std_dev = sqrt(abs((*b).box_vec - (*b).box_center * (*b).box_center));
-    (*b).box_vec = std_dev;
+    out.box_center_weight = weight;
+    out.box_center /= weight;
+    out.box_vec /= weight;
+    let std_dev = sqrt(abs(out.box_vec - out.box_center * out.box_center));
+    out.box_vec = std_dev;
+    return out;
 }

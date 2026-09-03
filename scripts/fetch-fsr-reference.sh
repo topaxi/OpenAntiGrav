@@ -32,6 +32,10 @@ paths=(
     sdk/include/FidelityFX/gpu/ffx_core_gpu_common_half.h
     sdk/include/FidelityFX/gpu/ffx_core_hlsl.h
     sdk/include/FidelityFX/gpu/ffx_core_portability.h
+    # FSR 1's own header: FSR 3.1's `rcas` pass is FSR 1's RCAS with
+    # `FSR_RCAS_DENOISE` on, so the two ports share a lineage and the denoise
+    # branch lives here rather than in the 3.1 tree.
+    sdk/include/FidelityFX/gpu/fsr1/ffx_fsr1.h
     sdk/include/FidelityFX/gpu/fsr3upscaler/ffx_fsr3upscaler_accumulate.h
     sdk/include/FidelityFX/gpu/fsr3upscaler/ffx_fsr3upscaler_callbacks_glsl.h
     sdk/include/FidelityFX/gpu/fsr3upscaler/ffx_fsr3upscaler_callbacks_hlsl.h

@@ -25,6 +25,7 @@ fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
         camera: camera(),
         delta_time: 1.0 / 60.0,
         reset: true,
+        sharpness: crate::post::fsr1::Sharpness::DEFAULT,
     }
 }
 
@@ -263,11 +264,126 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
         .expect("device poll");
 
     assert_eq!(fsr3.constants().map(|c| c.render_size), Some([64, 32]));
+    // **All eight passes are ported, so there is an output.** This assertion
+    // was the opposite until `rcas` landed: an incomplete chain must hand back
+    // nothing rather than a half-resolved intermediate, because a half-resolved
+    // picture reads as a rendering bug rather than as unfinished work. It flips
+    // with `Pass::ported`, which is what keeps the two honest.
     assert!(
-        fsr3.output().is_none(),
-        "the chain is incomplete, so it must hand back nothing rather than a \
-         half-resolved intermediate - see `Fsr3::output`"
+        fsr3.output().is_some(),
+        "every pass is ported, so the chain must produce a frame"
     );
+}
+
+#[test]
+fn a_jittered_still_scene_converges_on_a_history_it_trusts() {
+    // **The one property that distinguishes a temporal upscaler from a blit**,
+    // and the reason this fixture is the only one that turns jitter on. Without
+    // a sub-pixel offset there is one sample per pixel per frame and nothing to
+    // reconstruct from, so every other test here would report a resolve and a
+    // point sample as identical.
+    //
+    // With jitter, a still scene must *converge*: each frame lands its samples
+    // somewhere new inside each pixel, the history absorbs them, and after a
+    // full sequence the answer stops moving. Two things are asserted:
+    //
+    // 1. The last two frames' outputs agree - accumulation settles rather than
+    //    oscillating, which a wrong history weight would break.
+    // 2. The chain believes it has a deep, trusted history by then: the
+    //    accumulation channel is full, and nothing calls the scene disoccluded
+    //    or re-lit.
+    //
+    // (2) rather than "the settled output differs from the first frame's",
+    // which was tried and is not a control at all here. On a smooth ramp a
+    // single frame's nine-tap upsample already gets the answer nearly right, so
+    // accumulation legitimately buys almost nothing and the two agree to within
+    // the settling residual - measured at 0.0156 against 0.0176. Reconstruction
+    // *gain* needs high-frequency detail to reconstruct, and high-frequency
+    // detail is exactly what makes the rectification box too tight to converge
+    // at this fixture's size. Measuring at the source sidesteps the conflict.
+    //
+    // **A gentler ramp than every other fixture here uses**, and the reason is
+    // measured rather than guessed. A converged history is not frozen: each
+    // frame's jittered upsample lands somewhere new, and where it falls outside
+    // the rectification box the history is *snapped* to the box's surface
+    // rather than blended a few percent towards it. The box is sized by the
+    // neighbourhood's own standard deviation, so on a steep gradient it is
+    // narrow and the snap is large. Measured on this 8x4 fixture: the standard
+    // 2%-per-texel ramp settles to 0.0625 between the last two frames, a
+    // 0.2%-per-texel ramp to 0.0176 - a tenth of the slope for a third of the
+    // residual. Neither is a convergence failure; the accumulation reaches a
+    // full 1.0 with no false shading change in both.
+    let depth = depth_pattern();
+    let colour: Vec<[f32; 3]> = (0..FIXTURE.0 * FIXTURE.1)
+        .map(|i| {
+            let t = 0.40 + 0.002 * i as f32;
+            [t, t * 0.8, t * 0.6]
+        })
+        .collect();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let phases = crate::jitter::phases(FIXTURE.0, FIXTURE.0 * 2) as usize;
+    assert_eq!(phases, 32, "the fixture upscales by two");
+
+    let run = |count: usize| {
+        Scene::run_with(FIXTURE, &vec![still; count], true).map(|scene| {
+            let output = scene
+                .fsr3
+                .output_texture()
+                .expect("a complete chain has an output");
+            scene.read_rgba16(output)
+        })
+    };
+
+    let (Some(nearly), Some(settled)) = (run(phases - 1), run(phases)) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+
+    let mut worst_settling = 0.0f32;
+    for index in 0..settled.len() {
+        for channel in 0..3 {
+            worst_settling =
+                worst_settling.max((settled[index][channel] - nearly[index][channel]).abs());
+        }
+    }
+
+    // Not zero, for the reason above - and comfortably above the 0.0176
+    // measured, so a real regression in the history weight has room to show up
+    // rather than being absorbed by the bound.
+    assert!(
+        worst_settling < 0.03,
+        "the resolve is still moving at frame {phases}: worst channel change \
+         {worst_settling}"
+    );
+
+    // The direct statement, read off `prepare_reactivity`'s own output rather
+    // than inferred from pixels: after a full sequence of a still scene the
+    // history is as deep as it goes and nothing has knocked it back.
+    let Some(scene) = Scene::run_with(FIXTURE, &vec![still; phases], true) else {
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    for (index, masks) in scene
+        .read_rgba_unorm(&targets.dilated_reactive_masks.texture)
+        .iter()
+        .enumerate()
+    {
+        assert!(
+            masks[3] > 0.99,
+            "texel {index} accumulated only {} frames' worth under jitter",
+            masks[3]
+        );
+        assert!(masks[1] < 0.01, "texel {index} disocclusion {}", masks[1]);
+        assert!(
+            masks[2] < 0.01,
+            "texel {index} shading change {} - a moving sub-pixel offset is \
+             being mistaken for the scene changing",
+            masks[2]
+        );
+    }
 }
 
 /// The fixture's extent: small enough that a wrong mip count or a wrong

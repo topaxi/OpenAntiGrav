@@ -12,9 +12,12 @@ The short version is that driving the native Vulkan backend would cost lifting
 and Vulkan-only support, to inherit an FSR4 upgrade path that does not reach a
 native Linux build.
 
-**Status: in flight.** The [pass table](#the-passes) below is the port's spine
-and says which passes exist; `HANDOVER.md`'s open-threads index points at the
-thread carrying what is not done yet and the traps found on the way.
+**Status: all eight passes are ported and the chain produces a frame** - and
+**nothing in the game selects it yet.** `oag_render::post::fsr3::Fsr3::output`
+returns a picture; `upscale::Framebuffer::resolve_scene` has no branch that
+reads it. That separation is deliberate: wiring the game side is its own change,
+so that a bug in the resolve and a bug in the wiring cannot arrive together.
+`HANDOVER.md`'s open-threads index points at the thread carrying what is left.
 
 ## Provenance
 
@@ -72,8 +75,12 @@ order, so this table and the code cannot drift apart silently.
 | 4 | `shading_change` | render/2 | **yes** |
 | 5 | `prepare_reactivity` | render | **yes** |
 | 6 | `luma_instability` | render | **yes** |
-| 7 | `accumulate` | **presentation** | no |
-| 8 | `rcas` | presentation | no |
+| 7 | `accumulate` | **presentation** | **yes** |
+| 8 | `rcas` | presentation | **yes** |
+
+**The chain is complete but unlooked-at.** Every pass is checked against
+arithmetic worked out on the CPU, and no human has seen a frame it produced -
+see [what is checked](#what-is-checked-and-how) for exactly how far that goes.
 
 Three upstream passes are deliberately out of scope. `autogen_reactive` and the
 TCR autogenerator exist to guess a reactive mask for engines that cannot supply
@@ -111,6 +118,24 @@ workgroups and is overwritten by the shading-change pyramid before anything
 reads it. The third has no reader here, for the reason below. So what is left is
 `farthest_depth_mip1` - a single 2x2 box average - and the pass is one dispatch
 rather than a chain.
+
+### RCAS is FSR 1's, with the denoise branch FSR 1 did not need
+
+`ffx_fsr3upscaler_rcas.h` is a thin wrapper around `FsrRcasF` from
+`fsr1/ffx_fsr1.h` - the same routine
+[`oag_render::post::fsr1`](../../crates/render/src/post/fsr1.rs) already ports.
+It is ported a second time rather than shared, because the two sit in different
+scaffolding entirely (a fragment pass over a full-screen triangle against a
+compute dispatch over a storage texture) and folding them together would mean
+neither could be diffed against its own upstream file.
+
+The one arithmetic difference is worth stating: FSR 3.1 sets
+**`FSR_RCAS_DENOISE 1`** and FSR 1's use here does not. That enables a five-tap
+luma term that scales the sharpening lobe down where the neighbourhood looks
+like noise rather than like an edge. Upstream's own comment on the define
+recommends applying film grain after RCAS instead of turning it on - but a
+temporally accumulated frame carries reconstruction noise a single-frame sharpen
+never sees, and sharpening that is exactly wrong.
 
 ### Auto-exposure is off, and `frame_info` is therefore not allocated
 
@@ -175,6 +200,23 @@ sign. That one has to use a **flat** colour where the others use a gradient:
 the smallest relative difference between any pair, so across a gradient some
 dark tap is nearer to some bright tap than the ratio between the frames, and the
 answer is a fact about the neighbourhood rather than about the formula.
+
+**What it does not check is whether a texel matches what `ffx_fsr3upscaler`
+would have produced.** There is no reference implementation to diff against
+without building the SDK, which ADR-0012 declined. What the readbacks establish
+is that each pass computes what upstream's *source* says it should, worked out
+independently; what remains unestablished is that the source was read correctly.
+A `--presented` capture beside the `fsr1` and `off` ones is the instrument for
+that, and it has not been taken.
+
+The resolve has one property the others do not, and it needs jitter to see:
+**a still scene must converge**. Each frame lands its samples somewhere new
+inside each pixel, the history absorbs them, and after a full sequence the
+answer stops moving - to within a residual that scales with the neighbourhood's
+own contrast, because a converged history is still snapped to the rectification
+box each frame. It is checked at 32 phases with the real Halton offsets, paired
+with the direct statement that the chain believes what it has: a full
+accumulation channel and no false disocclusion or shading change.
 
 It caught the port's first substantive bug at pass 5, and one that would never
 have produced an error message: **`accumulation` and `luma_history` are

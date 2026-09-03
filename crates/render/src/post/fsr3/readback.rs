@@ -64,6 +64,24 @@ impl Scene {
     /// and it means the fixture can write exact `f32`s rather than encode
     /// halves, so an expected value is a number rather than a rounding.
     pub(super) fn run(render: (u32, u32), frames: &[Input<'_>]) -> Option<Self> {
+        Self::run_with(render, frames, false)
+    }
+
+    /// [`Scene::run`], with the real Halton offsets fed through
+    /// `Dispatch::jitter` when `jittered`.
+    ///
+    /// **Only the resolve can use this.** Every other pass's fixture wants a
+    /// scene that is genuinely still, and a moving sub-pixel offset makes
+    /// consecutive frames differ for a reason that has nothing to do with what
+    /// is being tested. `accumulate` is the opposite case: without jitter there
+    /// is one sample per pixel per frame and there is nothing to reconstruct
+    /// *from*, so a still fixture would report a temporal upscaler and a blit
+    /// as identical.
+    pub(super) fn run_with(
+        render: (u32, u32),
+        frames: &[Input<'_>],
+        jittered: bool,
+    ) -> Option<Self> {
         let texels = (render.0 * render.1) as usize;
         let upscale = (render.0 * 2, render.1 * 2);
 
@@ -143,15 +161,24 @@ impl Scene {
                         render,
                         max_render: render,
                         upscale,
-                        // Zero, so that nothing in this fixture depends on
-                        // which phase of the sequence it happened to land on -
-                        // and so that a still scene really is still, where a
-                        // moving offset would make consecutive frames differ.
-                        jitter: (0.0, 0.0),
+                        // Zero unless asked for, so that nothing in a fixture
+                        // depends on which phase of the sequence it happened to
+                        // land on - and so that a still scene really is still,
+                        // where a moving offset would make consecutive frames
+                        // differ.
+                        jitter: if jittered {
+                            crate::jitter::offset_pixels(
+                                index as u32,
+                                crate::jitter::phases(render.0, upscale.0),
+                            )
+                        } else {
+                            (0.0, 0.0)
+                        },
                         phase_count: crate::jitter::phases(render.0, upscale.0),
                         camera: CAMERA,
                         delta_time: 1.0 / 60.0,
                         reset: index == 0,
+                        sharpness: crate::post::fsr1::Sharpness::DEFAULT,
                     },
                 },
             );

@@ -121,6 +121,13 @@ pub struct Dispatch {
     /// Whether the history is meaningless and must be thrown away - a race
     /// restart, a camera cut, the first frame after a stage change.
     pub reset: bool,
+    /// How hard the final RCAS pass sharpens.
+    ///
+    /// The same [`super::super::fsr1::Sharpness`] the FSR 1 path takes, and
+    /// deliberately so: it is upstream's own scale in both, so a player moving
+    /// the UPSCALER SHARPNESS row means the same thing whichever upscaler is
+    /// running.
+    pub sharpness: crate::post::fsr1::Sharpness,
 }
 
 impl Default for Dispatch {
@@ -134,6 +141,7 @@ impl Default for Dispatch {
             camera: Camera::default(),
             delta_time: 1.0 / 60.0,
             reset: true,
+            sharpness: crate::post::fsr1::Sharpness::DEFAULT,
         }
     }
 }
@@ -171,9 +179,18 @@ pub struct Constants {
     pub shading_change_scale: f32,
     pub accumulation_added_per_frame: f32,
     pub min_disocclusion_accumulation: f32,
-    /// To the 16-byte multiple a uniform buffer's size must be. Upstream's
-    /// struct is 148 bytes and its backends round it up; this says so.
-    pub padding: [f32; 3],
+    /// RCAS's sharpening lobe, already through `exp2(-stops)`.
+    ///
+    /// **Ours, and it lives in upstream's padding on purpose.** Upstream keeps
+    /// a *separate* constant buffer for the RCAS pass holding this one value;
+    /// carrying a second uniform and a second bind group for a single float
+    /// would be more machinery than the thing it carries. The 148-byte struct
+    /// rounds up to 160 either way, so this occupies space that already
+    /// existed - and it is placed *after* every upstream field, so the layout
+    /// this block is a transliteration of is untouched.
+    pub rcas_sharpness: f32,
+    /// To the 16-byte multiple a uniform buffer's size must be.
+    pub padding: [f32; 2],
 }
 
 /// This renderer's velocity attachment holds the **current-minus-previous** UV
@@ -262,7 +279,8 @@ impl Constants {
             shading_change_scale: SHADING_CHANGE_SCALE,
             accumulation_added_per_frame: ACCUMULATION_ADDED_PER_FRAME,
             min_disocclusion_accumulation: MIN_DISOCCLUSION_ACCUMULATION,
-            padding: [0.0; 3],
+            rcas_sharpness: dispatch.sharpness.factor(),
+            padding: [0.0; 2],
         }
     }
 

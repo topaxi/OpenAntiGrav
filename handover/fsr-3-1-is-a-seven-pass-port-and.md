@@ -1,4 +1,4 @@
-# FSR 3.1 is a seven-pass port, and this is where it stands
+# FSR 3.1's eight passes are ported; nothing selects it yet
 
 The route was decided by
 [ADR-0012](../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md):
@@ -70,28 +70,34 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Open
 
-- **The passes not yet ported: `luma_instability`, `accumulate`, `rcas`.** Five
-  of eight are built and each is checked by a readback against CPU-computed
-  arithmetic. `accumulate` is much the largest - it pulls in
-  `ffx_fsr3upscaler_upsample.h` and `..._reproject.h` as well, about 1,300 lines
-  of upstream between them - and it is the one that finally produces an output,
-  so `Fsr3::output` stays `None` and nothing selects `fsr3` for real until it
-  lands.
+- **The game side is not wired, and that is the next piece of work.**
+  `Fsr3::output` returns a frame; `upscale::Framebuffer::resolve_scene` has no
+  `Upscaler::Fsr3` branch that reads it, so choosing `fsr3` on the menu row
+  still resolves through the blit. Landing the resolve and the wiring separately
+  is deliberate - a bug in each would otherwise arrive together with nothing to
+  bisect between. Three things the wiring has to get right, all of them stated
+  in `docs/rendering/fsr3.md` and none of them enforced by a type:
+  the colour input is the **sRGB** view (FSR 1 takes the non-sRGB one), the
+  output is **linear** and the blit's grade must not decode it twice, and the
+  fallback ladder has to run `supported(&adapter)` and fall to FSR 1 rather than
+  failing to boot.
+- **Nobody has looked at a frame.** The chain is complete and every pass is
+  checked against arithmetic worked out on the CPU - which establishes that each
+  computes what upstream's source says, not that the source was read correctly.
+  A `--presented` capture at 50 % render scale beside the `fsr1` and `off` ones
+  is the instrument, and taking it is a decision for the maintainer rather than
+  something a green test can stand in for.
 - **`compute_motion_divergence` divides by zero on a perfectly static camera.**
   `saturate(reprojected_velocity / velocity_4k)` with both zero is `0/0`.
   Upstream has the same expression and relies on `saturate(NaN)` returning zero;
   a race always has motion so it never bites in play, but a still fixture walks
   straight into it. Noted rather than 'fixed', because changing it would be a
   divergence nobody has measured a need for.
-- **Nothing is compared against upstream's output.** The WGSL compiles and
-  draws on this machine's adapter, which says the bindings agree and the syntax
-  parses - it says nothing about whether a texel matches what `ffx_fsr3upscaler`
-  would produce. There is no reference implementation to diff against without
-  building the SDK, which ADR-0012 declined. The honest instrument is a
-  from-play look and a `--presented` capture, and neither has been taken.
-- **The widened intermediates are unmeasured.** Holding `R32Float` where
-  upstream holds `R16_FLOAT` doubles those targets; the doc page states the
-  arithmetic but nobody has looked at what it costs on the Steam Deck, which
+- **Nothing is compared against upstream's own output.** There is no reference
+  implementation to diff against without building the SDK, which ADR-0012
+  declined.
+- **The widened intermediates are unmeasured.** `Fsr3::sizes` reports the
+  number and nobody has read it on the Steam Deck, which
   [goals.md](../docs/overview/goals.md) names in the first tier. The same
   question the dynamic-resolution thread left open about the ceiling
   allocation.
@@ -102,12 +108,13 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Next Steps
 
-1. Port the next pass in the table in [fsr3.md](../docs/rendering/fsr3.md), in
-   the order given - the order is upstream's dispatch order, and a pass reads
-   what the ones before it wrote.
-2. Once `accumulate` lands, take a `--presented` capture at 50 % render scale
-   with `upscaler = fsr3` and put it beside the `fsr1` and `off` ones. Until
-   then there is nothing to look at: the chain has no output.
-3. Write the ADR for the SPD substitution, but only once the reduction is
-   actually built - ADRs are immutable and this one has a choice left in it
-   (a fixed six-level chain versus a loop to 1x1).
+1. Wire `Upscaler::Fsr3` into `upscale::Framebuffer::resolve_scene`, with the
+   fallback ladder and the two colour-space rules above. That is the whole
+   remaining gap between "ported" and "selectable".
+2. Then take a `--presented` capture at 50 % render scale with
+   `upscaler = fsr3` and put it beside the `fsr1` and `off` ones. **This is the
+   first time anyone will have seen the port's output**, and no test substitutes
+   for it.
+3. Derive `Dispatch::sharpness` from the existing `[graphics] upscale_sharpness`
+   row rather than the default it takes now - the setting already exists and
+   already means upstream's stops on both paths.

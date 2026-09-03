@@ -7,10 +7,12 @@
 //! [fsr3.md](../../../../docs/rendering/fsr3.md), which is the page to read
 //! before changing anything here.
 //!
-//! **This is in flight.** [`Fsr3::PASSES`] is the spine and says which passes
-//! exist; the rest of the chain is not built, so [`Fsr3::output`] is `None` and
-//! nothing selects this yet. The thread is
-//! `handover/fsr-3-1-is-a-seven-pass-port-and.md`.
+//! **All eight passes are built, and nothing selects this yet.**
+//! [`Fsr3::output`] returns a frame; `oag_game::upscale::Framebuffer` has no
+//! branch that reads it, so the UPSCALER row's `fsr3` still resolves through
+//! the blit. Wiring the game side is deliberately a separate change - a bug in
+//! the resolve and a bug in the wiring arriving together would leave nothing to
+//! bisect between. [`Fsr3::PASSES`] is the spine either way.
 //!
 //! # Why this and not FSR 1
 //!
@@ -46,6 +48,7 @@ use anyhow::Result;
 
 mod bindings;
 mod constants;
+mod groups;
 mod resources;
 
 use bindings::{
@@ -172,6 +175,8 @@ impl Pass {
                 | Self::ShadingChange
                 | Self::PrepareReactivity
                 | Self::LumaInstability
+                | Self::Accumulate
+                | Self::Rcas
         )
     }
 }
@@ -228,6 +233,10 @@ pub struct Fsr3 {
     prepare_reactivity: wgpu::ComputePipeline,
     luma_instability_layout: wgpu::BindGroupLayout,
     luma_instability: wgpu::ComputePipeline,
+    accumulate_layout: wgpu::BindGroupLayout,
+    accumulate: wgpu::ComputePipeline,
+    rcas_layout: wgpu::BindGroupLayout,
+    rcas: wgpu::ComputePipeline,
     /// One uniform per pyramid level, holding that level's source extent. See
     /// [`level_entry`]; written once, because the extents are a function of the
     /// allocation rather than of the frame.
@@ -380,6 +389,26 @@ impl Fsr3 {
                     store_entry(6, wgpu::TextureFormat::Rgba16Float),
                 ],
             });
+        let accumulate_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("fsr3 accumulate"),
+            entries: &[
+                load_entry(0),
+                load_entry(1),
+                sample_entry(2),
+                sample_entry(3),
+                sample_entry(4),
+                load_entry(5),
+                load_entry(6),
+                store_entry(7, wgpu::TextureFormat::Rgba16Float),
+            ],
+        });
+        let rcas_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("fsr3 rcas"),
+            entries: &[
+                load_entry(0),
+                store_entry(1, wgpu::TextureFormat::Rgba16Float),
+            ],
+        });
 
         // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
         // extent, so these never have to be rewritten - see the shader's
@@ -473,6 +502,18 @@ impl Fsr3 {
             "cs_luma_instability",
             &luma_instability_layout,
         );
+        let accumulate = pipeline(
+            "fsr3 accumulate",
+            include_str!("fsr3/accumulate.wgsl"),
+            "cs_accumulate",
+            &accumulate_layout,
+        );
+        let rcas = pipeline(
+            "fsr3 rcas",
+            include_str!("fsr3/rcas.wgsl"),
+            "cs_rcas",
+            &rcas_layout,
+        );
 
         Ok(Self {
             shared,
@@ -494,6 +535,10 @@ impl Fsr3 {
             prepare_reactivity,
             luma_instability_layout,
             luma_instability,
+            accumulate_layout,
+            accumulate,
+            rcas_layout,
+            rcas,
             levels,
             targets: None,
         })
@@ -502,12 +547,13 @@ impl Fsr3 {
     /// The resolved frame, in **linear light**. `None` until the chain is
     /// complete enough to produce one.
     ///
-    /// **Deliberately `None` while the port is in flight**, keyed off
-    /// [`Pass::ported`] rather than off whether a texture happens to exist:
-    /// handing back the last written intermediate would put a half-resolved
-    /// picture on screen, and a half-resolved picture reads as a rendering bug
-    /// rather than as unfinished work. Nothing is the honest answer, and it is
-    /// the one the caller's fallback ladder is built to handle.
+    /// **Keyed off [`Pass::ported`] rather than off whether a texture happens
+    /// to exist.** Every pass is built now, so this is `Some` from the first
+    /// frame - but the gate stays, because it is what made an incomplete chain
+    /// hand back nothing rather than a half-resolved picture, and a
+    /// half-resolved picture reads as a rendering bug rather than as unfinished
+    /// work. A pass added or removed moves both this and the test that asserts
+    /// on it.
     #[must_use]
     pub fn output(&self) -> Option<&wgpu::TextureView> {
         if !Pass::ALL.iter().all(|pass| pass.ported()) {
@@ -532,6 +578,18 @@ impl Fsr3 {
     #[must_use]
     pub fn constants(&self) -> Option<&Constants> {
         self.written.as_ref()
+    }
+
+    /// The texture behind [`output`](Self::output), for a readback or a
+    /// capture. The same accessor [`super::fsr1`] carries, for the same reason.
+    #[must_use]
+    pub fn output_texture(&self) -> Option<&wgpu::Texture> {
+        if !Pass::ALL.iter().all(|pass| pass.ported()) {
+            return None;
+        }
+        self.targets
+            .as_ref()
+            .map(|targets| &targets.upscaled_output.texture)
     }
 
     /// The intermediates, for a test that reads one back.
@@ -577,208 +635,8 @@ impl Fsr3 {
             return;
         };
 
-        let clear_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 clear"),
-            layout: &self.clear_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: targets
-                    .reconstructed_previous_nearest_depth
-                    .as_entire_binding(),
-            }],
-        });
-        let prepare_inputs_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 prepare inputs"),
-            layout: &self.prepare_inputs_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(frame.velocity),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(frame.depth),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(frame.colour),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.dilated_motion_vectors.view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&targets.dilated_depth.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: targets
-                        .reconstructed_previous_nearest_depth
-                        .as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.luma.current(wanted.frame_index as u64).view,
-                    ),
-                },
-            ],
-        });
-        let luma_pyramid_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 luma pyramid"),
-            layout: &self.luma_pyramid_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth_mip1.view),
-                },
-            ],
-        });
-
-        // The pyramid's chain: one group per level, each reading the level below
-        // and writing its own. Level 0 reads the render-resolution inputs
-        // instead, and binds level 0 as its (unused) source so that one layout
-        // serves both entry points.
         let frame_index = wanted.frame_index as u64;
-        let pyramid_levels = targets.spd_mips.mips.len();
-        let pyramid_groups: Vec<wgpu::BindGroup> = (0..pyramid_levels)
-            .map(|level| {
-                // **Level 0's source must not be level 0.** It never reads
-                // binding 3 - it computes from the render-resolution inputs -
-                // but wgpu forbids a texture being a storage-write and a
-                // sampled resource in the same dispatch whether or not the
-                // shader touches it, and one layout serving both entry points
-                // means the binding has to hold *something*. The current luma is
-                // already read-only in this dispatch, so pointing at it aliases
-                // nothing.
-                let source = match level {
-                    0 => &targets.luma.current(frame_index).view,
-                    _ => &targets.spd_mips.mips[level - 1],
-                };
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("fsr3 shading change pyramid"),
-                    layout: &self.shading_change_pyramid_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(
-                                &targets.luma.current(frame_index).view,
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(
-                                &targets.luma.previous(frame_index).view,
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(
-                                &targets.dilated_motion_vectors.view,
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::TextureView(source),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: wgpu::BindingResource::TextureView(
-                                &targets.spd_mips.mips[level],
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 5,
-                            resource: self.levels[level].as_entire_binding(),
-                        },
-                    ],
-                })
-            })
-            .collect();
-
-        // The whole pyramid, through a filtering sampler at three explicit mip
-        // levels - so this binds the texture's own view rather than one of the
-        // per-level ones the chain above writes through.
-        let shading_change_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 shading change"),
-            layout: &self.shading_change_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&targets.spd_mips.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&targets.shading_change.view),
-                },
-            ],
-        });
-
-        let prepare_reactivity_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 prepare reactivity"),
-            layout: &self.prepare_reactivity_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.dilated_motion_vectors.view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&targets.dilated_depth.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: targets
-                        .reconstructed_previous_nearest_depth
-                        .as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.luma.current(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&targets.shading_change.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.accumulation.previous(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.dilated_reactive_masks.view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.accumulation.current(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
-                    resource: wgpu::BindingResource::TextureView(&targets.new_locks.view),
-                },
-            ],
-        });
+        let bind = groups::Groups::new(self, device, targets, frame, frame_index);
 
         // **The lock target, wiped before anything writes it.** `new_locks` is
         // written by a scatter, so most presentation texels are never touched
@@ -806,51 +664,6 @@ impl Fsr3 {
             })
             .forget_lifetime();
 
-        let luma_instability_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 luma instability"),
-            layout: &self.luma_instability_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.dilated_motion_vectors.view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.dilated_reactive_masks.view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.luma.current(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.luma_history.previous(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth_mip1.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: wgpu::BindingResource::TextureView(
-                        &targets.luma_history.current(frame_index).view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::TextureView(&targets.luma_instability.view),
-                },
-            ],
-        });
-
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
 
@@ -861,11 +674,11 @@ impl Fsr3 {
         pass.set_bind_group(0, Some(&self.shared), &[]);
 
         pass.set_pipeline(&self.clear);
-        pass.set_bind_group(1, Some(&clear_group), &[]);
+        pass.set_bind_group(1, Some(&bind.clear), &[]);
         pass.dispatch_workgroups(groups(texels, CLEAR_GROUP), 1, 1);
 
         pass.set_pipeline(&self.prepare_inputs);
-        pass.set_bind_group(1, Some(&prepare_inputs_group), &[]);
+        pass.set_bind_group(1, Some(&bind.prepare_inputs), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
 
         // **Half the render extent**, which is upstream's `maxRenderSizeDiv2`
@@ -874,7 +687,7 @@ impl Fsr3 {
         // to the render extent for the same reason.
         let half = ((render.0 / 2).max(1), (render.1 / 2).max(1));
         pass.set_pipeline(&self.luma_pyramid);
-        pass.set_bind_group(1, Some(&luma_pyramid_group), &[]);
+        pass.set_bind_group(1, Some(&bind.luma_pyramid), &[]);
         pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
 
         // The pyramid, level by level. Upstream is one dispatch; this is
@@ -888,27 +701,38 @@ impl Fsr3 {
         // to establish inside a single dispatch.
         let mut level_size = half;
         pass.set_pipeline(&self.shading_change_pyramid_mip0);
-        pass.set_bind_group(1, Some(&pyramid_groups[0]), &[]);
+        pass.set_bind_group(1, Some(&bind.pyramid[0]), &[]);
         pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
 
         pass.set_pipeline(&self.shading_change_pyramid_reduce);
-        for group in &pyramid_groups[1..] {
+        for group in &bind.pyramid[1..] {
             level_size = ((level_size.0 / 2).max(1), (level_size.1 / 2).max(1));
             pass.set_bind_group(1, Some(group), &[]);
             pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
         }
 
         pass.set_pipeline(&self.shading_change);
-        pass.set_bind_group(1, Some(&shading_change_group), &[]);
+        pass.set_bind_group(1, Some(&bind.shading_change), &[]);
         pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
 
         pass.set_pipeline(&self.prepare_reactivity);
-        pass.set_bind_group(1, Some(&prepare_reactivity_group), &[]);
+        pass.set_bind_group(1, Some(&bind.prepare_reactivity), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
 
         pass.set_pipeline(&self.luma_instability);
-        pass.set_bind_group(1, Some(&luma_instability_group), &[]);
+        pass.set_bind_group(1, Some(&bind.luma_instability), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        // **Presentation resolution, where every pass above is at render
+        // resolution or half of it.** This is the one that decides a pixel.
+        let upscale = (dispatch.upscale.0.max(1), dispatch.upscale.1.max(1));
+        pass.set_pipeline(&self.accumulate);
+        pass.set_bind_group(1, Some(&bind.accumulate), &[]);
+        pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
+
+        pass.set_pipeline(&self.rcas);
+        pass.set_bind_group(1, Some(&bind.rcas), &[]);
+        pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
     }
 
     /// Rebuilds every intermediate when either allocation moves.
