@@ -150,6 +150,26 @@ fn a_mode_label_falls_back_rather_than_printing_prose() {
     );
 }
 
+/// `oag_race::Mode::fallback_label` is hardcoded English, and the invented-UI-text
+/// thread names that as a gap - but `mode_label` already reads through the
+/// same merged table [`crate::strings::overlay`] writes a project override
+/// into, so naming [`oag_race::Mode::string_id`] in a project file already
+/// overrides the fallback with no further wiring, even with no disc entry at
+/// all. `boot::load_strings` is what performs the merge at boot; this proves
+/// the read side alone, beside the disc-absent case the test above proves.
+#[test]
+fn a_project_override_of_a_mode_id_wins_over_the_hardcoded_fallback() {
+    let mut strings = crate::language::StringTable::default();
+    strings.merge(std::collections::HashMap::from([(
+        oag_race::Mode::TimeTrial.string_id().to_string(),
+        "AGAINST THE CLOCK".to_string(),
+    )]));
+    assert_eq!(
+        super::mode_label(oag_race::Mode::TimeTrial, &strings),
+        "AGAINST THE CLOCK"
+    );
+}
+
 /// `every_settings_row_is_one_the_game_seeds` skips any page that is not
 /// `display` or `graphics`, so the race rows are not covered by it. The mode
 /// row is the one that would break silently: a `choice` whose setting nothing
