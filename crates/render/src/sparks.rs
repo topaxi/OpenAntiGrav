@@ -85,6 +85,20 @@ pub const SEVERITY_SLOPE: f32 = 2.0;
 /// at its gentlest. **Recovered.**
 pub const SEVERITY_FLOOR: f32 = 0.4;
 
+/// The raw `min(|impulse| * `[`SEVERITY_SCALE`]`, 1.0)` clamp itself, before
+/// [`severity`]'s slope-and-floor reshaping.
+///
+/// This is the value `Ship_DispatchCollisionFx` passes on unmodified to its
+/// *second* call, `Camera_ArmShake` - see
+/// `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`. A caller arming
+/// [`crate::camera::shake::Shake`] from the same contact wants this, not
+/// [`severity`]'s own output: the two reactions share one clamp and diverge
+/// only in what each does with it afterwards.
+#[must_use]
+pub fn clamped_intensity(impact_speed: f32) -> f32 {
+    (impact_speed * SEVERITY_SCALE).clamp(0.0, 1.0)
+}
+
 /// The scale factor to pass [`crate::psys::System::ignite`] for a contact
 /// at `impact_speed` world units per second.
 ///
@@ -92,8 +106,7 @@ pub const SEVERITY_FLOOR: f32 = 0.4;
 /// [`SEVERITY_SCALE`].
 #[must_use]
 pub fn severity(impact_speed: f32) -> f32 {
-    let intensity = (impact_speed * SEVERITY_SCALE).clamp(0.0, 1.0);
-    intensity * SEVERITY_SLOPE + SEVERITY_FLOOR
+    clamped_intensity(impact_speed) * SEVERITY_SLOPE + SEVERITY_FLOOR
 }
 
 #[cfg(test)]

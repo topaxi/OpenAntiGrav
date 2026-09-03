@@ -28,6 +28,7 @@ pub mod chase;
 pub mod free;
 pub mod internal;
 pub mod orbit;
+pub mod shake;
 
 use oag_core::math::{Mat4, camera};
 

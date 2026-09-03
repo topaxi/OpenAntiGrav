@@ -325,6 +325,10 @@ pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 /// one is distinct from [`SEED`].
 pub const STAGE_SEED: u64 = 0x5_9a_2b_01;
 
+/// Seed for the camera shake's phase draw. Distinct from the others for the
+/// same determinism reason.
+pub const SHAKE_SEED: u64 = 0x5_9a_2b_02;
+
 /// The archive entry a Rocket's model comes from.
 ///
 /// **Recovered, confidence 85.** The string `Rocket_Ctor` (`0x0885cc24`) hands
@@ -435,6 +439,14 @@ pub struct Race {
     /// `tests::cycling_the_camera_changes_no_simulation_state`.
     view: crate::display::CameraView,
     camera: Chase,
+    /// The player's camera shake, armed by a hard wall hit. Render-only, for
+    /// the same reason [`Self::camera`] is - see
+    /// `oag_render::camera::shake`'s module doc comment for what is confirmed
+    /// against the original and what this module chose on its own.
+    shake: oag_render::camera::shake::Shake,
+    /// The shake's phase draw, deliberately **not** `world.rng` - see
+    /// [`Self::exhaust_rng`].
+    shake_rng: Rng,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     camera_override: Option<CameraOverride>,
     dt: f32,

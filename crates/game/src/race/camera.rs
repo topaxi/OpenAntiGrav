@@ -122,6 +122,13 @@ impl Race {
     /// matrix through [`Self::camera_position`], so overriding here overrides
     /// everywhere at once, and a consumer that read the chase camera directly
     /// instead would silently miss the override.
+    ///
+    /// [`Self::shake`] applies to both the external and the internal view and
+    /// not to an override: `Camera_ArmShake`'s `camera` argument is the
+    /// per-craft camera object both tripods share, not a property of one view,
+    /// but an override exists to reproduce a captured pose exactly and the
+    /// shake's phase is randomised, so a matched-pose comparison must not see
+    /// it. See `oag_render::camera::shake`.
     #[must_use]
     pub fn view(&self) -> Mat4 {
         if let Some(over) = &self.camera_override {
@@ -129,12 +136,23 @@ impl Race {
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
         let target = target_of(self.ship());
-        if self.view == crate::display::CameraView::Internal {
+        let base = if self.view == crate::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull.
-            return oag_render::camera::internal::view(target, &self.internal_params);
+            oag_render::camera::internal::view(target, &self.internal_params)
+        } else {
+            self.camera.view(target, &self.chase_params)
+        };
+        if self.shake.active() {
+            // A view matrix is the inverse of the camera's world transform, so
+            // rotating the camera's own basis by `Q` post-multiplies `Q` into
+            // that transform and pre-multiplies `Q`'s inverse into its
+            // inverse - see `oag_render::camera::shake`'s module documentation
+            // for what the rotation itself reproduces.
+            Mat4::from_quat(self.shake.rotation().inverse()) * base
+        } else {
+            base
         }
-        self.camera.view(target, &self.chase_params)
     }
 
     /// The camera's own world position, from the view matrix it produces.

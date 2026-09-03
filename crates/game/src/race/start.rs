@@ -274,6 +274,8 @@ impl Race {
             // with no screen. `set_camera_view` is what applies the player's.
             view: crate::display::CameraView::default(),
             camera,
+            shake: oag_render::camera::shake::Shake::new(),
+            shake_rng: Rng::new(SHAKE_SEED),
             camera_override,
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
             // is one place the rate is decided.

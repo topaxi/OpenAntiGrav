@@ -406,6 +406,11 @@ impl Race {
         // count. **After the camera**, because it projects through it.
         self.update_sight();
 
+        // Decays every tick regardless of contact, the same as
+        // `Camera_ArmShake`'s own `shake_timer` - see
+        // `oag_render::camera::shake`.
+        self.shake.advance(self.dt);
+
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
@@ -491,6 +496,31 @@ impl Race {
                     sparks::severity(evaluated.wall.impact_speed),
                 );
             }
+            // `Camera_ArmShake`'s own severity is the *raw* clamp
+            // `Ship_DispatchCollisionFx` passes it, not the spark's
+            // slope-and-floor-reshaped one - see
+            // `oag_render::sparks::clamped_intensity`. `mode = 3` (ahead) vs
+            // `mode = 1` (elsewhere) is a dot product of the contact point
+            // against the craft's forward, exactly as
+            // `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`
+            // records it.
+            //
+            // Re-armed on the same cooldown gate as the spark burst
+            // (`can_fire`) rather than every tick a contact is live: the
+            // original re-arms once per collision-function call on a fresh
+            // contact, which this project's own contact evaluation does not
+            // expose as a separate edge, and pairing the shake's cadence with
+            // the visible spark burst is the natural substitute.
+            let ship = self.ship();
+            let ahead =
+                (contact.point - ship.physics.body.position).dot(ship.physics.body.forward()) > 0.0;
+            let side = if ahead {
+                oag_render::camera::shake::Side::Ahead
+            } else {
+                oag_render::camera::shake::Side::Elsewhere
+            };
+            let shake_severity = sparks::clamped_intensity(evaluated.wall.impact_speed);
+            self.shake.arm(shake_severity, side, &mut self.shake_rng);
             self.sparks_ignitions += 1;
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
             self.sparks_attached = attached_effect;
