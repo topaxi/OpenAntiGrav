@@ -395,7 +395,17 @@ sudo udevadm trigger /dev/uinput`) needs the machine's own user, not a
 session running unprivileged. This is a one-time, per-machine fix - once
 applied, the walk above is the whole remaining step.
 
-## Sixteen languages, four of which the disc misnames
+**2026-09-03, later the same day: a second, independent play recollection
+corroborates the wide reading.** Asked directly what the Zone-mode picker
+showed on real hardware, the user's answer was "the full track list, with a
+few zone-only ones mixed in" - the same shape `also_race_circuits: true`
+already implements (all 28 `PI_Track` entries, the four zone-exclusive ones
+first) and the opposite of a narrow, zone-only carousel. This is a second,
+independently-asked play observation, not the capture above and not a
+decompile - it does not raise the claim past where a corroborated hypothesis
+sits, but it is real evidence in the same class as the pendant recollection
+that started this fork, this time answering the specific question this
+section's capture command was written to settle.
 
 All sixteen plugins parse. Fifteen did until 2026-08-18, and the sixteenth was
 lost to one byte: `Portuguese` writes its own name `Portugu\xeas`, which is

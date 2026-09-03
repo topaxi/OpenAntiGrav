@@ -45,8 +45,22 @@ sudo udevadm trigger /dev/uinput`) needs the machine's own user to run it
 once. After that, running the command above and reading `data/` for either
 four rows or 28 closes this thread's central open question outright.
 
+**2026-09-03, later the same day: asked directly, and the user's own
+recollection of the real Zone-mode picker is the wide shape.** Offered the
+udev fix above, the user did not take it up; asked instead what the Zone-mode
+carousel showed on real hardware, their answer was **"the full track list,
+with a few zone-only ones mixed in"** - exactly `also_race_circuits: true`'s
+own shape (all 28 `PI_Track` entries, the four zone-exclusive ones among
+them), not a narrow zone-only carousel. This is a second, independently-asked
+play observation - the pendant recollection that started this fork was
+volunteered while fixing something else; this one directly answers the
+question the capture command above was written to settle. It is still a
+recollection, not a capture or a decompile, so it does not move the
+confidence number, but it is the second piece of play evidence pointing the
+same way and there is now none pointing the other way.
+
 ## Next Steps
 
 - ~~Wire `zonemode.effectsettings`/`zonemodedlc3.effectsettings` into rendering for the ordinary circuits now offered~~ **Done, landed on the sibling thread, not this one.** `2048-and-hd-ship-an-unread-effectsettings-table.md` records the render-application half landing 2026-08-30 ("a Zone race now grades its circuit off this table") and the HD trigger closing 2026-08-31 (`oag_hd::race::ZONE_STAGES`, "an HD Zone race escalates its colour grade"). That thread is now twenty-plus Ghidra passes deep into a single narrow shader-parameter question (which of two parallel publications a given material draw enters through) and blocked on vector-store write watchpoints in the patched RPCS3 build - not something to wander into from here.
-- ~~Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true`~~ **Reframed, 2026-09-03: there is no dedicated screen to decompile** (see the new section above) - the open question is who populates the *shared* `Track` list's contents for `Mode=Zone`, and the fastest route to an answer is the `rpcs3-drive.py browse` capture above, once `/dev/uinput` is fixed on this machine. A Ghidra dig (find the `Track` list's population/filter code) is the fallback if the capture is ambiguous, not the first move - this front-end subsystem is completely unexplored in the Ghidra project (one named function total) and would be a fresh, unbounded search otherwise.
+- ~~Decompile HD's own Zone-mode circuit-select screen to either confirm or correct `also_race_circuits: true`~~ **Reframed, 2026-09-03: there is no dedicated screen to decompile** (see the new section above) - the open question is who populates the *shared* `Track` list's contents for `Mode=Zone`, and the fastest route to an answer is the `rpcs3-drive.py browse` capture above, once `/dev/uinput` is fixed on this machine. Two independent play recollections now agree with the wide reading and none disagrees, so this is lower priority than it was - worth closing when the machine fix happens anyway, not worth a dedicated session. A Ghidra dig (find the `Track` list's population/filter code) is the fallback if the capture is ever ambiguous, not the first move - this front-end subsystem is completely unexplored in the Ghidra project (one named function total) and would be a fresh, unbounded search otherwise.
 - The remaining two Open items above are both read-the-executable work - the `%s\%strack%s.vex` selector branch and HD's own Zone-counter widgets - not an engine change with a next step to name yet.
