@@ -551,6 +551,21 @@ no longer disagree.
   (seven TOC slots, ~40 users across the scene/render/front-end code). Do not
   write "Zone enables it" anywhere on the strength of this.
 
+  **Superseded, 2026-08-31: it is Zone-specific, named `g_ZoneEffectsActive`,
+  and its own writer is found.** [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md)
+  traces the byte to `Environment_LoadRaceScene`
+  (`0x003f3fb0`), which sets it to `(1 << mode) & 0x00206040 != 0` - exactly
+  mode ids **6, 13, 14 and 21**, three of which `mode-manager.md` had already
+  flagged as the Zone/Zone Battle/Detonator candidates with no `ModeManager`
+  of their own, and one of which (`14`) `zone-effectsettings-loader.md`'s
+  tenth pass independently pinned as Detonator. Confidence 82. The same page
+  also answers the maintainer's sky-gradient play report: the gate switches
+  `Data/Tex/ZoneSky.gtf` in for the circuit's own `sky.gtf` wholesale (a file
+  swap, not a computed gradient - confidence 84), and locates but does not
+  yet identify the consumer of a *second*, genuinely computed horizon/zenith
+  gradient gated on the same byte (confidence 80 on the read, 55 on what it
+  draws - below this project's naming threshold).
+
 - **2026-08-30, `FunkLayerColour2d_fp` is a clean negative.** The one
   post-chain program the input enumeration did not cover: its fragment program
   is `MOV H0, f[TC0]` with zero parameters and zero samplers, its vertex
@@ -1401,10 +1416,19 @@ no longer disagree.
 
   **Next steps, in order of tractability:**
 
-  1. `Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` are
-     already parsed into `StagePalette` and need **no** binding - they are
-     unwired because this engine's sky is textured geometry with no colour
-     input. That is a seam to add on this side, not a fact to recover.
+  1. ~~`Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` are
+     already parsed into `StagePalette` and need no binding~~ **Read and
+     implemented, 2026-08-31/2026-09-01.** The premise was half right for the
+     wrong reason: HD's Zone sky is textured, but not because the engine has
+     no colour input there - `Environment_LoadRaceScene` swaps in
+     `Data/Tex/ZoneSky.gtf` for the circuit's own `sky.gtf` wholesale, gated
+     on the same mode-id byte this thread's own next section names. Full
+     trace: [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md).
+     Wired: `crates/game/src/race/load/environment.rs`, checked against the
+     disc in `zone_sky_ground_truth.rs`. **What that page leaves open**: a
+     second, genuinely computed horizon/zenith gradient sits behind the same
+     gate, read but its consumer unidentified (confidence 55, below naming
+     threshold) - not wired, not this project's own invention either.
   2. `"Debug.Reload Growing Textures"` (`0x81509e3c`, 2048) names a Growing
      Texture subsystem with its own debug reload - a better handle on that
      effect than anything the file side has offered.
