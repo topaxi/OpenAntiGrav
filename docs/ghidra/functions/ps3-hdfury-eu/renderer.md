@@ -2121,6 +2121,30 @@ unexplained. Their `0.0` is faithful to the file (nothing here invents a
 value for them), and they still fall back to the shared `32`. What the
 remaining four fifths' `0.0` actually means is open.
 
+**Superseded 2026-09-04: `Program::dp3_feeding`'s writer search was found
+lane-unsound both ways and fixed - every population number in this whole
+section, above this paragraph, was measured under the buggy gate and no
+longer describes the current disc.** The naive "any nonzero mask" writer
+search both credited a `DP3` that wrote the wrong lane (1,679 of 6,141
+then-resolved blocks) and missed a real one behind an unrelated write to a
+different lane (5,556 blocks, the larger error). Fixed lane-aware and
+clobber-checked; independently cross-verified at 10,087 of 10,087
+currently-resolved blocks lane-sound (`crates/render/examples/
+hd_dp3_feeding_lane_check.rs`), confirming the prediction two paragraphs
+above the fix ("`8.3 %`... larger than the naive gate's `1.1 %`... a
+lane-correct `dp3_feeding` therefore has two independent effects... it can
+subtract false positives and add newly-qualifying blocks") - the resolved
+count did rise, not just correct itself: 6,141 to 10,087. The `0`/`32`/
+`260`/`200`/`40`/`35`/`300`/`250` population table, the `56.0 %`/`27.6 %`/
+`8.3 %`/`8.0 %` fallback breakdown, the `5`/`10` Zone-rim exclusion (still
+holds, re-checked) and the `SpecularPower` patch census two paragraphs above
+this one are all being re-derived against the fixed gate, tracked outside
+this page (see `crates/render/examples/hd_dp3_feeding_lane_check.rs` and
+`hd_specular_population_recheck.rs` for the re-measurement tooling and its
+first-pass numbers) rather than edited in place here - this page's own rule
+for a superseded finding is a dated paragraph noting what changed, not a
+silent rewrite of the numbers above it.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
