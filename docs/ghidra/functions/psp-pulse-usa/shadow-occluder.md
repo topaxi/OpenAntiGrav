@@ -12,10 +12,13 @@ page reads the function that does it.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
-| `0x089038c8` | `Shadow_RenderOccluderVolume` | 80 |
+| `0x089038c8` | `Shadow_RenderOccluderVolume` | 88 |
+| `0x0890446c` | `DynamicShadowOccluder_RegisterClass` | 90 |
 
-Confidence is capped at the rubric's **70-84 Probable** band: strong,
-convergent structural evidence, no runtime trace.
+Both sit in the rubric's **85-94 Confident** band: decompilation is
+unambiguous and every call site in the chain from class id to method-table
+slot is consistent, byte for byte. Neither is runtime-verified, so neither
+reaches the 95-100 band.
 
 ## Read this before trusting an address
 
@@ -52,8 +55,9 @@ of this reading:
   packed box at `+0x0c`/`+0x18` on 97 of 129 nodes.
 
 Three independently-pinned struct offsets landing exactly where this function
-reads them is the strongest evidence available short of the class-ID
-dispatch table actually naming the handler (below).
+reads them was already strong evidence on its own; the class-ID dispatch
+chain traced below (registration call site to method-table slot) confirms it
+statically rather than by structural inference alone.
 
 ## What it does
 
@@ -110,37 +114,86 @@ and every free-standing `Dynamic Shadow Occluder` hull on a circuit
 one from a scale-residual investigation, one from the occluder payload's own
 field layout - landed on the same function and agree on what it does where
 they overlap (the `1.0 / g_craft_scale` division matches `_DAT_002ace1c`
-exactly). That agreement is most of why this clears 80 rather than sitting at
-70.
+exactly).
 
-## Why it has no callers `get_xrefs_to` can find
+## The static class link, confirmed byte for byte
 
 Vex node classes dispatch through a per-class method table, not an inline
 compare - `exhaust.md`'s reading of `Vex_RegisterClass` already established
 this ("Class dispatch is by descriptor lookup, never by immediate compare...
 the registration call site is the only route"). Consistent with that: the
-only static reference to this function in the whole binary is as **data**,
-not as a `jal` target. Searching for the unrelocated pointer's raw
-little-endian bytes (`c8 f8 0f 00`) finds exactly one hit, at `0x08ad1258` -
-slot 15 (0-based) of an 8-byte-stride table, the same shape `exhaust.md`
-describes for a class's method table. `0x08ad1258` sits below
-`Vex_RegisterClass`'s documented base table for `Transform`
-(`0x08ad22f4`), consistent with - but not proof of - an alphabetically
-earlier class name such as `Dynamic Shadow Occluder`.
+only static reference to `Shadow_RenderOccluderVolume` in the whole binary is
+as **data**, not as a `jal` target - `get_xrefs_to` and `get_function_callers`
+return nothing for it, same as every function reached this way.
 
-**Not traced further**: which of `Vex_RegisterClass`'s 46 callers assigns
-this particular table, which would confirm the `0x3c3` link statically rather
-than by structural inference alone. That is real, additional work (walking
-call sites whose class-id argument is itself an unrelocated constant), not
-attempted this pass.
+`exhaust.md` names 46 callers of `Vex_RegisterClass` (`0x08908eb8`), one per
+node class, but not which. Its own unrelocated-constant trap
+(`autopilot.md`, `positional-audio.md`) is what hides them from `get_xrefs_to`
+too; finding them means `search_instructions` on the unrelocated `jal`
+target (`0x08908eb8 - 0x08804000 = 0x00104eb8`), which turns up 50 call
+sites (some callers, like `Collision_RegisterNodeClasses`, register several
+classes each). One of them is exactly the class this page is about:
+
+```text
+0890446c: addiu sp,sp,-0x10
+08904470: lui   a0,0x9
+08904478: addiu s0,a0,-0x7408        ; s0 = 0x88bf8, the class descriptor
+0890447c: move  a0,s0
+08904484: jal   0x00104eb8           ; Vex_RegisterClass(s0, 0x3c3)
+08904488: li    a1,0x3c3             ; delay slot - the class id itself
+0890448c: lui   a0,0x2d
+08904494: sw    a0,0x38(s0)          ; s0+0x38 = 0x2cd214 (-> 0x08ad1214)
+```
+
+`0x3c3` is `Dynamic Shadow Occluder`'s class id, and it is a plain immediate
+in a `li`, not a pointer needing any relocation correction - no ambiguity
+here at all. Named `DynamicShadowOccluder_RegisterClass`.
+
+The store at `s0+0x38` sets the descriptor's method-table pointer to
+`0x2cd214`, unrelocated for `0x08ad1214`. Reading 136 bytes from there shows
+a 12-byte zero header followed by an 8-byte-stride pointer table (pointer,
+then a zero pad word), eleven entries, all pointing into code:
+
+| Table offset | Raw (unrelocated) | Relocated |
+| --- | --- | --- |
+| `+0x0c` | `0x001404d0` | `0x089408d0` |
+| `+0x14` | `0x0014079c` | `0x0894079c` |
+| `+0x1c` | `0x001407a4` | `0x089407a4` |
+| `+0x24` | `0x001407ac` | `0x089407ac` |
+| `+0x2c` | `0x001407f4` | `0x089407f4` |
+| `+0x34` | `0x000feea8` | `0x0890eea8` |
+| `+0x3c` | `0x0014084c` | `0x0894084c` |
+| **`+0x44`** | **`0x000ff8c8`** | **`0x089038c8`** |
+| `+0x4c` | `0x00140864` | `0x08940864` |
+| `+0x54` | `0x000fec04` | `0x0890ec04` |
+| … | … | … |
+
+Slot 7 (0-based, `+0x44`) is `0x000ff8c8` - the unrelocated form of
+`0x089038c8` - matching `Shadow_RenderOccluderVolume`'s address to the byte,
+not just to the neighbourhood. That closes the chain fully: class id `0x3c3`
+-> `Vex_RegisterClass` call site -> method table `0x08ad1214` -> slot 7 ->
+`Shadow_RenderOccluderVolume`. Every step is either a plain immediate or a
+byte-exact address match; nothing in the chain is inferred from shape alone.
+
+**One sub-lead did not pan out and is recorded rather than silently
+dropped**: the same registration function also passes a second unrelocated
+constant (`0x280c10`, stored at `s0+0x28`) to another call
+(`func_0x0026a878`), which looked like a promising candidate for the class's
+*name* pointer - it would have named the class directly from code rather
+than relying on the class-ID table's separately-established `0x3c3 ->
+"Dynamic Shadow Occluder"` mapping. Relocating it the same way
+(`+0x08804000 = 0x08a84c10`) lands mid-way through an unrelated packed
+string blob (`"file"`, `"_world"`, `"AI track data"`, `"PCHSPEEDUPPAD"`, …) -
+not a class name. Either `s0+0x28` isn't a name pointer, or this particular
+constant needs a different correction than the one that works for `s0+0x38`
+and for the class-ID table's own name column. Left unresolved rather than
+asserted either way.
 
 ## Open
 
-- **The class-registration call site.** Finding the `Vex_RegisterClass`
-  caller that registers `0x3c3` and assigns the method table containing
-  `0x08ad1258` would move this past the rubric's "Probable" band without
-  needing a runtime trace - the missing static link, not the missing
-  behaviour.
+- **The `s0+0x28` field's real meaning**, from the sub-lead above - not a
+  class name pointer as far as this pass could tell, and what it actually is
+  was not chased further.
 - **The fixed local axis constant's value.** Read at one of two addresses
   selected by a global flag; both are unbacked by concrete bytes in this
   Ghidra import (no `.data`/`.rodata` content at either), so the axis itself
@@ -153,4 +206,4 @@ attempted this pass.
   disc-authored value.
 - **No runtime trace exists for any of this.** A PPSSPP watchpoint on
   `self+0x50` during a lap that passes a known occluder-bearing circuit
-  section would be the fastest way past 84.
+  section would be the fastest way into the 95-100 band.

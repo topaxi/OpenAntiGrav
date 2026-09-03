@@ -290,7 +290,8 @@ Two things follow for the setting:
   (`0x089038c8`, [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
   reads exactly this payload and extrudes a silhouette-edge stencil volume
   from it - not a lineage argument any more, a runtime reader, at confidence
-  80 (Probable: strong structural fit, not yet trace-verified).
+  88 (Confident: `DynamicShadowOccluder_RegisterClass` statically links class
+  `0x3c3` to this function's own method-table slot, byte for byte).
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
@@ -541,16 +542,20 @@ Each step is a landing that can be reviewed on its own.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
    are `n` planes and `m` vertices, above. ~~What is left of this step is the
    **runtime reader in Ghidra**~~ - **done 2026-09-03**:
-   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 80,
+   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 88,
    [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
    reads the same `n`/`m`/bbox fields this payload decode pinned, derives its
    projection direction from the occluder's **own local axis**, transformed
    by its own world matrix - not from any light - and extrudes a stencil
    shadow volume. It is also the craft's own drop-shadow renderer
    (`exhaust.md`'s `g_craft_scale` finding was the same function from a
-   different angle). Not traced: the static link from vex class `0x3c3` to
-   this function's method-table slot, which needs one more Ghidra pass to
-   move past "Probable".
+   different angle). **The static link from vex class `0x3c3` to this
+   function's method-table slot is also traced now**:
+   `DynamicShadowOccluder_RegisterClass` (`0x0890446c`, confidence 90) passes
+   `0x3c3` to `Vex_RegisterClass` and installs the method table whose slot 7
+   holds `Shadow_RenderOccluderVolume`'s address byte for byte. Step 4 is
+   fully closed; only a runtime trace is left, and it is optional polish
+   rather than a blocker on step 5.
 5. **`original`, per title.** Pulse: draw the 119 local-space hulls - the
    geometry and the projection are both now decoded, so this is a rendering
    task, not a reverse-engineering one. HD: the shadow-map path its four jobs
