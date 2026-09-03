@@ -430,7 +430,7 @@ impl Fsr3 {
                     store_entry(4, wgpu::TextureFormat::R32Float),
                     atomic_entry(5),
                     store_entry(6, wgpu::TextureFormat::R32Float),
-                    store_entry(7, wgpu::TextureFormat::R32Float),
+                    store_entry(7, wgpu::TextureFormat::Rgba16Float),
                 ],
             });
         let luma_pyramid_layout =
@@ -460,7 +460,7 @@ impl Fsr3 {
                 label: Some("fsr3 shading change"),
                 entries: &[
                     sample_entry(0),
-                    store_entry(1, wgpu::TextureFormat::R32Float),
+                    store_entry(1, wgpu::TextureFormat::Rgba8Unorm),
                 ],
             });
 

@@ -36,7 +36,7 @@
 // texture would have been. See `post::fsr3::resources`.
 @group(1) @binding(5) var<storage, read_write> rw_reconstructed_previous_nearest_depth: array<atomic<u32>>;
 @group(1) @binding(6) var rw_farthest_depth: texture_storage_2d<r32float, write>;
-@group(1) @binding(7) var rw_current_luma: texture_storage_2d<r32float, write>;
+@group(1) @binding(7) var rw_current_luma: texture_storage_2d<rgba16float, write>;
 
 fn load_input_depth(px_pos: vec2<i32>) -> f32 {
     return textureLoad(r_input_depth, px_pos, 0).x;

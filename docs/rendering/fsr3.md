@@ -210,11 +210,24 @@ formats only; a storage binding on them needs adapter-specific format features.
 Rather than probe for those and carry two layouts, each intermediate is held in
 the narrowest format the *baseline* guarantees:
 
+**Storable is not the only property that matters, and the second one is easy to
+miss.** `R32Float` is baseline-*storable* but not baseline-*filterable* -
+`float32-filterable` is itself a WebGPU feature - so any intermediate some pass
+reads through the linear sampler needs a format that is both. Which ones those
+are was settled by listing every `Sample*` callback the remaining passes
+actually **call**, rather than the ones that merely exist: `SampleAccumulation`,
+`SampleCurrentLuma`, `SampleDilatedReactiveMasks`, `SampleLumaHistory`,
+`SampleLumaInstability`, `SampleShadingChange` and
+`SampleTransparencyAndCompositionMask`, and no others. `SampleInputDepth` is
+declared and never called, which is why the depth attachment's unfilterable
+binding never becomes a problem.
+
 | Upstream | Here | Why |
 | --- | --- | --- |
-| `R16_FLOAT` | `R32Float` | `R32Float` is baseline-storable; `R16Float` is not |
-| `RG16_FLOAT` | `Rgba16Float` | `Rgba16Float` is baseline-storable; `Rg16Float` is not. Two channels are written, two are wasted |
-| `R8_UNORM` | `R32Float` | same reason as `R16_FLOAT`; the value is a `0..1` scalar either way |
+| `R16_FLOAT`, loaded only | `R32Float` | storable in the baseline, where `R16Float` is not. Twice the bytes, no loss |
+| `R16_FLOAT`, sampled | `Rgba16Float` | storable *and* filterable, which `R16Float` is neither of and `R32Float` is only the first of |
+| `R8_UNORM` | `Rgba8Unorm` | **not a widening at all**: storable, filterable, and the same 256 levels over the same `0..1` range |
+| `RG16_FLOAT` | `Rgba16Float` | `Rg16Float` carries no storage guarantee. Two channels written, two wasted |
 | `R8G8B8A8_UNORM` | `Rgba8Unorm` | already baseline |
 | `R16G16B16A16_FLOAT` | `Rgba16Float` | already baseline |
 | `R32_UINT` (atomic) | storage buffer | see above |
@@ -222,10 +235,8 @@ the narrowest format the *baseline* guarantees:
 **This costs memory and buys portability**, and the trade is deliberate: a
 widened intermediate is a number in a texture descriptor, while a feature probe
 is a second code path that every future change has to keep working and that
-this machine cannot exercise. The cost is real - the render-resolution scalar
-targets are four times the bytes upstream uses, not two, because the alternative
-to `R8_UNORM` is `R32Float` and not `R16Float` - and it is unmeasured on the
-Steam Deck.
+this machine cannot exercise. The cost is real - a sampled scalar is four times
+upstream's bytes - and it is unmeasured on the Steam Deck.
 
 The consequence worth stating plainly: **FSR 3.1 here requests no wgpu feature
 at all.** ADR-0012 expected an adapter probe with a fallback chain because the
@@ -235,12 +246,18 @@ below.
 
 ### The precision loss that follows, and does not
 
-Widening never loses precision; it is the reverse of what upstream does. What
-*is* lost is upstream's deliberate quantisation: `R8_UNORM` accumulation and
-reactive masks quantise to 256 levels, and holding them at full float means this
-port's history behaves marginally differently from a reference run. That is a
-divergence in the same family as the FP16 path upstream ships and this port does
-not take, and it is not correctable by matching formats alone.
+Widening never loses precision; it is the reverse of what upstream does. Nor is
+upstream's deliberate *quantisation* lost, which it would have been under an
+earlier version of the table above: the `R8_UNORM` targets - `accumulation`,
+`shading_change`, `new_locks` - are held at `Rgba8Unorm` and so round to the
+same 256 levels over the same range that upstream's do. That matters because
+accumulation is a feedback loop, and a loop that quantises differently drifts
+differently.
+
+What does remain divergent is the FP16 path upstream ships and this port does
+not take: every intermediate here is at least as wide as upstream's, so any
+arithmetic upstream performs in halves is performed here in floats. That is not
+correctable by matching formats.
 
 ## The fallback ladder
 

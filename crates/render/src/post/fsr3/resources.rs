@@ -31,18 +31,41 @@
 
 use wgpu::TextureFormat;
 
-/// A scalar intermediate: `R16_FLOAT` or `R8_UNORM` upstream.
+/// An `R16_FLOAT` scalar that is only ever `textureLoad`ed.
 ///
 /// `R32Float` and not `R16Float` because `R16Float` carries no storage
-/// guarantee. Widening never loses precision; what it loses is upstream's
-/// deliberate quantisation of the `R8_UNORM` ones, which is a divergence in the
-/// same family as not taking upstream's FP16 path.
+/// guarantee. Twice the bytes, and no loss: widening never costs precision.
+///
+/// **Only for the ones nothing samples.** `R32Float` is storable in the
+/// baseline but *not filterable* - `float32-filterable` is a WebGPU feature -
+/// so a target any pass reads through the linear sampler has to be
+/// [`FILTERABLE`] instead. The three that live here are `dilated_depth`,
+/// `farthest_depth` and `farthest_depth_mip1`, checked against every
+/// `Sample*` callback the remaining passes actually call rather than against
+/// the list of callbacks that exist.
 const SCALAR: TextureFormat = TextureFormat::R32Float;
+
+/// An `R16_FLOAT` scalar that some pass reads through the linear sampler.
+///
+/// `Rgba16Float` is both baseline-storable *and* baseline-filterable, which is
+/// the pair of properties `R16Float` has neither of and `R32Float` has only one
+/// of. Four times upstream's bytes for one channel, which is the price of
+/// asking for no GPU feature at all.
+const FILTERABLE: TextureFormat = TextureFormat::Rgba16Float;
+
+/// An `R8_UNORM` scalar - `accumulation`, `shading_change`, `new_locks`.
+///
+/// **`Rgba8Unorm` is not a widening at all**, and these are the only
+/// intermediates where that is true: it is storable, filterable, and quantises
+/// to the same 256 levels over the same `0..1` range that upstream's
+/// `R8_UNORM` does. Three channels go unwritten; the one that matters behaves
+/// exactly as upstream's.
+const UNORM: TextureFormat = TextureFormat::Rgba8Unorm;
 
 /// A two-channel intermediate: `RG16_FLOAT` upstream.
 ///
-/// `Rgba16Float` and not `Rg16Float` for the same reason, at the cost of two
-/// unwritten channels.
+/// `Rgba16Float` and not `Rg16Float` because `Rg16Float` carries no storage
+/// guarantee, at the cost of two unwritten channels.
 const PAIR: TextureFormat = TextureFormat::Rgba16Float;
 
 /// A colour intermediate, which upstream already holds at `RGBA16_FLOAT`.
@@ -312,17 +335,17 @@ impl Targets {
                 MASKS,
                 1,
             ),
-            luma: PingPong::new(device, "fsr3 luma", render, SCALAR),
-            luma_instability: scalar("fsr3 luma instability", render),
+            luma: PingPong::new(device, "fsr3 luma", render, FILTERABLE),
+            luma_instability: Target::new(device, "fsr3 luma instability", render, FILTERABLE, 1),
 
             farthest_depth_mip1: scalar("fsr3 farthest depth mip1", half),
             spd_mips: Target::new(device, "fsr3 spd mips", half, PAIR, PYRAMID_MIPS),
-            shading_change: scalar("fsr3 shading change", half),
+            shading_change: Target::new(device, "fsr3 shading change", half, UNORM, 1),
 
             internal_upscaled: PingPong::new(device, "fsr3 internal upscaled", upscale, COLOUR),
             luma_history: PingPong::new(device, "fsr3 luma history", upscale, COLOUR),
-            accumulation: PingPong::new(device, "fsr3 accumulation", upscale, SCALAR),
-            new_locks: scalar("fsr3 new locks", upscale),
+            accumulation: PingPong::new(device, "fsr3 accumulation", upscale, UNORM),
+            new_locks: Target::new(device, "fsr3 new locks", upscale, UNORM, 1),
             upscaled_output: Target::new(device, "fsr3 upscaled output", upscale, COLOUR, 1),
         }
     }

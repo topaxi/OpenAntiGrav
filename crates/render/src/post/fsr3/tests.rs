@@ -438,7 +438,7 @@ fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
     // takes a maximum across levels, and a sign error in either would still
     // read zero from zeros - which is why the control below exists.
     for (index, change) in scene
-        .read_r32(&targets.shading_change.texture)
+        .read_unorm(&targets.shading_change.texture)
         .iter()
         .enumerate()
     {
@@ -508,7 +508,7 @@ fn a_changed_scene_reports_a_signed_shading_change() {
     // are the same amount of shading change, and only the pyramid keeps the
     // direction.
     for (index, change) in scene
-        .read_r32(&targets.shading_change.texture)
+        .read_unorm(&targets.shading_change.texture)
         .iter()
         .enumerate()
     {

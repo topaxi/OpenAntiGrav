@@ -168,56 +168,17 @@ impl Scene {
         })
     }
 
-    /// One `R32Float` intermediate, read back as `f32`s row-major.
-    pub(super) fn read_r32(&self, texture: &wgpu::Texture) -> Vec<f32> {
-        let size = texture.size();
-        let unpadded = (size.width * 4) as usize;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-        let padded = unpadded.div_ceil(align) * align;
-        let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("fsr3 readback"),
-            size: (padded * size.height as usize) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        encoder.copy_texture_to_buffer(
-            texture.as_image_copy(),
-            wgpu::TexelCopyBufferInfo {
-                buffer: &readback,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded as u32),
-                    rows_per_image: Some(size.height),
-                },
-            },
-            size,
-        );
-        self.queue.submit([encoder.finish()]);
-        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("draining the queue");
-        let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-        let mut out = Vec::with_capacity((size.width * size.height) as usize);
-        for y in 0..size.height as usize {
-            for x in 0..size.width as usize {
-                let at = y * padded + x * 4;
-                out.push(f32::from_le_bytes(mapped[at..at + 4].try_into().unwrap()));
-            }
-        }
-        drop(mapped);
-        readback.unmap();
-        out
-    }
-
-    /// One `Rgba16Float` intermediate's first two channels, read back as pairs
-    /// row-major - which is what the pyramid holds.
-    pub(super) fn read_rg16(&self, texture: &wgpu::Texture, mip: u32) -> Vec<(f32, f32)> {
+    /// A mip level of `texture`, copied back and unpadded to `bytes` per
+    /// texel, row-major.
+    ///
+    /// The one place the row-alignment dance lives, because getting it wrong
+    /// reads a texel from the padding and produces a plausible wrong number
+    /// rather than an error.
+    fn read_bytes(&self, texture: &wgpu::Texture, mip: u32, bytes: usize) -> Vec<u8> {
         let size = texture
             .size()
             .mip_level_size(mip, wgpu::TextureDimension::D2);
-        let unpadded = (size.width * 8) as usize;
+        let unpadded = size.width as usize * bytes;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
         let padded = unpadded.div_ceil(align) * align;
         let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -250,18 +211,54 @@ impl Scene {
             .poll(wgpu::PollType::wait_indefinitely())
             .expect("draining the queue");
         let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-        let half =
-            |at: usize| f16_to_f32(u16::from_le_bytes(mapped[at..at + 2].try_into().unwrap()));
-        let mut out = Vec::with_capacity((size.width * size.height) as usize);
+        let mut out = Vec::with_capacity(size.height as usize * unpadded);
         for y in 0..size.height as usize {
-            for x in 0..size.width as usize {
-                let at = y * padded + x * 8;
-                out.push((half(at), half(at + 2)));
-            }
+            out.extend_from_slice(&mapped[y * padded..y * padded + unpadded]);
         }
         drop(mapped);
         readback.unmap();
         out
+    }
+
+    /// One `R32Float` intermediate, read back as `f32`s row-major.
+    pub(super) fn read_r32(&self, texture: &wgpu::Texture) -> Vec<f32> {
+        self.read_bytes(texture, 0, 4)
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
+            .collect()
+    }
+
+    /// One `Rgba8Unorm` intermediate's red channel, back as `0..1` floats.
+    ///
+    /// The three targets that live in this format - `accumulation`,
+    /// `shading_change`, `new_locks` - are the ones upstream holds at
+    /// `R8_UNORM`, so a readback here is quantised to the same 256 levels
+    /// upstream's is, and an expectation has to be given a tolerance
+    /// accordingly.
+    pub(super) fn read_unorm(&self, texture: &wgpu::Texture) -> Vec<f32> {
+        self.read_bytes(texture, 0, 4)
+            .into_iter()
+            .step_by(4)
+            .map(|byte| f32::from(byte) / 255.0)
+            .collect()
+    }
+
+    /// One `Rgba16Float` intermediate's first two channels at `mip`, read back
+    /// as pairs row-major - which is what the pyramid holds.
+    pub(super) fn read_rg16(&self, texture: &wgpu::Texture, mip: u32) -> Vec<(f32, f32)> {
+        self.read_bytes(texture, mip, 8)
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|texel| {
+                let half = |at: usize| {
+                    f16_to_f32(u16::from_le_bytes(texel[at..at + 2].try_into().unwrap()))
+                };
+                (half(0), half(2))
+            })
+            .collect()
     }
 
     /// `GetViewSpaceDepthInMeters` on the CPU, from the same two constants the
