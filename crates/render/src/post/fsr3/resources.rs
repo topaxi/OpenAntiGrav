@@ -51,10 +51,11 @@ use wgpu::TextureFormat;
 /// **Only for the ones nothing samples.** `R32Float` is storable in the
 /// baseline but *not filterable* - `float32-filterable` is a WebGPU feature -
 /// so a target any pass reads through the linear sampler has to be
-/// [`FILTERABLE`] instead. The three that live here are `dilated_depth`,
-/// `farthest_depth` and `farthest_depth_mip1`, checked against every
-/// `Sample*` callback the remaining passes actually call rather than against
-/// the list of callbacks that exist.
+/// [`FILTERABLE`] instead. The two that live here are `dilated_depth` and
+/// `farthest_depth`, from an enumeration of every `Sample*` callback the passes
+/// actually call - **and the enumeration has to allow digits in the name**, or
+/// it silently misses `SampleFarthestDepthMip1` and puts `farthest_depth_mip1`
+/// on the wrong side of the line.
 const SCALAR: TextureFormat = TextureFormat::R32Float;
 
 /// An `R16_FLOAT` scalar that some pass reads through the linear sampler.
@@ -381,7 +382,13 @@ impl Targets {
             luma: PingPong::new(device, "fsr3 luma", render, FILTERABLE),
             luma_instability: Target::new(device, "fsr3 luma instability", render, FILTERABLE, 1),
 
-            farthest_depth_mip1: scalar("fsr3 farthest depth mip1", half),
+            farthest_depth_mip1: Target::new(
+                device,
+                "fsr3 farthest depth mip1",
+                half,
+                FILTERABLE,
+                1,
+            ),
             spd_mips: Target::new(device, "fsr3 spd mips", half, PAIR, PYRAMID_MIPS),
             shading_change: Target::new(device, "fsr3 shading change", half, UNORM, 1),
 

@@ -71,7 +71,7 @@ order, so this table and the code cannot drift apart silently.
 | 3 | `shading_change_pyramid` (SPD) | render/2, mips | **yes**, as a dispatch per level |
 | 4 | `shading_change` | render/2 | **yes** |
 | 5 | `prepare_reactivity` | render | **yes** |
-| 6 | `luma_instability` | render | no |
+| 6 | `luma_instability` | render | **yes** |
 | 7 | `accumulate` | **presentation** | no |
 | 8 | `rcas` | presentation | no |
 

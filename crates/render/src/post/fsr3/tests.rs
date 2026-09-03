@@ -372,7 +372,7 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
         return;
     };
     let targets = scene.fsr3.targets().expect("a dispatched frame");
-    let mip1 = scene.read_r32(&targets.farthest_depth_mip1.texture);
+    let mip1 = scene.read_rg16(&targets.farthest_depth_mip1.texture, 0);
 
     let half = (size.0 / 2, size.1 / 2);
     for y in 0..half.1 {
@@ -382,9 +382,13 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
                 scene.view_space_metres(depth[at])
             };
             let want = (tap(0, 0) + tap(1, 0) + tap(0, 1) + tap(1, 1)) * 0.25;
-            let got = mip1[(y * half.0 + x) as usize];
+            let got = mip1[(y * half.0 + x) as usize].0;
+            // **A tenth of a percent, not a ten-thousandth**, because this
+            // target is `Rgba16Float`: it is sampled by `luma_instability`
+            // through `SampleFarthestDepthMip1`, and a filterable format is
+            // half-precision. The reduction is exact; the storage is not.
             assert!(
-                (got - want).abs() < want * 1e-4,
+                (got - want).abs() < want * 1e-3,
                 "({x}, {y}): got {got}, wanted {want}"
             );
         }
@@ -583,6 +587,69 @@ fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame() {
             (accumulation - 2.0 / 3.0).abs() < 2.0 * step,
             "texel {index} stored accumulation {accumulation}, wanted two thirds"
         );
+    }
+}
+
+#[test]
+fn a_still_scene_fills_the_luma_history_and_is_never_unstable() {
+    // **Seven frames, because the pass is gated twice and both gates take
+    // time.** The instability factor is only computed where the accumulation is
+    // over 0.9 frames deep, which at a third of a frame each takes until the
+    // fourth; the history is then four frames deep, so it takes three more to
+    // fill. A shorter run would read zeros and prove nothing.
+    //
+    // Two properties, and the second is the one a reader would break:
+    //
+    // 1. A perfectly still scene is **never unstable**. Instability means the
+    //    luma came back towards an older frame rather than going on, and
+    //    nothing here ever moves.
+    // 2. The history fills one slot per frame, oldest first out - so after
+    //    enough frames every slot holds this frame's luma. Get the four shift
+    //    assignments in the wrong order and the window becomes a smear, which
+    //    property 1 would not notice.
+    let depth = depth_pattern();
+    let colour = colour_pattern();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let Some(scene) = Scene::run(FIXTURE, &[still; 7]) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    let frame = scene
+        .fsr3
+        .constants()
+        .expect("a dispatched frame")
+        .frame_index as u64;
+    assert_eq!(frame, 6, "the fixture ran seven frames");
+
+    for (index, instability) in scene
+        .read_rgba16(&targets.luma_instability.texture)
+        .iter()
+        .enumerate()
+    {
+        assert_eq!(
+            instability[0], 0.0,
+            "texel {index} is called unstable in a scene that never moved"
+        );
+    }
+
+    for (index, history) in scene
+        .read_rgba16(&targets.luma_history.current(frame).texture)
+        .iter()
+        .enumerate()
+    {
+        // `rgb_to_luma` on the fixture's own colour, on the CPU.
+        let [r, g, b] = colour[index];
+        let want = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        for (slot, held) in history.iter().enumerate() {
+            assert!(
+                (held - want).abs() < want * 1e-2,
+                "texel {index} history slot {slot} holds {held}, wanted {want}"
+            );
+        }
     }
 }
 

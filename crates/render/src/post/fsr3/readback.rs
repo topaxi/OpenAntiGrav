@@ -256,6 +256,22 @@ impl Scene {
             .collect()
     }
 
+    /// All four channels of an `Rgba16Float` intermediate - which for
+    /// `luma_history` is four *frames*, N-1 through N-4, not a colour.
+    pub(super) fn read_rgba16(&self, texture: &wgpu::Texture) -> Vec<[f32; 4]> {
+        self.read_bytes(texture, 0, 8)
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|texel| {
+                std::array::from_fn(|channel| {
+                    let at = channel * 2;
+                    f16_to_f32(u16::from_le_bytes(texel[at..at + 2].try_into().unwrap()))
+                })
+            })
+            .collect()
+    }
+
     /// One `Rgba16Float` intermediate's first two channels at `mip`, read back
     /// as pairs row-major - which is what the pyramid holds.
     pub(super) fn read_rg16(&self, texture: &wgpu::Texture, mip: u32) -> Vec<(f32, f32)> {

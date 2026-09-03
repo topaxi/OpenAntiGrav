@@ -46,7 +46,7 @@
 // left half-built.
 
 @group(1) @binding(0) var r_farthest_depth: texture_2d<f32>;
-@group(1) @binding(1) var rw_farthest_depth_mip1: texture_storage_2d<r32float, write>;
+@group(1) @binding(1) var rw_farthest_depth_mip1: texture_storage_2d<rgba16float, write>;
 
 fn load_farthest_depth(px_pos: vec2<i32>) -> f32 {
     return textureLoad(r_farthest_depth, px_pos, 0).x;

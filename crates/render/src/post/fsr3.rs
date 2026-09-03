@@ -44,8 +44,14 @@
 
 use anyhow::Result;
 
+mod bindings;
 mod constants;
 mod resources;
+
+use bindings::{
+    atomic_entry, level_entry, load_entry, read_buffer_entry, sample_entry, shared_layout,
+    store_entry,
+};
 
 pub use constants::{Camera, Constants, Dispatch, camera_from_projection};
 pub use resources::{PYRAMID_MIPS, Sizes, Targets};
@@ -165,148 +171,8 @@ impl Pass {
                 | Self::ShadingChangePyramid
                 | Self::ShadingChange
                 | Self::PrepareReactivity
+                | Self::LumaInstability
         )
-    }
-}
-
-/// The `Fsr3Constants` uniform, the two samplers, and nothing else - group 0 of
-/// every pass.
-///
-/// One shared layout rather than one per pass, for the reason
-/// [`super::motion_blur`] gives for its own: a binding a pass does not read
-/// costs nothing, and four near-identical layouts is four places for a binding
-/// number to drift from the WGSL.
-fn shared_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-    let sampler = |binding, ty| wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Sampler(ty),
-        count: None,
-    };
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("fsr3 shared"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            sampler(1, wgpu::SamplerBindingType::NonFiltering),
-            sampler(2, wgpu::SamplerBindingType::Filtering),
-        ],
-    })
-}
-
-/// A texture read with `textureLoad`, which is what every pass here does.
-///
-/// `filterable: false` because the depth attachment binds through this too and
-/// a depth format is unfilterable - the same entry
-/// [`super::motion_blur`] needed for the same reason.
-fn load_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-            view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
-        },
-        count: None,
-    }
-}
-
-/// A write-only storage texture at `binding`.
-///
-/// **Write-only, never `ReadWrite`.** Read-write access carries no baseline
-/// guarantee, and a pass that needs to read what an earlier one wrote binds it
-/// through [`load_entry`] instead - every target here carries
-/// `TEXTURE_BINDING` as well as `STORAGE_BINDING` for exactly that.
-fn store_entry(binding: u32, format: wgpu::TextureFormat) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::StorageTexture {
-            access: wgpu::StorageTextureAccess::WriteOnly,
-            format,
-            view_dimension: wgpu::TextureViewDimension::D2,
-        },
-        count: None,
-    }
-}
-
-/// A texture read with `textureSampleLevel` through the filtering sampler,
-/// across its whole mip chain.
-///
-/// **The one binding kind here that is not `textureLoad`.** `shading_change`
-/// samples the pyramid at three explicit mip levels, interpolating across each
-/// level's coarser grid rather than snapping to it, so the binding has to
-/// declare itself filterable - which `Rgba16Float` is, in the WebGPU baseline,
-/// and which a depth format is not. Nothing depth-shaped reaches this entry.
-fn sample_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
-        },
-        count: None,
-    }
-}
-
-/// A small uniform at `binding`, for the one thing that changes *between*
-/// dispatches of the same frame.
-///
-/// The shared constants at group 0 are written once a frame; a pyramid's level
-/// index is not, so it cannot live there. One buffer per level, written at
-/// build time rather than per frame, because the values are `0..PYRAMID_MIPS`
-/// and never move.
-fn level_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-/// A read-only storage buffer at `binding` - the atomic scatter target again,
-/// seen by the passes that consume rather than write it.
-fn read_buffer_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only: true },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-/// A read-write storage buffer at `binding` - the atomic scatter target, and
-/// the one resource in this port that is not a texture.
-fn atomic_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only: false },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
     }
 }
 
@@ -360,6 +226,8 @@ pub struct Fsr3 {
     shading_change: wgpu::ComputePipeline,
     prepare_reactivity_layout: wgpu::BindGroupLayout,
     prepare_reactivity: wgpu::ComputePipeline,
+    luma_instability_layout: wgpu::BindGroupLayout,
+    luma_instability: wgpu::ComputePipeline,
     /// One uniform per pyramid level, holding that level's source extent. See
     /// [`level_entry`]; written once, because the extents are a function of the
     /// allocation rather than of the frame.
@@ -454,7 +322,10 @@ impl Fsr3 {
         let luma_pyramid_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("fsr3 luma pyramid"),
-                entries: &[load_entry(0), store_entry(1, wgpu::TextureFormat::R32Float)],
+                entries: &[
+                    load_entry(0),
+                    store_entry(1, wgpu::TextureFormat::Rgba16Float),
+                ],
             });
         // One layout for both pyramid entry points, so that a level-0 dispatch
         // and a reduce dispatch bind the same shape. Each reads a different
@@ -494,6 +365,19 @@ impl Fsr3 {
                     store_entry(6, wgpu::TextureFormat::Rgba8Unorm),
                     store_entry(7, wgpu::TextureFormat::Rgba8Unorm),
                     store_entry(8, wgpu::TextureFormat::Rgba8Unorm),
+                ],
+            });
+        let luma_instability_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 luma instability"),
+                entries: &[
+                    load_entry(0),
+                    sample_entry(1),
+                    sample_entry(2),
+                    sample_entry(3),
+                    sample_entry(4),
+                    store_entry(5, wgpu::TextureFormat::Rgba16Float),
+                    store_entry(6, wgpu::TextureFormat::Rgba16Float),
                 ],
             });
 
@@ -583,6 +467,12 @@ impl Fsr3 {
             "cs_prepare_reactivity",
             &prepare_reactivity_layout,
         );
+        let luma_instability = pipeline(
+            "fsr3 luma instability",
+            include_str!("fsr3/luma_instability.wgsl"),
+            "cs_luma_instability",
+            &luma_instability_layout,
+        );
 
         Ok(Self {
             shared,
@@ -602,6 +492,8 @@ impl Fsr3 {
             shading_change,
             prepare_reactivity_layout,
             prepare_reactivity,
+            luma_instability_layout,
+            luma_instability,
             levels,
             targets: None,
         })
@@ -914,6 +806,51 @@ impl Fsr3 {
             })
             .forget_lifetime();
 
+        let luma_instability_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fsr3 luma instability"),
+            layout: &self.luma_instability_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.dilated_motion_vectors.view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.dilated_reactive_masks.view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.luma.current(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.luma_history.previous(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth_mip1.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.luma_history.current(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&targets.luma_instability.view),
+                },
+            ],
+        });
+
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
 
@@ -967,6 +904,10 @@ impl Fsr3 {
 
         pass.set_pipeline(&self.prepare_reactivity);
         pass.set_bind_group(1, Some(&prepare_reactivity_group), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        pass.set_pipeline(&self.luma_instability);
+        pass.set_bind_group(1, Some(&luma_instability_group), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
     }
 
