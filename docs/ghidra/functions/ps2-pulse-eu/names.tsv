@@ -200,3 +200,13 @@
 0x0010b978	function	Gu_BlendFunc	90	batch-draw-state.md
 0x0010b1e8	function	Gu_Enable	85	batch-draw-state.md
 0x0010b230	function	Gu_Disable	85	batch-draw-state.md
+
+0x001d0350	function	AnimTransform_Update	90	anim-transform.md
+0x0023e098	function	fmodf	88	anim-transform.md
+0x001cffa0	function	AnimTransform_Bind	85	anim-transform.md
+0x001cfed8	function	AnimTransform_Construct	75	anim-transform.md
+0x00123878	function	InGame_Construct	82	anim-transform.md
+0x00123b98	function	InGame_Destruct	82	anim-transform.md
+0x0027ddbc	data	g_ingame	85	anim-transform.md
+0x00299b10	data	g_anim_transform_vtable	80	anim-transform.md
+0x002e3640	data	g_ingame_fallback	70	anim-transform.md

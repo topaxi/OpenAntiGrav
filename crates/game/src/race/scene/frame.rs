@@ -524,26 +524,26 @@ impl Scene {
             // plume carries no `Anim Transform` at all, so this early-returns
             // there and the PSP picture is untouched.
             //
-            // **The clock is the plume's own reveal timer, the same one the UV
-            // scroll above rides, and that is a reading rather than a
-            // recovery** - confidence 65. What is measured: the anchors carry
-            // a 67-key z-scale flicker (0.55 to 1.13) looping at 1.6667 s,
-            // identical across all 24 PS2 plume files, keyed at 1/60 s beside
-            // the UV track in the same file; on `plume_timer` it plays one
-            // monotonic pass per reveal and never wraps, where the race clock
-            // reaches the wrap and restarts the flicker mid-boost. What is
-            // not: no PS2 executable has been read, so which clock the
-            // original feeds its node evaluator is unrecovered, and the
-            // one-pass fit is approximate rather than exact - `PLUME_SECONDS`
-            // is 1.5 and PSP-recovered, against this track's 1.6667. The
-            // "wrong in both directions" argument HANDOVER records for the UV
-            // ramp is weaker here: an arbitrary start phase on a flicker still
-            // reads as a flicker.
+            // **The clock is the shared race clock, not the plume's own
+            // reveal timer** - recovered, confidence 90, not the earlier
+            // approximate fit. `AnimTransform_Update` (`0x001d0350` in
+            // `ps2-pulse-eu`) is the per-frame driver for every `Anim
+            // Transform` node on the disc, plume anchors included: it reads
+            // one shared session clock (`g_ingame`, with a fallback global,
+            // neither per-object), advances it, and wraps it at the node's
+            // own `LoopEnd` through `fmodf`. See
+            // `docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`. This
+            // is the same clock every other `Anim Transform` node in this
+            // frame already rides - `seconds`, below - so the plume anchors
+            // were the one outlier still wired to a per-craft timer. Unlike
+            // the UV scroll above, there is no independent evidence the
+            // node clock ever resets per reveal; the disc drives it exactly
+            // like scenery.
             //
             // Seconds, not frames. `vex::AnimTransform::sample` takes seconds
             // and wraps at the track's own `loop_seconds`, where the UV track
             // above takes 60 Hz frames and clamps.
-            boost.write_node_anims(queue, race.exhaust_of(slot).plume_timer());
+            boost.write_node_anims(queue, seconds);
         }
         oag_render::perfprobe::mark("rockets+plumes");
         if let Some(collision) = &self.collision {
