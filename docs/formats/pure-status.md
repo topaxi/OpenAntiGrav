@@ -106,6 +106,10 @@ from the exporter's own class-name ordering instead - see
 | `Wall Collision` | `0x3ba` | `0x36c` | Table index, plus the exact complement: 0.5 % downward, 68 % lateral | 94 |
 | `Reset Collision` | `0x3cd` | `0x37f` | Table index. The facing statistic could **not** settle this one - see [below](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) | 94 |
 | `Mag Floor`, `Cage` | `0x3e6`, `0x3e7` | absent | Pure authors neither on any circuit | 90 |
+| `Airbrake` | `0x3c5` | `0x377` | Table index, plus every one of 6 reachable ships names its pair `Airbrake_Left`/`Airbrake_Right`, each with one `Mesh` child - the shape `mesh.rs` already assumes | 90 |
+| `LodGroup` | `0x2ee` | `0x2de` | Not in the run - a generic Maya class, like `Mesh`/`Transform`. Every one of 6 reachable ships names one node `lodGroup1` with exactly two `Transform` children | 88 |
+| `fogCube` | `0x3d3` | `0x385` | Not in the run either. 10 instances across 7/16 circuits, all 128 bytes (`fog::PAYLOAD_LEN` exact) and all `edge == 500.0` - the same figure Pulse's own shipped tracks carry | 94 |
+| `Anim Transform` | `0x3c0` | `0x372` | Table index; 332 nodes across all 16 circuits, **332/332** parse under `anim_transform`'s own bounds-checked decoder | 94 |
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in
@@ -247,10 +251,17 @@ none was written to `docs/ghidra/functions/psp-pulse-usa/names.tsv`**; the
 `0x08a84db8` arithmetic is unverified in Ghidra. Reading Pure's registration
 table the way Pulse's was read is what would take this to 100.
 
-`Airbrake` is in the run at index 11, so the same arithmetic gives `0x377`.
-[`vex::classes::V4`](../../crates/formats/src/vex.rs) leaves it `None` anyway:
-nothing has looked for it in Pure's files and nothing consumes it, and the
-derivation being written down is not the same as the table asserting it.
+**Settled 2026-09-03.** `Airbrake` is in the run at index 11, so the same
+arithmetic gives `0x377`, and `Anim Transform` at index 8 gives `0x372` - both
+checked against Pure's own files now (six ships and all 16 circuits
+respectively; see the table above), and both in
+[`vex::classes::V4`](../../crates/formats/src/vex.rs). `crates/render/src/mesh.rs`
+already reads `classes.airbrake` to animate a ship's flap geometry, so this is
+not bookkeeping: before it, a Pure ship's flaps rendered in their base pose
+with no deflection at all, on every team, because the field it needed was
+`None`. `lod_group` (`0x2de`) and `fogcube` (`0x385`) are recovered too, the
+same way `mesh`/`transform` were - a property of their own node shape, since
+neither is a name in this run.
 
 ### The geometry is there and it is sane
 

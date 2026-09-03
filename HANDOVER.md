@@ -430,7 +430,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD/Fury's HUD draws, and three of Pulse's constants applied to every title were why it did not](handover/hd-furys-hud-draws-and-three-of-pulses.md)
 - [Wipeout HD / Fury's HUD reads, and the reader it shares with Pulse was wrong in three ways Pulse's own data could never have shown](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)
 - [`.gtf` reads, so HD's textures are pixels - all 7,333 decode; what is left is drawing the ship shadows](handover/gtf-reads-so-hds-textures-are-pixels.md)
-- [Wipeout Pure races, on Pulse's physics, and what is still absent is a list of unrecovered class ids](handover/wipeout-pure-races-on-pulses-physics-and-what.md)
+- [Wipeout Pure races, on Pulse's physics, and what is still absent is a list of unrecovered entry names](handover/wipeout-pure-races-on-pulses-physics-and-what.md)
 - [Pure's particle effects decode and play, and two of five names do not resolve](handover/pures-particle-effects-decode-and-play-and-two.md)
 - [Per-team hulls are drawn; which team flies which slot is not recovered](handover/per-team-hulls-are-drawn-which-team-flies.md)
 - [Team model and skin variants are declared and documented; the `.dat` payload and the drawing are both still open](handover/team-model-and-skin-variants-are-declared-and.md)
