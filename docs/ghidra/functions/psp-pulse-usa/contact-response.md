@@ -354,9 +354,24 @@ correction below the list, which replaces an earlier wrong reading of what
    factors, and a call to a `[0.2, 0.8]` range randomiser for a phase offset -
    the same shape, and the same two literals, as the PS2's arm function.
    `Camera_SubmitScene` (`0x08878874`, right after it) reads exactly those
-   fields at its own start, decaying a two-oscillator shake into the eye
-   offset every frame it's called - unremarked until now because nothing on
-   this page had read `Camera_SubmitScene`'s own body either. So: ~~if the
+   fields at its own start, decaying a two-oscillator shake every frame it's
+   called - unremarked until now because nothing on this page had read
+   `Camera_SubmitScene`'s own body either. **Correction (2026-09-03, same
+   day): it is not an eye offset.** A closer read for
+   [`collision-shake.md`](../ps2-pulse-eu/collision-shake.md) on the PS2
+   binary found its counterpart (`FUN_0025cbb0`/`FUN_0025ca48`) building a
+   Rodrigues axis-angle rotation matrix and `vmmul_t`-ing it into the
+   camera's own basis rows - not adding into a position. The PSP side's
+   `func_0x002676b4` (`0x08a6b6b4`) and `func_0x00267820` (`0x08a6b820`) do
+   the identical thing: build a rotation matrix (`vcos_s`/`vsin_s` off a
+   fixed-point-wrapped angle) and `vmmul_t` it into a 4x3 block read from the
+   call site, preserving the block's own `[3]`/`[7]`/`[0xb]` w-components.
+   Both binaries agree independently: the shake perturbs the camera's
+   *orientation*, not its eye position. See `collision-shake.md` for the
+   full accounting, including the exact three-key falloff envelope and the
+   confirmed `DAT_08ab0dfc = 0.3` / `DAT_08ab0e00 = 0.6` scale constants
+   (read directly from `.data`, identical bytes to the PS2's own
+   `DAT_0027e8dc`/`DAT_0027e8e0`). So: ~~if the
    reacting craft is the local player (`FUN_0883e64c(param_2) == 1`), it
    separately plays an audio cue via `FUN_08878750(fVar21 * DAT_08ab0dfc,
    ...)` - `fVar21` scaled *again* by a second, still-unread constant, one of
