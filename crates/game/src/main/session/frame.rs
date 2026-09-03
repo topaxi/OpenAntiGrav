@@ -790,7 +790,7 @@ impl Session {
                 timer.begin(self.frame_index);
             }
 
-            self.framebuffer.resolve_scene(
+            let upscale_encoded = self.framebuffer.resolve_scene(
                 &self.gpu.device,
                 &self.gpu.queue,
                 &mut encoder,
@@ -803,6 +803,27 @@ impl Session {
                     .as_ref()
                     .and_then(oag_render::timing::PassTimer::compute_writes),
             );
+            // **The same rule the blur and HD-bloom claims already follow**:
+            // a claim `will_upscale_temporally` made and `resolve_scene` did
+            // not write into is given back here, not left to resolve to an
+            // unspecified value. Without this, a shader that fails to build
+            // on one adapter and not another (RADV and NVIDIA's proprietary
+            // driver disagree on more than one WGSL corner) leaks the one
+            // slot claimed on the failing frame - and, because
+            // `Session::render_profile().reconstruction.is_temporal()` reads
+            // the *setting* rather than whether FSR 3.1 is actually running,
+            // every frame after that reads `Cost::fixed` as `None` forever
+            // and `Controller::record` is never called again: the render
+            // scale freezes wherever it happened to be the instant the build
+            // failed, with no way back. See
+            // `Session::read_timing_and_feed_drs`'s own `has_hd_bloom`-style
+            // fix for the read-back half of the same bug.
+            if will_upscale_temporally
+                && !upscale_encoded
+                && let Some(timer) = self.upscale_timer.as_mut()
+            {
+                timer.abandon();
+            }
         }
 
         // The HUD, after the resolve and at presentation size, laid out against

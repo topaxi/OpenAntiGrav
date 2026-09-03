@@ -585,7 +585,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    framebuffer.resolve_scene(
+    let _ = framebuffer.resolve_scene(
         &device,
         &queue,
         &mut encoder,

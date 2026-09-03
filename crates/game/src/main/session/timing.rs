@@ -113,7 +113,24 @@ impl Session {
             // anything temporal is resolving at all. Treating an unmeasured
             // chain as free would inflate the budget by the largest single
             // term in it.
-            let fixed = match (fixed, render_profile.reconstruction.is_temporal()) {
+            //
+            // **The setting alone is not enough to tell those apart.**
+            // `reconstruction.is_temporal()` answers "did a player ask for
+            // this", not "will a reading ever come back" - `self.gpu.temporal`
+            // (the adapter) and `self.framebuffer.temporal_upscaler_viable()`
+            // (whether the shaders actually built) are both permanent facts
+            // once they turn false, and `will_upscale_temporally` in
+            // `frame.rs` already gates the *claim* on all three together. This
+            // has to gate the *read* on the same three, or a shader that fails
+            // to build on one adapter and not another leaves this reading
+            // `None` forever: `fixed` stays `None`, `Controller::record` is
+            // never called again, and the render scale freezes wherever it
+            // was the instant the build failed - see the `abandon()` call
+            // beside the claim in `frame.rs` for the other half of this bug.
+            let expects_upscale = render_profile.reconstruction.is_temporal()
+                && self.gpu.temporal
+                && self.framebuffer.temporal_upscaler_viable();
+            let fixed = match (fixed, expects_upscale) {
                 (Some(seconds), _) => Some(seconds),
                 (None, false) => Some(0.0),
                 (None, true) => None,
