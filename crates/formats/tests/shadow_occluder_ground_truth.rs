@@ -116,6 +116,14 @@ const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 /// How many repeat their bounding box as two padded `vec4`s at `+0x30`,
 /// within this test's `1e-6` tolerance.
 ///
+/// **The tolerance hides a mixed population inside this number.** The
+/// denormal authoring sentinel `0x00800000` is `1.1754944e-38`, so a node
+/// whose packed `max.y` is the sentinel and whose padded `max.y` is a hard
+/// `0.0` differs by ~`1e-38` - well inside `1e-6` - and counts as a
+/// "match" here even though it is one of the hard-zero substitutions
+/// described below, not an identical copy. How many of the 97 are that
+/// case rather than a true copy is computable but not computed.
+///
 /// **Read by hand, 2026-09-03, and an earlier pass at this same comment
 /// overclaimed a clean rule from too small a sample - corrected the same
 /// day.** Not asserted here; the split would make this test depend on
@@ -132,16 +140,16 @@ const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 ///   the same value in the same files *does* get floored. No discriminator
 ///   found for the exception.
 /// - **Where the packed header's `max.y` is the denormal authoring sentinel
-///   `0x00800000`** (the same one `BEData.wad#20`'s flat hull declares),
-///   of the ~54 nodes where that matters (excluding the ones whose true
-///   vertex `max.y` is itself exactly `0.0`, where the two behaviours are
-///   indistinguishable): **`+0x40`'s `max.y` carries the true
-///   vertex-derived value on 16 of them, and is a hard `0.0` on the other
-///   ~38.** Tried and ruled out as a discriminator: node name/type (both
-///   behaviours occur on both `shadowShape` and `shadow_lodShape`, including
-///   the same numeric `max.y` value split both ways across different
-///   files) and the specific numeric value. May be a per-circuit build/tool
-///   version difference; not chased further.
+///   `0x00800000`** (the same one `BEData.wad#20`'s flat hull declares): 70
+///   nodes carry it, 16 of which have a true vertex-derived `max.y` that is
+///   itself exactly `0.0` (where the two possible behaviours are
+///   indistinguishable and excluded below). **Of the other 54: `+0x40`'s
+///   `max.y` carries the true vertex-derived value on 16, and is a hard
+///   `0.0` on the other 38.** Tried and ruled out as a discriminator: node
+///   name/type (both behaviours occur on both `shadowShape` and
+///   `shadow_lodShape`, including the same numeric `max.y` value split
+///   both ways across different files) and the specific numeric value. May
+///   be a per-circuit build/tool version difference; not chased further.
 ///
 /// So the padded box is doing *something* shadow-relevant rather than
 /// nothing - most divergence pulls the box toward the ground plane rather

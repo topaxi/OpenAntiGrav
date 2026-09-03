@@ -105,7 +105,7 @@ The `0x50` header, as far as it is read:
 | `+0x0c`..`+0x24` | bounding box, min then max, packed 3+3 floats | a real box on 129/129 |
 | `+0x24` | `u32` `5` | **129/129** |
 | `+0x28` | `f32` `1.0` | **129/129** |
-| `+0x30`..`+0x50` | leans shadow-relevant: `min.y` is floored toward the ground plane on most (not all) nodes above it, `max.y` patched with the true value on some (not most) nodes where the packed box is invalid | 97/129 match the packed box exactly; of the rest, 12/14 positive-`min.y` nodes are floored and 16/~54 denormal-`max.y` nodes are patched - neither exceptionless nor explained - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
+| `+0x30`..`+0x50` | leans shadow-relevant: `min.y` is floored toward the ground plane on most (not all) nodes above it, `max.y` patched with the true value on some (not most) nodes where the packed box is invalid | 97/129 match within `1e-6` tolerance, which hides some hard-zero substitutions as "matches" against the `~1e-38` denormal sentinel; of the rest, 12/14 positive-`min.y` nodes are floored and 16/54 denormal-`max.y` nodes are patched - neither exceptionless nor explained - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
 | `+0x50` | `n` records of 32 bytes, **each beginning with a unit vector** | 129/129 |
 | `+0x50 + 32n` | `m` records of 16 bytes; not unit, not points inside the box | open |
 

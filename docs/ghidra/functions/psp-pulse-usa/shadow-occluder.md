@@ -81,13 +81,18 @@ day, against the full corpus rather than the mismatcher subset:
   reverses on other files (below).
 - **Where the packed header's `max.y` is the denormal authoring sentinel**
   `0x00800000` (the same one `BEData.wad#20`'s flat hull declares, already
-  known from the payload-closure work): of the roughly 54 nodes where the
-  true vertex-derived `max.y` is not itself exactly `0.0` (where the two
-  possible behaviours would be indistinguishable), **16 get `+0x40`'s
-  `max.y` set to the true vertex-derived value, and about 38 get a hard
-  `0.0` instead.** Neither node name (`shadowShape` vs `shadow_lodShape`)
-  nor the specific numeric value discriminates - the same `max.y` value
-  gets fixed in one file's node and hard-zeroed in another's sibling.
+  known from the payload-closure work): 70 nodes carry it, 16 of which have
+  a true vertex-derived `max.y` that is itself exactly `0.0` (where the two
+  possible behaviours are indistinguishable and excluded). **Of the other
+  54: 16 get `+0x40`'s `max.y` set to the true vertex-derived value, and 38
+  get a hard `0.0` instead.** Neither node name (`shadowShape` vs
+  `shadow_lodShape`) nor the specific numeric value discriminates - the
+  same `max.y` value gets fixed in one file's node and hard-zeroed in
+  another's sibling. This is also why `PSP_OCCLUDERS_WITH_PADDED_BBOX = 97`
+  is not "97 identical copies" - the test's `1e-6` tolerance can't tell a
+  true copy from a hard-zero substitution against the `~1e-38` denormal, so
+  an unknown slice of the 97 is the latter; see the constant's own doc
+  comment.
 
 **The honest summary: the padded box leans toward the ground plane far more
 often than away from it, which is still consistent with it being a
@@ -277,7 +282,7 @@ asserted either way.
   `self+0x50` during a lap that passes a known occluder-bearing circuit
   section would be the fastest way into the 95-100 band.
 - **What discriminates the padded box's two exceptions from its two rules**
-  (the 2-of-14 unfloored `min.y` nodes, the ~38-of-54 hard-zeroed `max.y`
+  (the 2-of-14 unfloored `min.y` nodes, the 38-of-54 hard-zeroed `max.y`
   nodes). File/build-version is the leading guess, not checked; node name
   and specific value are both ruled out.
 - **Whether `f32::min`/hard-zero and true-vertex-value are the only two
