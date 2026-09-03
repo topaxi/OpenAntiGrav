@@ -51,6 +51,7 @@ rest are reserved for areas not yet analysed.
 | `AiTrack_` | The track spline graph, named for its `"AI track data"` resource |
 | `World_` | Track and scene assembly |
 | `Ship_` | Craft state and dynamics |
+| `Body_` | The rigid body under a craft: integration, force/torque accumulators, contact resolution |
 | `Movie_`, `MoviePlayer_` | The XML movie widget and its `sceMpeg` wrapper |
 | `Race_` | Race rules, timing, positions |
 | `Weapon_` | Pickups, projectiles, damage |

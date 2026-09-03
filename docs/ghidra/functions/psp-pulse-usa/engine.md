@@ -2508,7 +2508,7 @@ Two structural differences worth knowing before carrying any layout across:
   thrust, `+0x10` pitch, `+0x44` buttons. **The struct moved; its contents did
   not.**
 - **The PS2 has no craft-side accumulators.** `Body_ClearAccumulators`
-  (`0x0015ca48`) zeroes `body+0x100`/`+0x110`/`+0x120`/`+0x130` directly and
+  (`0x0015d058`) zeroes `body+0x100`/`+0x110`/`+0x120`/`+0x130` directly and
   every term writes the body, so this page's `craft+0x320`/`+0x330`/`+0x340`/
   `+0x350` have no PS2 counterpart. Same four accumulators, one less copy.
 
