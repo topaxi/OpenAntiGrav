@@ -549,15 +549,20 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
     assert!("graph".parse::<Overlay>().is_err());
 }
 
-/// The GPU cost row says only what has actually been measured.
+/// The GPU cost rows say only what has actually been measured.
 ///
 /// A reading arrives a frame or more after the frame it describes, so all
-/// four are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
-/// a frame the bilinear blit resolved would be a lie that reads as "free"
-/// rather than as "not running". Each field appears only once it has a number.
+/// four are legitimately absent at the start of a run - and an `FSR3 0.00 MS`
+/// row on a frame the bilinear blit resolved would be a lie that reads as
+/// "free" rather than as "not running". Each row appears only once its own
+/// field has a number, in pipeline order, with `OTHER` last.
 #[test]
-fn the_gpu_cost_row_shows_only_what_was_measured() {
-    assert_eq!(GpuCost::default().line(), None, "nothing measured, no row");
+fn the_gpu_cost_rows_show_only_what_was_measured() {
+    assert_eq!(
+        GpuCost::default().rows(11.76),
+        Vec::<String>::new(),
+        "nothing measured, no rows"
+    );
     assert_eq!(
         GpuCost {
             scene: Some(0.004_2),
@@ -565,9 +570,8 @@ fn the_gpu_cost_row_shows_only_what_was_measured() {
             bloom: None,
             upscale: None,
         }
-        .line()
-        .as_deref(),
-        Some("GPU SCENE 4.20 MS"),
+        .rows(11.76),
+        vec!["SCENE 4.20 MS".to_string(), "OTHER 7.6 MS".to_string()],
         "a scene reading alone must not imply blur, bloom or an upscaler ran"
     );
     assert_eq!(
@@ -577,9 +581,14 @@ fn the_gpu_cost_row_shows_only_what_was_measured() {
             bloom: Some(0.003_1),
             upscale: Some(0.001_8),
         }
-        .line()
-        .as_deref(),
-        Some("GPU SCENE 4.20 MS  BLOOM 3.10 MS  BLUR 1.20 MS  FSR3 1.80 MS")
+        .rows(11.76),
+        vec![
+            "SCENE 4.20 MS".to_string(),
+            "BLOOM 3.10 MS".to_string(),
+            "BLUR 1.20 MS".to_string(),
+            "FSR3 1.80 MS".to_string(),
+            "OTHER 1.5 MS".to_string(),
+        ]
     );
     // The upscaler can report before the scene pass does: the four rings are
     // independent, and a slot is claimed per ring per frame.
@@ -590,15 +599,16 @@ fn the_gpu_cost_row_shows_only_what_was_measured() {
             bloom: None,
             upscale: Some(0.001_8),
         }
-        .line()
-        .as_deref(),
-        Some("GPU  FSR3 1.80 MS")
+        .rows(11.76),
+        vec!["FSR3 1.80 MS".to_string(), "OTHER 10.0 MS".to_string()]
     );
 }
 
-/// The row is `Dev`-only, like the two above it.
+/// The GPU panel is `Dev`-only, like the two rows above it, and it is its own
+/// panel - a separate `Fill` at [`super::GPU_LEFT`], not folded into the
+/// frame-time panel at `RIGHT`.
 #[test]
-fn the_gpu_cost_row_is_dev_only() {
+fn the_gpu_panel_is_dev_only_and_sits_top_left() {
     let mut meter = Meter::new();
     for _ in 0..8 {
         meter.record(1.0 / 60.0);
@@ -609,14 +619,37 @@ fn the_gpu_cost_row_is_dev_only() {
         bloom: Some(0.003_1),
         upscale: Some(0.001_8),
     };
-    let has_row = |mode| {
+    let has_panel = |mode| {
         draw_list(&meter, mode, 60, None, None, None, None, cost)
             .iter()
-            .any(|d| matches!(d, Draw::Text { text, .. } if text.starts_with("GPU ")))
+            .any(|d| matches!(d, Draw::Fill { rect, .. } if rect[0] == super::GPU_LEFT))
     };
-    assert!(has_row(Overlay::Dev));
-    assert!(!has_row(Overlay::Pacing), "pacing is about the interval");
-    assert!(!has_row(Overlay::Fps));
+    assert!(has_panel(Overlay::Dev));
+    assert!(!has_panel(Overlay::Pacing), "pacing is about the interval");
+    assert!(!has_panel(Overlay::Fps));
+
+    // And it is genuinely separate from the frame-time panel: two `Fill`
+    // backgrounds, not one panel widened to fit both.
+    let draws = draw_list(&meter, Overlay::Dev, 60, None, None, None, None, cost);
+    let panel_count = draws
+        .iter()
+        .filter(|d| matches!(d, Draw::Fill { color, .. } if *color == super::PANEL))
+        .count();
+    assert_eq!(
+        panel_count, 2,
+        "the frame-time panel and the GPU panel, and no more"
+    );
+    // Every GPU row is left-aligned off `GPU_LEFT`, not right-aligned off
+    // `RIGHT` the way the frame-time panel's rows are.
+    let scene_row = draws
+        .iter()
+        .find(|d| matches!(d, Draw::Text { text, .. } if text == "SCENE 4.20 MS"))
+        .expect("the scene row is drawn");
+    let Draw::Text { x, align, .. } = scene_row else {
+        unreachable!()
+    };
+    assert_eq!(*x, super::GPU_LEFT + super::PAD);
+    assert_eq!(*align, Align::Left);
 }
 
 /// The residual is the frame-time row minus whatever the GPU row itself adds
@@ -633,8 +666,8 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
     assert!((cost.residual_ms(11.76).unwrap() - 2.16).abs() < 1e-4);
 
     // A field that never reported does not count as zero cost accidentally -
-    // it is simply left out of the sum, the same way `line` leaves it out of
-    // the row.
+    // it is simply left out of the sum, the same way `rows` leaves it out of
+    // the panel.
     let partial = GpuCost {
         scene: Some(0.002_5),
         blur: None,

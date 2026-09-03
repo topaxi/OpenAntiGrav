@@ -214,11 +214,14 @@ first-to-last: bracketing would need `TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is
 not WebGPU-portable, and would have to know which pass is last - which varies
 with the bloom, motion-blur and HD-chain settings.
 
-The `dev` overlay's `GPU` row prints all four timed readings - `SCENE`,
-`BLOOM`, `BLUR`, `FSR3`, each only once it has a reading - followed by an
-`OTHER` row: `perf::Meter`'s own wall-clock frame time minus whatever the row
-above adds up to. That is `RESIDUAL_SHARE`'s target made visible rather than
-assumed - see `perf::GpuCost::residual_ms`.
+The `dev` overlay's own GPU-cost panel - top left, separate from the
+frame-time panel at top right - prints one row per timed reading, `SCENE`,
+`BLOOM`, `BLUR`, `FSR3`, each only once it has a reading, followed by an
+`OTHER` row: `perf::Meter`'s own wall-clock frame time minus whatever the rows
+above add up to. That is `RESIDUAL_SHARE`'s target made visible rather than
+assumed - see `perf::GpuCost::rows` and `residual_ms`. Its own panel rather
+than a block inside the frame-time one, so a reader is not holding five
+numbers on one crammed line.
 
 ### What the signal does in a running race
 

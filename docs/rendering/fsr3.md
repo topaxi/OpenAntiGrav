@@ -261,12 +261,14 @@ the scene pass ([dynamic resolution](dynamic-resolution.md)); FSR 3.1 gets a
 ring of its own rather than a share of that one, because a slot spent here is a
 frame the resolution controller does not get a scene reading for.
 
-The reading lands on the `dev` performance overlay beside the scene pass's, as
-`GPU SCENE x.xx MS  FSR3 x.xx MS`. Two numbers rather than one because a render
-scale moves them in opposite directions: lowering it makes the scene pass
-cheaper and gives the temporal resolve more to reconstruct, and this runs
-*after* the scene pass rather than inside it - so choosing a render scale on the
-scene reading alone is choosing on half the cost.
+The reading lands on the `dev` performance overlay's dedicated GPU-cost panel,
+top left, beside the scene pass's - one row each, `SCENE x.xx MS` and
+`FSR3 x.xx MS`. A render scale moves them in opposite directions: lowering it
+makes the scene pass cheaper and gives the temporal resolve more to
+reconstruct, and this runs *after* the scene pass rather than inside it - so
+choosing a render scale on the scene reading alone is choosing on part of the
+cost. See [dynamic-resolution.md](dynamic-resolution.md) for the other rows
+that panel carries and the `OTHER` row that says what none of them measured.
 
 `Fsr3::sizes` is reported the same way, once per allocation, as a log line at
 `info`. It is the number [goals.md](../overview/goals.md)'s first-tier Steam

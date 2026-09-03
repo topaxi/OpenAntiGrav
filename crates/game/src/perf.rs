@@ -542,7 +542,7 @@ pub struct Stats {
     pub worst_ms: f32,
 }
 
-/// Where the panel sits in the 480x272 space, and how big it is.
+/// Where the frame-time panel sits in the 480x272 space, and how big it is.
 ///
 /// Top right, because the front end and the menus both start at the left margin
 /// and a race puts its ship in the middle. Nothing here is recovered from
@@ -555,6 +555,23 @@ const LINE: f32 = 10.0;
 const GRAPH_W: f32 = WINDOW as f32;
 const GRAPH_H: f32 = 30.0;
 const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
+
+/// Where the GPU-cost panel sits: top left, mirroring [`TOP`] and [`PAD`] off
+/// the opposite margin.
+///
+/// **Its own panel rather than folded into the frame-time one**, which is
+/// what it used to be: `GpuCost::rows` puts one reading a row rather than
+/// several crammed onto one line, and a reader comparing "does GPU add up to
+/// the frame time" wants the two numbers in two places their eye can jump
+/// between, not five values sharing a line with a p99 and a triangle count.
+/// Left rather than another right-side panel because the front end and the
+/// menus both start at the left margin too - but neither of those routes ever
+/// has a `GpuCost` to draw, so there is nothing there for this to collide
+/// with in practice.
+const GPU_LEFT: f32 = 4.0;
+/// Wide enough for the longest single row, `SCENE 100.00 MS` at three digits -
+/// picked to stay legible, the same way [`PANEL_W`] was.
+const GPU_PANEL_W: f32 = 90.0;
 
 /// The panel, the text, and the three bands a frame time can fall in.
 const PANEL: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
@@ -626,13 +643,13 @@ impl RenderSize {
 
 /// What the GPU spent on the passes this build actually times, in seconds.
 ///
-/// **The frame-time row above cannot answer this on its own.** `Meter`
-/// measures the interval between loop iterations, which under `Vsync::On` is
-/// the refresh and under a frame limit is the limit - so a frame with headroom
+/// **The frame-time panel cannot answer this on its own.** `Meter` measures
+/// the interval between loop iterations, which under `Vsync::On` is the
+/// refresh and under a frame limit is the limit - so a frame with headroom
 /// and a frame with none read the same *there*. These are GPU timestamps
 /// around specific work, from [`oag_render::timing::PassTimer`]. Read
-/// together - see [`GpuCost::line`] and the `OTHER` row it prints beside it -
-/// the two say what the frame-time row alone cannot: how much of a frame is
+/// together - see [`GpuCost::rows`] and the `OTHER` row it appends - the two
+/// say what the frame-time panel alone cannot: how much of a frame is
 /// accounted for and how much is not.
 ///
 /// Four numbers rather than one because they answer different questions and a
@@ -662,44 +679,38 @@ pub struct GpuCost {
 }
 
 impl GpuCost {
-    /// One line, or `None` when nothing has been measured yet.
+    /// One row per reading that has come back, each labelled and in
+    /// pipeline order, followed by `OTHER` - what [`Self::residual_ms`]
+    /// found. Empty when nothing has been measured yet.
     ///
-    /// A reading arrives a frame or more after the frame it describes, so the
-    /// first few frames of a run legitimately have nothing to show - printing
-    /// `0.0 MS` there would read as "free" rather than as "not measured yet".
-    ///
-    /// **Compare this against the `FPS`/`MS` line above it, not against the
-    /// target frame period.** That first line is `perf::Meter`'s own
-    /// wall-clock reading of the whole frame - CPU and GPU, every pass,
-    /// timed and untimed alike - and this line is only the passes this build
-    /// brackets with a GPU timestamp. [`Self::residual_ms`] is that
-    /// subtraction, done once rather than left to whoever is reading the
-    /// overlay - the real cost of the MSAA resolve, `hd_bloom`, the HUD, the
-    /// composite, the blit, the driver's own overhead, and the frame loop's
-    /// own CPU-side work, none of which any other row here can show.
+    /// **One row per number rather than one crammed line**, since the panel
+    /// this feeds is a dedicated one - see `draw_list`'s own top-left panel,
+    /// separate from the frame-time panel at top-right precisely so a reader
+    /// is not holding five numbers in one line. A reading arrives a frame or
+    /// more after the frame it describes, so the first few frames of a run
+    /// legitimately have nothing to show for a field - a row for it would
+    /// read as "free" rather than as "not measured yet", which is why each
+    /// row is conditional on its own field rather than the whole panel being
+    /// all-or-nothing.
     #[must_use]
-    pub fn line(self) -> Option<String> {
-        if self.scene.is_none()
-            && self.blur.is_none()
-            && self.bloom.is_none()
-            && self.upscale.is_none()
-        {
-            return None;
-        }
-        let mut line = String::from("GPU");
+    pub fn rows(self, frame_ms: f32) -> Vec<String> {
+        let mut rows = Vec::new();
         if let Some(scene) = self.scene {
-            line.push_str(&format!(" SCENE {:.2} MS", scene * 1000.0));
+            rows.push(format!("SCENE {:.2} MS", scene * 1000.0));
         }
         if let Some(bloom) = self.bloom {
-            line.push_str(&format!("  BLOOM {:.2} MS", bloom * 1000.0));
+            rows.push(format!("BLOOM {:.2} MS", bloom * 1000.0));
         }
         if let Some(blur) = self.blur {
-            line.push_str(&format!("  BLUR {:.2} MS", blur * 1000.0));
+            rows.push(format!("BLUR {:.2} MS", blur * 1000.0));
         }
         if let Some(upscale) = self.upscale {
-            line.push_str(&format!("  FSR3 {:.2} MS", upscale * 1000.0));
+            rows.push(format!("FSR3 {:.2} MS", upscale * 1000.0));
         }
-        Some(line)
+        if let Some(residual) = self.residual_ms(frame_ms) {
+            rows.push(format!("OTHER {residual:.1} MS"));
+        }
+        rows
     }
 
     /// What `frame_ms` does not account for, or `None` when nothing has been
@@ -707,12 +718,14 @@ impl GpuCost {
     ///
     /// **The whole point of carrying `frame_ms` in rather than reading a
     /// target period.** A target is what a player asked for; `frame_ms` -
-    /// `Stats::mean_ms`, the same wall-clock reading [`Self::line`]'s own doc
-    /// comment already argues against replacing this with - is what the
-    /// machine is actually doing, timed passes and untimed ones both. The
-    /// difference is real cost sitting outside every `PassTimer` this build
-    /// has, and reporting nothing here would leave a player doing the
-    /// subtraction by hand against two rows that do not share a decimal place.
+    /// `Stats::mean_ms`, the same wall-clock reading the panel's own top row
+    /// already carries - is what the machine is actually doing, timed passes
+    /// and untimed ones both. The difference is real cost sitting outside
+    /// every `PassTimer` this build has: the MSAA resolve, `hd_bloom` on a
+    /// circuit with no chain built for it, the HUD, the composite, the blit,
+    /// the driver's own overhead, and the frame loop's own CPU-side work.
+    /// Reporting nothing here would leave a player doing the subtraction by
+    /// hand against two panels that do not share a decimal place.
     ///
     /// Can be negative in principle - `frame_ms` is a rolling mean and the GPU
     /// readings are a frame or more old, so a moment where the mean has fallen
@@ -813,23 +826,6 @@ pub fn draw_list(
     {
         lines.push(render.line());
     }
-    // Directly under the render size, because it is the other half of the same
-    // question: that row says what the frame was drawn at, this one says what
-    // that cost. Only under `Dev`, like the two above it - `pacing` is about
-    // the interval between frames, and this is about the work inside one.
-    if mode == Overlay::Dev
-        && let Some(line) = gpu.line()
-    {
-        lines.push(line);
-        // **Directly under the GPU row, and only where that row printed.**
-        // `residual_ms` answers the same question the row above tempts a
-        // reader to ask by eye - "does GPU SCENE + BLUR + FSR3 add up to the
-        // FPS/MS line at the top" - without asking them to hold three numbers
-        // in their head and subtract. See `GpuCost::residual_ms`.
-        if let Some(residual) = gpu.residual_ms(stats.mean_ms) {
-            lines.push(format!("OTHER {residual:.1} MS"));
-        }
-    }
     // Resident memory, not virtual: what the process is actually holding,
     // rather than address space it has merely reserved (a wgpu process's
     // virtual size is a number nobody watching for a leak wants). `None`
@@ -873,34 +869,58 @@ pub fn draw_list(
         });
     }
 
-    if !graph {
-        return out;
+    if graph {
+        let left = RIGHT - PAD - GRAPH_W;
+        let top = TOP + PAD + text_height + PAD;
+        let bottom = top + GRAPH_H;
+        let ceiling = target_ms * GRAPH_FRAMES;
+
+        // The target, drawn under the columns so a column that reaches it is
+        // not cut in half by its own reference line.
+        out.push(Draw::Fill {
+            rect: [left, bottom - GRAPH_H / GRAPH_FRAMES, GRAPH_W, 1.0],
+            color: RULE,
+        });
+
+        // Oldest at the left, so the graph reads the way a chart does and the
+        // newest frame is the one nearest the numbers above it.
+        for (column, frame) in meter.frames().enumerate() {
+            let ms = frame * 1000.0;
+            let height = (ms / ceiling).min(1.0) * GRAPH_H;
+            if height <= 0.0 {
+                continue;
+            }
+            out.push(Draw::Fill {
+                rect: [left + column as f32, bottom - height, 1.0, height],
+                color: band(ms, target_ms),
+            });
+        }
     }
 
-    let left = RIGHT - PAD - GRAPH_W;
-    let top = TOP + PAD + text_height + PAD;
-    let bottom = top + GRAPH_H;
-    let ceiling = target_ms * GRAPH_FRAMES;
-
-    // The target, drawn under the columns so a column that reaches it is not
-    // cut in half by its own reference line.
-    out.push(Draw::Fill {
-        rect: [left, bottom - GRAPH_H / GRAPH_FRAMES, GRAPH_W, 1.0],
-        color: RULE,
-    });
-
-    // Oldest at the left, so the graph reads the way a chart does and the
-    // newest frame is the one nearest the numbers above it.
-    for (column, frame) in meter.frames().enumerate() {
-        let ms = frame * 1000.0;
-        let height = (ms / ceiling).min(1.0) * GRAPH_H;
-        if height <= 0.0 {
-            continue;
+    // **Its own panel, top left** - see [`GPU_LEFT`] for why it is not a
+    // second block inside the one above. `Dev`-only, the same tier every
+    // other GPU-cost row here already was.
+    if mode == Overlay::Dev {
+        let gpu_rows = gpu.rows(stats.mean_ms);
+        if !gpu_rows.is_empty() {
+            let gpu_h = PAD * 2.0 + gpu_rows.len() as f32 * LINE;
+            out.push(Draw::Fill {
+                rect: [GPU_LEFT, TOP, GPU_PANEL_W, gpu_h],
+                color: PANEL,
+            });
+            for (row, text) in gpu_rows.into_iter().enumerate() {
+                out.push(Draw::Text {
+                    x: GPU_LEFT + PAD,
+                    y: TOP + PAD + row as f32 * LINE,
+                    scale: 1.0,
+                    color: TEXT,
+                    border: None,
+                    align: Align::Left,
+                    text,
+                    wrap_width: None,
+                });
+            }
         }
-        out.push(Draw::Fill {
-            rect: [left + column as f32, bottom - height, 1.0, height],
-            color: band(ms, target_ms),
-        });
     }
 
     out
