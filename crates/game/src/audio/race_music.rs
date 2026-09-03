@@ -170,12 +170,55 @@ fn fetch_track(
     }))
 }
 
+/// What [`Audio::source_switch`]'s worker is fetching, and what to check
+/// before applying it once it lands - a switch can take several ticks, and
+/// whatever it was answering may not be the live question any more by then.
+#[derive(Debug)]
+pub(super) struct PendingSwitch {
+    /// The release this fetch is moving onto - checked against a fresh
+    /// request before this lands, so nudging the row back before the fetch
+    /// finishes drops it rather than applies it after the fact. `pub(super)`
+    /// so `Audio`'s own `Debug` impl in `audio.rs`, the parent module, can
+    /// report it.
+    pub(super) wanted: Platform,
+    /// Which voice this is for, and enough about it to tell whether that is
+    /// still true once the fetch lands.
+    target: SwitchTarget,
+    worker: MusicFetchWorker,
+}
+
+/// Which voice a [`PendingSwitch`] targets.
+#[derive(Debug)]
+enum SwitchTarget {
+    /// The menu voice - live only while [`Audio::race_voice`] is `None`. A
+    /// race starting while this is in flight empties [`Audio::music`], which
+    /// [`Audio::tick`]'s apply checks for rather than assumes away.
+    Menu,
+    /// The race voice, fetching soundtrack index `index` of the booted
+    /// disc's own order - live only while [`Audio::race_index`] still names
+    /// it. A track boundary while this is in flight moves the index on, and
+    /// applying a result for the track that just ended would be exactly the
+    /// wrong recording - the same staleness [`Audio::advance_race_track`]
+    /// already checks for [`Audio::race_prefetch`]. `discs`/`choice` are
+    /// carried alongside so a landed switch can update
+    /// [`Audio::race_context`] the same way the old synchronous version did,
+    /// without asking the caller that spawned this a second time.
+    Race {
+        index: usize,
+        discs: MusicDiscs,
+        choice: MusicSource,
+    },
+}
+
 /// The race-playlist half of `impl Audio`, kept beside [`MusicFetchWorker`]
 /// rather than in `audio.rs` itself: every method here either produces or
 /// consumes a [`MusicFetchWorker`]'s result, so the two belong to the same
 /// question - "how does the race's music get fetched" - even though nothing
 /// stops an inherent `impl` block living in a different file from the type it
-/// is on.
+/// is on. The `MUSIC SOURCE` row's async switch (below, from
+/// [`Audio::set_music_source`]) belongs here for the same reason: it is the
+/// exact same "decode one indexed track off a [`MusicFetchWorker`]" question,
+/// just asked mid-menu or mid-race instead of at a race's own hand-off.
 impl Audio {
     /// The race-launch counterpart of [`Self::start_race_music`]: applies a
     /// track that a [`MusicFetchWorker`], spawned earlier, has already located
@@ -393,5 +436,275 @@ impl Audio {
             return;
         }
         self.play_race_track(&discs, choice, &cache_dir, next, None);
+    }
+
+    /// [`Audio::set_music_source`]'s menu case.
+    pub(super) fn set_menu_music_source(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+    ) {
+        let Some((_, wanted)) = discs.pick(choice) else {
+            return;
+        };
+        let (Some(_), Some(from)) = (self.music, self.music_from) else {
+            // Either nothing is playing, or what is playing is not one of the
+            // sixteen. Neither is this row's business - see above.
+            return;
+        };
+
+        // A pending fetch for anything other than `wanted` no longer
+        // describes what this row is asking for - dropped up front rather
+        // than left to land later and apply a platform nobody is asking for
+        // any more. This runs even when `wanted` turns out to already be
+        // playing below: a press that lands back on the current release
+        // while a switch away from it is still in flight means "stay here",
+        // not "let the switch finish anyway".
+        let already_fetching_this = self.source_switch.as_ref().is_some_and(|pending| {
+            pending.wanted == wanted && matches!(pending.target, SwitchTarget::Menu)
+        });
+        if !already_fetching_this {
+            self.source_switch = None;
+        }
+
+        if from == wanted || already_fetching_this {
+            return;
+        }
+
+        if let Some((_, sound)) = self.held.iter().find(|(held, _)| *held == wanted) {
+            // Already read this session - no I/O, so there is nothing to
+            // move off this thread. Applied on the spot, the same as before.
+            let sound = Arc::clone(sound);
+            self.apply_menu_source_result(
+                wanted,
+                Ok(Some(Loaded {
+                    from: Some(wanted),
+                    sound,
+                    what: format!("{wanted} soundtrack track {MUSIC_TRACK}, already read"),
+                })),
+            );
+            return;
+        }
+
+        self.source_switch = Some(PendingSwitch {
+            wanted,
+            target: SwitchTarget::Menu,
+            worker: MusicFetchWorker::spawn(
+                discs.clone(),
+                choice,
+                cache_dir.to_path_buf(),
+                MUSIC_TRACK,
+                "menu-source",
+            ),
+        });
+    }
+
+    /// [`Audio::set_music_source`]'s race case: the same seek-preserving
+    /// swap, against [`Audio::race_voice`]/[`Audio::race_index`] instead of
+    /// the menu's fields, and landing in the bounded [`Audio::race_cache`],
+    /// not [`Audio::held`].
+    pub(super) fn set_race_music_source(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+    ) {
+        let Some((_, wanted)) = discs.pick(choice) else {
+            return;
+        };
+        let (Some(_), Some(from), Some(index)) = (self.race_voice, self.race_from, self.race_index)
+        else {
+            return;
+        };
+
+        // Same up-front drop as `Self::set_menu_music_source`: a pending
+        // fetch for a different release, or a different track of this one,
+        // no longer describes what this row is asking for.
+        let already_fetching_this = self.source_switch.as_ref().is_some_and(|pending| {
+            pending.wanted == wanted
+                && matches!(pending.target, SwitchTarget::Race { index: i, .. } if i == index)
+        });
+        if !already_fetching_this {
+            self.source_switch = None;
+        }
+
+        if from == wanted || already_fetching_this {
+            return;
+        }
+
+        if let Some((cached_platform, cached_index, sound)) = &self.race_cache
+            && *cached_platform == wanted
+            && *cached_index == index
+        {
+            let sound = Arc::clone(sound);
+            self.apply_race_source_result(
+                wanted,
+                index,
+                discs.clone(),
+                choice,
+                Ok(Some(Loaded {
+                    from: Some(wanted),
+                    sound,
+                    what: format!("{wanted} soundtrack track {index}, already read"),
+                })),
+            );
+            return;
+        }
+
+        // Dropped rather than kept: it was fetching the release this row is
+        // leaving, and a track fetched from the wrong release is exactly the
+        // kind of wrong `Self::advance_race_track` cannot detect by index
+        // alone. `Self::maybe_prefetch_next_race_track` starts a correct one
+        // once the switch below actually lands.
+        self.race_prefetch = None;
+
+        self.source_switch = Some(PendingSwitch {
+            wanted,
+            target: SwitchTarget::Race {
+                index,
+                discs: discs.clone(),
+                choice,
+            },
+            worker: MusicFetchWorker::spawn(
+                discs.clone(),
+                choice,
+                cache_dir.to_path_buf(),
+                index,
+                "race-source",
+            ),
+        });
+    }
+
+    /// Applies a fetched menu-source switch, from
+    /// [`Self::set_menu_music_source`]'s cache-hit fast path or a landed
+    /// [`PendingSwitch`] worker polled by [`Self::poll_source_switch`].
+    /// Either way the playhead is read **here**, at the moment of the swap,
+    /// not when the fetch was first asked for - a worker can take several
+    /// ticks to land, and the old voice keeps playing every one of them.
+    fn apply_menu_source_result(&mut self, wanted: Platform, fetched: Result<Option<Loaded>>) {
+        match fetched {
+            Ok(Some(loaded)) => {
+                // Banked for next time whether or not there is a menu voice
+                // left to apply to below - the decode is not wasted just
+                // because a race started while it was in flight.
+                if let Some(platform) = loaded.from
+                    && !self.held.iter().any(|(held, _)| *held == platform)
+                {
+                    self.held.push((platform, Arc::clone(&loaded.sound)));
+                }
+                let Some(playing) = self.music else {
+                    return;
+                };
+                let at = self.playhead().unwrap_or(0.0);
+                self.menu_sound = Some(Arc::clone(&loaded.sound));
+                self.output.with_mixer(|mixer| {
+                    mixer.stop(playing);
+                    let started = mixer.play(Play::looping(Arc::clone(&loaded.sound), Bus::Music));
+                    if let Some(id) = started {
+                        mixer.seek(id, at);
+                    }
+                    self.music = started;
+                });
+                self.music_from = self.music.and(loaded.from);
+                info!("audio: music {}, from {at:.1} s", loaded.what);
+            }
+            Ok(None) => {
+                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
+            }
+            Err(error) => warn!("audio: the music stays where it is ({error:#})"),
+        }
+    }
+
+    /// [`Self::apply_menu_source_result`]'s race counterpart.
+    ///
+    /// `index` is checked against [`Audio::race_index`] before anything
+    /// else: the playlist can move on to a new track - naturally, or a
+    /// second switch - while this was in flight, and applying a result for
+    /// the track that just ended would put the wrong recording under the
+    /// current one. `discs`/`choice` land in [`Audio::race_context`] on
+    /// success, the same bookkeeping the old synchronous version did, so a
+    /// later advance-on-finish in [`Audio::tick`] fetches the next track
+    /// from the release this switch actually moved to.
+    fn apply_race_source_result(
+        &mut self,
+        wanted: Platform,
+        index: usize,
+        discs: MusicDiscs,
+        choice: MusicSource,
+        fetched: Result<Option<Loaded>>,
+    ) {
+        match fetched {
+            Ok(Some(loaded)) => {
+                if self.race_index != Some(index) {
+                    return; // answers a question nobody is asking any more
+                }
+                let Some(playing) = self.race_voice else {
+                    return; // the race ended while this was in flight
+                };
+                let at = self.playhead_race().unwrap_or(0.0);
+                self.output.with_mixer(|mixer| {
+                    mixer.stop(playing);
+                    let started = mixer.play(Play::once(Arc::clone(&loaded.sound), Bus::Music));
+                    if let Some(id) = started {
+                        mixer.seek(id, at);
+                    }
+                    self.race_voice = started;
+                });
+                self.race_from = self.race_voice.and(loaded.from);
+                self.race_cache = loaded.from.map(|platform| (platform, index, loaded.sound));
+                if let Some((cached_discs, cached_choice, _)) = &mut self.race_context {
+                    *cached_discs = discs;
+                    *cached_choice = choice;
+                }
+                // A prefetch still in flight was started for the release
+                // this switch just left - see `Self::set_race_music_source`,
+                // which already dropped the one that existed when this was
+                // spawned; this catches one `Self::maybe_prefetch_next_race_track`
+                // started for the old release in the meantime.
+                self.race_prefetch = None;
+                info!("audio: race music {}, from {at:.1} s", loaded.what);
+            }
+            Ok(None) => {
+                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
+            }
+            Err(error) => warn!("audio: the race music stays where it is ({error:#})"),
+        }
+    }
+
+    /// Polls [`Audio::source_switch`], applying it once its worker lands.
+    ///
+    /// Called from [`Audio::tick`], the same way [`Self::advance_race_track`]
+    /// and [`Self::maybe_prefetch_next_race_track`] are - this module's rule
+    /// that everything here moves on the tick count, never a frame or a wall
+    /// clock. A no-op on every tick but the one a fetch actually finishes on.
+    pub(super) fn poll_source_switch(&mut self) {
+        let Some(pending) = &self.source_switch else {
+            return;
+        };
+        if !pending.worker.is_finished() {
+            return;
+        }
+        let Some(PendingSwitch {
+            wanted,
+            target,
+            mut worker,
+        }) = self.source_switch.take()
+        else {
+            return;
+        };
+        let fetched = worker.join().unwrap_or_else(|| {
+            Err(anyhow::anyhow!(
+                "the music source fetch thread would not start"
+            ))
+        });
+        match target {
+            SwitchTarget::Menu => self.apply_menu_source_result(wanted, fetched),
+            SwitchTarget::Race {
+                index,
+                discs,
+                choice,
+            } => self.apply_race_source_result(wanted, index, discs, choice, fetched),
+        }
     }
 }
