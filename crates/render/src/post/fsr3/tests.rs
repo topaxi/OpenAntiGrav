@@ -7,14 +7,12 @@
 
 use super::*;
 
+use super::readback::{self, Scene};
+
 /// The camera the race actually draws with, near enough: `oag-render`'s own
 /// `camera::perspective` is built from exactly these three numbers.
 fn camera() -> Camera {
-    Camera {
-        near: 0.1,
-        far: 1000.0,
-        fov_y: 45f32.to_radians(),
-    }
+    readback::CAMERA
 }
 
 fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
@@ -270,6 +268,101 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
         "the chain is incomplete, so it must hand back nothing rather than a \
          half-resolved intermediate - see `Fsr3::output`"
     );
+}
+
+/// An 8x4 depth buffer with no two texels alike and a deliberate near/far
+/// split, so that a 3x3 neighbourhood's nearest, its centre and its plain
+/// maximum are three different numbers everywhere they can be.
+fn depth_pattern() -> ((u32, u32), Vec<f32>) {
+    let size = (8u32, 4u32);
+    let mut depth = Vec::with_capacity((size.0 * size.1) as usize);
+    for y in 0..size.1 {
+        for x in 0..size.0 {
+            // 0.10 .. 0.72, monotonic along the scanline and stepped between
+            // rows, so a neighbourhood is never flat and never symmetric.
+            depth.push(0.10 + 0.02 * (y * size.0 + x) as f32);
+        }
+    }
+    (size, depth)
+}
+
+#[test]
+fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
+    // **The most transliteration-fragile line in `prepare_inputs`.** Upstream's
+    // `FindDepthExtents` initialises `fFarthest` to the centre's depth and then
+    // only ever `max`es it with a sample that was *nearer* than the running
+    // nearest - and every such sample is, by construction, nearer than the
+    // centre was. So `fFarthest` can never move: it is exactly the centre
+    // texel's own depth, whatever the neighbourhood holds.
+    //
+    // That reads as a bug. It is not, it is upstream's, and it is the sort of
+    // thing a future reader "fixes" into a real maximum without noticing that
+    // the reconstruction was tuned against this. Pinned on hardware rather than
+    // by a comment, because a comment cannot fail.
+    let (size, depth) = depth_pattern();
+    let Some(scene) = Scene::run(size, &depth) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    let farthest = scene.read_r32(&targets.farthest_depth.texture);
+
+    for y in 0..size.1 {
+        for x in 0..size.0 {
+            let at = (y * size.0 + x) as usize;
+            let want = scene.view_space_metres(depth[at]);
+            assert!(
+                (farthest[at] - want).abs() < want * 1e-4,
+                "({x}, {y}): got {}, wanted the centre's own {want}",
+                farthest[at]
+            );
+        }
+    }
+
+    // And the control that makes the above mean something: a plain
+    // neighbourhood maximum would be a *different* number at almost every
+    // texel, so a test that passed both ways would be testing nothing.
+    let interior = (2 * size.0 + 3) as usize;
+    let neighbourhood_max = [-1i32, 0, 1]
+        .iter()
+        .flat_map(|dy| [-1i32, 0, 1].iter().map(move |dx| (*dx, *dy)))
+        .map(|(dx, dy)| depth[((2 + dy) as u32 * size.0 + (3 + dx) as u32) as usize])
+        .fold(f32::MIN, f32::max);
+    assert!(
+        (neighbourhood_max - depth[interior]).abs() > 1e-3,
+        "the fixture is flat, so it cannot tell the two readings apart"
+    );
+}
+
+#[test]
+fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
+    // `SpdReduce4`: `(v0 + v1 + v2 + v3) * 0.25` over the 2x2 below each
+    // half-resolution texel. Checked against the CPU-side view-space transform
+    // rather than against a second run of the same shader, so a wrong
+    // `device_to_view_depth` cannot cancel itself out.
+    let (size, depth) = depth_pattern();
+    let Some(scene) = Scene::run(size, &depth) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    let mip1 = scene.read_r32(&targets.farthest_depth_mip1.texture);
+
+    let half = (size.0 / 2, size.1 / 2);
+    for y in 0..half.1 {
+        for x in 0..half.0 {
+            let tap = |dx: u32, dy: u32| {
+                let at = ((y * 2 + dy) * size.0 + (x * 2 + dx)) as usize;
+                scene.view_space_metres(depth[at])
+            };
+            let want = (tap(0, 0) + tap(1, 0) + tap(0, 1) + tap(1, 1)) * 0.25;
+            let got = mip1[(y * half.0 + x) as usize];
+            assert!(
+                (got - want).abs() < want * 1e-4,
+                "({x}, {y}): got {got}, wanted {want}"
+            );
+        }
+    }
 }
 
 #[test]

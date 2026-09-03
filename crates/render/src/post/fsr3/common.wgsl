@@ -119,6 +119,34 @@ fn shading_change_scale() -> f32 { return constants.shading_change_scale; }
 fn accumulation_added_per_frame() -> f32 { return constants.accumulation_added_per_frame; }
 fn min_disocclusion_accumulation() -> f32 { return constants.min_disocclusion_accumulation; }
 
+// `Exposure()`, and **a constant one rather than a resource**.
+//
+// Upstream reads a 1x1 `R32G32_FLOAT` texture here, which is either the app's
+// own exposure, or - with `FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE` set - the
+// frame-info target the luma pyramid writes. This renderer supplies neither: it
+// draws into a plain low-dynamic-range target, there is no exposure anywhere in
+// the pipeline, and the brightness a player controls is a grade applied after
+// everything here (`upscale::Framebuffer::composite`). Adding an automatic
+// global brightness adaptation that the original game does not have would be
+// inventing a feature, not porting one.
+//
+// **One is upstream's own answer for that case, not a simplification of it.**
+// `FSR3UPSCALER_DefaultExposure` is initialised to `{0.0, 0.0}` and `Exposure()`
+// maps a zero to exactly one. So this returns what the SDK would have returned,
+// through a constant instead of a texture read.
+fn exposure() -> f32 {
+    return 1.0;
+}
+
+// The ratio between this frame's exposure and the previous frame's. One
+// whenever nothing pre-exposes, which is always here - kept as a constants read
+// rather than folded to a literal, because unlike `exposure` above it is a
+// per-frame quantity that a future HDR path would fill in rather than a
+// property of there being no exposure at all.
+fn delta_pre_exposure() -> f32 {
+    return constants.delta_pre_exposure;
+}
+
 fn tonemap_first_frame() -> bool {
     return frame_index() == 0.0;
 }

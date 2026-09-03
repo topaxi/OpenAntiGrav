@@ -67,7 +67,7 @@ order, so this table and the code cannot drift apart silently.
 | # | Upstream | Resolution | Ported |
 | --- | --- | --- | --- |
 | 1 | `prepare_inputs` | render | **yes** |
-| 2 | `luma_pyramid` (SPD) | render/2, mips | no |
+| 2 | `luma_pyramid` (SPD) | render/2 | **yes**, reduced to one dispatch - see below |
 | 3 | `shading_change_pyramid` (SPD) | render/2, mips | no |
 | 4 | `shading_change` | render/2 | no |
 | 5 | `prepare_reactivity` | render | no |
@@ -103,6 +103,62 @@ the number of dispatches and the loss of SPD's one-pass property.
 **Only these two passes use `groupshared` at all.** Everything else under
 `gpu/fsr3upscaler/` is per-pixel, which is what keeps the substitution isolated
 to the two passes rather than infecting the port.
+
+**And the luma pyramid turned out not to need a pyramid.** Its three products
+are `farthest_depth_mip1` at mip 1, the pyramid itself at mip 6, and an
+auto-exposure estimate at the 1x1 level. The second is SPD's own handoff between
+workgroups and is overwritten by the shading-change pyramid before anything
+reads it. The third has no reader here, for the reason below. So what is left is
+`farthest_depth_mip1` - a single 2x2 box average - and the pass is one dispatch
+rather than a chain.
+
+### Auto-exposure is off, and `frame_info` is therefore not allocated
+
+`Exposure()` comes from the frame-info target only when
+`FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE` is set; otherwise it is the
+application's, and an application that supplies none gets upstream's own 1x1
+default, which holds zero and which `Exposure()` maps to exactly `1.0`. This
+renderer draws into a low-dynamic-range target, has no exposure anywhere in its
+pipeline, and gives a player a brightness *grade* applied after all of this
+instead. Adding an automatic global brightness adaptation the original game does
+not have would be inventing a feature rather than porting one, so the port takes
+upstream's no-auto-exposure path and `exposure()` is the constant it produces.
+
+The frame-info target's other product, `SceneAverageLuma()`, is **dead in
+v1.1.4**: declared in `ffx_fsr3upscaler_common.h` and called from no pass header
+at all. Checked across every one rather than assumed. With neither product read,
+the target is not allocated.
+
+If an HDR path ever lands and wants auto-exposure, the rest of the reduction -
+a mip chain over `(log(luma), luma)` down to 1x1 and the
+`ComputeAutoExposureFromLavg` smoothing - goes back into `luma_pyramid.wgsl`,
+which says so. It is left out rather than left half-built.
+
+## What is checked, and how
+
+Nothing downstream consumes these passes yet, so a wrong reduction has no
+visible symptom until `accumulate` lands. Each pass is therefore checked by
+**reading its output back off a real device and comparing it against arithmetic
+worked out on the CPU** - `post::fsr3::readback` runs the chain over a hand-built
+8x4 depth buffer, filled by a fullscreen pass writing `frag_depth` because
+WebGPU has no buffer-to-texture copy into a depth format.
+
+Two properties are pinned that way, and both are the kind a comment cannot
+defend:
+
+- **`FindDepthExtents`' `fFarthest` is exactly the centre texel's own depth**,
+  never the neighbourhood's maximum. It is initialised to the centre's depth and
+  only ever `max`ed with a sample that was *nearer* than the running nearest -
+  and every such sample is nearer than the centre was, so the value cannot move.
+  This reads as a bug, it is upstream's, and it is what a future reader would
+  "fix" into a real maximum.
+- **The reduction is a plain `(v0+v1+v2+v3)*0.25` box average**, checked against
+  the CPU-side view-space depth transform rather than against a second run of
+  the same shader, so a wrong `deviceToViewDepth` cannot cancel itself out.
+
+Running the fixture at 8x4 rather than at a realistic size is deliberate, and
+it paid for itself immediately: a 4x2 half-resolution target cannot hold six mip
+levels, which wgpu rejects and which no test at 960x540 would ever have reached.
 
 ### The scattered depth store becomes a storage buffer
 

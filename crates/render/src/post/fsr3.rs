@@ -103,7 +103,10 @@ pub enum Pass {
     /// belonging to the nearest, this frame's luma, and the scattered
     /// projection of this frame's depth into the previous frame's grid.
     PrepareInputs,
-    /// The luma pyramid, upstream's first SPD dispatch.
+    /// The luma pyramid, upstream's first SPD dispatch - which here reduces to
+    /// a single 2x2 average producing `farthest_depth_mip1`, because its other
+    /// two products are SPD's own plumbing and an auto-exposure this renderer
+    /// has no use for. `luma_pyramid.wgsl` argues both.
     LumaPyramid,
     /// The shading-change pyramid, upstream's second SPD dispatch.
     ShadingChangePyramid,
@@ -155,7 +158,7 @@ impl Pass {
     /// and say so, not a half-resolved frame that reads as a rendering bug.
     #[must_use]
     pub fn ported(self) -> bool {
-        matches!(self, Self::PrepareInputs)
+        matches!(self, Self::PrepareInputs | Self::LumaPyramid)
     }
 }
 
@@ -285,6 +288,8 @@ pub struct Fsr3 {
     clear: wgpu::ComputePipeline,
     prepare_inputs_layout: wgpu::BindGroupLayout,
     prepare_inputs: wgpu::ComputePipeline,
+    luma_pyramid_layout: wgpu::BindGroupLayout,
+    luma_pyramid: wgpu::ComputePipeline,
 
     targets: Option<Targets>,
 }
@@ -372,6 +377,11 @@ impl Fsr3 {
                     store_entry(7, wgpu::TextureFormat::R32Float),
                 ],
             });
+        let luma_pyramid_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 luma pyramid"),
+                entries: &[load_entry(0), store_entry(1, wgpu::TextureFormat::R32Float)],
+            });
 
         let pipeline = |label: &str, wgsl: &str, entry: &str, own: &wgpu::BindGroupLayout| {
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -405,6 +415,12 @@ impl Fsr3 {
             "cs_prepare_inputs",
             &prepare_inputs_layout,
         );
+        let luma_pyramid = pipeline(
+            "fsr3 luma pyramid",
+            include_str!("fsr3/luma_pyramid.wgsl"),
+            "cs_luma_pyramid",
+            &luma_pyramid_layout,
+        );
 
         Ok(Self {
             shared,
@@ -415,6 +431,8 @@ impl Fsr3 {
             clear,
             prepare_inputs_layout,
             prepare_inputs,
+            luma_pyramid_layout,
+            luma_pyramid,
             targets: None,
         })
     }
@@ -452,6 +470,18 @@ impl Fsr3 {
     #[must_use]
     pub fn constants(&self) -> Option<&Constants> {
         self.written.as_ref()
+    }
+
+    /// The intermediates, for a test that reads one back.
+    ///
+    /// Exposed because until the chain reaches [`Pass::Accumulate`] there is no
+    /// *output* to check, and a port with nothing checkable in it for six more
+    /// passes is a port nobody can trust. Each pass's product is a texture, and
+    /// a readback against arithmetic worked out on the CPU is the only
+    /// instrument available this early.
+    #[must_use]
+    pub fn targets(&self) -> Option<&Targets> {
+        self.targets.as_ref()
     }
 
     /// Runs every ported pass over `frame`.
@@ -539,6 +569,20 @@ impl Fsr3 {
                 },
             ],
         });
+        let luma_pyramid_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fsr3 luma pyramid"),
+            layout: &self.luma_pyramid_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&targets.farthest_depth_mip1.view),
+                },
+            ],
+        });
 
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
@@ -556,6 +600,15 @@ impl Fsr3 {
         pass.set_pipeline(&self.prepare_inputs);
         pass.set_bind_group(1, Some(&prepare_inputs_group), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        // **Half the render extent**, which is upstream's `maxRenderSizeDiv2`
+        // rounding: an integer halve, so an odd width loses its last column
+        // rather than gaining a half-covered one. The shader clamps its taps
+        // to the render extent for the same reason.
+        let half = ((render.0 / 2).max(1), (render.1 / 2).max(1));
+        pass.set_pipeline(&self.luma_pyramid);
+        pass.set_bind_group(1, Some(&luma_pyramid_group), &[]);
+        pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
     }
 
     /// Rebuilds every intermediate when either allocation moves.
@@ -580,5 +633,7 @@ impl Fsr3 {
     }
 }
 
+#[cfg(test)]
+mod readback;
 #[cfg(test)]
 mod tests;

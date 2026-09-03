@@ -52,9 +52,6 @@ const COLOUR: TextureFormat = TextureFormat::Rgba16Float;
 /// baseline-storable as it stands.
 const MASKS: TextureFormat = TextureFormat::Rgba8Unorm;
 
-/// A 1x1 `RGBA32_FLOAT` scratch the accumulate pass keeps frame statistics in.
-const FRAME_INFO: TextureFormat = TextureFormat::Rgba32Float;
-
 /// Every FSR 3.1 target is written by a compute pass and read by a later one.
 const USAGE: wgpu::TextureUsages = wgpu::TextureUsages::STORAGE_BINDING
     .union(wgpu::TextureUsages::TEXTURE_BINDING)
@@ -70,6 +67,19 @@ pub struct Target {
     pub mips: Vec<wgpu::TextureView>,
 }
 
+/// How many mip levels a `size`-wide target can hold: down to 1x1 and no
+/// further.
+///
+/// **A clamp, not a policy.** wgpu rejects a descriptor asking for more, and a
+/// small render extent really does hit it - a 4x2 half-resolution target has
+/// three levels, not [`PYRAMID_MIPS`]. Found by a test that ran the passes at
+/// 8x4 rather than by reading the spec, which is the argument for keeping a
+/// readback fixture that small.
+#[must_use]
+fn mip_ceiling(size: (u32, u32)) -> u32 {
+    32 - size.0.max(size.1).max(1).leading_zeros()
+}
+
 impl Target {
     fn new(
         device: &wgpu::Device,
@@ -78,6 +88,7 @@ impl Target {
         format: TextureFormat,
         mips: u32,
     ) -> Self {
+        let mips = mips.clamp(1, mip_ceiling(size));
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
@@ -188,6 +199,16 @@ pub const PYRAMID_MIPS: u32 = 6;
 /// made for the scene target, and FSR 3.1 asks for it directly: `renderSize`
 /// and `maxRenderSize` are separate constants precisely so a temporal upscaler
 /// can take a per-frame render size without anything being rebuilt.
+///
+/// **Upstream's `FSR3UPSCALER_FrameInfo` is deliberately absent**, and its
+/// absence was checked rather than assumed. It is a 1x1 `RGBA32_FLOAT` holding
+/// an exposure, a smoothed log luma and a scene average luma, written by the
+/// luma pyramid's 1x1 level. Nothing in this port can read it: `Exposure()`
+/// only comes from it when `FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE` is set and
+/// this renderer has no exposure at all (see `common.wgsl`'s `exposure`), and
+/// `SceneAverageLuma()` is **dead in v1.1.4** - declared in
+/// `ffx_fsr3upscaler_common.h` and called from no pass header. Allocating it
+/// would be allocating a target with neither a reader nor a writer.
 #[derive(Debug)]
 pub struct Targets {
     /// The render allocation these were built for.
@@ -222,8 +243,6 @@ pub struct Targets {
     pub new_locks: Target,
     /// What the last pass writes and [`super::Fsr3::output`] hands back.
     pub upscaled_output: Target,
-    /// A 1x1 scratch the accumulate pass keeps frame statistics in.
-    pub frame_info: Target,
 }
 
 /// What one allocation of [`Targets`] costs, in bytes, split the three ways a
@@ -305,7 +324,6 @@ impl Targets {
             accumulation: PingPong::new(device, "fsr3 accumulation", upscale, SCALAR),
             new_locks: scalar("fsr3 new locks", upscale),
             upscaled_output: Target::new(device, "fsr3 upscaled output", upscale, COLOUR, 1),
-            frame_info: Target::new(device, "fsr3 frame info", (1, 1), FRAME_INFO, 1),
         }
     }
 
@@ -334,8 +352,7 @@ impl Targets {
                 + self.luma_history.bytes()
                 + self.accumulation.bytes()
                 + self.new_locks.bytes()
-                + self.upscaled_output.bytes()
-                + self.frame_info.bytes(),
+                + self.upscaled_output.bytes(),
         }
     }
 }
