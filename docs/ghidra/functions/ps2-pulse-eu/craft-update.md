@@ -33,7 +33,8 @@ below 70; the one name under 80 carries the `_q` suffix per
 | `0x0015a058` | `Ship_UpdateBrakes` | 90 |
 | `0x0015bf30` | `Ship_UpdateSteering` | 90 |
 | `0x0015c7c0` | `Ship_ApplyLateralGrip` | 90 |
-| `0x0015ca48` | `Body_ClearAccumulators` | 88 |
+| `0x0015ca48` | `Body_ResetAccumulators` | 75 |
+| `0x0015d058` | `Body_ClearAccumulators` | 90 |
 | `0x0015a290` | `Ship_ApplyWeathervaneTorque` | 88 |
 | `0x0015c3a0` | `Ship_ApplyQuadraticDrag` | 88 |
 | `0x00159f10` | `Ship_ApplyRollingResistance` | 88 |
@@ -848,18 +849,27 @@ a guess at confidence 40 and the bit is left unnamed.
 
 ### The accumulators are cleared on the body, not the craft
 
-`Body_ClearAccumulators` (`0x0015ca48`) zeroes `body+0x100`, `+0x110`, `+0x120`
-and `+0x130`, writing `1.0` into each `w` lane. Together with
-`Ship_UpdateEngine` and `Ship_ApplyLateralGrip` writing `body+0x110` directly,
-this says the PS2 **drops the four craft-side mirror accumulators entirely** and
-has every term accumulate onto the body. [engine.md](../psp-pulse-usa/engine.md)
-describes the PSP zeroing `craft+0x320`/`+0x330`/`+0x340`/`+0x350` at the top of
-`Ship_UpdateCraft` and draining them at the bottom.
+`Body_ClearAccumulators` (`0x0015d058`) is the routine per-frame clear: called
+unconditionally from `World_StepBodies`, once per body, immediately after
+`Body_Integrate` has consumed this frame's `body+0x100`/`+0x110`/`+0x120`/
+`+0x130`. It zeroes all sixteen words, `w` lanes included, so the next frame's
+`Ship_UpdateCraft` starts every accumulator at a plain `(0,0,0,0)`. Together
+with `Ship_UpdateEngine` and `Ship_ApplyLateralGrip` writing `body+0x110`
+directly, this says the PS2 **drops the four craft-side mirror accumulators
+entirely** and has every term accumulate onto the body.
+[engine.md](../psp-pulse-usa/engine.md) describes the PSP zeroing
+`craft+0x320`/`+0x330`/`+0x340`/`+0x350` at the top of `Ship_UpdateCraft` and
+draining them at the bottom.
 
 **Same four accumulators, same four body offsets, one less copy.** That is a
 plumbing difference, not a physics one - but it does mean the PSP's four craft
 offsets have no PS2 counterpart, which is worth knowing before trying to carry a
-craft-struct layout across. Confidence **88**.
+craft-struct layout across. Confidence **90**.
+
+A second function at `0x0015ca48` touches the same four fields and was
+previously misidentified as this one - see
+[below](#not-the-clear-a-second-function-on-the-same-four-fields) for why it
+carries a different name.
 
 ## The call order matches the PSP's, all fifteen terms
 
@@ -1031,12 +1041,33 @@ for the queue reading, **75** for `contact+0x34` being friction specifically -
 that comes from the PSP twin `FUN_0884e968` computing a tangential relative
 velocity and scaling it by the same offset, not from a string.
 
-**Not renamed, deliberately.** `0x0015d058` zeroes the same four accumulators as
-`Body_ClearAccumulators` (`0x0015ca48`), so one of the two identifications is
-wrong or they are distinct entry points into the same idea. Naming either without
-resolving that would be a guess, and ADR-0005 says to write the hypothesis down
-instead. Same for `0x0015ea90`, pass 6's other branch, and `0x0015d980` /
-`0x0015cfb0`, the two impulse appliers.
+### Not the clear: a second function on the same four fields
+
+`0x0015ca48` writes the same four `body+0x100`/`+0x110`/`+0x120`/`+0x130`
+fields as `Body_ClearAccumulators`, with `1.0` in each `w` lane rather than a
+plain zero - which is what made the two look like duplicate identifications of
+one function. They are not. `0x0015ca48` is called from exactly two places,
+neither of them the per-frame pass: from `Ship_UpdateCraft`'s own tail, gated
+on `*(int *)(craft+0x2d4) == 3`, and from `FUN_00159dd8`, the craft's state
+setter (`case 3`), on the transition into that state. Both call sites also
+call an unnamed twin, `FUN_0015ca78`, which zeroes `body+0x140` and `+0x160`
+(the linear-velocity fields `Body_ResolveContactPair` reads) the same way -
+`(0,0,0,1.0)`, not a plain zero.
+
+So the pair together hold a body motionless - forces and velocity both reset
+to identity every frame - for as long as `craft+0x2d4 == 3`. What state 3 is
+was not fully pinned down, but its own setter (`FUN_001526d8`) is reached from
+an off-track timer that fires after `0.5` s past a `200`-unit range gate, and
+from a wall contact whose material reads `2`, both patterns fitting a
+respawn/reset condition rather than anything routine. Renamed
+`Body_ResetAccumulators`, confidence **75**: the mechanical behaviour (what it
+writes, when it is called) is read directly, but the game-state label behind
+"state 3" is inference, not confirmed by a string or a cross-checked second
+build, so the name stops at the verb the content supports rather than naming
+the trigger. `FUN_0015ca78` stays unnamed for the same reason ADR-0005 gives for leaving a
+function alone below full confidence: read, but not yet worked through enough
+to commit to a name - same as `0x0015ea90`, pass 6's other branch, and
+`0x0015d980`/`0x0015cfb0`, the two impulse appliers.
 
 `Ship_UpdateAirbrakes_q` (`0x0015a550`) carries the `_q` suffix per
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md): it is
