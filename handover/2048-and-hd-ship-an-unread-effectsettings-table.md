@@ -1,4 +1,4 @@
-# 2048's Zone grade escalates on the disc's own ladder now; HD's own trigger is what remains
+# Both titles' Zone grade escalates and draws now; four narrow render questions remain
 
 2026-08-28. Surfaced while chasing the 2048 Zone bugs this session also fixed
 (`oag_title::ZoneCraft::PlayerShip`, `oag_title::ZoneCircuit::SameCircuit` -
@@ -28,8 +28,12 @@ for the tokeniser and adds a stage index/name read off each key's own prefix.
 its circuit off this table, driven by an explicit stage index and weight.
 **Later the same day the trigger landed too, on 2048**: its seventeen-record
 zone-number ladder is read out of the executable and a 2048 Zone race now
-escalates on its own. **HD/Fury's own Zone trigger is still unrecovered** and
-is what remains of this thread; see Open and Next Steps below.
+escalates on its own. **2026-08-31: HD/Fury's own trigger landed too**
+(`Hud_UpdateZoneSpeedClass` writes the per-craft stage field the blend reads;
+see the section below) **and its recolour is confirmed drawing**
+(`Environment_UpdateStageBlend` writes all seven Zone vec4s, `mesh.wgsl`
+draws the subset - twenty-fifth pass, `## Open` below). What remains is four
+narrow render questions, not a missing trigger; see Open and Next Steps.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -1715,3 +1719,14 @@ no longer disagree.
   `oag_render` or needs a live read watchpoint on the consumer side too.
   Full write-up:
   [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-31-0x00c49130-moves-live-during-real-play---no-watchpoint-needed).
+
+  **Superseded, same day, by the twenty-second pass (recorded earlier in this
+  file under `## Open` and `## Next Steps` - this thread's own passes are not
+  in file order, see the correction on the title above).** The consumer is
+  `fogColour` (engine shader parameter 7) and `*(obj+0xd8)` is the link-time
+  constant `0x00d42220` installed by `Scene_InitRenderBlock` - not an
+  unidentified runtime object. The twenty-fifth pass goes further still:
+  `oag_render`'s `mesh.wgsl` already draws the recovered subset. This
+  paragraph's "last real gap" framing is stale; the real frontier is the four
+  items the twenty-fifth pass leaves open (see `## Open`, "What that leaves
+  open, all of it narrow").

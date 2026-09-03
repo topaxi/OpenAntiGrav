@@ -473,7 +473,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone ends now; what is missing is the explosion, not the rule](handover/zone-ends-now-what-is-missing-is-the.md)
 - [Zone flies its own environment now; the menu is the part still not mode-aware](handover/zone-flies-its-own-environment-now-the-menu.md)
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/zone-races-run-on-all-three-titles-now.md)
-- [2048's Zone grade escalates on the disc's own ladder now; HD's own trigger is what remains](handover/2048-and-hd-ship-an-unread-effectsettings-table.md)
+- [Both titles' Zone grade escalates and draws now; four narrow render questions remain](handover/2048-and-hd-ship-an-unread-effectsettings-table.md)
 - [HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not](handover/hd-zone-stage-textures-are-grounded.md)
 - [HD's Zone ladder draws and its speed-class sound now plays; the class-change blend stays unwired on three unrecovered inputs](handover/hds-zone-ladder-draws-and-the-zone-to.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
