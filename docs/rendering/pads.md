@@ -84,6 +84,33 @@ it has no vertex light of its own" value. The colour is in the texture:
 So an HD weapon pad is red because the artists painted it red, not because
 anything cycles it.
 
+### And every circuit authors a second pad texture, and a pad material of its own
+
+Beside each `_cs` file sits a `ds_speedup_ne.gtf` / `ds_weaponup_ne.gtf`, and
+**its alpha channel is a mask over exactly the pad's light bars** - the little
+rectangles laid out along the chevron and the cross, and nothing else. That is
+an emissive mask, authored per circuit, for precisely the elements that would
+light up and go out.
+
+Each circuit also ships two standalone material files that no other surface
+shares:
+
+```
+/data/environments/<circuit>/materials/speedup_material.rcsmaterial
+/data/environments/<circuit>/materials/weapon_pads.rcsmaterial
+```
+
+Both are duplicated again under `materials_dlc/` in `DATA03.PSARC`. 110 entries
+across the disc carry a pad name, on all eleven circuits.
+
+**None of that reaches the frame yet, and the reason is measured rather than
+assumed.** Every pad chunk on `12_sol_2` resolves to one surface role,
+`0x00000059`: second texture is the circuit's **lightmap** atlas
+(`lmaps/ile_mesh_combine13-lmap.gtf`), `ADD_SECOND` clear, `NO_AMBIENT` set. So
+the pads draw albedo times lightmap with no additive layer, and neither `_ne`
+file is among the fifteen second textures the pad model loads at all. Whatever
+binds a pad's emissive mask is not the second-texture slot this reader walks.
+
 ### The regression this replaced
 
 Between 2026-09-02 and 2026-09-03 this project drew a flat, invented blue over
@@ -116,7 +143,14 @@ pins all three facts against the disc.
 ([`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md)), so a
 counterpart is plausible. Nothing has been read that says it exists.
 
-What is established so far:
+The maintainer's own recollection from play is that an HD weapon pad **does**
+go dark and then relight, offered explicitly as memory rather than as a
+measurement, so it is a lead rather than evidence. What the disc shows is
+consistent with it and does not establish it: a per-circuit emissive mask
+covering exactly the light bars is what a thing that lights up and goes out
+would be authored as.
+
+What is established so far, on the executable side:
 
 - `SpeedupPad_Importer.cpp` and `WeaponPad_Importer.cpp` are both real
   translation units, sharing a `Pad_Importer.h` base, under
@@ -124,13 +158,32 @@ What is established so far:
   `0x002e0168`/`0x002e0210`; both are below `0x32d5e0`, so Ghidra's TOC is the
   right one for them and their data references can be read directly (see
   [`memory.md`](../ghidra/functions/ps3-hdfury-eu/memory.md)).
-- `WeaponPad_Importer`'s constructor stores a 128-bit vector at `this+0x1b0`,
-  the same offset PSP's `Pad_Bind` writes its box minimum to.
-- **No colour write has been read on either class.** Nothing above is evidence
-  of one.
+- `WeaponPad_Importer`'s constructor stores a 128-bit vector at `this+0x1b0` -
+  the same offset PSP's `Pad_Bind` writes its box minimum to - loaded through
+  a TOC slot at `0x008b431c` whose value, `0x00aec2c0`, is past the image's
+  last section (`0x009356ff`). It is a `.bss` global, so the bytes are not in
+  the file and something else initialises them. `SpeedupPad_Importer`'s
+  constructor has no such store, so the vector is class-specific.
+- `uNumSpeedupPads`/`uNumWeaponPads` are **leaderboard stat fields**, not
+  render state: their only reader is the `sceNpManagerGetOnlineName`
+  serialiser at `0x0001d800`. Recorded so nobody follows them again.
+- **No colour write and no emissive gate has been read on either class.**
+  Nothing above is evidence of one.
 
-Until it is read, an HD pad draws its authored texture under the circuit's own
-light rig in both states. That is a visible absence - a collected pad looks
-the same as an uncollected one - and it is deliberately preferred to inventing
-a cooldown grey, per [`CLAUDE.md`](../../CLAUDE.md)'s "never invent what the
-assets already author".
+Two leads worth the next session, in order of cost:
+
+1. **What binds a pad's `_ne` file.** It is authored per circuit, it is an
+   emissive mask over the light bars, and this reader never loads it. The
+   answer is in the two dedicated `.rcsmaterial` files - `weapon_pads` has 70
+   variants on `12_sol_2` - and it is asset-side work with no emulator needed.
+2. **The `Pad_Importer` base's virtual table.** `WeaponPad_Importer`'s object
+   takes its vtable from `0x0086a730`, seventeen slots; the adjacent table at
+   `0x0086a780` shares fourteen of them and differs at slots 0, 3 and 5. Those
+   three are where a class-specific per-frame update would sit, which is how
+   `WeaponPad_UpdateRefreshTimer` was found on PSP.
+
+Until one of them lands, an HD pad draws its authored texture under the
+circuit's own lightmap in both states. That is a visible absence - a collected
+pad looks the same as an uncollected one - and it is deliberately preferred to
+inventing a cooldown grey, per [`CLAUDE.md`](../../CLAUDE.md)'s "never invent
+what the assets already author".
