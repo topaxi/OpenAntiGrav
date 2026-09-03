@@ -90,6 +90,31 @@ different algorithm rather than as a second copy of the same one. Confidence
 **70** on that negative: the function was read, not run, and the trace at
 `0x00132ed0` was not decoded.
 
+## The `Aspect Ratio` option's widen, at one address inside a much bigger function
+
+`docs/ps2/aspect-ratio.md` ("What the option changes: one multiply, in the
+camera") already reads this in full - confidence 95, verified against every
+reference to the setting's global. Restated here only because that page lives
+outside this directory and `names.tsv` needs a citation inside it: at
+`0x0013e6ec`, `FUN_0013e280` reads `DAT_00284fe8` (`0` for `4:3`, `1` for
+`16:9`) and multiplies the projection's aspect by `4/3` before building it -
+`FUN_001e9420(fov_rad, aspect, near, far, 1.0)`, an ordinary perspective
+build. The authored FOV degrees are unchanged; only the aspect widens, so at
+`16:9` the horizontal field is genuinely a third wider, not a stretch of the
+same picture.
+
+**`FUN_0013e280` itself is not renamed, and should not be from this alone.**
+Read in full while chasing the multiply above: the function opens with what
+reads like a camera-shake/impulse decay against a keyed interpolation table
+(`param_1+0x194`, `+0x1a4` array, `+0x1c0`/`+0x1c4`/`+0x1cc`/`+0x1d0`), pushes
+a view matrix to the GS display stack (`DAT_00282aec+0x1410`..`+0x144c`)
+before building the projection, and after it computes four (possibly six)
+plane-like `{xyz, dot}` quads (`+0x150`, `+0x160`, `+0x170`, `+0x180`) that
+read like frustum planes derived from the same fov/aspect - none of that was
+analysed here. Naming the whole function "the aspect widen" would overclaim
+what is actually understood about it; the multiply is confidence 95 as one
+behaviour at one address, not as a description of the function's purpose.
+
 ## Not determined
 
 - **`0x0014f108`**, which returns the current view setting, reading either from
@@ -99,6 +124,11 @@ different algorithm rather than as a second copy of the same one. Confidence
 - **The rig lookup** at `0x00149450` and the trace at `0x00132ed0`.
 - **The second, spectator/photo camera enum** that the PSP page warns not to
   confuse with this one. Not searched for here.
+- **`FUN_0013e280`'s full purpose** - the shake/decay block at its start and
+  the four-or-more plane-like quads it computes after building the
+  projection, both unread beyond noticing their shape. See above.
+- **`FUN_001e9420`**, the perspective-matrix builder the aspect widen calls
+  into - read only for its two diagonal terms, not renamed.
 - **Nothing here was verified at runtime.**
 
 ## Cross-platform
@@ -113,3 +143,9 @@ different algorithm rather than as a second copy of the same one. Confidence
 
 - 2026-07-27: first pass. Cycle 88 from an exact match with the PSP reading;
   the 3/4 chase factor recorded as absent from the PS2 path.
+- 2026-09-03: added the `Aspect Ratio` widen's address inside `FUN_0013e280`,
+  restated from `docs/ps2/aspect-ratio.md` so `names.tsv` has a page in this
+  directory to cite against this project's own race camera reusing the PSP's
+  authored FOV on every title. Deliberately did not rename `FUN_0013e280`:
+  reading it in full showed camera-shake and frustum-plane-shaped work well
+  beyond the multiply, none of it analysed here.
