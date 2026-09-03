@@ -94,7 +94,8 @@ fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_a
         "the FSR 1 conflict and the 200%-redundancy warning, each in two \
          variants since RENDER SCALE became a ceiling, plus the FSR 3.1 one - \
          which needs only one variant because it does not read RENDER SCALE at \
-         all: a temporal upscaler is destroyed by a pre-blur at every scale. A \
+         all: `resolve_scene` skips the pass outright when FSR 3.1 resolves, \
+         at every scale. A \
          sixth would go unnoticed by the rest of this test"
     );
     // Picked out by the condition this test is actually about: the row also

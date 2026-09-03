@@ -273,6 +273,26 @@ impl PassTimer {
         })
     }
 
+    /// The same pair, for a **compute** pass.
+    ///
+    /// A separate method rather than a generic one because wgpu spells the two
+    /// descriptors as different types - `ComputePassTimestampWrites` and
+    /// `RenderPassTimestampWrites` - with no conversion between them, even
+    /// though a slot is a slot and this hands back the same two indices into
+    /// the same query set. Written for FSR 3.1, whose eight dispatches are one
+    /// compute pass and so are one timestamp pair; see
+    /// [`crate::post::fsr3::Fsr3::render`].
+    #[must_use]
+    pub fn compute_writes(&self) -> Option<wgpu::ComputePassTimestampWrites<'_>> {
+        let slot = self.writing?;
+        let base = u32::try_from(slot * 2).expect("four slots");
+        Some(wgpu::ComputePassTimestampWrites {
+            query_set: &self.queries,
+            beginning_of_pass_write_index: Some(base),
+            end_of_pass_write_index: Some(base + 1),
+        })
+    }
+
     /// Copy this frame's pair out of the query set, into the same encoder the
     /// pass was recorded in.
     ///

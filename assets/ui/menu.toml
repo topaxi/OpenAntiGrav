@@ -687,10 +687,13 @@ warn_when = [
     # Against FSR 3.1 the complaint is different and needs no render-scale
     # condition at all, which is why this is one entry where FSR 1 needs four.
     # A temporal upscaler reconstructs from the sub-pixel detail each jittered
-    # frame carries; a spatial pass that blurs before it runs is destroying
-    # exactly the samples the accumulation exists to gather, and it does that at
-    # every render scale including 100 %.
-    { message = "DESTROYS THE SUB-PIXEL DETAIL FSR3 RECONSTRUCTS FROM", all = [
+    # frame carries, and a spatial pass that blurs before it runs would destroy
+    # exactly the samples accumulation exists to gather - so `resolve_scene`
+    # does not feed it one, at any render scale including 100 %. **The
+    # consequence for a player is that the row does nothing**, which is what
+    # this says: the pass is skipped outright rather than run and discarded,
+    # so it costs neither the picture nor a frame's worth of fill.
+    { message = "NO EFFECT WITH FSR3, WHICH READS THE UNFILTERED SCENE", all = [
         { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
         { setting = "graphics.upscaler", value = "fsr3" },
     ] },
