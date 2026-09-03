@@ -571,11 +571,14 @@ impl Scene {
             );
             weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
         }
-        // Flat, not `race`-driven - see `oag_render::speedup_pad`.
-        if let Some(pads) = &self.pads {
-            pads.tint_speedup_pads(queue, recoloured);
-        }
-
+        // **A speed pad is not recoloured at all, on any title.** Its class'
+        // own `update` slot, `Pad_UpdateRefreshTimer` (`0x089265f0`,
+        // `docs/ghidra/functions/psp-pulse-usa/pads.md`), decrements a timer
+        // and writes no colour, so the original never overrides what the
+        // artists painted - and what they painted is the whole picture on
+        // every title measured: Pulse's `flicker1nonalpha_GLOW.tga` is the
+        // gold chevron, HD's `ds_speedup_cs.gtf` the blue one. See
+        // `docs/rendering/pads.md`.
         oag_render::perfprobe::mark("pads+tint");
         // The camera's own axes, read out of the view matrix: for a view matrix
         // `V`, world-space right and up are rows 0 and 1 of its rotation part.

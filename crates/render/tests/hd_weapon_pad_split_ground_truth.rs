@@ -35,7 +35,7 @@
 //! them to their own node-ordered pass - see `build_scene`'s own doc
 //! comment. That pass is what gives a pad model real per-node
 //! `Model::node_vertex_ranges`, which the world-space split never could, and
-//! is what `Drawable::tint_weapon_pads`/`tint_speedup_pads` need to cycle a
+//! is what `Drawable::tint_weapon_pads` needs to cycle a
 //! pad's ready/cooling colour at all.
 
 use std::path::{Path, PathBuf};

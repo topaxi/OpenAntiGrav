@@ -99,3 +99,72 @@ fn a_pure_speedup_pad_draws_visible_pixels() {
          `ALPHA_TEST_THRESHOLD` doc comment."
     );
 }
+
+/// **The same guard for Wipeout HD, and for a second reason.**
+///
+/// A pad's `Model` says nothing about whether it draws. Pure's proved that in
+/// 2026-08-17 with a decode that reported 952 correct triangles and rendered
+/// zero pixels, and HD's pads reached the same cliff from the other side on
+/// 2026-09-03: `mesh::rcs::pads` had been forcing both pad models off the
+/// authored lighting path (`vertex_colour_is_light = false` and every vertex's
+/// `lit` swept to `0.0`) so an invented flat tint would be visible, and
+/// putting them back means a pad's brightness is now *entirely* albedo times
+/// lightmap with no ambient floor - vertex light is a flat `0,0,0` on all
+/// eighteen chunks and `NO_AMBIENT` is set. If the lightmap did not reach
+/// them, or their `lightmap_texcoord` fell back to `[0.0, 0.0]` (which
+/// `mesh::rcs::emit` does silently), HD's pads would have gone from flat blue
+/// to near-black - and every attribute assertion in
+/// `crates/game/tests/hd_pad_illumination_ground_truth.rs` would still pass.
+///
+/// Measured at this framing when the guard was written: **559 lit pixels**
+/// for the whole `12_sol_2` `Speedup Pad` model - ten plates seen from far
+/// enough away to fit all ten, which is why the count is the same order as
+/// Pure's 321 rather than larger. Framed close, what is on screen is a grey
+/// plate with a blue chevron outline, painted by `ds_speedup_cs.gtf`; see
+/// `docs/rendering/pads.md`.
+#[test]
+#[ignore = "needs a GPU adapter and a disc image in data/images/"]
+fn an_hd_speedup_pad_draws_visible_pixels() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", path.display());
+    let name = "/data/environments/12_sol_2/track.vex";
+    let data = mesh::read_blob(&spec, name).expect("reading 12_sol_2's track.vex");
+    let geometry = mesh::rcs::sibling_geometry(&spec, name, &data)
+        .expect("12_sol_2 ships a .rcsmodel beside its .vex");
+    let (model, report) = mesh::rcs::build_pads(name, &data, &geometry, &mut |path| {
+        mesh::read_blob(&spec, path).ok()
+    })
+    .expect("building 12_sol_2's Speedup Pad geometry");
+    println!("{}", report.describe());
+    assert!(
+        !model.indices.is_empty(),
+        "12_sol_2 authors no Speedup Pad geometry - see \
+         talons_junction_speedup_pad_chunks_are_an_unbaked_content_donor for why this \
+         circuit and not the default one"
+    );
+
+    let pixels =
+        mesh_render::capture_pixels_from(&model, 1024, 1024, 0.9, 1.4, Anisotropy::default(), 0.0)
+            .expect("capturing the pad model");
+    let lit = lit_pixel_count(&pixels);
+    println!("{name}: {lit} lit pixel(s) of {}", pixels.len() / 4);
+    assert!(
+        lit > 250,
+        "12_sol_2's Speedup Pad model drew only {lit} lit pixel(s) of 1,048,576 (it drew \
+         559 when this guard was written). The geometry decoded and the picture is \
+         (almost) empty - check that the circuit's lightmap still reaches these chunks, \
+         since their own vertex light is 0,0,0 and NO_AMBIENT is set. See \
+         docs/rendering/pads.md."
+    );
+}

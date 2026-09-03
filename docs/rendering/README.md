@@ -75,6 +75,12 @@
   retuned against it), then the general `ParticleSystem`
   `0x3c4` and weapon effects. The weapon effects are M5's, being
   gameplay-coupled
+- Speed pads and weapon pads - **done**, and the answer on three of the four
+  title/class pairs is that the engine leaves the artists' texture alone. Only
+  Pulse's `Weapon Pad` is recoloured at runtime, off a recovered keyframe
+  table; HD's armed/cooling state is the one open question. See
+  [pads.md](pads.md), which also records the invented flat tint this replaced
+  and how it hid itself
 - The HUD - **done** for the 2D layer, off the disc's own layouts; see
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look. Bloom is **done** and
