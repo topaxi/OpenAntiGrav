@@ -483,10 +483,10 @@ impl Program {
     /// could not distinguish from the roughly 1,800 the disc sweep this
     /// method reproduces actually found. So:
     ///
-    /// - [`Self::lg2_reads_a_saturated_dot`] requires the `LG2` to read a
-    ///   register a saturated `DP3` most recently wrote - the `N.H`/`N.L`
-    ///   idiom every specular and sun-diffuse read in `renderer.md` shares,
-    ///   which a texture-fed power curve does not.
+    /// - [`Self::dp3_feeding`] requires the `LG2` to read a register a
+    ///   saturated `DP3` most recently wrote - the `N.H`/`N.L` idiom every
+    ///   specular and sun-diffuse read in `renderer.md` shares, which a
+    ///   texture-fed power curve does not.
     /// - The exponent literal is rejected when it is `log2(e)` (within
     ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, and `mesh.wgsl`'s own fog
     ///   curve names this exact constant for this exact reason ("a MUL by
@@ -527,7 +527,7 @@ impl Program {
     /// read by hand so far, but not ruled out either.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
-        self.specular_exponent_chain().map(|(value, _)| value)
+        self.specular_exponent_chain().map(|(value, ..)| value)
     }
 
     /// The code slot [`Self::specular_exponent`]'s own chain's `MUL` constant
@@ -540,17 +540,39 @@ impl Program {
     /// that question.
     #[must_use]
     pub fn specular_exponent_slot(&self) -> Option<u16> {
-        self.specular_exponent_chain().and_then(|(_, slot)| slot)
+        self.specular_exponent_chain().and_then(|(_, slot, _)| slot)
     }
 
-    /// The shared search behind [`Self::specular_exponent`] and
-    /// [`Self::specular_exponent_slot`] - see the former's doc comment for
-    /// the three filters and why each is load-bearing.
-    fn specular_exponent_chain(&self) -> Option<(f32, Option<u16>)> {
+    /// The index of the saturated `DP3` feeding [`Self::specular_exponent`]'s
+    /// own chain, when that chain exists - the instruction whose *other*
+    /// operand (besides the world-space normal every reading on
+    /// `renderer.md` shares) decides whether the chain is a real `pow(N.H,
+    /// e)` specular term or a `pow`/`exp` idiom sharing the same three
+    /// trailing instructions over a different saturated dot product (a
+    /// Fresnel or falloff curve, say - `renderer.md`'s "Ships have no
+    /// Lambert diffuse either" leaves `200`/`250`/`260`/`35` open exactly on
+    /// this question). [`Self::instructions`] indexed at the returned value
+    /// is the `DP3` itself; its two [`Instruction::operands`] are what a
+    /// caller answering that question needs to inspect and, for a register
+    /// operand, trace back further by register identity the same way this
+    /// method's own search does.
+    #[must_use]
+    pub fn specular_exponent_dp3(&self) -> Option<usize> {
+        self.specular_exponent_chain().map(|(_, _, dp3)| dp3)
+    }
+
+    /// The shared search behind [`Self::specular_exponent`],
+    /// [`Self::specular_exponent_slot`] and [`Self::specular_exponent_dp3`] -
+    /// see the first's doc comment for the three filters and why each is
+    /// load-bearing.
+    fn specular_exponent_chain(&self) -> Option<(f32, Option<u16>, usize)> {
         for i in (0..self.instructions.len()).rev() {
-            if self.instructions[i].name() != Some("LG2") || !self.lg2_reads_a_saturated_dot(i) {
+            if self.instructions[i].name() != Some("LG2") {
                 continue;
             }
+            let Some(dp3_i) = self.dp3_feeding(i) else {
+                continue;
+            };
             let lg2_dst = (self.instructions[i].dst, self.instructions[i].dst_half);
             let Some(mul_i) = self.instructions[i + 1..].iter().position(|insn| {
                 insn.name() == Some("MUL")
@@ -594,33 +616,34 @@ impl Program {
                 // `1.4427`. Skip and keep looking, rather than returning a
                 // value that is not the exponent this method promises.
                 if (value - std::f32::consts::LOG2_E).abs() > 1e-3 {
-                    return Some((value, mul.const_slot));
+                    return Some((value, mul.const_slot, dp3_i));
                 }
             }
         }
         None
     }
 
-    /// Whether the `LG2` at `at` reads a register a saturated `DP3` most
-    /// recently wrote - the `N.H`/`N.L` idiom `renderer.md` reads under
-    /// every specular and sun-diffuse term, and the discriminator a bare
-    /// `LG2`/`MUL`/`EX2` instruction shape does not carry on its own: see
-    /// [`Self::specular_exponent`]'s own doc comment for what this excludes
-    /// and why it has to.
+    /// The index of the saturated `DP3` that most recently wrote the
+    /// register the `LG2` at `at` reads - the `N.H`/`N.L` idiom
+    /// `renderer.md` reads under every specular and sun-diffuse term, and
+    /// the discriminator a bare `LG2`/`MUL`/`EX2` instruction shape does not
+    /// carry on its own: see [`Self::specular_exponent`]'s own doc comment
+    /// for what this excludes and why it has to.
     ///
-    /// `false` when the `LG2`'s own operand is not a register (an
+    /// `None` when the `LG2`'s own operand is not a register (an
     /// interpolator or an inline constant cannot be a saturated dot
-    /// product's result) or when nothing before it in the program wrote
-    /// that register at all.
-    fn lg2_reads_a_saturated_dot(&self, at: usize) -> bool {
+    /// product's result), when nothing before it in the program wrote that
+    /// register at all, or when the writer was not a saturated `DP3`.
+    fn dp3_feeding(&self, at: usize) -> Option<usize> {
         let Some(Source::Register { index, half }) = self.instructions[at].operands().next() else {
-            return false;
+            return None;
         };
-        self.instructions[..at]
+        let (i, insn) = self.instructions[..at]
             .iter()
+            .enumerate()
             .rev()
-            .find(|insn| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))
-            .is_some_and(|insn| insn.name() == Some("DP3") && insn.saturate)
+            .find(|(_, insn)| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))?;
+        (insn.name() == Some("DP3") && insn.saturate).then_some(i)
     }
 
     /// Whether the value the instruction at `from` writes survives, by

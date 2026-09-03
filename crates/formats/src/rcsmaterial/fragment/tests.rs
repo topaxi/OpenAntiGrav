@@ -584,6 +584,8 @@ fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(40.0));
+    // `pow_chain`'s `DP3` is instruction index 0 - see its own doc comment.
+    assert_eq!(program.specular_exponent_dp3(), Some(0));
 }
 
 /// A `pow` chain whose result nothing ever reads again is dead code, not the
