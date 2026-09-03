@@ -1,4 +1,4 @@
-# Invented UI text has no translation, and the disc's own strings have no override path either
+# Invented UI text has no translation, and the four sources that need it have no id-based indirection yet
 
 The disc's own localisation works and is already read: each language is a
 `Data\Plugins\PI0NN` plugin, `<Entry ID="..." String="...">` in a per-language
@@ -17,18 +17,32 @@ for at all, by its own doc comment's admission - "the disc's single string
 cannot say 'TRANSCODING MOVIES'". `crates/game/src/main/hints.rs` supplies the
 window title and stdout key-hint text the same way. None of these four
 sources has any id-based indirection - they are plain `&str`/`format!`
-literals, not lookups - so there is nothing today a translation file could
-attach to. Separately, the disc's own table has no override path either: when
-it is wrong or empty (Pure's, per
+literals, not lookups.
+
+**The format, the loader and the override layer landed** (this session):
+`oag_game::strings` merges one project-owned `assets/ui/strings/<language>.toml`
+over the disc's own `StringTable` in `boot::load_strings`, project entries
+winning over a matching disc id - see the module's own doc comment for the
+format and `StringTable::merge` for the primitive it needed. That already
+gives the disc's own table the override path it never had: a wrong or missing
+disc idstring (Pure's, per
 [pures-string-tables-are-not-read-and-its.md](pures-string-tables-are-not-read-and-its.md))
-the only fix available today is upstream disc data, which the project cannot
-ship (ADR-0006).
+can now be corrected by a project file instead of needing different disc data
+(ADR-0006) - **for something the disc already names**. It does nothing yet for
+the four sources above, none of which look anything up by id, so
+`assets/ui/strings/english.toml` ships empty rather than with invented
+content nothing reads.
 
 ## Open
 
 - `assets/ui/menu.toml` labels are literal English text; the file's own header
   (`menu.toml:20-22`) already reserves a `string_id` field for pulling the
-  disc's own wording, and nothing reads it.
+  disc's own wording, and nothing reads it. **Blocked on more than wiring**:
+  `crates/game/src/menu.rs` is at its `check-file-size` ratchet ceiling
+  (1785/1785 lines, `scripts/check-file-size.py`'s `BASELINE`) as of this
+  session, so `resolve()` (`crates/game/src/menu.rs:803`) cannot grow even by
+  the few lines a lookup call needs until something else in the file moves out
+  first.
 - `oag_race::Mode::fallback_label` (`crates/race/src/mode.rs:147`) is
   English-only, used by `menu::mode_label` (`crates/game/src/menu.rs:241`)
   whenever the disc's table lacks a short mode name.
@@ -37,37 +51,29 @@ ship (ADR-0006).
   per-language variant.
 - `crates/game/src/main/hints.rs` (window titles, stdout key hints) is the
   same shape: plain constants, no indirection.
-- The disc's own `StringTable` (`crates/game/src/language.rs:165`) has no
-  override layer - a wrong or missing entry (Pure's table currently loads
-  empty) can only be corrected by shipping different disc data, not by this
-  project.
-- No project-owned translation file format, loader, or on-disk location
-  exists anywhere in the repo - confirmed no `.po`/`.ftl`/locale JSON and no
-  i18n/l10n mechanism beyond the disc's own read side.
+- Pure's own `StringTable` loading empty is still a bug in the read side, not
+  fixed and not papered over by the override layer above - see the next
+  section.
 
 ## Next Steps
 
-- Design one `id -> string` file, one per language, as **TOML**, not a
-  transcription of the disc's XML shape - matching `menu.toml`'s own format
-  rather than `entries.xml`'s (`id = "string"` pairs, or a `[strings]` table
-  of them). The id space is still shared with the disc's own `idstring`s:
-  `menu.toml`'s reserved `string_id`, a new id per `fallback_label` mode, and
-  a new id per `loading/wording.rs` and `main/hints.rs` string all live in it.
-- Extend `StringTable::get_or_id` (`crates/game/src/language.rs:226`)'s
-  fallback chain by one link: project file first, then the disc's own table,
-  then the id itself - so the same lookup both supplies invented strings and
-  overrides a disc `idstring` when the project file names one.
-- Wire `menu.toml`'s `string_id` through `resolve()`
-  (`crates/game/src/menu.rs:954`), the way `menu::mode_label` already falls
-  back from a disc string to `fallback_label`, then do the same for
-  `fallback_label`, `loading/wording.rs` and `main/hints.rs` themselves.
-- Load the project file in `boot::load_strings` off the same
-  `chosen_language` (`crates/game/src/boot.rs:1622`) already used for the
-  disc's table, so one language choice governs both, and decide where the
-  files live - tracked in-repo alongside `menu.toml` under `assets/`, per
-  language.
-- Once this lands, cross-check against
+- Move something out of `crates/game/src/menu.rs` first (it has zero lines of
+  ratchet headroom), then wire `menu.toml`'s `string_id` through `resolve()`
+  (`crates/game/src/menu.rs:803`, where `let label = entry.label.clone();`
+  sits today) via `StringTable::get_or_id`, the way `menu::mode_label` already
+  falls back from a disc string to `fallback_label`. `resolve()` has no
+  `StringTable` in scope yet either - check what's available at menu-load time
+  versus draw time before assuming it can just be threaded through.
+- Do the same for `fallback_label`, `loading/wording.rs` and `main/hints.rs`:
+  give each string an id, add it to `assets/ui/strings/english.toml` with its
+  current English text as the value (this is the point where that file stops
+  being empty), and route the call site through `StringTable::get_or_id`
+  instead of the literal.
+- Once callers exist, add a second language's file
+  (`assets/ui/strings/french.toml`, ...) and a real translation, to prove the
+  mechanism end to end rather than only against English overriding itself.
+- Cross-check against
   [pures-string-tables-are-not-read-and-its.md](pures-string-tables-are-not-read-and-its.md):
-  Pure's own table loading empty is a bug in the read side, distinct from
-  this feature, and the override layer should not paper over it silently -
+  Pure's own table loading empty is a bug in the read side, distinct from this
+  feature, and the override layer must not be used to paper over it silently -
   fixing `load_strings` for Pure stays the real fix.
