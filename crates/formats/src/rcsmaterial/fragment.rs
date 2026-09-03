@@ -224,10 +224,21 @@ impl Instruction {
             0x31 => "TXB",
             0x36 => "RFL",
             0x3a => "DIV",
-            // 0x3b, 0x3c and 0x3d occur in shipped programs and are not in
-            // nouveau's table; they stay unnamed rather than guessed, and the
-            // reference decoder carries them as `op3B`/`op3D` for the same
-            // reason.
+            // `NVFX_FP_OP_OPCODE_LITEX2_NV40` in Mesa's `nvfx_shader.h`,
+            // confirmed against the primary source. One source operand
+            // (`nvfx_fragprog.c`'s `TGSI_OPCODE_LIT` emission). Absent from
+            // every fragment block on this disc (`hd_litex2_census.rs`, 0 of
+            // 76,358) - named for completeness, not because any shipped
+            // chain needs it.
+            0x3c => "LIT_EX2_NV40",
+            // `0x3b`/`0x3d` occur in shipped programs, genuinely absent
+            // from Mesa's `nvfx_shader.h` (confirmed against the primary
+            // source). `0x3d` has no hypothesis. `0x3b` does - renderer.md
+            // reads it as `NRM` at confidence ~70, deliberately not applied
+            // (not comfortably past this project's rename line, and a
+            // second usage shape found 2026-09-03 shows the semantics are
+            // not uniform even under the hypothesis). Reference decoder:
+            // both stay `op3B`/`op3D`.
             _ => return None,
         })
     }
@@ -243,7 +254,7 @@ impl Instruction {
             Some(
                 "MOV" | "FRC" | "FLR" | "RCP" | "RSQ" | "EX2" | "LG2" | "COS" | "SIN" | "DDX"
                 | "DDY" | "TEX" | "TXP" | "TXB" | "TXL" | "UP4B" | "UP2H" | "UP4UB" | "UP2US"
-                | "PK4B" | "PK2H" | "PK4UB" | "PK2US",
+                | "PK4B" | "PK2H" | "PK4UB" | "PK2US" | "LIT_EX2_NV40",
             ) => 1,
             Some("MAD" | "DP2A" | "TXD" | "LRP") => 3,
             _ => 2,
@@ -544,18 +555,12 @@ impl Program {
     }
 
     /// The index of the saturated `DP3` feeding [`Self::specular_exponent`]'s
-    /// own chain, when that chain exists - the instruction whose *other*
-    /// operand (besides the world-space normal every reading on
-    /// `renderer.md` shares) decides whether the chain is a real `pow(N.H,
-    /// e)` specular term or a `pow`/`exp` idiom sharing the same three
-    /// trailing instructions over a different saturated dot product (a
-    /// Fresnel or falloff curve, say - `renderer.md`'s "Ships have no
-    /// Lambert diffuse either" leaves `200`/`250`/`260`/`35` open exactly on
-    /// this question). [`Self::instructions`] indexed at the returned value
-    /// is the `DP3` itself; its two [`Instruction::operands`] are what a
-    /// caller answering that question needs to inspect and, for a register
-    /// operand, trace back further by register identity the same way this
-    /// method's own search does.
+    /// own chain, when that chain exists. [`Self::instructions`] indexed at
+    /// the returned value is the `DP3` itself; its two
+    /// [`Instruction::operands`] are the two vectors it dots, which a
+    /// caller can trace back further by register identity the same way this
+    /// method's own search does - `renderer.md`'s "Ships have no Lambert
+    /// diffuse either" is the worked example, and its own limits.
     #[must_use]
     pub fn specular_exponent_dp3(&self) -> Option<usize> {
         self.specular_exponent_chain().map(|(_, _, dp3)| dp3)

@@ -2073,13 +2073,14 @@ drafts settles nothing about meaning for `200`/`250`/`260`/`35` either way -
 it corrected real bugs in its own method three times over, confirmed its
 attempted calibration block was the wrong one, and then, checking *why*,
 found a genuine, confirmed false negative in `specular_exponent()` itself
-(the `0x3b`-fed chain above) that is worth fixing on its own merits,
-independent of this thread. What is left open: whether `Program::dp3_feeding`
-should accept `0x3b` as well as `DP3` (raising it from a hypothesis to a
-fix needs more than the one instance found here), what feeds a `Sum`
-chain's own two `ADD` operands, and re-deriving the ship's `N.H` cross-dot
-itself now that `@0x24` is read correctly as the accumulator's own
-normalize step rather than the cross-dot.
+(the `0x3b`-fed chain above), which the `op3B` section below settles: **not
+fixed**, on two independent reasons neither this thread nor its own new
+evidence moves - `op3B`/`NRM` sits at confidence ~70 by a considered prior
+decision, and the newly-found second usage shape shows `op3B`'s own
+semantics are not uniform even under that hypothesis. What is left open:
+what feeds a `Sum` chain's own two `ADD` operands, and re-deriving the
+ship's `N.H` cross-dot itself now that `@0x24` is read correctly as the
+accumulator's own normalize step rather than the cross-dot.
 
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**
@@ -2175,6 +2176,37 @@ same kind of claim. `op3D` has no hypothesis at all; seen only in
 `etched_glass_tech`, always as `op3D R63, R0, R0` - self-referencing, into the
 same "special" destination `SGT` also targets, which is what a predicate or
 flag-setting op would look like and is exactly that far from being a reading.
+
+**A second `op3B` usage shape, found 2026-09-03 tracing `200`/`250`/`260`/
+`35`'s calibration attempt (above), does not fit the pattern this section
+already names - kept here rather than folded into it as if it agreed.** The
+ship's own confirmed `pow(N.H, 40)` block feeds its `LG2` from
+`op3B R0.w, R0, R0` (paragraph `0x3f`): **both operands are the same
+register, with no preceding `DP3` self-dot in the local window**, unlike
+every occurrence this section's own transcript shows (`DP3 X, V, V` then
+`op3B V, V, X` - two instructions, `op3B`'s second operand the dot's result,
+not `V` again). If `op3B` truly is `NRM`, one instruction taking `(V, V)`
+directly and writing only `.w` reads as computing the reciprocal-length
+scalar in a single step rather than "combine a vector with a precomputed
+dot" - a real fused instruction can plausibly do both, gated by which lanes
+the caller's own mask asks for, so this is not necessarily a contradiction.
+It is, however, a second calling shape this page had not recorded, and it is
+exactly the kind of variance that keeps the specular-gate question below.
+
+**Consequently: `Program::dp3_feeding` should not be relaxed to accept
+`op3B` in place of a literal `DP3`, on the evidence gathered so far.** Two
+independent reasons, not one: this project's own naming rule already holds
+`op3B`/`NRM` at confidence ~70 without crossing into a rename (the paragraph
+above, deliberately, not an oversight this pass should second-guess without
+new evidence strong enough to move it); and the newly-found second usage
+shape means "does `op3B` compute the dot this gate wants" is not
+uniformly true even under the `NRM` hypothesis - relaxing the gate would
+risk trading one confirmed false negative for an unknown number of false
+positives, accepting a chain as a real `pow(N.H, e)` read whenever `op3B`'s
+own semantics in that instance are not actually a cross-vector dot. Leaving
+`specular_exponent()` conservative - reporting nothing rather than a
+possibly-wrong reading - is the correct choice until `op3B` itself resolves,
+not a gap to route around.
 
 **2. The colour set's fourth byte is that occlusion scalar**, which closes an
 open question above. The vertex program routes `v[colourSet].w` to a spare
