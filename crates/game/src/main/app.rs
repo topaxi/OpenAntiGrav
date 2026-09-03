@@ -117,6 +117,19 @@ impl App {
     ///
     /// `Ok(None)` means there was nothing to show, which only happens if the event
     /// loop resumes twice after the loaded state has been taken.
+    /// The render profile for the title `--race` opened, or the default.
+    ///
+    /// `None` on every other leg: the launcher has chosen nothing yet and a
+    /// boot has not resolved its title, so both correctly get the default and
+    /// pick the real one up through `Session::render_profile` once a `Shell`
+    /// exists. See [`Self::race_title`].
+    fn race_profile(&self) -> settings::RenderProfile {
+        self.race_title
+            .and_then(|title| self.settings.render_profiles.get(title))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
         let gpu = Gpu::new(
             event_loop,
@@ -125,15 +138,17 @@ impl App {
         )?;
 
         // Built before the stage, because a race's depth attachment has to match
-        // this rather than the window. Too early to know which leg this run
-        // takes - the launcher, `--race`, or a boot - so too early to know a
-        // title to resolve `settings.render_profiles` against; falls back to
-        // the same default a shell-less `Session::render_profile` would.
-        // `Session::frame` resizes this against the real per-title value on
-        // its first frame once a `Shell` exists.
+        // this rather than the window. On the launcher and boot legs it is too
+        // early to know a title to resolve `settings.render_profiles` against,
+        // so it falls back to the default and `Session::frame` resizes it
+        // against the real per-title value on its first frame once a `Shell`
+        // exists. On the `--race` leg the title *is* known - see
+        // [`Self::race_profile`] - and using it here saves that first-frame
+        // reallocation.
+        let render_profile = self.race_profile();
         let target = upscale::target_size(
             display::viewport(gpu.size(), self.settings.display.aspect),
-            settings::RenderProfile::default().render_scale,
+            render_profile.render_scale,
             gpu.device.limits().max_texture_dimension_2d,
         );
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
@@ -200,12 +215,16 @@ impl App {
                 framebuffer.allocation(),
                 self.anisotropy,
                 &self.settings,
-                // No `Shell` on this leg at all - `--race` skips the boot
-                // sequence outright (see the comment on this leg in
-                // `main.rs`), so there is no title in hand to resolve
-                // `render_profiles` against. Falls back to the same default
-                // a shell-less `Session::render_profile` would.
-                &settings::RenderProfile::default(),
+                // **The title's own profile**, and it has to be *this* one
+                // rather than the per-frame value `Session::render_profile`
+                // hands out: `msaa` is baked into every scene pipeline here,
+                // at `race::Scene::new`, and never read again for the life of
+                // the race. Passing a default here left `--race` rasterizing
+                // at one sample whatever the row or `--msaa` said, with the
+                // per-frame rows all correct around it - a half-applied
+                // profile, which reads as "MSAA costs nothing" rather than as
+                // a bug.
+                &render_profile,
                 self.scheme,
                 self.autopilot,
             )?
@@ -266,10 +285,12 @@ impl App {
         // sharing the scene pass's would cost the resolution controller a
         // reading every frame the upscaler took a slot.
         let upscale_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        // And a third, for the same reason again - see `Session::blur_cost`.
+        let blur_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         info!(
             "GPU timing: {}",
             if pass_timer.is_some() {
-                "the scene pass and the FSR 3.1 chain are timed"
+                "the scene pass, the motion-blur chain and the FSR 3.1 chain are timed"
             } else {
                 "no timestamps on this device"
             }
@@ -290,6 +311,9 @@ impl App {
             pass_timer,
             upscale_cost: perf::Meter::new(),
             upscale_timer,
+            blur_cost: perf::Meter::new(),
+            blur_timer,
+            drs_unreachable_said: false,
             frame_index: 0,
             stall_frame: 0,
             memory: perf::memory::Probe::new(),

@@ -16,6 +16,17 @@ pub struct SceneStats {
     pub draws_submitted: u32,
     pub draws_culled: u32,
     pub triangles: u32,
+    /// Whether the motion-blur chain was actually encoded this frame.
+    ///
+    /// **Not a statistic, and it is here because it has to travel the same
+    /// path.** A caller that claimed a `PassTimer` slot for the blur needs to
+    /// know whether the chain wrote the timestamps into it: at `off`, and on a
+    /// frame whose scratch targets have not been built yet, `MotionBlur::render`
+    /// encodes nothing, and a claimed-but-unwritten slot never comes back. Four
+    /// of those end measurement for the run - see `PassTimer::begin`. The
+    /// caller answers that with `PassTimer::abandon`, and this is what tells it
+    /// to.
+    pub blur_encoded: bool,
 }
 
 impl SceneStats {
@@ -23,6 +34,10 @@ impl SceneStats {
         self.draws_submitted += other.draws_submitted;
         self.draws_culled += other.draws_culled;
         self.triangles += other.triangles;
+        // Or-ed rather than summed: it is the one field here that is not a
+        // count, and "any part of this frame encoded the chain" is the
+        // question a timestamp claim is asking.
+        self.blur_encoded |= other.blur_encoded;
     }
 }
 

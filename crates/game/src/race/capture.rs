@@ -497,7 +497,9 @@ pub fn capture(
             // project compares captures byte for byte, and a measurement is
             // the input a resolution controller would eventually act on. See
             // `oag_render::timing::PassTimer` and `perf.rs`'s own argument for
-            // why the overlay is window-only.
+            // why the overlay is window-only. Both pairs, the scene pass's and
+            // the motion-blur chain's.
+            None,
             None,
         );
         queue.submit(Some(primer.finish()));
@@ -557,6 +559,7 @@ pub fn capture(
                 // about a different thing, and mixing them into one loop's
                 // output is how a bench stops meaning anything.
                 None,
+                None,
             );
             samples.push(start.elapsed().as_secs_f64() * 1e6);
             drop(bench);
@@ -590,6 +593,7 @@ pub fn capture(
         camera_jitter,
         &spectrum,
         // Untimed, as the primer above is and for the same reason.
+        None,
         None,
     );
     oag_render::perfprobe::report_frame(race.world.tick);

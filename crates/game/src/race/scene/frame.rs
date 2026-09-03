@@ -66,6 +66,7 @@ impl Scene {
         camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        blur_timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -916,7 +917,7 @@ impl Scene {
         // see `Scene::velocity`.
         if let Some(pass) = &self.motion_blur {
             let size = self.depth.size();
-            pass.borrow_mut().render(
+            stats.blur_encoded = pass.borrow_mut().render(
                 device,
                 queue,
                 encoder,
@@ -929,6 +930,7 @@ impl Scene {
                     viewport,
                     strength: motion_blur.shutter(),
                 },
+                blur_timestamps,
             );
         }
         oag_render::perfprobe::mark("post-chain");

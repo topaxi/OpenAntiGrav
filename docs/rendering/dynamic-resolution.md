@@ -194,25 +194,23 @@ control purposes: under `Vsync::On` it is pinned to the refresh and under any
 real work only with vsync off *and* no limit - a diagnostic configuration
 rather than a shipping one.
 
-### What is in the budget, and what is not
+### What is timed, what is measured-and-fixed, and what is a residual constant
 
-**The scene pass and nothing else**, and this is an under-measurement that is
-recorded rather than hidden:
+Three categories since [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md),
+replacing the two-way "in the budget or not" split this section used to draw:
 
-| Pass | In the budget | Why |
+| Pass | Category | Why |
 | --- | --- | --- |
-| The `race` pass (`race/scene/frame.rs`) | **Yes** | The one pass whose cost falls with the render extent |
-| `bloom`, `hd_bloom`, `motion_blur` | Not yet, and still not | They draw at scene resolution and belong in it, and they now take a viewport - so the reason they are out is no longer structural, it is that timing three more passes means three more timestamp claims a frame. `SCENE_SHARE` absorbs the under-measurement in the meantime, which is what makes it a constant to revisit |
-| FXAA, SMAA, FSR 1, the blit | **No, permanently** | The resolve draws at presentation size whatever the scale is |
-| The HUD, the composite, the perf overlay | **No, permanently** | Presentation resolution since ADR-0036 and ADR-0038 |
+| The `race` pass (`race/scene/frame.rs`) | `drs::Cost::scalable` | Falls with the render extent, timed every frame |
+| `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes` |
+| The FSR 3.1 chain | `drs::Cost::fixed` | Timed (`Session::upscale_cost`), but does not fall with the extent - its temporal accumulate and RCAS passes run at presentation size. Counted in full rather than split, which is conservative: some of the chain does shrink with the extent, and treating it all as fixed under-states the true budget |
+| `bloom`, `hd_bloom` | `RESIDUAL_SHARE` | Not timed. `bloom` draws at a fixed 240x136 regardless of scale; `hd_bloom` draws through the extent and belongs in `scalable`, but its ladder length is a runtime decision and bracketing it needs the same first/last split motion blur got - not done yet, and the residual measurement was taken on the disc's cheapest ladder |
+| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay | `RESIDUAL_SHARE` | Presentation-resolution or driver overhead, permanently outside the extent's reach |
 
-Folding a fixed cost into a budget that exists to be divided by a moving one is
-the error the split guards against, which is why the last two rows are
-permanent rather than pending. Each pass is timed and summed rather than the
-encoder being bracketed first-to-last: bracketing would need
-`TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is not WebGPU-portable, and would have
-to know which pass is last - which varies with the bloom, motion-blur and
-HD-chain settings.
+Each pass is timed and summed rather than the encoder being bracketed
+first-to-last: bracketing would need `TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is
+not WebGPU-portable, and would have to know which pass is last - which varies
+with the bloom, motion-blur and HD-chain settings.
 
 ### What the signal does in a running race
 
@@ -314,27 +312,35 @@ Three things this settles:
 
 ## The controller
 
-`crates/game/src/drs.rs`, and it reads nothing: fed one scene-pass timing, it
-emits a rectangle. Never a clock, never a GPU, never a settings file - the
-argument `perf.rs` already makes for why a presentation-side module is not a
+`crates/game/src/drs.rs`, and it reads nothing: fed one `drs::Cost` a frame - the
+scalable readings summed, the fixed reading carried separately - it emits a
+rectangle. Never a clock, never a GPU, never a settings file - the argument
+`perf.rs` already makes for why a presentation-side module is not a
 determinism problem, and the same shape, so every number in it is testable
 against a sequence somebody chose.
 
-### The budget is a share of a frame, not a measured frame
+### The budget subtracts what it can measure
 
-`drs::SCENE_SHARE` of the target period, and the alternative is degenerate
-rather than merely worse. A controller fed headroom from the wall-clock
-interval is inert under vsync or any frame limit: the loop *sleeps* to the
-target, so `interval - scene` is slack that absorbs whatever the scene did not
-use, the ratio is 1.0 at every render scale, and nothing ever moves - in
-precisely the configuration a player turns the feature on for. It would also
-put a clock inside the one module whose selling point is that it has none. See
+Not derived from the wall-clock frame interval, and that part of the original
+design is unchanged: a controller fed headroom from `interval - scene` is inert
+under vsync or any frame limit, because the loop *sleeps* to the target, so the
+ratio is 1.0 at every render scale and nothing ever moves - in precisely the
+configuration a player turns the feature on for. It would also put a clock
+inside the one module whose selling point is that it has none. See
 [ADR-0040](../architecture/adr/0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md).
 
-`SCENE_SHARE` is 0.45 and is **a choice, not a reading**. The budget is the
-`race` pass alone; the rest of the frame has to cover the bloom, the blur, the
-resolve, the UI composite and the driver, none of which is timed. It rises when
-those join the budget.
+What changed, in [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md):
+`drs::SCENE_SHARE`, a single constant standing in for everything the scene pass
+was not, is gone. The budget is now `period - fixed - RESIDUAL_SHARE * period`,
+where `fixed` is `drs::Cost::fixed` - the FSR 3.1 chain's own GPU timing,
+already measured and previously discarded - and `RESIDUAL_SHARE = 0.15`
+covers only the presentation-resolution and allocation-bound work that
+genuinely cannot be reached by a render-extent change: the HUD, the composite,
+the blit, the perf overlay, the MSAA resolve, and (not yet timed) `hd_bloom`'s
+ladder on the disc's cheapest circuits. A single constant could not serve both
+a profile with FSR 3.1 and MSAA and one with neither - measured, the scene
+pass's own share of the frame ranged from 23 % to 39 % across four render
+profiles on one circuit, which is not a range one constant can be.
 
 ### The policy
 
@@ -369,6 +375,34 @@ At a target the machine can only just hold, the scale settles between two
 adjacent grid points and keeps stepping between them. That is what a closed
 loop on a marginal load does, and the honest answer is a lower target rather
 than a cleverer policy.
+
+**Two more things, both found once [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
+made the true scalable cost visible for the first time:**
+
+- **A rise has to survive its own overshoot, not just clear the deadband.** One
+  grid step is a fixed fraction of the *ceiling*, so it is a growing fraction of
+  *cost* as the scale falls - about 10 % at the top of the range, about 21 % at
+  half scale, against a 15 %-wide deadband. Below roughly 70 % scale a rise the
+  deadband permits can land outside it on the other side and get corrected back
+  next frame: the same two-point ping-pong `RISE_PATIENCE` exists to prevent,
+  reappearing lower on the grid. A candidate rise is now refused unless
+  `ratio * (next / here)^2` still clears the deadband's own floor - checked
+  against the floor rather than the middle, because the quadratic cost model is
+  itself optimistic (real frames carry per-frame cost that does not scale with
+  pixels). Measured on the report this ADR was written from: 176 changes in 41
+  seconds before this guard, 83 after.
+- **An unreachable target is earned by a run, not declared on one frame.** When
+  the measured fixed cost alone fills more of the frame period than
+  `RESIDUAL_SHARE` leaves room for, or the scale is parked at the floor and
+  still over budget, no render scale can deliver the target - and the
+  controller must not walk toward the floor chasing a rate that will never
+  arrive, the same failure `Target::at_most` already guards from the clamping
+  side. `Controller::unreachable()` requires `RISE_PATIENCE` consecutive frames
+  of "nothing left to decide" before it reports true, for the same reason a
+  rise needs earning: at a target the machine can only just miss, the
+  underlying condition flickers between frames, and a caller that logged every
+  flicker would print continuously about a situation that had not changed.
+  Measured: 68 raw per-frame occurrences in 41 seconds, 7 after requiring a run.
 
 ### The rows
 

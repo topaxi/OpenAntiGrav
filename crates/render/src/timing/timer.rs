@@ -43,6 +43,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// is smaller than a single 8x8 texture.
 const SLOTS: usize = 4;
 
+/// Which end of a pair [`PassTimer::half_writes`] is asking for.
+///
+/// A two-variant enum rather than a `bool`, because `half_writes(true)` at a
+/// call site says nothing about which end true is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Half {
+    /// The opening timestamp: put this on the chain's first pass.
+    Begin,
+    /// The closing timestamp: put this on the chain's last pass.
+    End,
+}
+
 /// One timestamp pair: two `u64`s, which is also the smallest useful buffer.
 const PAIR_BYTES: u64 = 16;
 
@@ -91,6 +103,17 @@ impl Ring {
         self.slots[free] = Slot::Writing(frame);
         self.next = (free + 1) % SLOTS;
         Some(free)
+    }
+
+    /// Give a claimed slot back unwritten.
+    ///
+    /// Only legal from `Slot::Writing`: a slot that has been resolved or is
+    /// mapping has a readback in flight and is not the caller's to reclaim.
+    /// See [`PassTimer::abandon`] for the case this exists for.
+    fn release(&mut self, slot: usize) {
+        if matches!(self.slots[slot], Slot::Writing(_)) {
+            self.slots[slot] = Slot::Free;
+        }
     }
 
     /// The slot's queries have been resolved into its readback buffer.
@@ -271,6 +294,53 @@ impl PassTimer {
             beginning_of_pass_write_index: Some(base),
             end_of_pass_write_index: Some(base + 1),
         })
+    }
+
+    /// Half a pair, for bracketing a **chain** of passes rather than one pass.
+    ///
+    /// `Half::Begin` writes only the opening timestamp and `Half::End` only the
+    /// closing one, so a caller can put the first on the chain's first pass and
+    /// the second on its last and get one reading spanning all of them. That is
+    /// what [`crate::post::hd_bloom`] needs: its ladder is a loop of render
+    /// passes whose length is a runtime decision inside the chain, so
+    /// [`Self::writes`] on any single one of them would measure a fraction of
+    /// the cost and there is no `TIMESTAMP_QUERY_INSIDE_ENCODERS` to bracket
+    /// the encoder with.
+    ///
+    /// **Both halves are required.** wgpu allows either index to be `None`
+    /// independently, which is what makes this expressible at all; what it
+    /// does not do is notice that a slot only ever got its opening write. Such
+    /// a slot resolves to a closing timestamp that was never written - an
+    /// unspecified value, not zero - so a chain that can encode *no* passes
+    /// must not have claimed a slot in the first place. See
+    /// [`Self::abandon`].
+    #[must_use]
+    pub fn half_writes(&self, half: Half) -> Option<wgpu::RenderPassTimestampWrites<'_>> {
+        let slot = self.writing?;
+        let base = u32::try_from(slot * 2).expect("four slots");
+        Some(wgpu::RenderPassTimestampWrites {
+            query_set: &self.queries,
+            beginning_of_pass_write_index: matches!(half, Half::Begin).then_some(base),
+            end_of_pass_write_index: matches!(half, Half::End).then_some(base + 1),
+        })
+    }
+
+    /// Give back a slot claimed for a chain that turned out to encode nothing.
+    ///
+    /// **The escape hatch [`Self::begin`]'s contract needs once a claim can be
+    /// made before the caller knows whether there will be a pass.** A claim is
+    /// paired with exactly one [`Self::resolve`], and four claims that never
+    /// resolve end measurement for the run; a caller that has to decide "is
+    /// this chain empty" *after* claiming needs a way to un-claim rather than a
+    /// reason to guess beforehand.
+    ///
+    /// Returns the slot to `Free` rather than to any in-flight state, because
+    /// nothing was ever written into it: there is no readback to wait for and
+    /// no frame index worth carrying.
+    pub fn abandon(&mut self) {
+        if let Some(slot) = self.writing.take() {
+            self.ring.release(slot);
+        }
     }
 
     /// The same pair, for a **compute** pass.

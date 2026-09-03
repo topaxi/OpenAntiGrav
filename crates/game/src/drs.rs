@@ -17,19 +17,29 @@
 //! resolution does, so a scale that moves several times a second changes how
 //! many pixels a frame has and never how far the world advanced.
 //!
-//! # The budget is a share of a frame, not a measured frame
+//! # The budget subtracts what it can measure
 //!
-//! The signal this controls on is [`crate::main::session::Session::scene_cost`] -
-//! the `race` pass alone, timed on the GPU. What it is measured *against* is
-//! [`SCENE_SHARE`] of the target frame period, and the alternative - some
-//! headroom derived from the wall-clock frame interval - is degenerate rather
-//! than merely worse. Under [`crate::perf::Vsync::On`] the loop sleeps to the
-//! refresh and under any [`crate::perf::FrameLimit`] it sleeps to the limit,
-//! so `interval - scene` is a slack term that absorbs whatever the scene did
-//! not use: the ratio would be 1.0 at every render scale and the controller
-//! would be inert in precisely the configuration a player turns it on for.
-//! It would also put a clock inside the one module whose whole selling point
-//! is that it has none. See ADR-0040.
+//! The signal this controls on is a [`Cost`]: the `race` pass and the
+//! motion-blur chain, which both draw through the render extent and both fall
+//! when it does, against the FSR 3.1 chain, which does not. The budget is the
+//! target frame period **minus the measured fixed cost** minus
+//! [`RESIDUAL_SHARE`] for the presentation work nothing times.
+//!
+//! It is still not derived from the wall clock, and that part of ADR-0040
+//! stands: under [`crate::perf::Vsync::On`] the loop sleeps to the refresh and
+//! under any [`crate::perf::FrameLimit`] it sleeps to the limit, so
+//! `interval - scene` is a slack term that absorbs whatever the scene did not
+//! use - the ratio would be 1.0 at every render scale and the controller would
+//! be inert in precisely the configuration a player turns it on for. It would
+//! also put a clock inside the one module whose whole selling point is that it
+//! has none.
+//!
+//! What ADR-0040 got wrong, and [ADR-0042] replaces, is the *other* half: a
+//! single constant share standing in for everything the budget could not see.
+//! Measured, that share has to be about 0.3 for one render profile and 0.9 for
+//! another on the same machine and circuit, so no constant could serve both.
+//!
+//! [ADR-0042]: ../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md
 //!
 //! # The invariant that survives review
 //!
@@ -48,22 +58,68 @@ pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };
 
-/// What fraction of a frame the scene pass alone is allowed to take.
+/// What fraction of a frame is reserved for the presentation work nothing
+/// times.
 ///
-/// **A choice, not a measurement**, and it exists because the budget is the
-/// `race` pass and nothing else - deliberately and incompletely, see the
-/// budget table on `docs/rendering/dynamic-resolution.md`. A target rate
-/// cannot become a scene budget without naming how much of a frame that one
-/// pass may be, and the rest has to cover the bloom, the motion blur, the
-/// resolve, the UI composite and the driver's own overhead, none of which is
-/// timed.
+/// **A choice, and a much narrower one than the constant it replaces.**
+/// `SCENE_SHARE` was 0.45 and asserted that the one timed pass was 45 % of a
+/// frame; measured on an HD/Fury circuit at 2560x1440 it was **20 %**, and the
+/// error was not a bad number but an unfixable one - a share that has to be
+/// 0.3 for `msaa = 4x` with `motion_blur = high` and 0.9 with both off cannot
+/// be a constant at all. See
+/// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
 ///
-/// For scale: 1.556 ms of a 16.67 ms frame at 100 % on the development
-/// machine is 9 %, but that is one adapter on one track, and a controller
-/// that aimed at 9 % would chase a resolution the rest of the frame cannot
-/// afford. **This rises when Phase 5's passes join the budget**; it is a
-/// constant to revisit, not a formula to redesign.
-pub const SCENE_SHARE: f32 = 0.45;
+/// What is left for a constant to cover is the HUD, the UI composite, the
+/// blit, the performance overlay, the MSAA resolve and the driver's own
+/// overhead - all of it at *presentation* resolution or over the whole
+/// allocation, none of it moving when the extent does, and none of it varying
+/// with the render-profile rows. Measured across four render profiles on the
+/// same circuit it sat at **1.45 ms of a 9.3 ms frame** and did not move
+/// between them, which is 0.156; 0.15 is that rounded down, because
+/// under-reserving makes the controller slightly *keener* to shrink and the
+/// bug this replaces was the opposite.
+///
+/// **The known gap: `hd_bloom` is in here and should not be.** It draws
+/// through the extent, so it belongs in the scalable half, and it is not
+/// timed. The circuit measured authors `blur steps 1/1`, the cheapest ladder,
+/// so it hides inside the 1.45 ms; a circuit with a longer ladder would push
+/// the residual up and the controller would under-shrink. That is the next
+/// term to measure, not a reason to inflate this constant.
+pub const RESIDUAL_SHARE: f32 = 0.15;
+
+/// One frame's GPU cost, split by whether the controller can change it.
+///
+/// **The split is the whole of ADR-0042.** A budget that exists to be divided
+/// by a moving cost must not have a fixed cost folded into it, and until this
+/// type there was nowhere to say which was which: the controller was handed
+/// one number, the `race` pass, and a constant that pretended to stand for
+/// everything else.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cost {
+    /// What falls when the render extent does: the `race` pass and the
+    /// motion-blur chain, both drawn through the extent and both timed.
+    pub scalable: f32,
+    /// What does not: the FSR 3.1 chain, measured, and **all of it**.
+    ///
+    /// Conservative rather than exact - the chain's render-resolution passes
+    /// do shrink with the extent, and only its accumulate and RCAS passes are
+    /// truly presentation-bound. Counting the whole reading as fixed makes the
+    /// budget smaller than the truth and so biases the controller toward
+    /// falling, which is the safe direction for the bug ADR-0042 exists to
+    /// fix. Splitting it needs a second pair inside `Fsr3::render`.
+    ///
+    /// Zero on every frame no temporal reconstruction ran, which is honest
+    /// rather than a default: nothing fixed was paid.
+    pub fixed: f32,
+}
+
+impl Cost {
+    /// The whole reading, for a log line.
+    #[must_use]
+    pub fn total(self) -> f32 {
+        self.scalable + self.fixed
+    }
+}
 
 /// How many frames a second dynamic resolution is aiming for, or `off`.
 ///
@@ -146,13 +202,36 @@ impl Target {
         }
     }
 
-    /// How long the scene pass may take, in seconds, or `None` when off.
-    ///
-    /// [`SCENE_SHARE`] of the target frame period. See the module docs for why
-    /// this is a share of a period rather than anything measured.
+    /// The target frame period in seconds, or `None` when off.
     #[must_use]
-    pub fn scene_budget(self) -> Option<f32> {
-        self.hz().map(|hz| SCENE_SHARE / hz as f32)
+    pub fn period(self) -> Option<f32> {
+        self.hz().map(|hz| 1.0 / hz as f32)
+    }
+
+    /// How long the *scalable* work may take, given what the fixed work
+    /// already cost this frame - or `None` when this target is off.
+    ///
+    /// `period - fixed - RESIDUAL_SHARE * period`. The measured fixed cost is
+    /// **subtracted** rather than absorbed into a share, which is the whole
+    /// change ADR-0042 makes: a controller that shrinks the extent buys back
+    /// nothing from the FSR 3.1 chain, so pretending a constant fraction of
+    /// the frame covers it made the budget wrong by a factor that varied with
+    /// the render profile.
+    ///
+    /// **May be zero or negative, and the caller must not treat that as an
+    /// error.** It is the honest answer to "how much room is left for the
+    /// scene at this target on this machine": none. See
+    /// [`Controller::record`], which stops stepping rather than grinding to
+    /// the floor for frames that will never arrive.
+    #[must_use]
+    pub fn scalable_budget(self, fixed_seconds: f32) -> Option<f32> {
+        let period = self.period()?;
+        let fixed = if fixed_seconds.is_finite() && fixed_seconds > 0.0 {
+            fixed_seconds
+        } else {
+            0.0
+        };
+        Some(period - fixed - RESIDUAL_SHARE * period)
     }
 
     /// The spelling used in a settings file and on a menu row.

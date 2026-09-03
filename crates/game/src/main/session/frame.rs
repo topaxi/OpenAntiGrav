@@ -1,7 +1,7 @@
 //! One frame: the fixed timestep, the stage update, and the draw.
 
 use anyhow::Result;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::keys;
@@ -582,6 +582,14 @@ impl Session {
         if has_scene && let Some(timer) = self.pass_timer.as_mut() {
             timer.begin(self.frame_index);
         }
+        // And one for the motion-blur chain, on the same terms. **Claimed
+        // before it is known whether the chain will encode anything**, because
+        // the claim has to precede the pass and only `MotionBlur::render`
+        // knows whether its scratch targets are built yet - `stats.blur_encoded`
+        // is the answer, and the `abandon` below is what a `false` costs.
+        if has_scene && let Some(timer) = self.blur_timer.as_mut() {
+            timer.begin(self.frame_index);
+        }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Read before `self.stage` is borrowed mutably below, for the same
@@ -664,6 +672,14 @@ impl Session {
                     self.pass_timer
                         .as_ref()
                         .and_then(oag_render::timing::PassTimer::writes),
+                    // The two halves of one pair, for the chain's first and
+                    // last pass - see `PassTimer::half_writes`.
+                    self.blur_timer.as_ref().and_then(|timer| {
+                        Some(oag_render::post::motion_blur::ChainTimestamps {
+                            begin: timer.half_writes(oag_render::timing::Half::Begin)?,
+                            end: timer.half_writes(oag_render::timing::Half::End)?,
+                        })
+                    }),
                 );
                 if let Some(start) = start {
                     info!("first race frame: encoded in {:?}", start.elapsed());
@@ -671,6 +687,19 @@ impl Session {
                 (Some(stats), None)
             }
         };
+
+        // **A claim the chain did not write into is given back here**, not
+        // left to resolve: `MotionBlur::render` encodes nothing at `off` or
+        // before its scratch targets exist, and a slot whose closing timestamp
+        // was never written reads back an unspecified value rather than a zero.
+        // Four unresolved claims end measurement for the run, so this is the
+        // difference between "motion blur is off" and "nothing is timed any
+        // more".
+        if !scene_stats.is_some_and(|stats| stats.blur_encoded)
+            && let Some(timer) = self.blur_timer.as_mut()
+        {
+            timer.abandon();
+        }
 
         // Only sampled under `Dev`, which is the one tier that shows it - a
         // reader that costs nothing at 4 Hz would still be a syscall a frame
@@ -847,6 +876,9 @@ impl Session {
         if let Some(timer) = self.upscale_timer.as_mut() {
             timer.resolve(&mut encoder);
         }
+        if let Some(timer) = self.blur_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
 
         let submit_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
@@ -854,50 +886,7 @@ impl Session {
         // the buffer this frame just copied into. What comes back is a frame or
         // more old and says which frame it was - so a reading from a frame that
         // carried a load is dropped rather than recorded as a 300 ms scene.
-        if let Some(timer) = self.pass_timer.as_mut()
-            && let Some(reading) = timer.read(&self.gpu.device)
-        {
-            if reading.frame > self.stall_frame {
-                self.scene_cost.record(reading.seconds);
-                // The same reading, inside the same guard: a load lands in one
-                // frame's timing and would otherwise drive the scale to the
-                // floor and take seconds to climb back.
-                if let Some(extent) = self.drs.record(reading.seconds, drs_limits) {
-                    trace!(
-                        "dynamic resolution: {}x{} ({:.0}% of {}x{})",
-                        extent.0,
-                        extent.1,
-                        self.drs.scale() * 100.0,
-                        drs_limits.ceiling().0,
-                        drs_limits.ceiling().1
-                    );
-                }
-            }
-            trace!(
-                "scene pass: frame {} took {:.3} ms, read on frame {}",
-                reading.frame,
-                reading.seconds * 1000.0,
-                self.frame_index
-            );
-        }
-        // The upscaler's own reading, on the same terms as the scene pass's.
-        // The `seconds > 0.0` guard is belt and braces rather than the
-        // mechanism: what keeps a reading honest is that a slot is only
-        // claimed on a frame the chain actually runs on - see the claim above
-        // for why an unwritten pair cannot be filtered out here.
-        if let Some(timer) = self.upscale_timer.as_mut()
-            && let Some(reading) = timer.read(&self.gpu.device)
-            && reading.frame > self.stall_frame
-            && reading.seconds > 0.0
-        {
-            self.upscale_cost.record(reading.seconds);
-            trace!(
-                "fsr3 chain: frame {} took {:.3} ms, read on frame {}",
-                reading.frame,
-                reading.seconds * 1000.0,
-                self.frame_index
-            );
-        }
+        self.read_timing_and_feed_drs(&render_profile, drs_limits);
         if let Some(start) = submit_start {
             info!("first race frame: submitted in {:?}", start.elapsed());
         }

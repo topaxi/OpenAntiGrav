@@ -5,7 +5,7 @@
 //! sit together, because two of them are only correct with respect to each
 //! other. See [`DEADBAND`].
 
-use super::Limits;
+use super::{Cost, Limits};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -98,6 +98,15 @@ pub struct Controller {
     /// Consecutive readings with room to spare, counted toward
     /// [`RISE_PATIENCE`]. Reset by anything that is not one.
     under: u32,
+    /// Consecutive frames with nothing left to decide, counted toward
+    /// [`RISE_PATIENCE`] before [`Self::unreachable`] says so.
+    ///
+    /// **A run rather than a flag, for the reason a rise needs one.** At a
+    /// target the machine can only just hold, the controller sits between two
+    /// adjacent grid points and the "nowhere left to go" condition is true on
+    /// some frames and false on others - measured, 68 times in 41 seconds. A
+    /// flag would report every one of those as a fresh spell.
+    unreachable: u32,
 }
 
 impl Default for Controller {
@@ -114,39 +123,62 @@ impl Controller {
             steps: GRID,
             cooldown: 0,
             under: 0,
+            unreachable: 0,
         }
     }
 
-    /// Records one scene-pass timing and returns the extent to draw next, or
+    /// Records one frame's [`Cost`] and returns the extent to draw next, or
     /// `None` when nothing should move.
     ///
-    /// `None` covers four different quiet cases - the target is off, the
-    /// reading is inside [`DEADBAND`], a [`COOLDOWN`] is still running, or the
-    /// correction quantised back onto the scale already in force. The last is
-    /// deliberately not a step: burning a cooldown on a no-op would halve how
-    /// often the controller could respond to a real overrun.
+    /// `None` covers five quiet cases - the target is off, the reading is
+    /// inside [`DEADBAND`], a [`COOLDOWN`] is still running, the correction
+    /// quantised back onto the scale already in force, or the target is out of
+    /// reach at any resolution. The fourth is deliberately not a step: burning
+    /// a cooldown on a no-op would halve how often the controller could
+    /// respond to a real overrun.
     ///
     /// A reading that is not a finite positive number is dropped, the way
     /// [`crate::perf::Meter::record`] drops one: a clock that went backwards
     /// is not a fast frame.
-    pub fn record(&mut self, scene_seconds: f32, limits: Limits) -> Option<(u32, u32)> {
-        let budget = limits.target().scene_budget()?;
-        if !scene_seconds.is_finite() || scene_seconds <= 0.0 {
+    ///
+    /// **The unreachable branch is not an error path.** When the measured
+    /// fixed cost alone fills the target frame period, no render scale exists
+    /// that would deliver the rate - so the controller holds where it is
+    /// rather than walking to the floor to buy frames that will never arrive.
+    /// That is the same failure [`super::Target::at_most`] was written to
+    /// prevent, reached from the other direction, and it is reported through
+    /// [`Self::unreachable`] so the caller can say so once.
+    pub fn record(&mut self, cost: Cost, limits: Limits) -> Option<(u32, u32)> {
+        let budget = limits.target().scalable_budget(cost.fixed)?;
+        let scalable = cost.scalable;
+        if !scalable.is_finite() || scalable <= 0.0 {
+            return None;
+        }
+        // **Before the cooldown**, so a target that has become unreachable is
+        // reported on the frame it happens rather than up to `COOLDOWN` frames
+        // later - and so the cooldown cannot be spent on a frame there was
+        // never a decision to make.
+        if budget <= 0.0 {
+            self.unreachable = self.unreachable.saturating_add(1);
             return None;
         }
         if self.cooldown > 0 {
             self.cooldown -= 1;
             return None;
         }
-        let ratio = scene_seconds / budget;
+        let ratio = scalable / budget;
         if DEADBAND.contains(&ratio) {
             // Comfortable, and comfortable is not headroom: a frame in the
             // band breaks the run a rise has to earn.
             self.under = 0;
+            // It does break the *other* run, though: a frame that fits is the
+            // plainest possible evidence the target is not out of reach.
+            self.unreachable = 0;
             return None;
         }
         if ratio < *DEADBAND.start() {
             self.under += 1;
+            self.unreachable = 0;
             if self.under < RISE_PATIENCE {
                 return None;
             }
@@ -166,15 +198,71 @@ impl Controller {
         // would let a rise land above what the measurement supports, and a
         // rise that overshoots is the dropped frame this exists to avoid.
         let next = (here + delta).floor().clamp(0.0, f64::from(GRID)) as u32;
-        let next = next.clamp(floor_steps(limits), GRID);
+        let floor = floor_steps(limits);
+        let next = next.clamp(floor, GRID);
+        // **A rise has to land with room to spare, not merely inside the
+        // band.** Cost goes as the pixel count, so stepping from `here` to
+        // `next` multiplies it by `(next / here)^2` - and near the floor that
+        // is a much bigger jump than near the ceiling: one step of twenty is
+        // 10 % of the cost at the top of the range and 21 % at half scale.
+        // [`DEADBAND`] is 15 % wide, so below about 70 % scale a rise that the
+        // band permits lands *outside* it on the other side and is undone next
+        // frame. Measured once the budget could see the whole scalable cost:
+        // 176 changes in 41 seconds, against the 143 a minute that
+        // [`RISE_PATIENCE`] was added to fix.
+        //
+        // Predicting against `DEADBAND.start()` rather than `.end()` is the
+        // margin, and it is deliberately conservative: the quadratic model is
+        // optimistic, because a scene pass has per-frame cost in it that does
+        // not scale with pixels at all - measured at half scale the real
+        // multiplier was 1.30 where the model said 1.21. A refused rise costs
+        // sharpness the machine could not hold anyway; an accepted one that
+        // overshoots is the dropped frame this whole loop exists to avoid.
+        if next > self.steps {
+            let growth = (f64::from(next) / here).powi(2);
+            if f64::from(ratio) * growth > f64::from(*DEADBAND.start()) {
+                return None;
+            }
+        }
 
         if next == self.steps {
+            // **Parked at the floor and still over budget is unreachable too.**
+            // The quantised correction has nowhere left to go, so the caller
+            // should hear the same thing it hears when the budget goes
+            // non-positive rather than watching a silent controller sit at the
+            // floor missing its target.
+            if next == floor && ratio > 1.0 {
+                self.unreachable = self.unreachable.saturating_add(1);
+            } else {
+                self.unreachable = 0;
+            }
             return None;
         }
         self.steps = next;
         self.cooldown = COOLDOWN;
         self.under = 0;
+        // A step taken is a decision made, so whatever run of "nowhere left to
+        // go" was building is over.
+        self.unreachable = 0;
         Some(limits.pixels(self.scale()))
+    }
+
+    /// Whether the target cannot be met at any resolution this controller may
+    /// choose.
+    ///
+    /// True once the measured fixed cost alone has filled the frame period, or
+    /// the scale has been parked at the floor and still over budget, for
+    /// [`RISE_PATIENCE`] consecutive frames. For a log line and a menu note,
+    /// never for a decision - the controller has already made the only
+    /// decision available, which is to stop.
+    ///
+    /// **Earned by a run, exactly as a rise is**, and for the same reason: a
+    /// marginal target makes the underlying condition flicker, and a caller
+    /// that logged the flicker would print a paragraph a second about a
+    /// situation that has not changed.
+    #[must_use]
+    pub fn unreachable(&self) -> bool {
+        self.unreachable >= RISE_PATIENCE
     }
 
     /// Throws the recent past away without moving the scale.
@@ -189,6 +277,7 @@ impl Controller {
     pub fn reset(&mut self) {
         self.cooldown = COOLDOWN;
         self.under = 0;
+        self.unreachable = 0;
     }
 
     /// The extent to draw at, re-derived from the bounds in force now.

@@ -1179,9 +1179,12 @@ recipe and its three traps.
       `crates/game/src/drs.rs` turns the reading into a rectangle behind
       `[render_profiles.<title>] target_fps` and its floor, per title
       beside the ceiling they pair with. The
-      budget is a share of the target frame period rather than anything derived
-      from the wall clock, which is the one decision here worth an ADR
+      budget is measured against the target frame period rather than anything
+      derived from the wall clock, which is the one decision here worth an ADR
       ([ADR-0040](../architecture/adr/0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md)).
+      What the period is measured *against* moved off a single constant onto a
+      measured fixed cost plus a small residual once FSR 3.1 landed
+      ([ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)).
       At the default the whole feature is byte-identical to not having it -
       see [dynamic resolution](../rendering/dynamic-resolution.md).
       **FSR4 is not a plan**: it ships as signed DLLs

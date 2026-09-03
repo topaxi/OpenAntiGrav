@@ -29,6 +29,8 @@ mod load;
 pub(crate) mod menus;
 #[path = "session/placeholder.rs"]
 mod placeholder;
+#[path = "session/timing.rs"]
+mod timing;
 // Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
 // unaliased throughout `session::menus`, and a sibling module of the same
 // name would shadow it at every one of those call sites.
@@ -105,6 +107,33 @@ pub(crate) struct Session {
     /// Four slots each is eight tiny buffers - see `PassTimer`'s own note on
     /// what a ring costs.
     pub(crate) upscale_timer: Option<oag_render::timing::PassTimer>,
+    /// What the motion-blur chain costs on the **GPU**, in the same seconds.
+    ///
+    /// **The third meter, and the one that made the budget honest.** Motion
+    /// blur draws through the render extent, so its cost falls with the
+    /// resolution exactly as the scene pass's does - and it was entirely
+    /// invisible: measured 2026-09-03 on an HD/Fury circuit at 2560x1440,
+    /// `high` costs about 1.7 ms against a 9.3 ms frame, with the scene pass
+    /// and the FSR 3.1 chain both unmoved. A controller that could not see it
+    /// was budgeting against a fifth of the work it controls. See
+    /// [`oag_game::drs`].
+    pub(crate) blur_cost: perf::Meter,
+    /// The timer behind [`Session::blur_cost`], on its own ring for the reason
+    /// [`Session::upscale_timer`] has one.
+    ///
+    /// **Bracketed across six passes with one pair**, which is what
+    /// `PassTimer::half_writes` exists for: the chain is prepare, two tile
+    /// reductions, a neighbour-max, a gather and a copy, and timing any single
+    /// one of them would measure a fraction of the cost.
+    pub(crate) blur_timer: Option<oag_render::timing::PassTimer>,
+    /// Whether the "this target is out of reach" line has already been said
+    /// for the spell the controller is currently in.
+    ///
+    /// The condition is per-frame and would otherwise be a log line per frame;
+    /// what a reader wants is the edge. Cleared when the controller stops
+    /// reporting it, so a target that becomes reachable again and then does
+    /// not says so twice.
+    pub(crate) drs_unreachable_said: bool,
     /// Which frame the loop is on, counted rather than timed.
     ///
     /// Exists because a GPU reading arrives a frame or more after the frame it

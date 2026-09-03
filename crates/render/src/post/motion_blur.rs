@@ -97,6 +97,22 @@ fn max_px(viewport: (f32, f32, f32, f32)) -> f32 {
     (MAX_STRETCH * viewport.3).max(8.0)
 }
 
+/// One timestamp pair, split across the first and last pass of a chain.
+///
+/// Two descriptors rather than one because a pair spans six render passes here
+/// and wgpu writes a timestamp per *pass*: `beginning_of_pass_write_index` and
+/// `end_of_pass_write_index` are independently optional, so the opening index
+/// rides the first pass and the closing one the last. See
+/// [`crate::timing::PassTimer::half_writes`], which builds both halves from one
+/// claimed slot.
+#[derive(Debug)]
+pub struct ChainTimestamps<'a> {
+    /// Opening timestamp only, for the chain's first pass.
+    pub begin: wgpu::RenderPassTimestampWrites<'a>,
+    /// Closing timestamp only, for the chain's last pass.
+    pub end: wgpu::RenderPassTimestampWrites<'a>,
+}
+
 /// One frame's worth of input to [`MotionBlur::render`].
 #[derive(Debug)]
 pub struct Frame<'a> {
@@ -439,9 +455,10 @@ impl MotionBlur {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame<'_>,
-    ) {
+        timestamps: Option<ChainTimestamps<'_>>,
+    ) -> bool {
         if frame.strength <= 0.0 {
-            return;
+            return false;
         }
         let tile = max_px(frame.viewport).ceil() as u32;
         self.resize(device, frame.size, tile);
@@ -452,7 +469,7 @@ impl MotionBlur {
             &self.tile_b,
             &self.scratch,
         ) else {
-            return;
+            return false;
         };
 
         let wanted = Constants::new(frame.viewport, frame.size, frame.strength, tile);
@@ -472,34 +489,48 @@ impl MotionBlur {
         if self.groups.as_ref().is_none_or(|groups| groups.key != key) {
             self.groups = Some(self.build_groups(device, frame, key));
         }
-        let Some(groups) = &self.groups else { return };
-
-        let mut pass = |label: &str,
-                        pipeline: &wgpu::RenderPipeline,
-                        groups: &[&wgpu::BindGroup],
-                        target: &wgpu::TextureView| {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(label),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_pipeline(pipeline);
-            for (index, group) in groups.iter().enumerate() {
-                pass.set_bind_group(index as u32, Some(*group), &[]);
-            }
-            pass.draw(0..3, 0..1);
+        let Some(groups) = &self.groups else {
+            return false;
         };
+
+        // **The two halves are split across the first and last pass**, which is
+        // what makes one reading cover the whole six-pass chain without
+        // `TIMESTAMP_QUERY_INSIDE_ENCODERS` - see `timing::PassTimer::half_writes`.
+        // Destructured here rather than carried into the closure so the
+        // borrow ends before `encoder` is used again.
+        let (mut opening, mut closing) = match timestamps {
+            Some(pair) => (Some(pair.begin), Some(pair.end)),
+            None => (None, None),
+        };
+
+        let mut pass =
+            |label: &str,
+             pipeline: &wgpu::RenderPipeline,
+             groups: &[&wgpu::BindGroup],
+             target: &wgpu::TextureView,
+             timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>| {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: target,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_pipeline(pipeline);
+                for (index, group) in groups.iter().enumerate() {
+                    pass.set_bind_group(index as u32, Some(*group), &[]);
+                }
+                pass.draw(0..3, 0..1);
+            };
 
         let prepare_pipeline = if groups.multisampled {
             &self.prepare_ms
@@ -512,6 +543,7 @@ impl MotionBlur {
             prepare_pipeline,
             &[&groups.idle, &groups.prepare],
             &prepared.view,
+            opening.take(),
         );
         // 2 and 3: the separable tile reduction, horizontal then vertical.
         pass(
@@ -519,12 +551,14 @@ impl MotionBlur {
             &self.tile_max_x,
             &[&groups.rows],
             &tile_rows.view,
+            None,
         );
         pass(
             "motion blur tile-max (y)",
             &self.tile_max_y,
             &[&groups.columns],
             &tile_a.view,
+            None,
         );
         // 4: neighbour-max.
         pass(
@@ -532,6 +566,7 @@ impl MotionBlur {
             &self.neighbour_max,
             &[&groups.spread],
             &tile_b.view,
+            None,
         );
         // 5: the gather, into scratch.
         pass(
@@ -539,9 +574,17 @@ impl MotionBlur {
             &self.reconstruct,
             &[&groups.gather],
             &scratch.view,
+            None,
         );
         // 6: home.
-        pass("motion blur copy", &self.copy, &[&groups.home], frame.scene);
+        pass(
+            "motion blur copy",
+            &self.copy,
+            &[&groups.home],
+            frame.scene,
+            closing.take(),
+        );
+        true
     }
 
     /// Builds all seven bind groups for one `key`. See [`Groups`].

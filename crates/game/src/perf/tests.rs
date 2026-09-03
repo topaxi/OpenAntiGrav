@@ -197,6 +197,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
     assert_eq!(bare.len(), 4 + WINDOW);
 
     let scene = crate::race::SceneStats {
+        blur_encoded: false,
         draws_submitted: 12,
         draws_culled: 3,
         triangles: 4096,
@@ -387,6 +388,7 @@ fn nothing_is_drawn_outside_the_panel() {
         meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
     }
     let scene = crate::race::SceneStats {
+        blur_encoded: false,
         draws_submitted: 12,
         draws_culled: 3,
         triangles: 4096,

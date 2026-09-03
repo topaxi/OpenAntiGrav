@@ -243,6 +243,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
         },
+        None,
     );
 
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -476,6 +477,7 @@ fn still_block_over_a_moving_background(
             viewport: (0.0, 0.0, size as f32, size as f32),
             strength: 0.5,
         },
+        None,
     );
 
     // `bytes_per_row` has to be a multiple of 256, which a ragged width is
@@ -632,6 +634,7 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
         },
+        None,
     );
 
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -820,6 +823,7 @@ fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
         },
+        None,
     );
 
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
