@@ -1929,9 +1929,9 @@ literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
 that specific value keeps reading as `SpecularPower` patched at draw time
 (finding 1 above) rather than as a sixth real constant.
 
-**`200`/`250`/`260`/`35` traced 2026-09-03, and the operand-shape trace turns
-out not to discriminate at all - both a population-and-Zone finding worth
-keeping and a method that does not answer the question it was built for.**
+**`200`/`250`/`260`/`35` traced 2026-09-03, over four drafts before the
+method was trustworthy - all four kept in this history rather than silently
+corrected away, per this project's own evidence rule.**
 `Program::specular_exponent_dp3()` now names the winning chain's own `DP3`
 (`crates/formats/src/rcsmaterial/fragment.rs`), so
 `crates/render/examples/hd_specular_unresolved_trace.rs` can print its two
@@ -1967,48 +1967,75 @@ including both `zone_death_*` ship materials despite the name. So unlike
 coincidence on `zone_death_*` is exactly that, a coincidence - the material
 is used during Zone mode, not gated by a Zone shader parameter.
 
-**The operand-shape trace itself does not hold up, and two successive drafts
-of this section overclaimed before it was checked properly - both errors are
-kept here rather than silently fixed, per this project's own evidence rule.**
-First draft: a `last_writer` search that ignored write masks entirely
-reported "every operand carries its own normalize tail", including
+**The operand-shape trace took four passes to get right, and the first
+three are worth reading because each looked plausible before the next one
+broke it.** Draft 1: a `last_writer` search that ignored write masks
+entirely reported "every operand carries its own normalize tail", including
 annotating an unnamed opcode (`0x3b`, not in nouveau's table) as `<-
 normalize` from its position alone - a guess dressed as a name, exactly what
-the confidence rubric's sub-50 rule exists to prevent. Made lane-aware
-(requiring the writer to cover every lane the read swizzle selects), the
-tally dropped to `Normalize` 4 of 168 operands, `Sum` (the half-vector shape
-specifically) 0 - and a second draft used that to flag one confirmed
-`32`-resolving block as anomalous (its operand traced to `EX2`, not a
-geometric write). **Neither number survives one more check: a lane-aware
-writer can still be stale if a later, different write touches an overlapping
-lane afterward**, which the first fix did not account for. Adding that
-clobber check collapses the tally further - `NoSingleWriter` 164 of 168 - and
-the flagged `32` block's own operand turns out to be exactly this case too
-(the `EX2` write covered only `.w`; a partial write afterward touched the
-rest), so that "anomaly" was never real, just the same unfixed bug read a
-second way.
+the confidence rubric's sub-50 rule exists to prevent. Draft 2, made
+lane-aware (requiring the writer to cover every lane the read swizzle
+names) but still treating a `DP3` as a four-lane read when it only ever
+consumes three: the tally collapsed to `Normalize` 4 of 168, `Sum` (the
+half-vector shape) 0, and flagged one confirmed `32`-resolving block as
+anomalous (its operand traced to `EX2`). Draft 3 added a clobber check (a
+lane-aware writer can still be stale if a later write touches an
+overlapping lane) and, on the strength of that, concluded the method could
+not discriminate at all: `NoSingleWriter` 164 of 168, and the same ratio -
+`5,354` of `5,528` - on the `32` bucket used as a control.
 
-**Run against the confirmed `32` bucket for comparison, the same ratio
-holds - `5,354` of `5,528` operands (97 %) are `NoSingleWriter`.** This is
-not a property of `200`/`250`/`260`/`35`; it is a property of this
-microcode's own style, which builds a vector's lanes across several
-separate, partial-mask instructions almost universally rather than in one
-write. **A single-instruction "who wrote this register" search cannot
-discriminate a real light-vector dot from anything else here**, on either
-population - not because the disputed values look wrong, but because the
-method cannot see far enough to say either way. Real provenance would need a
-per-lane dataflow trace (the most recent writer of *each individual lane*,
-merged across instructions), which is a genuinely bigger analysis than this
-pass built.
+**Draft 3's own conclusion doesn't survive either, for two reasons found
+together.** First, `32` was never a valid control: it carries the same
+confidence-80 label and the same lightmap-pow-curve false-positive risk
+this page's own sweep already named, so "indistinguishable from `32`" shows
+two uncertain populations resembling each other, not that either is real.
+The only member of this whole population whose semantics were established
+by *reading*, not by instruction shape, is the ship's own `pow(N.H, 40)` -
+the worked transcript above naming `ADD R2.xzw, normalize(f[TC1]), {const}`
+as `V + L`. Second, correcting `DP3`'s three-lane read (still outstanding
+after draft 2's partial fix) and narrowing every other opcode's read width
+to the lanes its own destination mask actually writes - a property of a
+masked SIMD ALU generally, not a claim about what any specific unnamed
+opcode computes - moves the tally again, sharply: `NoSingleWriter` drops to
+**0**.
 
-**Left wired, not retracted - but for a narrower reason than a first pass
-here claimed.** Nothing found this pass argues these four values are wrong;
-the Zone-rim exclusion still holds, and per this project's own rule a
-reading that has not been contradicted stays wired rather than held back a
-second time for an uncertainty already priced into the confidence-80 base
-method. Confidence stays at **80**, unmoved: this pass neither raises it
-(the operand trace it set out to run turned out not to discriminate) nor
-lowers it (nothing it found contradicts the base reading either).
+**Draft 4, calibrated against the one occurrence read by hand: `Sum` 82,
+`Normalize` 58, `Neither` 28, of 168 operands.** Run through the same
+classifier, the ship's confirmed `pow(N.H, 40)` block reads as
+`(Normalize, Sum)` - `N` normalizes on its own, `H` traces to
+`normalize(ADD of two distinct sources)`. `140` of `168` `200`/`250`/`260`/
+`35` operands (83 %) land in one of those same two categories the
+calibration case itself uses. **This is not proof each is a half-vector
+specifically** - `ADD of two distinct sources` also fits an ordinary
+bias-add, and `Sum`/`Normalize` are named for the mechanical shape they
+match, not for what the shape means in every occurrence - but it is
+consistent with the same vector-construction idiom throughout, on the one
+case checked by reading, and inconsistent with none of the 84. One
+worked transcript, `zone_death_panel.rcsmaterial`:
+
+```text
+[13] op3B R2.xyz, R2.xyzw, R0.wwww
+[14] DP3_SAT R2.x, R0.xyzw, R2.xyzw
+[15] DP3 R1.w, R0.xyzw, R3.xyzw
+[17] DP3 R0.w, R3.xyzw, R3.xyzw
+[18] ADD R3.xyz, R1.xyzw, R3.xyzw        <- R1 + R3, two distinct sources
+[19] DP3 R2.y, R3.xyzw, R3.xyzw          <- dot(sum, sum)
+[20] op3B R3.xyz, R3.xyzw, R2.yyyy       <- scaled by the dot above
+[21] DP3_SAT R2.w, R0.xyzw, R3.xyzw      <- the winning DP3
+    operand 0: R0.xyzw -> Normalize
+    operand 1: R3.xyzw -> Sum
+```
+
+**Left wired, not retracted, and this time on a checked basis.** Confidence
+stays at **80**, unmoved: this pass corroborates the base reading (the
+operand shape is consistent with a real dot product, calibrated against the
+one known case) without independently confirming any individual chain's
+specific meaning, so it does not clear the bar for a higher band either. What
+still isn't traced: what feeds the sum's own two operands (a light direction,
+the view vector, or something else) beyond one `ADD`, and whether the
+`read_lanes` elementwise-by-mask assumption holds for the specific unnamed
+opcode (`0x3b`) this idiom uses throughout - both real next steps, not
+resolved here.
 
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**

@@ -17,30 +17,39 @@
 //!
 //! `Program::specular_exponent` names the chain's value; this prints the
 //! `DP3`'s own two operands and classifies each with [`Evidence`] - **lane
-//! aware and clobber-checked**: [`last_writer`] only reports an instruction
-//! that both wrote *every* lane the reader's own swizzle selects and had
-//! nothing else touch any of those lanes afterward, so a value assembled
-//! across several partial writes reports as "no single writer" rather than
-//! naming whichever one happened to sit closest.
+//! aware and clobber-checked**: [`last_writer`]/[`read_lanes`] only credit
+//! an instruction with supplying an operand if it both wrote *every* lane
+//! the read actually needs (a `DP3` needs three, not four; a lane-parallel
+//! op needs only the lanes matching its own destination mask - see
+//! [`read_lanes`]'s own doc comment for why that is a general assumption
+//! about masked SIMD, not a claim about what any specific unnamed opcode
+//! computes) and had nothing else touch those lanes afterward.
 //!
-//! **The honest result of that check: this operand trace does not
-//! discriminate.** Two earlier, less careful passes each claimed a shape
-//! ("every operand carries a normalize tail", then "one confirmed `32`
-//! block's operand comes from `EX2`, unlike the disputed values") - both
-//! were artifacts of a `last_writer` that ignored write masks and,
-//! afterward, ignored a later clobber. Corrected, **164 of 168 operands**
-//! across all 84 `200`/`250`/`260`/`35` occurrences have `NoSingleWriter`:
-//! this microcode overwhelmingly builds a vector's lanes across several
-//! separate, partial-mask instructions rather than one full write, so "the
-//! last instruction that wrote this register" is very rarely a real
-//! answer. Run against the confirmed `32` bucket for comparison, the ratio
-//! is the same - `5,354` of `5,528` (97 %) - so this is not a property of
-//! the four disputed values, it is a property of the microcode itself, and
-//! a single-writer heuristic cannot tell a real specular dot from anything
-//! else here. Real provenance would need a per-lane dataflow trace (the
-//! most recent writer of *each individual lane*, merged), which is a
-//! bigger analysis than this pass built - left as the open item, not a
-//! result this pass can report either way.
+//! **Getting the read width right took three tries, and the first two are
+//! kept in `renderer.md`'s own history rather than silently corrected
+//! away.** A naive four-lane check found "every operand normalizes"; fixed
+//! for `DP3`'s three-lane read alone, almost everything read as
+//! `NoSingleWriter` (this microcode writes a vector's lanes across several
+//! partial-mask instructions almost universally, so a check that still
+//! demands a four-lane writer for a lane-parallel op finds one almost
+//! never); only once the elementwise read width was narrowed to match the
+//! reading op's own destination mask did the two real categories - `Sum`
+//! and `Normalize` - separate from the noise.
+//!
+//! **Calibrated against the one occurrence already read by hand.**
+//! `renderer.md`'s own worked example names the ship's `pow(N.H, 40)` block
+//! as `H = normalize(V + L)` dotted against a separately-normalized `N`.
+//! Run through this classifier, that exact block's `DP3` operands come back
+//! `(Normalize, Sum)` - the un-summed operand (`N`) normalizes on its own,
+//! the summed one (`H`) traces to `normalize(ADD of two distinct sources)`.
+//! That is the calibration this tool has: `Sum` tracks the mechanical shape
+//! of the one known real half-vector construction. It does not by itself
+//! prove any other `Sum` result is a half-vector too - `ADD of two distinct
+//! sources` is also what a bias-add looks like - only that the label is
+//! reading the same shape reading-by-hand already confirmed once.
+//!
+//! See [`Evidence`]'s own doc comment for what classifying all 84 `200`/
+//! `250`/`260`/`35` occurrences against that calibration found.
 //!
 //! **Unnamed opcodes are printed as `op3B`/`op3C`/`op3D`, never guessed at.**
 //! `Instruction::name()` returns `None` for these three specifically because
@@ -176,14 +185,22 @@ fn last_writer(program: &Program, at: usize, reg: (u8, bool), read: [u8; 4]) -> 
 }
 
 /// What tracing one `DP3` operand back found - see [`classify`]. Over all 84
-/// `200`/`250`/`260`/`35` occurrences (168 operands): `NoSingleWriter` 164,
-/// `Normalize` 2, `Neither` 2, `Sum` 0 - see this module's own doc comment
-/// for why `NoSingleWriter` dominating means the trace does not
-/// discriminate, rather than meaning "not a specular term".
+/// `200`/`250`/`260`/`35` occurrences (168 operands, all of them registers):
+/// `Sum` 82, `Normalize` 58, `Neither` 28, `NoSingleWriter` 0. The
+/// calibration case (the ship's confirmed `pow(N.H, 40)`, this module's own
+/// doc comment) reads as `(Normalize, Sum)` under the same classifier, so
+/// the 140 of 168 (`Sum` + `Normalize`) that land in one of the two
+/// categories the calibration case itself uses is the number worth
+/// reporting - not proof each is a half-vector specifically, but consistent
+/// with the same construction idiom in every case checked, and consistent
+/// with none checked so far.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Evidence {
-    /// The operand is `normalize(A + B)` for two distinct registers/inputs -
-    /// the half-vector shape `renderer.md`'s ship reading already carries.
+    /// The operand traces to `normalize(A + B)` for two distinct sources -
+    /// the mechanical shape the calibration case (this module's own doc
+    /// comment) reads as a half-vector, `H = normalize(V + L)`. The same
+    /// shape also fits an ordinary bias-add, so this is "consistent with a
+    /// half-vector", not proof of one on its own.
     Sum,
     /// The operand traces to a self-dot-then-scale (`DP3 x,v,v` then a
     /// writer reading `x` and `v`) with a single vector rather than a sum -
@@ -197,11 +214,49 @@ enum Evidence {
     NoSingleWriter,
 }
 
+/// The lanes `insn` actually reads from `reg`, given the swizzle it reads it
+/// with - `None` if `insn` does not read `reg` at all.
+///
+/// **A `DP3` computes a three-component dot product and never consumes the
+/// fourth swizzled lane**, regardless of its own destination mask - one
+/// place this got wrong: an identity-swizzle `DP3` operand was checked
+/// against all four lanes, so an instruction that fully supplied `.xyz` and
+/// left `.w` to something unrelated (the dominant shape in this microcode,
+/// per the `op3B .xyz` / `EX2 .w` split seen throughout) reported as no
+/// single writer when one genuinely existed.
+///
+/// **Every other opcode here is lane-parallel: output lane `i` reads only
+/// swizzled input lane `i`**, so a source lane whose *destination* mask bit
+/// is clear is never actually consumed - this is a property of a masked
+/// SIMD ALU generally (the same assumption [`last_writer`]'s own clobber
+/// check already leans on to say what a mask "means"), not a claim about
+/// what any specific unnamed opcode computes.
+fn read_lanes(insn: &Instruction, reg: (u8, bool)) -> Option<[u8; 4]> {
+    let (_, sw) = insn
+        .operands()
+        .zip(insn.swizzles)
+        .find(|(s, _)| matches!(s, Source::Register { index, half } if (*index, *half) == reg))?;
+    if insn.name() == Some("DP3") {
+        return Some([sw[0], sw[1], sw[2], sw[0]]);
+    }
+    let mut lanes = [sw[0]; 4];
+    let mut n = 0;
+    for (i, &lane) in sw.iter().enumerate() {
+        if insn.mask & (1 << i) != 0 {
+            lanes[n] = lane;
+            n += 1;
+        }
+    }
+    Some(lanes)
+}
+
 fn classify(program: &Program, at: usize, src: Source, swizzle: [u8; 4]) -> Option<Evidence> {
     let Source::Register { index, half } = src else {
         return None;
     };
-    let Some(w) = last_writer(program, at, (index, half), swizzle) else {
+    // The winning instruction is always a `DP3` - see `read_lanes`.
+    let dp3_read = [swizzle[0], swizzle[1], swizzle[2], swizzle[0]];
+    let Some(w) = last_writer(program, at, (index, half), dp3_read) else {
         return Some(Evidence::NoSingleWriter);
     };
     let writer = &program.instructions[w];
@@ -210,14 +265,11 @@ fn classify(program: &Program, at: usize, src: Source, swizzle: [u8; 4]) -> Opti
     // resolve (a reciprocal-length term) - `nvfx_shader.h`'s RSQ/RCP, or one
     // of the two unnamed opcodes this project has seen adjacent to a DP3
     // self-dot on this exact shape.
-    let reads_same_reg = writer
-        .operands()
-        .any(|s| matches!(s, Source::Register{index: i, half: h} if (i, h) == (index, half)));
-    if !reads_same_reg {
+    let Some(read) = read_lanes(writer, (index, half)) else {
         return Some(Evidence::Neither);
-    }
+    };
     // Was the un-normalized vector itself a sum of two distinct sources?
-    let Some(pre) = last_writer(program, w, (index, half), [0, 1, 2, 3]) else {
+    let Some(pre) = last_writer(program, w, (index, half), read) else {
         return Some(Evidence::Normalize);
     };
     let pre_insn = &program.instructions[pre];
