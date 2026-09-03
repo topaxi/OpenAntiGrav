@@ -92,7 +92,14 @@ Four details in the launch, each of which cost a run:
   means no PINE, no bindings, and a BIOS directory that does not exist.
 - **`[Folders] Bios` must be absolute** or it resolves inside that same data
   path. The harness points it at the user's real `~/.config/PCSX2/bios` rather
-  than copying a BIOS anywhere.
+  than copying a BIOS anywhere. **That folder being empty is a real, silent
+  failure mode**, hit 2026-09-03 in a session with no prior PCSX2 setup:
+  `just pcsx2-boot` reports nothing to the caller beyond the recipe's own exit
+  code, and the actual reason is one line into the emulator's own log,
+  `ReportErrorAsync: Startup Error: PCSX2 requires a PlayStation 2 BIOS in
+  order to run` - check `~/.config/PCSX2/bios` before assuming the harness
+  itself is broken. A BIOS is exactly as user-supplied as the disc images
+  under `data/images/` and just as uncommittable; this project ships none.
 - **Xvfb must listen on TCP** (`-listen tcp -nolisten unix`, addressed as
   `127.0.0.1:78`), for the reason the RPCS3 page records: a sandboxed session
   may be unable to write `/tmp/.X11-unix`, and then the unix socket never
