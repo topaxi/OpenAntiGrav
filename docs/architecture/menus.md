@@ -75,7 +75,7 @@ the release rather than of this project:
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
 | MONITOR | winit's own monitor list, read every time the menus open |
-| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / UPSCALER / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
+| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
 
 MONITOR is the one supplied row that is a property of **the desk** rather than
@@ -594,7 +594,7 @@ the renderer would notice**:
 | | Rows | What they have in common |
 | --- | --- | --- |
 | DISPLAY | MONITOR, WINDOW MODE, WINDOW SIZE, ASPECT RATIO, VSYNC, FRAME LIMIT, BRIGHTNESS, GAMMA | The picture's container, and how a finished frame reaches a screen |
-| GRAPHICS | RENDERER, RENDER SCALE, UPSCALER, UPSCALER SHARPNESS, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+| GRAPHICS | RENDERER, RENDER SCALE, RECONSTRUCTION, UPSCALER SHARPNESS, MSAA, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
 
 RENDERER is the most literal case of that criterion there is - it is *what*
 draws - which is why it sits on GRAPHICS despite resembling MONITOR in every
@@ -606,7 +606,7 @@ only on a machine with a software driver installed rather than a switch this
 project could provide.
 
 A row can also be **warned** rather than greyed, which is a different thing and
-the UPSCALER row is why it exists. A greyed row cannot be changed *now* because
+the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply
 does not have the effect its label promises while some other row holds a
 particular value - FSR 1 above a render scale of 100 % being the case in hand.
@@ -675,13 +675,15 @@ because a warning tells a player rather than stopping them.
 
 **And a ceiling is not a drawn size.** Three warnings on this page were written
 when `render_scale` *was* the size the frame is drawn at, and a controller that
-goes below it makes each of them wrong - UPSCALER's most visibly, since at a
-100 % ceiling with a 50 % minimum it reported a magnifying FSR 1 as having no
+goes below it makes each of them wrong - the `fsr1` one most visibly, since at
+a 100 % ceiling with a 50 % minimum it reported a magnifying FSR 1 as having no
 effect. What each wants is the lowest size the rows permit, which is an OR
 across two rows, and `Condition.all` is an AND: so each is two entries sharing
 one message, one requiring the controller off and one requiring its floor high
-enough. That is what `Entry::warnings` being a list buys, beyond the two
-unrelated statements on ANTI-ALIASING it was originally for.
+enough. That is what `Entry::warnings` being a list buys - and since
+[ADR-0041](adr/0041-one-row-for-what-resolves-the-frame.md) both surviving
+warnings sit on the *same* row, RECONSTRUCTION, so the list is now also what
+lets one row say two unrelated things at two ends of the render-scale range.
 
 TARGET FPS also warns when it is above DISPLAY's FRAME LIMIT - and is
 **clamped** to it, which is the same statement made twice on purpose: the row
@@ -697,10 +699,17 @@ screen a player moves it from, and *"this row's effect is not visible here"* is
 a different kind of statement from *"this row is redundant given that one"*.
 Overloading one amber line with both was judged worse than no warning at all.
 
-UPSCALER sits directly under RENDER SCALE because only the pairing means
-anything: at 100 % there is nothing to upscale and the choice is between a blit
-and a sharpen. UPSCALER SHARPNESS is greyed out when the upscaler is off, which
-leaves no sharpen to adjust - greyed rather than hidden, for the reason FRAME LIMIT is:
+RECONSTRUCTION sits directly under RENDER SCALE because the pairing is what
+makes several of its values mean anything: at 100 % there is nothing to
+upscale, and the choice is between a blit, a spatial anti-aliaser and a
+temporal reconstruction that has work to do at any scale. **One row where there
+were two** - see [ADR-0041](adr/0041-one-row-for-what-resolves-the-frame.md),
+which folded an ANTI-ALIASING row and an UPSCALER row onto one axis and deleted
+five of this page's seven warnings by making their combinations
+unrepresentable. MSAA came off that axis in the same change and is greyed under
+`fsr3`, which anti-aliases the same frame temporally. UPSCALER SHARPNESS is
+greyed out on the three values that run no sharpen at all, which leaves nothing
+to adjust - greyed rather than hidden, for the reason FRAME LIMIT is:
 a row that vanishes gives a player no way to find out what took it away. Its
 unit is **stops**, upstream FidelityFX's own, where zero is maximum and each
 whole step halves it; that runs the opposite way to what a reader expects and is

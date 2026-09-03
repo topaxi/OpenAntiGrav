@@ -350,14 +350,14 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the render-scale rows and `Scale::OFFERED` must be one list"
     );
 
-    let upscalers: Vec<crate::display::Upscaler> = values("graphics.upscaler")
+    let reconstructions: Vec<crate::display::Reconstruction> = values("graphics.reconstruction")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
-        upscalers,
-        crate::display::Upscaler::ALL,
-        "the upscaler rows and `Upscaler::ALL` must be one list"
+        reconstructions,
+        crate::display::Reconstruction::ALL,
+        "the reconstruction rows and `Reconstruction::ALL` must be one list"
     );
 
     let sharpness: Vec<crate::display::Sharpness> = values("graphics.upscale_sharpness")
@@ -370,14 +370,14 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the sharpness rows and `Sharpness::OFFERED` must be one list"
     );
 
-    let anti_aliasing: Vec<crate::display::AntiAliasing> = values("graphics.anti_aliasing")
+    let msaa: Vec<crate::display::Msaa> = values("graphics.msaa")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
-        anti_aliasing,
-        crate::display::AntiAliasing::ALL,
-        "the anti-aliasing rows and `AntiAliasing::ALL` must be one list"
+        msaa,
+        crate::display::Msaa::ALL,
+        "the MSAA rows and `Msaa::ALL` must be one list"
     );
 
     let sizes: Vec<Size> = values("display.window_size")

@@ -263,7 +263,7 @@ pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `assets/ui/menu.toml` whose `values` are exactly `ALL`, in order; an arm in
 `Session::apply_setting`; a per-frame argument on `Scene::render` next to
 `anim_seconds`; and a field on `race::CaptureOptions` so `--screenshot`
-reflects it, the way `bloom` and `anti_aliasing` already do.
+reflects it, the way `bloom` and `msaa` already do.
 
 > All of that exists now (`display::MotionBlur`), the `CaptureOptions` field
 > included: `race::capture` holds the last tick back, renders a discarded
@@ -404,7 +404,7 @@ adding a format assumption of your own. Multisampled `Rg16Float` is far more
 ordinary than sample-count-2, so the probe will very likely pass - but
 discovering otherwise after the shader is written is expensive. Fallbacks: `Rgba16Float`, universally
 multisample-renderable at four more bytes per pixel; or gate the combination
-with a `warn_when` on the menu row, for which the anti-aliasing row's existing
+with a `warn_when` on the menu row, for which the reconstruction row's existing
 warning against the upscaler is exact precedent.
 
 **Does bloom render correctly today?** This design inherits bloom's placement

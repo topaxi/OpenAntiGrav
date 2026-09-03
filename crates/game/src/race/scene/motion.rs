@@ -191,7 +191,7 @@ impl super::Scene {
     /// otherwise hand a temporal upscaler a bind group of the wrong shape.
     #[must_use]
     pub fn sample_count(&self) -> u32 {
-        self.anti_aliasing.msaa_samples()
+        self.msaa.samples()
     }
 }
 

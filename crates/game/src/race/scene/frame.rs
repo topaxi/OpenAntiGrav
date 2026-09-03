@@ -924,7 +924,7 @@ impl Scene {
                     scene: view,
                     velocity: velocity_view,
                     depth: depth_view,
-                    sample_count: self.anti_aliasing.msaa_samples(),
+                    sample_count: self.msaa.samples(),
                     size: (size.width, size.height),
                     viewport,
                     strength: motion_blur.shutter(),

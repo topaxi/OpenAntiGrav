@@ -391,7 +391,7 @@ impl Stage {
             anisotropy,
             settings.graphics.bloom,
             visibility,
-            render_profile.anti_aliasing,
+            render_profile.msaa,
             fog_volumes,
             light,
             authored_fog,

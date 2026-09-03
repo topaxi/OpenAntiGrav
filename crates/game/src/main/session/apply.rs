@@ -289,13 +289,15 @@ impl Session {
                     return;
                 }
             },
-            "graphics.upscaler" => match text.parse::<display::Upscaler>() {
-                // Applied by the next frame. Choosing `fsr1` for the first time
-                // builds its two pipelines inside that frame, which is a shader
-                // compilation a player may notice once and never again.
-                Ok(upscaler) => {
+            // Every value on this axis is applied by the next frame:
+            // `Framebuffer::resolve_scene` reads it fresh and builds each
+            // pass's pipelines lazily. Choosing `fxaa`, `fsr1` or `fsr3` for
+            // the first time compiles them inside that frame, which is a stall
+            // a player may notice once and never again.
+            "graphics.reconstruction" => match text.parse::<display::Reconstruction>() {
+                Ok(reconstruction) => {
                     if let Some(profile) = self.render_profile_mut() {
-                        profile.upscaler = upscaler;
+                        profile.reconstruction = reconstruction;
                     }
                 }
                 Err(e) => {
@@ -316,18 +318,15 @@ impl Session {
                     return;
                 }
             },
-            // `off`, `fxaa` and `smaa` are applied by the next frame, the
-            // same as the upscaler: `Framebuffer::resolve_scene` reads this fresh
-            // and builds FXAA's pipeline lazily, the same way it does FSR 1's.
-            // **Only moving to or between the two MSAA levels waits for the
-            // next race**, because that is what rebuilds the scene pipelines
-            // MSAA's sample count is baked into - see `race::Scene::new`. The
-            // row's restart note distinguishes the two cases; see
-            // `Session::open_menus`.
-            "graphics.anti_aliasing" => match text.parse::<display::AntiAliasing>() {
+            // **Always waits for the next race**, because this row is nothing
+            // but the sample count the scene's pipelines are built with - see
+            // `race::Scene::new`. Since ADR-0041 there is no half of it that
+            // applies live, which is what the row's unconditional restart note
+            // now says; see `Session::open_menus`.
+            "graphics.msaa" => match text.parse::<display::Msaa>() {
                 Ok(mode) => {
                     if let Some(profile) = self.render_profile_mut() {
-                        profile.anti_aliasing = mode;
+                        profile.msaa = mode;
                     }
                 }
                 Err(e) => {

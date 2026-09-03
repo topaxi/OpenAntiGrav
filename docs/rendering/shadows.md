@@ -29,7 +29,7 @@ authored hull projected onto the road can read *worse* than a soft circle on a
 track whose floor curves under the craft.
 
 So this follows
-[`AntiAliasing`](../../crates/game/src/display/anti_aliasing.rs) - variants
+[`Reconstruction`](../../crates/game/src/display/reconstruction.rs) - variants
 named for the technique - and not
 [`MotionBlur`](../../crates/game/src/display/motion_blur.rs), whose "strength,
 not technique" framing works only because every one of its tiers is one shutter
@@ -503,7 +503,7 @@ three things in this order:
    one, and Pulse is where it would have to be invented.
 2. **Acceleration structures in wgpu.** Ray queries are experimental and
    effectively Vulkan-only, so a variant would be absent on most adapters -
-   exactly the failure `AntiAliasing` documents for `Msaa2x`, where a pipeline
+   exactly the failure `Msaa` documents for a `2x` level, where a pipeline
    built at an unsupported sample count fails device validation rather than
    degrading.
 3. **A reason.** The cheaper win on the same infrastructure is ray-queried
@@ -526,7 +526,7 @@ Each step is a landing that can be reviewed on its own.
    a survey nobody can reproduce.
 2. **The setting, with only `off` and `blob` live.**
    `crates/game/src/display/shadows.rs` - its own file from the start, since
-   `display.rs` is already why `anti_aliasing.rs` and `motion_blur.rs` were
+   `display.rs` is already why `reconstruction.rs` and `motion_blur.rs` were
    split out - tests in `display/tests.rs`, a `graphics.shadows` key, and a
    menu row on the GRAPHICS page. `original` and `mapped` are **not** offered
    until they exist. One day.

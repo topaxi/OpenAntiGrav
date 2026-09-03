@@ -136,7 +136,7 @@ a quarter-sized viewport of it and reads the resolve back. Inside the viewport
 it is green; **outside it, red** - the pass's own clear, not the blue that was
 there before.
 
-So under `anti_aliasing = "msaa4x"` a short render extent leaves the region
+So under `msaa = "4x"` a short render extent leaves the region
 outside it holding the multisampled attachment's `LoadOp::Clear`, which in a
 race is black with alpha zero - exactly what the non-MSAA path's clear leaves
 there, so every sampler's half-texel clamp covers both identically. The answer
@@ -395,7 +395,7 @@ stopping them and `Ord::clamp` panics when `min > max`.
 `render_scale` used to be the size the frame was drawn at, and three warnings
 on the graphics page were written against that reading. Once a controller can
 go below it they are wrong, and one of them wrong in the worst direction -
-UPSCALER at a 100 % ceiling with a 50 % minimum says *"NO EFFECT AT RENDER
+`fsr1` at a 100 % ceiling with a 50 % minimum says *"NO EFFECT AT RENDER
 SCALE 100 OR ABOVE"* while FSR 1 magnifies every frame. A working setting
 reported as dead.
 
@@ -405,11 +405,17 @@ What each really wants is *the lowest size the frame may be drawn at*, which is
 one message**: one requiring `target_fps = off`, one requiring the floor high
 enough that the statement holds anyway.
 
-| Row | Was wrong when | Now |
+All three were on two rows when this was written. Since
+[ADR-0041](../architecture/adr/0041-one-row-for-what-resolves-the-frame.md) the
+middle one is **gone** rather than fixed - FXAA and FSR 1 are values on one
+axis now, so "fights the upscaler" is a combination nobody can select - and the
+other two share the RECONSTRUCTION row.
+
+| Warning | Was wrong when | Now |
 | --- | --- | --- |
-| UPSCALER, *"no effect at 100 or above"* | The controller drops below 100 from a 100+ ceiling | Fires only with the controller off, or a floor at 100+ |
-| ANTI-ALIASING, *"fights the upscaler below 100"* | The ceiling is 100+ but the floor is not - a **missing** warning rather than a wrong one | A second entry for a running controller with a floor under 100 |
-| ANTI-ALIASING, *"redundant on top of 200 % supersampling"* | The controller stops supersampling | Fires only with the controller off, or a floor at 200 |
+| `fsr1`, *"no effect at 100 or above"* | The controller drops below 100 from a 100+ ceiling | Fires only with the controller off, or a floor at 100+ |
+| `fxaa`/`smaa`, *"fights the upscaler below 100"* | The ceiling is 100+ but the floor is not - a **missing** warning rather than a wrong one | Deleted with ADR-0041: unrepresentable |
+| `fxaa`/`smaa`, *"redundant on top of 200 % supersampling"* | The controller stops supersampling | Fires only with the controller off, or a floor at 200 |
 
 `a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling` pins the
 floor halves against `upscale::magnifies`, the same guard the `off` halves were

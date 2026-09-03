@@ -6,24 +6,26 @@
 //! temporal resolve from a spatial one at the call site, which is that it does
 //! not want a spatial pass in front of it.
 
-use crate::display::{AntiAliasing, Brightness, Gamma, Upscaler};
+use crate::display::{Brightness, Gamma, Reconstruction};
 use crate::upscale::{Framebuffer, Presentation, Temporal};
 
 /// A frame FSR 3.1 resolved must never have built an FXAA or SMAA pass.
 ///
 /// **The finding this pins is a cost, not a picture.** FSR 3.1 deliberately
 /// reads `self.perceptual` rather than a spatial pass's output - a temporal
-/// reconstruction reasons about the edges a blur has already removed, which is
-/// what the anti-aliasing row's own warning is about. But `resolve_scene` used
-/// to *run* the pass anyway and then bind nothing, which is a full-screen pass
-/// paid for a frame nobody reads. Both arrangements produce identical pixels,
-/// so nothing but [`Framebuffer::built_spatial_anti_aliasing`] can tell them
-/// apart: the passes are lazy, so "was it ever built" is "did a frame ever run
-/// it".
+/// reconstruction reasons about the edges a blur has already removed. Both
+/// arrangements produce identical pixels, so nothing but
+/// [`Framebuffer::built_spatial_anti_aliasing`] can tell them apart: the
+/// passes are lazy, so "was it ever built" is "did a frame ever run it".
 ///
-/// The control is the same call with the upscaler off, which must build it -
-/// or this would pass against a `resolve_scene` that had stopped
-/// anti-aliasing altogether.
+/// **Since [ADR-0041] the two cannot both be selected**, so what this guards
+/// has narrowed and is still worth guarding: `resolve_scene` matches on one
+/// enum now, and an arm that fell through to the FXAA branch would be a
+/// full-screen pass paid for a frame nobody reads. The control is the same
+/// call asking for FXAA, which must build it - or this would pass against a
+/// `resolve_scene` that had stopped anti-aliasing altogether.
+///
+/// [ADR-0041]: ../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md
 ///
 /// **Skips with no adapter**, so a green CI run is not evidence it ran.
 #[test]
@@ -77,7 +79,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
     );
 
-    let resolve = |upscaler: Upscaler| {
+    let resolve = |reconstruction: Reconstruction| {
         let mut framebuffer = Framebuffer::new(&device, format, render).expect("the pipeline");
         framebuffer.resize_output(&device, (16, 8));
         let mut encoder = device.create_command_encoder(&Default::default());
@@ -87,9 +89,8 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
             &mut encoder,
             whole,
             &Presentation {
-                upscaler,
+                reconstruction,
                 sharpness: 0.2,
-                anti_aliasing: AntiAliasing::Fxaa,
                 brightness: Brightness::NEUTRAL,
                 gamma: Gamma::NEUTRAL,
             },
@@ -111,7 +112,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         )
     };
 
-    let (built_aa, viable) = resolve(Upscaler::Fsr3);
+    let (built_aa, viable) = resolve(Reconstruction::Fsr3);
     assert!(
         !built_aa,
         "FSR 3.1 resolved, so the FXAA pass must never have been built"
@@ -124,10 +125,10 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         "the pipelines built, so the temporal path stays claimable"
     );
 
-    let (built_aa, viable) = resolve(Upscaler::Off);
+    let (built_aa, viable) = resolve(Reconstruction::Fxaa);
     assert!(
         built_aa,
-        "the control: with no temporal upscaler the row must still run"
+        "the control: asked for FXAA and nothing else, the pass must run"
     );
     // Nothing has attempted a build, which is not the same as one having
     // failed - and the timestamp claim keys on the difference.

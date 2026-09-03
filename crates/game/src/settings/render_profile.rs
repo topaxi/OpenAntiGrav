@@ -75,40 +75,42 @@ pub struct RenderProfile {
     /// offers, so the floor and the ceiling read against the same list.
     #[serde(default = "default_minimum_resolution")]
     pub minimum_resolution: crate::display::Scale,
-    /// Which resampler carries the frame onto the surface: `off` or
-    /// `fsr1`.
+    /// What resolves the frame onto the surface: `off`, `fxaa`, `smaa`,
+    /// `fsr1` or `fsr3`.
     ///
-    /// Defaults to `off`, which is what this always did. FSR 1 costs two
-    /// fullscreen passes and is a clear win on photographic art at a low render
-    /// scale; whether it is one on this game's hard-edged paletted art is a
-    /// screenshot comparison has now been run, and at 50 % on one frame of one
-    /// track FSR 1 wins clearly. **The default has not moved on it**, because
-    /// one frame of one track is not the sample a default flip is held to
-    /// here; see HANDOVER for what would settle it. See
-    /// [`crate::display::Upscaler`].
+    /// **One axis since
+    /// [ADR-0041](../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md)**,
+    /// where an anti-aliasing key and an upscaler key used to sit side by side
+    /// and need five menu warnings to describe how they interact. Every value
+    /// answers the same question, so at most one can be doing it.
     ///
-    /// **Only has an effect below 100 % `render_scale`.** FSR 1 is a magnifier;
-    /// asked to minify it undoes the supersampling it was handed. See
-    /// `crate::upscale::magnifies`.
+    /// Defaults to `off`, the blit's own bilinear tap. Read fresh every frame
+    /// by `upscale::Framebuffer::resolve_scene`, so moving this row takes
+    /// effect the frame it was chosen on - unlike [`Self::msaa`].
+    ///
+    /// **`fsr1` only has an effect below 100 % `render_scale`.** FSR 1 is a
+    /// magnifier; asked to minify it undoes the supersampling it was handed.
+    /// See `crate::upscale::magnifies`. `fsr3` has something to do at every
+    /// scale. See [`crate::display::Reconstruction`].
     #[serde(default)]
-    pub upscaler: crate::display::Upscaler,
+    pub reconstruction: crate::display::Reconstruction,
     /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each
     /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
     #[serde(default)]
     pub upscale_sharpness: crate::display::Sharpness,
-    /// Which anti-aliasing the scene draws with: `off`, `fxaa`, `smaa` or
-    /// `msaa4x`.
+    /// How many samples the rasterizer takes: `off` or `4x`.
     ///
-    /// Defaults to `off`. **Only `msaa4x` is baked into the scene's
-    /// pipelines when a race starts** - `off`, `fxaa` and `smaa` are read
-    /// fresh every frame by `upscale::Framebuffer::resolve_scene`, the same as
-    /// `upscaler` is, and moving among those three takes effect the frame
-    /// they were chosen on. Moving to or from `msaa4x` takes effect the next
-    /// time a race is launched, because that is what rebuilds the pipelines
-    /// it is a property of. See [`crate::display::AntiAliasing`] and
+    /// **Its own axis since ADR-0041**, because it is a property of the
+    /// rasterizer rather than a choice about what reads the resolved result -
+    /// it composes with every [`Self::reconstruction`] value except `fsr3`,
+    /// which anti-aliases the same frame temporally and greys this row.
+    ///
+    /// **Baked into the scene's pipelines when a race starts**, so moving it
+    /// takes effect the next time a race is launched rather than the frame it
+    /// was chosen on. See [`crate::display::Msaa`] and
     /// `docs/architecture/adr/0013-anti-aliasing-architecture.md`.
     #[serde(default)]
-    pub anti_aliasing: crate::display::AntiAliasing,
+    pub msaa: crate::display::Msaa,
     /// How hard the finished frame is smeared along the camera's own motion:
     /// `off`, `low`, `medium` or `high`.
     ///
@@ -140,9 +142,9 @@ impl Default for RenderProfile {
             // `default_minimum_resolution`, and the reason this impl is
             // written out rather than derived.
             minimum_resolution: default_minimum_resolution(),
-            upscaler: crate::display::Upscaler::default(),
+            reconstruction: crate::display::Reconstruction::default(),
             upscale_sharpness: crate::display::Sharpness::default(),
-            anti_aliasing: crate::display::AntiAliasing::default(),
+            msaa: crate::display::Msaa::default(),
             motion_blur: crate::display::MotionBlur::default(),
         }
     }
@@ -178,9 +180,9 @@ pub(super) const PROFILE_KEYS: [&str; 7] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
-    "upscaler",
+    "reconstruction",
     "upscale_sharpness",
-    "anti_aliasing",
+    "msaa",
     "motion_blur",
 ];
 
@@ -197,6 +199,53 @@ pub(super) const MOVED_TO_RENDER_PROFILES: [&str; 5] = [
     "anti_aliasing",
     "motion_blur",
 ];
+
+/// Folds a profile's pre-[ADR-0041] `upscaler` and `anti_aliasing` keys into
+/// `reconstruction` and `msaa`.
+///
+/// **Both old keys are consumed, and one of them can lose information.** The
+/// two used to be independent, so a file can hold `anti_aliasing = "fxaa"`
+/// beside `upscaler = "fsr1"` - a pairing the new axis cannot express, and one
+/// `menu.toml` already warned about as `FIGHTS THE UPSCALER'S EDGE-ADAPTIVE
+/// RESAMPLE`. The upscaler wins, because it is the value that was actually
+/// carrying the frame onto the surface; the spatial pass is dropped.
+///
+/// `anti_aliasing = "msaa4x"` becomes `msaa = "4x"` and leaves the
+/// reconstruction to the old `upscaler`, which is the case that loses nothing:
+/// the two really were orthogonal.
+///
+/// Runs on a table rather than on a [`RenderProfile`] for the reason
+/// [`super::migrate_render_profiles`] does - serde has not seen the value yet,
+/// so an unknown key would be dropped silently before any typed code could
+/// look at it.
+fn migrate_reconstruction(profile: &mut toml::Table) {
+    let upscaler = profile
+        .remove("upscaler")
+        .and_then(|value| value.as_str().map(str::to_owned));
+    let anti_aliasing = profile
+        .remove("anti_aliasing")
+        .and_then(|value| value.as_str().map(str::to_owned));
+    // Nothing to fold: a file already written on this side of the split, or a
+    // fresh one. Left alone rather than defaulted, so serde's own `default`
+    // stays the single answer to "what does a missing key mean".
+    if upscaler.is_none() && anti_aliasing.is_none() {
+        return;
+    }
+    let msaa = matches!(anti_aliasing.as_deref(), Some("msaa4x"));
+    let reconstruction = match upscaler.as_deref() {
+        // An upscaler that was doing something carries over as-is, whatever
+        // the anti-aliasing row said beside it.
+        Some(name @ ("fsr1" | "fsr3")) => name.to_owned(),
+        // No upscaler, so whatever the anti-aliasing row held is what was
+        // resolving the frame - unless it was MSAA, which is not on this axis.
+        _ => match anti_aliasing.as_deref() {
+            Some(name @ ("fxaa" | "smaa")) => name.to_owned(),
+            _ => "off".to_owned(),
+        },
+    };
+    profile.insert("reconstruction".to_owned(), reconstruction.into());
+    profile.insert("msaa".to_owned(), if msaa { "4x" } else { "off" }.into());
+}
 
 /// Moves any of [`MOVED_TO_RENDER_PROFILES`] a file still holds flat in
 /// `[graphics]` into every title in [`KNOWN_TITLES`]'s own
@@ -252,6 +301,26 @@ pub(super) fn migrate_render_profiles(table: &mut toml::Table) {
             .expect("only ever inserted as a table, immediately above");
         for (key, value) in &moved {
             profile.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
+}
+
+/// Folds every profile's pre-[ADR-0041] `upscaler` and `anti_aliasing` keys.
+///
+/// **After [`migrate_render_profiles`], never before.** That one moves the two
+/// old keys out of a flat `[graphics]` table and into each profile; running
+/// this first would fold the profiles that already existed and leave the ones
+/// it was about to create still holding the old spelling.
+pub(super) fn migrate_reconstruction_keys(table: &mut toml::Table) {
+    let Some(profiles) = table
+        .get_mut("render_profiles")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+    for (_, profile) in profiles.iter_mut() {
+        if let Some(profile) = profile.as_table_mut() {
+            migrate_reconstruction(profile);
         }
     }
 }

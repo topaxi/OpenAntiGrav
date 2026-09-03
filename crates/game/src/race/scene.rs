@@ -263,7 +263,7 @@ pub struct Scene {
     attachment_views: Attachments,
     /// What this scene's pipelines were actually built with, for the
     /// GRAPHICS menu's restart note - see `Session::open_menus` in `main.rs`.
-    anti_aliasing: crate::display::AntiAliasing,
+    msaa: crate::display::Msaa,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
 }
@@ -346,7 +346,7 @@ impl Scene {
         anisotropy: Anisotropy,
         bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
-        anti_aliasing: crate::display::AntiAliasing,
+        msaa: crate::display::Msaa,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
         light: mesh_render::Light,
         authored_fog: Option<mesh_render::Fog>,
@@ -357,7 +357,7 @@ impl Scene {
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.
         let far = track_model.radius * 4.0;
-        let sample_count = anti_aliasing.msaa_samples();
+        let sample_count = msaa.samples();
         let scene_depth = mesh_render::Depth::Scene;
         // Wipeout HD's post chain: a linear float scene target, the read
         // FunkLayerBloom passes and the encode. Present exactly when the
@@ -894,7 +894,7 @@ impl Scene {
             depth,
             msaa_color,
             attachment_views,
-            anti_aliasing,
+            msaa,
             far,
         })
     }
@@ -965,7 +965,7 @@ impl Scene {
     /// A colour or depth attachment whose size does not match the others is a
     /// validation error, so this is not optional on resize.
     pub fn resize(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, size: (u32, u32)) {
-        let sample_count = self.anti_aliasing.msaa_samples();
+        let sample_count = self.msaa.samples();
         // Under the HD chain every scene pipeline was built against the
         // linear float format, so the MSAA attachment has to match it, and
         // the chain's own targets track the viewport.
@@ -987,7 +987,7 @@ impl Scene {
     /// What this scene's pipelines were actually built with, for the restart
     /// note - see [`Self::msaa_color`].
     #[must_use]
-    pub fn anti_aliasing(&self) -> crate::display::AntiAliasing {
-        self.anti_aliasing
+    pub fn msaa(&self) -> crate::display::Msaa {
+        self.msaa
     }
 }
