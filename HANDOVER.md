@@ -446,7 +446,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual](handover/the-ais-six-stage-plan-line-follower-to.md)
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/the-ai-was-never-the-problem-four-contact.md)
 - [A global reached through `$gp` has an instruction displacement unrelated to its address](handover/a-global-reached-through-gp-has-an-instruction.md)
-- [`just apply-names` reported success for renames the bridge did not make](handover/just-apply-names-reported-success-for-renames-the.md)
 - [DLC packs are mounted; two things inside them are not read](handover/dlc-packs-are-mounted-two-things-inside-them.md)
 - [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
 - [The menus draw the disc's layout; the footer's ticker and prompts are still unbuilt](handover/the-menus-draw-the-discs-layout-the-chrome.md)
@@ -1111,6 +1110,42 @@ clean as of 2026-08-19); `psp-pulse-eu`/`psp-pure-usa`/`psp-pure-eu` still have
 no way to apply their `names.tsv` live until the bridge can disambiguate
 same-named programs, or until each is loaded in a Ghidra project without a
 `BOOT.BIN` name collision.
+
+**Correction, 2026-09-03: two of those three were never a bridge
+disambiguation limit - `psp-pure-usa` and `psp-pure-eu` simply were not open
+in the tool.** `list_open_programs` returned 8 programs, not the 10
+`list_instances` implied (that call reports the *project's* files, not what
+the tool has open); `psp-pure-usa`/`psp-pure-eu` were missing from it, which
+is why `switch_program`/`get_function_by_address` reported them unreachable.
+One `open_program` call each fixed it - both are reachable and writable
+afterward, no bridge fix needed. `psp-pulse-eu` was never actually blocked
+either: this same session's `just apply-names` run applied all 301 of its
+rows cleanly with no `open_program` needed, so the `BOOT.BIN`-collision theory
+above does not hold for it. **Check `list_open_programs` before believing a
+program is unreachable** - a closed program and a same-name collision look
+identical from `switch_program`'s side, and only the first is a one-call fix.
+All four `BOOT.BIN`s (`psp-pulse-usa`, `psp-pulse-eu`, `psp-pure-usa`,
+`psp-pure-eu`) are confirmed live and cleaned as of this session: a sample
+function and a sample data label were checked post-`apply-names` on each via
+`get_function_by_address`/`list_globals` and all read back with their
+documented names rather than `FUN_`/`DAT_`.
+
+**A duplicate address in `names.tsv` had silently broken `just apply-names`
+for `psp-pulse-usa` since 2026-09-02, with nothing catching it offline.**
+`apply_group`'s duplicate-address check runs before any bridge call and
+refuses the whole group on the first hit, so the 2026-09-02 Plasma commit's
+`plasma.md` re-documenting two functions (`WeaponStats_ParseTurbo`,
+`WeaponStats_ParseAutopilot`) that `weapon-stats.md` already owned - both
+rows correct, both pages genuinely support them, just one address named
+twice - meant `psp-pulse-usa`'s whole group aborted with "duplicate address
+0x0880c92c" and never reached a single rename. `just check-names` (the
+offline gate CI actually runs) had no duplicate-address rule, only the
+evidence/suffix/floor ones, so this was invisible to `just` and to review.
+Fixed both ways: the two `plasma.md` rows deleted from `names.tsv` (the
+`weapon-stats.md` rows already covered the same functions), and
+`check-ghidra-names.py` gained a `check_duplicates` rule so a repeat trips
+the gate offline instead of surfacing as a live bridge failure a session
+later.
 
 **`psp-pulse-usa`'s Ghidra DB stores every `jal` target pre-relocation, so
 `get_xrefs_to`/`get_function_callers` return "none" for almost all of them.**

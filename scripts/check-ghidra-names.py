@@ -161,6 +161,30 @@ def check_floor(applier, path: Path, rows: list) -> list[str]:
     ]
 
 
+def check_duplicates(path: Path, rows: list) -> list[str]:
+    """A binary's `names.tsv` names each address once.
+
+    `apply_group` refuses a duplicate address too, but only gets the chance
+    once a Ghidra bridge is up - the same gap this whole script exists to
+    close for the evidence and suffix rules. Found the hard way on
+    2026-09-02: a new page re-documented two functions an older page already
+    named, adding two rows for addresses `weapon-stats.md` already owned, and
+    `just apply-names` refused the entire `psp-pulse-usa` group on it from
+    then on with nothing catching it offline.
+    """
+    seen: dict[str, object] = {}
+    complaints = []
+    for row in rows:
+        if row.address in seen:
+            complaints.append(
+                f"{where(path, row)}: duplicate address {row.address}, "
+                f"first seen at {where(path, seen[row.address])}"
+            )
+            continue
+        seen[row.address] = row
+    return complaints
+
+
 def check_baseline_rows(seen: set[str]) -> list[str]:
     """A baseline only ever gets shorter - a row for a fixed line must go."""
     return [
@@ -188,6 +212,7 @@ def main() -> int:
         raise SystemExit(f"no names.tsv found under {FUNCTIONS_DIR}")
 
     evidence: list[str] = []
+    duplicates: list[str] = []
     broken: list[str] = []
     stale: list[str] = []
     floor: list[str] = []
@@ -201,6 +226,7 @@ def main() -> int:
         rows = applier.read_rows(path)
         total += len(rows)
         evidence += [f"{path.parent.name}/{c}" for c in applier.check_evidence(rows)]
+        duplicates += check_duplicates(path, rows)
         row_broken, row_stale = check_suffix(applier, path, rows)
         broken += row_broken
         stale += row_stale
@@ -212,6 +238,13 @@ def main() -> int:
         evidence,
         "The pages are the record of truth, so this means the row is stale, not the\n"
         "page. Repoint the row, or delete it if the name was withdrawn.",
+    )
+    report(
+        "row(s) naming an address another row already names:",
+        duplicates,
+        "A binary's names.tsv names each address once. Delete the later row, keeping\n"
+        "whichever page is the one to cite - both can be right about the name and\n"
+        "still be one row too many.",
     )
     report(
         "row(s) that apply a doubled `_q_q` to Ghidra:",
@@ -238,7 +271,7 @@ def main() -> int:
         "A guess dressed as a name stops other people from looking. See ADR-0005.",
     )
 
-    if evidence or broken or stale or floor or check_baseline_rows(suffixed):
+    if evidence or duplicates or broken or stale or floor or check_baseline_rows(suffixed):
         return 1
 
     print(f"{total} names.tsv row(s) across {len(tsvs)} binaries: evidence, suffix and floor rules hold")
