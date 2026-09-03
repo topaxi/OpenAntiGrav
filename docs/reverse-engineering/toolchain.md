@@ -191,15 +191,22 @@ entirely since there is nothing on the Ghidra install left to check. Verified
 Language/Compiler: PowerPC:BE:64:A2ALT-32addr-PS3:default` and imports
 successfully.
 
-**Not yet the default.** The live `OpenAntiGrav.gpr` project was imported
-under step 1/2's stock id, and Ghidra does not migrate a program between
-language ids - switching means a fresh reimport under the new one. That is
-safe by this project's own rule (`just apply-names` reproduces the recovered
-names onto a fresh import, per [ADR-0005](../architecture/adr/0005-ghidra-conventions.md)),
-but slow enough on a 26,100-function binary that it should be a deliberate
-choice made when re-importing anyway, not a default flipped underneath an
-existing project. There is also no `.opinion` file for it yet - same as step
-1's stock id, the language still has to be chosen by hand.
+**The default since 2026-08-28.** The live `OpenAntiGrav.gpr` project was
+originally imported under step 1/2's stock id; Ghidra does not migrate a
+program between language ids, so switching meant a fresh reimport under the
+new one. That was safe by this project's own rule (`just apply-names`
+reproduces the recovered names onto a fresh import, per
+[ADR-0005](../architecture/adr/0005-ghidra-conventions.md)), and the
+maintainer made the deliberate choice to do it: `ps3-hdfury-eu`'s `EBOOT.elf`
+now reads `PowerPC:BE:64:A2ALT-32addr-PS3`, still 26,100 functions, all 114
+`names.tsv` rows re-applied clean. There is no `.opinion` file for it, and
+there cannot be one: traced through Ghidra's own `ElfLoader.java`
+(`ghidra/app/util/opinion/ElfLoader.java`, from `Base-src.zip`), the ELF
+loader's opinion matching only ever keys on `e_machine` and `e_flags`, never
+`EI_OSABI` - and this binary's `e_flags` is `0x0`, generic rather than
+PS3-specific, so there is nothing left to key a constraint on even though
+`EI_OSABI` itself (`0x66`, `ELFOSABI_CELLOSLV2`) is genuinely PS3-specific.
+The language still has to be chosen by hand at import time, permanently.
 
 The two added files are this project's own, tracked in `scripts/`, not
 upstream's - Ps3GhidraScripts itself ships no `data/languages/` to compare
