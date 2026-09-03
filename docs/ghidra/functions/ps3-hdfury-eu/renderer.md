@@ -2121,6 +2121,30 @@ unexplained. Their `0.0` is faithful to the file (nothing here invents a
 value for them), and they still fall back to the shared `32`. What the
 remaining four fifths' `0.0` actually means is open.
 
+**Superseded 2026-09-04: `Program::dp3_feeding`'s writer search was found
+lane-unsound both ways and fixed - every population number in this whole
+section, above this paragraph, was measured under the buggy gate and no
+longer describes the current disc.** The naive "any nonzero mask" writer
+search both credited a `DP3` that wrote the wrong lane (1,679 of 6,141
+then-resolved blocks) and missed a real one behind an unrelated write to a
+different lane (5,556 blocks, the larger error). Fixed lane-aware and
+clobber-checked; independently cross-verified at 10,087 of 10,087
+currently-resolved blocks lane-sound (`crates/render/examples/
+hd_dp3_feeding_lane_check.rs`), confirming the prediction two paragraphs
+above the fix ("`8.3 %`... larger than the naive gate's `1.1 %`... a
+lane-correct `dp3_feeding` therefore has two independent effects... it can
+subtract false positives and add newly-qualifying blocks") - the resolved
+count did rise, not just correct itself: 6,141 to 10,087. The `0`/`32`/
+`260`/`200`/`40`/`35`/`300`/`250` population table, the `56.0 %`/`27.6 %`/
+`8.3 %`/`8.0 %` fallback breakdown, the `5`/`10` Zone-rim exclusion (still
+holds, re-checked) and the `SpecularPower` patch census two paragraphs above
+this one are all being re-derived against the fixed gate, tracked outside
+this page (see `crates/render/examples/hd_dp3_feeding_lane_check.rs` and
+`hd_specular_population_recheck.rs` for the re-measurement tooling and its
+first-pass numbers) rather than edited in place here - this page's own rule
+for a superseded finding is a dated paragraph noting what changed, not a
+silent rewrite of the numbers above it.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
@@ -2207,6 +2231,77 @@ own semantics in that instance are not actually a cross-vector dot. Leaving
 `specular_exponent()` conservative - reporting nothing rather than a
 possibly-wrong reading - is the correct choice until `op3B` itself resolves,
 not a gap to route around.
+
+**The shipped `Program::dp3_feeding` gate is itself lane-unsound in a
+measured fraction of what it currently resolves - found while trying to
+explain the 96 % fallback rate below, and more consequential than that
+explanation.** `dp3_feeding`'s writer search only checks `insn.mask != 0` -
+"wrote *some* lane of the register" - not whether the writer covered the
+specific lane(s) the paired `LG2` actually reads. `LG2` has arity 1 and reads
+one lane (its own swizzle, broadcast); `DP3` almost always writes a
+*different* subset of lanes (commonly `.xyz`, sharing the register with an
+unrelated `.w` write from something else entirely), so "most recent writer of
+any lane" routinely credits a `DP3` for a lane it never wrote.
+`crates/render/examples/hd_dp3_feeding_lane_check.rs` measured this directly:
+of the 6,141 blocks `specular_exponent()` currently resolves, **1,679
+(27.3 %) are lane-unsound** - the credited `DP3` did not write the lane the
+`LG2` reads, so the value `specular_exponent()` reports for those blocks may
+not be the exponent the `LG2`/`MUL`/`EX2` chain actually consumes. This is a
+correctness gap in shipped detection code, not a documentation-only finding,
+and is filed as its own `## Open` item in the handover thread rather than
+fixed in the same pass that found it - both because scope discipline says a
+gate change needs its own verification pass, and because fixing it will move
+every number measured against the current `6,141`, including the ones below.
+
+**The 96 % `specular_exponent_unresolved` fallback rate `Report` counts
+(2026-09-04) has a mostly mundane explanation, re-measured disc-wide with a
+lane-correct gate rather than the naive one above.**
+`crates/render/examples/hd_specular_unresolved_reasons.rs` categorises every
+one of 76,358 fragment blocks, using the lane-correct check (not
+`dp3_feeding`'s own naive one - see above): `56.0 %` have an `LG2` whose
+feeding register is not lane-soundly written by a saturated, literally-named
+`DP3` (`op3B`-fed among them, but not the majority of it - see below);
+`27.6 %` have no `LG2` at all, genuinely no `pow`/`exp` curve; `8.3 %` pass
+the lane-correct `DP3` gate but `specular_exponent()` still fails (`MUL`/
+`EX2` absent, `log2(e)`, or dead code - larger than the naive gate's `1.1 %`
+**not because the lane-correct gate is stricter, but the opposite: it is
+more permissive, and the arithmetic proves which direction moved.**
+`Lg2NotDp3Fed` drops by exactly `5,556` blocks (`48,329` naive to `42,773`
+lane-correct) and `Lg2Dp3FedButNoChain` grows by the same `5,556` (`802` to
+`6,358`); `NoLg2` and `Resolved` are unchanged in both runs, so those `5,556`
+moved *into* the DP3-fed population, not out of it. The mechanism: a `DP3`
+writes the lane an `LG2` reads (say `.x`), then something unrelated writes a
+*different* lane (`.w`) of the same register before the `LG2` runs. The naive
+"most recent writer of any lane" search finds that `.w` writer, sees it is
+not a `DP3`, and reports not-fed - a false negative. The lane-correct search
+never considers `.w` a candidate or a clobber, since `.w` is outside what the
+`LG2` reads, and finds the real `DP3` underneath it. This false-negative
+class, at `5,556` blocks, is more than three times the size of the `1,679`
+false positives `dp3_feeding` itself carries); `8.0 %` resolve via
+`specular_exponent()` itself (unaffected by this file's own gate, still
+`6,141` blocks exactly, though `27.3 %` of those are the lane-unsound
+population above). **A lane-correct `dp3_feeding` therefore has two
+independent effects on the `6,141`, not one: it can subtract false positives
+and add newly-qualifying blocks whose `MUL`/`EX2`/`reaches_output` tail
+completes now that the DP3 gate itself passes lane-correctly** - the fix, if
+made, is not simply "shrink the resolved count to remove the unsound 27.3 %."
+**Within the
+56.0 %, what actually feeds the `LG2` is still mostly ordinary arithmetic,
+not `op3B`, but `op3B` is a larger share of it than the naive gate showed**:
+`ADD`/`ADD_SAT` together `53.4 %`, `TEX` `11.4 %`, `MOV` `5.9 %`, `op3B`/
+`op3B_SAT` combined `23.1 %` (`19.3 %` + `3.8 %`, up from the naive gate's
+diluted `~13.6 %` once the lane-mismatched entries are removed from the
+denominator), and a plain **unsaturated** `DP3` - a real `DP3` by name, only
+missing the saturate bit this gate also requires - `1.2 %` (down from the
+naive gate's `~2.8 %`, most of that difference having been lane-mismatched
+entries miscounted as unsaturated `DP3` hits). `LG2` is a general-purpose
+primitive shared by fog curves, rim falloffs and other combines that share
+the identical `LG2`/`MUL`/`EX2` shape over an unrelated saturated dot or none
+at all (this page's own Zone-rim and `log2(e)` exclusions are evidence the
+bare shape already over-matches), so most of the 56.0 % still reads as "this
+`LG2` was never a specular term" rather than as further confirmed misses -
+`op3B` at `23.1 %` of it is a real, non-trivial share though, larger than
+first measured.
 
 **2. The colour set's fourth byte is that occlusion scalar**, which closes an
 open question above. The vertex program routes `v[colourSet].w` to a spare
