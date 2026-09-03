@@ -104,16 +104,19 @@ build. The authored FOV degrees are unchanged; only the aspect widens, so at
 same picture.
 
 **`FUN_0013e280` itself is not renamed, and should not be from this alone.**
-Read in full while chasing the multiply above: the function opens with what
-reads like a camera-shake/impulse decay against a keyed interpolation table
-(`param_1+0x194`, `+0x1a4` array, `+0x1c0`/`+0x1c4`/`+0x1cc`/`+0x1d0`), pushes
-a view matrix to the GS display stack (`DAT_00282aec+0x1410`..`+0x144c`)
-before building the projection, and after it computes four (possibly six)
-plane-like `{xyz, dot}` quads (`+0x150`, `+0x160`, `+0x170`, `+0x180`) that
-read like frustum planes derived from the same fov/aspect - none of that was
-analysed here. Naming the whole function "the aspect widen" would overclaim
-what is actually understood about it; the multiply is confidence 95 as one
-behaviour at one address, not as a description of the function's purpose.
+Read in full while chasing the multiply above: the function opens with a
+camera-shake decay/apply block, now understood and documented on its own page
+- [collision-shake.md](collision-shake.md), which also has the arming side of
+it (`Camera_ArmShake`, called from the collision-response path on impact).
+Past the multiply this page covers, `FUN_0013e280` also pushes a view matrix
+to the GS display stack (`DAT_00282aec+0x1410`..`+0x144c`) before building the
+projection, and afterward computes four (possibly six) plane-like `{xyz, dot}`
+quads (`+0x150`, `+0x160`, `+0x170`, `+0x180`) that read like frustum planes
+derived from the same fov/aspect - **that part is still unanalysed**. Naming
+the whole function off the multiply and the now-understood shake block would
+still overclaim what's known about it: both are documented as one behaviour
+each, at one address each, and the frustum-plane-shaped tail neither of them
+covers is still unread.
 
 ## Not determined
 
@@ -124,9 +127,10 @@ behaviour at one address, not as a description of the function's purpose.
 - **The rig lookup** at `0x00149450` and the trace at `0x00132ed0`.
 - **The second, spectator/photo camera enum** that the PSP page warns not to
   confuse with this one. Not searched for here.
-- **`FUN_0013e280`'s full purpose** - the shake/decay block at its start and
-  the four-or-more plane-like quads it computes after building the
-  projection, both unread beyond noticing their shape. See above.
+- **`FUN_0013e280`'s full purpose** - the shake/decay block at its start is
+  now documented ([collision-shake.md](collision-shake.md)); the
+  four-or-more plane-like quads it computes after building the projection
+  are still unread beyond noticing their shape.
 - **`FUN_001e9420`**, the perspective-matrix builder the aspect widen calls
   into - read only for its two diagonal terms, not renamed.
 - **Nothing here was verified at runtime.**
@@ -146,6 +150,8 @@ behaviour at one address, not as a description of the function's purpose.
 - 2026-09-03: added the `Aspect Ratio` widen's address inside `FUN_0013e280`,
   restated from `docs/ps2/aspect-ratio.md` so `names.tsv` has a page in this
   directory to cite against this project's own race camera reusing the PSP's
-  authored FOV on every title. Deliberately did not rename `FUN_0013e280`:
-  reading it in full showed camera-shake and frustum-plane-shaped work well
-  beyond the multiply, none of it analysed here.
+  authored FOV on every title. Reading `FUN_0013e280` in full for that also
+  turned up its shake-decay block, since documented separately
+  ([collision-shake.md](collision-shake.md)) once its arming side was found.
+  Still deliberately did not rename `FUN_0013e280` itself: a frustum-plane-
+  shaped tail past the projection build remains unanalysed.

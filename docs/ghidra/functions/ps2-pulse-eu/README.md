@@ -27,10 +27,11 @@ form, and Ghidra's string search will return all three.
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
+| [Collision feedback](collision-shake.md) | The hull-spark trigger and the shield-bubble hit-flash, both shared with the PSP, plus a camera shake on impact the PSP's own path was verified not to have |
 
 ## Renames
 
-**Applied.** 166 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 169 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
