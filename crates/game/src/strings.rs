@@ -3,7 +3,7 @@
 //! The disc's localisation works and is already read - see
 //! [`crate::boot::load_strings`] - but it covers only the disc's own ids.
 //! Everything this project has added on top (`assets/ui/menu.toml`'s labels,
-//! [`crate::race::mode::fallback_label`]-style fallbacks, the loading screen's
+//! [`oag_race::Mode::fallback_label`]-style fallbacks, the loading screen's
 //! prose, ...) is plain English with no id-based indirection at all, and the
 //! disc's own table has no way to be *overridden* either - a wrong or missing
 //! entry can currently only be fixed by shipping different disc data, which
@@ -84,6 +84,26 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
     }
 }
 
+/// A disc-independent table: `language`'s project file, and nothing else.
+///
+/// For the three sources that have no disc-derived `StringTable` to merge
+/// into at all - `menu.toml`, the loading screen's prose, the window's own
+/// title - because every one of them runs before a disc is open. Falls back
+/// to `"English"` on `None`, the one-language analogue of
+/// [`crate::boot::chosen_language`]'s own fallback, since there is no
+/// `languages` list here to fall further back through.
+///
+/// [`overlay`] stays the one merge primitive underneath this and
+/// [`crate::boot::load_strings`] both - this only changes what it starts
+/// from.
+#[must_use]
+pub fn project_table(language: Option<&str>) -> StringTable {
+    let mut table = StringTable::default();
+    let mut report = Vec::new();
+    overlay(&mut table, language.unwrap_or("English"), &mut report);
+    table
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +144,20 @@ mod tests {
     #[test]
     fn a_malformed_file_is_an_error_not_a_panic() {
         assert!(toml::from_str::<File>("not = [valid").is_err());
+    }
+
+    #[test]
+    fn project_table_defaults_to_english_with_no_language_named() {
+        // Both empty today, so this only proves they take the same path -
+        // see `english_parses_and_is_empty_today` for why that is expected.
+        assert_eq!(
+            project_table(None).len(),
+            project_table(Some("English")).len()
+        );
+    }
+
+    #[test]
+    fn project_table_is_empty_for_a_language_this_build_ships_no_file_for() {
+        assert!(project_table(Some("Klingon")).is_empty());
     }
 }
