@@ -93,6 +93,12 @@ fn main() -> anyhow::Result<()> {
                 let lg2 = &program.instructions[lg2_i];
                 let dp3 = &program.instructions[dp3_i];
                 let sw = lg2.swizzles[0];
+                // Elementwise reading (see `hd_specular_unresolved_reasons.rs`'s
+                // `read_mask` doc comment): whether LG2 is actually a
+                // scalar-broadcast unit is unsettled, and 27.0% of LG2s
+                // disc-wide have a non-uniform swizzle where the two
+                // readings disagree - this may over-demand coverage on that
+                // slice and inflate the lane-unsound count somewhat.
                 let needed: u8 = (0..4)
                     .filter(|&i| lg2.mask & (1 << i) != 0)
                     .fold(0u8, |acc, i| acc | (1 << sw[i]));

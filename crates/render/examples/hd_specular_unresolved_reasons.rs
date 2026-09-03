@@ -17,17 +17,24 @@
 //!
 //! **Lane-aware, not the naive "any nonzero mask" check `Program::
 //! dp3_feeding` itself uses.** A first draft of this file copied that naive
-//! check verbatim and got a badly wrong picture: `LG2` reads a single lane
-//! (its own swizzle, broadcast), so a "most recent writer of *any* lane of
-//! the register" match credits a `DP3` that wrote a completely different
-//! lane than the one `LG2` actually consumes. `crates/render/examples/
-//! hd_dp3_feeding_lane_check.rs` measured this directly against the shipped
-//! gate: of the 6,141 blocks `specular_exponent()` currently resolves,
-//! **1,679 (27.3%) are lane-unsound** - the `DP3` `dp3_feeding` credited did
-//! not write the lane(s) the paired `LG2` reads. That is a finding about
-//! `Program::dp3_feeding` itself, filed separately (see the thread file's
-//! `## Open`); this diagnostic does not reimplement the shipped gate's bug,
-//! it uses the lane-correct check `dp3_feeding` should have.
+//! check verbatim and got a badly wrong picture: `LG2` reads only the lane(s)
+//! its own swizzle names for the output lanes its mask selects (see
+//! [`read_mask`]'s own doc comment for the unsettled question of whether
+//! that is genuinely elementwise or a scalar broadcast), so a "most recent
+//! writer of *any* lane of the register" match both credits a `DP3` that
+//! wrote a lane `LG2` never reads (a false positive) and, just as often,
+//! misses a real `DP3` behind an unrelated write to some *other* lane of the
+//! same register (a false negative). `crates/render/examples/
+//! hd_dp3_feeding_lane_check.rs` measured the false-positive direction
+//! against the shipped gate: of the 6,141 blocks `specular_exponent()`
+//! currently resolves, **1,679 (27.3%) are lane-unsound**. This file's own
+//! re-tally (below) measures the false-negative direction: `5,556` blocks
+//! move from `Lg2NotDp3Fed` to `Lg2Dp3FedButNoChain` once the check is
+//! lane-correct - more than three times the false-positive count. Both are
+//! findings about `Program::dp3_feeding` itself, filed separately (see the
+//! thread file's `## Open`); this diagnostic does not reimplement the
+//! shipped gate's bug, it uses the lane-correct check `dp3_feeding` should
+//! have.
 //!
 //! This mirrors what a lane-aware `dp3_feeding` would answer, not
 //! `specular_exponent_chain`'s full search - the `Lg2NotDp3Fed`/
@@ -63,11 +70,24 @@ enum Category {
 }
 
 /// The lanes `insn` reads from `reg` through its first operand, as a mask -
-/// `None` if that operand is not `reg`. `LG2` has arity 1 and reads one lane
-/// (its own swizzle's first entry, broadcast to every output lane its own
-/// mask selects) - unlike `DP3`, which always reads three lanes regardless
-/// of its destination mask. This function is only ever called with an `LG2`
-/// as `insn` in this file, so it does not need `DP3`'s special case.
+/// `None` if that operand is not `reg`. Computed as the union of the source
+/// lane each masked *output* lane's own swizzle entry names - the general
+/// elementwise reading, and the only one that matches every masked-write
+/// instruction seen elsewhere in this microcode. This function is only ever
+/// called with an `LG2` as `insn` in this file, so it does not need `DP3`'s
+/// three-lane special case.
+///
+/// **Whether `LG2`'s hardware unit is genuinely elementwise, or a scalar
+/// unit that always reads one lane (broadcasting the swizzle's first entry
+/// regardless of what the other three name), is not settled.** A disc-wide
+/// swizzle check (`hd_lg2_swizzle_check.rs`) found **32,381 of 120,082 `LG2`
+/// instructions (27.0 %) have a non-uniform swizzle** - the two readings
+/// disagree on exactly those. If `LG2` is actually scalar-broadcast, this
+/// function over-demands coverage on that 27.0 % (asking a writer to supply
+/// lanes the hardware never reads), which would inflate `Lg2NotDp3Fed` by an
+/// unknown amount within it. Left as the general elementwise reading -
+/// consistent with every other opcode this project has read - rather than
+/// asserting a scalar special case with no primary-source confirmation.
 fn read_mask(insn: &Instruction, reg: (u8, bool)) -> Option<u8> {
     let (_, sw) = insn
         .operands()

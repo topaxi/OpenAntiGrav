@@ -2240,10 +2240,28 @@ feeding register is not lane-soundly written by a saturated, literally-named
 `27.6 %` have no `LG2` at all, genuinely no `pow`/`exp` curve; `8.3 %` pass
 the lane-correct `DP3` gate but `specular_exponent()` still fails (`MUL`/
 `EX2` absent, `log2(e)`, or dead code - larger than the naive gate's `1.1 %`
-because the lane-correct gate is stricter, so fewer blocks silently pass it
-on a lane it never checked); `8.0 %` resolve via `specular_exponent()` itself
-(unaffected by this file's own gate, still `6,141` blocks exactly, though
-`27.3 %` of those are the lane-unsound population above). **Within the
+**not because the lane-correct gate is stricter, but the opposite: it is
+more permissive, and the arithmetic proves which direction moved.**
+`Lg2NotDp3Fed` drops by exactly `5,556` blocks (`48,329` naive to `42,773`
+lane-correct) and `Lg2Dp3FedButNoChain` grows by the same `5,556` (`802` to
+`6,358`); `NoLg2` and `Resolved` are unchanged in both runs, so those `5,556`
+moved *into* the DP3-fed population, not out of it. The mechanism: a `DP3`
+writes the lane an `LG2` reads (say `.x`), then something unrelated writes a
+*different* lane (`.w`) of the same register before the `LG2` runs. The naive
+"most recent writer of any lane" search finds that `.w` writer, sees it is
+not a `DP3`, and reports not-fed - a false negative. The lane-correct search
+never considers `.w` a candidate or a clobber, since `.w` is outside what the
+`LG2` reads, and finds the real `DP3` underneath it. This false-negative
+class, at `5,556` blocks, is more than three times the size of the `1,679`
+false positives `dp3_feeding` itself carries); `8.0 %` resolve via
+`specular_exponent()` itself (unaffected by this file's own gate, still
+`6,141` blocks exactly, though `27.3 %` of those are the lane-unsound
+population above). **A lane-correct `dp3_feeding` therefore has two
+independent effects on the `6,141`, not one: it can subtract false positives
+and add newly-qualifying blocks whose `MUL`/`EX2`/`reaches_output` tail
+completes now that the DP3 gate itself passes lane-correctly** - the fix, if
+made, is not simply "shrink the resolved count to remove the unsound 27.3 %."
+**Within the
 56.0 %, what actually feeds the `LG2` is still mostly ordinary arithmetic,
 not `op3B`, but `op3B` is a larger share of it than the naive gate showed**:
 `ADD`/`ADD_SAT` together `53.4 %`, `TEX` `11.4 %`, `MOV` `5.9 %`, `op3B`/
