@@ -285,10 +285,12 @@ Two things follow for the setting:
 - **HD carries a stencil-volume path** - `LiveStencilShadow_vp`/`_fp` and
   `/shadow.stencilvolume` - beside its shadow maps. A stencil shadow volume is
   extruded from an occluder's silhouette **planes and edges**, which is exactly
-  the shape `0x3c3`'s two record arrays have. That is the strongest reason yet
-  to expect the "planes and edges" reading to hold, and it names the mechanism
-  step 4 should look for. It is still a lineage argument, not a decode: the
-  interpretation stays at 60 until a runtime reader is found.
+  the shape `0x3c3`'s two record arrays have. **Confirmed on Pulse's own
+  binary, 2026-09-03**: `Shadow_RenderOccluderVolume`
+  (`0x089038c8`, [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
+  reads exactly this payload and extrudes a silhouette-edge stencil volume
+  from it - not a lineage argument any more, a runtime reader, at confidence
+  80 (Probable: strong structural fit, not yet trace-verified).
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
@@ -537,18 +539,24 @@ Each step is a landing that can be reviewed on its own.
    [`draw-order.md`](draw-order.md)'s queue, so it costs more than it looks.
    Two days.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
-   are `n` planes and `m` vertices, above. What is left of this step is the
-   **runtime reader in Ghidra**, with a page under
-   `docs/ghidra/functions/psp-pulse-usa/` and a `names.tsv` row in the same
-   change. That is what would say how the hull is *projected*, which the data
-   alone does not. `original` on Pulse can now be built without it - there is
-   geometry to draw - but how faithfully it is drawn depends on it.
+   are `n` planes and `m` vertices, above. ~~What is left of this step is the
+   **runtime reader in Ghidra**~~ - **done 2026-09-03**:
+   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 80,
+   [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
+   reads the same `n`/`m`/bbox fields this payload decode pinned, derives its
+   projection direction from the occluder's **own local axis**, transformed
+   by its own world matrix - not from any light - and extrudes a stencil
+   shadow volume. It is also the craft's own drop-shadow renderer
+   (`exhaust.md`'s `g_craft_scale` finding was the same function from a
+   different angle). Not traced: the static link from vex class `0x3c3` to
+   this function's method-table slot, which needs one more Ghidra pass to
+   move past "Probable".
 5. **`original`, per title.** Pulse: draw the 119 local-space hulls - the
-   geometry is decoded, and what step 4 still owes is the projection. HD: the
-   shadow-map path its four jobs and material flags describe. 2048: the
-   `track_proximity_shadow` pair plus the precomputed environment shadows,
-   with the shadow direction read straight out of `.EnvSettings`. Pure:
-   absence, reported.
+   geometry and the projection are both now decoded, so this is a rendering
+   task, not a reverse-engineering one. HD: the shadow-map path its four jobs
+   and material flags describe. 2048: the `track_proximity_shadow` pair plus
+   the precomputed environment shadows, with the shadow direction read
+   straight out of `.EnvSettings`. Pure: absence, reported.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
