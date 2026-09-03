@@ -69,6 +69,7 @@ pub mod settings;
 pub mod source;
 pub mod sprite;
 pub mod state_machine;
+pub mod strings;
 pub mod title;
 pub mod upscale;
 

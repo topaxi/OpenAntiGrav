@@ -216,6 +216,15 @@ impl StringTable {
         self.entries.get(id).map(String::as_str)
     }
 
+    /// Overlays `other`, which wins over any id already present.
+    ///
+    /// The one caller is [`crate::strings::overlay`] - see its own doc for
+    /// why "wins" is the right direction: a project file is meant to
+    /// override a disc entry, not lose to one.
+    pub fn merge(&mut self, other: HashMap<String, String>) {
+        self.entries.extend(other);
+    }
+
     /// Looks up an id, falling back to the id itself.
     ///
     /// The front end references ids that are not in the table at all: the

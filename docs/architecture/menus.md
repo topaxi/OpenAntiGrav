@@ -285,7 +285,13 @@ can have a title behind it, and every screen but this one can.
   rather than keeping a second table, so what the page shows cannot drift from
   what the game does.
 - **Localised labels.** Row labels are literal text. `string_id` is accepted and
-  not read, so adding localisation later is not a format change.
+  not read, so adding localisation later is not a format change. The layer it
+  would read through now exists - `oag_game::strings::overlay` merges a
+  project-owned `assets/ui/strings/<language>.toml` over the disc's own
+  `StringTable`, project entries winning - but nothing calls it with a
+  `string_id` yet: `menu.rs` is at its `check-file-size` ratchet ceiling
+  (1,785 of 1,785 lines), so wiring `resolve()` through it needs room made
+  first.
 - **Applying a language without relaunching.** The LANGUAGE row writes the
   setting, and the string table it selects is loaded once at boot; the change
   therefore lands on the next launch. Anisotropic filtering is the same, and is
