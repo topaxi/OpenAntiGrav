@@ -1929,6 +1929,159 @@ literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
 that specific value keeps reading as `SpecularPower` patched at draw time
 (finding 1 above) rather than as a sixth real constant.
 
+**`200`/`250`/`260`/`35` traced 2026-09-03, over four drafts before the
+method was trustworthy - all four kept in this history rather than silently
+corrected away, per this project's own evidence rule.**
+`Program::specular_exponent_dp3()` now names the winning chain's own `DP3`
+(`crates/formats/src/rcsmaterial/fragment.rs`), so
+`crates/render/examples/hd_specular_unresolved_trace.rs` can print its two
+operands rather than only the chain's value - the piece the paragraph above
+left unread. Two things had to be fixed to look at the right population
+first: `hd_specular_patch_census.rs`'s own 16-circuit sweep resolves fragment
+blocks through a circuit's *model-variant* table, and that population
+contains **none** of `5`/`10`/`40`/`200`/`250`/`260`/`35`/`26.156` at all,
+only `0`/`32`/`300` - so a caller has to sweep every `.rcsmaterial` file
+directly, the way the original count did, or these four values are
+invisible. Doing that (`oag_assets::psarc::Archive` over all seven `PSARC`s,
+`1,632` materials - agreeing with `rcsmaterial.md`'s own disc-wide count)
+reproduces the population exactly: `260` 48, `200` 16, `250` 12, `35` 8,
+alongside `32` 2,764, `0` 2,173, `5` 841, `10` 253, `300` 18, `40` 8.
+
+All 84 occurrences of the four trace to **eight distinct files**: the ship's
+own `nitro_body_new.rcsmaterial`/`nitro_perspex_new.rcsmaterial` (`260`),
+`zone_death_panel.rcsmaterial`/`zone_death_electricity.rcsmaterial` (`200`,
+also ship materials - both are Zone-mode hazard props mounted *on* a craft,
+not track geometry), the two weapon materials `hd_bomb.rcsmaterial`/
+`hd_mine.rcsmaterial` (`35`), and `05_ubermall`'s inflatable prop
+`materials/martin_inflatable2.rcsmaterial` (`250`, present byte-identically
+in both `DATA02`'s base copy and `DATA03`'s DLC copy).
+
+**Checked against the Zone-rim hypothesis directly, since `5` and `10` turned
+out to be entirely that - and this holds up.** Declaring one of the sixteen
+`zone*` parameters `renderer.md`'s own name listing carries (`zoneTexInner`,
+`zoneEffectOuter`, etc., hashed with `rcsmaterial::name_hash` rather than
+trusted by name) is true for only 4 of the 84 - both DLC and base copies of
+one of `martin_inflatable2`'s six variants - and `false` for the rest,
+including both `zone_death_*` ship materials despite the name. So unlike
+`5`/`10`, these four are **not** primarily a Zone-rim artifact; the name
+coincidence on `zone_death_*` is exactly that, a coincidence - the material
+is used during Zone mode, not gated by a Zone shader parameter.
+
+**The operand-shape trace took four passes to get right, and the first
+three are worth reading because each looked plausible before the next one
+broke it.** Draft 1: a `last_writer` search that ignored write masks
+entirely reported "every operand carries its own normalize tail", including
+annotating an unnamed opcode (`0x3b`, not in nouveau's table) as `<-
+normalize` from its position alone - a guess dressed as a name, exactly what
+the confidence rubric's sub-50 rule exists to prevent. Draft 2, made
+lane-aware (requiring the writer to cover every lane the read swizzle
+names) but still treating a `DP3` as a four-lane read when it only ever
+consumes three: the tally collapsed to `Normalize` 4 of 168, `Sum` (the
+half-vector shape) 0, and flagged one confirmed `32`-resolving block as
+anomalous (its operand traced to `EX2`). Draft 3 added a clobber check (a
+lane-aware writer can still be stale if a later write touches an
+overlapping lane) and, on the strength of that, concluded the method could
+not discriminate at all: `NoSingleWriter` 164 of 168, and the same ratio -
+`5,354` of `5,528` - on the `32` bucket used as a control.
+
+**Draft 3's own conclusion doesn't survive either, for two reasons found
+together.** First, `32` was never a valid control: it carries the same
+confidence-80 label and the same lightmap-pow-curve false-positive risk
+this page's own sweep already named, so "indistinguishable from `32`" shows
+two uncertain populations resembling each other, not that either is real.
+The only member of this whole population whose semantics were established
+by *reading*, not by instruction shape, is the ship's own `pow(N.H, 40)` -
+the worked transcript above naming `ADD R2.xzw, normalize(f[TC1]), {const}`
+as `V + L`. Second, correcting `DP3`'s three-lane read (still outstanding
+after draft 2's partial fix) and narrowing every other opcode's read width
+to the lanes its own destination mask actually writes - a property of a
+masked SIMD ALU generally, not a claim about what any specific unnamed
+opcode computes - moves the tally again, sharply: `NoSingleWriter` drops to
+**0**.
+
+**A fifth check reverses the previous paragraph's own "the addresses don't
+match" claim - `0x3a00` is confirmed as exactly the documented block, and
+finding that also names the real reason `specular_exponent()` misses it.**
+Decoding `0x3a00` and walking every instruction with its byte position
+(`crates/render/examples/hd_specular_calibration_check.rs`) shows the
+doc's own `@0xNN` addresses are paragraph counts (`byte_position / 16`, not
+raw byte offsets - the earlier paragraph's check used byte offsets and so
+never found the match) - and under that convention, six independent details
+land exactly where `renderer.md`'s worked example says: `@0x13` is a `DP3`
+writing `R0.y`, saturated, against `{const}` (`N.L`); `@0x17` is an `ADD`
+writing `R2.xzw` against `{const}` (the unusual three-lane mask is a
+fingerprint, and it matches); `@0x40`/`@0x43`/`@0x46` are an `LG2`, a `MUL`
+whose constant is literally `[40.0, 0, 0, 0]`, and an `EX2`. Address, lane,
+saturation and the literal `40` all agree - this is the block.
+
+**So why does `specular_exponent()` return `None` on it?** The `LG2` at
+`@0x40` reads register `R0`, and its most recent full writer is `@0x3f`
+(paragraph), an **unnamed `0x3b` instruction**, saturated, self-referential
+(`R0.w = f(R0, R0)`) - the same "normalize tail" shape this page's operand
+work has read throughout. `Program::specular_exponent()`'s own gate
+(`dp3_feeding`) requires that writer to be a literally-named `DP3`
+(`insn.name() == Some("DP3")`), and `0x3b` is not in the opcode table this
+project has named. **That gate is a false negative on at least this one
+confirmed instance**: the saturate condition holds, the shape holds, only
+the mnemonic check fails, because the hardware idiom this material actually
+uses feeds its `LG2` from the fused normalize instruction rather than from a
+bare `DP3` directly. Not a claim about a measured rate across the disc -
+one instance, confirmed by decode, is what this pass establishes.
+
+**One thing this does *not* call into question: the ship's `pow(N.H, 40)`
+reading itself stands.** `@0x24`'s raw operands are `(R2, R2)` - a self-dot,
+computing `|half|²` as part of normalizing the accumulator `@0x17` built,
+not literally "`normalize(half)` dotted against `normal`" as the transcript's
+own prose reads. That is not a new error: the same transcript already names
+`@0x17`'s raw register operand `R2` as `normalize(f[TC1])`, which is the
+*value* `R2` holds by that point in the block, not its literal operand
+either. **The transcript names semantic values, not raw operands** - read
+that way, `@0x24` self-dotting the half-vector accumulator to normalize it
+is exactly what the surrounding prose describes, and re-deriving the N.H
+cross-dot itself is a separate piece of work, not something this check
+unsettles.
+
+**Consequence for the operand-shape work: the eight wired `40.0`
+occurrences and this one hand-confirmed case are disjoint populations.**
+`hd_specular_unresolved_trace.rs`'s "calibration" ran against whichever
+block in this file `specular_exponent()` *does* accept (`0x57e0`/`0x7340`) -
+neither of which is `0x3a00`, the one actually read by hand - so it was
+never calibrated against a known-real case at all, for exactly this reason
+rather than the vague one the previous paragraph gave. The
+`Sum`/`Normalize`/`Neither` tally (`82`/`58`/`28` of 168) stands as raw,
+lane-correct structural data with no calibration - unchanged in number, now
+correctly explained. One transcript, `zone_death_panel.rcsmaterial`, kept as
+an example of the mechanical shape rather than as evidence of meaning:
+
+```text
+[13] op3B R2.xyz, R2.xyzw, R0.wwww
+[14] DP3_SAT R2.x, R0.xyzw, R2.xyzw
+[15] DP3 R1.w, R0.xyzw, R3.xyzw
+[17] DP3 R0.w, R3.xyzw, R3.xyzw
+[18] ADD R3.xyz, R1.xyzw, R3.xyzw        <- R1 + R3, two distinct sources
+[19] DP3 R2.y, R3.xyzw, R3.xyzw          <- dot(sum, sum)
+[20] op3B R3.xyz, R3.xyzw, R2.yyyy       <- scaled by the dot above
+[21] DP3_SAT R2.w, R0.xyzw, R3.xyzw      <- the winning DP3
+    operand 0: R0.xyzw -> Normalize
+    operand 1: R3.xyzw -> Sum
+```
+
+**Left wired, not retracted - on the population and Zone-exclusion findings
+alone.** Confidence stays at **80**, unmoved: those two hold up and neither
+argues these four values are wrong. The operand-shape work across five
+drafts settles nothing about meaning for `200`/`250`/`260`/`35` either way -
+it corrected real bugs in its own method three times over, confirmed its
+attempted calibration block was the wrong one, and then, checking *why*,
+found a genuine, confirmed false negative in `specular_exponent()` itself
+(the `0x3b`-fed chain above), which the `op3B` section below settles: **not
+fixed**, on two independent reasons neither this thread nor its own new
+evidence moves - `op3B`/`NRM` sits at confidence ~70 by a considered prior
+decision, and the newly-found second usage shape shows `op3B`'s own
+semantics are not uniform even under that hypothesis. What is left open:
+what feeds a `Sum` chain's own two `ADD` operands, and re-deriving the
+ship's `N.H` cross-dot itself now that `@0x24` is read correctly as the
+accumulator's own normalize step rather than the cross-dot.
+
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**
 `fragment::Program::patches` ports it into Rust from
@@ -2023,6 +2176,37 @@ same kind of claim. `op3D` has no hypothesis at all; seen only in
 `etched_glass_tech`, always as `op3D R63, R0, R0` - self-referencing, into the
 same "special" destination `SGT` also targets, which is what a predicate or
 flag-setting op would look like and is exactly that far from being a reading.
+
+**A second `op3B` usage shape, found 2026-09-03 tracing `200`/`250`/`260`/
+`35`'s calibration attempt (above), does not fit the pattern this section
+already names - kept here rather than folded into it as if it agreed.** The
+ship's own confirmed `pow(N.H, 40)` block feeds its `LG2` from
+`op3B R0.w, R0, R0` (paragraph `0x3f`): **both operands are the same
+register, with no preceding `DP3` self-dot in the local window**, unlike
+every occurrence this section's own transcript shows (`DP3 X, V, V` then
+`op3B V, V, X` - two instructions, `op3B`'s second operand the dot's result,
+not `V` again). If `op3B` truly is `NRM`, one instruction taking `(V, V)`
+directly and writing only `.w` reads as computing the reciprocal-length
+scalar in a single step rather than "combine a vector with a precomputed
+dot" - a real fused instruction can plausibly do both, gated by which lanes
+the caller's own mask asks for, so this is not necessarily a contradiction.
+It is, however, a second calling shape this page had not recorded, and it is
+exactly the kind of variance that keeps the specular-gate question below.
+
+**Consequently: `Program::dp3_feeding` should not be relaxed to accept
+`op3B` in place of a literal `DP3`, on the evidence gathered so far.** Two
+independent reasons, not one: this project's own naming rule already holds
+`op3B`/`NRM` at confidence ~70 without crossing into a rename (the paragraph
+above, deliberately, not an oversight this pass should second-guess without
+new evidence strong enough to move it); and the newly-found second usage
+shape means "does `op3B` compute the dot this gate wants" is not
+uniformly true even under the `NRM` hypothesis - relaxing the gate would
+risk trading one confirmed false negative for an unknown number of false
+positives, accepting a chain as a real `pow(N.H, e)` read whenever `op3B`'s
+own semantics in that instance are not actually a cross-vector dot. Leaving
+`specular_exponent()` conservative - reporting nothing rather than a
+possibly-wrong reading - is the correct choice until `op3B` itself resolves,
+not a gap to route around.
 
 **2. The colour set's fourth byte is that occlusion scalar**, which closes an
 open question above. The vertex program routes `v[colourSet].w` to a spare

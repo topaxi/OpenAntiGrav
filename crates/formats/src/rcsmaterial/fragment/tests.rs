@@ -62,17 +62,31 @@ fn arity_follows_the_mnemonic() {
     assert!(!insn(0x04).is_texture());
 }
 
-/// The three opcodes shipped programs use that nouveau's table does not name.
+/// The two opcodes shipped programs use that nouveau's table does not name -
+/// `0x3c` moved out of this set 2026-09-03, confirmed present in Mesa's own
+/// `nvfx_shader.h` as `LITEX2_NV40`, see [`opcode_0x3c_is_named_lit_ex2`].
 ///
-/// They stay unnamed rather than guessed, and fall back to two sources - the
-/// reference decoder's own behaviour.
+/// The remaining two stay unnamed rather than guessed, and fall back to two
+/// sources - the reference decoder's own behaviour.
 #[test]
 fn an_opcode_outside_the_table_stays_unnamed() {
-    for opcode in [0x3b, 0x3c, 0x3d, 0x2b] {
+    for opcode in [0x3b, 0x3d, 0x2b] {
         assert_eq!(insn(opcode).name(), None, "{opcode:#04x}");
         assert_eq!(insn(opcode).arity(), 2);
         assert!(!insn(opcode).is_texture());
     }
+}
+
+/// `NVFX_FP_OP_OPCODE_LITEX2_NV40` - confirmed against Mesa's own
+/// `nvfx_shader.h` 2026-09-03, not carried over unverified from the
+/// reference script. One source operand (`nvfx_fragprog.c`'s
+/// `TGSI_OPCODE_LIT` emission reads a single temporary), and absent from
+/// every fragment block on this disc (`hd_litex2_census.rs`, 0 of 76,358).
+#[test]
+fn opcode_0x3c_is_named_lit_ex2() {
+    assert_eq!(insn(0x3c).name(), Some("LIT_EX2_NV40"));
+    assert_eq!(insn(0x3c).arity(), 1);
+    assert!(!insn(0x3c).is_texture());
 }
 
 /// A synthetic block: header, empty declaration tables, program sub-header, and
@@ -584,6 +598,8 @@ fn a_pow_chain_that_reaches_the_output_returns_its_exponent() {
         instructions,
     };
     assert_eq!(program.specular_exponent(), Some(40.0));
+    // `pow_chain`'s `DP3` is instruction index 0 - see its own doc comment.
+    assert_eq!(program.specular_exponent_dp3(), Some(0));
 }
 
 /// A `pow` chain whose result nothing ever reads again is dead code, not the

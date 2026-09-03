@@ -377,6 +377,7 @@ pub(super) fn roles(
     picks: &[Pick],
     seconds: &[Option<Arc<ModelTexture>>],
     textures: Textures<'_>,
+    report: &mut Report,
 ) -> Roles {
     use crate::mesh::slots;
     use rcsmaterial::fragment::{Program, Texel};
@@ -435,6 +436,9 @@ pub(super) fn roles(
                 .flatten()
                 .filter(|value| *value != 0.0)
         });
+        if resolved.is_none() {
+            report.specular_exponent_unresolved += 1;
+        }
         specular_exponent.push(resolved.unwrap_or(crate::mesh::DEFAULT_SPECULAR_EXPONENT));
         let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
             rcsmaterial::Declared::parse(blob, variant.fragment.offset)

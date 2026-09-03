@@ -439,6 +439,18 @@ helpers from their position in the stream, which is a reading of a use rather
 than of an opcode. A fourth appearing would mean the corpus grew or the stride
 is wrong somewhere, and the test says so.
 
+**A fourth, `0x3c`, is in Mesa's own `nvfx_shader.h`** - `LIT_EX2_NV40` -
+confirmed against the primary source 2026-09-03, and now named in
+`fragment.rs`. It occurs **zero** times in shipped code (checked disc-wide,
+`crates/render/examples/hd_litex2_census.rs`), so it changes nothing here;
+worth recording only because "exactly three opcodes outside nouveau's table"
+and "a name this project has not yet ported" are different claims, and this
+was briefly the latter for an opcode that was never the former. See
+`renderer.md`'s "Ships have no Lambert diffuse either" for a second `op3B`
+usage shape found while tracing the specular exponent's disputed values,
+and why it does not move `op3B`/`NRM` past the same confidence-70 line this
+page's own account of it already sits at.
+
 ### What the microcode does and does not settle
 
 With the decoder there, the natural next question is whether a surface takes
