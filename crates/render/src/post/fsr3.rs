@@ -65,8 +65,8 @@ mod groups;
 mod resources;
 
 use bindings::{
-    atomic_entry, level_entry, load_entry, read_buffer_entry, sample_entry, shared_layout,
-    store_entry,
+    atomic_entry, level_entry, load_entry, load_multisampled_entry, read_buffer_entry,
+    sample_entry, shared_layout, store_entry,
 };
 
 pub use constants::{Camera, Constants, Dispatch, camera_from_projection};
@@ -203,6 +203,29 @@ fn source(pass: &str) -> String {
     format!("{COMMON}\n{pass}")
 }
 
+/// The scene's velocity and depth attachments, single-sampled.
+///
+/// Prepended to `prepare_inputs.wgsl` rather than written in it, because the
+/// same pass has to be built against a multisampled pair whenever MSAA is on
+/// and the two are different WGSL *types*. See [`INPUTS_MULTISAMPLED`].
+const INPUTS: &str = "
+@group(1) @binding(0) var r_input_motion_vectors: texture_2d<f32>;
+@group(1) @binding(1) var r_input_depth: texture_2d<f32>;
+";
+
+/// The same two, multisampled - `[graphics] anti_aliasing` at either MSAA
+/// level.
+///
+/// **The pass's body is byte-identical between the two builds**, which is the
+/// whole reason this is a prelude rather than a second copy of the file:
+/// `textureLoad(t, p, 0)` is spelled the same either way, the `0` being a mip
+/// level on the single-sampled texture and a *sample index* on this one.
+/// Sample 0 rather than a resolve, for the reason `post::motion_blur` gives.
+const INPUTS_MULTISAMPLED: &str = "
+@group(1) @binding(0) var r_input_motion_vectors: texture_multisampled_2d<f32>;
+@group(1) @binding(1) var r_input_depth: texture_multisampled_2d<f32>;
+";
+
 /// How many threads each of upstream's render-resolution passes covers, in each
 /// axis - `FFX_FSR3UPSCALER_THREAD_GROUP_WIDTH` and `..._HEIGHT`.
 const GROUP: u32 = 8;
@@ -233,8 +256,10 @@ pub struct Fsr3 {
 
     clear_layout: wgpu::BindGroupLayout,
     clear: wgpu::ComputePipeline,
-    prepare_inputs_layout: wgpu::BindGroupLayout,
-    prepare_inputs: wgpu::ComputePipeline,
+    /// The two builds of `prepare_inputs`: single-sampled and multisampled.
+    /// Which one runs is [`Dispatch::sample_count`]'s only consequence.
+    prepare_inputs_layout: [wgpu::BindGroupLayout; 2],
+    prepare_inputs: [wgpu::ComputePipeline; 2],
     luma_pyramid_layout: wgpu::BindGroupLayout,
     luma_pyramid: wgpu::ComputePipeline,
     shading_change_pyramid_layout: wgpu::BindGroupLayout,
@@ -327,20 +352,24 @@ impl Fsr3 {
             label: Some("fsr3 clear"),
             entries: &[atomic_entry(0)],
         });
-        let prepare_inputs_layout =
+        let prepare_inputs_entries = |multisampled: bool| {
+            [
+                load_multisampled_entry(0, multisampled),
+                load_multisampled_entry(1, multisampled),
+                load_entry(2),
+                store_entry(3, wgpu::TextureFormat::Rgba16Float),
+                store_entry(4, wgpu::TextureFormat::R32Float),
+                atomic_entry(5),
+                store_entry(6, wgpu::TextureFormat::R32Float),
+                store_entry(7, wgpu::TextureFormat::Rgba16Float),
+            ]
+        };
+        let prepare_inputs_layout = [false, true].map(|multisampled| {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("fsr3 prepare inputs"),
-                entries: &[
-                    load_entry(0),
-                    load_entry(1),
-                    load_entry(2),
-                    store_entry(3, wgpu::TextureFormat::Rgba16Float),
-                    store_entry(4, wgpu::TextureFormat::R32Float),
-                    atomic_entry(5),
-                    store_entry(6, wgpu::TextureFormat::R32Float),
-                    store_entry(7, wgpu::TextureFormat::Rgba16Float),
-                ],
-            });
+                entries: &prepare_inputs_entries(multisampled),
+            })
+        });
         let luma_pyramid_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("fsr3 luma pyramid"),
@@ -473,12 +502,21 @@ impl Fsr3 {
             "cs_clear_reconstructed_depth",
             &clear_layout,
         );
-        let prepare_inputs = pipeline(
-            "fsr3 prepare inputs",
-            include_str!("fsr3/prepare_inputs.wgsl"),
-            "cs_prepare_inputs",
-            &prepare_inputs_layout,
-        );
+        let prepare_inputs_body = include_str!("fsr3/prepare_inputs.wgsl");
+        let prepare_inputs = [
+            pipeline(
+                "fsr3 prepare inputs",
+                &format!("{INPUTS}{prepare_inputs_body}"),
+                "cs_prepare_inputs",
+                &prepare_inputs_layout[0],
+            ),
+            pipeline(
+                "fsr3 prepare inputs (msaa)",
+                &format!("{INPUTS_MULTISAMPLED}{prepare_inputs_body}"),
+                "cs_prepare_inputs",
+                &prepare_inputs_layout[1],
+            ),
+        ];
         let luma_pyramid = pipeline(
             "fsr3 luma pyramid",
             include_str!("fsr3/luma_pyramid.wgsl"),
@@ -690,7 +728,7 @@ impl Fsr3 {
         pass.set_bind_group(1, Some(&bind.clear), &[]);
         pass.dispatch_workgroups(groups(texels, CLEAR_GROUP), 1, 1);
 
-        pass.set_pipeline(&self.prepare_inputs);
+        pass.set_pipeline(&self.prepare_inputs[usize::from(dispatch.sample_count > 1)]);
         pass.set_bind_group(1, Some(&bind.prepare_inputs), &[]);
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
 

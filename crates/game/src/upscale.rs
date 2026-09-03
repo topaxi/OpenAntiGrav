@@ -484,6 +484,7 @@ impl Framebuffer {
                         // auto-exposure smoothing this port does not have.
                         delta_time: 1.0 / 60.0,
                         reset: temporal.reset,
+                        sample_count: temporal.sample_count,
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
                 },

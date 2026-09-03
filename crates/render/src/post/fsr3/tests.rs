@@ -25,6 +25,7 @@ fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
         camera: camera(),
         delta_time: 1.0 / 60.0,
         reset: true,
+        sample_count: 1,
         sharpness: crate::post::fsr1::Sharpness::DEFAULT,
     }
 }
@@ -766,6 +767,78 @@ fn a_still_scene_fills_the_luma_history_and_is_never_unstable() {
                 "texel {index} history slot {slot} holds {held}, wanted {want}"
             );
         }
+    }
+}
+
+#[test]
+fn the_multisampled_build_binds_a_multisampled_scene() {
+    // **The crash this test exists for was found by playing, not by testing.**
+    // `[graphics] anti_aliasing` at either MSAA level makes the scene's depth
+    // and velocity attachments multisampled, and a multisampled binding is a
+    // different WGSL type - so `prepare_inputs` is built twice and the wrong
+    // one is a `create_bind_group` validation failure, which is a panic in a
+    // player's frame loop rather than anything the compile-only tests could
+    // see.
+    //
+    // Only the two scene attachments are ever multisampled: everything after
+    // `prepare_inputs` reads a target this port wrote itself.
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no device; skipping");
+        return;
+    };
+
+    let render = (64u32, 32u32);
+    let sampled = |format, samples| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("fsr3 msaa test"),
+                size: wgpu::Extent3d {
+                    width: render.0,
+                    height: render.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: samples,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    };
+
+    let mut fsr3 = Fsr3::new(&device).expect("the FSR 3.1 shaders must compile");
+    for samples in [1u32, 4] {
+        let colour = sampled(wgpu::TextureFormat::Rgba16Float, 1);
+        let depth = sampled(wgpu::TextureFormat::Depth32Float, samples);
+        let velocity = sampled(crate::mesh_render::VELOCITY_FORMAT, samples);
+
+        let mut dispatch = dispatch(render, (render.0 * 2, render.1 * 2));
+        dispatch.sample_count = samples;
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+        fsr3.render(
+            &device,
+            &queue,
+            &mut encoder,
+            Frame {
+                colour: &colour,
+                depth: &depth,
+                velocity: &velocity,
+                dispatch,
+            },
+        );
+        queue.submit([encoder.finish()]);
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("device poll");
     }
 }
 

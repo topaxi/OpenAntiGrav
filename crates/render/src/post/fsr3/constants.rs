@@ -121,6 +121,14 @@ pub struct Dispatch {
     /// Whether the history is meaningless and must be thrown away - a race
     /// restart, a camera cut, the first frame after a stage change.
     pub reset: bool,
+    /// How many samples the scene's depth and velocity attachments carry - 1,
+    /// or MSAA's 4.
+    ///
+    /// **The only thing it selects is which build of `prepare_inputs` runs**,
+    /// because that is the one pass reading the scene's own attachments;
+    /// everything after it reads targets this port wrote, which are never
+    /// multisampled. It is not part of the constant buffer.
+    pub sample_count: u32,
     /// How hard the final RCAS pass sharpens.
     ///
     /// The same [`super::super::fsr1::Sharpness`] the FSR 1 path takes, and
@@ -141,6 +149,7 @@ impl Default for Dispatch {
             camera: Camera::default(),
             delta_time: 1.0 / 60.0,
             reset: true,
+            sample_count: 1,
             sharpness: crate::post::fsr1::Sharpness::DEFAULT,
         }
     }

@@ -36,6 +36,14 @@ pub struct Temporal<'a> {
     pub depth: &'a wgpu::TextureView,
     /// The scene's velocity attachment.
     pub velocity: &'a wgpu::TextureView,
+    /// How many samples the two above carry - 1, or MSAA's 4.
+    ///
+    /// **Travels with them rather than being read from the settings**, which is
+    /// the distinction that matters: `[graphics] anti_aliasing` is what a
+    /// player last chose, while this is what the scene on screen was actually
+    /// built with, and the two differ for a whole race after the row moves -
+    /// which is exactly what its `restart_required` note is about.
+    pub sample_count: u32,
     /// The camera this frame was drawn with.
     pub camera: fsr3::Camera,
     /// The sub-pixel offset this frame was drawn with, in pixels.

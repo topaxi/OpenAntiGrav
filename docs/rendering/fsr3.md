@@ -119,6 +119,29 @@ reads it. The third has no reader here, for the reason below. So what is left is
 `farthest_depth_mip1` - a single 2x2 box average - and the pass is one dispatch
 rather than a chain.
 
+### MSAA makes two of the inputs a different type
+
+`[graphics] anti_aliasing` at either MSAA level makes the scene's depth and
+velocity attachments multisampled, and a multisampled binding is a different
+WGSL type - so `prepare_inputs` is built **twice**, against a single-sampled and
+a multisampled declaration of those two, and the dispatch picks by the sample
+count the scene was actually built with.
+
+Only that pass needs it: everything after it reads a target this port wrote
+itself, and none of those is multisampled. The two builds share a byte-identical
+body, because `textureLoad(t, p, 0)` is spelled the same either way - the `0`
+being a mip level on one and a **sample index** on the other. Reading sample 0
+rather than resolving is the decision [motion blur](motion-blur.md) already
+made, for the same reason: a resolve averages velocity across a silhouette edge,
+which is where the two surfaces have least in common.
+
+**The sample count travels with the views, not with the setting.** MSAA's count
+is baked into every scene pipeline when the scene is built, so the row and the
+scene disagree for a whole race after a player moves it - which is what that
+row's `restart_required` note is about, and which would otherwise hand the
+upscaler a bind group of the wrong shape. Found by playing it; the compile-only
+tests could not see it, and there is now one that can.
+
 ### RCAS is FSR 1's, with the denoise branch FSR 1 did not need
 
 `ffx_fsr3upscaler_rcas.h` is a thin wrapper around `FsrRcasF` from

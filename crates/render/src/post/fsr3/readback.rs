@@ -178,6 +178,7 @@ impl Scene {
                         camera: CAMERA,
                         delta_time: 1.0 / 60.0,
                         reset: index == 0,
+                        sample_count: 1,
                         sharpness: crate::post::fsr1::Sharpness::DEFAULT,
                     },
                 },

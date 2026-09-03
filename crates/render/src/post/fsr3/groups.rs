@@ -46,7 +46,7 @@ impl Groups {
         });
         let prepare_inputs_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("fsr3 prepare inputs"),
-            layout: &fsr3.prepare_inputs_layout,
+            layout: &fsr3.prepare_inputs_layout[usize::from(frame.dispatch.sample_count > 1)],
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

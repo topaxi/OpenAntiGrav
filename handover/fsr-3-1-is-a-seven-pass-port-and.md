@@ -47,6 +47,12 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 - **A dispatch cannot bind one texture as both a storage write and a sampled
   resource**, even when the shader ignores the read. The pyramid's level-0
   dispatch needed pointing at something other than the level it writes.
+- **MSAA changes the *type* of two inputs, and only playing it found that.**
+  The scene's depth and velocity attachments are multisampled under
+  `anti_aliasing = msaa4x`, which is a different WGSL binding type and a
+  `create_bind_group` validation panic in the frame loop. Every test up to that
+  point ran at sample count 1. `prepare_inputs` is now built twice and there is
+  a test that runs both.
 - **A small fixture catches size rules a realistic one never reaches.** 8x4
   render found the mip-count ceiling (a 4x2 target holds three levels, not six)
   and the resolution bug above.

@@ -40,6 +40,24 @@ pub(super) fn shared_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     })
 }
 
+/// [`load_entry`], but multisampled when the scene is.
+///
+/// Only the two scene attachments ever need it: everything else this port reads
+/// is a target it wrote itself, and those are never multisampled.
+pub(super) fn load_multisampled_entry(
+    binding: u32,
+    multisampled: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled,
+        },
+        ..load_entry(binding)
+    }
+}
+
 /// A texture read with `textureLoad`, which is what every pass here does.
 ///
 /// `filterable: false` because the depth attachment binds through this too and

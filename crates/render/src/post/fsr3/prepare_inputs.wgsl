@@ -24,8 +24,18 @@
 //   resolution (ADR-0030), so a low-resolution position indexes it directly
 //   and `ComputeHrPosFromLrPos` is not involved.
 
-@group(1) @binding(0) var r_input_motion_vectors: texture_2d<f32>;
-@group(1) @binding(1) var r_input_depth: texture_2d<f32>;
+// **Bindings 0 and 1 are declared by a prelude, not here.** The scene's
+// velocity and depth attachments are multisampled whenever `[graphics]
+// anti_aliasing` is at one of its MSAA levels, and a multisampled binding is a
+// different WGSL type - so `post::fsr3` prepends one of two declarations and
+// builds this file twice. Nothing else in the pass changes: `textureLoad(t, p,
+// 0)` is spelled identically either way, the `0` being a mip level on one and a
+// **sample index** on the other.
+//
+// Reading sample 0 rather than resolving is the same decision
+// `post::motion_blur` made and for the same reason: resolving would average
+// velocity across a silhouette edge, which is where the two surfaces have the
+// least in common.
 @group(1) @binding(2) var r_input_color_jittered: texture_2d<f32>;
 @group(1) @binding(3) var rw_dilated_motion_vectors: texture_storage_2d<rgba16float, write>;
 @group(1) @binding(4) var rw_dilated_depth: texture_storage_2d<r32float, write>;

@@ -629,6 +629,7 @@ pub fn capture(
             |(depth, velocity, frame)| crate::upscale::Temporal {
                 depth,
                 velocity,
+                sample_count: scene.sample_count(),
                 camera: frame.camera,
                 jitter: frame.jitter,
                 phase_count: frame.phase_count,

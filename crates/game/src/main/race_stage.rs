@@ -83,6 +83,7 @@ impl RaceStage {
             .map(|(depth, velocity, frame)| upscale::Temporal {
                 depth,
                 velocity,
+                sample_count: self.scene.sample_count(),
                 camera: frame.camera,
                 jitter: frame.jitter,
                 phase_count: frame.phase_count,

@@ -181,6 +181,18 @@ impl super::Scene {
             )
         })
     }
+
+    /// How many samples this scene's attachments carry.
+    ///
+    /// **What the scene was built with, not what the setting says.** MSAA's
+    /// sample count is baked into every pipeline at `Scene::new`, so the row
+    /// and the scene disagree for a whole race after a player moves it - which
+    /// is what that row's `restart_required` note exists for, and which would
+    /// otherwise hand a temporal upscaler a bind group of the wrong shape.
+    #[must_use]
+    pub fn sample_count(&self) -> u32 {
+        self.anti_aliasing.msaa_samples()
+    }
 }
 
 /// What one frame was drawn with, for the upscaler that resolves it.
