@@ -83,7 +83,13 @@ impl Session {
     pub(crate) fn render_profile(&self) -> settings::RenderProfile {
         self.shell
             .as_ref()
-            .and_then(|shell| self.settings.render_profiles.get(shell.title.name))
+            .map(|shell| shell.title.name)
+            // **The `--race` route, which has no shell and is not profile-less.**
+            // Falling straight to the default here meant that route drew with
+            // `render_scale` 100 and no reconstruction whatever the file or the
+            // CLI said - see `App::race_title`.
+            .or(self.race_title)
+            .and_then(|title| self.settings.render_profiles.get(title))
             .cloned()
             .unwrap_or_default()
     }

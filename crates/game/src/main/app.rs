@@ -80,6 +80,9 @@ pub(crate) struct App {
     pub(crate) settings: settings::Settings,
     /// What the menus need, absent on the `--race` path.
     pub(crate) shell: Option<Shell>,
+    /// The title `--race` opened, for the render profile it has no shell to
+    /// resolve. `None` on every route that has a shell.
+    pub(crate) race_title: Option<&'static str>,
     /// The mixer and its device, waiting for the window that will step it.
     ///
     /// Taken by [`Session`] on the first resume, which is why it is an
@@ -310,6 +313,7 @@ impl App {
             races_launched: 0,
             settings: self.settings.clone(),
             shell: self.shell.clone(),
+            race_title: self.race_title,
             // Race Remix's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),

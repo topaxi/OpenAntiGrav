@@ -937,6 +937,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     });
 
     Ok(Loaded {
+        title,
         setup: Setup {
             mode: options.mode,
             difficulty: options.difficulty,

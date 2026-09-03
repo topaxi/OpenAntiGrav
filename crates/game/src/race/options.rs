@@ -435,6 +435,19 @@ pub struct Setup {
 pub struct Loaded {
     /// The simulation half.
     pub setup: Setup,
+    /// Which title the source turned out to be.
+    ///
+    /// **Carried out of [`load`] because `--race` has no other way to know**,
+    /// and without it every `--race` run silently drew with
+    /// `settings::RenderProfile::default()` rather than the player's own
+    /// `[render_profiles.<title>]` - so `--render-scale 100` and
+    /// `--render-scale 200` produced an identical scene pass and `fsr3` never
+    /// ran at all. `load` resolves the title anyway, to pick the default track
+    /// and team (see [`Options::track`]); this is the same value, kept.
+    ///
+    /// The track's title rather than `craft_title`: a render profile is about
+    /// how expensive the *scene* is, and the circuit is the scene.
+    pub title: &'static oag_title::Title,
     /// The HUD's layout, atlas, fonts and strings.
     pub hud: crate::hud::Assets,
     /// What to draw for the track.

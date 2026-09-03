@@ -373,19 +373,24 @@ pub(crate) fn run_race(
             settings.audio.music_source,
             &boot::default_audio_cache_dir(),
         );
-        // No title in hand on this leg: `--race` skips the boot sequence and
-        // `race::load` above never hands a resolved title back, so there is
-        // nothing to key `settings.render_profiles` on. The same fallback
-        // `Session::render_profile` uses on a shell-less run.
+        // **The title's own profile**, which this leg used to have no way to
+        // reach: `race::load` resolves the title to pick a default track and
+        // team, and since it carries that out in `Loaded::title` there is
+        // something to key `settings.render_profiles` on. Falls back to the
+        // default for a title with no table entry, exactly as
+        // `Session::render_profile` does.
         //
         // **The four CLI overrides are re-applied on top**, and forgetting them
-        // is a bug this carried: `main.rs` applies `--render-scale`,
-        // `--upscaler`, `--anti-aliasing` and `--motion-blur` by walking
-        // `settings.render_profiles`, which this profile is not in - so every
+        // is a bug this carried: `main.rs` applies them by walking
+        // `settings.render_profiles`, which this profile was not in - so every
         // one of them was silently discarded on a headless capture, and `just
         // compare-upscalers` produced three byte-identical images while
         // reporting nothing wrong. See `Cli::apply_render_overrides`.
-        let mut render_profile = settings::RenderProfile::default();
+        let mut render_profile = settings
+            .render_profiles
+            .get(loaded.title.name)
+            .cloned()
+            .unwrap_or_default();
         let render_scale = match cli.render_scale {
             Some(percent) => Some(
                 crate::display::Scale::try_from(percent)
@@ -455,6 +460,8 @@ pub(crate) fn run_race(
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
+    // Read before `loaded` is moved into the app below.
+    let race_title = loaded.title.name;
     let mut app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
@@ -477,6 +484,14 @@ pub(crate) fn run_race(
         // settings still apply, they just cannot be changed from here - which
         // is what makes escape quit on this route rather than back out.
         shell: None,
+        // **What makes the sentence above true.** `Session::render_profile`
+        // keys on the shell's title, and with no shell it fell all the way to
+        // `RenderProfile::default()` - so this route ignored the render scale,
+        // the reconstruction, the MSAA level, the motion blur *and* every CLI
+        // flag that overrides them, silently. Measured before the fix:
+        // `--render-scale 100` and `--render-scale 200` both gave a 0.80 ms
+        // scene pass and zero FSR 3.1 chain readings.
+        race_title: Some(race_title),
         audio: Some(audio),
         music_discs,
         // `--race` says up front that it ignores `--prefetch` - that converts

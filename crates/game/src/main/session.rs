@@ -234,6 +234,9 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// The title `--race` opened - see `App::race_title`. Read only when
+    /// `shell` is `None`, which is exactly the `--race` route.
+    pub(crate) race_title: Option<&'static str>,
     /// Every title this machine can currently open a source for, one row per
     /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
     /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's

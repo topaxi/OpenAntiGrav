@@ -517,6 +517,9 @@ fn main() -> Result<()> {
         scheme,
         settings,
         shell,
+        // Every route through `main` has a shell or is about to load one;
+        // only `--race`, which is `headless::run_race`, has neither.
+        race_title: None,
         audio: Some(audio),
         music_discs,
         prefetch,

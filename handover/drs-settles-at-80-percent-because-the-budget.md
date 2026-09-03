@@ -71,9 +71,8 @@ separate question from this one, but it is where a chunk of the untimed cost is.
 
 ## Trap: the windowed `--race` path discards the whole render profile
 
-**Measured, not read.** Two 60-second Xvfb runs at 2560x1440,
-`hdfury-ps3-eu-dec.iso --race --autopilot --upscaler fsr3 --anti-aliasing
-msaa4x`, NVIDIA RTX PRO 2000:
+**Measured, not read.** Two 60-second runs of `hdfury-ps3-eu-dec.iso --race
+--autopilot --upscaler fsr3 --anti-aliasing msaa4x`, NVIDIA RTX PRO 2000:
 
 | `--render-scale` | scene pass p50 | FSR 3.1 chain readings |
 | --- | --- | --- |
@@ -156,12 +155,36 @@ Two consequences worth stating separately from the budget question:
   rewrite and the warning tests regenerated. **It makes no frame faster** and
   is independent of the budget question below.
 
+## Two traps in measuring any of this
+
+**`DISPLAY=:99` does not reach Xvfb from a Wayland session.** winit prefers
+Wayland whenever `WAYLAND_DISPLAY` is set, so every run above that believed it
+was headless actually opened a window on the maintainer's Niri session at their
+own resolution - which is also why an early note here claimed 2560x1440 when
+the window was whatever Niri gave it. Use `env -u WAYLAND_DISPLAY -u
+XDG_SESSION_TYPE DISPLAY=:99`, and set `XDG_CONFIG_HOME` to a scratch directory
+while you are at it, or the run rewrites the maintainer's own
+`settings.toml`.
+
+**And once it is genuinely on Xvfb, the numbers are not usable for
+performance.** Measured 2026-09-03 at 2560x1440: the scene pass reads 7.0 ms
+against the 2.4 ms the same profile shows on the real display, the loop
+manages about 6 FPS, and `--msaa off` against `--msaa 4x` and `--motion-blur
+off` against `--motion-blur high` move **nothing at all** - four legs within
+noise of each other. Xvfb presents in software, and a 2560x1440 copy per frame
+dominates the frame and distorts the timestamp deltas around it. Xvfb is fine
+for driving the game headlessly and for anything about *pixels*; it cannot size
+a pass. The `dev` overlay on the real display is the instrument.
+
 ## Next Steps
 
-1. Fix the windowed `--race` profile fallback, so the flags and the settings
-   file mean something on the one path that can be driven headlessly. `--race`
-   opens a source and so knows a title; the fallback needs a title name, not a
-   whole `Shell`.
+1. ~~Fix the windowed `--race` profile fallback.~~ **Done**: `race::Loaded`
+   carries the title `race::load` already resolved, `Session::race_title`
+   carries it to `render_profile()`, and the capture path reads the file's own
+   profile instead of a default. Verified by the measurement that exposed the
+   bug: `--render-scale 100` now gives a 0.63 ms scene pass against 2.93 ms at
+   200, where both used to give 0.80, and the FSR 3.1 chain reports 8,044
+   readings where it used to report none.
 2. With that, reproduce at `render_scale = 150`, MSAA 4x, motion blur high,
    FSR 3.1, target 120, and record the scene/untimed split.
 3. Then decide the budget shape. The candidate is
