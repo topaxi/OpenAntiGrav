@@ -847,12 +847,13 @@ impl Session {
                 extent: self.framebuffer.extent(),
                 allocation: self.framebuffer.allocation(),
             }),
-            // Both GPU readings, whatever the stage: a reading is a frame or
-            // more old, so gating this on `has_scene` would blank the row on
-            // the menu frame that is finally reporting the last race frame's
-            // cost. Each half is `None` until its own first reading lands.
+            // All three GPU readings, whatever the stage: a reading is a
+            // frame or more old, so gating this on `has_scene` would blank the
+            // row on the menu frame that is finally reporting the last race
+            // frame's cost. Each is `None` until its own first reading lands.
             perf::GpuCost {
                 scene: self.scene_cost.stats().map(|s| s.mean_ms / 1000.0),
+                blur: self.blur_cost.stats().map(|s| s.mean_ms / 1000.0),
                 upscale: self.upscale_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
         );

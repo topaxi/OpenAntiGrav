@@ -641,25 +641,43 @@ impl RenderSize {
 pub struct GpuCost {
     /// The race's scene pass, or `None` before its first reading has come back.
     pub scene: Option<f32>,
+    /// The motion-blur chain, or `None` before its first reading has come
+    /// back. That includes every frame `[render_profiles.<title>]
+    /// motion_blur` is `off`, since `oag_render::post::motion_blur::MotionBlur::render`
+    /// then encodes nothing and the claimed slot is given back unwritten. See
+    /// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
+    pub blur: Option<f32>,
     /// FSR 3.1's eight dispatches, or `None` when no temporal upscaler has run
     /// - which is every frame on every other rung of the ladder.
     pub upscale: Option<f32>,
 }
 
 impl GpuCost {
-    /// One line, or `None` when neither pass has been measured yet.
+    /// One line, or `None` when nothing has been measured yet.
     ///
     /// A reading arrives a frame or more after the frame it describes, so the
     /// first few frames of a run legitimately have nothing to show - printing
     /// `0.0 MS` there would read as "free" rather than as "not measured yet".
+    ///
+    /// **Compare this against the `FPS`/`MS` line above it, not against the
+    /// target frame period.** That first line is `perf::Meter`'s own
+    /// wall-clock reading of the whole frame - CPU and GPU, every pass,
+    /// timed and untimed alike - and this line is only the three passes this
+    /// build brackets with a GPU timestamp. The difference between the two is
+    /// real cost: the MSAA resolve, `hd_bloom`, the HUD, the composite, the
+    /// blit, the driver's own overhead, and the frame loop's own CPU-side
+    /// work, none of which any row here can show.
     #[must_use]
     pub fn line(self) -> Option<String> {
-        match (self.scene, self.upscale) {
-            (None, None) => None,
-            (scene, upscale) => {
+        match (self.scene, self.blur, self.upscale) {
+            (None, None, None) => None,
+            (scene, blur, upscale) => {
                 let mut line = String::from("GPU");
                 if let Some(scene) = scene {
                     line.push_str(&format!(" SCENE {:.2} MS", scene * 1000.0));
+                }
+                if let Some(blur) = blur {
+                    line.push_str(&format!("  BLUR {:.2} MS", blur * 1000.0));
                 }
                 if let Some(upscale) = upscale {
                     line.push_str(&format!("  FSR3 {:.2} MS", upscale * 1000.0));

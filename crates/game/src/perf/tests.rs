@@ -549,37 +549,40 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
 
 /// The GPU cost row says only what has actually been measured.
 ///
-/// A reading arrives a frame or more after the frame it describes, so both
-/// halves are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
+/// A reading arrives a frame or more after the frame it describes, so all
+/// three are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
 /// a frame the bilinear blit resolved would be a lie that reads as "free"
-/// rather than as "not running". Each half appears only once it has a number.
+/// rather than as "not running". Each field appears only once it has a number.
 #[test]
 fn the_gpu_cost_row_shows_only_what_was_measured() {
     assert_eq!(GpuCost::default().line(), None, "nothing measured, no row");
     assert_eq!(
         GpuCost {
             scene: Some(0.004_2),
+            blur: None,
             upscale: None,
         }
         .line()
         .as_deref(),
         Some("GPU SCENE 4.20 MS"),
-        "a scene reading alone must not imply an upscaler ran"
+        "a scene reading alone must not imply blur or an upscaler ran"
     );
     assert_eq!(
         GpuCost {
             scene: Some(0.004_2),
+            blur: Some(0.001_2),
             upscale: Some(0.001_8),
         }
         .line()
         .as_deref(),
-        Some("GPU SCENE 4.20 MS  FSR3 1.80 MS")
+        Some("GPU SCENE 4.20 MS  BLUR 1.20 MS  FSR3 1.80 MS")
     );
-    // The upscaler can report before the scene pass does: the two rings are
+    // The upscaler can report before the scene pass does: the three rings are
     // independent, and a slot is claimed per ring per frame.
     assert_eq!(
         GpuCost {
             scene: None,
+            blur: None,
             upscale: Some(0.001_8),
         }
         .line()
@@ -597,6 +600,7 @@ fn the_gpu_cost_row_is_dev_only() {
     }
     let cost = GpuCost {
         scene: Some(0.004_2),
+        blur: Some(0.001_2),
         upscale: Some(0.001_8),
     };
     let has_row = |mode| {
