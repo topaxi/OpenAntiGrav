@@ -627,7 +627,14 @@ fn material_setup(
     let skin::Roles {
         packed: mut material_slots,
         specular_exponent: material_specular_exponent,
-    } = roles(model, &material_variants, &picks, &seconds, textures);
+    } = roles(
+        model,
+        &material_variants,
+        &picks,
+        &seconds,
+        textures,
+        report,
+    );
     // **The coordinate's orientation, off the resolved *vertex* block** rather
     // than the fragment one the roles come from, and folded into the same word
     // because it is the same kind of statement: what this material's own

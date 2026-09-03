@@ -139,6 +139,25 @@ pub struct Report {
     pub variant_chunks: usize,
     /// Chunks drawn by a slot that ships no row for the key.
     pub variant_chunks_missed: usize,
+    /// Materials whose resolved fragment program has no `rcsmaterial::fragment
+    /// ::Program::specular_exponent` chain, and therefore draw with the shared
+    /// `mesh::DEFAULT_SPECULAR_EXPONENT` stand-in rather than a value read off
+    /// the file.
+    ///
+    /// **Not necessarily wrong** - most materials genuinely have no specular
+    /// term to read, and a default there is the correct answer, not a gap.
+    /// Counted anyway, because the two look identical from this field alone:
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have no
+    /// Lambert diffuse either" found one hand-confirmed real chain
+    /// `specular_exponent` misses structurally (its feeding instruction is an
+    /// unnamed opcode, not a literal `DP3`), so a material landing here may be
+    /// unlit, or may be exactly that false negative - a silent fallback would
+    /// make both look the same, which is the failure mode every other counter
+    /// on this struct exists to avoid. **426 of Talon's Junction's 442
+    /// materials (96 %)** land here as of 2026-09-04 - a population too large
+    /// to be all false negative, but too large to wave off as "mostly unlit"
+    /// without checking either; unread, deliberately, rather than assumed.
+    pub specular_exponent_unresolved: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -214,6 +233,9 @@ impl Report {
         } + &match self.authored_normals {
             0 => ", lit off face normals computed from the triangles".to_string(),
             n => format!(", {n} authored vertex normal(s)"),
+        } + &match self.specular_exponent_unresolved {
+            0 => String::new(),
+            n => format!(", {n} material(s) with no specular_exponent chain read (default used)"),
         } + &match self.isolated {
             0 => String::new(),
             n => format!(
