@@ -20,7 +20,7 @@
 //! "everything nobody claims" bucket the way it used to for `Weapon Pad`
 //! alone - that bucket has no per-node correspondence to build
 //! `Model::node_vertex_ranges` from, and without that field
-//! `Drawable::tint_weapon_pads`/`tint_speedup_pads` have nothing to zip
+//! `Drawable::tint_weapon_pads` has nothing to zip
 //! against. [`build_pads`]/[`build_weapon_pads`] draw the excluded chunks
 //! through [`build_pad_class`] instead: one node-ordered pass per class,
 //! walking [`oag_formats::pads::volumes`]'s own node order so
@@ -151,22 +151,21 @@ pub(super) fn build_pad_class(
     out.material_variants = material_variants;
     out.emissive = emissive;
     out.alpha_test_ref = alpha_test_ref;
-    // **`false`, unlike every other PS3 model - this is the load-bearing
-    // difference that makes gameplay tinting visible at all.** An ordinary
-    // HD chunk's `in.colour` is a baked *light* the shader adds inside its
-    // authored lighting sum (`mesh.wgsl`'s `lit_texel`, "the vertex colour is
-    // inside `authored` on this path, not a factor outside it") and never
-    // reads as a tint there - measured directly: overwriting a pad's colour
-    // with `speedup_pad::COLOUR` while this stayed `true` produced a
-    // byte-identical capture, because `Drawable::recolour_nodes` was writing
-    // into a channel the authored branch only ever adds a few percent of
-    // itself back into, never multiplies. `false` and the `lit = 0.0` below
-    // together route the pad through `mesh.wgsl`'s *other*, stand-in branch
-    // instead (`shaded.rgb = mix(plain_rgb, authored_rgb, ... * in.lit)`,
-    // `in.lit = 0.0` selects `plain_rgb` in full), where vertex colour has
-    // always been a genuine multiplicative tint - the same channel every
-    // non-HD title's pad already used it as.
-    out.vertex_colour_is_light = false;
+    // **`true`, exactly like every other PS3 model this crate builds.** A pad
+    // chunk's `in.colour` is HD's baked per-vertex *light*, the term the
+    // fragment program adds inside its authored lighting sum - see
+    // [`super::emit`] and `mesh.wgsl`'s `lit_texel`. It is not a tint, and a
+    // pad's own colour is not in it: `12_sol_2`'s ten `Speedup Pad` and eight
+    // `Weapon Pad` chunks all carry a flat `0,0,0` colour set, and the blue
+    // chevron and red cross are painted into `ds_speedup_cs.gtf` and
+    // `ds_weaponup_cs.gtf` respectively.
+    //
+    // This was `false` between 2026-09-02 and 2026-09-03, paired with a
+    // `lit = 0.0` sweep, so that a flat invented tint written over
+    // `in.colour` would show up. It did show up, and what it showed was a pad
+    // lifted out of the circuit's own light rig and repainted - see
+    // `docs/rendering/pads.md`.
+    out.vertex_colour_is_light = true;
 
     let mut node_vertex_ranges = Vec::new();
     for node in nodes.iter().filter(|n| n.class_id == class_id) {
@@ -192,16 +191,6 @@ pub(super) fn build_pad_class(
         node_vertex_ranges.push(node_first_vertex..out.vertices.len() as u32);
     }
     out.node_vertex_ranges = node_vertex_ranges;
-    // Forces every pad vertex through `mesh.wgsl`'s stand-in branch - see the
-    // `vertex_colour_is_light` comment above for why both flags have to move
-    // together. A no-op for the picture PSP and PS2 pads draw: this crate's
-    // own PSP `emit` already leaves ordinary geometry's `lit` at `1.0` and a
-    // pad there was never routed through the HD-only authored branch in the
-    // first place, so nothing changes for those titles.
-    for vertex in &mut out.vertices {
-        vertex.lit = 0.0;
-    }
-
     face_normals(&mut out);
     let (centre, radius) = bounding_sphere(&out.vertices);
     out.centre = centre;

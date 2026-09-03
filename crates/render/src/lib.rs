@@ -45,7 +45,6 @@ pub mod psys;
 pub mod pvs;
 pub mod shield;
 pub mod sparks;
-pub mod speedup_pad;
 pub mod texgen;
 pub mod timing;
 pub mod track;

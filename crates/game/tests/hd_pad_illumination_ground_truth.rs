@@ -166,14 +166,68 @@ fn talons_junction_speedup_pad_chunks_are_an_unbaked_content_donor() {
     );
 }
 
+/// **An HD pad stays on the circuit's own lighting path, and nothing
+/// recolours it.** This is the regression that shipped on 2026-09-02 and was
+/// reverted on 2026-09-03: to make a flat invented tint *visible* on HD, both
+/// pad models were taken off the authored branch (`vertex_colour_is_light`
+/// forced `false`, every vertex's `lit` forced `0.0`), which is what routes
+/// `mesh.wgsl` to its stand-in shading where vertex colour multiplies. A pad
+/// lit by its own baked light rig then read as a flat plate in a colour the
+/// disc does not author anywhere.
+///
+/// Three facts pinned, each of which alone would have caught it:
+///
+/// 1. `vertex_colour_is_light` is `true`, as on every other PS3 model.
+/// 2. Every pad vertex is `lit`, as on every other PS3 model.
+/// 3. The authored colour set is what the file carries - a flat `0,0,0` on
+///    all 18 chunks across both classes, HD's "this chunk is lightmapped, it
+///    has no vertex light of its own" value. A tint pass writing a palette
+///    entry into that slot shows up here immediately.
+///
+/// What a pad *looks* like on HD is the texture's own job: `ds_speedup_cs`
+/// paints the blue chevron and `ds_weaponup_cs` the red cross. See
+/// `docs/rendering/pads.md`.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_pads_keep_their_authored_light_and_are_never_recoloured() {
+    let Some(loaded) = load_track(Some("/data/environments/12_sol_2/track.vex")) else {
+        return;
+    };
+    for (label, model) in [
+        ("speedup", &loaded.pad_model),
+        ("weapon", &loaded.weapon_pad_model),
+    ] {
+        let model = model
+            .as_ref()
+            .unwrap_or_else(|| panic!("12_sol_2 authors {label} pad geometry"));
+        assert!(
+            model.vertex_colour_is_light,
+            "{label} pads left HD's authored lighting path - `colour` is a light \
+             term there, not a tint, see Drawable::tint_weapon_pads"
+        );
+        assert!(
+            model.vertices.iter().all(|v| v.lit == 1.0),
+            "{label} pads were forced onto mesh.wgsl's stand-in shading branch"
+        );
+        assert!(
+            model
+                .vertices
+                .iter()
+                .all(|v| v.colour[..3] == [0.0, 0.0, 0.0]),
+            "{label} pads no longer carry the file's own flat colour set - either \
+             the reader changed or something recoloured them"
+        );
+    }
+}
+
 /// **The double-draw guard.** `mesh::rcs::build_scene`'s world-space pass
 /// draws every `.rcsmodel` chunk no `Mesh`-class node references, and a
 /// `Weapon Pad`/`Speedup Pad` chunk is exactly such a chunk unless
 /// `build_scene` excludes it on purpose - see `mesh::rcs::pad_chunk_hashes`.
 /// If that exclusion ever regressed, every HD pad would draw twice: once
-/// tinted, through `Drawable::tint_weapon_pads`/`tint_speedup_pads`, and once
-/// more, untinted, as part of the plain track model - coincident geometry
-/// that would look almost right and differ only by draw order, which is
+/// through its own node-ordered pass and once more as part of the plain
+/// track model - coincident geometry that would look almost right and
+/// differ only by draw order, which is
 /// exactly the failure mode `crates/render/examples/hd_double_submit_check.rs`
 /// exists for on the *ordinary* `Mesh` side of this same mechanism.
 ///

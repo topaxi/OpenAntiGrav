@@ -1,0 +1,136 @@
+# Speed pads and weapon pads: what colours one
+
+Two `.vex` classes, `Speedup Pad` `0x3bd` and `Weapon Pad` `0x3be`, and one
+question this page exists to answer for both on every title: **where does a
+pad's colour come from?**
+
+The trigger side is [`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md); the
+payload layout is [`formats/pads.md`](../formats/pads.md); how a pad's geometry
+gets into a model at all is `oag_render::mesh::build_pads` on PSP/PS2 and
+`oag_render::mesh::rcs::pads` on PS3. This page is only about pixels.
+
+## The answer, per title and per class
+
+| Title | Class | Colour comes from | Recovered |
+| --- | --- | --- | --- |
+| Pulse (PSP/PS2), Pure | `Speedup Pad` | the texture, unmodified | 90 |
+| Pulse (PSP/PS2), Pure | `Weapon Pad` | `pad+0x6c`, a per-tick runtime write | 85 |
+| HD / Fury | `Speedup Pad` | the texture, unmodified | 80 |
+| HD / Fury | `Weapon Pad` | the texture; any armed/cooling state is **unrecovered** | 80 |
+
+Three of those four rows say "the texture", and that is the finding worth
+carrying: **on every title measured, a pad's colour is painted by the artists
+and the engine leaves it alone.** The one exception is Pulse's `Weapon Pad`,
+and it is exceptional because its texture is deliberately neutral so that the
+runtime write has something to colour.
+
+## A speed pad is never recoloured, on any title
+
+`Speedup Pad`'s own class-table `update` slot is `Pad_UpdateRefreshTimer`
+(`0x089265f0`, PSP Pulse). It reads, in full,
+`pad->0x1a0 = max(0.0, pad->0x1a0 - dt)` - and nothing anywhere in the
+executable ever writes a `Speedup Pad`'s `+0x1a0` non-zero, so even that is
+inert. There is no colour write, no ready state and no cooldown state on the
+class.
+
+What the texture carries instead, measured on the discs:
+
+| Title | Entry | What it paints |
+| --- | --- | --- |
+| Pulse | `flicker1nonalpha_GLOW.tga`, over `whitenonalpha.tga` | the gold chevron |
+| Pure | `speedup_GLOW_KEY.tga` | the same, and see [`HANDOVER.md`](../../HANDOVER.md)'s alpha-test note |
+| HD / Fury | `ds_speedup_cs.gtf`, 1024x1024 | a grey plate with a **blue** chevron outline |
+
+Pulse's pad vertices carry a flat white (`255,255,255,255` on PSP, `253` on
+PS2 - the PS2 exporter's own quantisation) plus one dark warm accent
+(`34,34,17`), so the file's own vertex colour passes the texture through
+rather than tinting it. HD's carry a flat `0,0,0`, which on that title is not
+a tint at all - see below.
+
+## What Pulse's `Weapon Pad` does instead, and why it is the exception
+
+`WeaponPad_UpdateRefreshTimer` (`0x0892c034`) packs a flat `0x3f3f3f` grey into
+`pad+0x6c` while the pad is cooling down, and cross-fades that slot through a
+6-entry keyframe table at `0x08ac00c8` at three keys a second once the refresh
+timer reaches zero. `pad+0x6c` is a full colour *replacement*: `Pad_Bind` calls
+`Mesh_Bind` first, which builds the GE colour commands from the file's own
+materials, and the timer overwrites that slot every tick regardless.
+
+That is reproduced in `oag_render::weapon_pad`, which carries the table, and
+applied by `Drawable::tint_weapon_pads`. The pad's own texture,
+`weapon_under.tga`, is neutral, which is what makes a full replacement the
+right shape here and the wrong shape everywhere else on this page.
+
+## On Wipeout HD, `colour` is a light, not a tint
+
+**This is the trap, and it is worth stating plainly because it already cost
+one shipped regression.**
+
+On a PS3 `.rcsmodel` chunk, `GpuVertex::colour` holds HD's baked per-vertex
+light - the `f[TC1]` term the fragment program **adds** into its authored
+lighting sum before multiplying the albedo. `Model::vertex_colour_is_light`
+is the flag that says so, and `mesh.wgsl` reads it. Writing a palette entry
+into that slot is not "the wrong colour"; it is a different physical quantity.
+
+`12_sol_2` authors ten `Speedup Pad` and eight `Weapon Pad` chunks and every
+vertex of all eighteen carries `0,0,0` there - HD's "this chunk is lightmapped,
+it has no vertex light of its own" value. The colour is in the texture:
+
+| Entry | What it paints |
+| --- | --- |
+| `ds_speedup_cs.gtf` | a grey plate, blue chevron outline; most saturated texel `58,113,99` |
+| `ds_weaponup_cs.gtf` | a grey plate, **red** cross outline; most saturated texel `167,54,60` |
+
+So an HD weapon pad is red because the artists painted it red, not because
+anything cycles it.
+
+### The regression this replaced
+
+Between 2026-09-02 and 2026-09-03 this project drew a flat, invented blue over
+every speed pad on every title, and drew Pulse's recovered `Weapon Pad`
+keyframe cycle on HD's weapon pads too. Both were reported from play: PS2
+Pulse's speed pads had stopped being gold, and HD's weapon pads had started
+cycling through colours they never cycle through.
+
+The blue was documented at the time as a deliberate gameplay-clarity choice
+with no disc evidence behind it. It was also, on HD, only *visible* because
+the pad builder took both pad models off the authored lighting path on purpose
+- `vertex_colour_is_light` forced `false` and every pad vertex's `lit` forced
+`0.0`, which routes `mesh.wgsl` to its stand-in shading branch, where vertex
+colour does multiply. A pad lifted out of the circuit's own light rig and
+repainted flat is exactly the "plausible-looking stand-in" failure
+[`CLAUDE.md`](../../CLAUDE.md) names, and the tell was there in the code: the
+comment recording that the tint had been *invisible* until the lighting path
+was changed to make room for it.
+
+Both are gone. `oag_render::speedup_pad` is deleted rather than gated,
+`Drawable::tint_weapon_pads` returns early on any model with
+`vertex_colour_is_light`, and
+`crates/game/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
+pins all three facts against the disc.
+
+## The one open question
+
+**Does an HD weapon pad look different while it is cooling down?** Pulse's does
+- flat `0x3f3f3f` grey - and HD keeps Pulse's whole importer-per-class layout
+([`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md)), so a
+counterpart is plausible. Nothing has been read that says it exists.
+
+What is established so far:
+
+- `SpeedupPad_Importer.cpp` and `WeaponPad_Importer.cpp` are both real
+  translation units, sharing a `Pad_Importer.h` base, under
+  `Code/System/Render`. Their constructors are `0x002dd2a0`/`0x002dd340` and
+  `0x002e0168`/`0x002e0210`; both are below `0x32d5e0`, so Ghidra's TOC is the
+  right one for them and their data references can be read directly (see
+  [`memory.md`](../ghidra/functions/ps3-hdfury-eu/memory.md)).
+- `WeaponPad_Importer`'s constructor stores a 128-bit vector at `this+0x1b0`,
+  the same offset PSP's `Pad_Bind` writes its box minimum to.
+- **No colour write has been read on either class.** Nothing above is evidence
+  of one.
+
+Until it is read, an HD pad draws its authored texture under the circuit's own
+light rig in both states. That is a visible absence - a collected pad looks
+the same as an uncollected one - and it is deliberately preferred to inventing
+a cooldown grey, per [`CLAUDE.md`](../../CLAUDE.md)'s "never invent what the
+assets already author".

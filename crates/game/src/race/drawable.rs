@@ -374,6 +374,26 @@ impl Drawable {
     ///
     /// A no-op on a model with no weapon pads - every track and the sky -
     /// since `ready` is empty there.
+    ///
+    /// **Also a no-op on a Wipeout HD model**, and that gate is the point of
+    /// [`mesh::Model::vertex_colour_is_light`] being read here rather than a
+    /// title enum. Two independent reasons, either sufficient:
+    ///
+    /// 1. The keyframe table is *Pulse's*, read out of the PSP executable at
+    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). Nothing says HD's own
+    ///    `Weapon Pad` cycles at all, and the picture the disc paints says it
+    ///    does not: `ds_weaponup_cs.gtf` is a grey plate with a **red** cross
+    ///    on it, where Pulse's `weapon_under.tga` is neutral and takes its
+    ///    colour entirely from `pad+0x6c`.
+    /// 2. On an HD model `colour` is not a tint at all. It is the baked
+    ///    per-vertex light the fragment program **adds** inside its authored
+    ///    lighting sum - see `oag_render::mesh::rcs::emit`. Writing a palette
+    ///    entry there is not "the wrong colour", it is a different quantity.
+    ///
+    /// What HD does instead is unrecovered - see `docs/rendering/pads.md`. An
+    /// HD pad therefore draws its authored texture under the circuit's own
+    /// light rig, unarmed and armed alike, which is a visible absence rather
+    /// than an invented state.
     pub(super) fn tint_weapon_pads(
         &self,
         queue: &wgpu::Queue,
@@ -381,6 +401,9 @@ impl Drawable {
         ready: &[bool],
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
+        if self.model.vertex_colour_is_light {
+            return;
+        }
         self.recolour_nodes(
             queue,
             ready.iter().map(|&is_ready| {
@@ -390,21 +413,6 @@ impl Drawable {
                     oag_render::weapon_pad::COOLDOWN_COLOUR
                 }
             }),
-            tinted,
-        );
-    }
-
-    /// Recolours every speed pad's own geometry to
-    /// [`oag_render::speedup_pad::COLOUR`] - see that module's own doc
-    /// comment for why there is no state to switch between, unlike
-    /// [`Self::tint_weapon_pads`].
-    ///
-    /// A no-op on a model with no speed pads - every track and the sky.
-    pub(super) fn tint_speedup_pads(&self, queue: &wgpu::Queue, tinted: &mut Vec<mesh::GpuVertex>) {
-        let count = self.model.node_vertex_ranges.len();
-        self.recolour_nodes(
-            queue,
-            std::iter::repeat_n(oag_render::speedup_pad::COLOUR, count),
             tinted,
         );
     }
