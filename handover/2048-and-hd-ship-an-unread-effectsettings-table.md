@@ -1,4 +1,4 @@
-# Both titles' Zone grade escalates and draws now; four narrow render questions remain
+# Both titles' Zone grade escalates and draws now; three narrow render questions remain
 
 2026-08-28. Surfaced while chasing the 2048 Zone bugs this session also fixed
 (`oag_title::ZoneCraft::PlayerShip`, `oag_title::ZoneCircuit::SameCircuit` -
@@ -32,8 +32,10 @@ escalates on its own. **2026-08-31: HD/Fury's own trigger landed too**
 (`Hud_UpdateZoneSpeedClass` writes the per-craft stage field the blend reads;
 see the section below) **and its recolour is confirmed drawing**
 (`Environment_UpdateStageBlend` writes all seven Zone vec4s, `mesh.wgsl`
-draws the subset - twenty-fifth pass, `## Open` below). What remains is four
-narrow render questions, not a missing trigger; see Open and Next Steps.
+draws the subset - twenty-fifth pass, `## Open` below). **2026-09-01: the
+visualiser (`zoneTexVis`) closed too and is already implemented** -
+`oag_audio::spectrum` + `mesh.wgsl`. What remains is three narrow render
+questions, not a missing trigger; see Open and Next Steps.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -294,11 +296,21 @@ no longer disagree.
      wavefront** - a sphere expanding out of `zoneOrigin` that repaints the
      world with the new stage - so both are needed only once a transition can
      be in flight, which needs HD's stage trigger first.
-  3. **`zoneTexVis`, still.** Built at `0x003d8b40` from a static table at
-     `0x008c2d78`, so a port must generate it rather than load it - and the
-     loop's arithmetic does not close (nine passes of 64 texels, source running
-     `+1728` down to `+192`, destination advancing 256 bytes a pass, against a
-     256-entry table). Reconciling that is what the glow term waits on.
+  3. ~~`zoneTexVis`~~ **Closed and implemented, 2026-09-01 - the `0x003d8b40`
+     reading above was wrong.** That address builds an unrelated struct field
+     172 bytes away; `zoneTexVis` itself is a load-time zero-fill, rewritten
+     every frame by `Environment_UpdateStageBlend` as sixteen ten-segment bar
+     meters fed by `SoundSystem_GetBandLevel` - it is the original's
+     **audio-spectrum visualiser**, not a static ramp, confirmed three ways
+     against the shipped `zoneModeTrack*.gtf` art. `oag_audio::spectrum` now
+     supplies the same sixteen bands (the disc's own count, not chosen) and
+     `mesh.wgsl` draws them. What stays this project's own, permanently: the
+     band centre frequencies and the magnitude curve - the original's per-band
+     source is middleware (Sony SCREAM/MultiStream), not PPU code in this
+     executable. Full trace:
+     [zone-visualiser.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md),
+     twenty-sixth pass of
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
   4. **`zoneAnisoPalette` / `zoneAnisoPaletteOuter`.** Unchanged: no filling
      write located, and `zonemode.effectsettings` authors no
      `Scene.Aniso Power` on any of its fifteen stages either, so the rim term
@@ -780,11 +792,15 @@ no longer disagree.
   structural rather than a search failure - it sits at `+0x35a0`, the one gap
   in an otherwise unbroken run of vec4s this function writes - so the search
   should move outside `Environment_UpdateStageBlend` rather than deeper into
-  it. It is only needed once a stage transition can be in flight, which needs
-  HD's trigger first.
-- **Close `zoneTexVis`'s build loop** before drawing the visualiser glow. The
-  texel count does not match the table size, and a port that guesses at the
-  reconciliation would be inventing the equaliser rather than reproducing it.
+  it. **No longer blocked on HD's trigger** - `Hud_UpdateZoneSpeedClass`
+  writing the per-craft stage field closed that dependency 2026-08-31 (see
+  the section above); a stage transition can genuinely be in flight now, so
+  this is a live search, not a deferred one.
+- ~~Close `zoneTexVis`'s build loop~~ **Done, 2026-09-01** - see the
+  corresponding item in `## Open` above. The address named here
+  (`0x003d8b40`) turned out to build an unrelated field; `zoneTexVis` itself
+  is the audio-spectrum visualiser, and `oag_audio::spectrum` +
+  `mesh.wgsl` already implement it.
 
 - ~~Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130`~~
   **Done, 2026-08-31 - it is the shader parameter `fogColour`.** Both halves
