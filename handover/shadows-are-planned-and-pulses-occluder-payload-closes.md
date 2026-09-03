@@ -52,9 +52,15 @@
 
 ## Next Steps
 
+**The RE half of this thread (steps 1 and 4) is done.** Building anything on
+it - the setting, `blob`, Pulse's `original` tier - is a rendering task now,
+not a reverse-engineering one, and lives in its own thread:
+[shadow-setting-blob-and-pulses-original-tier-are.md](shadow-setting-blob-and-pulses-original-tier-are.md).
+What's left here is the RE work that thread doesn't need and isn't
+unblocked by it:
+
 - **Write a GXP fragment-program decoder** (`scripts/vita-gxp.py`, on the model of `scripts/ps3-microcode.py`). It unblocks `track_proximity_shadow_fp` and `NovaShipOcclusion`, and beyond shadow it is the only way to read any of 2048's 67 shader programs
-- ~~Open the Ghidra bridge and take the `0x3c3` reader in `psp-pulse-usa`~~ - **done 2026-09-03**: `Shadow_RenderOccluderVolume`, confidence 84, and its class registration (`DynamicShadowOccluder_RegisterClass`), confidence 84, both in [`shadow-occluder.md`](../docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md)
-- Steps 2 and 3 (the setting with `off`/`blob` live, then the blob pass) do not need step 4 and can run beside it
-- **Step 4 is closed.** What's left is optional: a PPSSPP watchpoint on `self+0x50` during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` from confidence 84 into the 85+ band, but nothing in step 5 needs it
-- **Step 5 (`original` on Pulse) is unblocked and is the next real next-step**: draw the 119 local-space hulls. Geometry, projection and the static dispatch link are all decoded now, so this is a rendering task, not a reverse-engineering one. Plumb it the way `blob` (step 3) plumbs into [`draw-order.md`](../docs/rendering/draw-order.md)'s queue; the `m` face-to-vertex index mapping's exact byte layout (see Open, above) is the one gap worth resolving before drawing rather than after
-- **Step 7 (`mapped`) will want `wgpu::Features::DEPTH_CLIP_CONTROL`.** Its caster pass needs to skip near/far depth clipping for casters that sit outside the light's clip volume but still belong in the shadow map - the standard fix for missing shadows from casters just outside the light frustum. Request it the way `TEXTURE_COMPRESSION_BC`/`TIMESTAMP_QUERY` already are, probed and intersected in `crates/render::mesh_render::optional_features` rather than required - though unlike those two, it's supported on all three backends this project actually requests (`crates/game::adapter::BACKENDS` is Vulkan/Metal/DX12 only), so the probe is a formality here, not a real fallback path. Not needed before step 7 starts
+- **HD's `LiveStencilShadow`/`shadow.stencilvolume` path** needs the same kind of Ghidra pass this thread just gave Pulse's `0x3c3`, done on the HD binary specifically - not attempted here
+- Once the GXP decoder exists: **what `track_proximity_shadow_vp`/`_fp` actually does**, **where `Lighting.ShadowLight direction` is authored** (`.envsettings` is the leading guess), and **whether 2048's directional bake is a radiosity-normal basis or a single dominant direction**
+- **A PPSSPP watchpoint on `self+0x50`** during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` and `DynamicShadowOccluder_RegisterClass` past confidence 84 - optional, not blocking anything
+- **What discriminates the padded-bbox field's two exception populations** (see above) - file/build-version is the leading guess, unchecked
