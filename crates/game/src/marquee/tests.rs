@@ -11,8 +11,9 @@ fn measure(text: &str) -> f32 {
 }
 
 fn fixture(value: &str) -> Menu {
-    let definition = crate::menu::Definition::parse(&format!(
-        r#"
+    let definition = crate::menu::Definition::parse(
+        &format!(
+            r#"
         version = 1
         root = "main"
         [[page]]
@@ -23,7 +24,9 @@ fn fixture(value: &str) -> Menu {
         setting = "graphics.renderer"
         values = ["{value}"]
         "#
-    ))
+        ),
+        &crate::language::StringTable::default(),
+    )
     .expect("parse");
     Menu::new(definition)
 }
@@ -37,8 +40,9 @@ fn skin() -> Skin {
 /// on hit, where the cursor sits on a nearer row while the adapter
 /// name's own row stays broken.
 fn unfocused_fixture(value: &str) -> Menu {
-    let definition = crate::menu::Definition::parse(&format!(
-        r#"
+    let definition = crate::menu::Definition::parse(
+        &format!(
+            r#"
         version = 1
         root = "main"
         [[page]]
@@ -54,7 +58,9 @@ fn unfocused_fixture(value: &str) -> Menu {
         setting = "graphics.renderer"
         values = ["{value}"]
         "#
-    ))
+        ),
+        &crate::language::StringTable::default(),
+    )
     .expect("parse");
     Menu::new(definition)
 }

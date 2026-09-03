@@ -1652,7 +1652,8 @@ pub fn load_strings(
         .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
     {
         Ok(xml) => {
-            let table = StringTable::from_xml(&xml);
+            let mut table = StringTable::from_xml(&xml);
+            crate::strings::overlay(&mut table, &language.name, report);
             if table.is_empty() {
                 report.push(format!("{} names no string table", language.name));
             } else {

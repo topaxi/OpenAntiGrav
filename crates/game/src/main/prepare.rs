@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use log::info;
 
 use oag_game::frontend;
-use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings};
+use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings, strings};
 use oag_physics::SpeedClass;
 
 use crate::args::{resolve_difficulty, resolve_scheme};
@@ -313,20 +313,23 @@ impl Pending {
 ///
 /// Here rather than in `main`'s body only because it is the last thing between
 /// the command line and a source; it reads no disc and depends on nothing this
-/// module produces.
+/// module produces. `language` resolves a row's `string_id`, when it names
+/// one - see `crate::strings::project_table` for why this, and not the
+/// disc's own `StringTable`, is what a caller this early can ever have.
 ///
 /// # Errors
 ///
 /// A `--menu` file that will not read, or a definition that will not parse.
-pub(crate) fn definition(cli: &Cli) -> Result<menu::Definition> {
+pub(crate) fn definition(cli: &Cli, language: Option<&str>) -> Result<menu::Definition> {
+    let strings = strings::project_table(language);
     match cli.menu.as_deref() {
         Some(path) => {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("reading {}", path.display()))?;
-            menu::Definition::parse(&text).with_context(|| format!("parsing {}", path.display()))
+            menu::Definition::parse(&text, &strings)
+                .with_context(|| format!("parsing {}", path.display()))
         }
-        None => {
-            menu::Definition::parse(menu::BUILT_IN).context("parsing the built-in menu definition")
-        }
+        None => menu::Definition::parse(menu::BUILT_IN, &strings)
+            .context("parsing the built-in menu definition"),
     }
 }

@@ -284,8 +284,16 @@ can have a title behind it, and every screen but this one can.
   only here. `keys::bound_keys` asks `map_key` itself about a candidate set
   rather than keeping a second table, so what the page shows cannot drift from
   what the game does.
-- **Localised labels.** Row labels are literal text. `string_id` is accepted and
-  not read, so adding localisation later is not a format change.
+- **Localised labels.** Row labels are literal text, and `string_id` **is**
+  now read: `menu::definition::resolve` looks it up in whatever `StringTable`
+  its caller passes and shows the answer in place of `label`. What is missing
+  is content, not mechanism - `assets/ui/menu.toml`'s own rows below still
+  don't name a `string_id`, since nothing has translated them yet, so
+  `assets/ui/strings/english.toml` stays empty. The table a caller can pass
+  differs by call site: `prepare::definition` (the `--menu`/built-in path)
+  passes a project-only one from `oag_game::strings::project_table`, because
+  it runs before any disc is open; `capture::menu_page` passes the real,
+  disc-merged one, because it draws a page of an already-open title.
 - **Applying a language without relaunching.** The LANGUAGE row writes the
   setting, and the string table it selects is loaded once at boot; the change
   therefore lands on the next launch. Anisotropic filtering is the same, and is

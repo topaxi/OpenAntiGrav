@@ -168,7 +168,8 @@ setting = "a.limit"
 disabled_by = { setting = "a.nothing", value = "on" }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
     assert!(e.to_string().contains("a.nothing"), "{e}");
 }
@@ -195,7 +196,8 @@ setting = "a.limit"
 disabled_by = { setting = "a.vsync", value = "onn" }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
     assert!(e.to_string().contains("onn"), "{e}");
     assert!(e.to_string().contains("off, on"), "{e}");
@@ -217,7 +219,8 @@ setting = "a.limit"
 disabled_by = { setting = "a.limit", value = 60 }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
 }
 
@@ -239,7 +242,8 @@ kind = "back"
 label = "BACK"
 disabled_by = { setting = "a.vsync", value = true }
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
     assert!(e.to_string().contains("disabled_by"), "{e}");
 }
@@ -502,7 +506,8 @@ setting = "a.renderer"
 values = ["one", "two"]
 restart_required = ""
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
     assert!(e.to_string().contains("restart_required"), "{e}");
 }
@@ -521,13 +526,18 @@ kind = "back"
 label = "BACK"
 restart_required = "RESTART THE GAME"
 "#;
-    let e = Definition::parse(text).expect_err("must not load");
+    let e = Definition::parse(text, &crate::language::StringTable::default())
+        .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
 }
 
 #[test]
 fn a_version_this_build_does_not_know_is_refused() {
-    let error = Definition::parse("version = 99\nroot = \"main\"").expect_err("refused");
+    let error = Definition::parse(
+        "version = 99\nroot = \"main\"",
+        &crate::language::StringTable::default(),
+    )
+    .expect_err("refused");
     assert!(matches!(error, Error::Version { found: 99 }), "{error}");
 }
 
@@ -544,6 +554,7 @@ fn a_dangling_target_is_refused() {
         label = "NOWHERE"
         target = "does_not_exist"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(matches!(error, Error::NoSuchPage { .. }), "{error}");
@@ -562,6 +573,7 @@ fn an_unknown_action_is_refused_and_says_what_is_known() {
         label = "DO IT"
         action = "make_tea"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect_err("refused");
     let message = error.to_string();
@@ -589,6 +601,7 @@ fn a_page_nothing_links_to_is_refused() {
         kind = "back"
         label = "BACK"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(

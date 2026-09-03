@@ -1,0 +1,19 @@
+# Project-owned English strings, overlaid onto the disc's own string table by
+# `crate::strings::overlay`.
+#
+# Two uses share this file and this id space:
+#
+#   - overriding a disc idstring an existing widget already resolves (a
+#     wrong or missing entry the project cannot fix by shipping different
+#     disc data - see ADR-0006);
+#   - giving a translatable home to text this project invented, once
+#     `assets/ui/menu.toml`'s `string_id`, `oag_race::Mode::fallback_label`,
+#     `crates/game/src/loading/wording.rs` and `crates/game/src/main/hints.rs`
+#     are wired to look one up instead of holding a literal `&str`. None of
+#     the four is wired yet - see
+#     `handover/invented-ui-text-has-no-translation-and-the.md`.
+#
+# Empty until the second kind of entry gets a caller: an id with no reader
+# would be a promise this file cannot keep.
+
+[strings]
