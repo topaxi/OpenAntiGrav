@@ -803,7 +803,7 @@ impl Session {
                 // frame's timing and would otherwise drive the scale to the
                 // floor and take seconds to climb back.
                 if let Some(extent) = self.drs.record(reading.seconds, drs_limits) {
-                    debug!(
+                    trace!(
                         "dynamic resolution: {}x{} ({:.0}% of {}x{})",
                         extent.0,
                         extent.1,
