@@ -436,6 +436,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Team model and skin variants are declared and documented; the `.dat` payload and the drawing are both still open](handover/team-model-and-skin-variants-are-declared-and.md)
 - [The particle effects are played from the disc, and most of them have no recovered trigger](handover/the-particle-effects-are-played-from-the-disc.md)
 - [The PS2's engine flare plays and reads as nothing on screen](handover/the-ps2s-engine-flare-plays-and-reads-as.md)
+- [The race camera's FOV is fitted to the PSP's own aspect on every title, and the PS2's own in-game widening option has no counterpart](handover/the-race-cameras-fov-is-fitted-to-the-psps.md)
 - [The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual](handover/the-ais-six-stage-plan-line-follower-to.md)
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/the-ai-was-never-the-problem-four-contact.md)
 - [A global reached through `$gp` has an instruction displacement unrelated to its address](handover/a-global-reached-through-gp-has-an-instruction.md)
