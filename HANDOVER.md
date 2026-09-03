@@ -632,6 +632,8 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**The `ghidra-mcp` bridge is one shared instance across every concurrent session, and `switch_program` sets a global "current program" pointer any of them can move out from under you.** 2026-09-03, reading `ps3-hdfury-eu`'s `TrackSelection_Screen` while a second, independent thread (`2048-and-hd-ship-an-unread-effectsettings-table.md`) was doing overlapping Ghidra work the same week. Three `rename_function_by_address` calls with no explicit `program` argument reported success; a follow-up `get_current_program_info` showed the active program had silently become a different title's binary mid-session, and the three renames had landed there instead - `get_function_by_address` back on `ps3-hdfury-eu` still showed plain `.opd.FUN_xxxxxxxx`. Fixed by redoing all three with an explicit `program: "/ps3-hdfury-eu/EBOOT.elf"` and re-verifying the same way. **Pass `program` explicitly on every mutating call** (`rename_*`, `set_*`, `create_*`, not just `switch_program`), and re-verify with an explicit-`program` read immediately after any rename that matters - a `switch_program` done once at the start of a session is not durable if another agent is driving the same instance. Full write-up: `handover-scratch/hd-zone-tracklist-re-notes.md` from that session (untracked, may not survive - this paragraph is the durable copy).
+
 **Ghidra's decompile of a PS3 HD/Fury function above the `0x32d5e0` TOC break
 names the wrong strings, disc-wide, not just for one function.** Read closing
 the engine-shader-parameters thread, 2026-08-24 originally. `0x003f1300`
