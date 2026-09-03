@@ -1929,6 +1929,97 @@ literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
 that specific value keeps reading as `SpecularPower` patched at draw time
 (finding 1 above) rather than as a sixth real constant.
 
+**`200`/`250`/`260`/`35` traced 2026-09-03, and the trace favours "real dot
+product" over "Fresnel/falloff sharing the idiom's shape".** `Program::specular_exponent_dp3()`
+now names the winning chain's own `DP3` (`crates/formats/src/rcsmaterial/fragment.rs`),
+so `crates/render/examples/hd_specular_unresolved_trace.rs` can print its two
+operands rather than only the chain's value - the piece the paragraph above
+left unread. Two things had to be fixed to look at the right population first:
+`hd_specular_patch_census.rs`'s own 16-circuit sweep resolves fragment blocks
+through a circuit's *model-variant* table, and that population contains
+**none** of `5`/`10`/`40`/`200`/`250`/`260`/`35`/`26.156` at all, only
+`0`/`32`/`300` - so a caller has to sweep every `.rcsmaterial` file directly,
+the way the original count did, or these four values are invisible. Doing
+that (`oag_assets::psarc::Archive` over all seven `PSARC`s, `1,632` materials
+- agreeing with `rcsmaterial.md`'s own disc-wide count) reproduces the
+population exactly: `260` 48, `200` 16, `250` 12, `35` 8, alongside `32` 2,764,
+`0` 2,173, `5` 841, `10` 253, `300` 18, `40` 8.
+
+All 84 occurrences of the four trace to **eight distinct files**: the ship's
+own `nitro_body_new.rcsmaterial`/`nitro_perspex_new.rcsmaterial` (`260`),
+`zone_death_panel.rcsmaterial`/`zone_death_electricity.rcsmaterial` (`200`,
+also ship materials - both are Zone-mode hazard props mounted *on* a craft,
+not track geometry), the two weapon materials `hd_bomb.rcsmaterial`/
+`hd_mine.rcsmaterial` (`35`), and `05_ubermall`'s inflatable prop
+`materials/martin_inflatable2.rcsmaterial` (`250`, present byte-identically
+in both `DATA02`'s base copy and `DATA03`'s DLC copy).
+
+**Checked against the Zone-rim hypothesis directly, since `5` and `10` turned
+out to be entirely that.** Declaring one of the sixteen `zone*` parameters
+`renderer.md`'s own name listing carries (`zoneTexInner`, `zoneEffectOuter`,
+etc., hashed with `rcsmaterial::name_hash` rather than trusted by name) is
+true for only 4 of the 84 - both DLC and base copies of one of
+`martin_inflatable2`'s six variants - and `false` for the rest, including
+both `zone_death_*` ship materials despite the name. So unlike `5`/`10`,
+these four are **not** primarily a Zone-rim artifact; the name coincidence on
+`zone_death_*` is exactly that, a coincidence - the material is used during
+Zone mode, not gated by a Zone shader parameter.
+
+**Every one of the eight files' winning `DP3` reads two operands that are
+each themselves the tail of a `ADD` (sum two vectors) → `DP3` (self-dot,
+squared length) → normalize-scale chain** - the identical shape
+`renderer.md`'s own ship worked example already reads as the half-vector
+construction (`@0x17 ADD R2.xzw, normalize(f[TC1]), {const} <- V + L, the
+half vector` above). One representative transcript, `zone_death_panel.rcsmaterial`:
+
+```text
+[ 13] ??? R2, R2.xyzw, R0.wwww          <- normalize R2 (mul by 1/|R2|)
+[ 14] DP3_SAT R2, R0.xyzw, R2.xyzw      <- an earlier, unrelated dot
+[ 15] DP3 R1, R0.xyzw, R3.xyzw
+[ 17] DP3 R0, R3.xyzw, R3.xyzw          <- dot(R3, R3), |R3|^2
+[ 18] ADD R3, R1.xyzw, R3.xyzw          <- R1 + R3, a vector sum
+[ 19] DP3 R2, R3.xyzw, R3.xyzw          <- dot(sum, sum), |sum|^2
+[ 20] ??? R3, R3.xyzw, R2.yyyy          <- normalize sum (mul by 1/|sum|)
+[ 21] DP3_SAT R2, R0.xyzw, R3.xyzw      <- the winning DP3: dot(R0, normalize(sum))
+```
+
+Neither operand of the winning `DP3` is a bare, already-resident vector fed
+straight into the dot the way a Fresnel `dot(N, V)` term would read - both
+sides carry their own normalize tail, matching the two-normalized-vectors
+shape a real light-vector dot (`N.H`, or `N.L`) needs and a single-vector
+falloff curve does not. The same shape recurs on all eight files (`hd_bomb`,
+`hd_mine`, `nitro_body_new`, `nitro_perspex_new`, `martin_inflatable2`, both
+`zone_death_*` files). **This favours "real dot product" over "another `pow`
+sharing the idiom's shape" for all four values**, though it does not close the
+question outright: what feeds the sum's own two operands (a light direction,
+the view vector, or something else) is not traced past this one `ADD`, so
+which specific term each is (specular half-vector vs. a differently-shaped
+lit term) stays open.
+
+**A new, separate concern surfaced while comparing against a confirmed value,
+and is recorded rather than chased further here.** One `32`-resolving block
+in `01_normal_diffuse_specularonalpha.rcsmaterial` has its winning `DP3` read
+an operand last written by `EX2` - an exponential's output, which is not a
+sensible operand for a literal light-vector dot. That block sits in the
+*already-wired* population, so the three gates `specular_exponent()` applies
+(saturated-`DP3`-fed `LG2`, non-`log2(e)` constant, reaches the output) do
+not guarantee the winning `DP3` computes a geometric dot at all, only that the
+instruction shape matches - the same caveat the `26.156`/`1.4426949` scope
+already carried, now observed on a value this project trusts. Not
+investigated further: closing it would mean auditing the `32` bucket's own
+2,764 occurrences the way this pass audited `200`/`250`/`260`/`35`'s 84, which
+is out of this pass's scope.
+
+**Left wired, not retracted.** The evidence moves in the direction of
+"real", not away from it, and per this project's own rule a reading that
+survives every discriminator found so far stays wired rather than held back a
+second time. Confidence 78 (up from the base method's 80 only insofar as this
+pass adds a structural corroboration - surviving the Zone-rim check, matching
+the confirmed half-vector shape on all eight files - while the un-traced
+operand provenance and the fresh `32`-bucket anomaly above keep it from
+climbing higher): decompilation-only, consistent across every occurrence
+found, not runtime-verified.
+
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**
 `fragment::Program::patches` ports it into Rust from
