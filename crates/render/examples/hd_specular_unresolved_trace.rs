@@ -37,20 +37,20 @@
 //! and `Normalize` - separate from the noise.
 //!
 //! **A calibration against the one occurrence already read by hand was
-//! attempted and does not hold up - see
-//! `crates/render/examples/hd_specular_calibration_check.rs`.**
-//! `renderer.md`'s own worked example names the ship's `pow(N.H, 40)` block
-//! as `H = normalize(V + L)` at file offset `0x3a00` in
-//! `detonator_ship_rich_iridescent.rcsmaterial`. Decoding that exact offset
-//! finds a real `SHO` block whose `specular_exponent()` is `None` - not the
-//! documented chain - and neither of the two blocks in that same file that
-//! *do* resolve to `40.0` has an `LG2` anywhere near the doc's own cited
-//! `@0x40`/`@0x43`/`@0x46` byte addresses once walked instruction by
-//! instruction. So `(Normalize, Sum)` on *a* `40.0` block in that file is
-//! not confirmed to be *the* documented block's own result, and the
-//! `Sum`/`Normalize` split below is raw structural data only - not checked
-//! against a known-real case. See [`Evidence`]'s own doc comment for the
-//! numbers and `renderer.md`'s own retraction of the calibration claim.
+//! attempted, and the block is confirmed real - but `specular_exponent()`
+//! itself never resolves it, so this tool never sees it either.** See
+//! `crates/render/examples/hd_specular_calibration_check.rs` and
+//! `renderer.md`'s "Ships have no Lambert diffuse either" for the full
+//! decode: `detonator_ship_rich_iridescent.rcsmaterial` at file offset
+//! `0x3a00` matches the doc's worked `pow(N.H, 40)` example exactly once
+//! its `@0xNN` addresses are read as `byte_position / 16`, but the `LG2`
+//! there is fed by an unnamed `0x3b` instruction, not a literal `DP3` -
+//! `specular_exponent()`'s own gate requires the latter, so it returns
+//! `None` on this block. **The eight `40.0` occurrences this tool's own
+//! sweep finds and the one hand-confirmed case are therefore disjoint
+//! populations** - the `Sum`/`Normalize` split below was never calibrated
+//! against a known-real case, for exactly this reason. See [`Evidence`]'s
+//! own doc comment for the numbers.
 //!
 //! **Unnamed opcodes are printed as `op3B`/`op3C`/`op3D`, never guessed at.**
 //! `Instruction::name()` returns `None` for these three specifically because
@@ -188,13 +188,11 @@ fn last_writer(program: &Program, at: usize, reg: (u8, bool), read: [u8; 4]) -> 
 /// What tracing one `DP3` operand back found - see [`classify`]. Over all 84
 /// `200`/`250`/`260`/`35` occurrences (168 operands, all of them registers):
 /// `Sum` 82, `Normalize` 58, `Neither` 28, `NoSingleWriter` 0. **Reported as
-/// raw structural data, not as evidence of meaning** - a `(Normalize, Sum)`
-/// result on *a* `40.0`-resolving block in `detonator_ship_rich_iridescent
-/// .rcsmaterial` was, for one draft of this module, taken as calibration
-/// against `renderer.md`'s documented `pow(N.H, 40)` half-vector read;
-/// checking the actual file offset that reading names shows it is not the
-/// same block (this module's own doc comment, and
-/// `hd_specular_calibration_check.rs`), so that calibration does not hold.
+/// raw structural data, not as evidence of meaning.** `specular_exponent()`
+/// never resolves the one block confirmed by hand-reading (this module's own
+/// doc comment) - a false negative in its own gate, not an absent chain -
+/// so nothing in this tool's `40.0` population, and therefore no `Sum`/
+/// `Normalize` result here, has been checked against a known-real case.
 /// `Sum` still names a real, lane-correct mechanical shape -
 /// `normalize(ADD of two distinct sources)` - it is only the claim that the
 /// shape means "half-vector" that is unconfirmed.

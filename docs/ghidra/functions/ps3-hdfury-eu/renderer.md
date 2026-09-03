@@ -1999,36 +1999,59 @@ masked SIMD ALU generally, not a claim about what any specific unnamed
 opcode computes - moves the tally again, sharply: `NoSingleWriter` drops to
 **0**.
 
-**Draft 4 computed `Sum` 82, `Normalize` 58, `Neither` 28 of 168 operands and
-called that "calibrated against the one occurrence read by hand" - checked
-directly, that calibration does not hold, and the claim is retracted here
-rather than corrected quietly.** The check: locate the exact block
-`renderer.md`'s own worked example reads, `detonator_ship_rich_iridescent
-.rcsmaterial` "block #2 (`0x3a00`)", and confirm the classifier's
-`(Normalize, Sum)` result is *that* block's, not a different one in the same
-file that happens to also resolve to `40.0`. It is not. `Program::parse` at
-file offset `0x3a00` decodes cleanly (a real `SHO` block) but
-`specular_exponent()` on it returns `None` - no `pow(N.H, e)` chain at all -
-and neither of the two blocks in this file that *do* resolve to `40.0`
-(`0x57e0`, ordinal 51; `0x7340`, ordinal 43) has an `LG2` anywhere near
-`renderer.md`'s own cited `@0x40`/`@0x43`/`@0x46` byte addresses once decoded
-and walked instruction-by-instruction (`crates/render/examples
-/hd_specular_calibration_check.rs`, written to check exactly this). Either
-this page's own `@0xNN` addressing is not byte offsets from this parser's
-code-start convention, or the worked example was read against a different
-file or a stale project state - unresolved, and not guessed at here.
+**A fifth check reverses the previous paragraph's own "the addresses don't
+match" claim - `0x3a00` is confirmed as exactly the documented block, and
+finding that also names the real reason `specular_exponent()` misses it.**
+Decoding `0x3a00` and walking every instruction with its byte position
+(`crates/render/examples/hd_specular_calibration_check.rs`) shows the
+doc's own `@0xNN` addresses are paragraph counts (`byte_position / 16`, not
+raw byte offsets - the earlier paragraph's check used byte offsets and so
+never found the match) - and under that convention, six independent details
+land exactly where `renderer.md`'s worked example says: `@0x13` is a `DP3`
+writing `R0.y`, saturated, against `{const}` (`N.L`); `@0x17` is an `ADD`
+writing `R2.xzw` against `{const}` (the unusual three-lane mask is a
+fingerprint, and it matches); `@0x40`/`@0x43`/`@0x46` are an `LG2`, a `MUL`
+whose constant is literally `[40.0, 0, 0, 0]`, and an `EX2`. Address, lane,
+saturation and the literal `40` all agree - this is the block.
 
-**So the `Sum`/`Normalize`/`Neither` tally stands only as raw, lane-correct
-structural data, not as anything checked against a known-real case.** `82`
-of `168` operands trace to `normalize(ADD of two distinct sources)` and `58`
-to a single-vector normalize with no sum found before it; `28` trace to
-neither shape. That the mechanical trace itself is now lane-aware and
-clobber-checked (see the three prior drafts above) is solid; that `Sum`
-specifically means "half-vector" is not established by anything in this
-pass - it was asserted on an unverified block match and that assertion does
-not survive checking it. One transcript, `zone_death_panel.rcsmaterial`,
-kept as an example of the mechanical shape rather than as evidence of
-meaning:
+**So why does `specular_exponent()` return `None` on it?** The `LG2` at
+`@0x40` reads register `R0`, and its most recent full writer is `@0x3f`
+(paragraph), an **unnamed `0x3b` instruction**, saturated, self-referential
+(`R0.w = f(R0, R0)`) - the same "normalize tail" shape this page's operand
+work has read throughout. `Program::specular_exponent()`'s own gate
+(`dp3_feeding`) requires that writer to be a literally-named `DP3`
+(`insn.name() == Some("DP3")`), and `0x3b` is not in the opcode table this
+project has named. **That gate is a false negative on at least this one
+confirmed instance**: the saturate condition holds, the shape holds, only
+the mnemonic check fails, because the hardware idiom this material actually
+uses feeds its `LG2` from the fused normalize instruction rather than from a
+bare `DP3` directly. Not a claim about a measured rate across the disc -
+one instance, confirmed by decode, is what this pass establishes.
+
+**One thing this does *not* call into question: the ship's `pow(N.H, 40)`
+reading itself stands.** `@0x24`'s raw operands are `(R2, R2)` - a self-dot,
+computing `|half|²` as part of normalizing the accumulator `@0x17` built,
+not literally "`normalize(half)` dotted against `normal`" as the transcript's
+own prose reads. That is not a new error: the same transcript already names
+`@0x17`'s raw register operand `R2` as `normalize(f[TC1])`, which is the
+*value* `R2` holds by that point in the block, not its literal operand
+either. **The transcript names semantic values, not raw operands** - read
+that way, `@0x24` self-dotting the half-vector accumulator to normalize it
+is exactly what the surrounding prose describes, and re-deriving the N.H
+cross-dot itself is a separate piece of work, not something this check
+unsettles.
+
+**Consequence for the operand-shape work: the eight wired `40.0`
+occurrences and this one hand-confirmed case are disjoint populations.**
+`hd_specular_unresolved_trace.rs`'s "calibration" ran against whichever
+block in this file `specular_exponent()` *does* accept (`0x57e0`/`0x7340`) -
+neither of which is `0x3a00`, the one actually read by hand - so it was
+never calibrated against a known-real case at all, for exactly this reason
+rather than the vague one the previous paragraph gave. The
+`Sum`/`Normalize`/`Neither` tally (`82`/`58`/`28` of 168) stands as raw,
+lane-correct structural data with no calibration - unchanged in number, now
+correctly explained. One transcript, `zone_death_panel.rcsmaterial`, kept as
+an example of the mechanical shape rather than as evidence of meaning:
 
 ```text
 [13] op3B R2.xyz, R2.xyzw, R0.wwww
@@ -2045,15 +2068,18 @@ meaning:
 
 **Left wired, not retracted - on the population and Zone-exclusion findings
 alone.** Confidence stays at **80**, unmoved: those two hold up and neither
-argues these four values are wrong. The operand-shape work across all four
-drafts settles nothing about meaning either way - it corrected real bugs in
-its own method three times over and then found its one calibration point
-unconfirmed, which is a result about the method, not about `200`/`250`/`260`/
-`35`. What is left open, genuinely, not "mostly": reconciling this page's
-`@0xNN` addresses with a real decode of the block they name (the prerequisite
-for any future calibration attempt), what feeds a `Sum` chain's own two `ADD`
-operands, and whether `read_lanes`'s elementwise-by-mask assumption holds for
-the unnamed opcode (`0x3b`) this idiom uses throughout.
+argues these four values are wrong. The operand-shape work across five
+drafts settles nothing about meaning for `200`/`250`/`260`/`35` either way -
+it corrected real bugs in its own method three times over, confirmed its
+attempted calibration block was the wrong one, and then, checking *why*,
+found a genuine, confirmed false negative in `specular_exponent()` itself
+(the `0x3b`-fed chain above) that is worth fixing on its own merits,
+independent of this thread. What is left open: whether `Program::dp3_feeding`
+should accept `0x3b` as well as `DP3` (raising it from a hypothesis to a
+fix needs more than the one instance found here), what feeds a `Sum`
+chain's own two `ADD` operands, and re-deriving the ship's `N.H` cross-dot
+itself now that `@0x24` is read correctly as the accumulator's own
+normalize step rather than the cross-dot.
 
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**
