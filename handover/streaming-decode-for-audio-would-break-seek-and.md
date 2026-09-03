@@ -105,6 +105,37 @@ synchronous `load_track`/`fetch`/`fetch_indexed` call off the thread that
 cannot afford to block, keep the buffer whole. The pattern to copy is
 `RaceMusicWorker` itself, not a new mechanism.
 
+## 2026-09-03: `set_music_source`'s freeze is fixed
+
+The actual player-facing freeze (previous section) is closed.
+`set_menu_music_source`/`set_race_music_source` (moved to `race_music.rs`,
+beside `MusicFetchWorker` - renamed from `RaceMusicWorker`, now generic over
+a `label` so a debugger still says which caller is waiting on it) still
+apply an already-read release on the spot - that path is pure memory, no
+I/O - but a fresh one now spawns a `MusicFetchWorker` and returns
+immediately. `Audio::tick` polls the pending switch
+(`Audio::source_switch`) and applies it once it lands, reading the live
+playhead **at that moment** rather than when the fetch was first asked for,
+since a worker can now take several ticks to land while the old track keeps
+sounding. A second request before the first lands drops the stale one,
+including a press back to the platform already playing - new race-shaped
+territory the old synchronous row could never reach at all, since every
+press used to block until it finished.
+
+Verified two ways:
+
+- Three synthetic unit tests in `crates/game/src/audio/tests/source_switch.rs`
+  (fake disc paths, no game data needed): the call never blocks, a failed
+  fetch leaves state untouched, and a press back to the current release
+  drops a switch still in flight.
+- `crates/game/examples/audio_source_switch_probe.rs`, against real discs
+  (`pulse-psp-usa.chd`/`pulse-ps2-eu.chd`) and a real `ffmpeg` decode: the
+  `set_music_source` call itself measures **0.0 ms**, and the playhead keeps
+  advancing through the whole 3-second window the old synchronous version
+  would have spent blocked on the PS2's cold 2.0 s decode.
+
+`just` clean; full workspace test 2,831 passed.
+
 ## Open
 
 - Whether progressive decode is ever worth it depends on a constraint that
@@ -113,27 +144,27 @@ cannot afford to block, keep the buffer whole. The pattern to copy is
   desktop this project has targeted so far, and is an open question on the
   handheld targets the project has not yet chosen. Revisit once a specific
   handheld's memory budget is known - not before, and not as a blocker to
-  fixing the freeze below, which streaming would not fix any faster than a
-  worker thread does.
+  anything above, which streaming would not have fixed any faster than a
+  worker thread did.
 - If progressive decode is later worth doing anyway, decide seek's fate
   explicitly first - keep it and progressively fill (no memory win, `Sound`
   stays a `Vec`) or drop it to checkpoint-based seek (memory win, breaks
   `race_position` scrubbing and pause/resume as currently built) - rather
   than let a half-considered ring buffer answer it by accident.
+- `Audio::start_music`'s own first-boot fetch is the same shape of
+  synchronous decode `set_music_source` used to be, unfixed - likely lower
+  priority since it runs once per boot rather than on a repeatable player
+  action, and is plausibly already masked by a loading screen, but that is
+  an assumption nobody has checked against a real boot.
 
 ## Next Steps
 
-1. **Fix `set_music_source`'s freeze first** - it is the one a player can
-   actually trigger today. Give it the `RaceMusicWorker` treatment: spawn
-   the fetch on a worker thread, apply the result on a later tick once it
-   joins, and decide what plays in the gap (the old track keeps sounding
-   until the switch lands, most likely - silence would be worse). Needs
-   `set_menu_music_source` and `set_race_music_source` both covered, since
-   `set_music_source` dispatches to either depending on `race_voice`.
-2. Cover `advance_race_track`'s fallback path the same way if a skip control
-   is ever added - right now it is unreachable by a player, so this is
-   scoping for later, not a bug to fix today.
-3. Do not build progressive/streaming decode without a stated handheld
+1. Cover `advance_race_track`'s fallback path the same way if a skip
+   control is ever added - right now it is unreachable by a player, so this
+   is scoping for later, not a bug to fix today.
+2. Do not build progressive/streaming decode without a stated handheld
    memory budget to measure against - the desktop number above already
-   answers "is this a problem today" (no) and streaming would not make step
-   1 or 2 land any sooner.
+   answers "is this a problem today" (no).
+3. Check whether `Audio::start_music`'s first-boot decode is actually
+   masked by a loading screen or genuinely visible as a stall - if the
+   latter, it is the same fix shape as `set_music_source`'s, not a new one.
