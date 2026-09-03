@@ -164,6 +164,7 @@ impl Pass {
                 | Self::LumaPyramid
                 | Self::ShadingChangePyramid
                 | Self::ShadingChange
+                | Self::PrepareReactivity
         )
     }
 }
@@ -279,6 +280,21 @@ fn level_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
     }
 }
 
+/// A read-only storage buffer at `binding` - the atomic scatter target again,
+/// seen by the passes that consume rather than write it.
+fn read_buffer_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
 /// A read-write storage buffer at `binding` - the atomic scatter target, and
 /// the one resource in this port that is not a texture.
 fn atomic_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -342,6 +358,8 @@ pub struct Fsr3 {
     shading_change_pyramid_reduce: wgpu::ComputePipeline,
     shading_change_layout: wgpu::BindGroupLayout,
     shading_change: wgpu::ComputePipeline,
+    prepare_reactivity_layout: wgpu::BindGroupLayout,
+    prepare_reactivity: wgpu::ComputePipeline,
     /// One uniform per pyramid level, holding that level's source extent. See
     /// [`level_entry`]; written once, because the extents are a function of the
     /// allocation rather than of the frame.
@@ -463,6 +481,21 @@ impl Fsr3 {
                     store_entry(1, wgpu::TextureFormat::Rgba8Unorm),
                 ],
             });
+        let prepare_reactivity_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 prepare reactivity"),
+                entries: &[
+                    load_entry(0),
+                    load_entry(1),
+                    read_buffer_entry(2),
+                    load_entry(3),
+                    sample_entry(4),
+                    sample_entry(5),
+                    store_entry(6, wgpu::TextureFormat::Rgba8Unorm),
+                    store_entry(7, wgpu::TextureFormat::Rgba8Unorm),
+                    store_entry(8, wgpu::TextureFormat::Rgba8Unorm),
+                ],
+            });
 
         // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
         // extent, so these never have to be rewritten - see the shader's
@@ -544,6 +577,12 @@ impl Fsr3 {
             "cs_shading_change",
             &shading_change_layout,
         );
+        let prepare_reactivity = pipeline(
+            "fsr3 prepare reactivity",
+            include_str!("fsr3/prepare_reactivity.wgsl"),
+            "cs_prepare_reactivity",
+            &prepare_reactivity_layout,
+        );
 
         Ok(Self {
             shared,
@@ -561,6 +600,8 @@ impl Fsr3 {
             shading_change_pyramid_reduce,
             shading_change_layout,
             shading_change,
+            prepare_reactivity_layout,
+            prepare_reactivity,
             levels,
             targets: None,
         })
@@ -792,6 +833,87 @@ impl Fsr3 {
             ],
         });
 
+        let prepare_reactivity_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fsr3 prepare reactivity"),
+            layout: &self.prepare_reactivity_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.dilated_motion_vectors.view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&targets.dilated_depth.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: targets
+                        .reconstructed_previous_nearest_depth
+                        .as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.luma.current(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&targets.shading_change.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.accumulation.previous(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.dilated_reactive_masks.view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: wgpu::BindingResource::TextureView(
+                        &targets.accumulation.current(frame_index).view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: wgpu::BindingResource::TextureView(&targets.new_locks.view),
+                },
+            ],
+        });
+
+        // **The lock target, wiped before anything writes it.** `new_locks` is
+        // written by a scatter, so most presentation texels are never touched
+        // and last frame's locks would otherwise survive into this one.
+        // Upstream avoids the clear by having `accumulate` zero each texel as
+        // it reads it, which would need a read-write storage texture - see
+        // `resources::CLEARABLE`. An empty render pass is the cheapest wipe
+        // available: no pipeline, no draw, just the hardware's fast clear.
+        encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("fsr3 clear new locks"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &targets.new_locks.view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            })
+            .forget_lifetime();
+
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
 
@@ -842,6 +964,10 @@ impl Fsr3 {
         pass.set_pipeline(&self.shading_change);
         pass.set_bind_group(1, Some(&shading_change_group), &[]);
         pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
+
+        pass.set_pipeline(&self.prepare_reactivity);
+        pass.set_bind_group(1, Some(&prepare_reactivity_group), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
     }
 
     /// Rebuilds every intermediate when either allocation moves.

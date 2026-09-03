@@ -70,7 +70,7 @@ order, so this table and the code cannot drift apart silently.
 | 2 | `luma_pyramid` (SPD) | render/2 | **yes**, reduced to one dispatch - see below |
 | 3 | `shading_change_pyramid` (SPD) | render/2, mips | **yes**, as a dispatch per level |
 | 4 | `shading_change` | render/2 | **yes** |
-| 5 | `prepare_reactivity` | render | no |
+| 5 | `prepare_reactivity` | render | **yes** |
 | 6 | `luma_instability` | render | no |
 | 7 | `accumulate` | **presentation** | no |
 | 8 | `rcas` | presentation | no |
@@ -175,6 +175,15 @@ sign. That one has to use a **flat** colour where the others use a gradient:
 the smallest relative difference between any pair, so across a gradient some
 dark tap is nearer to some bright tap than the ratio between the frames, and the
 answer is a fact about the neighbourhood rather than about the formula.
+
+It caught the port's first substantive bug at pass 5, and one that would never
+have produced an error message: **`accumulation` and `luma_history` are
+render-sized upstream, not presentation-sized**, despite their names. Both are
+properties of the *sample* being reprojected rather than of the pixel it lands
+in. Allocated presentation-wide, only their top-left corner is ever written and
+every read past it comes back zero - which reads as "this pixel has no history"
+everywhere, and would have shown up as a permanently blurry picture with nothing
+to point at.
 
 Running the fixture at 8x4 rather than at a realistic size is deliberate, and
 it paid for itself immediately: a 4x2 half-resolution target cannot hold six mip

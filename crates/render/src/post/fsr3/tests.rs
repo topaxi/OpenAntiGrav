@@ -520,6 +520,73 @@ fn a_changed_scene_reports_a_signed_shading_change() {
 }
 
 #[test]
+fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame() {
+    // The feedback loop `accumulate` will weight its history by, and the reason
+    // the `R8_UNORM` targets are held at `Rgba8Unorm` rather than widened: a
+    // loop that quantises differently drifts differently.
+    //
+    // Two still frames. The first has no history and a previous luma of zero,
+    // so its shading change reads as total and its accumulation is knocked to
+    // nothing - then stored one third of a frame ahead. The second sees an
+    // unchanged scene, so nothing knocks it back and it advances by another
+    // third. That is upstream's own worked example in `UpdateAccumulation`,
+    // run rather than read.
+    let depth = depth_pattern();
+    let colour = colour_pattern();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let Some(scene) = Scene::run(FIXTURE, &[still, still]) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    let frame = scene
+        .fsr3
+        .constants()
+        .expect("a dispatched frame")
+        .frame_index as u64;
+    assert_eq!(frame, 1, "the fixture ran two frames");
+
+    // One unorm step, which is the tightest a `0..1` byte can be held to.
+    let step = 1.0 / 255.0;
+
+    for (index, masks) in scene
+        .read_rgba_unorm(&targets.dilated_reactive_masks.texture)
+        .iter()
+        .enumerate()
+    {
+        // **Nothing was revealed and nothing was re-lit.** A zero motion vector
+        // reprojects onto the texel's own scattered depth, so the depth
+        // difference is exactly zero and the disocclusion test rejects it -
+        // which is the branch that matters, because a *positive* difference
+        // there is what "something moved out of the way" means.
+        assert!(masks[1] < step, "texel {index} disocclusion {}", masks[1]);
+        assert!(masks[2] < step, "texel {index} shading change {}", masks[2]);
+        // And the history is a third of a frame deep: the value the first
+        // frame stored, read back by the second.
+        assert!(
+            (masks[3] - 1.0 / 3.0).abs() < 2.0 * step,
+            "texel {index} accumulation {}, wanted a third of a frame",
+            masks[3]
+        );
+    }
+
+    // What the *next* frame would read: two thirds, one more step along.
+    for (index, accumulation) in scene
+        .read_unorm(&targets.accumulation.current(frame).texture)
+        .iter()
+        .enumerate()
+    {
+        assert!(
+            (accumulation - 2.0 / 3.0).abs() < 2.0 * step,
+            "texel {index} stored accumulation {accumulation}, wanted two thirds"
+        );
+    }
+}
+
+#[test]
 fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {

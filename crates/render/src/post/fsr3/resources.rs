@@ -22,6 +22,18 @@
 //! [`Sizes`] type reports the total so the cost is a number rather than a
 //! feeling.
 //!
+//! # Three resolutions, and the one that surprises
+//!
+//! Most intermediates are at the **render** allocation, a few at half of it,
+//! and only four at the presentation one: `new_locks`, the two
+//! `internal_upscaled` halves and `upscaled_output`. In particular
+//! `accumulation` and `luma_history` are **render**-sized despite their names -
+//! both are properties of the sample being reprojected rather than of the pixel
+//! it lands in. This port had both wrong until a readback test caught it, and
+//! the failure was silent in exactly the way that matters: presentation-sized,
+//! only the top-left corner is ever written and every read past it comes back
+//! zero, which reads as "no history here" rather than as an error.
+//!
 //! # One of them is not a texture
 //!
 //! `reconstructed_previous_nearest_depth` is written by a *scatter* with an
@@ -80,6 +92,17 @@ const USAGE: wgpu::TextureUsages = wgpu::TextureUsages::STORAGE_BINDING
     .union(wgpu::TextureUsages::TEXTURE_BINDING)
     .union(wgpu::TextureUsages::COPY_SRC);
 
+/// [`USAGE`] plus `RENDER_ATTACHMENT`, for the one target that has to be
+/// cleared every frame.
+///
+/// `new_locks` is written by a *scatter* - most presentation texels have no
+/// render-resolution pixel landing on them - so stale locks would survive
+/// unless something wipes it. Upstream has `accumulate` zero each texel as it
+/// consumes it, which needs a read-write storage texture; a clear is the same
+/// result and a render-pass clear is the cheapest way to get one, because the
+/// hardware has a fast path for it that a compute shader writing zeros does not.
+const CLEARABLE: wgpu::TextureUsages = USAGE.union(wgpu::TextureUsages::RENDER_ATTACHMENT);
+
 /// One intermediate.
 #[derive(Debug)]
 pub struct Target {
@@ -111,6 +134,17 @@ impl Target {
         format: TextureFormat,
         mips: u32,
     ) -> Self {
+        Self::with_usage(device, label, size, format, mips, USAGE)
+    }
+
+    fn with_usage(
+        device: &wgpu::Device,
+        label: &str,
+        size: (u32, u32),
+        format: TextureFormat,
+        mips: u32,
+        usage: wgpu::TextureUsages,
+    ) -> Self {
         let mips = mips.clamp(1, mip_ceiling(size));
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -123,7 +157,7 @@ impl Target {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: USAGE,
+            usage,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -257,12 +291,21 @@ pub struct Targets {
     /// `SHADING_CHANGE`, at half the render resolution.
     pub shading_change: Target,
 
+    /// `LUMA_HISTORY_1`/`_2`, at **render** resolution.
+    pub luma_history: PingPong,
+    /// `ACCUMULATION_1`/`_2`, at **render** resolution.
+    ///
+    /// **Render and not presentation**, which is worth stating because it is
+    /// the opposite of what the name suggests and this port had it wrong until
+    /// a readback test caught it. Accumulation is a property of the *sample*
+    /// being reprojected, not of the pixel it lands in, so it is indexed by the
+    /// render grid throughout - `UpdateAccumulation` stores at the
+    /// render-resolution dispatch position. Sized presentation-wide, only the
+    /// top-left corner would ever be written and every read past it would come
+    /// back zero, which reads as "this pixel has no history" everywhere.
+    pub accumulation: PingPong,
     /// `INTERNAL_UPSCALED_COLOR_1`/`_2`, at presentation resolution.
     pub internal_upscaled: PingPong,
-    /// `LUMA_HISTORY_1`/`_2`, at presentation resolution.
-    pub luma_history: PingPong,
-    /// `ACCUMULATION_1`/`_2`, at presentation resolution.
-    pub accumulation: PingPong,
     pub new_locks: Target,
     /// What the last pass writes and [`super::Fsr3::output`] hands back.
     pub upscaled_output: Target,
@@ -342,10 +385,11 @@ impl Targets {
             spd_mips: Target::new(device, "fsr3 spd mips", half, PAIR, PYRAMID_MIPS),
             shading_change: Target::new(device, "fsr3 shading change", half, UNORM, 1),
 
+            luma_history: PingPong::new(device, "fsr3 luma history", render, COLOUR),
+            accumulation: PingPong::new(device, "fsr3 accumulation", render, UNORM),
+
             internal_upscaled: PingPong::new(device, "fsr3 internal upscaled", upscale, COLOUR),
-            luma_history: PingPong::new(device, "fsr3 luma history", upscale, COLOUR),
-            accumulation: PingPong::new(device, "fsr3 accumulation", upscale, UNORM),
-            new_locks: Target::new(device, "fsr3 new locks", upscale, UNORM, 1),
+            new_locks: Target::with_usage(device, "fsr3 new locks", upscale, UNORM, 1, CLEARABLE),
             upscaled_output: Target::new(device, "fsr3 upscaled output", upscale, COLOUR, 1),
         }
     }
@@ -367,13 +411,13 @@ impl Targets {
                 + self.farthest_depth.bytes()
                 + self.dilated_reactive_masks.bytes()
                 + self.luma.bytes()
-                + self.luma_instability.bytes(),
+                + self.luma_instability.bytes()
+                + self.luma_history.bytes()
+                + self.accumulation.bytes(),
             half_render: self.farthest_depth_mip1.bytes()
                 + self.spd_mips.bytes()
                 + self.shading_change.bytes(),
             upscale: self.internal_upscaled.bytes()
-                + self.luma_history.bytes()
-                + self.accumulation.bytes()
                 + self.new_locks.bytes()
                 + self.upscaled_output.bytes(),
         }

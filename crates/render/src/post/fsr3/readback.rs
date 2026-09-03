@@ -230,6 +230,17 @@ impl Scene {
             .collect()
     }
 
+    /// All four channels of an `Rgba8Unorm` intermediate - which for
+    /// `dilated_reactive_masks` is four independent answers, not a colour.
+    pub(super) fn read_rgba_unorm(&self, texture: &wgpu::Texture) -> Vec<[f32; 4]> {
+        self.read_bytes(texture, 0, 4)
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|texel| texel.map(|byte| f32::from(byte) / 255.0))
+            .collect()
+    }
+
     /// One `Rgba8Unorm` intermediate's red channel, back as `0..1` floats.
     ///
     /// The three targets that live in this format - `accumulation`,

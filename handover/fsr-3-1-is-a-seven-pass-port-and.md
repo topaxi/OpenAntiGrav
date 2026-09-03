@@ -31,6 +31,26 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Traps found
 
+- **`accumulation` and `luma_history` are render-sized, not
+  presentation-sized**, despite their names, and getting that wrong produces no
+  error at all - only the top-left corner of each is ever written, every read
+  past it comes back zero, and the picture reads as "no history anywhere". Found
+  by a readback test at pass 5, not by reading the descriptor table twice. The
+  four that really are presentation-sized are `new_locks`,
+  `internal_upscaled_color_1`/`_2` and the output.
+- **Storable and filterable are different properties.** `R32Float` is
+  baseline-storable and *not* baseline-filterable, so every intermediate some
+  pass reads through the linear sampler needs `Rgba16Float` or `Rgba8Unorm`
+  instead. Settle it by listing the `Sample*` callbacks the passes actually
+  call - `SampleInputDepth` is declared and never called, which is the only
+  reason the depth attachment's unfilterable binding is never a problem.
+- **A dispatch cannot bind one texture as both a storage write and a sampled
+  resource**, even when the shader ignores the read. The pyramid's level-0
+  dispatch needed pointing at something other than the level it writes.
+- **A small fixture catches size rules a realistic one never reaches.** 8x4
+  render found the mip-count ceiling (a 4x2 target holds three levels, not six)
+  and the resolution bug above.
+
 - **`ffxFsr3UpscalerGetJitterOffset` is already what `oag_render::jitter`
   does.** `halton(index % phaseCount + 1, 2 or 3) - 0.5`, both axes, is
   upstream's function line for line - so `jitter::offset_pixels` turned out to
@@ -50,9 +70,19 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Open
 
-- **The passes not yet ported.** See the table in
-  [fsr3.md](../docs/rendering/fsr3.md#the-passes); it is the port's spine and
-  is kept current as each lands.
+- **The passes not yet ported: `luma_instability`, `accumulate`, `rcas`.** Five
+  of eight are built and each is checked by a readback against CPU-computed
+  arithmetic. `accumulate` is much the largest - it pulls in
+  `ffx_fsr3upscaler_upsample.h` and `..._reproject.h` as well, about 1,300 lines
+  of upstream between them - and it is the one that finally produces an output,
+  so `Fsr3::output` stays `None` and nothing selects `fsr3` for real until it
+  lands.
+- **`compute_motion_divergence` divides by zero on a perfectly static camera.**
+  `saturate(reprojected_velocity / velocity_4k)` with both zero is `0/0`.
+  Upstream has the same expression and relies on `saturate(NaN)` returning zero;
+  a race always has motion so it never bites in play, but a still fixture walks
+  straight into it. Noted rather than 'fixed', because changing it would be a
+  divergence nobody has measured a need for.
 - **Nothing is compared against upstream's output.** The WGSL compiles and
   draws on this machine's adapter, which says the bindings agree and the syntax
   parses - it says nothing about whether a texel matches what `ffx_fsr3upscaler`
