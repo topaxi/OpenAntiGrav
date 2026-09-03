@@ -15,37 +15,40 @@
 //!   or the result never reaches the output colour.
 //! - `Resolved`: `specular_exponent()` succeeds.
 //!
-//! This mirrors `Program::dp3_feeding`'s own gate (name-and-saturate) rather
-//! than reimplementing `specular_exponent_chain`'s full search. The
-//! `Lg2NotDp3Fed`/`Lg2Dp3FedButNoChain` split checks **every** `LG2` in the
-//! block (`Lg2NotDp3Fed` means none of them are `DP3`-`SAT`-fed, not just
-//! the last one), so the category counts are exact under this gate; only
-//! the printed *feeder* (what wrote the register) looks at the block's last
-//! `LG2` alone, and a block with several differently-fed `LG2`s reports
+//! **Lane-aware, not the naive "any nonzero mask" check `Program::
+//! dp3_feeding` itself uses.** A first draft of this file copied that naive
+//! check verbatim and got a badly wrong picture: `LG2` reads a single lane
+//! (its own swizzle, broadcast), so a "most recent writer of *any* lane of
+//! the register" match credits a `DP3` that wrote a completely different
+//! lane than the one `LG2` actually consumes. `crates/render/examples/
+//! hd_dp3_feeding_lane_check.rs` measured this directly against the shipped
+//! gate: of the 6,141 blocks `specular_exponent()` currently resolves,
+//! **1,679 (27.3%) are lane-unsound** - the `DP3` `dp3_feeding` credited did
+//! not write the lane(s) the paired `LG2` reads. That is a finding about
+//! `Program::dp3_feeding` itself, filed separately (see the thread file's
+//! `## Open`); this diagnostic does not reimplement the shipped gate's bug,
+//! it uses the lane-correct check `dp3_feeding` should have.
+//!
+//! This mirrors what a lane-aware `dp3_feeding` would answer, not
+//! `specular_exponent_chain`'s full search - the `Lg2NotDp3Fed`/
+//! `Lg2Dp3FedButNoChain` split checks **every** `LG2` in the block
+//! (`Lg2NotDp3Fed` means none of them are lane-soundly `DP3`-`SAT`-fed, not
+//! just the last one), so the category counts are exact under this gate;
+//! only the printed *feeder* (what wrote the register) looks at the block's
+//! last `LG2` alone, and a block with several differently-fed `LG2`s reports
 //! only that one - good enough to size the feeder population, not to claim
 //! it is exhaustive per block.
 //!
-//! **Measured disc-wide, 76,358 blocks**: `Lg2NotDp3Fed` 63.3%, `NoLg2`
-//! 27.6%, `Resolved` 8.0%, `Lg2Dp3FedButNoChain` 1.1%. Within
-//! `Lg2NotDp3Fed`, the feeder breakdown says the `0x3b` shape is a real but
-//! *minority* cause: `ADD`/`MUL`/`MOV`/`TEX`/other named opcodes make up
-//! roughly three quarters of it, `op3B`/`op3B_SAT` combined only ~13.6 %,
-//! and a plain **unsaturated** `DP3` (a real `DP3` by name, just missing
-//! the saturate bit `dp3_feeding` also requires) ~2.8 %. `LG2` is a
-//! general-purpose `pow`/`exp` primitive - fog curves, rim falloffs and
-//! other unrelated combines use the identical `LG2`/`MUL`/`EX2` shape over
-//! a *different* saturated dot, or none at all - so most of `Lg2NotDp3Fed`
-//! reads as "this `LG2` was never a specular term" rather than as further
-//! confirmed false negatives: `renderer.md`'s own detection of this
-//! (excluding Zone's `rim^5`/`rim^10` and the `log2(e)`/`exp()` idiom) was
-//! already evidence the bare shape over-matches. The unsaturated-`DP3`
-//! slice is the narrower, better-justified candidate for widening the gate,
-//! but the one block sampled here (`amphiseum/base_diffusespecular
-//! .rcsmaterial`) has four differently-fed `LG2`s in one program, not a
-//! single clean term - a real per-block read, not assumed from the shape.
+//! **Measured disc-wide, 76,358 blocks, lane-correct**: `Lg2NotDp3Fed`
+//! 56.0%, `NoLg2` 27.6%, `Lg2Dp3FedButNoChain` 8.3%, `Resolved` 8.0%. Within
+//! `Lg2NotDp3Fed` (42,773 blocks): `ADD`/`ADD_SAT` 53.4%, `op3B`/`op3B_SAT`
+//! combined 23.1%, `TEX` 11.4%, `MOV` 5.9%, unsaturated `DP3` 1.2%, the rest
+//! single digits or below. See `renderer.md`'s "Ships have no Lambert
+//! diffuse either" for the full write-up and what changed from the earlier,
+//! naive-gate numbers (`63.3`/`27.6`/`8.0`/`1.1`, `op3B` `~13.6%`).
 
 use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::{Program, Source};
+use oag_formats::rcsmaterial::fragment::{Instruction, Program, Source};
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
@@ -59,17 +62,59 @@ enum Category {
     Resolved,
 }
 
-/// Mirrors `Program::dp3_feeding`: the most recent full writer of the
-/// register `at`'s own first operand names, checked for `DP3` + saturate.
-fn dp3_feeds(program: &Program, at: usize) -> bool {
-    let Some(Source::Register { index, half }) = program.instructions[at].operands().next() else {
-        return false;
-    };
-    program.instructions[..at]
+/// The lanes `insn` reads from `reg` through its first operand, as a mask -
+/// `None` if that operand is not `reg`. `LG2` has arity 1 and reads one lane
+/// (its own swizzle's first entry, broadcast to every output lane its own
+/// mask selects) - unlike `DP3`, which always reads three lanes regardless
+/// of its destination mask. This function is only ever called with an `LG2`
+/// as `insn` in this file, so it does not need `DP3`'s special case.
+fn read_mask(insn: &Instruction, reg: (u8, bool)) -> Option<u8> {
+    let (_, sw) = insn
+        .operands()
+        .zip(insn.swizzles)
+        .find(|(s, _)| matches!(s, Source::Register { index, half } if (*index, *half) == reg))?;
+    Some(
+        (0..4)
+            .filter(|&i| insn.mask & (1 << i) != 0)
+            .fold(0u8, |acc, i| acc | (1 << sw[i])),
+    )
+}
+
+/// The single instruction before `at` that fully covers the lanes `needed`
+/// selects - `None` when no writer covers all of them in one instruction, or
+/// when a later partial write to any of those lanes lands between it and
+/// `at` (the value `at` reads is then a mix, not that one writer's output).
+/// Lifted from `hd_specular_unresolved_trace.rs`'s `last_writer`, generalised
+/// to a mask rather than a 4-lane array since the caller here already knows
+/// its reader is `LG2`, never `DP3`.
+fn last_writer(program: &Program, at: usize, reg: (u8, bool), needed: u8) -> Option<usize> {
+    let (w, _) = program.instructions[..at]
         .iter()
+        .enumerate()
         .rev()
-        .find(|insn| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))
-        .is_some_and(|insn| insn.name() == Some("DP3") && insn.saturate)
+        .find(|(_, insn)| (insn.dst, insn.dst_half) == reg && insn.mask & needed == needed)?;
+    let clobbered = program.instructions[w + 1..at]
+        .iter()
+        .any(|insn| (insn.dst, insn.dst_half) == reg && insn.mask & needed != 0);
+    (!clobbered).then_some(w)
+}
+
+/// The lane-sound writer feeding the `LG2` at `at`, if any - `None` if its
+/// operand is not a register, or no single instruction lane-soundly covers
+/// what it reads.
+fn feeding(program: &Program, at: usize) -> Option<usize> {
+    let Some(Source::Register { index, half }) = program.instructions[at].operands().next() else {
+        return None;
+    };
+    let needed = read_mask(&program.instructions[at], (index, half))?;
+    last_writer(program, at, (index, half), needed)
+}
+
+fn dp3_feeds(program: &Program, at: usize) -> bool {
+    feeding(program, at).is_some_and(|w| {
+        let insn = &program.instructions[w];
+        insn.name() == Some("DP3") && insn.saturate
+    })
 }
 
 fn classify(program: &Program) -> Category {
@@ -93,10 +138,11 @@ fn classify(program: &Program) -> Category {
     }
 }
 
-/// What actually wrote the register the last `LG2` in the block reads -
-/// `"???"` for an unnamed opcode (with its raw hex), `"none"` if no full
-/// writer exists at all (an interpolator/constant read, or lanes assembled
-/// piecemeal so no single writer covers them).
+/// What actually, lane-soundly wrote the register the last `LG2` in the
+/// block reads - `"???"` for an unnamed opcode (with its raw hex), `"no
+/// writer"` if no lane-sound writer exists at all (an interpolator/constant
+/// read, lanes assembled piecemeal so no single writer covers them, or a
+/// writer whose own destination mask misses the lane `LG2` actually reads).
 fn feeder(program: &Program) -> String {
     let Some(&lg2_i) = program
         .instructions
@@ -109,23 +155,18 @@ fn feeder(program: &Program) -> String {
     else {
         return "no LG2".to_string();
     };
-    let Some(Source::Register { index, half }) = program.instructions[lg2_i].operands().next()
-    else {
-        return "LG2 reads non-register".to_string();
-    };
-    match program.instructions[..lg2_i]
-        .iter()
-        .rev()
-        .find(|insn| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))
-    {
-        Some(insn) => match insn.name() {
-            Some(n) => format!("{n}{}", if insn.saturate { "_SAT" } else { "" }),
-            None => format!(
-                "op{:02X}{}",
-                insn.opcode,
-                if insn.saturate { "_SAT" } else { "" }
-            ),
-        },
+    match feeding(program, lg2_i) {
+        Some(w) => {
+            let insn = &program.instructions[w];
+            match insn.name() {
+                Some(n) => format!("{n}{}", if insn.saturate { "_SAT" } else { "" }),
+                None => format!(
+                    "op{:02X}{}",
+                    insn.opcode,
+                    if insn.saturate { "_SAT" } else { "" }
+                ),
+            }
+        }
         None => "no writer".to_string(),
     }
 }
@@ -136,7 +177,6 @@ fn main() -> anyhow::Result<()> {
     let mut blocks = 0usize;
     let mut tally: Vec<(Category, u32)> = Vec::new();
     let mut feeders: Vec<(String, u32)> = Vec::new();
-    let mut unsaturated_samples = 0usize;
 
     for archive in ARCHIVES {
         let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
@@ -169,21 +209,6 @@ fn main() -> anyhow::Result<()> {
                 }
                 if c == Category::Lg2NotDp3Fed {
                     let f = feeder(&program);
-                    if f == "DP3" && unsaturated_samples < 5 {
-                        println!("=== {archive}:{path} unsaturated-DP3-fed LG2 ===");
-                        for (i, insn) in program.instructions.iter().enumerate() {
-                            let name = insn.name().unwrap_or("???");
-                            println!(
-                                "  [{i:3}] {name}{} dst=R{}{} mask={:#06b} sat={}",
-                                if insn.saturate { "_SAT" } else { "" },
-                                insn.dst,
-                                if insn.dst_half { "h" } else { "" },
-                                insn.mask,
-                                insn.saturate,
-                            );
-                        }
-                        unsaturated_samples += 1;
-                    }
                     match feeders.iter_mut().find(|(name, _)| *name == f) {
                         Some((_, n)) => *n += 1,
                         None => feeders.push((f, 1)),
