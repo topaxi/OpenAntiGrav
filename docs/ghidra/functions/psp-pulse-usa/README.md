@@ -30,7 +30,7 @@ An unencrypted ELF, so no decryption step is needed. See
 
 ## Renames
 
-**Applied.** 845 symbols: 539 from the pages above, collected in
+**Applied.** 846 symbols: 540 from the pages above, collected in
 [names.tsv](names.tsv), plus 306 import stubs derived from the binary itself.
 
 ```sh

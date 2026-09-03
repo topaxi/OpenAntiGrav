@@ -1,18 +1,17 @@
-# Collision feedback: sparks are shared with the PSP, the camera shake is not
+# Collision feedback: sparks, a shield-bubble flash, and a camera shake - all three shared with the PSP
 
 Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 `0x00100000`.
 
 Found chasing the PS2 `Aspect Ratio` camera-widen (see
 [camera.md](camera.md)), reading `FUN_0013e280` in full turned up a
-shake-decay block at its start. The PSP's own collision-response path was
-read twice and found to call no camera API at all - "the 'camera shake'
-reading this page previously carried was a guess from the `0.0125` scale
-alone and is **retracted**"
-([contact-response.md](../psp-pulse-usa/contact-response.md#fun_088418e0s-contact-loop-drives-three-separate-reactions-and-one-of-them-is-a-particle)).
-The PS2 binary's equivalent function does something the PSP's was verified not
-to: it calls into a real, working camera-shake mechanism, in the same
-conditional slot where the PSP's plays an audio cue instead.
+shake-decay block at its start. The PSP's own collision-response path had a
+"camera shake" reading retracted for calling no camera API at all
+([contact-response.md](../psp-pulse-usa/contact-response.md#fun_088418e0s-contact-loop-drives-three-separate-reactions-and-one-of-them-is-a-particle))
+- checked closely enough to be right about the function, and wrong about the
+conclusion: the retraction rested on an *unread* second call it guessed was a
+sound cue. It's `Camera_ArmShake` there too, same as here - see the
+correction below.
 
 Also found on the same pass, from the same contact loop: `ShipShield_Hit`, the
 shield-pickup bubble's hit-flash, already named on the PSP
@@ -74,16 +73,18 @@ slots (`craft + 0xd20`, distance to the contact point) exactly as the PSP's
    `0x0027e7xx`-`0x0027e8xx` global cluster [camera.md](camera.md) already
    places the per-player camera state in.
 
-**Where the PSP's equivalent stops at a sound cue, this one also arms a
-shake.** `contact-response.md` is explicit that `Ship_DispatchCollisionFx`'s
-body calls no camera API, checked by a full decompile specifically looking for
-one; the PS2 function occupies the *same* slot (spark first, an unconditional
-call; then, gated on local-player, a per-hit-direction branch) with a shake
-call where the PSP has a sound call instead. That is either a genuine
-platform difference or the PSP's shake (if it exists at all) is wired
-somewhere this function's own call graph never reaches - not yet
-distinguished, see Open below. `FUN_00159268(craft)` (not named - a plain
-struct-field walk, low value to name on its own) is read as "the camera for
+**Corrected same day: the PSP has the identical call in the identical slot.**
+This page originally read `contact-response.md`'s retraction ("nothing in
+`Ship_DispatchCollisionFx`'s body calls a camera API") as meaning the PSP
+genuinely lacks this shake. It doesn't - the retraction was checking the
+right function and drawing the wrong conclusion from an *unread* second call,
+which `contact-response.md` had guessed was a sound cue at confidence 40 and
+never actually decompiled. It is `Camera_ArmShake` there too (`0x08878750`,
+renamed and documented on that page now), called with the same severity, the
+same `[0.2, 0.8]` phase randomiser, and the same front/behind mode branch as
+here. So this is not a platform difference: both binaries arm and apply the
+same shake from the same collision event. `FUN_00159268(craft)` (not named - a
+plain struct-field walk, low value to name on its own) is read as "the camera for
 this craft" purely from being self-consistent with `Camera_ArmShake`'s own
 writes, below.
 
@@ -164,11 +165,6 @@ which stays a separate, open question.
 
 ## Not determined
 
-- Whether the PSP disc genuinely lacks this shake (a real platform
-  difference) or has it wired through a path `contact-response.md`'s search
-  didn't reach - `Ship_DispatchCollisionFx`'s own body was the thing checked
-  there, not the PSP's per-frame camera-update function itself for an
-  internal shake-apply block matching this one's shape.
 - `+0x40`'s consumer inside `FUN_0013e280` - not traced past the accumulator
   calls.
 - `FUN_0020cf50`/`FUN_0025cbb0`/`FUN_00159268`/`FUN_001cc100` - read only for
@@ -189,4 +185,9 @@ which stays a separate, open question.
   [camera.md](camera.md)'s `Aspect Ratio` section. `ShipShield_Hit` added the
   same day, prompted by a maintainer's own play-testing observation of a
   shield element flashing on a hit - traced to the pickup bubble's mechanism,
-  not the HUD bar the observation may also have meant.
+  not the HUD bar the observation may also have meant. Later the same day, a
+  maintainer's memory of playing PSP/Pure ("this happens there too") sent the
+  search back to `contact-response.md`, which corrected its own "camera
+  shake... retracted" conclusion in place once its unread second call turned
+  out to be the PSP's own `Camera_ArmShake` - the platform-difference framing
+  earlier on this page did not survive that.

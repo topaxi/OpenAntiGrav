@@ -27,7 +27,7 @@ form, and Ghidra's string search will return all three.
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
-| [Collision feedback](collision-shake.md) | The hull-spark trigger and the shield-bubble hit-flash, both shared with the PSP, plus a camera shake on impact the PSP's own path was verified not to have |
+| [Collision feedback](collision-shake.md) | The hull-spark trigger, the shield-bubble hit-flash, and a camera shake on impact - all three shared with the PSP, the shake mislabelled a sound cue there until this page's own read prompted correcting it |
 
 ## Renames
 

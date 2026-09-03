@@ -333,26 +333,50 @@ correction below the list, which replaces an earlier wrong reading of what
 `Ship_DispatchCollisionFx` actually receives.
 
 1. **`Ship_DispatchCollisionFx` (`0x0883de90`)**, called as
-   `FUN_0883de90(fVar21, param_2, piVar17)` where **`fVar21 = min(|p| * 0.0125,
-   1.0)`** - clamped, not raw - only when a squared distance to a stored world
-   position (`DAT_08ab10b0 + 0x70`, read as a camera-ish anchor) is in `(0,
-   10000)` - i.e. gated by proximity. **Decompiled in full.** It finds the
-   nearest of up to 10 `Ship Collision Fx` (`0x3d0`) instances attached to the
-   craft (`param_2 + 0xc80` list, distance to the hit point at `param_3+0x10`),
-   then unconditionally calls `ShipCollisionFx_Trigger(fVar21, thatInstance, 0,
-   depth > 0.0)` - **this is the spark spawn**, not a camera effect. Only
-   *after* that, if the reacting craft is the local player
-   (`FUN_0883e64c(param_2) == 1`), it separately plays an audio cue via
-   `FUN_08878750(fVar21 * DAT_08ab0dfc, ...)` - `fVar21` scaled *again* by a
-   second, still-unread constant, one of two sound variants depending on
-   whether the hit point is in front of or behind the craft. Nothing in this
-   function's body calls a camera API; the "camera shake" reading this page
-   previously carried was a guess from the `0.0125` scale alone and is
-   **retracted**. Confidence **80** on the control flow (nearest-instance
-   search, unconditional spark dispatch, gated sound); **40** on what
-   `FUN_08878750` actually does with its arguments (sound cue is the likely
-   reading given `PTR_s_...COLLISIONS...`-shaped sound calls elsewhere on this
-   path, but the function itself is unread).
+   `Ship_DispatchCollisionFx(fVar21, param_2, piVar17)` where **`fVar21 =
+   min(|p| * 0.0125, 1.0)`** - clamped, not raw - only when a squared distance
+   to a stored world position (`DAT_08ab10b0 + 0x70`, read as a camera-ish
+   anchor) is in `(0, 10000)` - i.e. gated by proximity. **Decompiled in
+   full.** It finds the nearest of up to 10 `Ship Collision Fx` (`0x3d0`)
+   instances attached to the craft (`param_2 + 0xc80` list, distance to the
+   hit point at `param_3+0x10`), then unconditionally calls
+   `ShipCollisionFx_Trigger(fVar21, thatInstance, 0, depth > 0.0)` - **this is
+   the spark spawn**, not a camera effect.
+   **Correction (2026-09-03): the second call is the camera shake, not an
+   audio cue - the "retracted" note below stood on an unread function and was
+   wrong.** Reading the PS2 binary's collision-response path for an unrelated
+   question (`docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`) turned
+   up its own `Camera_ArmShake`, structurally identical to this call and its
+   callee, which is what prompted decompiling `Camera_ArmShake` (`0x08878750`
+   here) in full for the first time. It is `Camera_ArmShake(float magnitude,
+   float duration, int camera, int mode)`: four stores (magnitude, duration, duration's
+   reciprocal, mode), a keyframed falloff-table reset with precomputed lerp
+   factors, and a call to a `[0.2, 0.8]` range randomiser for a phase offset -
+   the same shape, and the same two literals, as the PS2's arm function.
+   `Camera_SubmitScene` (`0x08878874`, right after it) reads exactly those
+   fields at its own start, decaying a two-oscillator shake into the eye
+   offset every frame it's called - unremarked until now because nothing on
+   this page had read `Camera_SubmitScene`'s own body either. So: ~~if the
+   reacting craft is the local player (`FUN_0883e64c(param_2) == 1`), it
+   separately plays an audio cue via `FUN_08878750(fVar21 * DAT_08ab0dfc,
+   ...)` - `fVar21` scaled *again* by a second, still-unread constant, one of
+   two sound variants depending on whether the hit point is in front of or
+   behind the craft. Nothing in this function's body calls a camera API; the
+   "camera shake" reading this page previously carried was a guess from the
+   `0.0125` scale alone and is **retracted**.~~ Corrected: gated on the same
+   local-player check, `Ship_DispatchCollisionFx` calls
+   `Camera_ArmShake(fVar21 * DAT_08ab0dfc, DAT_08ab0e00, DAT_08ab10b0, mode)`
+   - the third argument is the same `DAT_08ab10b0` this entry's own proximity
+   gate reads `+0x70` of two paragraphs up, closing that loop: it is the
+   camera object, not merely "a camera-ish anchor". `mode` is `3` when the hit
+   point is ahead of the craft (a dot product against forward) and `1`
+   otherwise, the same two-way branch this page previously read as "two sound
+   variants". No sound call exists anywhere in `Camera_ArmShake`'s body.
+   Confidence **90** on the control flow (nearest-instance search,
+   unconditional spark dispatch, gated shake arm) - raised from 80 now that
+   the second call is decompiled rather than assumed; **88** on
+   `Camera_ArmShake` itself, matched field-for-field against the PS2 binary's
+   independently-recovered counterpart.
 2. **Hull damage**, `FUN_088439ac(|p| * 0.05 * 0.7, param_2, hitSide, 0, 0)`.
    **Decompiled in full this pass.** It decrements the ship's shield/energy
    (`FUN_0883e6f4(shield - amount, ...)`), accumulates per-kind telemetry
