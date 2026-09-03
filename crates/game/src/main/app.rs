@@ -287,10 +287,12 @@ impl App {
         let upscale_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a third, for the same reason again - see `Session::blur_cost`.
         let blur_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        // And a fourth - see `Session::hd_bloom_cost`.
+        let hd_bloom_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         info!(
             "GPU timing: {}",
             if pass_timer.is_some() {
-                "the scene pass, the motion-blur chain and the FSR 3.1 chain are timed"
+                "the scene pass, the motion-blur chain, the HD bloom chain and the FSR 3.1 chain are timed"
             } else {
                 "no timestamps on this device"
             }
@@ -313,6 +315,8 @@ impl App {
             upscale_timer,
             blur_cost: perf::Meter::new(),
             blur_timer,
+            hd_bloom_cost: perf::Meter::new(),
+            hd_bloom_timer,
             drs_unreachable_said: false,
             frame_index: 0,
             stall_frame: 0,

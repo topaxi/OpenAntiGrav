@@ -198,6 +198,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
 
     let scene = crate::race::SceneStats {
         blur_encoded: false,
+        hd_bloom_encoded: false,
         draws_submitted: 12,
         draws_culled: 3,
         triangles: 4096,
@@ -389,6 +390,7 @@ fn nothing_is_drawn_outside_the_panel() {
     }
     let scene = crate::race::SceneStats {
         blur_encoded: false,
+        hd_bloom_encoded: false,
         draws_submitted: 12,
         draws_culled: 3,
         triangles: 4096,
@@ -550,7 +552,7 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
 /// The GPU cost row says only what has actually been measured.
 ///
 /// A reading arrives a frame or more after the frame it describes, so all
-/// three are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
+/// four are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
 /// a frame the bilinear blit resolved would be a lie that reads as "free"
 /// rather than as "not running". Each field appears only once it has a number.
 #[test]
@@ -560,29 +562,32 @@ fn the_gpu_cost_row_shows_only_what_was_measured() {
         GpuCost {
             scene: Some(0.004_2),
             blur: None,
+            bloom: None,
             upscale: None,
         }
         .line()
         .as_deref(),
         Some("GPU SCENE 4.20 MS"),
-        "a scene reading alone must not imply blur or an upscaler ran"
+        "a scene reading alone must not imply blur, bloom or an upscaler ran"
     );
     assert_eq!(
         GpuCost {
             scene: Some(0.004_2),
             blur: Some(0.001_2),
+            bloom: Some(0.003_1),
             upscale: Some(0.001_8),
         }
         .line()
         .as_deref(),
-        Some("GPU SCENE 4.20 MS  BLUR 1.20 MS  FSR3 1.80 MS")
+        Some("GPU SCENE 4.20 MS  BLOOM 3.10 MS  BLUR 1.20 MS  FSR3 1.80 MS")
     );
-    // The upscaler can report before the scene pass does: the three rings are
+    // The upscaler can report before the scene pass does: the four rings are
     // independent, and a slot is claimed per ring per frame.
     assert_eq!(
         GpuCost {
             scene: None,
             blur: None,
+            bloom: None,
             upscale: Some(0.001_8),
         }
         .line()
@@ -601,6 +606,7 @@ fn the_gpu_cost_row_is_dev_only() {
     let cost = GpuCost {
         scene: Some(0.004_2),
         blur: Some(0.001_2),
+        bloom: Some(0.003_1),
         upscale: Some(0.001_8),
     };
     let has_row = |mode| {
@@ -611,4 +617,44 @@ fn the_gpu_cost_row_is_dev_only() {
     assert!(has_row(Overlay::Dev));
     assert!(!has_row(Overlay::Pacing), "pacing is about the interval");
     assert!(!has_row(Overlay::Fps));
+}
+
+/// The residual is the frame-time row minus whatever the GPU row itself adds
+/// up to - not a fraction of a target, and not clamped at zero.
+#[test]
+fn the_residual_is_the_frame_time_minus_the_gpu_row() {
+    let cost = GpuCost {
+        scene: Some(0.002_5),
+        blur: Some(0.001_2),
+        bloom: Some(0.003_1),
+        upscale: Some(0.002_8),
+    };
+    // 2.5 + 1.2 + 3.1 + 2.8 = 9.6 ms accounted for out of an 11.76 ms frame.
+    assert!((cost.residual_ms(11.76).unwrap() - 2.16).abs() < 1e-4);
+
+    // A field that never reported does not count as zero cost accidentally -
+    // it is simply left out of the sum, the same way `line` leaves it out of
+    // the row.
+    let partial = GpuCost {
+        scene: Some(0.002_5),
+        blur: None,
+        bloom: None,
+        upscale: None,
+    };
+    assert!((partial.residual_ms(11.76).unwrap() - 9.26).abs() < 1e-4);
+
+    // Nothing measured yet: no row, no residual either - there is nothing to
+    // subtract from.
+    assert_eq!(GpuCost::default().residual_ms(11.76), None);
+
+    // A moment where the rolling mean has fallen faster than the GPU readings
+    // (which lag a frame or more) can go negative, and that is reported
+    // rather than clamped - zero would claim nothing is missing.
+    let heavy = GpuCost {
+        scene: Some(0.010_0),
+        blur: None,
+        bloom: None,
+        upscale: None,
+    };
+    assert!(heavy.residual_ms(8.0).unwrap() < 0.0);
 }

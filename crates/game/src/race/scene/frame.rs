@@ -32,15 +32,13 @@ impl Scene {
     /// with nothing reconstructing from it, is a worse picture and passes
     /// [`oag_render::jitter::DEFAULT_PHASES`]. See [`Scene::jittered`].
     ///
-    /// `timestamps` brackets this pass with a GPU timestamp pair, and is
-    /// `Some` only on the window's own frame loop - see
-    /// [`oag_render::timing::PassTimer`]. **This pass and no other**, because
-    /// it is the one whose cost falls with the render extent: the upscaler and
-    /// the composite draw at presentation size whatever the scale is, so
-    /// folding them in would put a fixed cost into a budget that exists to be
-    /// divided by a moving one. The scene-resolution post-processes belong in
-    /// it and are not in it yet - they take no viewport, which is the same
-    /// thing that stops the extent moving at all. See
+    /// `timestamps`, `blur_timestamps` and `hd_bloom_timestamps` bracket this
+    /// pass, the motion-blur chain and the HD/Fury bloom chain, `Some` only on
+    /// the window's own frame loop - see [`oag_render::timing::PassTimer`].
+    /// **These three and no others**, because they are the passes whose cost
+    /// falls with the render extent: the upscaler and the composite draw at
+    /// presentation size whatever the scale is, so folding them in would put a
+    /// fixed cost into a budget that exists to be divided by a moving one. See
     /// [dynamic-resolution.md](../../../../../docs/rendering/dynamic-resolution.md).
     ///
     /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
@@ -67,6 +65,7 @@ impl Scene {
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
         blur_timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -877,13 +876,19 @@ impl Scene {
         drop(pass);
         oag_render::perfprobe::mark("scene-pass");
 
-        // Wipeout HD's read post chain: gate, downsample, the two blurs, the
-        // composite back over the linear scene, and the encode into the
-        // caller's view. It replaces the PSP bloom outright - its gate
-        // consumes the same glow-mask alpha as one of its two terms. See
-        // `oag_render::post::hd_bloom`.
+        // Wipeout HD's read post chain (`oag_render::post::hd_bloom`): gate,
+        // downsample, the two blurs, the composite back over the linear
+        // scene, and the encode into the caller's view. Replaces the PSP
+        // bloom outright - its gate consumes the same glow-mask alpha.
         if let Some(hd) = &self.hd {
-            hd.run(queue, encoder, view, (viewport.2 as u32, viewport.3 as u32));
+            hd.run(
+                queue,
+                encoder,
+                view,
+                (viewport.2 as u32, viewport.3 as u32),
+                hd_bloom_timestamps,
+            );
+            stats.hd_bloom_encoded = true;
         } else if let Some(bloom) = &self.bloom {
             // The recovered post-process, reading the alpha channel the ribbon
             // and the flare stamped and adding a blurred copy of the masked

@@ -624,19 +624,23 @@ impl RenderSize {
     }
 }
 
-/// What the GPU spent on the two passes this build actually times, in seconds.
+/// What the GPU spent on the passes this build actually times, in seconds.
 ///
-/// **The frame-time row above cannot answer this.** `Meter` measures the
-/// interval between loop iterations, which under `Vsync::On` is the refresh and
-/// under a frame limit is the limit - so a frame with headroom and a frame with
-/// none read the same. These are GPU timestamps around specific work, from
-/// [`oag_render::timing::PassTimer`].
+/// **The frame-time row above cannot answer this on its own.** `Meter`
+/// measures the interval between loop iterations, which under `Vsync::On` is
+/// the refresh and under a frame limit is the limit - so a frame with headroom
+/// and a frame with none read the same *there*. These are GPU timestamps
+/// around specific work, from [`oag_render::timing::PassTimer`]. Read
+/// together - see [`GpuCost::line`] and the `OTHER` row it prints beside it -
+/// the two say what the frame-time row alone cannot: how much of a frame is
+/// accounted for and how much is not.
 ///
-/// Two numbers rather than one because they answer different questions and a
-/// render scale moves them in opposite directions: lowering it makes the scene
-/// pass cheaper and gives the temporal resolve *more* to reconstruct, and the
-/// upscale chain runs after the scene pass rather than inside it. Choosing a
-/// render scale without both is choosing on half the cost.
+/// Four numbers rather than one because they answer different questions and a
+/// render scale moves them in different directions: lowering it makes the
+/// scene pass, the motion-blur chain and the HD bloom chain cheaper and gives
+/// the temporal resolve *more* to reconstruct, and the upscale chain runs
+/// after the other three rather than inside them. Choosing a render scale
+/// without all four is choosing on part of the cost.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct GpuCost {
     /// The race's scene pass, or `None` before its first reading has come back.
@@ -647,6 +651,11 @@ pub struct GpuCost {
     /// then encodes nothing and the claimed slot is given back unwritten. See
     /// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
     pub blur: Option<f32>,
+    /// Wipeout HD/Fury's read bloom chain, or `None` before its first reading
+    /// has come back. `None` forever on Pulse, Pure, or an HD circuit with no
+    /// `HDR and Bloom` block - see `race::Scene::has_hd_bloom` and
+    /// [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md).
+    pub bloom: Option<f32>,
     /// FSR 3.1's eight dispatches, or `None` when no temporal upscaler has run
     /// - which is every frame on every other rung of the ladder.
     pub upscale: Option<f32>,
@@ -662,29 +671,70 @@ impl GpuCost {
     /// **Compare this against the `FPS`/`MS` line above it, not against the
     /// target frame period.** That first line is `perf::Meter`'s own
     /// wall-clock reading of the whole frame - CPU and GPU, every pass,
-    /// timed and untimed alike - and this line is only the three passes this
-    /// build brackets with a GPU timestamp. The difference between the two is
-    /// real cost: the MSAA resolve, `hd_bloom`, the HUD, the composite, the
-    /// blit, the driver's own overhead, and the frame loop's own CPU-side
-    /// work, none of which any row here can show.
+    /// timed and untimed alike - and this line is only the passes this build
+    /// brackets with a GPU timestamp. [`Self::residual_ms`] is that
+    /// subtraction, done once rather than left to whoever is reading the
+    /// overlay - the real cost of the MSAA resolve, `hd_bloom`, the HUD, the
+    /// composite, the blit, the driver's own overhead, and the frame loop's
+    /// own CPU-side work, none of which any other row here can show.
     #[must_use]
     pub fn line(self) -> Option<String> {
-        match (self.scene, self.blur, self.upscale) {
-            (None, None, None) => None,
-            (scene, blur, upscale) => {
-                let mut line = String::from("GPU");
-                if let Some(scene) = scene {
-                    line.push_str(&format!(" SCENE {:.2} MS", scene * 1000.0));
-                }
-                if let Some(blur) = blur {
-                    line.push_str(&format!("  BLUR {:.2} MS", blur * 1000.0));
-                }
-                if let Some(upscale) = upscale {
-                    line.push_str(&format!("  FSR3 {:.2} MS", upscale * 1000.0));
-                }
-                Some(line)
-            }
+        if self.scene.is_none()
+            && self.blur.is_none()
+            && self.bloom.is_none()
+            && self.upscale.is_none()
+        {
+            return None;
         }
+        let mut line = String::from("GPU");
+        if let Some(scene) = self.scene {
+            line.push_str(&format!(" SCENE {:.2} MS", scene * 1000.0));
+        }
+        if let Some(bloom) = self.bloom {
+            line.push_str(&format!("  BLOOM {:.2} MS", bloom * 1000.0));
+        }
+        if let Some(blur) = self.blur {
+            line.push_str(&format!("  BLUR {:.2} MS", blur * 1000.0));
+        }
+        if let Some(upscale) = self.upscale {
+            line.push_str(&format!("  FSR3 {:.2} MS", upscale * 1000.0));
+        }
+        Some(line)
+    }
+
+    /// What `frame_ms` does not account for, or `None` when nothing has been
+    /// measured yet.
+    ///
+    /// **The whole point of carrying `frame_ms` in rather than reading a
+    /// target period.** A target is what a player asked for; `frame_ms` -
+    /// `Stats::mean_ms`, the same wall-clock reading [`Self::line`]'s own doc
+    /// comment already argues against replacing this with - is what the
+    /// machine is actually doing, timed passes and untimed ones both. The
+    /// difference is real cost sitting outside every `PassTimer` this build
+    /// has, and reporting nothing here would leave a player doing the
+    /// subtraction by hand against two rows that do not share a decimal place.
+    ///
+    /// Can be negative in principle - `frame_ms` is a rolling mean and the GPU
+    /// readings are a frame or more old, so a moment where the mean has fallen
+    /// faster than the GPU cost has is not impossible - and is passed through
+    /// rather than clamped, because a small negative number says "these two
+    /// signals are close and slightly out of phase" where zero would claim
+    /// nothing is missing.
+    #[must_use]
+    pub fn residual_ms(self, frame_ms: f32) -> Option<f32> {
+        if self.scene.is_none()
+            && self.blur.is_none()
+            && self.bloom.is_none()
+            && self.upscale.is_none()
+        {
+            return None;
+        }
+        let timed_ms = (self.scene.unwrap_or(0.0)
+            + self.blur.unwrap_or(0.0)
+            + self.bloom.unwrap_or(0.0)
+            + self.upscale.unwrap_or(0.0))
+            * 1000.0;
+        Some(frame_ms - timed_ms)
     }
 }
 
@@ -771,6 +821,14 @@ pub fn draw_list(
         && let Some(line) = gpu.line()
     {
         lines.push(line);
+        // **Directly under the GPU row, and only where that row printed.**
+        // `residual_ms` answers the same question the row above tempts a
+        // reader to ask by eye - "does GPU SCENE + BLUR + FSR3 add up to the
+        // FPS/MS line at the top" - without asking them to hold three numbers
+        // in their head and subtract. See `GpuCost::residual_ms`.
+        if let Some(residual) = gpu.residual_ms(stats.mean_ms) {
+            lines.push(format!("OTHER {residual:.1} MS"));
+        }
     }
     // Resident memory, not virtual: what the process is actually holding,
     // rather than address space it has merely reserved (a wgpu process's

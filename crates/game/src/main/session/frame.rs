@@ -590,6 +590,16 @@ impl Session {
         if has_scene && let Some(timer) = self.blur_timer.as_mut() {
             timer.begin(self.frame_index);
         }
+        // And one for the HD/Fury bloom chain, on the same terms as the blur
+        // claim above. **Claimed before it is known whether this scene even
+        // has one**: `race::scene::frame::Scene::hd` is `None` on Pulse,
+        // Pure and any HD circuit with no `HDR and Bloom` block, and there is
+        // no cheap way to ask that here, above the match that borrows
+        // `self.stage`. `stats.hd_bloom_encoded` is the answer and the
+        // `abandon` below is what a `false` costs - see `SceneStats::hd_bloom_encoded`.
+        if has_scene && let Some(timer) = self.hd_bloom_timer.as_mut() {
+            timer.begin(self.frame_index);
+        }
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
         // Read before `self.stage` is borrowed mutably below, for the same
@@ -680,6 +690,13 @@ impl Session {
                             end: timer.half_writes(oag_render::timing::Half::End)?,
                         })
                     }),
+                    // The same split, for the HD/Fury bloom chain.
+                    self.hd_bloom_timer.as_ref().and_then(|timer| {
+                        Some(oag_render::post::hd_bloom::ChainTimestamps {
+                            begin: timer.half_writes(oag_render::timing::Half::Begin)?,
+                            end: timer.half_writes(oag_render::timing::Half::End)?,
+                        })
+                    }),
                 );
                 if let Some(start) = start {
                     info!("first race frame: encoded in {:?}", start.elapsed());
@@ -697,6 +714,16 @@ impl Session {
         // more".
         if !scene_stats.is_some_and(|stats| stats.blur_encoded)
             && let Some(timer) = self.blur_timer.as_mut()
+        {
+            timer.abandon();
+        }
+        // The same rule for the HD/Fury bloom chain: `false` on Pulse, Pure,
+        // or an HD circuit with no `HDR and Bloom` block, all of which claim a
+        // slot above with nothing to write into it. `Chain::run` has no early
+        // return once it starts, so this is the only way the claim goes
+        // unwritten - see `SceneStats::hd_bloom_encoded`.
+        if !scene_stats.is_some_and(|stats| stats.hd_bloom_encoded)
+            && let Some(timer) = self.hd_bloom_timer.as_mut()
         {
             timer.abandon();
         }
@@ -847,13 +874,14 @@ impl Session {
                 extent: self.framebuffer.extent(),
                 allocation: self.framebuffer.allocation(),
             }),
-            // All three GPU readings, whatever the stage: a reading is a
+            // All four GPU readings, whatever the stage: a reading is a
             // frame or more old, so gating this on `has_scene` would blank the
             // row on the menu frame that is finally reporting the last race
             // frame's cost. Each is `None` until its own first reading lands.
             perf::GpuCost {
                 scene: self.scene_cost.stats().map(|s| s.mean_ms / 1000.0),
                 blur: self.blur_cost.stats().map(|s| s.mean_ms / 1000.0),
+                bloom: self.hd_bloom_cost.stats().map(|s| s.mean_ms / 1000.0),
                 upscale: self.upscale_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
         );
@@ -878,6 +906,9 @@ impl Session {
             timer.resolve(&mut encoder);
         }
         if let Some(timer) = self.blur_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
+        if let Some(timer) = self.hd_bloom_timer.as_mut() {
             timer.resolve(&mut encoder);
         }
 

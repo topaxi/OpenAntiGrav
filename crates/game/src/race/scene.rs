@@ -6,10 +6,11 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
-use log::{info, warn};
+use log::warn;
 
 mod frame;
 mod motion;
+mod queries;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
@@ -897,97 +898,5 @@ impl Scene {
             msaa,
             far,
         })
-    }
-
-    /// How many rows down the ladder the next speed class begins, or `None`
-    /// with no grade, no recovered ladder, or on the top rung.
-    ///
-    /// See [`crate::race::zone_grade::ZoneGrade::zones_to_next_stage`].
-    #[must_use]
-    pub fn zones_to_next_stage(&self, zone: u16) -> Option<u32> {
-        self.zone_grade.as_ref()?.zones_to_next_stage(zone)
-    }
-
-    /// Which rung of the Zone ladder this scene's grade is showing, or `None`
-    /// outside Zone mode and on a title shipping no stage table.
-    ///
-    /// The HUD's speed-class name reads this rather than the zone counter, so
-    /// the two halves of the escalation - the colour grade and the word on
-    /// screen - move together and are wrong together. See
-    /// `oag_hd::hud::ZONE_SPEED_CLASSES` for why the zone counter is not the
-    /// right question to ask.
-    #[must_use]
-    pub fn zone_stage(&self) -> Option<u32> {
-        Some(self.zone_grade.as_ref()?.blend().current)
-    }
-
-    /// Points the Zone colour grade at the zone the race has reached, and
-    /// answers whether that moved it.
-    ///
-    /// Called once a frame, which is where the original does it:
-    /// `Zone_UpdateStage` (`0x81044cfc`, `vita-2048-eu-v104`) runs from the
-    /// main render-update loop every frame, reads the stage index off the
-    /// craft and shows it. A no-op outside Zone, on a title shipping no stage
-    /// table, and on one whose zone-to-stage ladder is unrecovered - see
-    /// [`crate::race::zone_grade::ZoneGrade::show_zone`].
-    ///
-    /// **One precedence question is untested rather than answered.** `frame`
-    /// samples the circuit's own `fogCube` volumes *after* laying the grade
-    /// over the authored fog, and a volume the camera sits inside replaces the
-    /// result outright. No title reaches that today - the two that ship a
-    /// stage table both load their geometry through the PSARC path, which
-    /// parses no `fogCube` at all, so `fog_volumes` is empty on both - and
-    /// which of the two the original prefers is not recovered, since
-    /// `Environment_UpdateStageBlend`'s own consumer is still unfound. Worth
-    /// knowing before a title with both ever loads.
-    pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
-        let zone = race.world.race.zone;
-        let Some(grade) = self.zone_grade.as_mut() else {
-            return false;
-        };
-        if !grade.show_zone(zone) {
-            return false;
-        }
-        // Once per stage change, which is at most fifteen times a race - the
-        // same "log the edge, not the state" rule the announcer cue follows.
-        // It is also the only headless evidence that the grade moved at all,
-        // since a `--screenshot` cannot say so on its own.
-        info!(
-            "zone {zone}: the colour grade steps to stage {}",
-            grade.blend().current
-        );
-        true
-    }
-
-    /// Rebuilds the depth buffer, and the MSAA colour target if there is one,
-    /// for a new viewport size.
-    ///
-    /// A colour or depth attachment whose size does not match the others is a
-    /// validation error, so this is not optional on resize.
-    pub fn resize(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, size: (u32, u32)) {
-        let sample_count = self.msaa.samples();
-        // Under the HD chain every scene pipeline was built against the
-        // linear float format, so the MSAA attachment has to match it, and
-        // the chain's own targets track the viewport.
-        let format = if self.hd.is_some() {
-            oag_render::post::hd_bloom::SCENE_FORMAT
-        } else {
-            format
-        };
-        if let Some(hd) = &mut self.hd {
-            hd.resize(device, size);
-        }
-        self.depth = depth_texture(device, size, sample_count);
-        self.velocity = motion::velocity_texture(device, size, sample_count);
-        self.msaa_color = msaa_color_texture(device, format, size, sample_count);
-        self.attachment_views =
-            Attachments::new(&self.depth, &self.velocity, self.msaa_color.as_ref());
-    }
-
-    /// What this scene's pipelines were actually built with, for the restart
-    /// note - see [`Self::msaa_color`].
-    #[must_use]
-    pub fn msaa(&self) -> crate::display::Msaa {
-        self.msaa
     }
 }

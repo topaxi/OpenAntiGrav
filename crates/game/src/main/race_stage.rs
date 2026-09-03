@@ -44,6 +44,7 @@ impl RaceStage {
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
         blur_timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
     ) -> race::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs
@@ -69,6 +70,7 @@ impl RaceStage {
             zone_spectrum,
             timestamps,
             blur_timestamps,
+            hd_bloom_timestamps,
         )
     }
 
@@ -205,8 +207,9 @@ impl RaceStage {
             &[],
             // Untimed: a warmup frame is the pipeline compiles this call
             // exists to pay, so its cost is the one measurement that would
-            // mislead a controller most. Both pairs, and the blur chain would
-            // encode nothing here anyway at `MotionBlur::Off`.
+            // mislead a controller most. All three pairs, and the blur chain
+            // would encode nothing here anyway at `MotionBlur::Off`.
+            None,
             None,
             None,
         );

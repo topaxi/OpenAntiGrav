@@ -27,6 +27,16 @@ pub struct SceneStats {
     /// caller answers that with `PassTimer::abandon`, and this is what tells it
     /// to.
     pub blur_encoded: bool,
+    /// Whether the HD/Fury bloom chain was actually encoded this frame.
+    ///
+    /// The same shape as [`Self::blur_encoded`] and for the same reason, with
+    /// one difference worth stating: `hd_bloom::Chain::run` has no early
+    /// return, so a caller that claims a slot only when a scene actually holds
+    /// a `Chain` (see `race::scene::frame::Scene::hd`) never needs the
+    /// abandon path in the running case - this field earns its keep on the
+    /// PSP/Pure titles and any HD circuit with no `HDR and Bloom` block, where
+    /// no `Chain` exists to claim a slot for at all.
+    pub hd_bloom_encoded: bool,
 }
 
 impl SceneStats {
@@ -34,10 +44,11 @@ impl SceneStats {
         self.draws_submitted += other.draws_submitted;
         self.draws_culled += other.draws_culled;
         self.triangles += other.triangles;
-        // Or-ed rather than summed: it is the one field here that is not a
-        // count, and "any part of this frame encoded the chain" is the
+        // Or-ed rather than summed: they are the two fields here that are not
+        // counts, and "any part of this frame encoded the chain" is the
         // question a timestamp claim is asking.
         self.blur_encoded |= other.blur_encoded;
+        self.hd_bloom_encoded |= other.hd_bloom_encoded;
     }
 }
 

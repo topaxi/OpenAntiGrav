@@ -126,6 +126,30 @@ pub(crate) struct Session {
     /// reductions, a neighbour-max, a gather and a copy, and timing any single
     /// one of them would measure a fraction of the cost.
     pub(crate) blur_timer: Option<oag_render::timing::PassTimer>,
+    /// What Wipeout HD/Fury's read bloom chain costs on the **GPU**, in the
+    /// same seconds.
+    ///
+    /// **The fourth meter, and the fix for a gap ADR-0042 recorded rather than
+    /// closed.** `oag_render::post::hd_bloom::Chain::run` draws through the
+    /// render extent - the same viewport every level of its ladder follows -
+    /// so its cost belongs beside the scene pass and the motion-blur chain in
+    /// [`drs::Cost::scalable`], not folded into `drs::RESIDUAL_SHARE` as an
+    /// assumed constant. See
+    /// [ADR-0043](../../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md).
+    ///
+    /// `None` on Pulse, Pure, and any HD circuit whose `track.envsettings`
+    /// carries no `HDR and Bloom` block - `race::scene::frame::Scene::hd` is
+    /// `None` there too, and `stats.hd_bloom_encoded` is how the frame loop
+    /// tells the two "nothing measured" cases (no chain, ring full) apart.
+    pub(crate) hd_bloom_cost: perf::Meter,
+    /// The timer behind [`Session::hd_bloom_cost`], on its own ring for the
+    /// reason [`Session::upscale_timer`] has one.
+    ///
+    /// **Bracketed the same way [`Session::blur_timer`] is**, with one
+    /// simplification: `Chain::run` has no early return, so the only way a
+    /// claim goes unwritten is a scene with no `Chain` at all, never a
+    /// mid-chain bail-out.
+    pub(crate) hd_bloom_timer: Option<oag_render::timing::PassTimer>,
     /// Whether the "this target is out of reach" line has already been said
     /// for the spell the controller is currently in.
     ///

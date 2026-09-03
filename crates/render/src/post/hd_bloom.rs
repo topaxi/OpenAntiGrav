@@ -103,6 +103,29 @@ pub const BLUR_WEIGHTS: [f32; 9] = [0.1, 0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2, 0.1]
 /// The kernel's divisor, the microcode's own constant.
 pub const BLUR_DIVISOR: f32 = 4.2;
 
+/// One timestamp pair, split across the chain's first and last pass.
+///
+/// The same shape as `oag_render::post::motion_blur::ChainTimestamps`, for
+/// the same reason: [`Chain::run`] is a fixed sequence of render passes -
+/// two downsamples, a reduction ladder, adapt, gate, two blurs and the
+/// encode - and wgpu writes a timestamp per *pass*, not per encoder span. The
+/// opening index rides the first downsample and the closing one rides the
+/// encode, covering the whole chain with one claimed
+/// [`crate::timing::PassTimer`] slot. See
+/// [`crate::timing::PassTimer::half_writes`].
+///
+/// **Unlike motion blur's, this chain never encodes nothing.** [`Chain::run`]
+/// has no early return - the downsample ladder always has at least two
+/// entries and the encode always runs - so a caller that claims a slot only
+/// when it is about to call `run` never needs to give it back unwritten.
+#[derive(Debug)]
+pub struct ChainTimestamps<'a> {
+    /// Opening timestamp only, for the first downsample pass.
+    pub begin: wgpu::RenderPassTimestampWrites<'a>,
+    /// Closing timestamp only, for the encode pass.
+    pub end: wgpu::RenderPassTimestampWrites<'a>,
+}
+
 /// One circuit's `HDR and Bloom` values - the parameters the engine patches
 /// into the gate and blur programs, read from `track.envsettings`. The
 /// settings-block offsets each name maps to are read out of the registrar
@@ -671,6 +694,7 @@ impl Chain {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (u32, u32),
+        timestamps: Option<ChainTimestamps<'_>>,
     ) {
         let scene = self.sized.scene_size;
         let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
@@ -696,36 +720,58 @@ impl Chain {
             self.written.set(Some(viewport));
         }
 
-        let mut pass = |label: &str,
-                        pipeline: &wgpu::RenderPipeline,
-                        stage: &Pass,
-                        target: Option<&wgpu::TextureView>,
-                        load: wgpu::LoadOp<wgpu::Color>| {
-            let rect = level_viewport(stage.level, viewport, scene);
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(label),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target.unwrap_or(&stage.target),
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_pipeline(pipeline);
-            pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-            pass.set_bind_group(0, &stage.group, &[]);
-            pass.draw(0..3, 0..1);
+        // **The two halves, taken apart here rather than carried into the
+        // closure.** `RenderPassTimestampWrites` borrows `self.queries` and is
+        // `Clone` but not `Copy`, and `.take()` on an `Option` is the cheapest
+        // way to hand the opening write to exactly one call and the closing
+        // one to exactly one other, out of however many this function makes.
+        let (mut opening, mut closing) = match timestamps {
+            Some(pair) => (Some(pair.begin), Some(pair.end)),
+            None => (None, None),
         };
+
+        let mut pass =
+            |label: &str,
+             pipeline: &wgpu::RenderPipeline,
+             stage: &Pass,
+             target: Option<&wgpu::TextureView>,
+             load: wgpu::LoadOp<wgpu::Color>,
+             timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>| {
+                let rect = level_viewport(stage.level, viewport, scene);
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: target.unwrap_or(&stage.target),
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_pipeline(pipeline);
+                pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
+                pass.set_bind_group(0, &stage.group, &[]);
+                pass.draw(0..3, 0..1);
+            };
         let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
+        // `self.sized.downsamples` always has at least two entries - see its
+        // own construction - so the opening write always lands on a real pass
+        // and `opening` never survives this loop unconsumed.
         for stage in &self.sized.downsamples {
-            pass("hd bloom downsample", &self.copy, stage, None, clear);
+            pass(
+                "hd bloom downsample",
+                &self.copy,
+                stage,
+                None,
+                clear,
+                opening.take(),
+            );
         }
         let current = self.current.get();
         let adapt_pipeline = if self.fresh.replace(false) {
@@ -739,6 +785,7 @@ impl Chain {
             &self.sized.adapt[current],
             None,
             clear,
+            None,
         );
         pass(
             "hd bloom gate",
@@ -746,6 +793,7 @@ impl Chain {
             &self.sized.gate[current],
             None,
             clear,
+            None,
         );
         pass(
             "hd bloom blur-v",
@@ -753,6 +801,7 @@ impl Chain {
             &self.sized.blur_vertical,
             None,
             clear,
+            None,
         );
         pass(
             "hd bloom blur-h",
@@ -760,13 +809,17 @@ impl Chain {
             &self.sized.blur_horizontal,
             None,
             clear,
+            None,
         );
+        // The closing write, on the chain's genuinely last pass - see
+        // [`ChainTimestamps`].
         pass(
             "hd encode",
             &self.encode,
             &self.sized.encode[current],
             Some(view),
             clear,
+            closing.take(),
         );
         self.current.set(1 - current);
     }
@@ -791,3 +844,6 @@ fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) ->
         axis(level.1, viewport.1, scene.1),
     )
 }
+
+#[cfg(test)]
+mod tests;

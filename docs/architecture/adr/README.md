@@ -53,6 +53,7 @@ out to be wrong.
 | [0040](0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md) | The dynamic-resolution budget is a share of a frame, not a measured frame | Accepted; its budget formula superseded by [ADR-0042](0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md) |
 | [0041](0041-one-row-for-what-resolves-the-frame.md) | One row for what resolves the frame, and MSAA on an axis of its own | Accepted; supersedes [ADR-0013](0013-anti-aliasing-architecture.md)'s row shape |
 | [0042](0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md) | The dynamic-resolution budget subtracts what it can measure | Accepted; supersedes [ADR-0040](0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md)'s budget formula |
+| [0043](0043-hd-bloom-joins-the-scalable-budget.md) | `hd_bloom` joins the scalable budget | Accepted; extends ADR-0042 |
 
 ## Format
 

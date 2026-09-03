@@ -70,22 +70,28 @@ pub use policy::{
 /// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
 ///
 /// What is left for a constant to cover is the HUD, the UI composite, the
-/// blit, the performance overlay, the MSAA resolve and the driver's own
-/// overhead - all of it at *presentation* resolution or over the whole
-/// allocation, none of it moving when the extent does, and none of it varying
-/// with the render-profile rows. Measured across four render profiles on the
-/// same circuit it sat at **1.45 ms of a 9.3 ms frame** and did not move
-/// between them, which is 0.156; 0.15 is that rounded down, because
-/// under-reserving makes the controller slightly *keener* to shrink and the
-/// bug this replaces was the opposite.
+/// blit, the performance overlay, the MSAA resolve and the driver's and
+/// frame loop's own CPU-side overhead - all of it at *presentation*
+/// resolution, over the whole allocation, or off the render-extent path
+/// entirely, so none of it should move when the extent does or vary with the
+/// render-profile rows the way [`Cost::scalable`] and [`Cost::fixed`] do.
 ///
-/// **The known gap: `hd_bloom` is in here and should not be.** It draws
-/// through the extent, so it belongs in the scalable half, and it is not
-/// timed. The circuit measured authors `blur steps 1/1`, the cheapest ladder,
-/// so it hides inside the 1.45 ms; a circuit with a longer ladder would push
-/// the residual up and the controller would under-shrink. That is the next
-/// term to measure, not a reason to inflate this constant.
-pub const RESIDUAL_SHARE: f32 = 0.15;
+/// **Raised from 0.15 to 0.20 once `hd_bloom` joined [`Cost::scalable`]**,
+/// per [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md).
+/// The original 0.15 was measured solo (one ship, no opponents) and folded
+/// `hd_bloom` into the residual, which is what made 1.45 ms of a 9.3 ms frame
+/// hold steady across four render profiles: on that circuit `hd_bloom` costs
+/// about 0.36 ms regardless of `msaa`/`motion_blur`, so it never showed up as
+/// motion in the number. With `hd_bloom` measured and moved out, a fielded
+/// grid of seven opponents (`--mode single_race`, the mode every real race
+/// runs) left roughly 2.4 ms of a ~8.7 ms frame still unaccounted for -
+/// AI, physics and draw-call overhead for seven more craft, none of it timed
+/// by anything this module reads. 0.20 covers that on the one circuit
+/// measured; it has not been checked against a heavier `hd_bloom` ladder, a
+/// second title, or a second adapter, and under-reserving is still the safer
+/// direction to be wrong in than over-reserving - see
+/// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
+pub const RESIDUAL_SHARE: f32 = 0.20;
 
 /// One frame's GPU cost, split by whether the controller can change it.
 ///
@@ -96,8 +102,11 @@ pub const RESIDUAL_SHARE: f32 = 0.15;
 /// everything else.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cost {
-    /// What falls when the render extent does: the `race` pass and the
-    /// motion-blur chain, both drawn through the extent and both timed.
+    /// What falls when the render extent does: the `race` pass, the
+    /// motion-blur chain and the HD/Fury bloom chain - all three drawn
+    /// through the extent, all three timed. See
+    /// [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md)
+    /// for the third.
     pub scalable: f32,
     /// What does not: the FSR 3.1 chain, measured, and **all of it**.
     ///

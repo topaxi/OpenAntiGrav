@@ -196,21 +196,29 @@ rather than a shipping one.
 
 ### What is timed, what is measured-and-fixed, and what is a residual constant
 
-Three categories since [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md),
+Three categories since [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
+and [ADR-0043](../architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md),
 replacing the two-way "in the budget or not" split this section used to draw:
 
 | Pass | Category | Why |
 | --- | --- | --- |
 | The `race` pass (`race/scene/frame.rs`) | `drs::Cost::scalable` | Falls with the render extent, timed every frame |
 | `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes` |
+| `hd_bloom` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain the same way since ADR-0043. `Scene::has_hd_bloom` tells "ring full" from "no chain to measure" - Pulse, Pure, and an HD circuit with no `HDR and Bloom` block all have none |
 | The FSR 3.1 chain | `drs::Cost::fixed` | Timed (`Session::upscale_cost`), but does not fall with the extent - its temporal accumulate and RCAS passes run at presentation size. Counted in full rather than split, which is conservative: some of the chain does shrink with the extent, and treating it all as fixed under-states the true budget |
-| `bloom`, `hd_bloom` | `RESIDUAL_SHARE` | Not timed. `bloom` draws at a fixed 240x136 regardless of scale; `hd_bloom` draws through the extent and belongs in `scalable`, but its ladder length is a runtime decision and bracketing it needs the same first/last split motion blur got - not done yet, and the residual measurement was taken on the disc's cheapest ladder |
-| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay | `RESIDUAL_SHARE` | Presentation-resolution or driver overhead, permanently outside the extent's reach |
+| `bloom` | `RESIDUAL_SHARE` | Not timed. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
+| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay, AI/physics for opponents beyond the player | `RESIDUAL_SHARE` | Presentation-resolution, driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
 
 Each pass is timed and summed rather than the encoder being bracketed
 first-to-last: bracketing would need `TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is
 not WebGPU-portable, and would have to know which pass is last - which varies
 with the bloom, motion-blur and HD-chain settings.
+
+The `dev` overlay's `GPU` row prints all four timed readings - `SCENE`,
+`BLOOM`, `BLUR`, `FSR3`, each only once it has a reading - followed by an
+`OTHER` row: `perf::Meter`'s own wall-clock frame time minus whatever the row
+above adds up to. That is `RESIDUAL_SHARE`'s target made visible rather than
+assumed - see `perf::GpuCost::residual_ms`.
 
 ### What the signal does in a running race
 
@@ -333,13 +341,15 @@ What changed, in [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budg
 `drs::SCENE_SHARE`, a single constant standing in for everything the scene pass
 was not, is gone. The budget is now `period - fixed - RESIDUAL_SHARE * period`,
 where `fixed` is `drs::Cost::fixed` - the FSR 3.1 chain's own GPU timing,
-already measured and previously discarded - and `RESIDUAL_SHARE = 0.15`
-covers only the presentation-resolution and allocation-bound work that
-genuinely cannot be reached by a render-extent change: the HUD, the composite,
-the blit, the perf overlay, the MSAA resolve, and (not yet timed) `hd_bloom`'s
-ladder on the disc's cheapest circuits. A single constant could not serve both
-a profile with FSR 3.1 and MSAA and one with neither - measured, the scene
-pass's own share of the frame ranged from 23 % to 39 % across four render
+already measured and previously discarded - and `RESIDUAL_SHARE = 0.20`
+covers what genuinely cannot be reached by a render-extent change: the HUD,
+the composite, the blit, the perf overlay, the MSAA resolve, and, per
+[ADR-0043](../architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md), the
+AI and physics cost of every opponent beyond the player - `hd_bloom` itself
+joined `Cost::scalable` in that same ADR rather than staying here. A single
+constant could not serve both a profile with FSR 3.1 and MSAA and one with
+neither - measured, the scene pass's own share of the frame ranged from 23 % to
+39 % across four render
 profiles on one circuit, which is not a range one constant can be.
 
 ### The policy
