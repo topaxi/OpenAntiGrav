@@ -126,8 +126,11 @@ BASELINE = {
     "crates/game/src/movie.rs": 1981,
     # Ratcheted down from 2,005 when the two drawing idioms split out into
     # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
-    # draws nothing itself.
-    "crates/game/src/menu.rs": 1785,
+    # draws nothing itself. Ratcheted down again from 1,785 to 1,276 when
+    # `Definition`, `Error`, the raw TOML shape and the parse/check functions
+    # split out into `menu/definition.rs` - the seam `string_id` resolution
+    # needs, and the file had zero lines of headroom to grow it in place.
+    "crates/game/src/menu.rs": 1274,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1614,
