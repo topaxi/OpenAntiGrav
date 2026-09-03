@@ -20,7 +20,19 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
     let meter = Meter::new();
     assert!(meter.is_empty());
     assert_eq!(meter.stats(), None);
-    assert!(draw_list(&meter, Overlay::Pacing, 60, None, None, None, None).is_empty());
+    assert!(
+        draw_list(
+            &meter,
+            Overlay::Pacing,
+            60,
+            None,
+            None,
+            None,
+            None,
+            GpuCost::default()
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -110,7 +122,19 @@ fn clearing_forgets_the_load_that_was_not_a_frame() {
 fn off_draws_nothing_however_full_the_meter_is() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
-    assert!(draw_list(&meter, Overlay::Off, 60, None, None, None, None).is_empty());
+    assert!(
+        draw_list(
+            &meter,
+            Overlay::Off,
+            60,
+            None,
+            None,
+            None,
+            None,
+            GpuCost::default()
+        )
+        .is_empty()
+    );
 }
 
 /// The counter is one panel and one line; the pacing view adds a second
@@ -120,12 +144,30 @@ fn each_mode_draws_exactly_what_it_promises() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let fps = draw_list(&meter, Overlay::Fps, 60, None, None, None, None);
+    let fps = draw_list(
+        &meter,
+        Overlay::Fps,
+        60,
+        None,
+        None,
+        None,
+        None,
+        GpuCost::default(),
+    );
     assert_eq!(fps.len(), 2);
     assert!(matches!(fps[0], Draw::Fill { .. }));
     assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
 
-    let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None, None, None);
+    let pacing = draw_list(
+        &meter,
+        Overlay::Pacing,
+        60,
+        None,
+        None,
+        None,
+        None,
+        GpuCost::default(),
+    );
     // panel + two lines + the rule + one column per frame
     assert_eq!(pacing.len(), 4 + WINDOW);
     assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
@@ -140,7 +182,16 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let bare = draw_list(&meter, Overlay::Dev, 60, None, None, None, None);
+    let bare = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        None,
+        None,
+        None,
+        GpuCost::default(),
+    );
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
     // rule + one column per frame.
     assert_eq!(bare.len(), 4 + WINDOW);
@@ -150,7 +201,16 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         draws_culled: 3,
         triangles: 4096,
     };
-    let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None, None, None);
+    let with_scene = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        Some(scene),
+        None,
+        None,
+        None,
+        GpuCost::default(),
+    );
     assert!(
         with_scene
             .iter()
@@ -165,6 +225,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         Some(64 * 1024 * 1024),
         None,
+        GpuCost::default(),
     );
     assert!(
         with_memory
@@ -180,6 +241,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         Some("gstreamer"),
         None,
         None,
+        GpuCost::default(),
     );
     assert!(
         with_video
@@ -198,6 +260,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
             extent: (1440, 816),
             allocation: (1440, 816),
         }),
+        GpuCost::default(),
     );
     assert!(
         with_all
@@ -246,7 +309,16 @@ fn a_stage_with_no_scene_draws_no_render_row() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let none = draw_list(&meter, Overlay::Dev, 60, None, None, None, None);
+    let none = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        None,
+        None,
+        None,
+        GpuCost::default(),
+    );
     assert!(
         !none
             .iter()
@@ -265,6 +337,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
             extent: (1440, 816),
             allocation: (1440, 816),
         }),
+        GpuCost::default(),
     );
     assert!(
         race.iter()
@@ -291,6 +364,7 @@ fn the_render_row_is_dev_only() {
             extent: (1440, 816),
             allocation: (1440, 816),
         }),
+        GpuCost::default(),
     );
     assert!(
         !pacing
@@ -318,7 +392,16 @@ fn nothing_is_drawn_outside_the_panel() {
         triangles: 4096,
     };
     for list in [
-        draw_list(&meter, Overlay::Pacing, 60, None, None, None, None),
+        draw_list(
+            &meter,
+            Overlay::Pacing,
+            60,
+            None,
+            None,
+            None,
+            None,
+            GpuCost::default(),
+        ),
         draw_list(
             &meter,
             Overlay::Dev,
@@ -332,6 +415,7 @@ fn nothing_is_drawn_outside_the_panel() {
                 extent: (1216, 688),
                 allocation: (1440, 816),
             }),
+            GpuCost::default(),
         ),
     ] {
         let Draw::Fill { rect: panel, .. } = list[0] else {
@@ -365,14 +449,23 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
     steady(&mut meter, WINDOW, 1.0 / 240.0);
 
     let heights = |target| {
-        draw_list(&meter, Overlay::Pacing, target, None, None, None, None)
-            .into_iter()
-            .skip(4) // the panel, two lines of text and the rule
-            .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } => Some((rect[3], color)),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
+        draw_list(
+            &meter,
+            Overlay::Pacing,
+            target,
+            None,
+            None,
+            None,
+            None,
+            GpuCost::default(),
+        )
+        .into_iter()
+        .skip(4) // the panel, two lines of text and the rule
+        .filter_map(|draw| match draw {
+            Draw::Fill { rect, color } => Some((rect[3], color)),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
     };
 
     let (tall, colour) = heights(240)[0];
@@ -450,4 +543,66 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
         assert_eq!(mode.to_string().parse::<Overlay>(), Ok(mode));
     }
     assert!("graph".parse::<Overlay>().is_err());
+}
+
+/// The GPU cost row says only what has actually been measured.
+///
+/// A reading arrives a frame or more after the frame it describes, so both
+/// halves are legitimately absent at the start of a run - and `FSR3 0.00 MS` on
+/// a frame the bilinear blit resolved would be a lie that reads as "free"
+/// rather than as "not running". Each half appears only once it has a number.
+#[test]
+fn the_gpu_cost_row_shows_only_what_was_measured() {
+    assert_eq!(GpuCost::default().line(), None, "nothing measured, no row");
+    assert_eq!(
+        GpuCost {
+            scene: Some(0.004_2),
+            upscale: None,
+        }
+        .line()
+        .as_deref(),
+        Some("GPU SCENE 4.20 MS"),
+        "a scene reading alone must not imply an upscaler ran"
+    );
+    assert_eq!(
+        GpuCost {
+            scene: Some(0.004_2),
+            upscale: Some(0.001_8),
+        }
+        .line()
+        .as_deref(),
+        Some("GPU SCENE 4.20 MS  FSR3 1.80 MS")
+    );
+    // The upscaler can report before the scene pass does: the two rings are
+    // independent, and a slot is claimed per ring per frame.
+    assert_eq!(
+        GpuCost {
+            scene: None,
+            upscale: Some(0.001_8),
+        }
+        .line()
+        .as_deref(),
+        Some("GPU  FSR3 1.80 MS")
+    );
+}
+
+/// The row is `Dev`-only, like the two above it.
+#[test]
+fn the_gpu_cost_row_is_dev_only() {
+    let mut meter = Meter::new();
+    for _ in 0..8 {
+        meter.record(1.0 / 60.0);
+    }
+    let cost = GpuCost {
+        scene: Some(0.004_2),
+        upscale: Some(0.001_8),
+    };
+    let has_row = |mode| {
+        draw_list(&meter, mode, 60, None, None, None, None, cost)
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.starts_with("GPU ")))
+    };
+    assert!(has_row(Overlay::Dev));
+    assert!(!has_row(Overlay::Pacing), "pacing is about the interval");
+    assert!(!has_row(Overlay::Fps));
 }

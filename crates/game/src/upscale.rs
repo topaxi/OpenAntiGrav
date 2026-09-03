@@ -68,7 +68,7 @@
 //! comparison wants a picture of a window; a bug report does not.
 
 use anyhow::Result;
-use log::warn;
+use log::{info, warn};
 
 use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
@@ -97,7 +97,11 @@ mod temporal;
 
 pub use temporal::{Temporal, jitter_phases};
 
-use blit::{Grade, Source, grade_buffer};
+use blit::{Grade, Source, bind, grade_buffer, resolved_source};
+// Re-exported rather than merely used: the menu's warning tests ask the same
+// question the ladder does, and asking it of `upscale` is what keeps the two
+// from drifting.
+pub(crate) use blit::magnifies;
 use targets::{output, target};
 
 /// The offscreen target and the pipeline that puts it on screen.
@@ -140,6 +144,17 @@ pub struct Framebuffer {
     /// same reason `fsr1` is, and more so: this one is eight shader
     /// compilations and a dozen textures.
     fsr3: Option<Result<fsr3::Fsr3>>,
+    /// What FSR 3.1's intermediates cost, last time it was reported.
+    ///
+    /// **Held only so the line is printed once per allocation** rather than
+    /// once a frame. The widening to baseline-storable formats is that port's
+    /// one unmeasured cost - `docs/rendering/fsr3.md` argues it and
+    /// `fsr3::Sizes` counts it - and a number nothing prints is an argument
+    /// rather than a measurement. It is the reading
+    /// [goals.md](../../../docs/overview/goals.md)'s first-tier Steam Deck
+    /// question needs, and it moves only when a render scale or a window
+    /// resize moves an allocation.
+    fsr3_sizes: Option<fsr3::Sizes>,
     /// The scene texture's real dimensions, and what every size-matched
     /// attachment is built against.
     ///
@@ -275,6 +290,7 @@ impl Framebuffer {
             fxaa: None,
             smaa: None,
             fsr3: None,
+            fsr3_sizes: None,
             allocation: size,
             // The whole target to begin with, which is what keeps every caller
             // that predates the split correct with no change: a capture, a
@@ -338,15 +354,29 @@ impl Framebuffer {
     /// [`magnifies`].
     ///
     /// **FXAA/SMAA run before the upscaler, not after**, reading `self.perceptual`
-    /// at the scene's own size and handing their output on as what the
+    /// at the scene's own size and handing their output on as what a *spatial*
     /// upscaler reads instead - see [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md)
     /// for why the order is the reverse of a generic post-process-AA diagram.
+    ///
+    /// **FSR 3.1 is the exception, and it does not run them at all.** A
+    /// temporal reconstruction reasons about the edges a spatial filter has
+    /// already blurred, so its input is `self.perceptual` whatever the
+    /// anti-aliasing row says - which is the pairing that row's own warning is
+    /// about. The pass is therefore *skipped* rather than run and discarded,
+    /// which is why the FSR 3.1 resolve is encoded above the anti-aliasing
+    /// match rather than below it: only `temporally_resolved` answers "did the
+    /// temporal upscaler actually run", where the setting alone does not.
     ///
     /// This puts the frame in [`Framebuffer::output`], **not** on the surface,
     /// and it does so *ungraded* - the caller draws the UI on top of it and
     /// then calls [`Framebuffer::composite`], which is where the grade is and
     /// where the surface is written. See
     /// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one timestamp pair, which cannot ride in `Temporal`: \
+                  `ComputePassTimestampWrites` is `Clone` and not `Copy`"
+    )]
     pub fn resolve_scene(
         &mut self,
         device: &wgpu::Device,
@@ -355,6 +385,7 @@ impl Framebuffer {
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
         temporal: Option<Temporal<'_>>,
+        upscale_timestamp: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         let output_size = (rect.2 as u32, rect.3 as u32);
         // **The extent, not the allocation**: every pass below is asking
@@ -368,65 +399,6 @@ impl Framebuffer {
         // extent never rebuilds them, and FSR 1 takes upstream's own
         // `inputViewportInPixels` and `inputSizeInPixels` separately again.
         let allocation = self.allocation;
-
-        let post_process: Option<&wgpu::TextureView> = match presentation.anti_aliasing {
-            AntiAliasing::Fxaa => {
-                let fxaa = self
-                    .fxaa
-                    .get_or_insert_with(|| fxaa::Fxaa::new(device, self.format));
-                match fxaa {
-                    Ok(fxaa) => {
-                        fxaa.render(
-                            device,
-                            queue,
-                            encoder,
-                            fxaa::Frame {
-                                source: &self.perceptual,
-                                size: allocation,
-                                viewport: extent,
-                            },
-                        );
-                        fxaa.output()
-                    }
-                    // A shader that will not compile is a build-time mistake,
-                    // but it must not be a crash in a player's frame loop: say
-                    // so once and carry on unfiltered.
-                    Err(why) => {
-                        warn!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
-                        None
-                    }
-                }
-            }
-            AntiAliasing::Smaa => {
-                let smaa = self
-                    .smaa
-                    .get_or_insert_with(|| smaa::Smaa::new(device, queue, self.format));
-                match smaa {
-                    Ok(smaa) => {
-                        smaa.render(
-                            device,
-                            queue,
-                            encoder,
-                            smaa::Frame {
-                                source: &self.perceptual,
-                                size: allocation,
-                                viewport: extent,
-                            },
-                        );
-                        smaa.output()
-                    }
-                    // A shader that will not compile is a build-time mistake,
-                    // but it must not be a crash in a player's frame loop: say
-                    // so once and carry on unfiltered.
-                    Err(why) => {
-                        warn!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
-                        None
-                    }
-                }
-            }
-            AntiAliasing::Off | AntiAliasing::Msaa4x => None,
-        };
-        let upscale_source = post_process.unwrap_or(&self.perceptual);
 
         // **The fallback ladder, as one expression.** FSR 3.1 when the setting
         // asks for it, the adapter can run it, and this frame is a race with a
@@ -488,10 +460,100 @@ impl Framebuffer {
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
                 },
+                upscale_timestamp,
             );
-            fsr.output()
-                .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+            let sizes = fsr.sizes();
+            let view = fsr
+                .output()
+                .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view));
+            // After the render, which is what allocates them - so the first
+            // race frame reports rather than the second.
+            if let Some(sizes) = sizes
+                && self.fsr3_sizes != Some(sizes)
+            {
+                let mib = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
+                info!(
+                    "FSR 3.1 intermediates: {:.1} MiB ({:.1} render, {:.1} half, {:.1} presentation)",
+                    mib(sizes.total()),
+                    mib(sizes.render),
+                    mib(sizes.half_render),
+                    mib(sizes.upscale)
+                );
+                self.fsr3_sizes = Some(sizes);
+            }
+            view
         });
+
+        // **Anti-aliasing is skipped entirely when FSR 3.1 resolved**, rather
+        // than run and discarded. A spatial post-process blurs the edges a
+        // temporal reconstruction reasons about, so its output is deliberately
+        // not what FSR 3.1 reads - the anti-aliasing row already warns a player
+        // about the pairing. Running the pass anyway to bind nothing was a
+        // full-screen pass's cost paid for a frame nobody reads, which is why
+        // the resolve above happens first: `temporally_resolved` is the exact
+        // answer to "did FSR 3.1 run", where the setting alone is not.
+        let post_process: Option<&wgpu::TextureView> = if temporally_resolved.is_some() {
+            None
+        } else {
+            match presentation.anti_aliasing {
+                AntiAliasing::Fxaa => {
+                    let fxaa = self
+                        .fxaa
+                        .get_or_insert_with(|| fxaa::Fxaa::new(device, self.format));
+                    match fxaa {
+                        Ok(fxaa) => {
+                            fxaa.render(
+                                device,
+                                queue,
+                                encoder,
+                                fxaa::Frame {
+                                    source: &self.perceptual,
+                                    size: allocation,
+                                    viewport: extent,
+                                },
+                            );
+                            fxaa.output()
+                        }
+                        // A shader that will not compile is a build-time mistake,
+                        // but it must not be a crash in a player's frame loop: say
+                        // so once and carry on unfiltered.
+                        Err(why) => {
+                            warn!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
+                            None
+                        }
+                    }
+                }
+                AntiAliasing::Smaa => {
+                    let smaa = self
+                        .smaa
+                        .get_or_insert_with(|| smaa::Smaa::new(device, queue, self.format));
+                    match smaa {
+                        Ok(smaa) => {
+                            smaa.render(
+                                device,
+                                queue,
+                                encoder,
+                                smaa::Frame {
+                                    source: &self.perceptual,
+                                    size: allocation,
+                                    viewport: extent,
+                                },
+                            );
+                            smaa.output()
+                        }
+                        // A shader that will not compile is a build-time mistake,
+                        // but it must not be a crash in a player's frame loop: say
+                        // so once and carry on unfiltered.
+                        Err(why) => {
+                            warn!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
+                            None
+                        }
+                    }
+                }
+                AntiAliasing::Off | AntiAliasing::Msaa4x => None,
+            }
+        };
+        let upscale_source = post_process.unwrap_or(&self.perceptual);
 
         let resolved = temporally_resolved.or_else(|| {
             (effective == Upscaler::Fsr1 && magnifies(extent, output_size))
@@ -580,6 +642,37 @@ impl Framebuffer {
             read,
         );
         self.present(encoder, &self.output.view, rect, source.as_ref());
+    }
+
+    /// Whether FSR 3.1's pipelines are known *not* to build.
+    ///
+    /// **For the caller's timestamp claim, not for the ladder.** The ladder
+    /// falls a rung inside [`Framebuffer::resolve_scene`] and needs no help;
+    /// what a caller cannot see from outside is that a build failure is
+    /// permanent - the `Err` is kept rather than retried - so a frame loop
+    /// claiming a timestamp pair for a pass that will never be recorded would
+    /// go on claiming one every frame. `true` before the first attempt, which
+    /// is right: nothing has failed yet.
+    #[must_use]
+    pub fn temporal_upscaler_viable(&self) -> bool {
+        !matches!(self.fsr3, Some(Err(_)))
+    }
+
+    /// Whether a spatial anti-aliasing pass has ever been *built*, for a test.
+    ///
+    /// Both are lazy - constructed the first frame the row asks for one - so
+    /// "was it built" is exactly "did a frame ever run it", which is what makes
+    /// this the observable for FSR 3.1 skipping them. A pass that ran and had
+    /// its output discarded and a pass that never ran produce the same picture;
+    /// only this tells them apart.
+    ///
+    /// **On a fresh `Framebuffer`**, which is the precondition and not a
+    /// detail: this says "ever", so a framebuffer reused across two settings
+    /// answers about the pair of them. A test comparing two upscalers builds
+    /// one framebuffer per reading.
+    #[must_use]
+    pub fn built_spatial_anti_aliasing(&self) -> bool {
+        self.fxaa.is_some() || self.smaa.is_some()
     }
 
     /// Makes sure the presentation target is `size` - the **surface's** size,
@@ -795,92 +888,6 @@ impl Framebuffer {
         pass.set_bind_group(0, Some(source.unwrap_or(&self.bind_group)), &[]);
         pass.draw(0..3, 0..1);
     }
-}
-
-/// Which rectangle of the bound source the blit reads.
-///
-/// **The question is which size the bound view is, not whether a pass ran.**
-/// FSR 1 resolves to the presentation rectangle and hands back a texture
-/// exactly that size, so its output is the whole thing. FXAA and SMAA draw at
-/// scene resolution into an allocation-sized target with the extent in its
-/// corner, so their output owes the same sub-rectangle the scene target does -
-/// and `source.is_some()` cannot tell those two apart.
-///
-/// Its own function because both arms are identical while the extent is the
-/// allocation, which is every frame until a controller moves it: no
-/// `--presented` capture can distinguish a correct reading of this from a
-/// wrong one, so a test on the decision itself is the only guard there is.
-fn resolved_source(upscaled: bool, extent: (u32, u32), allocation: (u32, u32)) -> Source {
-    if upscaled {
-        Source::WHOLE
-    } else {
-        Source::of(extent, allocation)
-    }
-}
-
-/// Whether resolving `scene` to `rect` is a magnification, which is the only
-/// thing a spatial upscaler is for.
-///
-/// FSR 1 is a **magnifier**, and upstream says so: EASU's contract is that the
-/// output is larger than the input. Handed a render scale above 100 % it is
-/// being asked to minify, and its twelve taps then step more than one input
-/// texel apart and undersample - so it re-introduces exactly the aliasing the
-/// supersampling was there to remove. Measured on a trackside fence at 200 %:
-/// the bilinear blit resolves the mesh smoothly and FSR 1 turns it crunchy.
-///
-/// So the setting is honoured where it means something and quietly not where it
-/// would only do harm. A row that silently degrades the picture at three of the
-/// six render scales it sits next to would be worse than one that does nothing
-/// at those three.
-/// Either axis and not both: a render scale applies to both, but a clamped
-/// target or an odd rectangle can leave one axis equal while the other is
-/// short, and one short axis is still something to reconstruct. On the equal
-/// axis EASU then steps exactly one input texel per output texel, which is the
-/// one-to-one case - it reconstructs nothing there, but it also cannot produce
-/// the undersampling artefact above, which needs a step *greater* than one.
-pub(crate) fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
-    scene.0 < rect.0 || scene.1 < rect.1
-}
-
-/// The blit's one bind group: a source view, the sampler and the grade.
-fn bind(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
-    grade: &wgpu::Buffer,
-    view: &wgpu::TextureView,
-) -> wgpu::BindGroup {
-    // Through the probe rather than `device.create_bind_group` directly, the
-    // same as the five sites in `oag_render::post`. This is the sixth, and the
-    // only one outside that module - which is why a sweep of `post/` alone
-    // missed it. A counting passthrough: the same bind group, and nothing at
-    // all without the `perf-probe` feature.
-    //
-    // It counts three callers, and only two of them are per-frame:
-    // `resolve_scene` binds an upscaler's or a post-process's output every
-    // frame it runs one, while `target` and `output` bind once per resize. A
-    // resize is rare enough that the count still reads as per-frame churn.
-    oag_render::perfprobe::bind_group(
-        device,
-        &wgpu::BindGroupDescriptor {
-            label: Some("upscale"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: grade.as_entire_binding(),
-                },
-            ],
-        },
-    )
 }
 
 /// How big the offscreen target should be for a viewport rectangle and a scale.

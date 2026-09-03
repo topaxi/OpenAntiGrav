@@ -158,3 +158,93 @@ pub(super) fn grade_buffer(
     buffer.unmap();
     Ok(buffer)
 }
+
+/// Which rectangle of the bound source the blit reads.
+///
+/// **The question is which size the bound view is, not whether a pass ran.**
+/// FSR 1 resolves to the presentation rectangle and hands back a texture
+/// exactly that size, so its output is the whole thing. FXAA and SMAA draw at
+/// scene resolution into an allocation-sized target with the extent in its
+/// corner, so their output owes the same sub-rectangle the scene target does -
+/// and `source.is_some()` cannot tell those two apart.
+///
+/// Its own function because both arms are identical while the extent is the
+/// allocation, which is every frame until a controller moves it: no
+/// `--presented` capture can distinguish a correct reading of this from a
+/// wrong one, so a test on the decision itself is the only guard there is.
+pub(super) fn resolved_source(
+    upscaled: bool,
+    extent: (u32, u32),
+    allocation: (u32, u32),
+) -> Source {
+    if upscaled {
+        Source::WHOLE
+    } else {
+        Source::of(extent, allocation)
+    }
+}
+
+/// Whether resolving `scene` to `rect` is a magnification, which is the only
+/// thing a spatial upscaler is for.
+///
+/// FSR 1 is a **magnifier**, and upstream says so: EASU's contract is that the
+/// output is larger than the input. Handed a render scale above 100 % it is
+/// being asked to minify, and its twelve taps then step more than one input
+/// texel apart and undersample - so it re-introduces exactly the aliasing the
+/// supersampling was there to remove. Measured on a trackside fence at 200 %:
+/// the bilinear blit resolves the mesh smoothly and FSR 1 turns it crunchy.
+///
+/// So the setting is honoured where it means something and quietly not where it
+/// would only do harm. A row that silently degrades the picture at three of the
+/// six render scales it sits next to would be worse than one that does nothing
+/// at those three.
+/// Either axis and not both: a render scale applies to both, but a clamped
+/// target or an odd rectangle can leave one axis equal while the other is
+/// short, and one short axis is still something to reconstruct. On the equal
+/// axis EASU then steps exactly one input texel per output texel, which is the
+/// one-to-one case - it reconstructs nothing there, but it also cannot produce
+/// the undersampling artefact above, which needs a step *greater* than one.
+pub(crate) fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
+    scene.0 < rect.0 || scene.1 < rect.1
+}
+
+/// The blit's one bind group: a source view, the sampler and the grade.
+pub(super) fn bind(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    grade: &wgpu::Buffer,
+    view: &wgpu::TextureView,
+) -> wgpu::BindGroup {
+    // Through the probe rather than `device.create_bind_group` directly, the
+    // same as the five sites in `oag_render::post`. This is the sixth, and the
+    // only one outside that module - which is why a sweep of `post/` alone
+    // missed it. A counting passthrough: the same bind group, and nothing at
+    // all without the `perf-probe` feature.
+    //
+    // It counts three callers, and only two of them are per-frame:
+    // `resolve_scene` binds an upscaler's or a post-process's output every
+    // frame it runs one, while `target` and `output` bind once per resize. A
+    // resize is rare enough that the count still reads as per-frame churn.
+    oag_render::perfprobe::bind_group(
+        device,
+        &wgpu::BindGroupDescriptor {
+            label: Some("upscale"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: grade.as_entire_binding(),
+                },
+            ],
+        },
+    )
+}

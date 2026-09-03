@@ -182,6 +182,7 @@ impl Scene {
                         sharpness: crate::post::fsr1::Sharpness::DEFAULT,
                     },
                 },
+                None,
             );
             queue.submit([encoder.finish()]);
             device

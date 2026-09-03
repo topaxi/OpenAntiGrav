@@ -624,6 +624,52 @@ impl RenderSize {
     }
 }
 
+/// What the GPU spent on the two passes this build actually times, in seconds.
+///
+/// **The frame-time row above cannot answer this.** `Meter` measures the
+/// interval between loop iterations, which under `Vsync::On` is the refresh and
+/// under a frame limit is the limit - so a frame with headroom and a frame with
+/// none read the same. These are GPU timestamps around specific work, from
+/// [`oag_render::timing::PassTimer`].
+///
+/// Two numbers rather than one because they answer different questions and a
+/// render scale moves them in opposite directions: lowering it makes the scene
+/// pass cheaper and gives the temporal resolve *more* to reconstruct, and the
+/// upscale chain runs after the scene pass rather than inside it. Choosing a
+/// render scale without both is choosing on half the cost.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct GpuCost {
+    /// The race's scene pass, or `None` before its first reading has come back.
+    pub scene: Option<f32>,
+    /// FSR 3.1's eight dispatches, or `None` when no temporal upscaler has run
+    /// - which is every frame on every other rung of the ladder.
+    pub upscale: Option<f32>,
+}
+
+impl GpuCost {
+    /// One line, or `None` when neither pass has been measured yet.
+    ///
+    /// A reading arrives a frame or more after the frame it describes, so the
+    /// first few frames of a run legitimately have nothing to show - printing
+    /// `0.0 MS` there would read as "free" rather than as "not measured yet".
+    #[must_use]
+    pub fn line(self) -> Option<String> {
+        match (self.scene, self.upscale) {
+            (None, None) => None,
+            (scene, upscale) => {
+                let mut line = String::from("GPU");
+                if let Some(scene) = scene {
+                    line.push_str(&format!(" SCENE {:.2} MS", scene * 1000.0));
+                }
+                if let Some(upscale) = upscale {
+                    line.push_str(&format!("  FSR3 {:.2} MS", upscale * 1000.0));
+                }
+                Some(line)
+            }
+        }
+    }
+}
+
 /// The overlay, as plain data.
 ///
 /// The same [`Draw`] vocabulary the front end and the menus emit, so the
@@ -648,6 +694,7 @@ impl RenderSize {
 /// so a size there would name a texture nothing on screen came from. Same
 /// discipline as `scene`: absent rather than stale.
 #[must_use]
+#[expect(clippy::too_many_arguments, reason = "one row's worth of GPU cost")]
 pub fn draw_list(
     meter: &Meter,
     mode: Overlay,
@@ -656,6 +703,7 @@ pub fn draw_list(
     video: Option<&str>,
     memory: Option<u64>,
     render: Option<RenderSize>,
+    gpu: GpuCost,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -696,6 +744,15 @@ pub fn draw_list(
         && let Some(render) = render
     {
         lines.push(render.line());
+    }
+    // Directly under the render size, because it is the other half of the same
+    // question: that row says what the frame was drawn at, this one says what
+    // that cost. Only under `Dev`, like the two above it - `pacing` is about
+    // the interval between frames, and this is about the work inside one.
+    if mode == Overlay::Dev
+        && let Some(line) = gpu.line()
+    {
+        lines.push(line);
     }
     // Resident memory, not virtual: what the process is actually holding,
     // rather than address space it has merely reserved (a wgpu process's

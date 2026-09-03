@@ -88,6 +88,23 @@ pub(crate) struct Session {
     /// be greyed for it: `disabled_by` names a *setting* and an adapter
     /// capability is not one. See `docs/architecture/menus.md`.
     pub(crate) pass_timer: Option<oag_render::timing::PassTimer>,
+    /// What FSR 3.1's eight dispatches cost on the **GPU**, in the seconds
+    /// [`Session::scene_cost`] is fed.
+    ///
+    /// A second meter because it measures a second thing and one a player
+    /// choosing an upscaler actually has to weigh: the temporal resolve runs
+    /// *after* the scene pass and is not in its reading, so a render scale
+    /// that halved the scene can still cost more overall. Empty on every frame
+    /// no temporal upscaler ran, which is most of them.
+    pub(crate) upscale_cost: perf::Meter,
+    /// The timer behind [`Session::upscale_cost`].
+    ///
+    /// **Its own ring rather than a share of [`Session::pass_timer`]'s**: that
+    /// one feeds the dynamic-resolution controller, and a slot spent on the
+    /// upscaler is a frame the controller does not get a scene reading for.
+    /// Four slots each is eight tiny buffers - see `PassTimer`'s own note on
+    /// what a ring costs.
+    pub(crate) upscale_timer: Option<oag_render::timing::PassTimer>,
     /// Which frame the loop is on, counted rather than timed.
     ///
     /// Exists because a GPU reading arrives a frame or more after the frame it

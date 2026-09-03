@@ -693,31 +693,60 @@ impl Session {
         // is already at presentation size. Ungraded on purpose; `composite`
         // grades.
         if has_scene {
+            let presentation = {
+                let render_profile = self.render_profile();
+                upscale::Presentation {
+                    upscaler: render_profile.upscaler,
+                    sharpness: render_profile.upscale_sharpness.stops(),
+                    anti_aliasing: render_profile.anti_aliasing,
+                    brightness: self.settings.display.brightness,
+                    gamma: self.settings.display.gamma,
+                }
+            };
+            // **Only a race answers, and only on an adapter that can run it.**
+            // Every other stage has no scene to reconstruct from (ADR-0038) and
+            // hands `None`, which falls the fallback ladder one rung exactly as
+            // an unsupported adapter does. Read *after* the stage rendered
+            // above, which is what makes it this frame's camera rather than the
+            // previous one's.
+            let temporal = match &self.stage {
+                Stage::Race(stage) if self.gpu.temporal => stage.temporal(),
+                _ => None,
+            };
+
+            // **The claim is here, not up beside the scene pass's, and it is
+            // gated on the same three things `resolve_scene` decides with.**
+            // A timestamp pair that no pass writes does not resolve to zero -
+            // its value is unspecified, and the query set is not cleared
+            // between frames, so a slot reused four frames later can hand back
+            // the pair a *previous* frame wrote. That reads as a plausible
+            // number attributed to the wrong frame, which is worse on an
+            // overlay than a blank. So a slot is claimed only when the chain
+            // will actually run.
+            //
+            // `resolve` below stays unconditional: `PassTimer::begin`'s own
+            // documentation is that a claimed-and-unresolved slot never comes
+            // back, and four of those end measurement for the run. Claim less,
+            // always resolve.
+            let will_upscale_temporally = temporal.is_some()
+                && presentation.upscaler == crate::display::Upscaler::Fsr3
+                && self.framebuffer.temporal_upscaler_viable();
+            if will_upscale_temporally && let Some(timer) = self.upscale_timer.as_mut() {
+                timer.begin(self.frame_index);
+            }
+
             self.framebuffer.resolve_scene(
                 &self.gpu.device,
                 &self.gpu.queue,
                 &mut encoder,
                 rect,
-                &{
-                    let render_profile = self.render_profile();
-                    upscale::Presentation {
-                        upscaler: render_profile.upscaler,
-                        sharpness: render_profile.upscale_sharpness.stops(),
-                        anti_aliasing: render_profile.anti_aliasing,
-                        brightness: self.settings.display.brightness,
-                        gamma: self.settings.display.gamma,
-                    }
-                },
-                // **Only a race answers, and only on an adapter that can run
-                // it.** Every other stage has no scene to reconstruct from
-                // (ADR-0038) and hands `None`, which falls the fallback ladder
-                // one rung exactly as an unsupported adapter does. Read *after*
-                // the stage rendered above, which is what makes it this frame's
-                // camera rather than the previous one's.
-                match &self.stage {
-                    Stage::Race(stage) if self.gpu.temporal => stage.temporal(),
-                    _ => None,
-                },
+                &presentation,
+                temporal,
+                // One pair around FSR 3.1's whole compute pass, on the frames
+                // the claim above took a slot for.
+                self.upscale_timer
+                    .as_ref()
+                    .and_then(oag_render::timing::PassTimer::compute_writes),
             );
         }
 
@@ -790,6 +819,14 @@ impl Session {
                 extent: self.framebuffer.extent(),
                 allocation: self.framebuffer.allocation(),
             }),
+            // Both GPU readings, whatever the stage: a reading is a frame or
+            // more old, so gating this on `has_scene` would blank the row on
+            // the menu frame that is finally reporting the last race frame's
+            // cost. Each half is `None` until its own first reading lands.
+            perf::GpuCost {
+                scene: self.scene_cost.stats().map(|s| s.mean_ms / 1000.0),
+                upscale: self.upscale_cost.stats().map(|s| s.mean_ms / 1000.0),
+            },
         );
         if !list.is_empty() {
             self.overlay.overlay(
@@ -806,6 +843,9 @@ impl Session {
         // the copy has to follow the pass that wrote the timestamps and
         // precede the submit that runs both.
         if let Some(timer) = self.pass_timer.as_mut() {
+            timer.resolve(&mut encoder);
+        }
+        if let Some(timer) = self.upscale_timer.as_mut() {
             timer.resolve(&mut encoder);
         }
 
@@ -836,6 +876,24 @@ impl Session {
             }
             trace!(
                 "scene pass: frame {} took {:.3} ms, read on frame {}",
+                reading.frame,
+                reading.seconds * 1000.0,
+                self.frame_index
+            );
+        }
+        // The upscaler's own reading, on the same terms as the scene pass's.
+        // The `seconds > 0.0` guard is belt and braces rather than the
+        // mechanism: what keeps a reading honest is that a slot is only
+        // claimed on a frame the chain actually runs on - see the claim above
+        // for why an unwritten pair cannot be filtered out here.
+        if let Some(timer) = self.upscale_timer.as_mut()
+            && let Some(reading) = timer.read(&self.gpu.device)
+            && reading.frame > self.stall_frame
+            && reading.seconds > 0.0
+        {
+            self.upscale_cost.record(reading.seconds);
+            trace!(
+                "fsr3 chain: frame {} took {:.3} ms, read on frame {}",
                 reading.frame,
                 reading.seconds * 1000.0,
                 self.frame_index

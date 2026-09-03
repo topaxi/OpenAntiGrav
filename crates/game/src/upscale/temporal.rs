@@ -92,3 +92,6 @@ pub fn jitter_phases(
     }
     flag.then_some(oag_render::jitter::DEFAULT_PHASES)
 }
+
+#[cfg(test)]
+mod tests;

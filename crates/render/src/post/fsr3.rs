@@ -7,12 +7,12 @@
 //! [fsr3.md](../../../../docs/rendering/fsr3.md), which is the page to read
 //! before changing anything here.
 //!
-//! **All eight passes are built, and nothing selects this yet.**
-//! [`Fsr3::output`] returns a frame; `oag_game::upscale::Framebuffer` has no
-//! branch that reads it, so the UPSCALER row's `fsr3` still resolves through
-//! the blit. Wiring the game side is deliberately a separate change - a bug in
-//! the resolve and a bug in the wiring arriving together would leave nothing to
-//! bisect between. [`Fsr3::PASSES`] is the spine either way.
+//! **All eight passes are built, and the UPSCALER row selects them.**
+//! `oag_game::upscale::Framebuffer::resolve_scene` reads [`Fsr3::output`] on a
+//! race frame whose adapter has compute shaders, and falls one rung to
+//! [`super::fsr1`] otherwise. It is off by default; what has *not* happened is
+//! anybody judging a moving frame it produced - see the handover thread.
+//! [`Fsr3::PASSES`] is the spine either way.
 //!
 //! # Why this and not FSR 1
 //!
@@ -277,6 +277,22 @@ pub struct Fsr3 {
     levels: Vec<wgpu::Buffer>,
 
     targets: Option<Targets>,
+    /// Both ping-pong parities' bind groups, or `None` before the first frame
+    /// and after a resize.
+    ///
+    /// **Fifteen `create_bind_group` calls and a `Vec` allocation that used to
+    /// happen every frame**, for a set of bindings in which nothing is
+    /// per-frame: see `groups.rs`'s own header. Held here rather than beside
+    /// [`Targets`] because it is invalidated by one more thing than an
+    /// allocation is - the scene's own views, which the caller owns.
+    groups: Option<groups::Cache>,
+    /// How many times [`Self::groups`] has been built.
+    ///
+    /// **The only externally visible evidence that the cache works.** A bind
+    /// group that is rebuilt every frame and one that is reused produce
+    /// identical pictures, so nothing but a count can tell them apart - see
+    /// [`Self::group_rebuilds`].
+    group_rebuilds: u64,
 }
 
 impl Fsr3 {
@@ -588,11 +604,14 @@ impl Fsr3 {
             rcas,
             levels,
             targets: None,
+            groups: None,
+            group_rebuilds: 0,
         })
     }
 
-    /// The resolved frame, in **linear light**. `None` until the chain is
-    /// complete enough to produce one.
+    /// The resolved frame, in the same **gamma** space it was handed - see
+    /// this module's own header, and ADR-0020 behind it. `None` until the
+    /// chain is complete enough to produce one.
     ///
     /// **Keyed off [`Pass::ported`] rather than off whether a texture happens
     /// to exist.** Every pass is built now, so this is `Some` from the first
@@ -639,6 +658,18 @@ impl Fsr3 {
             .map(|targets| &targets.upscaled_output.texture)
     }
 
+    /// How many times the bind groups have been rebuilt, for a test.
+    ///
+    /// Exposed because the cache is otherwise invisible: it changes what the
+    /// frame path *costs* and nothing about what it produces, so a regression
+    /// that put `Cache::build` back in the per-frame path would pass every
+    /// other test in this module. One per allocation and one per scene-view
+    /// change is the contract; a count that tracks the frame index is the bug.
+    #[must_use]
+    pub fn group_rebuilds(&self) -> u64 {
+        self.group_rebuilds
+    }
+
     /// The intermediates, for a test that reads one back.
     ///
     /// Exposed because until the chain reaches [`Pass::Accumulate`] there is no
@@ -652,12 +683,27 @@ impl Fsr3 {
     }
 
     /// Runs every ported pass over `frame`.
+    ///
+    /// `timestamp` times the whole chain. **One pair for eight dispatches**,
+    /// which is what the single compute pass below makes possible and is the
+    /// only shape available: `TIMESTAMP_QUERY_INSIDE_PASSES` would be needed
+    /// to bracket a dispatch, and it is not WebGPU-portable. So this measures
+    /// "what FSR 3.1 cost", which is the number a player choosing an upscaler
+    /// and a Steam Deck reading both want, rather than a per-pass breakdown
+    /// nobody has asked for yet. `None` leaves the pass untimed, which is what
+    /// a device without [`wgpu::Features::TIMESTAMP_QUERY`] gets.
+    ///
+    /// **The clear of `new_locks` is deliberately outside it.** That is a
+    /// render pass, and a timestamp pair cannot span two passes; it is one
+    /// hardware fast clear against eight dispatches, so the reading is the
+    /// chain either way.
     pub fn render(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
+        timestamp: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         let dispatch = frame.dispatch;
         self.resize(device, dispatch.max_render, dispatch.upscale);
@@ -671,19 +717,36 @@ impl Fsr3 {
         } else {
             self.previous.as_ref()
         };
+        // **Unconditionally, because `frame_index` moves every frame.** This
+        // once compared against the last block written and skipped a matching
+        // write; no two consecutive frames can match, so the comparison never
+        // saved a write and only read as though it might.
         let wanted = Constants::new(dispatch, previous);
-        if self.written != Some(wanted) {
-            queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
-            self.written = Some(wanted);
-        }
+        crate::perfprobe::write_buffer(queue, &self.constants, 0, bytemuck::bytes_of(&wanted));
+        self.written = Some(wanted);
         self.previous = Some(wanted);
 
-        let Some(targets) = &self.targets else {
+        if self.targets.is_none() {
             return;
-        };
-
+        }
+        // Both parities, rebuilt only when the scene views or the sample count
+        // move - `resize` above has already dropped them if an allocation did.
+        // See `groups.rs`: nothing in a bind group here is per-frame.
+        if !self.groups.as_ref().is_some_and(|cache| cache.fits(frame)) {
+            let cache = {
+                let targets = self.targets.as_ref().expect("checked just above");
+                groups::Cache::build(self, device, targets, frame)
+            };
+            self.groups = Some(cache);
+            self.group_rebuilds += 1;
+        }
+        let targets = self.targets.as_ref().expect("checked just above");
         let frame_index = wanted.frame_index as u64;
-        let bind = groups::Groups::new(self, device, targets, frame, frame_index);
+        let bind = self
+            .groups
+            .as_ref()
+            .expect("built just above")
+            .groups(frame_index);
 
         // **The lock target, wiped before anything writes it.** `new_locks` is
         // written by a scatter, so most presentation texels are never touched
@@ -715,7 +778,7 @@ impl Fsr3 {
 
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("fsr3"),
-            timestamp_writes: None,
+            timestamp_writes: timestamp,
         });
         pass.set_bind_group(0, Some(&self.shared), &[]);
 
@@ -797,6 +860,8 @@ impl Fsr3 {
             return;
         }
         self.targets = Some(Targets::new(device, max_render, upscale));
+        // Every bind group points into the targets just dropped.
+        self.groups = None;
         // A new history is no history. Without this, the first frame after a
         // resize would reproject through constants describing the old one.
         self.previous = None;

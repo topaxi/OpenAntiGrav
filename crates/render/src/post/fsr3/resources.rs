@@ -39,7 +39,9 @@
 //! `reconstructed_previous_nearest_depth` is written by a *scatter* with an
 //! `InterlockedMin`, so it needs an atomic, and texture atomics are behind
 //! `wgpu::Features::TEXTURE_ATOMIC` while buffer atomics are core. It is a
-//! storage buffer of `atomic<u32>` indexed `y * width + x`, cleared per frame.
+//! storage buffer of `atomic<u32>` indexed `y * width + x`, cleared per frame
+//! by a compute dispatch - `clear_buffer` writes zero, and zero is the one
+//! value `atomicMin` must not start from. See `clear.wgsl`.
 
 use wgpu::TextureFormat;
 
@@ -179,17 +181,29 @@ impl Target {
         }
     }
 
-    /// The bytes this target occupies at mip 0, which is what [`Sizes`] adds
-    /// up. Mip levels past the first add a third at most and are ignored.
+    /// Every byte this target occupies, **mip chain included**.
+    ///
+    /// The chain matters for exactly one target - `spd_mips`, the only
+    /// multi-level one - and there it is a third again on top of mip 0. Small
+    /// against the whole allocation, and [`Sizes`] is the instrument the
+    /// widened-format argument is checked with, so it reports what is actually
+    /// held rather than what is nearly all of it.
     fn bytes(&self) -> u64 {
         let size = self.texture.size();
-        let bytes_per_texel = self
-            .texture
-            .format()
-            .target_pixel_byte_cost()
-            .unwrap_or(4)
-            .max(1);
-        u64::from(size.width) * u64::from(size.height) * u64::from(bytes_per_texel)
+        let bytes_per_texel = u64::from(
+            self.texture
+                .format()
+                .target_pixel_byte_cost()
+                .unwrap_or(4)
+                .max(1),
+        );
+        (0..self.texture.mip_level_count())
+            .map(|level| {
+                let width = u64::from(size.width >> level).max(1);
+                let height = u64::from(size.height >> level).max(1);
+                width * height * bytes_per_texel
+            })
+            .sum()
     }
 }
 
@@ -322,7 +336,8 @@ pub struct Targets {
 pub struct Sizes {
     /// Targets at the render allocation.
     pub render: u64,
-    /// Targets at half the render allocation, including the pyramid's mip 0.
+    /// Targets at half the render allocation, the pyramid's whole mip chain
+    /// included.
     pub half_render: u64,
     /// Targets at the presentation allocation.
     pub upscale: u64,
@@ -356,9 +371,13 @@ impl Targets {
 
             reconstructed_previous_nearest_depth: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("fsr3 reconstructed previous nearest depth"),
-                // One `u32` per render texel. `COPY_DST` is not needed:
-                // `clear_buffer` is a distinct operation from a write and
-                // needs no usage flag of its own.
+                // One `u32` per render texel. `STORAGE` alone, because the
+                // only thing that ever writes this is a shader: `clear.wgsl`
+                // fills it and `prepare_inputs` scatters into it, so there is
+                // no host-side write and nothing needs `COPY_DST`. **Not
+                // `clear_buffer`**, which writes zero and only zero - see
+                // `clear.wgsl` for why zero is the one value that cannot be
+                // used here.
                 size: u64::from(render.0) * u64::from(render.1) * 4,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,

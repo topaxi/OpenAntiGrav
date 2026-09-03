@@ -643,6 +643,9 @@ pub fn capture(
             rect,
             &state.presentation,
             temporal,
+            // A capture has no frame loop to pace and no timer to pace it
+            // with: `PassTimer` is per-window state the session owns.
+            None,
         );
     }
     // Where the HUD goes, which is not where the scene went. Presented, that is

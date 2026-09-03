@@ -125,13 +125,26 @@ fn lanczos2_approx_sq(x2_in: f32) -> f32 {
     return lanczos2_approx_sq_no_clamp(x2);
 }
 
+// The four Lanczos-2 weights for one fractional offset.
+//
+// **Split out of `lanczos2_row` so a row of four can share one set.** Upstream
+// computes the weights inside the interpolation, which is fine where it is
+// written once - but the 4x4 fetch below calls it four times with the *same*
+// horizontal fraction, and every `lanczos2` here is the reference sinc, two
+// `sin` each. Computed per row that is 40 `sin` for one presentation pixel;
+// hoisted it is 16. The arithmetic is unchanged: same expression, same input.
+fn lanczos2_weights(t: f32) -> vec4<f32> {
+    return vec4<f32>(
+        lanczos2(-1.0 - t),
+        lanczos2(-0.0 - t),
+        lanczos2(1.0 - t),
+        lanczos2(2.0 - t),
+    );
+}
+
 // The four-tap Lanczos-2 interpolation the history reprojection is built from.
-fn lanczos2_row(c0: vec4<f32>, c1: vec4<f32>, c2: vec4<f32>, c3: vec4<f32>, t: f32) -> vec4<f32> {
-    let w0 = lanczos2(-1.0 - t);
-    let w1 = lanczos2(-0.0 - t);
-    let w2 = lanczos2(1.0 - t);
-    let w3 = lanczos2(2.0 - t);
-    return (w0 * c0 + w1 * c1 + w2 * c2 + w3 * c3) / (w0 + w1 + w2 + w3);
+fn lanczos2_row(c0: vec4<f32>, c1: vec4<f32>, c2: vec4<f32>, c3: vec4<f32>, w: vec4<f32>) -> vec4<f32> {
+    return (w.x * c0 + w.y * c1 + w.z * c2 + w.w * c3) / (w.x + w.y + w.z + w.w);
 }
 
 // `HistorySample`: the 4x4 fetch, the separable Lanczos over it, and the
@@ -146,6 +159,23 @@ fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
     px_sample.y = max(0.0, min(f32(texture_size.y - 1), px_sample.y));
 
     let base = vec2<i32>(floor(px_sample));
+    // One weight set for all four rows - see `lanczos2_weights`.
+    let wx = lanczos2_weights(px_frac.x);
+
+    // **Deringing, against the inner four taps only** - the ones the
+    // interpolation is actually between. A Lanczos kernel has negative lobes
+    // and will overshoot on an edge; this is what stops the overshoot becoming
+    // a halo that then feeds back into the next frame's history.
+    //
+    // **Accumulated inside the fetch loop rather than re-fetched after it.**
+    // Those four taps are exactly rows 1 and 2's two middle ones, which the
+    // loop already has in registers; upstream's macro loads them a second time,
+    // which is four extra `textureLoad`s out of twenty from the largest texture
+    // this pass reads. `min` and `max` are associative and exact, so folding
+    // them in this order is the same four-way reduction.
+    var deringing_min = vec4<f32>(FSR3UPSCALER_FP32_MAX);
+    var deringing_max = vec4<f32>(-FSR3UPSCALER_FP32_MAX);
+
     var rows: array<vec4<f32>, 4>;
     for (var row = 0; row < 4; row++) {
         let dy = row - 1;
@@ -153,20 +183,14 @@ fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
         let c1 = load_history(clamp_coord(base, vec2<i32>(0, dy), texture_size));
         let c2 = load_history(clamp_coord(base, vec2<i32>(1, dy), texture_size));
         let c3 = load_history(clamp_coord(base, vec2<i32>(2, dy), texture_size));
-        rows[row] = lanczos2_row(c0, c1, c2, c3, px_frac.x);
+        if row == 1 || row == 2 {
+            deringing_min = min(deringing_min, min(c1, c2));
+            deringing_max = max(deringing_max, max(c1, c2));
+        }
+        rows[row] = lanczos2_row(c0, c1, c2, c3, wx);
     }
-    var color = lanczos2_row(rows[0], rows[1], rows[2], rows[3], px_frac.y);
+    var color = lanczos2_row(rows[0], rows[1], rows[2], rows[3], lanczos2_weights(px_frac.y));
 
-    // Deringing, against the inner four taps only - the ones the interpolation
-    // is actually between. A Lanczos kernel has negative lobes and will
-    // overshoot on an edge; this is what stops the overshoot becoming a halo
-    // that then feeds back into the next frame's history.
-    let d0 = load_history(clamp_coord(base, vec2<i32>(0, 0), texture_size));
-    let d1 = load_history(clamp_coord(base, vec2<i32>(1, 0), texture_size));
-    let d2 = load_history(clamp_coord(base, vec2<i32>(0, 1), texture_size));
-    let d3 = load_history(clamp_coord(base, vec2<i32>(1, 1), texture_size));
-    let deringing_min = min(min(d0, d1), min(d2, d3));
-    let deringing_max = max(max(d0, d1), max(d2, d3));
     color = clamp(color, deringing_min, deringing_max);
 
     return color;

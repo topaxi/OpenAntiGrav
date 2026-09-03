@@ -259,10 +259,14 @@ impl App {
         // Said out loud either way: which of the two happened decides whether
         // the eventual DRS row can be offered at all.
         let pass_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        // A ring of its own, for the reason `Session::upscale_timer` gives:
+        // sharing the scene pass's would cost the resolution controller a
+        // reading every frame the upscaler took a slot.
+        let upscale_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         info!(
             "GPU timing: {}",
             if pass_timer.is_some() {
-                "the scene pass is timed"
+                "the scene pass and the FSR 3.1 chain are timed"
             } else {
                 "no timestamps on this device"
             }
@@ -281,6 +285,8 @@ impl App {
             scene_cost: perf::Meter::new(),
             drs: oag_game::drs::Controller::new(),
             pass_timer,
+            upscale_cost: perf::Meter::new(),
+            upscale_timer,
             frame_index: 0,
             stall_frame: 0,
             memory: perf::memory::Probe::new(),

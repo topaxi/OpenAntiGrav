@@ -82,7 +82,131 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Open
 
-- **It has been captured once and never played.** `just compare-upscalers`
+### A review on 2026-09-03, and what it changed
+
+A read of the eight passes, `groups.rs`, `resources.rs`, the call site in
+`upscale::Framebuffer::resolve_scene` and both doc pages. Nothing here reopened
+ADR-0012 or ADR-0020; the gamma accumulation, the WGSL port and the
+no-feature-probe widening are owned cost, not findings.
+
+**All nine findings are implemented.** What each one was and what it now is:
+
+1. **Nothing timed the passes, and `oag_render::timing::Timer` existed.** Both
+   recordings passed `timestamp_writes: None` while six other subsystems used
+   the timer. `PassTimer::compute_writes` is new (wgpu spells the compute and
+   render descriptors as unrelated types), the chain's single compute pass now
+   carries a pair, and `Session::upscale_timer` is a **ring of its own** - a
+   slot shared with the scene pass would be a frame the resolution controller
+   got no reading for. It lands on the `dev` overlay as
+   `GPU SCENE x.xx MS  FSR3 x.xx MS`, which also gives `Session::scene_cost` the
+   reader its own doc had been claiming for it.
+
+   **The trap inside this one is worth reading before touching it again.** The
+   first attempt claimed a slot on every race frame, which is wrong for a
+   reason no test would have shown: a timestamp pair that no pass writes does
+   **not** resolve to zero. Its value is unspecified, the query set is not
+   cleared between frames, and the ring reuses a slot every four - so a race at
+   `--upscaler off` would eventually read back the pair a *previous* frame
+   wrote and report `FSR3 x.xx MS` for a frame the bilinear blit resolved. A
+   plausible number attributed to the wrong frame is worse on an overlay than a
+   blank one, and a `seconds > 0.0` filter does not catch it. The claim is
+   therefore gated on the three things `resolve_scene` itself decides with -
+   `temporal.is_some()`, the row saying `fsr3`, and
+   `Framebuffer::temporal_upscaler_viable` (a pipeline build failure is kept
+   rather than retried, so it would otherwise claim forever). `resolve` stays
+   unconditional: `PassTimer::begin`'s own documentation is that a
+   claimed-and-unresolved slot never comes back, and four of those end
+   measurement for the run. **Claim less, always resolve.**
+2. **FXAA/SMAA ran and was discarded whenever FSR 3.1 resolved.** The behaviour
+   was right - a pre-blur destroys what a temporal resolve reconstructs from,
+   which is what the anti-aliasing row warns about - and the cost was not: a
+   full-screen pass for a frame nothing read. The FSR 3.1 resolve is now encoded
+   **above** the anti-aliasing match rather than below it, so the skip keys on
+   `temporally_resolved.is_some()` - the exact answer - rather than on the
+   setting, which would have dropped anti-aliasing on the never-expected path
+   where the pipelines fail to build. `resolve_scene`'s doc comment claimed the
+   opposite contract and the menu warning gave a reason that was not what
+   happens; both are rewritten.
+3. **About fifteen bind groups were rebuilt per frame at the one site in
+   `post/` that bypassed `perfprobe::bind_group`.** Nothing in them is
+   per-frame: `groups::Cache` holds both ping-pong parities and rebuilds only
+   when the scene views change identity, when MSAA changes which build of
+   `prepare_inputs` runs, or when `resize` replaces the targets. All nine sites
+   now go through the probe, so `OAG_RENDER_PERF` stops reporting the
+   renderer's largest producer as zero.
+4. **`history_sample` computed the same four Lanczos weights four times** - 40
+   `sin` per presentation pixel where 16 suffice, ~50 million redundant
+   evaluations a frame at 1920x1080. `lanczos2_weights` is split out and the row
+   loop is handed one `vec4<f32>`.
+5. **`history_sample` fetched four of its sixteen taps twice.** The deringing
+   clamp's inner 2x2 is exactly rows 1 and 2's middle taps; the min and max are
+   folded in as the loop passes them. `min`/`max` are associative and exact, so
+   it is the same reduction.
+6. **The widening's cost is now printed.** `Fsr3::sizes` had no caller outside
+   `tests.rs`; `resolve_scene` logs it at `info` once per allocation. And
+   `Target::bytes` counted mip 0 only, so `spd_mips`'s five further levels went
+   missing - small (0.33 MiB of 93.8 at 1080p/50 %) and wrong in the one number
+   the whole widening argument is checked with.
+7. **Four doc statements the code had outgrown**: both module headers still
+   said nothing selected FSR 3.1; `output()` was documented as returning linear
+   light; `fsr3.md` said the depth buffer was cleared with `clear_buffer` when
+   `clear_buffer` writes the one value `atomicMin` must not start from; and
+   `resources.rs` justified omitting `COPY_DST` by citing that same absent
+   mechanism.
+8. **`Fsr3::render`'s `written != wanted` guard could never skip**, because
+   `frame_index` moves every frame. Deleted rather than commented: the write is
+   unconditional and goes through `perfprobe::write_buffer` now.
+9. **Both `accumulate.wgsl` changes are recorded as deviations** in
+   `docs/rendering/fsr3.md`. This page's premise is that the WGSL stays
+   diffable against upstream, and a reader diffing those two functions will find
+   them rearranged - silence there would have been the same mistake as an
+   undocumented arithmetic change.
+
+**What pins each of these.** A cache hit and a rebuild produce identical pixels,
+and so do a discarded anti-aliasing pass and a skipped one - so both needed an
+observable built for them: `Fsr3::group_rebuilds` and
+`Framebuffer::built_spatial_anti_aliasing`. The tests are
+`the_bind_groups_are_built_once_and_not_once_a_frame` (beside `groups.rs`, whose
+contract it is) and
+`fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it`, which
+carries its own control. The shader changes are covered by
+`a_jittered_still_scene_converges_on_a_history_it_trusts`, which exercises
+`accumulate.wgsl` over 32 real Halton phases.
+
+**One number is measured now, and the rest are not.** A headless
+`--race --presented --render-scale 50 --upscaler fsr3 --anti-aliasing fxaa` run
+on `pulse-psp-usa.chd` produces a real frame with no validation error and logs
+
+```
+FSR 3.1 intermediates: 61.3 MiB (23.5 render, 1.9 half, 35.9 presentation)
+```
+
+at 1440x816 presentation - so the widening's cost is a reading rather than an
+argument for the first time, and it is the *presentation* half that dominates
+exactly as `Sizes` predicted. **That extent is not the one finding 6's table was
+computed at**, so it confirms nothing about the 93.8-against-70.2 figure; the
+two agree by area and only this one is a measurement.
+
+The run also proves the chain survives real data end to end - 120 ticks, a
+detailed frame, no validation error - but it does **not** prove finding 2's
+skip, and cannot: a discarded anti-aliasing pass and a skipped one produce the
+same picture, which is why that claim rests on
+`fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it` calling
+the real `resolve_scene` and reading `built_spatial_anti_aliasing`.
+
+What is still unread is the **timer**: a headless capture has no overlay and no
+frame loop pacing it, so `GPU SCENE / FSR3` needs somebody playing it. The
+counts in findings 4 and 5 are work removed, not a profile.
+
+### From the port itself
+
+- **It has been captured once and never played**, and that capture now
+  predates a behaviour change: a `--anti-aliasing fxaa` or `smaa` alongside
+  `--upscaler fsr3` no longer runs the spatial pass at all, where before it ran
+  it and discarded the result. The *picture* is the same either way - FSR 3.1
+  never read that output - so the capture below still describes what FSR 3.1
+  produces; what changed is that the frame no longer pays for a pass nothing
+  reads. `just compare-upscalers`
   produces the three frames now and the FSR 3.1 one is a clean, artefact-free
   race frame that sits *between* bilinear and FSR 1 in apparent sharpness -
   cleaner edges than the blit, less crisp than FSR 1 and without FSR 1's
@@ -123,13 +247,22 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Next Steps
 
-1. **Play it.** `just play --race --upscaler fsr3 --render-scale 50` and look
-   at a moving frame; the capture is nearly static and is the wrong instrument
-   for the one thing a temporal upscaler is for. Ghosting behind the craft and
-   shimmer on the barrier slats are what to watch.
-2. Decide whether `fsr3` should be a default anywhere. It is off by default and
+1. **Play it, and read the two numbers while you do.**
+   `just play --race --upscaler fsr3 --render-scale 50` with
+   `[graphics] perf_overlay = dev`, and look at a *moving* frame: the capture is
+   nearly static and is the wrong instrument for the one thing a temporal
+   upscaler is for. Ghosting behind the craft and shimmer on the barrier slats
+   are what to watch; `GPU SCENE x.xx MS  FSR3 x.xx MS` is what the chain costs,
+   and the `info` line at the first race frame is what it holds. Both are wired
+   and neither has been read.
+2. **Read the same two on a Steam Deck**, which is the first-tier target
+   [goals.md](../docs/overview/goals.md) names and the reading the widening
+   argument has been waiting on since the port opened. 93.8 MiB against
+   upstream's 70.2 at 1080p/50 % is the number to check against what the device
+   actually has.
+3. Decide whether `fsr3` should be a default anywhere. It is off by default and
    the row already offers it; `Scale::default` is `FULL`, so like `fsr1` it is
    inert until a player lowers the render scale - except that unlike `fsr1` it
    is *not* inert at 100 %, because a temporal resolve still has more samples
    than one frame carries.
-3. Reset the history on a camera cut, which nothing does yet - see above.
+4. Reset the history on a camera cut, which nothing does yet - see above.

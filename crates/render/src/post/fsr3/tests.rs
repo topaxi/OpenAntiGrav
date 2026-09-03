@@ -258,6 +258,7 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
             velocity: &velocity,
             dispatch: dispatch(render, upscale),
         },
+        None,
     );
     queue.submit([encoder.finish()]);
     device
@@ -869,6 +870,7 @@ fn the_multisampled_build_binds_a_multisampled_scene() {
                 velocity: &velocity,
                 dispatch,
             },
+            None,
         );
         queue.submit([encoder.finish()]);
         device
@@ -909,5 +911,22 @@ fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
         "render {} vs upscale {}",
         sizes.render,
         sizes.upscale
+    );
+
+    // **The pyramid's mip chain is counted, not just its mip 0.** `spd_mips` is
+    // the one multi-level target here, and a reduction chain over halving
+    // extents adds a third again - so the half-resolution figure has to exceed
+    // what the three targets' base levels come to. Counting mip 0 alone
+    // under-reported by that third, in the one number the widened-format
+    // argument is checked with.
+    let half = ((960 / 2) as u64, (540 / 2) as u64);
+    // `farthest_depth_mip1` and `spd_mips` at 8 bytes a texel, `shading_change`
+    // at 4 - each target's base level and nothing else.
+    let base_levels = half.0 * half.1 * (8 + 8 + 4);
+    assert!(
+        sizes.half_render > base_levels,
+        "half_render {} must exceed the base levels' {base_levels} by the \
+         pyramid's own chain",
+        sizes.half_render
     );
 }

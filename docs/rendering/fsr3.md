@@ -12,12 +12,13 @@ The short version is that driving the native Vulkan backend would cost lifting
 and Vulkan-only support, to inherit an FSR4 upgrade path that does not reach a
 native Linux build.
 
-**Status: all eight passes are ported and the chain produces a frame** - and
-**nothing in the game selects it yet.** `oag_render::post::fsr3::Fsr3::output`
-returns a picture; `upscale::Framebuffer::resolve_scene` has no branch that
-reads it. That separation is deliberate: wiring the game side is its own change,
-so that a bug in the resolve and a bug in the wiring cannot arrive together.
-`HANDOVER.md`'s open-threads index points at the thread carrying what is left.
+**Status: all eight passes are ported, the chain produces a frame, and the
+UPSCALER row selects it.** `upscale::Framebuffer::resolve_scene` reads
+`oag_render::post::fsr3::Fsr3::output` on a race frame whose adapter has compute
+shaders, and falls one rung to FSR 1 otherwise. It is off by default. What has
+not happened is anybody looking at a *moving* frame it produced;
+`HANDOVER.md`'s open-threads index points at the thread carrying that and the
+rest of what is left.
 
 ## Provenance
 
@@ -250,6 +251,28 @@ independently; what remains unestablished is that the source was read correctly.
 A `--presented` capture beside the `fsr1` and `off` ones is the instrument for
 that, and it has not been taken.
 
+### What it costs is measured, not argued
+
+The whole chain is one `begin_compute_pass`, so one `wgpu` timestamp pair
+brackets all eight dispatches - which is the only shape available, because
+bracketing a single dispatch would need `TIMESTAMP_QUERY_INSIDE_PASSES` and
+that is not WebGPU-portable. `oag_render::timing::PassTimer` already existed for
+the scene pass ([dynamic resolution](dynamic-resolution.md)); FSR 3.1 gets a
+ring of its own rather than a share of that one, because a slot spent here is a
+frame the resolution controller does not get a scene reading for.
+
+The reading lands on the `dev` performance overlay beside the scene pass's, as
+`GPU SCENE x.xx MS  FSR3 x.xx MS`. Two numbers rather than one because a render
+scale moves them in opposite directions: lowering it makes the scene pass
+cheaper and gives the temporal resolve more to reconstruct, and this runs
+*after* the scene pass rather than inside it - so choosing a render scale on the
+scene reading alone is choosing on half the cost.
+
+`Fsr3::sizes` is reported the same way, once per allocation, as a log line at
+`info`. It is the number [goals.md](../overview/goals.md)'s first-tier Steam
+Deck question needs, and the table below is an argument until something prints
+it.
+
 The resolve has one property the others do not, and it needs jitter to see:
 **a still scene must converge**. Each frame lands its samples somewhere new
 inside each pixel, the history absorbs them, and after a full sequence the
@@ -276,6 +299,49 @@ both a storage write and a sampled resource, even when the shader ignores the
 read, so the pyramid's level-0 dispatch had to be pointed at something other
 than the level it writes.
 
+### `HistorySample` shares its weights and keeps its taps
+
+Two changes inside `accumulate.wgsl`'s 4x4 history fetch, both of which leave
+the arithmetic alone and neither of which is upstream's shape. They are listed
+here rather than left silent because this page's whole premise is that the WGSL
+stays diffable against `ffx_fsr3upscaler_accumulate.h`, and a reader diffing
+these two functions will find them rearranged.
+
+**The Lanczos weights are computed once per axis, not once per row.** Upstream's
+`Lanczos2` interpolation computes `w0..w3` from the fractional offset inside the
+same function that blends four taps with them - which is fine where it is
+written once, and the fetch calls it four times with the *same* horizontal
+fraction. With `FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE` at
+upstream's default of 0, every weight is the reference sinc and every `lanczos2`
+is two `sin`: 40 of them for one presentation pixel, where 16 suffice.
+`lanczos2_weights` is split out and the row loop is handed one `vec4<f32>`.
+Same expression, same input, same result.
+
+**The deringing clamp reuses the taps the fetch already loaded.** Upstream's
+`DeclareCustomFetchBicubicSamples` loads the inner 2x2 a second time after the
+separable pass, which is four extra `textureLoad`s out of twenty from the
+largest texture this pass reads. Those four are exactly rows 1 and 2's two
+middle taps, so the min and max are folded in as the loop passes them. `min`
+and `max` are associative and exact on floats, so the four-way reduction is the
+same one.
+
+Both are per-presentation-pixel costs in the one pass that runs at presentation
+resolution, which is why they were worth taking at all.
+
+### The bind groups are two sets, not one a frame
+
+Not a deviation from upstream at all - upstream's HLSL says nothing about
+descriptor lifetime - but the shape a reader of `groups.rs` should expect.
+Every resource FSR 3.1 binds is either a `Targets` member, which moves only when
+an allocation does, or one of the three scene views, which move only on a
+resize. What is left is the ping-pong parity, and a parity has two values. So
+`groups::Cache` holds both sets and hands back the one this frame wants,
+rebuilding when the scene views change identity, when MSAA changes which build
+of `prepare_inputs` runs, or when `Fsr3::resize` replaces the targets.
+
+`Fsr3::group_rebuilds` counts the rebuilds, because a cache hit and a rebuild
+produce identical pixels and nothing else can tell them apart.
+
 ### The scattered depth store becomes a storage buffer
 
 `ReconstructPrevDepth` projects each pixel's depth into the *previous* frame's
@@ -287,10 +353,16 @@ attachment.
 
 Texture atomics are behind `wgpu::Features::TEXTURE_ATOMIC`. **A storage buffer
 of `atomic<u32>` needs no feature at all** - buffer atomics are WebGPU core -
-so the target is a buffer indexed `y * width + x`, cleared per frame with
-`clear_buffer`. The arithmetic is upstream's `InterlockedMin` on the same
-bit-packed depth; only the resource kind differs, and the clear is cheaper than
-the texture clear it replaces.
+so the target is a buffer indexed `y * width + x`. The arithmetic is upstream's
+`InterlockedMin` on the same bit-packed depth; only the resource kind differs.
+
+**It is cleared by a compute dispatch, not by `clear_buffer`**, and that is
+forced rather than chosen: `wgpu::CommandEncoder::clear_buffer` writes zero and
+only zero, and zero is the *nearest* possible depth - `atomicMin` would keep it,
+so every texel would read back as touching the near plane. The clear writes
+upstream's own value for a non-inverted projection, `1.0` as its bit pattern.
+`clear.wgsl` carries the argument, and it is also why that dispatch walks a
+texture extent rather than a texel count.
 
 ### The intermediates are widened to baseline-storable formats
 
