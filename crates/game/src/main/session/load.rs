@@ -400,13 +400,14 @@ impl Session {
         // `reserve_race_music_index` settles which track before the worker
         // starts, so it and `Audio::finish_race_music` (called once this
         // stage's fade runs out) agree on one without either asking `discs`
-        // twice. See `LoadingStage::music` and `audio::RaceMusicWorker`.
+        // twice. See `LoadingStage::music` and `audio::MusicFetchWorker`.
         let music_index = self.audio.reserve_race_music_index(&self.music_discs);
-        let music = audio::RaceMusicWorker::spawn(
+        let music = audio::MusicFetchWorker::spawn(
             self.music_discs.clone(),
             self.settings.audio.music_source,
             boot::default_audio_cache_dir(),
             music_index,
+            "race-music",
         );
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
@@ -600,7 +601,7 @@ impl Session {
         //
         // Timed as a diagnostic, kept from the round that found the decode
         // running here: `Audio::finish_race_music` only ever joins an
-        // already-finished `RaceMusicWorker` (see `LoadingStage::race_ready`),
+        // already-finished `MusicFetchWorker` (see `LoadingStage::race_ready`),
         // so this should now read near-instant rather than the 2.83s a cold
         // PS2 track measured before the worker existed.
         let music_start = std::time::Instant::now();

@@ -39,7 +39,7 @@ use crate::display::percentage;
 pub mod sfx;
 
 mod race_music;
-pub use race_music::RaceMusicWorker;
+pub use race_music::MusicFetchWorker;
 use race_music::locate;
 
 /// A bus volume, as a percentage of unattenuated.
@@ -548,7 +548,7 @@ pub struct Audio {
     /// - the track index it targets, alongside the worker fetching it.
     ///
     /// **This is what keeps a track boundary - or a future skip control -
-    /// from hitching**, the same way [`RaceMusicWorker`] keeps the race
+    /// from hitching**, the same way [`MusicFetchWorker`] keeps the race
     /// launch itself from hitching: [`Self::advance_race_track`] used to
     /// call [`Self::play_race_track`] synchronously the moment the current
     /// track ended, decoding the next one - 0.4 to 2.8 s by this module's own
@@ -569,7 +569,7 @@ pub struct Audio {
     /// checks the two still agree before trusting it, and
     /// [`Self::set_race_music_source`] drops a stale one outright rather than
     /// let it survive a source change it was not fetched for.
-    race_prefetch: Option<(usize, RaceMusicWorker)>,
+    race_prefetch: Option<(usize, MusicFetchWorker)>,
 }
 
 /// A music track that has been read and decoded, before a voice is started on
@@ -580,7 +580,7 @@ pub struct Audio {
 /// sixteen soundtrack tracks, which is what decides whether MUSIC SOURCE may
 /// ever move it. See [`MusicSource`].
 ///
-/// `pub` - not its fields - so [`RaceMusicWorker::join`] can hand one back
+/// `pub` - not its fields - so [`MusicFetchWorker::join`] can hand one back
 /// across the crate's own lib/bin boundary, the way [`crate::race::Loaded`]
 /// already does for the circuit's own worker. Nothing outside this module
 /// needs to read a field; it only ever moves one straight into

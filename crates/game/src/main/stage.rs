@@ -151,7 +151,7 @@ impl Stage {
     pub(crate) fn race_loading(
         gpu: &Gpu,
         worker: race::LoadWorker,
-        music: audio::RaceMusicWorker,
+        music: audio::MusicFetchWorker,
         font: &oag_game::font::Atlas,
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
