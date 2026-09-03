@@ -136,6 +136,32 @@ Both are gone. `oag_render::speedup_pad` is deleted rather than gated,
 `crates/game/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
 pins all three facts against the disc.
 
+### And putting HD's pads back on the lit path had to be checked as a picture
+
+Restoring `vertex_colour_is_light` is not free: a pad's brightness is then
+*entirely* albedo times lightmap, with no ambient floor - vertex light is a
+flat `0,0,0` and `NO_AMBIENT` is set. Had the circuit's lightmap not reached
+those chunks, or had their `lightmap_texcoord` fallen back to `[0.0, 0.0]`
+(which `mesh::rcs::emit` does silently), HD's pads would have gone from flat
+blue to **near-black**, and every attribute assertion above would still have
+passed. That is the same shape as the failure
+[`HANDOVER.md`](../../HANDOVER.md) already records for Pure's pads: a correct
+triangle count and an empty picture.
+
+Checked as a picture, offscreen, no window: one isolated plate per title
+through `capture::capture_from`, plus
+`crates/render/tests/pad_alpha_test_ground_truth.rs::an_hd_speedup_pad_draws_visible_pixels`
+as the standing guard (559 lit pixels for `12_sol_2`'s ten plates, against
+Pure's 321 for fourteen). What the plates show:
+
+| Title | Speed pad | Weapon pad |
+| --- | --- | --- |
+| PS2 / PSP Pulse | gold chevron | neutral white cross, coloured by `pad+0x6c` in a race |
+| HD / Fury | grey plate, blue chevron outline | grey plate, red cross outline |
+
+An HD pad draws, and it draws the picture the artists painted. What it does
+not draw is the light bars - see the open question below.
+
 ## The one open question
 
 **Does an HD weapon pad look different while it is cooling down?** Pulse's does
