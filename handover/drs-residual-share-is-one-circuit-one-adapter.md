@@ -36,23 +36,65 @@ roughly 2.4 ms of a ~8.7 ms frame was still unaccounted for after `hd_bloom`
 was subtracted out - which is why `RESIDUAL_SHARE` moved to `0.20` rather than
 shrinking now that `hd_bloom` left it.
 
+## The constant stopped being the reserve, 2026-09-03
+
+**Landed as [ADR-0044](../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md):
+the reserve is a `drs::Residual` learned per session**, starting at
+`RESIDUAL_SHARE * period` and tightened by frames that can prove a smaller
+number. What made it safe to feed the wall clock into a module ADR-0040 kept
+one out of, in two lines:
+
+- `reading = frame - timed = residual + sleep`, and sleep is never negative,
+  so **every reading is an upper bound on the truth**.
+- Under pacing, `reading <= reserve` is the same statement as
+  `scalable >= budget` - the frame had no slack to sleep away. The gate is
+  ADR-0040's own condition rearranged, not a threshold somebody picked.
+
+A reading above the reserve is trusted only when the frame ran 5 % past the
+target period, and the result is capped at `RESIDUAL_SHARE`, so no budget this
+build produces is ever smaller than the one before the ADR
+(`a_learned_residual_never_reserves_more_than_the_constant`).
+
+The prompt that opened this work proposed gating at the deadband's lower edge
+instead. **That one runs away**, and the algebra is in the ADR: at the settle
+point the readings it admits are *above* the reserve, and its fixed point is
+`E = period - fixed` - a budget of zero and a scale at the floor. Worth
+knowing before anybody proposes it again.
+
 ## Open
 
-**Whether AI/physics cost for a full grid should be its own measured term**,
-the way `hd_bloom` just stopped being a residual guess. The raw material
-exists - `perf::Meter` already measures the real wall-clock frame time
-`GpuCost::residual_ms` subtracts from - but turning that into a *budget input*
-needs deciding what a "CPU floor" means for a controller that only ever
-changes GPU-side render extent, which no render-scale change can buy back.
-Unlike `hd_bloom`, there is no existing timestamp mechanism to reuse here.
+**Nobody has run any of this on the Steam Deck.** No machine in the session
+that wrote ADR-0044 has that hardware, so every number in it is a model of the
+report (`drs::tests::machines`), labelled as one. The check is a race on the
+Deck at `target_fps = 90` with `RUST_LOG=oag_game=trace`, reading the render
+scale and the `residual x.xxx ms (learned|assumed)` field the trace line now
+carries. Two things to look for: whether the scale settles higher than 60-65 %
+at all, and whether the residual says `learned` - under vsync at exactly the
+target rate it can only tighten while the controller is still falling, so it
+may report a reserve barely under the constant even when it is working.
 
-**Whether `0.20` covers the report that started this thread.** It was
-measured on one circuit with a full grid, not on whatever circuit and grid
-the original report was actually racing. The tools to check now exist and did
-not before this landed: read the `dev` overlay's `BLOOM` and `OTHER` rows
-during a real race. A large `BLOOM` means a heavier ladder than the
-calibration circuit's; a large `OTHER` with `BLOOM` small points at CPU cost
-(AI/physics/HUD/composite/blit) or an adapter difference, not at `hd_bloom`.
+**A competing hypothesis for the same report, not ruled out.** A settle at
+60-65 % implies a scalable cost around 19 ms at full scale under the quadratic
+model, which does not square with the same machine holding 90 FPS at full
+scale unless a large part of the scene pass does not scale with pixels. A
+mis-scaled `TIMESTAMP_QUERY` period would produce the identical picture, and
+`docs/rendering/dynamic-resolution.md` records a 52x difference in timestamp
+period between two adapters on one laptop. ADR-0044 makes the budget right; it
+does not prove the budget was the only thing wrong. The Deck reading above
+tells them apart: if `SCENE` alone reads near the whole frame period while the
+frame rate is fine, the reading is the suspect, not the reserve.
+
+**Whether AI/physics cost for a full grid should be its own measured term**,
+the way `hd_bloom` stopped being a residual guess. ADR-0044 is the inference
+from the clock the loop already reads, not a measurement, and it says where it
+stops: under vsync at the target rate the sleep destroys the evidence once the
+controller is comfortable, and only a real CPU-side timer closes that. Still
+no mechanism to reuse - `PassTimer` reaches GPU work only.
+
+**Whether `0.20` is still the right *ceiling*.** It is no longer the reserve,
+so being wrong high now costs only the first seconds of a session and the
+vsync-at-target case; but it is still the number a display refreshing below
+the target falls back to, and it is still one circuit's measurement.
 
 Still unmeasured, carried over from before this landed: a circuit with a
 longer `hd_bloom` ladder than `talons_junction`'s `blur steps 1/1` - now that
@@ -67,8 +109,10 @@ single-machine constant on principle.
 
 1. Ask for (or take) a `dev`-overlay reading during the race that motivated
    this thread, now that `BLOOM` and `OTHER` are on screen: `FPS`/`MS`,
-   `SCENE`, `BLOOM`, `BLUR`, `FSR3`, `OTHER`. That one reading tells which of
-   the two open questions above is the real one.
+   `SCENE`, `BLOOM`, `BLUR`, `FSR3`, `OTHER` - plus the render scale and the
+   `residual` field on the `dynamic resolution:` trace line. That one reading
+   tells which of the open questions above is the real one, and whether
+   ADR-0044 moved the Deck at all.
 2. If `OTHER` is still large with `BLOOM` small, decide the CPU-floor design
    question above before building it - this is a real design decision, not a
    measurement.

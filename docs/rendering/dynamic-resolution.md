@@ -194,11 +194,16 @@ control purposes: under `Vsync::On` it is pinned to the refresh and under any
 real work only with vsync off *and* no limit - a diagnostic configuration
 rather than a shipping one.
 
-### What is timed, what is measured-and-fixed, and what is a residual constant
+### What is timed, what is measured-and-fixed, and what is left to the residual
 
 Three categories since [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
 and [ADR-0043](../architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md),
-replacing the two-way "in the budget or not" split this section used to draw:
+replacing the two-way "in the budget or not" split this section used to draw.
+The third category is no longer a constant: since
+[ADR-0044](../architecture/adr/0044-the-residual-is-a-learned-upper-bound.md)
+`RESIDUAL_SHARE` is where the reserve *starts* and the most it may ever be,
+and the reserve itself is a `drs::Residual` learned per session - see "The
+residual learns" below:
 
 | Pass | Category | Why |
 | --- | --- | --- |
@@ -206,8 +211,8 @@ replacing the two-way "in the budget or not" split this section used to draw:
 | `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes` |
 | `hd_bloom` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain the same way since ADR-0043. `Scene::has_hd_bloom` tells "ring full" from "no chain to measure" - Pulse, Pure, and an HD circuit with no `HDR and Bloom` block all have none |
 | The FSR 3.1 chain | `drs::Cost::fixed` | Timed (`Session::upscale_cost`), but does not fall with the extent - its temporal accumulate and RCAS passes run at presentation size. Counted in full rather than split, which is conservative: some of the chain does shrink with the extent, and treating it all as fixed under-states the true budget |
-| `bloom` | `RESIDUAL_SHARE` | Not timed. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
-| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay, AI/physics for opponents beyond the player | `RESIDUAL_SHARE` | Presentation-resolution, driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
+| `bloom` | The residual | Not timed. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
+| FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay, AI/physics for opponents beyond the player | The residual | Presentation-resolution, driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
 
 Each pass is timed and summed rather than the encoder being bracketed
 first-to-last: bracketing would need `TIMESTAMP_QUERY_INSIDE_ENCODERS`, which is
@@ -218,8 +223,9 @@ The `dev` overlay's own GPU-cost panel - top left, separate from the
 frame-time panel at top right - prints one row per timed reading, `SCENE`,
 `BLOOM`, `BLUR`, `FSR3`, each only once it has a reading, followed by an
 `OTHER` row: `perf::Meter`'s own wall-clock frame time minus whatever the rows
-above add up to. That is `RESIDUAL_SHARE`'s target made visible rather than
-assumed - see `perf::GpuCost::rows` and `residual_ms`. Its own panel rather
+above add up to. That is the residual made visible rather than assumed - see
+`perf::GpuCost::rows` and `residual_ms`, and, for the same subtraction fed back
+into the budget instead of only printed, "The residual learns" below. Its own panel rather
 than a block inside the frame-time one, so a reader is not holding five
 numbers on one crammed line.
 
@@ -342,10 +348,10 @@ inside the one module whose selling point is that it has none. See
 
 What changed, in [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md):
 `drs::SCENE_SHARE`, a single constant standing in for everything the scene pass
-was not, is gone. The budget is now `period - fixed - RESIDUAL_SHARE * period`,
-where `fixed` is `drs::Cost::fixed` - the FSR 3.1 chain's own GPU timing,
-already measured and previously discarded - and `RESIDUAL_SHARE = 0.20`
-covers what genuinely cannot be reached by a render-extent change: the HUD,
+was not, is gone. The budget is now `period - fixed - residual`, where `fixed`
+is `drs::Cost::fixed` - the FSR 3.1 chain's own GPU timing, already measured
+and previously discarded - and the residual opens each session at
+`RESIDUAL_SHARE = 0.20` of the period and covers what genuinely cannot be reached by a render-extent change: the HUD,
 the composite, the blit, the perf overlay, the MSAA resolve, and, per
 [ADR-0043](../architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md), the
 AI and physics cost of every opponent beyond the player - `hd_bloom` itself
@@ -354,6 +360,70 @@ constant could not serve both a profile with FSR 3.1 and MSAA and one with
 neither - measured, the scene pass's own share of the frame ranged from 23 % to
 39 % across four render
 profiles on one circuit, which is not a range one constant can be.
+
+### The residual learns, and can only ever tighten
+
+`RESIDUAL_SHARE` was measured on one circuit, on one adapter, with one grid
+size, and both ADRs that set it said so. Reported from play on a second
+adapter - a Steam Deck (AMD, RADV) at a 90 Hz target - it is wrong by enough to
+matter: the machine holds 90 FPS at the full render scale, and the controller
+shrinks it to 60-65 % and settles there. Over-reserving does not drop a frame;
+it takes pixels away quietly, which is why nothing caught it earlier.
+
+[ADR-0044](../architecture/adr/0044-the-residual-is-a-learned-upper-bound.md)
+makes the reserve a `drs::Residual`: an estimate in seconds that starts at
+`RESIDUAL_SHARE * period` and is tightened by frames that can prove a smaller
+one. The composition root hands `Controller::record` the frame's own wall-clock
+duration - the same `elapsed` `perf::Meter` is fed, and `None` for a frame that
+carried a load - so the controller still never reads a clock.
+
+Two facts make that safe, and both are properties rather than choices:
+
+- **Every reading is an upper bound.** `reading = frame - timed = residual +
+  sleep`, and sleep is never negative, so an observation cannot claim the
+  machine spends less outside its timers than it does - only less than the last
+  guess did.
+- **The gate is the no-slack condition solved for the reading.** Under pacing,
+  `reading <= reserve` is the same statement as `scalable >= budget`: a frame
+  whose scalable cost had already filled its budget, with no slack for the loop
+  to have slept away. So a reading below the reserve is always safe to fold in,
+  and one above it is only trusted when the frame ran past the target period by
+  `OVERRUN` (5 %, jitter's width) - which is a frame the loop demonstrably did
+  not sleep through.
+
+`RESIDUAL_SHARE` caps whatever comes out, so the reserve can only ever shrink
+relative to what shipped before: it is a floor under the *budget*, never a
+floor under the reserve. `a_learned_residual_never_reserves_more_than_the_constant`
+asserts that over a grid of targets, fixed costs and learned values.
+
+**What it buys, and where it stops.** `drs::tests::machines` simulates the
+reported machine frame by frame against the real controller - a model of a
+report, labelled as one, with the split inside the scene pass chosen to put
+the constant's settling point where the report puts it:
+
+| Pacing | Constant | Learned | Reserve reached |
+| --- | --- | --- | --- |
+| Vsync at the target rate | 0.80 scale | 0.90 | 1.61 ms of 2.22 |
+| Frame limiter at 240, target 90 | 0.80 scale | 0.95 | 0.50 ms - the truth |
+
+A loop sleeping to the very rate the controller aims at destroys the evidence
+before the controller sees it: once it has bought back enough slack to be
+comfortable, every reading is inflated by the sleep it just created and the
+gate refuses all of them. Under a limiter above the target - the shipped
+default is 240 - the work is what is left on the clock and the estimate
+converges exactly. Closing the vsync gap needs the untimed work *timed*, which
+is a fifth ring and a CPU-side one.
+
+The estimate is in memory for the session and carries no `Serialize`: it is
+what a machine is doing this run, not a preference, and `drs` cannot reach
+`crate::settings` to write one anyway. It survives `Controller::reset` for the
+same reason the scale does - a load is the one moment its evidence is
+worthless, not a reason to unlearn a race's worth of it.
+
+Because the budget now moves within a session, the `dynamic resolution:` trace
+line and the `out of reach` warning both print the reserve in force and whether
+it is learned or assumed. Two lines a minute apart can otherwise divide the
+same scalable cost by two different budgets with nothing saying so.
 
 ### The policy
 
@@ -405,8 +475,8 @@ made the true scalable cost visible for the first time:**
   pixels). Measured on the report this ADR was written from: 176 changes in 41
   seconds before this guard, 83 after.
 - **An unreachable target is earned by a run, not declared on one frame.** When
-  the measured fixed cost alone fills more of the frame period than
-  `RESIDUAL_SHARE` leaves room for, or the scale is parked at the floor and
+  the measured fixed cost alone fills more of the frame period than the
+  residual leaves room for, or the scale is parked at the floor and
   still over budget, no render scale can deliver the target - and the
   controller must not walk toward the floor chasing a rate that will never
   arrive, the same failure `Target::at_most` already guards from the clamping

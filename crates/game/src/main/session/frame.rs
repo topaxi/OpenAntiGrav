@@ -145,6 +145,14 @@ impl Session {
         // arrives on, which is what `stall_frame` below is then able to
         // exclude - see [`oag_render::timing::PassTimer`].
         self.frame_index += 1;
+        // **How long this frame took, or nothing at all on a stalled one.**
+        // The same value `meter` is fed, handed to the same guard: a load is
+        // not a frame time, and the residual `drs::Residual` learns from is
+        // `frame - timed`, so a 300 ms stall paired with a 3 ms scene would
+        // teach it that this machine spends 297 ms on work nothing times. The
+        // `Option` is how "the caller has no reading" is said, rather than a
+        // zero that would read as a frame that took no time.
+        let frame_seconds = (!self.stalled).then_some(elapsed.as_secs_f32());
         if self.stalled {
             self.meter.clear();
             // The same guard, reaching a measurement that has not come back
@@ -918,7 +926,7 @@ impl Session {
         // the buffer this frame just copied into. What comes back is a frame or
         // more old and says which frame it was - so a reading from a frame that
         // carried a load is dropped rather than recorded as a 300 ms scene.
-        self.read_timing_and_feed_drs(&render_profile, drs_limits);
+        self.read_timing_and_feed_drs(&render_profile, frame_seconds, drs_limits);
         if let Some(start) = submit_start {
             info!("first race frame: submitted in {:?}", start.elapsed());
         }

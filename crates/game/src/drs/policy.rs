@@ -5,7 +5,7 @@
 //! sit together, because two of them are only correct with respect to each
 //! other. See [`DEADBAND`].
 
-use super::{Cost, Limits};
+use super::{Cost, Limits, Residual};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -107,6 +107,13 @@ pub struct Controller {
     /// some frames and false on others - measured, 68 times in 41 seconds. A
     /// flag would report every one of those as a fresh spell.
     unreachable: u32,
+    /// What this machine spends on work no timer here reaches, learned from
+    /// the frames that can prove it - see [`super::residual`].
+    ///
+    /// **Session state, not a setting**, and the type is what says so: it
+    /// carries no `Serialize` and this module cannot reach `crate::settings`
+    /// to write one anyway.
+    residual: Residual,
 }
 
 impl Default for Controller {
@@ -124,13 +131,27 @@ impl Controller {
             cooldown: 0,
             under: 0,
             unreachable: 0,
+            residual: Residual::new(),
         }
     }
 
-    /// Records one frame's [`Cost`] and returns the extent to draw next, or
-    /// `None` when nothing should move.
+    /// Records one frame's [`Cost`] and how long that frame took on the
+    /// caller's wall clock, and returns the extent to draw next, or `None`
+    /// when nothing should move.
     ///
-    /// `None` covers five quiet cases - the target is off, the reading is
+    /// **`frame_seconds` is an input to the budget and never to the ratio.**
+    /// It is the same `elapsed` the composition root feeds
+    /// [`crate::perf::Meter`], handed over rather than read here, and all it
+    /// does is let [`super::Residual`] tighten what is held back for the work
+    /// no timer reaches - see that module for why a paced loop's wall clock is
+    /// an upper bound rather than a measurement, and [ADR-0044] for the machine
+    /// that made a constant untenable. Passing no reading at all is how a
+    /// caller says it has none - a frame that carried a load, a meter it just
+    /// cleared - and leaves the estimate exactly where it was.
+    ///
+    /// [ADR-0044]: ../../../../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md
+    ///
+    /// A returned `None` covers five quiet cases - the target is off, the reading is
     /// inside [`DEADBAND`], a [`COOLDOWN`] is still running, the correction
     /// quantised back onto the scale already in force, or the target is out of
     /// reach at any resolution. The fourth is deliberately not a step: burning
@@ -148,12 +169,26 @@ impl Controller {
     /// That is the same failure [`super::Target::at_most`] was written to
     /// prevent, reached from the other direction, and it is reported through
     /// [`Self::unreachable`] so the caller can say so once.
-    pub fn record(&mut self, cost: Cost, limits: Limits) -> Option<(u32, u32)> {
-        let budget = limits.target().scalable_budget(cost.fixed)?;
+    pub fn record(
+        &mut self,
+        cost: Cost,
+        frame_seconds: Option<f32>,
+        limits: Limits,
+    ) -> Option<(u32, u32)> {
+        let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
             return None;
         }
+        // **Before the budget is taken, so this frame's evidence reaches this
+        // frame's decision**, and before every branch below, so a cooldown or
+        // a comfortable stretch does not throw the reading away: the estimate
+        // is learned from what the frame cost, not from what the controller
+        // decided to do about it.
+        if let Some(frame_seconds) = frame_seconds {
+            self.residual.observe(frame_seconds, cost.total(), period);
+        }
+        let budget = limits.target().scalable_budget(cost.fixed, self.residual)?;
         // **Before the cooldown**, so a target that has become unreachable is
         // reported on the frame it happens rather than up to `COOLDOWN` frames
         // later - and so the cooldown cannot be spent on a frame there was
@@ -265,6 +300,18 @@ impl Controller {
         self.unreachable >= RISE_PATIENCE
     }
 
+    /// What this session has learned it spends outside every timer, for a log
+    /// line and for the budget arithmetic a reader has to be able to redo.
+    ///
+    /// **The budget is no longer a constant within a session**, so a `ratio`
+    /// printed on one frame and a `ratio` printed a minute later are not
+    /// comparable without this - which is why the trace line that prints the
+    /// cost prints the reserve beside it.
+    #[must_use]
+    pub fn residual(&self) -> Residual {
+        self.residual
+    }
+
     /// Throws the recent past away without moving the scale.
     ///
     /// Called from the same guard `perf::Meter::clear` is: a track load lands
@@ -274,6 +321,14 @@ impl Controller {
     /// run at full resolution, which is the drop this whole loop exists to
     /// avoid; what has to be thrown away is the readings in flight, and the
     /// cooldown is what does it.
+    ///
+    /// **[`Self::residual`] survives too, for the same reason the scale
+    /// does.** It is a property of the machine rather than of the last few
+    /// frames, and a load is the one moment its evidence is worthless -
+    /// throwing away what a whole race taught it, to relearn from the frames
+    /// straight after a stall, would be the same mistake as snapping back to
+    /// the ceiling. The stalled frame itself never reaches it: the caller
+    /// passes no wall-clock reading for the frame it dropped.
     pub fn reset(&mut self) {
         self.cooldown = COOLDOWN;
         self.under = 0;

@@ -22,17 +22,24 @@
 //! The signal this controls on is a [`Cost`]: the `race` pass and the
 //! motion-blur chain, which both draw through the render extent and both fall
 //! when it does, against the FSR 3.1 chain, which does not. The budget is the
-//! target frame period **minus the measured fixed cost** minus
-//! [`RESIDUAL_SHARE`] for the presentation work nothing times.
+//! target frame period **minus the measured fixed cost** minus a [`Residual`]
+//! for the presentation work nothing times.
 //!
-//! It is still not derived from the wall clock, and that part of ADR-0040
-//! stands: under [`crate::perf::Vsync::On`] the loop sleeps to the refresh and
-//! under any [`crate::perf::FrameLimit`] it sleeps to the limit, so
+//! The *signal* is still not the wall clock, and that part of ADR-0040 stands:
+//! under [`crate::perf::Vsync::On`] the loop sleeps to the refresh and under
+//! any [`crate::perf::FrameLimit`] it sleeps to the limit, so
 //! `interval - scene` is a slack term that absorbs whatever the scene did not
 //! use - the ratio would be 1.0 at every render scale and the controller would
-//! be inert in precisely the configuration a player turns it on for. It would
-//! also put a clock inside the one module whose whole selling point is that it
-//! has none.
+//! be inert in precisely the configuration a player turns it on for.
+//!
+//! What [ADR-0044] adds is a *second* input, to the budget rather than to the
+//! ratio, and it arrives in the shape everything else here does: the caller
+//! hands over how long its frame took, this module never asks. A wall-clock
+//! frame time is trusted only where it can be proved uncontaminated - see
+//! [`residual`], which is that proof and nothing else - and the reserve it
+//! learns can only ever be smaller than the constant that preceded it.
+//!
+//! [ADR-0044]: ../../../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md
 //!
 //! What ADR-0040 got wrong, and [ADR-0042] replaces, is the *other* half: a
 //! single constant share standing in for everything the budget could not see.
@@ -53,13 +60,25 @@
 use serde::{Deserialize, Serialize};
 
 pub mod policy;
+pub mod residual;
 
 pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };
+pub use residual::Residual;
 
-/// What fraction of a frame is reserved for the presentation work nothing
-/// times.
+/// The most of a frame that may be reserved for the work nothing times, and
+/// what is reserved until a frame has proved otherwise.
+///
+/// **Two roles since [ADR-0044], and neither of them is "the reserve".**
+/// [`Residual`] starts here and learns down from it, so this is the prior a
+/// session opens on and the ceiling on what any amount of learning may reserve:
+/// a floor under the *budget*, not a floor under the reserve. A floor under
+/// the reserve is the one thing it cannot be: the machine ADR-0044 was written
+/// for needs to reserve **less** than this, and a constant that could only be
+/// raised would have no way to say so.
+///
+/// [ADR-0044]: ../../../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md
 ///
 /// **A choice, and a much narrower one than the constant it replaces.**
 /// `SCENE_SHARE` was 0.45 and asserted that the one timed pass was 45 % of a
@@ -218,14 +237,24 @@ impl Target {
     }
 
     /// How long the *scalable* work may take, given what the fixed work
-    /// already cost this frame - or `None` when this target is off.
+    /// already cost this frame and what is being held back for the work
+    /// nothing times - or `None` when this target is off.
     ///
-    /// `period - fixed - RESIDUAL_SHARE * period`. The measured fixed cost is
+    /// `period - fixed - residual`. The measured fixed cost is
     /// **subtracted** rather than absorbed into a share, which is the whole
     /// change ADR-0042 makes: a controller that shrinks the extent buys back
     /// nothing from the FSR 3.1 chain, so pretending a constant fraction of
     /// the frame covers it made the budget wrong by a factor that varied with
     /// the render profile.
+    ///
+    /// **The residual is now a [`Residual`] rather than a constant**, which is
+    /// the whole of [ADR-0044] - it opens at `RESIDUAL_SHARE * period` and
+    /// falls from there on frames that can prove the machine spends less. It
+    /// can never rise past the constant, so this budget is never smaller than
+    /// the one the same reading produced before that ADR landed;
+    /// `a_learned_residual_never_reserves_more_than_the_constant` pins that.
+    ///
+    /// [ADR-0044]: ../../../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md
     ///
     /// **May be zero or negative, and the caller must not treat that as an
     /// error.** It is the honest answer to "how much room is left for the
@@ -233,14 +262,14 @@ impl Target {
     /// [`Controller::record`], which stops stepping rather than grinding to
     /// the floor for frames that will never arrive.
     #[must_use]
-    pub fn scalable_budget(self, fixed_seconds: f32) -> Option<f32> {
+    pub fn scalable_budget(self, fixed_seconds: f32, residual: Residual) -> Option<f32> {
         let period = self.period()?;
         let fixed = if fixed_seconds.is_finite() && fixed_seconds > 0.0 {
             fixed_seconds
         } else {
             0.0
         };
-        Some(period - fixed - RESIDUAL_SHARE * period)
+        Some(period - fixed - residual.seconds(period))
     }
 
     /// The spelling used in a settings file and on a menu row.
