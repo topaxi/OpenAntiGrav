@@ -24,14 +24,27 @@
 //! everything on the input list below plus the history's own failure modes
 //! (ghosting, disocclusion) that the middle five passes exist to manage.
 //!
-//! # Colour space
+//! # Colour space: gamma, and upstream would want otherwise
 //!
-//! **Linear light**, which is the opposite of [`super::fsr1`] and is the
-//! "fourth thing" [`super`]'s own table always listed. Accumulation averages
-//! several frames of one surface; an average of sRGB-encoded values weights a
-//! dark sample as brighter than it is. So the caller hands [`Frame::colour`] an
-//! **sRGB view** - the one that decodes on read - where FSR 1 is handed the
-//! non-sRGB one, and must not decode [`Fsr3::output`] again.
+//! Upstream accumulates **linear light**, and for good reason: averaging
+//! several frames of one surface in an encoded space weights a dark sample as
+//! brighter than it is. [`super`]'s own table anticipated that and listed FSR
+//! 3.1 as wanting "a fourth thing".
+//!
+//! **It cannot have it here.**
+//! [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+//! makes gamma this renderer's authoritative colour space and *nothing*
+//! linearises - the blend equations the art was authored against are defined on
+//! stored bytes, and the scene target holds gamma values in a deliberately
+//! non-sRGB format. There is no linear light anywhere in the pipeline to hand
+//! this, and manufacturing some for one pass would be exactly the
+//! inconsistency that ADR removed.
+//!
+//! So [`Frame::colour`] takes the same view [`super::fsr1`] takes, and
+//! accumulation runs on encoded values. That is a real divergence from
+//! upstream, in the same family as the FP16 path this port does not take, and
+//! it is the *consistent* choice rather than the accurate one - which is the
+//! trade ADR-0020 already made for every other pass in this renderer.
 //!
 //! # Jitter is an input, not a setting
 //!
@@ -84,9 +97,9 @@ pub fn supported(adapter: &wgpu::Adapter) -> bool {
 /// One frame's worth of input.
 #[derive(Debug, Clone, Copy)]
 pub struct Frame<'a> {
-    /// An **sRGB** view of the scene target - the one that decodes to linear
-    /// light on read. See the module docs; FSR 1 wants the opposite view of the
-    /// same texture.
+    /// The scene target, in whatever space this renderer draws in - which is
+    /// gamma, and is the same view [`super::fsr1`] takes. See the module docs
+    /// for why upstream would want linear light and why there is none here.
     pub colour: &'a wgpu::TextureView,
     /// The scene's depth attachment, stored rather than discarded since
     /// [ADR-0028](../../../../docs/architecture/adr/0028-camera-motion-blur-first.md).

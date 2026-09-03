@@ -33,6 +33,16 @@ pub(crate) struct Gpu {
     /// with something in particular. See [`adapter::Chosen::in_use`] and the
     /// row's restart note.
     pub(crate) in_use: Vec<String>,
+    /// Whether this adapter can run the temporal upscaler at all.
+    ///
+    /// **Asked once, here, because this is the only place the adapter exists.**
+    /// [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
+    /// requires that a missing capability *degrade* rather than fail to boot,
+    /// and the degrade happens in `upscale::Framebuffer::resolve_scene` - which
+    /// has a device and no adapter. Carrying the answer is cheaper than
+    /// re-requesting an adapter to ask it a second time, which is the same
+    /// argument `offered` above already makes.
+    pub(crate) temporal: bool,
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -49,6 +59,7 @@ pub(crate) struct BroughtUp {
     offered: Vec<wgpu::PresentMode>,
     adapters: Vec<String>,
     in_use: Vec<String>,
+    temporal: bool,
 }
 
 impl Gpu {
@@ -103,6 +114,10 @@ impl Gpu {
         // has to be checked against this same list, and re-requesting an
         // adapter to ask would be a second answer to the same question.
         let offered = surface.get_capabilities(&chosen.adapter).present_modes;
+        let temporal = oag_render::post::fsr3::supported(&chosen.adapter);
+        if !temporal {
+            info!("no compute shaders on this adapter; UPSCALER fsr3 will run as fsr1");
+        }
         // Said here, after the device and the surface config, so the line is
         // about an adapter that *worked*: an attempt that dies at either of them
         // prints its own failure and falls back, and one line naming the loser
@@ -127,6 +142,7 @@ impl Gpu {
             },
         );
         Ok(BroughtUp {
+            temporal,
             device,
             queue,
             config,
@@ -221,9 +237,11 @@ impl Gpu {
             offered,
             adapters,
             in_use,
+            temporal,
         } = brought;
 
         let mut gpu = Self {
+            temporal,
             window,
             device,
             queue,

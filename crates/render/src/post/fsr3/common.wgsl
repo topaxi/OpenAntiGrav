@@ -19,11 +19,10 @@
 // in every pass and holds only what every pass needs; a pass's own resources
 // are group 1.
 //
-// **Everything here works on linear light**, not on sRGB-encoded values. That
-// is the opposite of `fsr1.wgsl` and it is deliberate: accumulation averages
-// several frames of one surface, and an average of encoded values weights a
-// dark sample as brighter than it is. See `post::fsr3` for how the caller
-// arranges it.
+// **Upstream works on linear light; this works on gamma**, the same space
+// `fsr1.wgsl` does. ADR-0020 makes gamma this renderer's authoritative colour
+// space and nothing linearises, so there is none to hand it. See `post::fsr3`
+// for the whole argument and what it costs.
 
 // `Fsr3UpscalerConstants`, in upstream's declaration order. The order is
 // load-bearing: HLSL's 16-byte cbuffer rows and WGSL's uniform layout rules

@@ -70,7 +70,7 @@
 use anyhow::Result;
 use log::warn;
 
-use oag_render::post::{fsr1, fullscreen_layout, fxaa, smaa};
+use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
 use crate::display::{AntiAliasing, Brightness, Gamma, Scale, Upscaler};
 
@@ -91,42 +91,14 @@ pub struct Presentation {
     pub gamma: Gamma,
 }
 
-/// The jitter sequence this frame's scene should be drawn with, or `None` for
-/// no jitter at all.
-///
-/// **The upscaler decides this, not a settings row**, and that inversion is the
-/// point of the function existing. Sub-pixel jitter is not a picture setting: it
-/// is an input a *temporal* reconstruction needs and a *spatial* one is actively
-/// harmed by, because with nothing resolving the offsets they are a shimmer
-/// bought for nothing
-/// ([ADR-0039](../../../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)).
-/// So FSR 3.1 turns it on whether or not `flag` is set, and everything else
-/// leaves it to the flag.
-///
-/// `flag` is `--camera-jitter`, which stays an override for looking at jitter on
-/// its own. It gets [`oag_render::jitter::DEFAULT_PHASES`] rather than a
-/// ratio-derived count, because with no upscaler behind it there is no ratio -
-/// nothing is resolving the frames it jitters.
-///
-/// `extent` is the rectangle the scene is actually drawn into and `output` the
-/// presentation rectangle; the count is quadratic in their ratio, so it has to
-/// be recomputed as a resolution controller moves the extent.
-#[must_use]
-pub fn jitter_phases(
-    flag: bool,
-    upscaler: Upscaler,
-    extent: (u32, u32),
-    output: (u32, u32),
-) -> Option<u32> {
-    if upscaler.is_temporal() {
-        return Some(oag_render::jitter::phases(extent.0, output.0));
-    }
-    flag.then_some(oag_render::jitter::DEFAULT_PHASES)
-}
-
 mod blit;
+mod targets;
+mod temporal;
+
+pub use temporal::{Temporal, jitter_phases};
 
 use blit::{Grade, Source, grade_buffer};
+use targets::{output, target};
 
 /// The offscreen target and the pipeline that puts it on screen.
 pub struct Framebuffer {
@@ -163,6 +135,11 @@ pub struct Framebuffer {
     /// frame `[graphics] anti_aliasing` asks for them. Lazy for the same
     /// reason `fsr1` is.
     smaa: Option<Result<smaa::Smaa>>,
+    /// FSR 3.1's eight pipelines and its intermediates, built the first frame
+    /// the setting asks for them *and* the adapter can run them. Lazy for the
+    /// same reason `fsr1` is, and more so: this one is eight shader
+    /// compilations and a dozen textures.
+    fsr3: Option<Result<fsr3::Fsr3>>,
     /// The scene texture's real dimensions, and what every size-matched
     /// attachment is built against.
     ///
@@ -297,6 +274,7 @@ impl Framebuffer {
             fsr1: None,
             fxaa: None,
             smaa: None,
+            fsr3: None,
             allocation: size,
             // The whole target to begin with, which is what keeps every caller
             // that predates the split correct with no change: a capture, a
@@ -376,6 +354,7 @@ impl Framebuffer {
         encoder: &mut wgpu::CommandEncoder,
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
+        temporal: Option<Temporal<'_>>,
     ) {
         let output_size = (rect.2 as u32, rect.3 as u32);
         // **The extent, not the allocation**: every pass below is asking
@@ -449,38 +428,104 @@ impl Framebuffer {
         };
         let upscale_source = post_process.unwrap_or(&self.perceptual);
 
-        let resolved = (presentation.upscaler == Upscaler::Fsr1 && magnifies(extent, output_size))
-            .then(|| {
-                let fsr = self
-                    .fsr1
-                    .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
-                let fsr = match fsr {
-                    Ok(fsr) => fsr,
-                    // A shader that will not compile is a build-time mistake, but
-                    // it must not be a crash in a player's frame loop: say so once
-                    // and carry on bilinear.
-                    Err(why) => {
-                        warn!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
-                        return None;
-                    }
-                };
-                fsr.render(
-                    device,
-                    queue,
-                    encoder,
-                    fsr1::Frame {
-                        source: upscale_source,
-                        viewport: extent,
-                        input: allocation,
-                        output: output_size,
+        // **The fallback ladder, as one expression.** FSR 3.1 when the setting
+        // asks for it, the adapter can run it, and this frame is a race with a
+        // history to reconstruct from; FSR 1 when the setting asks for *that*
+        // and it is actually magnifying; the blit otherwise. A `fsr3` chosen on
+        // a machine without compute shaders, or on a menu frame, arrives here as
+        // `Upscaler::Fsr1` and takes the middle rung - which is what
+        // [ADR-0012] means by degrading rather than failing to boot, and why
+        // FSR 1 is load-bearing rather than a stepping stone.
+        //
+        // [ADR-0012]: ../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md
+        let temporal = temporal.filter(|_| presentation.upscaler == Upscaler::Fsr3);
+        let effective = match (presentation.upscaler, temporal.is_some()) {
+            (Upscaler::Fsr3, true) => Upscaler::Fsr3,
+            // Every other reading of `fsr3` falls one rung: a menu frame with
+            // no scene, an adapter with no compute shaders, and a race whose
+            // stage could not answer all arrive here as a `None` bundle.
+            (Upscaler::Fsr3, false) => Upscaler::Fsr1,
+            (chosen, _) => chosen,
+        };
+
+        let temporally_resolved = temporal.and_then(|temporal| {
+            let fsr = self.fsr3.get_or_insert_with(|| fsr3::Fsr3::new(device));
+            let fsr = match fsr {
+                Ok(fsr) => fsr,
+                // A shader that will not compile is a build-time mistake, but
+                // it must not be a crash in a player's frame loop: say so once
+                // and carry on down the ladder.
+                Err(why) => {
+                    warn!("the FSR 3.1 pipelines did not build ({why:#}); staying bilinear");
+                    return None;
+                }
+            };
+            fsr.render(
+                device,
+                queue,
+                encoder,
+                fsr3::Frame {
+                    // **The same view FSR 1 reads, not the sRGB one**, and
+                    // upstream would want the opposite. ADR-0020 makes gamma
+                    // this renderer's authoritative colour space and nothing
+                    // linearises, so there is no linear light here to hand it -
+                    // see `docs/rendering/fsr3.md`.
+                    colour: &self.perceptual,
+                    depth: temporal.depth,
+                    velocity: temporal.velocity,
+                    dispatch: fsr3::Dispatch {
+                        render: extent,
+                        max_render: allocation,
+                        upscale: output_size,
+                        jitter: temporal.jitter,
+                        phase_count: temporal.phase_count,
+                        camera: temporal.camera,
+                        // Inert: the only upstream reader of it is the
+                        // auto-exposure smoothing this port does not have.
+                        delta_time: 1.0 / 60.0,
+                        reset: temporal.reset,
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
-                );
-                fsr.output()
-                    .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
-            })
-            .flatten();
-        // **Whether FSR 1 actually resolved**, which decides the source
+                },
+            );
+            fsr.output()
+                .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+        });
+
+        let resolved = temporally_resolved.or_else(|| {
+            (effective == Upscaler::Fsr1 && magnifies(extent, output_size))
+                .then(|| {
+                    let fsr = self
+                        .fsr1
+                        .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
+                    let fsr = match fsr {
+                        Ok(fsr) => fsr,
+                        // A shader that will not compile is a build-time mistake, but
+                        // it must not be a crash in a player's frame loop: say so once
+                        // and carry on bilinear.
+                        Err(why) => {
+                            warn!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
+                            return None;
+                        }
+                    };
+                    fsr.render(
+                        device,
+                        queue,
+                        encoder,
+                        fsr1::Frame {
+                            source: upscale_source,
+                            viewport: extent,
+                            input: allocation,
+                            output: output_size,
+                            sharpness: fsr1::Sharpness::stops(presentation.sharpness),
+                        },
+                    );
+                    fsr.output()
+                        .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+                })
+                .flatten()
+        });
+        // **Whether an upscaler actually resolved**, which decides the source
         // rectangle below - not `source.is_some()`, which is also true for an
         // FXAA or SMAA frame that is scene-sized.
         let upscaled = resolved.is_some();
@@ -749,91 +794,6 @@ impl Framebuffer {
         pass.set_bind_group(0, Some(source.unwrap_or(&self.bind_group)), &[]);
         pass.draw(0..3, 0..1);
     }
-}
-
-/// Builds the presentation-sized target and the bind group that reads it.
-///
-/// No non-sRGB twin, unlike [`target`]: nothing samples this one in perceptual
-/// space. The upscalers and the post-process passes all read the *scene*
-/// target, upstream of here, and the only pass that reads this one is the
-/// graded blit onto the surface.
-fn output(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
-    format: wgpu::TextureFormat,
-    size: (u32, u32),
-) -> Result<Output> {
-    let size = (size.0.max(1), size.1.max(1));
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("presentation target"),
-        size: wgpu::Extent3d {
-            width: size.0,
-            height: size.1,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
-    let grade = grade_buffer(device, "presentation grade", graded)?;
-    let bind_group = bind(device, layout, sampler, &grade, &view);
-    Ok(Output {
-        view,
-        bind_group,
-        grade,
-        graded,
-        size,
-    })
-}
-
-fn target(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
-    grade: &wgpu::Buffer,
-    format: wgpu::TextureFormat,
-    size: (u32, u32),
-) -> (
-    wgpu::Texture,
-    wgpu::TextureView,
-    wgpu::TextureView,
-    wgpu::BindGroup,
-) {
-    // The non-sRGB twin is declared here so an upscaler can take a view in it
-    // later. Declaring a view format costs nothing when nobody asks for one,
-    // and on some backends it is the difference between a texture that can be
-    // reinterpreted at all and one that cannot - which is not a thing that can
-    // be retrofitted to an already-created texture.
-    let twin = format.remove_srgb_suffix();
-    let view_formats: &[wgpu::TextureFormat] = if twin == format { &[] } else { &[twin] };
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("upscale target"),
-        size: wgpu::Extent3d {
-            width: size.0.max(1),
-            height: size.1.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats,
-    });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let perceptual = texture.create_view(&wgpu::TextureViewDescriptor {
-        label: Some("upscale target (perceptual)"),
-        format: Some(twin),
-        ..Default::default()
-    });
-    let bind_group = bind(device, layout, sampler, grade, &view);
-    (texture, view, perceptual, bind_group)
 }
 
 /// Which rectangle of the bound source the blit reads.

@@ -93,6 +93,30 @@ impl MotionState {
     }
 }
 
+/// The race pass's three attachment views, rebuilt with the textures behind
+/// them and not before. See [`Scene::attachment_views`].
+#[derive(Debug)]
+pub(super) struct Attachments {
+    pub(super) depth: wgpu::TextureView,
+    pub(super) velocity: wgpu::TextureView,
+    /// `None` at sample count 1, matching [`Scene::msaa_color`].
+    pub(super) msaa: Option<wgpu::TextureView>,
+}
+
+impl Attachments {
+    pub(super) fn new(
+        depth: &wgpu::Texture,
+        velocity: &wgpu::Texture,
+        msaa: Option<&wgpu::Texture>,
+    ) -> Self {
+        Self {
+            depth: depth.create_view(&wgpu::TextureViewDescriptor::default()),
+            velocity: velocity.create_view(&wgpu::TextureViewDescriptor::default()),
+            msaa: msaa.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default())),
+        }
+    }
+}
+
 /// The scene's velocity attachment - see `Scene::velocity`.
 pub(super) fn velocity_texture(
     device: &wgpu::Device,
@@ -113,6 +137,67 @@ pub(super) fn velocity_texture(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
+}
+
+impl super::Scene {
+    /// Records what this frame is being drawn with, for the upscaler that
+    /// resolves it afterwards and can derive none of it.
+    ///
+    /// **Called before [`super::Scene::jittered`] applies the offset**, and
+    /// with the *unjittered* projection: the camera FSR 3.1 wants is the one
+    /// the scene was framed by, and the offset it wants is a number rather than
+    /// a matrix it would have to factor back out.
+    ///
+    /// `camera_from_projection` recovers the three values from the matrix
+    /// rather than re-deriving them - the projection is the tick's own
+    /// speed-widened field of view, and computing that twice would be a second
+    /// answer to the same question. Its one lossy term, `far`, is not one the
+    /// depth transform is sensitive to; see its own documentation.
+    pub(super) fn record_frame(&self, phases: Option<u32>, projection: Mat4) {
+        let phase = self.frame_index.get();
+        self.last_frame.set(phases.map(|phase_count| TemporalFrame {
+            camera: oag_render::post::fsr3::camera_from_projection(projection),
+            jitter: oag_render::jitter::offset_pixels(phase, phase_count),
+            phase_count,
+            // The sequence's first frame has nothing behind it. A camera *cut*
+            // mid-race is not detected here and would want the same treatment -
+            // see the handover thread.
+            reset: phase == 0,
+        }));
+    }
+
+    /// The depth and velocity attachments, and what the last frame was drawn
+    /// with - everything a temporal upscaler needs and cannot derive.
+    ///
+    /// `None` before the first [`Scene::render`], which is the same frame on
+    /// which there would be no history anyway.
+    #[must_use]
+    pub fn temporal(&self) -> Option<(&wgpu::TextureView, &wgpu::TextureView, TemporalFrame)> {
+        self.last_frame.get().map(|frame| {
+            (
+                &self.attachment_views.depth,
+                &self.attachment_views.velocity,
+                frame,
+            )
+        })
+    }
+}
+
+/// What one frame was drawn with, for the upscaler that resolves it.
+///
+/// `Copy` and four numbers, so [`Scene`] can hold it in a `Cell` beside the
+/// frame counter it is derived from.
+#[derive(Debug, Clone, Copy)]
+pub struct TemporalFrame {
+    /// The camera, in the terms FSR 3.1 asks for.
+    pub camera: oag_render::post::fsr3::Camera,
+    /// The sub-pixel offset this frame was actually drawn with, in pixels.
+    pub jitter: (f32, f32),
+    /// The jitter sequence's length.
+    pub phase_count: u32,
+    /// Whether this was the first frame of the sequence, and so has no history
+    /// behind it.
+    pub reset: bool,
 }
 
 impl super::Scene {

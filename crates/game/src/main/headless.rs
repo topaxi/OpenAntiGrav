@@ -377,7 +377,23 @@ pub(crate) fn run_race(
         // `race::load` above never hands a resolved title back, so there is
         // nothing to key `settings.render_profiles` on. The same fallback
         // `Session::render_profile` uses on a shell-less run.
-        let render_profile = settings::RenderProfile::default();
+        //
+        // **The four CLI overrides are re-applied on top**, and forgetting them
+        // is a bug this carried: `main.rs` applies `--render-scale`,
+        // `--upscaler`, `--anti-aliasing` and `--motion-blur` by walking
+        // `settings.render_profiles`, which this profile is not in - so every
+        // one of them was silently discarded on a headless capture, and `just
+        // compare-upscalers` produced three byte-identical images while
+        // reporting nothing wrong. See `Cli::apply_render_overrides`.
+        let mut render_profile = settings::RenderProfile::default();
+        let render_scale = match cli.render_scale {
+            Some(percent) => Some(
+                crate::display::Scale::try_from(percent)
+                    .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
+            ),
+            None => None,
+        };
+        cli.apply_render_overrides(&mut render_profile, render_scale);
         race::capture(
             loaded,
             &race::CaptureOptions {

@@ -304,6 +304,10 @@ pub fn capture(
 
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
+    // Asked here because this is where this path's adapter is - the capture
+    // builds its own rather than borrowing the window's. See
+    // `upscale::Temporal`.
+    let temporal_supported = oag_render::post::fsr3::supported(&adapter);
     let (device, queue) = pollster::block_on(adapter.request_device(
         &oag_render::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
     ))
@@ -445,6 +449,7 @@ pub fn capture(
         presented.map_or(crate::display::Upscaler::Off, |state| {
             state.presentation.upscaler
         }),
+        temporal_supported,
         (viewport.2 as u32, viewport.3 as u32),
         (rect.2 as u32, rect.3 as u32),
     );
@@ -617,7 +622,27 @@ pub fn capture(
     // the grade comes last, in `composite`, so the HUD is inside it.
     if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
         framebuffer.resize_output(&device, (width, height));
-        framebuffer.resolve_scene(&device, &queue, &mut encoder, rect, &state.presentation);
+        // **A `--presented` capture is the one place an upscaler's output can
+        // be looked at**, which is what this flag exists for - so the temporal
+        // path has to be reachable here too, not just from the window.
+        let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
+            |(depth, velocity, frame)| crate::upscale::Temporal {
+                depth,
+                velocity,
+                camera: frame.camera,
+                jitter: frame.jitter,
+                phase_count: frame.phase_count,
+                reset: frame.reset,
+            },
+        );
+        framebuffer.resolve_scene(
+            &device,
+            &queue,
+            &mut encoder,
+            rect,
+            &state.presentation,
+            temporal,
+        );
     }
     // Where the HUD goes, which is not where the scene went. Presented, that is
     // the presentation target at the aspect rectangle; otherwise it is the

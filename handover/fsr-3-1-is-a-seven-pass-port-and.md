@@ -1,4 +1,4 @@
-# FSR 3.1's eight passes are ported; nothing selects it yet
+# FSR 3.1 is ported, wired and selectable; nobody has played it
 
 The route was decided by
 [ADR-0012](../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md):
@@ -70,23 +70,26 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Open
 
-- **The game side is not wired, and that is the next piece of work.**
-  `Fsr3::output` returns a frame; `upscale::Framebuffer::resolve_scene` has no
-  `Upscaler::Fsr3` branch that reads it, so choosing `fsr3` on the menu row
-  still resolves through the blit. Landing the resolve and the wiring separately
-  is deliberate - a bug in each would otherwise arrive together with nothing to
-  bisect between. Three things the wiring has to get right, all of them stated
-  in `docs/rendering/fsr3.md` and none of them enforced by a type:
-  the colour input is the **sRGB** view (FSR 1 takes the non-sRGB one), the
-  output is **linear** and the blit's grade must not decode it twice, and the
-  fallback ladder has to run `supported(&adapter)` and fall to FSR 1 rather than
-  failing to boot.
-- **Nobody has looked at a frame.** The chain is complete and every pass is
-  checked against arithmetic worked out on the CPU - which establishes that each
-  computes what upstream's source says, not that the source was read correctly.
-  A `--presented` capture at 50 % render scale beside the `fsr1` and `off` ones
-  is the instrument, and taking it is a decision for the maintainer rather than
-  something a green test can stand in for.
+- **It has been captured once and never played.** `just compare-upscalers`
+  produces the three frames now and the FSR 3.1 one is a clean, artefact-free
+  race frame that sits *between* bilinear and FSR 1 in apparent sharpness -
+  cleaner edges than the blit, less crisp than FSR 1 and without FSR 1's
+  ringing on the barrier slats. Whether that is right is a from-play judgement
+  nobody has made. Three candidate explanations for the softness, in the order
+  worth testing: the capture is nearly static (the craft is stationary for 240
+  of its 300 ticks, which is the worst case for a temporal upscaler); RCAS runs
+  at its default sharpness rather than the settings row's; and accumulation runs
+  on gamma-encoded values, which biases a converging history bright in the
+  shadows.
+- **Accumulation runs in gamma, and upstream's runs in linear.** ADR-0020 makes
+  gamma authoritative here and says nothing linearises, so there is no linear
+  light to hand FSR 3.1 - see `docs/rendering/fsr3.md`. It is the *consistent*
+  choice rather than the accurate one, and its visible cost is unmeasured. A
+  ghost trail behind a dark object is where it would show.
+- **A camera cut does not reset the history.** `Scene::record_frame` sets
+  `reset` on the sequence's first frame only, so a view change or a
+  respawn hands the resolve a history of a different scene. It has not been
+  seen because nothing cuts the camera mid-race yet.
 - **`compute_motion_divergence` divides by zero on a perfectly static camera.**
   `saturate(reprojected_velocity / velocity_4k)` with both zero is `0/0`.
   Upstream has the same expression and relies on `saturate(NaN)` returning zero;
@@ -108,13 +111,13 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 
 ## Next Steps
 
-1. Wire `Upscaler::Fsr3` into `upscale::Framebuffer::resolve_scene`, with the
-   fallback ladder and the two colour-space rules above. That is the whole
-   remaining gap between "ported" and "selectable".
-2. Then take a `--presented` capture at 50 % render scale with
-   `upscaler = fsr3` and put it beside the `fsr1` and `off` ones. **This is the
-   first time anyone will have seen the port's output**, and no test substitutes
-   for it.
-3. Derive `Dispatch::sharpness` from the existing `[graphics] upscale_sharpness`
-   row rather than the default it takes now - the setting already exists and
-   already means upstream's stops on both paths.
+1. **Play it.** `just play --race --upscaler fsr3 --render-scale 50` and look
+   at a moving frame; the capture is nearly static and is the wrong instrument
+   for the one thing a temporal upscaler is for. Ghosting behind the craft and
+   shimmer on the barrier slats are what to watch.
+2. Decide whether `fsr3` should be a default anywhere. It is off by default and
+   the row already offers it; `Scale::default` is `FULL`, so like `fsr1` it is
+   inert until a player lowers the render scale - except that unlike `fsr1` it
+   is *not* inert at 100 %, because a temporal resolve still has more samples
+   than one frame carries.
+3. Reset the history on a camera cut, which nothing does yet - see above.

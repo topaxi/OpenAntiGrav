@@ -1,7 +1,7 @@
 //! The race stage: a loaded track, and the scene that draws it.
 
 use log::warn;
-use oag_game::{display, race};
+use oag_game::{display, race, upscale};
 
 use crate::gpu::Gpu;
 
@@ -68,6 +68,26 @@ impl RaceStage {
             zone_spectrum,
             timestamps,
         )
+    }
+
+    /// What a temporal upscaler needs from this frame, or `None` when nothing
+    /// has been drawn yet or jitter is off.
+    ///
+    /// **Read after [`RaceStage::render`], never before**: it reports the frame
+    /// that was drawn, and a caller that asked first would hand the upscaler the
+    /// *previous* frame's camera and offset - which produces a picture rather
+    /// than an error.
+    pub(crate) fn temporal(&self) -> Option<upscale::Temporal<'_>> {
+        self.scene
+            .temporal()
+            .map(|(depth, velocity, frame)| upscale::Temporal {
+                depth,
+                velocity,
+                camera: frame.camera,
+                jitter: frame.jitter,
+                phase_count: frame.phase_count,
+                reset: frame.reset,
+            })
     }
 
     /// Draws the HUD, or the results table once the race has one.

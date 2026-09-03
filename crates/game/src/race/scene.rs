@@ -12,6 +12,8 @@ mod frame;
 mod motion;
 
 use frame::{depth_texture, msaa_color_texture};
+use motion::Attachments;
+pub use motion::TemporalFrame;
 
 /// The track and the ship on the GPU, drawn from a chase camera.
 #[derive(Debug)]
@@ -221,6 +223,16 @@ pub struct Scene {
     motion: std::cell::RefCell<Option<motion::MotionState>>,
     /// The camera-jitter phase: frames, not ticks. See [`Scene::jittered`].
     frame_index: std::cell::Cell<u32>,
+    /// What the last [`Scene::render`] drew with, for a temporal upscaler that
+    /// runs *after* it and cannot see any of it.
+    ///
+    /// **Recorded rather than recomputed.** The jitter offset, the sequence
+    /// length and the camera are all decided inside `render` - the offset from
+    /// a counter this scene owns, the camera from the tick's own speed-widened
+    /// field of view - and a caller re-deriving them would be a second answer
+    /// to the same question, wrong in exactly the way that produces a
+    /// plausible picture. `None` until the first frame.
+    last_frame: std::cell::Cell<Option<TemporalFrame>>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -300,26 +312,6 @@ impl Scratch {
         self.alpha.clear();
         self.pads_ready.clear();
         self.recoloured.clear();
-    }
-}
-
-/// The race pass's three attachment views, rebuilt with the textures behind
-/// them and not before. See [`Scene::attachment_views`].
-#[derive(Debug)]
-pub(super) struct Attachments {
-    pub(super) depth: wgpu::TextureView,
-    pub(super) velocity: wgpu::TextureView,
-    /// `None` at sample count 1, matching [`Scene::msaa_color`].
-    pub(super) msaa: Option<wgpu::TextureView>,
-}
-
-impl Attachments {
-    fn new(depth: &wgpu::Texture, velocity: &wgpu::Texture, msaa: Option<&wgpu::Texture>) -> Self {
-        Self {
-            depth: depth.create_view(&wgpu::TextureViewDescriptor::default()),
-            velocity: velocity.create_view(&wgpu::TextureViewDescriptor::default()),
-            msaa: msaa.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default())),
-        }
     }
 }
 
@@ -878,6 +870,7 @@ impl Scene {
             velocity,
             motion: std::cell::RefCell::new(None),
             frame_index: std::cell::Cell::new(0),
+            last_frame: std::cell::Cell::new(None),
             track,
             visibility,
             ships,

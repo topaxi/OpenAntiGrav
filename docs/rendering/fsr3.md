@@ -333,18 +333,35 @@ compute-less adapter degrades rather than failing to boot. Same shape of hole as
 the missing-`TIMESTAMP_QUERY` case in
 [dynamic resolution](dynamic-resolution.md).
 
-## Colour space
+## Colour space: gamma, and upstream would want otherwise
 
-**FSR 3.1 wants linear light**, which is a different answer from FSR 1's and is
-why [`post`](../../crates/render/src/post/mod.rs)'s own table always listed it
-as a fourth consumer rather than folding it in with the others. Accumulation
-averages several frames of the same surface, and averaging sRGB-encoded values
-weights a dark sample as though it were brighter than it is; the reconstruction
-is being asked to do arithmetic on light, so it must be handed light.
+**FSR 3.1 accumulates linear light upstream, and cannot here.** The reasoning
+for upstream's choice is sound - averaging several frames of one surface in an
+encoded space weights a dark sample as brighter than it is, and the
+reconstruction is doing arithmetic on light. [`post`](../../crates/render/src/post/mod.rs)'s
+own table anticipated it and listed FSR 3.1 as wanting "a fourth thing", linear
+light with its own tonemapping either side of accumulation.
 
-Concretely: FSR 3.1 reads the scene target through its **sRGB** view - the one
-that decodes on read - where FSR 1 reads the non-sRGB one. Its output is linear
-too, and the blit's grade therefore must not decode it a second time.
+That note predates the port and does not survive it.
+[ADR-0020](../architecture/adr/0020-gamma-authoritative-colour-space.md) makes
+gamma this renderer's authoritative colour space and says plainly that nothing
+linearises: the PSP's blend equations are defined on stored framebuffer bytes,
+the art was authored against that arithmetic, and the scene target holds gamma
+values in a deliberately *non*-sRGB format. **There is no linear light in this
+pipeline to hand FSR 3.1**, and manufacturing some for one pass would
+reintroduce exactly the two-colour-spaces-at-once inconsistency that ADR
+removed - the one that cost up to 73/255 on the boost plume and made every
+measurement of one thing against another measure two spaces.
+
+So the port reads the same view FSR 1 reads and accumulates encoded values.
+That is a real divergence from upstream, in the same family as the FP16 path,
+and it is the *consistent* choice rather than the accurate one - which is the
+trade ADR-0020 already made on this renderer's behalf everywhere else.
+
+Whether it is visible is unmeasured, and it is the first thing a comparison
+capture should be looked at for: encoded accumulation biases a converging
+history *bright* in the shadows, so a ghost trail behind a dark object is where
+it would show.
 
 ## Jitter is not optional here
 
