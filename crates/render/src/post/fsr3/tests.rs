@@ -270,20 +270,30 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
     );
 }
 
-/// An 8x4 depth buffer with no two texels alike and a deliberate near/far
-/// split, so that a 3x3 neighbourhood's nearest, its centre and its plain
-/// maximum are three different numbers everywhere they can be.
-fn depth_pattern() -> ((u32, u32), Vec<f32>) {
-    let size = (8u32, 4u32);
-    let mut depth = Vec::with_capacity((size.0 * size.1) as usize);
-    for y in 0..size.1 {
-        for x in 0..size.0 {
-            // 0.10 .. 0.72, monotonic along the scanline and stepped between
-            // rows, so a neighbourhood is never flat and never symmetric.
-            depth.push(0.10 + 0.02 * (y * size.0 + x) as f32);
-        }
-    }
-    (size, depth)
+/// The fixture's extent: small enough that a wrong mip count or a wrong
+/// rounding shows up, and it already has - see `resources::mip_ceiling`.
+const FIXTURE: (u32, u32) = (8, 4);
+
+/// A depth buffer with no two texels alike, so that a 3x3 neighbourhood's
+/// nearest, its centre and its plain maximum are three different numbers
+/// everywhere they can be.
+fn depth_pattern() -> Vec<f32> {
+    (0..FIXTURE.0 * FIXTURE.1)
+        // 0.10 .. 0.72, monotonic along the scanline and stepped between rows,
+        // so a neighbourhood is never flat and never symmetric.
+        .map(|i| 0.10 + 0.02 * i as f32)
+        .collect()
+}
+
+/// A colour buffer with a luma gradient across it, so that the five-tap
+/// neighbourhood the shading-change pass compares is never flat either.
+fn colour_pattern() -> Vec<[f32; 3]> {
+    (0..FIXTURE.0 * FIXTURE.1)
+        .map(|i| {
+            let t = 0.15 + 0.02 * i as f32;
+            [t, t * 0.8, t * 0.6]
+        })
+        .collect()
 }
 
 #[test]
@@ -299,8 +309,16 @@ fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
     // thing a future reader "fixes" into a real maximum without noticing that
     // the reconstruction was tuned against this. Pinned on hardware rather than
     // by a comment, because a comment cannot fail.
-    let (size, depth) = depth_pattern();
-    let Some(scene) = Scene::run(size, &depth) else {
+    let size = FIXTURE;
+    let depth = depth_pattern();
+    let colour = colour_pattern();
+    let Some(scene) = Scene::run(
+        size,
+        &[readback::Input {
+            depth: &depth,
+            colour: &colour,
+        }],
+    ) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -340,8 +358,16 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
     // half-resolution texel. Checked against the CPU-side view-space transform
     // rather than against a second run of the same shader, so a wrong
     // `device_to_view_depth` cannot cancel itself out.
-    let (size, depth) = depth_pattern();
-    let Some(scene) = Scene::run(size, &depth) else {
+    let size = FIXTURE;
+    let depth = depth_pattern();
+    let colour = colour_pattern();
+    let Some(scene) = Scene::run(
+        size,
+        &[readback::Input {
+            depth: &depth,
+            colour: &colour,
+        }],
+    ) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -362,6 +388,102 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
                 "({x}, {y}): got {got}, wanted {want}"
             );
         }
+    }
+}
+
+#[test]
+fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
+    // **Two frames of an unchanging scene, which is the sharpest property this
+    // pass has.** The neighbourhood it compares is identical either side, and
+    // upstream's `ComputeMinimumDifference` handles that through a value that
+    // looks like the opposite of "no change": a pair matching to within
+    // `FP16_MIN` sets `fMinDiff` to `FP16_MAX`, and the *final multiply* is
+    // what turns that back into a zero. Drop that multiply - it reads like a
+    // no-op guard - and a perfectly still frame reports the largest shading
+    // change representable, at every level of the pyramid.
+    //
+    // The first frame is excluded from the claim by construction: it has no
+    // previous luma, so its output is whatever the ping-pong's unwritten half
+    // held. Only the second frame's is asserted.
+    let depth = depth_pattern();
+    let colour = colour_pattern();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let Some(scene) = Scene::run(FIXTURE, &[still, still]) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+
+    let levels = targets.spd_mips.mips.len() as u32;
+    assert!(levels >= 2, "a one-level pyramid tests no reduction");
+    for level in 0..levels {
+        for (index, (difference, sign_sum)) in scene
+            .read_rg16(&targets.spd_mips.texture, level)
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                (*difference, *sign_sum),
+                (0.0, 0.0),
+                "level {level} texel {index} reports a change in a still scene"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_changed_scene_reports_a_signed_shading_change() {
+    // The control for the test above: with the second frame's colour actually
+    // different, the pyramid must be non-zero - and *signed*, brightening
+    // positive. Without this, a pass that wrote zeros unconditionally would
+    // pass every other assertion in this file.
+    // **Flat, where the still-scene test above uses a gradient**, and the
+    // difference matters: `ComputeMinimumDifference` walks the two *sorted*
+    // five-tap sets merge-style and keeps the smallest relative difference
+    // between any pair drawn from them. Across a gradient, some dark tap is
+    // nearer to some bright tap than the four-times ratio, and the answer is a
+    // number nobody can predict by hand - measured at 0.357 for this fixture,
+    // which is a fact about the neighbourhood rather than about the formula.
+    // Flat neighbourhoods leave exactly one pair to find.
+    let depth = depth_pattern();
+    let texels = (FIXTURE.0 * FIXTURE.1) as usize;
+    let dark = vec![[0.2f32, 0.2, 0.2]; texels];
+    let bright = vec![[0.8f32, 0.8, 0.8]; texels];
+    let Some(scene) = Scene::run(
+        FIXTURE,
+        &[
+            readback::Input {
+                depth: &depth,
+                colour: &dark,
+            },
+            readback::Input {
+                depth: &depth,
+                colour: &bright,
+            },
+        ],
+    ) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let targets = scene.fsr3.targets().expect("a dispatched frame");
+    let level0 = scene.read_rg16(&targets.spd_mips.texture, 0);
+
+    // Four times the luma is a `1 - min/max` of 0.75, and the sign summand is
+    // +1 at every contributing texel - so the 2x2 average of each is that same
+    // value. Not an approximation of upstream's formula: it *is* the formula,
+    // at an input chosen so the answer is a round number.
+    for (index, (difference, sign_sum)) in level0.iter().enumerate() {
+        assert!(
+            (*difference - 0.75).abs() < 0.01,
+            "texel {index} difference {difference}, wanted 0.75"
+        );
+        assert!(
+            (*sign_sum - 1.0).abs() < 0.01,
+            "texel {index} sign sum {sign_sum}, wanted +1 for a brightening"
+        );
     }
 }
 

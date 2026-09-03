@@ -68,7 +68,7 @@ order, so this table and the code cannot drift apart silently.
 | --- | --- | --- | --- |
 | 1 | `prepare_inputs` | render | **yes** |
 | 2 | `luma_pyramid` (SPD) | render/2 | **yes**, reduced to one dispatch - see below |
-| 3 | `shading_change_pyramid` (SPD) | render/2, mips | no |
+| 3 | `shading_change_pyramid` (SPD) | render/2, mips | **yes**, as a dispatch per level |
 | 4 | `shading_change` | render/2 | no |
 | 5 | `prepare_reactivity` | render | no |
 | 6 | `luma_instability` | render | no |
@@ -156,9 +156,33 @@ defend:
   the CPU-side view-space depth transform rather than against a second run of
   the same shader, so a wrong `deviceToViewDepth` cannot cancel itself out.
 
+The fixture runs **more than one frame**, because half of what this port does is
+temporal: a first frame has no history, so a pass that compares against the
+previous frame reads the ping-pong's unwritten half and nothing about its output
+is attributable. Two frames of a *still* scene is the sharpest instrument
+available before `accumulate` lands, and it pins a third trap:
+
+- **A still scene must report zero shading change**, and upstream reaches that
+  answer through a value that looks like its opposite. Two neighbourhoods
+  matching to within `FP16_MIN` set `fMinDiff` to `FP16_MAX`, and the *final
+  multiply* is what turns that back into a zero. Drop that multiply - it reads
+  like a redundant guard - and a perfectly still frame reports the largest
+  shading change representable, at every level of the pyramid.
+
+Its control is a scene that really did change, checked for both magnitude and
+sign. That one has to use a **flat** colour where the others use a gradient:
+`ComputeMinimumDifference` walks two sorted five-tap sets merge-style and keeps
+the smallest relative difference between any pair, so across a gradient some
+dark tap is nearer to some bright tap than the ratio between the frames, and the
+answer is a fact about the neighbourhood rather than about the formula.
+
 Running the fixture at 8x4 rather than at a realistic size is deliberate, and
 it paid for itself immediately: a 4x2 half-resolution target cannot hold six mip
 levels, which wgpu rejects and which no test at 960x540 would ever have reached.
+It caught a second one on the next pass - a dispatch cannot bind one texture as
+both a storage write and a sampled resource, even when the shader ignores the
+read, so the pyramid's level-0 dispatch had to be pointed at something other
+than the level it writes.
 
 ### The scattered depth store becomes a storage buffer
 

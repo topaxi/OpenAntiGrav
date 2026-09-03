@@ -27,9 +27,29 @@ pub(super) const CAMERA: Camera = Camera {
     fov_y: std::f32::consts::FRAC_PI_4,
 };
 
+/// One frame of the fixture: a depth buffer and a colour buffer, both
+/// row-major at the render extent.
+///
+/// The scene is otherwise still - the velocity attachment is left at zero -
+/// so a two-frame run differs only in what these hold, which is what makes a
+/// temporal pass's output attributable to one thing.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Input<'a> {
+    pub depth: &'a [f32],
+    /// Linear RGB per texel, three floats each.
+    pub colour: &'a [[f32; 3]],
+}
+
 impl Scene {
-    /// Runs every ported pass over a `render`-sized depth buffer holding
-    /// `depth`, row-major. `None` when there is no adapter.
+    /// Runs every ported pass once per frame in `frames`, in order, on one
+    /// device. `None` when there is no adapter.
+    ///
+    /// **More than one frame, because half of what this port does is temporal.**
+    /// The first frame has no history, so a pass that compares against the
+    /// previous frame reads whatever the ping-pong's unwritten half holds and
+    /// nothing about its output is attributable. Two frames of a *still* scene
+    /// is the sharpest fixture available: whatever the shading-change pyramid
+    /// says then, it should say nothing changed.
     ///
     /// **The depth texture is a real `Depth32Float`,** not a colour format
     /// standing in for one: binding a depth view as an unfilterable float is
@@ -38,8 +58,13 @@ impl Scene {
     /// because WebGPU does not allow a buffer-to-texture copy into a depth
     /// format - the fill is a fullscreen pass writing `@builtin(frag_depth)`
     /// from a storage buffer, which is the same picture by a longer road.
-    pub(super) fn run(render: (u32, u32), depth: &[f32]) -> Option<Self> {
-        assert_eq!(depth.len(), (render.0 * render.1) as usize);
+    ///
+    /// The colour texture is `Rgba32Float` where the game's scene target is an
+    /// sRGB one. The binding is identical - every pass here `textureLoad`s it -
+    /// and it means the fixture can write exact `f32`s rather than encode
+    /// halves, so an expected value is a number rather than a rounding.
+    pub(super) fn run(render: (u32, u32), frames: &[Input<'_>]) -> Option<Self> {
+        let texels = (render.0 * render.1) as usize;
         let upscale = (render.0 * 2, render.1 * 2);
 
         let instance = wgpu::Instance::default();
@@ -47,81 +72,94 @@ impl Scene {
         let (device, queue) =
             pollster::block_on(adapter.request_device(&Default::default())).ok()?;
 
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("fsr3 test depth"),
-            size: wgpu::Extent3d {
-                width: render.0,
-                height: render.1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let depth_view = depth_texture.create_view(&Default::default());
-        fill_depth(&device, &queue, &depth_view, render, depth);
-
-        let plain = |label, format, usage| {
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some(label),
-                    size: wgpu::Extent3d {
-                        width: render.0,
-                        height: render.1,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format,
-                    usage,
-                    view_formats: &[],
-                })
-                .create_view(&Default::default())
+        let make = |label, format, usage| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: wgpu::Extent3d {
+                    width: render.0,
+                    height: render.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
         };
-        let binding = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT;
-        let colour = plain(
-            "fsr3 test colour",
-            wgpu::TextureFormat::Rgba16Float,
-            binding,
+        let depth_texture = make(
+            "fsr3 test depth",
+            wgpu::TextureFormat::Depth32Float,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
-        let velocity = plain(
+        let depth_view = depth_texture.create_view(&Default::default());
+        let colour_texture = make(
+            "fsr3 test colour",
+            wgpu::TextureFormat::Rgba32Float,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        );
+        let colour = colour_texture.create_view(&Default::default());
+        let velocity = make(
             "fsr3 test velocity",
             crate::mesh_render::VELOCITY_FORMAT,
-            binding,
-        );
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        )
+        .create_view(&Default::default());
 
         let mut fsr3 = Fsr3::new(&device).expect("the FSR 3.1 shaders must compile");
-        let mut encoder = device.create_command_encoder(&Default::default());
-        fsr3.render(
-            &device,
-            &queue,
-            &mut encoder,
-            Frame {
-                colour: &colour,
-                depth: &depth_view,
-                velocity: &velocity,
-                dispatch: Dispatch {
-                    render,
-                    max_render: render,
-                    upscale,
-                    // Zero, so that nothing in this fixture depends on which
-                    // phase of the sequence it happened to land on.
-                    jitter: (0.0, 0.0),
-                    phase_count: crate::jitter::phases(render.0, upscale.0),
-                    camera: CAMERA,
-                    delta_time: 1.0 / 60.0,
-                    reset: true,
+
+        for (index, input) in frames.iter().enumerate() {
+            assert_eq!(input.depth.len(), texels);
+            assert_eq!(input.colour.len(), texels);
+
+            fill_depth(&device, &queue, &depth_view, render, input.depth);
+            let rgba: Vec<f32> = input
+                .colour
+                .iter()
+                .flat_map(|[r, g, b]| [*r, *g, *b, 1.0])
+                .collect();
+            queue.write_texture(
+                colour_texture.as_image_copy(),
+                bytemuck::cast_slice(&rgba),
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(render.0 * 16),
+                    rows_per_image: Some(render.1),
                 },
-            },
-        );
-        queue.submit([encoder.finish()]);
-        device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("draining the queue");
+                colour_texture.size(),
+            );
+
+            let mut encoder = device.create_command_encoder(&Default::default());
+            fsr3.render(
+                &device,
+                &queue,
+                &mut encoder,
+                Frame {
+                    colour: &colour,
+                    depth: &depth_view,
+                    velocity: &velocity,
+                    dispatch: Dispatch {
+                        render,
+                        max_render: render,
+                        upscale,
+                        // Zero, so that nothing in this fixture depends on
+                        // which phase of the sequence it happened to land on -
+                        // and so that a still scene really is still, where a
+                        // moving offset would make consecutive frames differ.
+                        jitter: (0.0, 0.0),
+                        phase_count: crate::jitter::phases(render.0, upscale.0),
+                        camera: CAMERA,
+                        delta_time: 1.0 / 60.0,
+                        reset: index == 0,
+                    },
+                },
+            );
+            queue.submit([encoder.finish()]);
+            device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("draining the queue");
+        }
 
         Some(Self {
             device,
@@ -173,6 +211,59 @@ impl Scene {
         out
     }
 
+    /// One `Rgba16Float` intermediate's first two channels, read back as pairs
+    /// row-major - which is what the pyramid holds.
+    pub(super) fn read_rg16(&self, texture: &wgpu::Texture, mip: u32) -> Vec<(f32, f32)> {
+        let size = texture
+            .size()
+            .mip_level_size(mip, wgpu::TextureDimension::D2);
+        let unpadded = (size.width * 8) as usize;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+        let padded = unpadded.div_ceil(align) * align;
+        let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("fsr3 readback"),
+            size: (padded * size.height as usize) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: mip,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded as u32),
+                    rows_per_image: Some(size.height),
+                },
+            },
+            size,
+        );
+        self.queue.submit([encoder.finish()]);
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("draining the queue");
+        let mapped = readback.slice(..).get_mapped_range().expect("mapping");
+        let half =
+            |at: usize| f16_to_f32(u16::from_le_bytes(mapped[at..at + 2].try_into().unwrap()));
+        let mut out = Vec::with_capacity((size.width * size.height) as usize);
+        for y in 0..size.height as usize {
+            for x in 0..size.width as usize {
+                let at = y * padded + x * 8;
+                out.push((half(at), half(at + 2)));
+            }
+        }
+        drop(mapped);
+        readback.unmap();
+        out
+    }
+
     /// `GetViewSpaceDepthInMeters` on the CPU, from the same two constants the
     /// shader reads - so the check is against the transform this frame was
     /// dispatched with rather than against a second derivation of it.
@@ -180,6 +271,34 @@ impl Scene {
         let c = self.fsr3.constants().expect("a dispatched frame");
         let metres = c.device_to_view_depth[1] / (device_depth - c.device_to_view_depth[0]);
         metres.min(65504.0)
+    }
+}
+
+/// An IEEE binary16 back to an `f32`.
+///
+/// Written out rather than pulled in as a dependency: `half` is already in the
+/// lock file under wgpu, but adding it to this crate's manifest for eleven
+/// lines of test-only decoding is a dependency the build would carry forever.
+///
+/// Every case is handled because the pyramid legitimately holds all of them - a
+/// zero where nothing changed, a subnormal where the change is tiny, and an
+/// infinity if a later pass ever writes one.
+fn f16_to_f32(bits: u16) -> f32 {
+    let sign = u32::from(bits & 0x8000) << 16;
+    let exponent = u32::from((bits >> 10) & 0x1f);
+    let mantissa = u32::from(bits & 0x3ff);
+    match exponent {
+        0 if mantissa == 0 => f32::from_bits(sign),
+        // Subnormal: renormalise by shifting the mantissa up until its leading
+        // one falls out, decrementing the exponent as it goes.
+        0 => {
+            let shift = mantissa.leading_zeros() - 21;
+            let exponent = 127 - 15 - shift;
+            let mantissa = (mantissa << (shift + 1)) & 0x3ff;
+            f32::from_bits(sign | (exponent << 23) | (mantissa << 13))
+        }
+        0x1f => f32::from_bits(sign | 0x7f80_0000 | (mantissa << 13)),
+        _ => f32::from_bits(sign | ((exponent + 127 - 15) << 23) | (mantissa << 13)),
     }
 }
 

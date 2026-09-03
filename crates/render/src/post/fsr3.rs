@@ -48,7 +48,7 @@ mod constants;
 mod resources;
 
 pub use constants::{Camera, Constants, Dispatch, camera_from_projection};
-pub use resources::{Sizes, Targets};
+pub use resources::{PYRAMID_MIPS, Sizes, Targets};
 
 /// Whether `adapter` can run this at all.
 ///
@@ -158,7 +158,10 @@ impl Pass {
     /// and say so, not a half-resolved frame that reads as a rendering bug.
     #[must_use]
     pub fn ported(self) -> bool {
-        matches!(self, Self::PrepareInputs | Self::LumaPyramid)
+        matches!(
+            self,
+            Self::PrepareInputs | Self::LumaPyramid | Self::ShadingChangePyramid
+        )
     }
 }
 
@@ -232,6 +235,26 @@ fn store_entry(binding: u32, format: wgpu::TextureFormat) -> wgpu::BindGroupLayo
     }
 }
 
+/// A small uniform at `binding`, for the one thing that changes *between*
+/// dispatches of the same frame.
+///
+/// The shared constants at group 0 are written once a frame; a pyramid's level
+/// index is not, so it cannot live there. One buffer per level, written at
+/// build time rather than per frame, because the values are `0..PYRAMID_MIPS`
+/// and never move.
+fn level_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
 /// A read-write storage buffer at `binding` - the atomic scatter target, and
 /// the one resource in this port that is not a texture.
 fn atomic_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -290,6 +313,13 @@ pub struct Fsr3 {
     prepare_inputs: wgpu::ComputePipeline,
     luma_pyramid_layout: wgpu::BindGroupLayout,
     luma_pyramid: wgpu::ComputePipeline,
+    shading_change_pyramid_layout: wgpu::BindGroupLayout,
+    shading_change_pyramid_mip0: wgpu::ComputePipeline,
+    shading_change_pyramid_reduce: wgpu::ComputePipeline,
+    /// One uniform per pyramid level, holding that level's source extent. See
+    /// [`level_entry`]; written once, because the extents are a function of the
+    /// allocation rather than of the frame.
+    levels: Vec<wgpu::Buffer>,
 
     targets: Option<Targets>,
 }
@@ -382,6 +412,46 @@ impl Fsr3 {
                 label: Some("fsr3 luma pyramid"),
                 entries: &[load_entry(0), store_entry(1, wgpu::TextureFormat::R32Float)],
             });
+        // One layout for both pyramid entry points, so that a level-0 dispatch
+        // and a reduce dispatch bind the same shape. Each reads a different
+        // subset of it and an unused binding costs nothing - the argument group
+        // 0 already makes.
+        let shading_change_pyramid_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 shading change pyramid"),
+                entries: &[
+                    load_entry(0),
+                    load_entry(1),
+                    load_entry(2),
+                    load_entry(3),
+                    store_entry(4, wgpu::TextureFormat::Rgba16Float),
+                    level_entry(5),
+                ],
+            });
+
+        // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
+        // extent, so these never have to be rewritten - see the shader's
+        // `pyramid_level_size`.
+        // `mapped_at_creation` rather than a queue write, because `new` has no
+        // queue - and wants none: these are build-time constants, not per-frame
+        // data.
+        let levels = (0..PYRAMID_MIPS)
+            .map(|level| {
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("fsr3 pyramid level"),
+                    size: 16,
+                    usage: wgpu::BufferUsages::UNIFORM,
+                    mapped_at_creation: true,
+                });
+                buffer
+                    .slice(..)
+                    .get_mapped_range_mut()
+                    .expect("a freshly mapped buffer")
+                    .copy_from_slice(bytemuck::cast_slice(&[level, 0u32, 0, 0]));
+                buffer.unmap();
+                buffer
+            })
+            .collect();
 
         let pipeline = |label: &str, wgsl: &str, entry: &str, own: &wgpu::BindGroupLayout| {
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -421,6 +491,18 @@ impl Fsr3 {
             "cs_luma_pyramid",
             &luma_pyramid_layout,
         );
+        let shading_change_pyramid_mip0 = pipeline(
+            "fsr3 shading change pyramid mip0",
+            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            "cs_shading_change_pyramid_mip0",
+            &shading_change_pyramid_layout,
+        );
+        let shading_change_pyramid_reduce = pipeline(
+            "fsr3 shading change pyramid reduce",
+            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            "cs_shading_change_pyramid_reduce",
+            &shading_change_pyramid_layout,
+        );
 
         Ok(Self {
             shared,
@@ -433,6 +515,10 @@ impl Fsr3 {
             prepare_inputs,
             luma_pyramid_layout,
             luma_pyramid,
+            shading_change_pyramid_layout,
+            shading_change_pyramid_mip0,
+            shading_change_pyramid_reduce,
+            levels,
             targets: None,
         })
     }
@@ -584,6 +670,67 @@ impl Fsr3 {
             ],
         });
 
+        // The pyramid's chain: one group per level, each reading the level below
+        // and writing its own. Level 0 reads the render-resolution inputs
+        // instead, and binds level 0 as its (unused) source so that one layout
+        // serves both entry points.
+        let frame_index = wanted.frame_index as u64;
+        let pyramid_levels = targets.spd_mips.mips.len();
+        let pyramid_groups: Vec<wgpu::BindGroup> = (0..pyramid_levels)
+            .map(|level| {
+                // **Level 0's source must not be level 0.** It never reads
+                // binding 3 - it computes from the render-resolution inputs -
+                // but wgpu forbids a texture being a storage-write and a
+                // sampled resource in the same dispatch whether or not the
+                // shader touches it, and one layout serving both entry points
+                // means the binding has to hold *something*. The current luma is
+                // already read-only in this dispatch, so pointing at it aliases
+                // nothing.
+                let source = match level {
+                    0 => &targets.luma.current(frame_index).view,
+                    _ => &targets.spd_mips.mips[level - 1],
+                };
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("fsr3 shading change pyramid"),
+                    layout: &self.shading_change_pyramid_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                &targets.luma.current(frame_index).view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(
+                                &targets.luma.previous(frame_index).view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(
+                                &targets.dilated_motion_vectors.view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::TextureView(source),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::TextureView(
+                                &targets.spd_mips.mips[level],
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
+                            resource: self.levels[level].as_entire_binding(),
+                        },
+                    ],
+                })
+            })
+            .collect();
+
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
 
@@ -609,6 +756,27 @@ impl Fsr3 {
         pass.set_pipeline(&self.luma_pyramid);
         pass.set_bind_group(1, Some(&luma_pyramid_group), &[]);
         pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
+
+        // The pyramid, level by level. Upstream is one dispatch; this is
+        // `pyramid_levels` of them, which is ADR-0012's predicted SPD
+        // substitution and the port's one structural deviation.
+        //
+        // **Each level is its own `dispatch_workgroups` inside one compute
+        // pass, and that is sufficient synchronisation**: wgpu inserts a
+        // barrier between dispatches that write and then read the same
+        // resource, which is exactly the dependency SPD's global atomic exists
+        // to establish inside a single dispatch.
+        let mut level_size = half;
+        pass.set_pipeline(&self.shading_change_pyramid_mip0);
+        pass.set_bind_group(1, Some(&pyramid_groups[0]), &[]);
+        pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
+
+        pass.set_pipeline(&self.shading_change_pyramid_reduce);
+        for group in &pyramid_groups[1..] {
+            level_size = ((level_size.0 / 2).max(1), (level_size.1 / 2).max(1));
+            pass.set_bind_group(1, Some(group), &[]);
+            pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
+        }
     }
 
     /// Rebuilds every intermediate when either allocation moves.
