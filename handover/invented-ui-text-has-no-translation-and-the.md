@@ -33,42 +33,87 @@ the four sources above, none of which look anything up by id, so
 `assets/ui/strings/english.toml` ships empty rather than with invented
 content nothing reads.
 
+**`oag_race::Mode::fallback_label` turns out already covered, with no code
+change** (this session, second pass): `menu::mode_label` reads through the
+same `StringTable` `boot::load_strings` merges the project overlay into, so
+naming `Mode::string_id` (`crates/race/src/mode.rs:132`) in a project file
+already wins over the hardcoded fallback, even with no disc entry present -
+proved in `crates/game/src/menu/tests/definition.rs`'s
+`a_project_override_of_a_mode_id_wins_over_the_hardcoded_fallback`. This is
+the one of the four sources that happens to run **after** boot, with a real
+disc-merged `StringTable` already in hand; the other three do not, which is
+the open question below.
+
 ## Open
 
+- **`assets/ui/menu.toml`, `loading/wording.rs` and `main/hints.rs` all run
+  before any disc-derived `StringTable` exists, which is a bigger blocker than
+  "nothing reads the id yet".** Checked this session, not assumed:
+  - `menu.toml` is parsed by `prepare::definition` (`crates/game/src/main/prepare.rs:321`),
+    called from `main()` before `source::resolve` opens a disc at all
+    (`crates/game/src/main.rs:326`) - its own doc comment already says so
+    ("reads no disc and depends on nothing this module produces").
+  - `loading/wording.rs`'s strings are what the loading screen says **while**
+    the boot sequence's movies and language plugins are still being read -
+    `heading`'s `"READING THE ARCHIVES"` case fires before there is anything
+    to look a translation up in.
+  - `main/hints.rs`'s `TITLE`/`MENU_KEYS` print before the boot sequence
+    starts.
+
+  So passing the disc's own merged `StringTable` into any of the three is not
+  available even in principle, not just unwired - unlike `mode_label` above,
+  which runs after boot and already has one. The fix these three need is a
+  **second, disc-independent table**: `crate::strings` currently only exposes
+  `overlay`, which merges *onto* an already-built disc `StringTable`; what is
+  missing is a constructor that builds a project-only table straight from the
+  embedded file, needing nothing but a language *name* - which is available
+  this early, from `Settings::language: Option<String>`
+  (`crates/game/src/settings.rs:137`), already loaded by the time any of the
+  three run. Something close to `crate::strings::project_table(language:
+  Option<&str>) -> StringTable`, falling back to `"English"` the way
+  `boot::chosen_language` does. `menu::mode_label` would keep using the
+  disc-merged table it already has; these three would use this one instead.
 - `assets/ui/menu.toml` labels are literal English text; the file's own header
-  (`menu.toml:20-22`) already reserves a `string_id` field for pulling the
-  disc's own wording, and nothing reads it. **Blocked on more than wiring**:
-  `crates/game/src/menu.rs` is at its `check-file-size` ratchet ceiling
-  (1785/1785 lines, `scripts/check-file-size.py`'s `BASELINE`) as of this
-  session, so `resolve()` (`crates/game/src/menu.rs:803`) cannot grow even by
-  the few lines a lookup call needs until something else in the file moves out
-  first.
-- `oag_race::Mode::fallback_label` (`crates/race/src/mode.rs:147`) is
-  English-only, used by `menu::mode_label` (`crates/game/src/menu.rs:241`)
-  whenever the disc's table lacks a short mode name.
+  (`menu.toml:20-22`) already reserves a `string_id` field, and nothing reads
+  it. **Also blocked on `crates/game/src/menu.rs` itself**: it is at its
+  `check-file-size` ratchet ceiling (1785/1785 lines,
+  `scripts/check-file-size.py`'s `BASELINE`) as of this session, so
+  `resolve()` (`crates/game/src/menu.rs:803`) cannot grow even by the few
+  lines a lookup call needs until something moves out first. `Definition::parse`
+  (`crates/game/src/menu.rs:662`), the function that would gain the
+  `StringTable` parameter, has roughly twenty call sites across
+  `main/prepare.rs`, `capture/menu_page.rs` and the `menu/tests/*.rs` files -
+  mechanical to update (most only need `&StringTable::default()`), but real
+  breadth, worth doing as its own commit separate from the `menu.rs` split.
 - `crates/game/src/loading/wording.rs` is an entire module of invented
   loading-screen prose with no id, no disc string behind it, and no
   per-language variant.
 - `crates/game/src/main/hints.rs` (window titles, stdout key hints) is the
-  same shape: plain constants, no indirection.
+  same shape: plain constants, no indirection - turning them into functions
+  taking a `&StringTable` touches every print/window-title call site, fewer
+  than `menu.toml`'s but not zero.
 - Pure's own `StringTable` loading empty is still a bug in the read side, not
   fixed and not papered over by the override layer above - see the next
   section.
 
 ## Next Steps
 
+- Add `crate::strings::project_table` (or similar): a disc-independent
+  `StringTable` built from the embedded file alone, keyed on a language name
+  rather than a loaded `Language`. This is the one piece all three blocked
+  sources need before any of the rest of this list is reachable.
 - Move something out of `crates/game/src/menu.rs` first (it has zero lines of
-  ratchet headroom), then wire `menu.toml`'s `string_id` through `resolve()`
-  (`crates/game/src/menu.rs:803`, where `let label = entry.label.clone();`
-  sits today) via `StringTable::get_or_id`, the way `menu::mode_label` already
-  falls back from a disc string to `fallback_label`. `resolve()` has no
-  `StringTable` in scope yet either - check what's available at menu-load time
-  versus draw time before assuming it can just be threaded through.
-- Do the same for `fallback_label`, `loading/wording.rs` and `main/hints.rs`:
-  give each string an id, add it to `assets/ui/strings/english.toml` with its
-  current English text as the value (this is the point where that file stops
-  being empty), and route the call site through `StringTable::get_or_id`
-  instead of the literal.
+  ratchet headroom) - `mod raw` plus `resolve`/`condition_from`/`warning_from`
+  (`crates/game/src/menu.rs:573`-`1012`, ~440 lines) is the obvious seam: it is
+  already how `frame`/`rows`/`skin`/`strip` were split out, and it is exactly
+  the code `string_id` wiring needs to touch. Then thread `project_table`'s
+  output through `Definition::parse` -> `resolve()` and its ~twenty call
+  sites, via `StringTable::get_or_id`.
+- Do the same for `loading/wording.rs` and `main/hints.rs`: give each string
+  an id, add it to `assets/ui/strings/english.toml` with its current English
+  text as the value (this is the point where that file stops being empty),
+  and route each call site through `StringTable::get_or_id` against
+  `project_table` instead of the literal.
 - Once callers exist, add a second language's file
   (`assets/ui/strings/french.toml`, ...) and a real translation, to prove the
   mechanism end to end rather than only against English overriding itself.
