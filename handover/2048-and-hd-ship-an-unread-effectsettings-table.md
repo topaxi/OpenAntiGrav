@@ -290,12 +290,23 @@ no longer disagree.
      `Track` at `9.0`. **What is left open is only which prologue a given draw
      enters through**, and that needs control-flow reconstruction over
      `FUN_003ff860` rather than peephole reading.
-  2. **`zoneOrigin` (`0x00c81550`) and the sphere radius.** The radius is
-     `H[e].f32@0x08`, copied per frame under a lane-3-only `vsel`; nothing was
-     found writing `zoneOrigin` at all. Inner/outer is a **stage-transition
+  2. **`zoneOrigin` (`0x00c81550`) - writer found, 2026-09-03; the radius is
+     the one piece still open.** `Scene_PrepareFrame` writes it every frame,
+     one call frame above `Environment_UpdateStageBlend` (which is why the
+     twenty-fourth pass found no writer *inside* the blend and correctly
+     didn't claim more than that), from a resolved entity's own `+0x80`
+     field, gated on a viewport/id lookup rather than on Zone mode.
+     Confidence 78 - the chain's two ends (the object-array base, `zoneOrigin`
+     itself) are TOC-verified twice over; what the middle offsets *mean*
+     (whose `+0x80`, which viewport `id` selects) is not chased past this
+     pass. Full trace: twenty-seventh pass of
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+     The radius (`H[e].f32@0x08`, copied per frame under a lane-3-only
+     `vsel`) still has no located writer. Inner/outer is a **stage-transition
      wavefront** - a sphere expanding out of `zoneOrigin` that repaints the
-     world with the new stage - so both are needed only once a transition can
-     be in flight, which needs HD's stage trigger first.
+     world with the new stage - and is only visibly exercised once a
+     transition is in flight, which needs a live Zone race to observe (HD's
+     stage trigger itself is no longer the blocker - see the section above).
   3. ~~`zoneTexVis`~~ **Closed and implemented, 2026-09-01 - the `0x003d8b40`
      reading above was wrong.** That address builds an unrelated struct field
      172 bytes away; `zoneTexVis` itself is a load-time zero-fill, rewritten
@@ -803,14 +814,12 @@ no longer disagree.
   reading; recorded so the next reader does not repeat the search for a
   selector that is not there. Each of the seven publishers has exactly one
   direct caller, so the split is inside each publisher, not between them.
-- **Find `zoneOrigin`'s writer, or establish it has none.** Its absence is now
-  structural rather than a search failure - it sits at `+0x35a0`, the one gap
-  in an otherwise unbroken run of vec4s this function writes - so the search
-  should move outside `Environment_UpdateStageBlend` rather than deeper into
-  it. **No longer blocked on HD's trigger** - `Hud_UpdateZoneSpeedClass`
-  writing the per-craft stage field closed that dependency 2026-08-31 (see
-  the section above); a stage transition can genuinely be in flight now, so
-  this is a live search, not a deferred one.
+- ~~Find `zoneOrigin`'s writer, or establish it has none~~ **Found,
+  2026-09-03** - one call frame above `Environment_UpdateStageBlend`, in
+  `Scene_PrepareFrame`. See the corresponding item in `## Open` above. What
+  is left is narrower: what the source object's `+0x80` field is (a
+  world-position guess, not traced further) and which entity the viewport
+  lookup that gates the write actually selects.
 - ~~Close `zoneTexVis`'s build loop~~ **Done, 2026-09-01** - see the
   corresponding item in `## Open` above. The address named here
   (`0x003d8b40`) turned out to build an unrelated field; `zoneTexVis` itself

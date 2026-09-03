@@ -4277,6 +4277,96 @@ None. `Environment_UpdateStageBlend`'s `zoneTexVis`-writing block and the
 object at `iVar8+0x335c` are both read only for what they touch; neither has
 the second independent leg this project's naming threshold asks for.
 
+## 2026-09-03, a twenty-seventh pass: `zoneOrigin`'s writer is found - one call frame up, not inside the blend
+
+The twenty-fourth pass established `zoneOrigin` (`0x00c81550`) has no writer
+inside `Environment_UpdateStageBlend`, "no claim at all about the rest of the
+image." This pass makes that claim: `Scene_PrepareFrame` (`0x003aa888`)
+writes it, at `0x003ad8d0`-`0x003ad8dc`, immediately before its own call to
+`Environment_UpdateStageBlend` at `0x003ad8e8` - so the two live in the same
+per-frame call, one call frame apart.
+
+**Found by the `attrib` technique already used for strings, applied to a raw
+pointer value instead.** `zoneOrigin`'s own address is not a string, but
+`scripts/ps3-toc.py attrib` doesn't require one - it finds every TOC slot in
+the image holding a given 32-bit word and every instruction that loads it.
+Run against `0x00c81550` it returns exactly one function: `0x003aa888`,
+i.e. `Scene_PrepareFrame` itself. That function's own TOC (`0x008bd3c4`)
+carries a **dedicated** slot for this address at `-0x61C0(r2)` -> `0x008b7204`
+-> `0x00c81550`, loaded twice: at `0x003ab67c` (registering it as engine
+parameter 59's value pointer, `stw r7,0x778(r10)` - `0x778 = 59*0x20+0x18`,
+the same value-pointer idiom the twenty-second pass identified) and at
+`0x003ad8d0` (the write below). Confidence **85** on both addresses -
+TOC-resolved, and the `attrib` scan is exhaustive by construction.
+
+**The write itself**, read at instruction level:
+
+```text
+3ad8b0  slwi  0, 27, 2                    ; index = r27 * 4
+3ad8b4  lwz   11, -0x617C(2)              ; TOC -> 0x0098d7c0, an object-array base
+3ad8bc  lwzx  9, 11, 0                    ; r9 = array[r27]
+3ad8c0  lwz   3, 0x6adc(9)                ; r3 = *(r9 + 0x6adc)
+3ad8c4  bl    0x67a728                    ; r3 = r3 + 0x80 (a trivial field-offset stub)
+3ad8d0  lwz   9, -0x61C0(2)               ; TOC -> 0x00c81550 (zoneOrigin)
+3ad8d8  lvx   0, 3, 0                     ; v0 = *(r3)   [the object's own +0x80, a float4]
+3ad8dc  stvx  0, 0, 9                     ; zoneOrigin = v0
+```
+
+`0x67a728` is a TOC-switching stub to `_opd_FUN_00323760`, which decompiles to
+exactly `return param_1 + 0x80;` - a bare field accessor, not named here
+because nothing establishes what that field holds beyond "a float4 some
+object publishes at a fixed offset."
+
+**The write is gated, and the gate is a viewport lookup, not a Zone check.**
+`r3` is tested non-null (`cmpwi 7,3,0` / `bt 30,0x3ad8e0`) right before this
+block, and that `r3` is the return of `FUN_000557e8` (via the
+`0x67a528`/`0x679e68` stub pair), called twice in sequence with an id (`r27`,
+saved as `r28`) read a few instructions earlier from
+`*(*(param+0x13e8) + 0x6284)`. `FUN_000557e8` decompiles cleanly:
+
+```c
+int FUN_000557e8(int container, int id) {
+    // walks container's own entry (+0xe8) then an array at (+0xec),
+    // count from a global, returning the first entry whose +0x6284 == id.
+}
+```
+
+So the guard is **"does a viewport/entity matching this id exist in the
+lookup"**, not a Zone-mode test - `g_ZoneEffectsActive` (`0x00d45f84`,
+[zone-sky.md](zone-sky.md)) is never read anywhere in this window. That
+matches this project's own earlier finding that `Environment_UpdateStageBlend`
+runs every frame in every mode, not only Zone.
+
+**What this settles, and what it does not.** Settled, confidence **78**: the
+disc's own executable writes a live value into `zoneOrigin` every frame,
+sourced from a resolved entity's own `+0x80` field - it is not a static
+zero the disc leaves unfed, and the twenty-fourth pass's "structural gap" was
+real but local to the wrong function. **Not settled**: what the `+0x80` field
+actually is (a world-position guess is the obvious reading for an object
+resolved through a viewport/entity lookup, but nothing here traces it further
+than "a float4"), what the `id` in `r27` selects among (which viewport - the
+same "local player" convention this project has already met on 2048's
+`Zone_UpdateStage`, or something broader, is not checked here), and whether
+`FUN_000557e8`'s two-call chain ever picks a *different* answer than "the
+local viewport" in practice. None of the three helper stubs are named:
+`FUN_000557e8`, `_opd_FUN_00323760` and their two dispatch thunks are each
+narrow enough, and generic enough in shape, that naming them from this one
+call site alone would assert more than this pass establishes.
+
+**Reproduce**:
+
+```sh
+python3 scripts/ps3-toc.py attrib 0x00c81550      # -> 0x003aa888, and only it
+python3 scripts/ps3-toc.py resolve 0x003aa888 -0x617C   # -> 0x0098d7c0
+python3 scripts/ps3-toc.py resolve 0x003aa888 -0x61C0   # -> 0x00c81550
+ELF=data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf
+llvm-objdump -d --mcpu=pwr6 --start-address=0x3ad830 --stop-address=0x3ad8e0 $ELF
+```
+
+### Names applied
+
+None - see "What this does not settle" above.
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
