@@ -36,12 +36,70 @@ roughly 2.4 ms of a ~8.7 ms frame was still unaccounted for after `hd_bloom`
 was subtracted out - which is why `RESIDUAL_SHARE` moved to `0.20` rather than
 shrinking now that `hd_bloom` left it.
 
+## The second adapter found a worse bug than a miscalibrated constant
+
+**Reported from play, on Steam Deck (AMD RADV/Mesa, a different Vulkan stack
+from either machine `RESIDUAL_SHARE` was calibrated on): `target_fps = 90`,
+`render_scale = 150`, `minimum_resolution = 50`, with `fsr3` the render scale
+settled around 60-65 % and never moved again for the rest of the session -**
+not oscillating, not climbing back even briefly. Forcing `reconstruction =
+off` at a fixed `render_scale = 150` held a stable 90 FPS easily (with a ~1 s
+dip to 80 on the very first second of a race, consistent with pipeline
+warm-up and unrelated to this). That ruled out "genuinely, correctly over
+budget everywhere" - the hardware can do it, the controller just was not
+letting it.
+
+**Root cause, found by static read (the Deck was not reachable for a live
+trace) and fixed 2026-09-03: a claimed timestamp slot that a shader build
+failure leaves unwritten was never given back, and the read-back side had no
+way to tell "FSR 3.1 will never report again" from "hasn't reported yet".**
+Two bugs, compounding:
+
+- `upscale::Framebuffer::resolve_scene`'s FSR 3.1 branch returned early on a
+  shader build failure - correctly falling back to bilinear for the picture -
+  but the claimed `upscale_timestamp` was never written and nothing told the
+  ring to reclaim it. `blur_timer` and `hd_bloom_timer` both already had this
+  exact safety net (`PassTimer::abandon`, from ADR-0042 and ADR-0043); the
+  original FSR 3.1 timing, older than both, never got it. Fixed:
+  `resolve_scene` now returns whether it actually wrote the pair, and
+  `frame.rs` abandons the claim when it did not - the same shape as the other
+  two.
+- Worse: `Session::read_timing_and_feed_drs` decided whether to *expect* an
+  FSR 3.1 reading by asking `render_profile.reconstruction.is_temporal()` -
+  the **setting**, not whether FSR 3.1 was actually running. A player's
+  setting does not change when a shader fails to build on their adapter, so
+  once that happened, every frame after read `Cost::fixed` as `None` forever
+  (the "hasn't reported yet" case), `Controller::record` was never called
+  again, and the render scale froze at whatever it happened to be - which
+  fits "settled around 60-65 % and stayed" exactly: not the floor, just
+  wherever the freeze caught it. Fixed: the same check `frame.rs`'s claim
+  already used (`self.gpu.temporal && self.framebuffer.temporal_upscaler_viable()`)
+  now gates the read too, so a permanently-failed build correctly reads as
+  `Cost::fixed = 0.0` instead of `None` forever, and the controller keeps
+  running instead of going silent.
+
+**Not yet confirmed**: *why* FSR 3.1's shaders would fail to build on RADV
+specifically - no error text was captured, since the Deck could not produce a
+log for this thread. If the fix above stops the freeze but `reconstruction =
+fsr3` still never actually upscales on Steam Deck (i.e. it degrades to
+bilinear every frame, silently, the way ADR-0012's fallback ladder is
+supposed to), that is a separate, real gap - a `warn!` fires once per attempt
+today, but nothing surfaces "your build failed and you are running
+bilinear" anywhere a player would see it.
+
 ## The constant stopped being the reserve, 2026-09-03
 
 **Landed as [ADR-0044](../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md):
 the reserve is a `drs::Residual` learned per session**, starting at
 `RESIDUAL_SHARE * period` and tightened by frames that can prove a smaller
-number. What made it safe to feed the wall clock into a module ADR-0040 kept
+number. Written against the same Steam Deck report as the freeze fix above and
+landed the same day, from the *other* reading of it - the report as relayed
+into that work said the scale "wobbles a little" around 60-65 %, which is a
+live loop settling too low, where the section above reads it as frozen. **Both
+fixes stand whichever reading is right**: a frozen controller and a
+miscalibrated reserve are independent faults, and the constant was known to be
+one circuit's number before either. The Deck reading in Open below is what
+tells them apart, and it should now be taken with the freeze fix already in. What made it safe to feed the wall clock into a module ADR-0040 kept
 one out of, in two lines:
 
 - `reading = frame - timed = residual + sleep`, and sleep is never negative,
@@ -73,12 +131,13 @@ at all, and whether the residual says `learned` - under vsync at exactly the
 target rate it can only tighten while the controller is still falling, so it
 may report a reserve barely under the constant even when it is working.
 
-**A competing hypothesis for the same report, not ruled out.** A settle at
+**Two competing explanations for the same report, neither ruled out.** The
+first is the freeze two sections up, already fixed. The second: a settle at
 60-65 % implies a scalable cost around 19 ms at full scale under the quadratic
 model, which does not square with the same machine holding 90 FPS at full
-scale unless a large part of the scene pass does not scale with pixels. A
-mis-scaled `TIMESTAMP_QUERY` period would produce the identical picture, and
-`docs/rendering/dynamic-resolution.md` records a 52x difference in timestamp
+scale unless a large part of the scene pass does not scale with pixels - and a
+mis-scaled `TIMESTAMP_QUERY` period would produce the identical picture,
+`docs/rendering/dynamic-resolution.md` recording a 52x difference in timestamp
 period between two adapters on one laptop. ADR-0044 makes the budget right; it
 does not prove the budget was the only thing wrong. The Deck reading above
 tells them apart: if `SCENE` alone reads near the whole frame period while the
@@ -116,6 +175,12 @@ single-machine constant on principle.
 2. If `OTHER` is still large with `BLOOM` small, decide the CPU-floor design
    question above before building it - this is a real design decision, not a
    measurement.
-3. Repeat the four-row `docs/rendering/dynamic-resolution.md` "What is timed"
-   measurement on a second adapter if one is available, on the real display -
-   Xvfb cannot size a GPU pass, confirmed independently twice now.
+3. ~~Repeat the four-row measurement on a second adapter.~~ **Done, on Steam
+   Deck** - and it found the freeze bug above rather than a `RESIDUAL_SHARE`
+   answer. Once the fix has had a real race on the Deck, this still wants
+   redoing: does `reconstruction = fsr3` actually resolve there once it stops
+   silently going bilinear, and if so, what does the render scale settle at
+   with the freeze no longer masking the real number.
+4. Find out why FSR 3.1 fails to build on RADV at all - the `warn!` line's own
+   text (`"the FSR 3.1 pipelines did not build (...); staying bilinear"`)
+   would say, if it can be captured off the Deck.

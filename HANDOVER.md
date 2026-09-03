@@ -501,7 +501,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [A model built from several small pieces sharing one atlas](handover/a-model-built-from-several-small-pieces-sharing.md)
 - [Which movie cut plays, and what plays the three 260-frame reels](handover/which-movie-cut-plays-and-what-plays-the.md)
 - [The PS2 PAL/NTSC selector's ultimate trigger](handover/the-ps2-pal-ntsc-selectors-ultimate-trigger.md)
-- [Two PS2 identifications, one of which is wrong](handover/two-ps2-identifications-one-of-which-is-wrong.md)
 - [SteamOS's own glibc version](handover/steamoss-own-glibc-version.md)
 - [The loading screen draws now; the wave's decode is still not runtime-verified](handover/the-loading-screen-has-no-caller.md)
 - [`Anim Transform` `0x3c0` is read and played, and closing it fixed a placement defect](handover/anim-transform-0x3c0-is-read-and-played-and.md)

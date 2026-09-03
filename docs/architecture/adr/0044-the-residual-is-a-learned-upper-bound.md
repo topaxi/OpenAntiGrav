@@ -14,10 +14,19 @@ ADR-0043 recorded and declined - "time the CPU-side per-frame cost directly".
 **Reported from play, 2026-09-03, on a Steam Deck (AMD, RADV) at a 90 Hz
 target.** The machine holds 90 FPS at the full render scale with no temporal
 reconstruction running, and the controller shrinks it to 60-65 % of the
-allocation and settles there. The loop wobbles a little around that point, so
-this is a live control loop making decisions and not the frozen controller
-fixed separately the same day: every decision is being taken, and the budget
-they are taken against is wrong.
+allocation and settles there.
+
+**That report has two candidate explanations and this ADR is only one of
+them**, which is worth saying before any of the argument below. A separate fix
+landed the same day for a controller that could *freeze* at whatever scale it
+happened to hold - a failed FSR 3.1 shader build left a timestamp slot
+unwritten, and the read-back asked the settings row rather than the running
+state, so `Cost::fixed` read as "not reported yet" forever. As relayed into
+this work the scale "wobbles a little" around its settling point, which is a
+live loop settling too low rather than a frozen one; the thread that found the
+freeze reads the same report as never moving again. The two faults are
+independent, both fixes stand whichever reading is right, and what is not in
+dispute either way is where the constant came from.
 
 `RESIDUAL_SHARE` is 0.20 - 2.2 ms of an 11.1 ms frame - and ADR-0043 says in
 as many words where that number came from: one circuit (`talons_junction`),
@@ -213,7 +222,8 @@ timed, not a cleverer inference from this signal.
 **Nobody has run this on the Steam Deck.** No machine in the session that
 wrote it has that hardware, so every number above is a model of a report and
 is labelled as one in the test that produces it. The handover thread carries
-the check forward, and it carries a competing hypothesis with it: a settle at
+the check forward - and it should be taken with the freeze fix already in,
+since that is the first competing explanation. It carries a second: a settle at
 60-65 % implies a scalable cost around 19 ms at full scale under the quadratic
 model, which is *not* consistent with the same machine holding 90 FPS at full
 scale unless a large part of that pass does not scale with pixels at all. A

@@ -376,11 +376,23 @@ impl Framebuffer {
     /// then calls [`Framebuffer::composite`], which is where the grade is and
     /// where the surface is written. See
     /// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
+    ///
+    /// **Returns whether the FSR 3.1 pass actually wrote `upscale_timestamp`.**
+    /// A caller claims a slot before knowing whether the pipelines will build,
+    /// the same as [`oag_render::post::motion_blur::MotionBlur::render`] and
+    /// [`oag_render::post::hd_bloom::Chain::run`] both do for their own
+    /// chains - and, like both of those, needs a way to give an unwritten
+    /// claim back rather than let it resolve to an unspecified value. `false`
+    /// on every path that returns before `fsr.render` runs: no temporal
+    /// history yet, an adapter that cannot run it, or - the case this exists
+    /// for - a shader that failed to build.
     #[expect(
         clippy::too_many_arguments,
         reason = "one timestamp pair, which cannot ride in `Temporal`: \
                   `ComputePassTimestampWrites` is `Clone` and not `Copy`"
     )]
+    #[must_use = "a claimed slot this returns `false` for must be abandoned, \
+                  or it never resolves and costs a `PassTimer` slot forever"]
     pub fn resolve_scene(
         &mut self,
         device: &wgpu::Device,
@@ -390,7 +402,7 @@ impl Framebuffer {
         presentation: &Presentation,
         temporal: Option<Temporal<'_>>,
         upscale_timestamp: Option<wgpu::ComputePassTimestampWrites<'_>>,
-    ) {
+    ) -> bool {
         let output_size = (rect.2 as u32, rect.3 as u32);
         // **The extent, not the allocation**: every pass below is asking
         // "what was drawn", and since ADR-0037 the texture can be larger than
@@ -424,18 +436,29 @@ impl Framebuffer {
             (chosen, _) => chosen,
         };
 
+        // **Whether `upscale_timestamp` was actually written into**, for the
+        // caller to give a claimed-but-unwritten slot back - see the return
+        // value's own doc. Set the moment the pipelines are known to exist,
+        // which is also the moment `fsr.render` - the only call that writes
+        // the pair - is about to run: every path to this point either sets
+        // it and proceeds, or returns out of the closure below it having
+        // never touched it.
+        let mut upscale_encoded = false;
         let temporally_resolved = temporal.and_then(|temporal| {
             let fsr = self.fsr3.get_or_insert_with(|| fsr3::Fsr3::new(device));
             let fsr = match fsr {
                 Ok(fsr) => fsr,
                 // A shader that will not compile is a build-time mistake, but
                 // it must not be a crash in a player's frame loop: say so once
-                // and carry on down the ladder.
+                // and carry on down the ladder. `upscale_encoded` stays
+                // `false`: `fsr.render` below is what would have written
+                // `upscale_timestamp`, and this return skips it.
                 Err(why) => {
                     warn!("the FSR 3.1 pipelines did not build ({why:#}); staying bilinear");
                     return None;
                 }
             };
+            upscale_encoded = true;
             fsr.render(
                 device,
                 queue,
@@ -647,6 +670,7 @@ impl Framebuffer {
             read,
         );
         self.present(encoder, &self.output.view, rect, source.as_ref());
+        upscale_encoded
     }
 
     /// Whether FSR 3.1's pipelines are known *not* to build.

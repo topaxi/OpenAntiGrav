@@ -643,15 +643,18 @@ pub fn capture(
                 reset: frame.reset,
             },
         );
-        framebuffer.resolve_scene(
+        // No timer to abandon a claim on: a capture has no frame loop to pace
+        // and no `PassTimer` to pace it with - that is per-window state the
+        // session owns. The `false` this can return on a build failure is
+        // exactly the picture already carrying on down the ladder; nothing
+        // here claimed a slot for it to give back.
+        let _ = framebuffer.resolve_scene(
             &device,
             &queue,
             &mut encoder,
             rect,
             &state.presentation,
             temporal,
-            // A capture has no frame loop to pace and no timer to pace it
-            // with: `PassTimer` is per-window state the session owns.
             None,
         );
     }

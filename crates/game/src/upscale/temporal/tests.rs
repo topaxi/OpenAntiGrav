@@ -83,7 +83,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         let mut framebuffer = Framebuffer::new(&device, format, render).expect("the pipeline");
         framebuffer.resize_output(&device, (16, 8));
         let mut encoder = device.create_command_encoder(&Default::default());
-        framebuffer.resolve_scene(
+        let encoded = framebuffer.resolve_scene(
             &device,
             &queue,
             &mut encoder,
@@ -109,10 +109,11 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         (
             framebuffer.built_spatial_anti_aliasing(),
             framebuffer.temporal_upscaler_viable(),
+            encoded,
         )
     };
 
-    let (built_aa, viable) = resolve(Reconstruction::Fsr3);
+    let (built_aa, viable, encoded) = resolve(Reconstruction::Fsr3);
     assert!(
         !built_aa,
         "FSR 3.1 resolved, so the FXAA pass must never have been built"
@@ -124,8 +125,14 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         viable,
         "the pipelines built, so the temporal path stays claimable"
     );
+    // The other half of the same claim: a build that succeeded and actually
+    // ran `fsr.render` must say so too, or a caller has no way to tell "wrote
+    // the timestamp" from "gave up before trying" - see `resolve_scene`'s own
+    // return-value doc and the bug it was added to close, where nothing ever
+    // told a claimed-but-unwritten slot to give itself back.
+    assert!(encoded, "the pipelines built and ran, so the pass encoded");
 
-    let (built_aa, viable) = resolve(Reconstruction::Fxaa);
+    let (built_aa, viable, encoded) = resolve(Reconstruction::Fxaa);
     assert!(
         built_aa,
         "the control: asked for FXAA and nothing else, the pass must run"
@@ -133,4 +140,8 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
     // Nothing has attempted a build, which is not the same as one having
     // failed - and the timestamp claim keys on the difference.
     assert!(viable, "an unattempted build has not failed");
+    assert!(
+        !encoded,
+        "FXAA was asked for, not FSR 3.1 - nothing here should have run it"
+    );
 }
