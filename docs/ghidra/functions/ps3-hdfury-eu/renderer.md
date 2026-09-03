@@ -1999,19 +1999,36 @@ masked SIMD ALU generally, not a claim about what any specific unnamed
 opcode computes - moves the tally again, sharply: `NoSingleWriter` drops to
 **0**.
 
-**Draft 4, calibrated against the one occurrence read by hand: `Sum` 82,
-`Normalize` 58, `Neither` 28, of 168 operands.** Run through the same
-classifier, the ship's confirmed `pow(N.H, 40)` block reads as
-`(Normalize, Sum)` - `N` normalizes on its own, `H` traces to
-`normalize(ADD of two distinct sources)`. `140` of `168` `200`/`250`/`260`/
-`35` operands (83 %) land in one of those same two categories the
-calibration case itself uses. **This is not proof each is a half-vector
-specifically** - `ADD of two distinct sources` also fits an ordinary
-bias-add, and `Sum`/`Normalize` are named for the mechanical shape they
-match, not for what the shape means in every occurrence - but it is
-consistent with the same vector-construction idiom throughout, on the one
-case checked by reading, and inconsistent with none of the 84. One
-worked transcript, `zone_death_panel.rcsmaterial`:
+**Draft 4 computed `Sum` 82, `Normalize` 58, `Neither` 28 of 168 operands and
+called that "calibrated against the one occurrence read by hand" - checked
+directly, that calibration does not hold, and the claim is retracted here
+rather than corrected quietly.** The check: locate the exact block
+`renderer.md`'s own worked example reads, `detonator_ship_rich_iridescent
+.rcsmaterial` "block #2 (`0x3a00`)", and confirm the classifier's
+`(Normalize, Sum)` result is *that* block's, not a different one in the same
+file that happens to also resolve to `40.0`. It is not. `Program::parse` at
+file offset `0x3a00` decodes cleanly (a real `SHO` block) but
+`specular_exponent()` on it returns `None` - no `pow(N.H, e)` chain at all -
+and neither of the two blocks in this file that *do* resolve to `40.0`
+(`0x57e0`, ordinal 51; `0x7340`, ordinal 43) has an `LG2` anywhere near
+`renderer.md`'s own cited `@0x40`/`@0x43`/`@0x46` byte addresses once decoded
+and walked instruction-by-instruction (`crates/render/examples
+/hd_specular_calibration_check.rs`, written to check exactly this). Either
+this page's own `@0xNN` addressing is not byte offsets from this parser's
+code-start convention, or the worked example was read against a different
+file or a stale project state - unresolved, and not guessed at here.
+
+**So the `Sum`/`Normalize`/`Neither` tally stands only as raw, lane-correct
+structural data, not as anything checked against a known-real case.** `82`
+of `168` operands trace to `normalize(ADD of two distinct sources)` and `58`
+to a single-vector normalize with no sum found before it; `28` trace to
+neither shape. That the mechanical trace itself is now lane-aware and
+clobber-checked (see the three prior drafts above) is solid; that `Sum`
+specifically means "half-vector" is not established by anything in this
+pass - it was asserted on an unverified block match and that assertion does
+not survive checking it. One transcript, `zone_death_panel.rcsmaterial`,
+kept as an example of the mechanical shape rather than as evidence of
+meaning:
 
 ```text
 [13] op3B R2.xyz, R2.xyzw, R0.wwww
@@ -2026,16 +2043,17 @@ worked transcript, `zone_death_panel.rcsmaterial`:
     operand 1: R3.xyzw -> Sum
 ```
 
-**Left wired, not retracted, and this time on a checked basis.** Confidence
-stays at **80**, unmoved: this pass corroborates the base reading (the
-operand shape is consistent with a real dot product, calibrated against the
-one known case) without independently confirming any individual chain's
-specific meaning, so it does not clear the bar for a higher band either. What
-still isn't traced: what feeds the sum's own two operands (a light direction,
-the view vector, or something else) beyond one `ADD`, and whether the
-`read_lanes` elementwise-by-mask assumption holds for the specific unnamed
-opcode (`0x3b`) this idiom uses throughout - both real next steps, not
-resolved here.
+**Left wired, not retracted - on the population and Zone-exclusion findings
+alone.** Confidence stays at **80**, unmoved: those two hold up and neither
+argues these four values are wrong. The operand-shape work across all four
+drafts settles nothing about meaning either way - it corrected real bugs in
+its own method three times over and then found its one calibration point
+unconfirmed, which is a result about the method, not about `200`/`250`/`260`/
+`35`. What is left open, genuinely, not "mostly": reconciling this page's
+`@0xNN` addresses with a real decode of the block they name (the prerequisite
+for any future calibration attempt), what feeds a `Sum` chain's own two `ADD`
+operands, and whether `read_lanes`'s elementwise-by-mask assumption holds for
+the unnamed opcode (`0x3b`) this idiom uses throughout.
 
 **The `0.0` bucket is closed, 2026-09-02, with the `patch fslot` to
 `const@slot` decoder this paragraph used to leave as a next step.**

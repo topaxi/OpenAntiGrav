@@ -36,20 +36,21 @@
 //! reading op's own destination mask did the two real categories - `Sum`
 //! and `Normalize` - separate from the noise.
 //!
-//! **Calibrated against the one occurrence already read by hand.**
+//! **A calibration against the one occurrence already read by hand was
+//! attempted and does not hold up - see
+//! `crates/render/examples/hd_specular_calibration_check.rs`.**
 //! `renderer.md`'s own worked example names the ship's `pow(N.H, 40)` block
-//! as `H = normalize(V + L)` dotted against a separately-normalized `N`.
-//! Run through this classifier, that exact block's `DP3` operands come back
-//! `(Normalize, Sum)` - the un-summed operand (`N`) normalizes on its own,
-//! the summed one (`H`) traces to `normalize(ADD of two distinct sources)`.
-//! That is the calibration this tool has: `Sum` tracks the mechanical shape
-//! of the one known real half-vector construction. It does not by itself
-//! prove any other `Sum` result is a half-vector too - `ADD of two distinct
-//! sources` is also what a bias-add looks like - only that the label is
-//! reading the same shape reading-by-hand already confirmed once.
-//!
-//! See [`Evidence`]'s own doc comment for what classifying all 84 `200`/
-//! `250`/`260`/`35` occurrences against that calibration found.
+//! as `H = normalize(V + L)` at file offset `0x3a00` in
+//! `detonator_ship_rich_iridescent.rcsmaterial`. Decoding that exact offset
+//! finds a real `SHO` block whose `specular_exponent()` is `None` - not the
+//! documented chain - and neither of the two blocks in that same file that
+//! *do* resolve to `40.0` has an `LG2` anywhere near the doc's own cited
+//! `@0x40`/`@0x43`/`@0x46` byte addresses once walked instruction by
+//! instruction. So `(Normalize, Sum)` on *a* `40.0` block in that file is
+//! not confirmed to be *the* documented block's own result, and the
+//! `Sum`/`Normalize` split below is raw structural data only - not checked
+//! against a known-real case. See [`Evidence`]'s own doc comment for the
+//! numbers and `renderer.md`'s own retraction of the calibration claim.
 //!
 //! **Unnamed opcodes are printed as `op3B`/`op3C`/`op3D`, never guessed at.**
 //! `Instruction::name()` returns `None` for these three specifically because
@@ -186,21 +187,24 @@ fn last_writer(program: &Program, at: usize, reg: (u8, bool), read: [u8; 4]) -> 
 
 /// What tracing one `DP3` operand back found - see [`classify`]. Over all 84
 /// `200`/`250`/`260`/`35` occurrences (168 operands, all of them registers):
-/// `Sum` 82, `Normalize` 58, `Neither` 28, `NoSingleWriter` 0. The
-/// calibration case (the ship's confirmed `pow(N.H, 40)`, this module's own
-/// doc comment) reads as `(Normalize, Sum)` under the same classifier, so
-/// the 140 of 168 (`Sum` + `Normalize`) that land in one of the two
-/// categories the calibration case itself uses is the number worth
-/// reporting - not proof each is a half-vector specifically, but consistent
-/// with the same construction idiom in every case checked, and consistent
-/// with none checked so far.
+/// `Sum` 82, `Normalize` 58, `Neither` 28, `NoSingleWriter` 0. **Reported as
+/// raw structural data, not as evidence of meaning** - a `(Normalize, Sum)`
+/// result on *a* `40.0`-resolving block in `detonator_ship_rich_iridescent
+/// .rcsmaterial` was, for one draft of this module, taken as calibration
+/// against `renderer.md`'s documented `pow(N.H, 40)` half-vector read;
+/// checking the actual file offset that reading names shows it is not the
+/// same block (this module's own doc comment, and
+/// `hd_specular_calibration_check.rs`), so that calibration does not hold.
+/// `Sum` still names a real, lane-correct mechanical shape -
+/// `normalize(ADD of two distinct sources)` - it is only the claim that the
+/// shape means "half-vector" that is unconfirmed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Evidence {
     /// The operand traces to `normalize(A + B)` for two distinct sources -
-    /// the mechanical shape the calibration case (this module's own doc
-    /// comment) reads as a half-vector, `H = normalize(V + L)`. The same
-    /// shape also fits an ordinary bias-add, so this is "consistent with a
-    /// half-vector", not proof of one on its own.
+    /// the mechanical shape a half-vector, `H = normalize(V + L)`, would
+    /// have. **Not confirmed against a known-real case** - this module's
+    /// own doc comment tried and found the attempted calibration block was
+    /// the wrong one. The same shape also fits an ordinary bias-add.
     Sum,
     /// The operand traces to a self-dot-then-scale (`DP3 x,v,v` then a
     /// writer reading `x` and `v`) with a single vector rather than a sum -
