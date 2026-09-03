@@ -47,6 +47,12 @@ just fsr-reference   # into ~/.cache/oag-fsr/v1.1.4, never into the repo
 - **A dispatch cannot bind one texture as both a storage write and a sampled
   resource**, even when the shader ignores the read. The pyramid's level-0
   dispatch needed pointing at something other than the level it writes.
+- **A dispatch is capped at 65535 workgroups per dimension**, which the
+  buffer clear reached at 2880x1800 by being dispatched flat over the texel
+  count. Everything walks a texture extent now. Note the shape of this and the
+  MSAA one together: **both were found by playing, and both were invisible to a
+  fixture small enough to be fast.** A test that runs the chain once at a real
+  window size and a real anti-aliasing setting would have caught the pair.
 - **MSAA changes the *type* of two inputs, and only playing it found that.**
   The scene's depth and velocity attachments are multisampled under
   `anti_aliasing = msaa4x`, which is a different WGSL binding type and a

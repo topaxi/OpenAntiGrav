@@ -230,10 +230,6 @@ const INPUTS_MULTISAMPLED: &str = "
 /// axis - `FFX_FSR3UPSCALER_THREAD_GROUP_WIDTH` and `..._HEIGHT`.
 const GROUP: u32 = 8;
 
-/// The one-dimensional group size of the clear, which is not upstream's pass
-/// and has no upstream number to match.
-const CLEAR_GROUP: u32 = 64;
-
 /// How many workgroups cover `size` at `group` threads each.
 fn groups(size: u32, group: u32) -> u32 {
     size.div_ceil(group.max(1))
@@ -716,7 +712,6 @@ impl Fsr3 {
             .forget_lifetime();
 
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
-        let texels = render.0 * render.1;
 
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("fsr3"),
@@ -726,7 +721,7 @@ impl Fsr3 {
 
         pass.set_pipeline(&self.clear);
         pass.set_bind_group(1, Some(&bind.clear), &[]);
-        pass.dispatch_workgroups(groups(texels, CLEAR_GROUP), 1, 1);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
 
         pass.set_pipeline(&self.prepare_inputs[usize::from(dispatch.sample_count > 1)]);
         pass.set_bind_group(1, Some(&bind.prepare_inputs), &[]);

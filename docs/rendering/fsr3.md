@@ -119,6 +119,24 @@ reads it. The third has no reader here, for the reason below. So what is left is
 `farthest_depth_mip1` - a single 2x2 box average - and the pass is one dispatch
 rather than a chain.
 
+### Every dispatch walks a texture extent, not a texel count
+
+wgpu caps a dispatch at **65535 workgroups per dimension**, and the one pass
+here that is not naturally two-dimensional walked straight into it: the clear
+over `reconstructed_previous_nearest_depth` is a *buffer*, so it was dispatched
+flat over `width * height / 64` - which a 2880x1800 render extent turns into
+81000 and a panic in the frame loop.
+
+It now walks the grid the buffer represents, at `extent / 8` per dimension like
+every other pass. That makes the bound a property of what this port can
+**allocate** rather than of the arithmetic at one call site: no texture it can
+create comes within an order of magnitude of the cap, and a test says so at
+sizes past any adapter's `max_texture_dimension_2d`.
+
+The captures that were taken before this all ran at 720x408, where the flat
+shape came to 4590 - which is the shape of the whole class: a fixture small
+enough to be quick is a fixture too small to reach a limit.
+
 ### MSAA makes two of the inputs a different type
 
 `[graphics] anti_aliasing` at either MSAA level makes the scene's depth and

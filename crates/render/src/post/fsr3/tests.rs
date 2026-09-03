@@ -771,6 +771,41 @@ fn a_still_scene_fills_the_luma_history_and_is_never_unstable() {
 }
 
 #[test]
+fn no_dispatch_dimension_can_reach_wgpu_s_ceiling() {
+    // **A dispatch is capped at 65535 workgroups per dimension**, and this port
+    // walked straight into it: the clear over
+    // `reconstructed_previous_nearest_depth` was one-dimensional over
+    // `width * height / 64`, which a 2880x1800 render extent turns into 81000
+    // and a panic in a player's frame loop. Every fixture here runs at 8x4, and
+    // the `--presented` captures at 720x408 come to 4590 - so nothing before a
+    // real window at a real size could see it.
+    //
+    // Every dispatch is now two-dimensional over a texture extent, which makes
+    // the bound a property of what this port can *allocate* rather than of the
+    // arithmetic at any one call site. `max_texture_dimension_2d` is 8192 on
+    // the WebGPU baseline and 16384 on most desktop adapters; both are checked,
+    // because the guard has to hold for the largest thing that could ever be
+    // bound rather than for the largest anyone has tried.
+    const WGPU_MAX_WORKGROUPS_PER_DIMENSION: u32 = 65535;
+    for dimension in [8192u32, 16384, 32768] {
+        let dispatched = groups(dimension, GROUP);
+        assert!(
+            dispatched <= WGPU_MAX_WORKGROUPS_PER_DIMENSION,
+            "a {dimension}-wide target dispatches {dispatched} workgroups"
+        );
+    }
+    // And the shape that failed, stated so the reason is not lost: a flat
+    // dispatch over the same target's texels exceeds the cap long before its
+    // width does.
+    let flat = groups(2880 * 1800, 64);
+    assert!(
+        flat > WGPU_MAX_WORKGROUPS_PER_DIMENSION,
+        "the one-dimensional shape this replaced would have fitted at {flat}, \
+         so this test is no longer describing the bug it was written for"
+    );
+}
+
+#[test]
 fn the_multisampled_build_binds_a_multisampled_scene() {
     // **The crash this test exists for was found by playing, not by testing.**
     // `[graphics] anti_aliasing` at either MSAA level makes the scene's depth
