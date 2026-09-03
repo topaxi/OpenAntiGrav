@@ -304,6 +304,10 @@ pub fn capture(
 
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
+    // Asked here because this is where this path's adapter is - the capture
+    // builds its own rather than borrowing the window's. See
+    // `upscale::Temporal`.
+    let temporal_supported = oag_render::post::fsr3::supported(&adapter);
     let (device, queue) = pollster::block_on(adapter.request_device(
         &oag_render::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
     ))
@@ -431,6 +435,24 @@ pub fn capture(
         ),
         None => rect,
     };
+    // Computed once for all three `Scene::render` calls below, so the primer,
+    // the bench loop and the real frame cannot disagree about the sequence -
+    // they already share `Scene`'s own frame counter, and a differing phase
+    // count would desynchronise the offsets rather than the indices.
+    //
+    // **`Upscaler::Off` on an ordinary capture, and that is correct rather than
+    // a shortcut**: without `--presented` no upscaler runs at all, so nothing
+    // is reconstructing and only the flag can ask for jitter. See
+    // `upscale::jitter_phases`.
+    let camera_jitter = crate::upscale::jitter_phases(
+        options.camera_jitter,
+        presented.map_or(crate::display::Upscaler::Off, |state| {
+            state.presentation.upscaler
+        }),
+        temporal_supported,
+        (viewport.2 as u32, viewport.3 as u32),
+        (rect.2 as u32, rect.3 as u32),
+    );
 
     // The primer frame a motion blur capture needs: the scene at the
     // tick-before-last pose, drawn into the same target and then entirely
@@ -469,7 +491,7 @@ pub fn capture(
             options.pvs_culling,
             options.anim_seconds,
             options.motion_blur,
-            options.camera_jitter,
+            camera_jitter,
             &spectrum,
             // **No timestamps on any capture path**, deliberately: this
             // project compares captures byte for byte, and a measurement is
@@ -528,7 +550,7 @@ pub fn capture(
                 options.pvs_culling,
                 options.anim_seconds,
                 options.motion_blur,
-                options.camera_jitter,
+                camera_jitter,
                 &spectrum,
                 // `OAG_RENDER_BENCH` measures the CPU side of encoding this
                 // pass and says so; a GPU timestamp is a different number
@@ -565,7 +587,7 @@ pub fn capture(
         // the smear a player sees is the smear the PNG shows. Off, the pass
         // never observed a previous camera and encodes nothing.
         options.motion_blur,
-        options.camera_jitter,
+        camera_jitter,
         &spectrum,
         // Untimed, as the primer above is and for the same reason.
         None,
@@ -600,7 +622,28 @@ pub fn capture(
     // the grade comes last, in `composite`, so the HUD is inside it.
     if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
         framebuffer.resize_output(&device, (width, height));
-        framebuffer.resolve_scene(&device, &queue, &mut encoder, rect, &state.presentation);
+        // **A `--presented` capture is the one place an upscaler's output can
+        // be looked at**, which is what this flag exists for - so the temporal
+        // path has to be reachable here too, not just from the window.
+        let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
+            |(depth, velocity, frame)| crate::upscale::Temporal {
+                depth,
+                velocity,
+                sample_count: scene.sample_count(),
+                camera: frame.camera,
+                jitter: frame.jitter,
+                phase_count: frame.phase_count,
+                reset: frame.reset,
+            },
+        );
+        framebuffer.resolve_scene(
+            &device,
+            &queue,
+            &mut encoder,
+            rect,
+            &state.presentation,
+            temporal,
+        );
     }
     // Where the HUD goes, which is not where the scene went. Presented, that is
     // the presentation target at the aspect rectangle; otherwise it is the

@@ -1,0 +1,809 @@
+//! AMD FidelityFX Super Resolution 3.1: the temporal upscaler.
+//!
+//! Eight compute passes, transliterated from AMD's MIT-licensed FidelityFX SDK
+//! `v1.1.4`. The route - port to WGSL, drive no native SDK - is
+//! [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md);
+//! what is ported, what deviates and why is
+//! [fsr3.md](../../../../docs/rendering/fsr3.md), which is the page to read
+//! before changing anything here.
+//!
+//! **All eight passes are built, and nothing selects this yet.**
+//! [`Fsr3::output`] returns a frame; `oag_game::upscale::Framebuffer` has no
+//! branch that reads it, so the UPSCALER row's `fsr3` still resolves through
+//! the blit. Wiring the game side is deliberately a separate change - a bug in
+//! the resolve and a bug in the wiring arriving together would leave nothing to
+//! bisect between. [`Fsr3::PASSES`] is the spine either way.
+//!
+//! # Why this and not FSR 1
+//!
+//! [`super::fsr1`] is spatial: one frame in, one frame out, and its ceiling is
+//! set by how much a single frame's pixels can be argued to imply. FSR 3.1
+//! reconstructs from a *history* - several previous frames, each rasterised at
+//! a different sub-pixel offset, reprojected onto this one through the motion
+//! vectors. That buys detail a spatial filter cannot invent, and costs
+//! everything on the input list below plus the history's own failure modes
+//! (ghosting, disocclusion) that the middle five passes exist to manage.
+//!
+//! # Colour space: gamma, and upstream would want otherwise
+//!
+//! Upstream accumulates **linear light**, and for good reason: averaging
+//! several frames of one surface in an encoded space weights a dark sample as
+//! brighter than it is. [`super`]'s own table anticipated that and listed FSR
+//! 3.1 as wanting "a fourth thing".
+//!
+//! **It cannot have it here.**
+//! [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+//! makes gamma this renderer's authoritative colour space and *nothing*
+//! linearises - the blend equations the art was authored against are defined on
+//! stored bytes, and the scene target holds gamma values in a deliberately
+//! non-sRGB format. There is no linear light anywhere in the pipeline to hand
+//! this, and manufacturing some for one pass would be exactly the
+//! inconsistency that ADR removed.
+//!
+//! So [`Frame::colour`] takes the same view [`super::fsr1`] takes, and
+//! accumulation runs on encoded values. That is a real divergence from
+//! upstream, in the same family as the FP16 path this port does not take, and
+//! it is the *consistent* choice rather than the accurate one - which is the
+//! trade ADR-0020 already made for every other pass in this renderer.
+//!
+//! # Jitter is an input, not a setting
+//!
+//! Without a sub-pixel offset per frame, every frame samples the same point in
+//! each pixel and there is nothing for accumulation to reconstruct *from*: the
+//! result degrades to a blurry reprojection. [`Frame::jitter`] must therefore
+//! be the offset the scene was actually drawn with, and
+//! [`crate::jitter::phases`] must have chosen the sequence length from the same
+//! two sizes passed here. ADR-0039 records why the offset is applied where it
+//! is; the short version is that the culling frustum and the velocity buffer
+//! must not see it.
+
+use anyhow::Result;
+
+mod bindings;
+mod constants;
+mod groups;
+mod resources;
+
+use bindings::{
+    atomic_entry, level_entry, load_entry, load_multisampled_entry, read_buffer_entry,
+    sample_entry, shared_layout, store_entry,
+};
+
+pub use constants::{Camera, Constants, Dispatch, camera_from_projection};
+pub use resources::{PYRAMID_MIPS, Sizes, Targets};
+
+/// Whether `adapter` can run this at all.
+///
+/// **One question, where [ADR-0012] expected several.** The ADR predicted an
+/// adapter probe over storage-texture formats and access modes, because FSR
+/// 3.1's intermediates are held in formats outside the WebGPU baseline. This
+/// port widens them instead - see [`resources`] - so no `wgpu::Features` bit is
+/// requested and the only thing left to ask is whether the adapter has compute
+/// shaders at all. A downlevel GL adapter does not; everything else does.
+///
+/// The caller's job is what the ADR actually requires: degrade, never fail to
+/// boot. `false` here means fall to [`super::fsr1`], which is fragment-only and
+/// runs anywhere a triangle does.
+///
+/// [ADR-0012]: ../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md
+#[must_use]
+pub fn supported(adapter: &wgpu::Adapter) -> bool {
+    adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+}
+
+/// One frame's worth of input.
+#[derive(Debug, Clone, Copy)]
+pub struct Frame<'a> {
+    /// The scene target, in whatever space this renderer draws in - which is
+    /// gamma, and is the same view [`super::fsr1`] takes. See the module docs
+    /// for why upstream would want linear light and why there is none here.
+    pub colour: &'a wgpu::TextureView,
+    /// The scene's depth attachment, stored rather than discarded since
+    /// [ADR-0028](../../../../docs/architecture/adr/0028-camera-motion-blur-first.md).
+    pub depth: &'a wgpu::TextureView,
+    /// The scene's velocity attachment - screen motion in UV units, written by
+    /// every race draw since
+    /// [ADR-0030](../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md).
+    /// The sign is the opposite of what FSR 3.1 wants and the constants carry
+    /// the correction; see `constants::MOTION_VECTOR_SCALE`.
+    pub velocity: &'a wgpu::TextureView,
+    /// Everything that is a number rather than a resource.
+    pub dispatch: Dispatch,
+}
+
+/// Which pass a name refers to, in upstream's dispatch order.
+///
+/// Ported and unported alike, because the list *is* the port's remaining work
+/// and a table with holes in it says more than a table of what happens to exist.
+/// [`Pass::ported`] is the one that moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pass {
+    /// Nearest and farthest depth of each 3x3 neighbourhood, the motion vector
+    /// belonging to the nearest, this frame's luma, and the scattered
+    /// projection of this frame's depth into the previous frame's grid.
+    PrepareInputs,
+    /// The luma pyramid, upstream's first SPD dispatch - which here reduces to
+    /// a single 2x2 average producing `farthest_depth_mip1`, because its other
+    /// two products are SPD's own plumbing and an auto-exposure this renderer
+    /// has no use for. `luma_pyramid.wgsl` argues both.
+    LumaPyramid,
+    /// The shading-change pyramid, upstream's second SPD dispatch.
+    ShadingChangePyramid,
+    /// How much the shading of each half-resolution texel changed.
+    ShadingChange,
+    /// The packed reactive/disocclusion/shading-change/accumulation mask.
+    PrepareReactivity,
+    /// How unstable each pixel's luma has been across the history.
+    LumaInstability,
+    /// The temporal resolve itself, at presentation resolution.
+    Accumulate,
+    /// RCAS, the same sharpen [`super::fsr1`] ends with.
+    Rcas,
+}
+
+impl Pass {
+    /// Upstream's dispatch order, which is also the order they must be ported
+    /// in: a pass reads what the ones before it wrote.
+    pub const ALL: [Self; 8] = [
+        Self::PrepareInputs,
+        Self::LumaPyramid,
+        Self::ShadingChangePyramid,
+        Self::ShadingChange,
+        Self::PrepareReactivity,
+        Self::LumaInstability,
+        Self::Accumulate,
+        Self::Rcas,
+    ];
+
+    /// Upstream's own name for the pass, so a reader can find the header.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::PrepareInputs => "prepare_inputs",
+            Self::LumaPyramid => "luma_pyramid",
+            Self::ShadingChangePyramid => "shading_change_pyramid",
+            Self::ShadingChange => "shading_change",
+            Self::PrepareReactivity => "prepare_reactivity",
+            Self::LumaInstability => "luma_instability",
+            Self::Accumulate => "accumulate",
+            Self::Rcas => "rcas",
+        }
+    }
+
+    /// Whether this pass is built yet.
+    ///
+    /// A method rather than a comment because the fallback in
+    /// [`Fsr3::output`] keys on it: an incomplete chain must produce nothing
+    /// and say so, not a half-resolved frame that reads as a rendering bug.
+    #[must_use]
+    pub fn ported(self) -> bool {
+        matches!(
+            self,
+            Self::PrepareInputs
+                | Self::LumaPyramid
+                | Self::ShadingChangePyramid
+                | Self::ShadingChange
+                | Self::PrepareReactivity
+                | Self::LumaInstability
+                | Self::Accumulate
+                | Self::Rcas
+        )
+    }
+}
+
+/// The prelude every pass is compiled with. See `common.wgsl`'s own header for
+/// why concatenation rather than an include.
+const COMMON: &str = include_str!("fsr3/common.wgsl");
+
+/// `common.wgsl` followed by one pass's source.
+fn source(pass: &str) -> String {
+    format!("{COMMON}\n{pass}")
+}
+
+/// The scene's velocity and depth attachments, single-sampled.
+///
+/// Prepended to `prepare_inputs.wgsl` rather than written in it, because the
+/// same pass has to be built against a multisampled pair whenever MSAA is on
+/// and the two are different WGSL *types*. See [`INPUTS_MULTISAMPLED`].
+const INPUTS: &str = "
+@group(1) @binding(0) var r_input_motion_vectors: texture_2d<f32>;
+@group(1) @binding(1) var r_input_depth: texture_2d<f32>;
+";
+
+/// The same two, multisampled - `[graphics] anti_aliasing` at either MSAA
+/// level.
+///
+/// **The pass's body is byte-identical between the two builds**, which is the
+/// whole reason this is a prelude rather than a second copy of the file:
+/// `textureLoad(t, p, 0)` is spelled the same either way, the `0` being a mip
+/// level on the single-sampled texture and a *sample index* on this one.
+/// Sample 0 rather than a resolve, for the reason `post::motion_blur` gives.
+const INPUTS_MULTISAMPLED: &str = "
+@group(1) @binding(0) var r_input_motion_vectors: texture_multisampled_2d<f32>;
+@group(1) @binding(1) var r_input_depth: texture_multisampled_2d<f32>;
+";
+
+/// How many threads each of upstream's render-resolution passes covers, in each
+/// axis - `FFX_FSR3UPSCALER_THREAD_GROUP_WIDTH` and `..._HEIGHT`.
+const GROUP: u32 = 8;
+
+/// How many workgroups cover `size` at `group` threads each.
+fn groups(size: u32, group: u32) -> u32 {
+    size.div_ceil(group.max(1))
+}
+
+/// The pipelines, the intermediates, and the history's own bookkeeping.
+#[derive(Debug)]
+pub struct Fsr3 {
+    /// Group 0 of every pass, built once. The samplers and the layout it was
+    /// built from are not kept beside it: a `wgpu::BindGroup` holds its own
+    /// resources alive, and the layout is only needed while pipelines are being
+    /// created.
+    shared: wgpu::BindGroup,
+    constants: wgpu::Buffer,
+    written: Option<Constants>,
+    /// The previous frame's constants, which is where the four `previousFrame*`
+    /// fields and the frame index come from. `None` before the first frame and
+    /// after a reset.
+    previous: Option<Constants>,
+
+    clear_layout: wgpu::BindGroupLayout,
+    clear: wgpu::ComputePipeline,
+    /// The two builds of `prepare_inputs`: single-sampled and multisampled.
+    /// Which one runs is [`Dispatch::sample_count`]'s only consequence.
+    prepare_inputs_layout: [wgpu::BindGroupLayout; 2],
+    prepare_inputs: [wgpu::ComputePipeline; 2],
+    luma_pyramid_layout: wgpu::BindGroupLayout,
+    luma_pyramid: wgpu::ComputePipeline,
+    shading_change_pyramid_layout: wgpu::BindGroupLayout,
+    shading_change_pyramid_mip0: wgpu::ComputePipeline,
+    shading_change_pyramid_reduce: wgpu::ComputePipeline,
+    shading_change_layout: wgpu::BindGroupLayout,
+    shading_change: wgpu::ComputePipeline,
+    prepare_reactivity_layout: wgpu::BindGroupLayout,
+    prepare_reactivity: wgpu::ComputePipeline,
+    luma_instability_layout: wgpu::BindGroupLayout,
+    luma_instability: wgpu::ComputePipeline,
+    accumulate_layout: wgpu::BindGroupLayout,
+    accumulate: wgpu::ComputePipeline,
+    rcas_layout: wgpu::BindGroupLayout,
+    rcas: wgpu::ComputePipeline,
+    /// One uniform per pyramid level, holding that level's source extent. See
+    /// [`level_entry`]; written once, because the extents are a function of the
+    /// allocation rather than of the frame.
+    levels: Vec<wgpu::Buffer>,
+
+    targets: Option<Targets>,
+}
+
+impl Fsr3 {
+    /// Every pass, ported or not - [`Pass::ALL`], re-exported here so a caller
+    /// holding a `Fsr3` does not have to reach for the enum.
+    pub const PASSES: [Pass; 8] = Pass::ALL;
+
+    /// Builds every pass this port has.
+    ///
+    /// **Nothing is allocated here.** The intermediates want a render
+    /// allocation and a presentation rectangle, and neither is known until the
+    /// first [`render`](Self::render) - the same arrangement
+    /// [`super::fsr1`] uses.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a shader that will not compile, which is a build-time mistake
+    /// rather than anything a player can cause. The caller keeps the `Result`
+    /// rather than unwrapping it, so a broken shader reports itself once and
+    /// leaves the game running on the next rung of the ladder.
+    pub fn new(device: &wgpu::Device) -> Result<Self> {
+        let shared_layout = shared_layout(device);
+
+        // **Both clamp**, which is what upstream's `s_PointClamp` and
+        // `s_LinearClamp` are; every gather in these passes reaches past the
+        // frame's edge at the border and upstream leans on the clamp rather
+        // than testing for it.
+        let sampler = |label, filter| {
+            device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some(label),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: filter,
+                min_filter: filter,
+                ..Default::default()
+            })
+        };
+        let point = sampler("fsr3 point clamp", wgpu::FilterMode::Nearest);
+        let linear = sampler("fsr3 linear clamp", wgpu::FilterMode::Linear);
+
+        let constants = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("fsr3 constants"),
+            size: Constants::SIZE as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let shared = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fsr3 shared"),
+            layout: &shared_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: constants.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&point),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&linear),
+                },
+            ],
+        });
+
+        let clear_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("fsr3 clear"),
+            entries: &[atomic_entry(0)],
+        });
+        let prepare_inputs_entries = |multisampled: bool| {
+            [
+                load_multisampled_entry(0, multisampled),
+                load_multisampled_entry(1, multisampled),
+                load_entry(2),
+                store_entry(3, wgpu::TextureFormat::Rgba16Float),
+                store_entry(4, wgpu::TextureFormat::R32Float),
+                atomic_entry(5),
+                store_entry(6, wgpu::TextureFormat::R32Float),
+                store_entry(7, wgpu::TextureFormat::Rgba16Float),
+            ]
+        };
+        let prepare_inputs_layout = [false, true].map(|multisampled| {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 prepare inputs"),
+                entries: &prepare_inputs_entries(multisampled),
+            })
+        });
+        let luma_pyramid_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 luma pyramid"),
+                entries: &[
+                    load_entry(0),
+                    store_entry(1, wgpu::TextureFormat::Rgba16Float),
+                ],
+            });
+        // One layout for both pyramid entry points, so that a level-0 dispatch
+        // and a reduce dispatch bind the same shape. Each reads a different
+        // subset of it and an unused binding costs nothing - the argument group
+        // 0 already makes.
+        let shading_change_pyramid_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 shading change pyramid"),
+                entries: &[
+                    load_entry(0),
+                    load_entry(1),
+                    load_entry(2),
+                    load_entry(3),
+                    store_entry(4, wgpu::TextureFormat::Rgba16Float),
+                    level_entry(5),
+                ],
+            });
+
+        let shading_change_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 shading change"),
+                entries: &[
+                    sample_entry(0),
+                    store_entry(1, wgpu::TextureFormat::Rgba8Unorm),
+                ],
+            });
+        let prepare_reactivity_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 prepare reactivity"),
+                entries: &[
+                    load_entry(0),
+                    load_entry(1),
+                    read_buffer_entry(2),
+                    load_entry(3),
+                    sample_entry(4),
+                    sample_entry(5),
+                    store_entry(6, wgpu::TextureFormat::Rgba8Unorm),
+                    store_entry(7, wgpu::TextureFormat::Rgba8Unorm),
+                    store_entry(8, wgpu::TextureFormat::Rgba8Unorm),
+                ],
+            });
+        let luma_instability_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 luma instability"),
+                entries: &[
+                    load_entry(0),
+                    sample_entry(1),
+                    sample_entry(2),
+                    sample_entry(3),
+                    sample_entry(4),
+                    store_entry(5, wgpu::TextureFormat::Rgba16Float),
+                    store_entry(6, wgpu::TextureFormat::Rgba16Float),
+                ],
+            });
+        let accumulate_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("fsr3 accumulate"),
+            entries: &[
+                load_entry(0),
+                load_entry(1),
+                sample_entry(2),
+                sample_entry(3),
+                sample_entry(4),
+                load_entry(5),
+                load_entry(6),
+                store_entry(7, wgpu::TextureFormat::Rgba16Float),
+            ],
+        });
+        let rcas_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("fsr3 rcas"),
+            entries: &[
+                load_entry(0),
+                store_entry(1, wgpu::TextureFormat::Rgba16Float),
+            ],
+        });
+
+        // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
+        // extent, so these never have to be rewritten - see the shader's
+        // `pyramid_level_size`.
+        // `mapped_at_creation` rather than a queue write, because `new` has no
+        // queue - and wants none: these are build-time constants, not per-frame
+        // data.
+        let levels = (0..PYRAMID_MIPS)
+            .map(|level| {
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("fsr3 pyramid level"),
+                    size: 16,
+                    usage: wgpu::BufferUsages::UNIFORM,
+                    mapped_at_creation: true,
+                });
+                buffer
+                    .slice(..)
+                    .get_mapped_range_mut()
+                    .expect("a freshly mapped buffer")
+                    .copy_from_slice(bytemuck::cast_slice(&[level, 0u32, 0, 0]));
+                buffer.unmap();
+                buffer
+            })
+            .collect();
+
+        let pipeline = |label: &str, wgsl: &str, entry: &str, own: &wgpu::BindGroupLayout| {
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(label),
+                source: wgpu::ShaderSource::Wgsl(source(wgsl).into()),
+            });
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(label),
+                bind_group_layouts: &[Some(&shared_layout), Some(own)],
+                immediate_size: 0,
+            });
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(label),
+                layout: Some(&layout),
+                module: &module,
+                entry_point: Some(entry),
+                compilation_options: Default::default(),
+                cache: None,
+            })
+        };
+
+        let clear = pipeline(
+            "fsr3 clear",
+            include_str!("fsr3/clear.wgsl"),
+            "cs_clear_reconstructed_depth",
+            &clear_layout,
+        );
+        let prepare_inputs_body = include_str!("fsr3/prepare_inputs.wgsl");
+        let prepare_inputs = [
+            pipeline(
+                "fsr3 prepare inputs",
+                &format!("{INPUTS}{prepare_inputs_body}"),
+                "cs_prepare_inputs",
+                &prepare_inputs_layout[0],
+            ),
+            pipeline(
+                "fsr3 prepare inputs (msaa)",
+                &format!("{INPUTS_MULTISAMPLED}{prepare_inputs_body}"),
+                "cs_prepare_inputs",
+                &prepare_inputs_layout[1],
+            ),
+        ];
+        let luma_pyramid = pipeline(
+            "fsr3 luma pyramid",
+            include_str!("fsr3/luma_pyramid.wgsl"),
+            "cs_luma_pyramid",
+            &luma_pyramid_layout,
+        );
+        let shading_change_pyramid_mip0 = pipeline(
+            "fsr3 shading change pyramid mip0",
+            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            "cs_shading_change_pyramid_mip0",
+            &shading_change_pyramid_layout,
+        );
+        let shading_change_pyramid_reduce = pipeline(
+            "fsr3 shading change pyramid reduce",
+            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            "cs_shading_change_pyramid_reduce",
+            &shading_change_pyramid_layout,
+        );
+        let shading_change = pipeline(
+            "fsr3 shading change",
+            include_str!("fsr3/shading_change.wgsl"),
+            "cs_shading_change",
+            &shading_change_layout,
+        );
+        let prepare_reactivity = pipeline(
+            "fsr3 prepare reactivity",
+            include_str!("fsr3/prepare_reactivity.wgsl"),
+            "cs_prepare_reactivity",
+            &prepare_reactivity_layout,
+        );
+        let luma_instability = pipeline(
+            "fsr3 luma instability",
+            include_str!("fsr3/luma_instability.wgsl"),
+            "cs_luma_instability",
+            &luma_instability_layout,
+        );
+        let accumulate = pipeline(
+            "fsr3 accumulate",
+            include_str!("fsr3/accumulate.wgsl"),
+            "cs_accumulate",
+            &accumulate_layout,
+        );
+        let rcas = pipeline(
+            "fsr3 rcas",
+            include_str!("fsr3/rcas.wgsl"),
+            "cs_rcas",
+            &rcas_layout,
+        );
+
+        Ok(Self {
+            shared,
+            constants,
+            written: None,
+            previous: None,
+            clear_layout,
+            clear,
+            prepare_inputs_layout,
+            prepare_inputs,
+            luma_pyramid_layout,
+            luma_pyramid,
+            shading_change_pyramid_layout,
+            shading_change_pyramid_mip0,
+            shading_change_pyramid_reduce,
+            shading_change_layout,
+            shading_change,
+            prepare_reactivity_layout,
+            prepare_reactivity,
+            luma_instability_layout,
+            luma_instability,
+            accumulate_layout,
+            accumulate,
+            rcas_layout,
+            rcas,
+            levels,
+            targets: None,
+        })
+    }
+
+    /// The resolved frame, in **linear light**. `None` until the chain is
+    /// complete enough to produce one.
+    ///
+    /// **Keyed off [`Pass::ported`] rather than off whether a texture happens
+    /// to exist.** Every pass is built now, so this is `Some` from the first
+    /// frame - but the gate stays, because it is what made an incomplete chain
+    /// hand back nothing rather than a half-resolved picture, and a
+    /// half-resolved picture reads as a rendering bug rather than as unfinished
+    /// work. A pass added or removed moves both this and the test that asserts
+    /// on it.
+    #[must_use]
+    pub fn output(&self) -> Option<&wgpu::TextureView> {
+        if !Pass::ALL.iter().all(|pass| pass.ported()) {
+            return None;
+        }
+        self.targets
+            .as_ref()
+            .map(|targets| &targets.upscaled_output.view)
+    }
+
+    /// What the intermediates currently cost, or `None` before the first frame.
+    ///
+    /// Exposed because the widened formats are this port's one unmeasured cost
+    /// (see [`resources`]), and a caller that can print a number is what turns
+    /// that from an argument into a measurement.
+    #[must_use]
+    pub fn sizes(&self) -> Option<Sizes> {
+        self.targets.as_ref().map(Targets::sizes)
+    }
+
+    /// The constants this frame was dispatched with, for a test.
+    #[must_use]
+    pub fn constants(&self) -> Option<&Constants> {
+        self.written.as_ref()
+    }
+
+    /// The texture behind [`output`](Self::output), for a readback or a
+    /// capture. The same accessor [`super::fsr1`] carries, for the same reason.
+    #[must_use]
+    pub fn output_texture(&self) -> Option<&wgpu::Texture> {
+        if !Pass::ALL.iter().all(|pass| pass.ported()) {
+            return None;
+        }
+        self.targets
+            .as_ref()
+            .map(|targets| &targets.upscaled_output.texture)
+    }
+
+    /// The intermediates, for a test that reads one back.
+    ///
+    /// Exposed because until the chain reaches [`Pass::Accumulate`] there is no
+    /// *output* to check, and a port with nothing checkable in it for six more
+    /// passes is a port nobody can trust. Each pass's product is a texture, and
+    /// a readback against arithmetic worked out on the CPU is the only
+    /// instrument available this early.
+    #[must_use]
+    pub fn targets(&self) -> Option<&Targets> {
+        self.targets.as_ref()
+    }
+
+    /// Runs every ported pass over `frame`.
+    pub fn render(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: Frame<'_>,
+    ) {
+        let dispatch = frame.dispatch;
+        self.resize(device, dispatch.max_render, dispatch.upscale);
+
+        // A reset throws the history away, which here means forgetting the
+        // previous frame's constants: every `previousFrame*` field then
+        // describes this frame and the frame index restarts at zero, which is
+        // upstream's `resetAccumulation`.
+        let previous = if dispatch.reset {
+            None
+        } else {
+            self.previous.as_ref()
+        };
+        let wanted = Constants::new(dispatch, previous);
+        if self.written != Some(wanted) {
+            queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
+            self.written = Some(wanted);
+        }
+        self.previous = Some(wanted);
+
+        let Some(targets) = &self.targets else {
+            return;
+        };
+
+        let frame_index = wanted.frame_index as u64;
+        let bind = groups::Groups::new(self, device, targets, frame, frame_index);
+
+        // **The lock target, wiped before anything writes it.** `new_locks` is
+        // written by a scatter, so most presentation texels are never touched
+        // and last frame's locks would otherwise survive into this one.
+        // Upstream avoids the clear by having `accumulate` zero each texel as
+        // it reads it, which would need a read-write storage texture - see
+        // `resources::CLEARABLE`. An empty render pass is the cheapest wipe
+        // available: no pipeline, no draw, just the hardware's fast clear.
+        encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("fsr3 clear new locks"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &targets.new_locks.view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            })
+            .forget_lifetime();
+
+        let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
+
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("fsr3"),
+            timestamp_writes: None,
+        });
+        pass.set_bind_group(0, Some(&self.shared), &[]);
+
+        pass.set_pipeline(&self.clear);
+        pass.set_bind_group(1, Some(&bind.clear), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        pass.set_pipeline(&self.prepare_inputs[usize::from(dispatch.sample_count > 1)]);
+        pass.set_bind_group(1, Some(&bind.prepare_inputs), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        // **Half the render extent**, which is upstream's `maxRenderSizeDiv2`
+        // rounding: an integer halve, so an odd width loses its last column
+        // rather than gaining a half-covered one. The shader clamps its taps
+        // to the render extent for the same reason.
+        let half = ((render.0 / 2).max(1), (render.1 / 2).max(1));
+        pass.set_pipeline(&self.luma_pyramid);
+        pass.set_bind_group(1, Some(&bind.luma_pyramid), &[]);
+        pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
+
+        // The pyramid, level by level. Upstream is one dispatch; this is
+        // `pyramid_levels` of them, which is ADR-0012's predicted SPD
+        // substitution and the port's one structural deviation.
+        //
+        // **Each level is its own `dispatch_workgroups` inside one compute
+        // pass, and that is sufficient synchronisation**: wgpu inserts a
+        // barrier between dispatches that write and then read the same
+        // resource, which is exactly the dependency SPD's global atomic exists
+        // to establish inside a single dispatch.
+        let mut level_size = half;
+        pass.set_pipeline(&self.shading_change_pyramid_mip0);
+        pass.set_bind_group(1, Some(&bind.pyramid[0]), &[]);
+        pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
+
+        pass.set_pipeline(&self.shading_change_pyramid_reduce);
+        for group in &bind.pyramid[1..] {
+            level_size = ((level_size.0 / 2).max(1), (level_size.1 / 2).max(1));
+            pass.set_bind_group(1, Some(group), &[]);
+            pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
+        }
+
+        pass.set_pipeline(&self.shading_change);
+        pass.set_bind_group(1, Some(&bind.shading_change), &[]);
+        pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
+
+        pass.set_pipeline(&self.prepare_reactivity);
+        pass.set_bind_group(1, Some(&bind.prepare_reactivity), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        pass.set_pipeline(&self.luma_instability);
+        pass.set_bind_group(1, Some(&bind.luma_instability), &[]);
+        pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
+
+        // **Presentation resolution, where every pass above is at render
+        // resolution or half of it.** This is the one that decides a pixel.
+        let upscale = (dispatch.upscale.0.max(1), dispatch.upscale.1.max(1));
+        pass.set_pipeline(&self.accumulate);
+        pass.set_bind_group(1, Some(&bind.accumulate), &[]);
+        pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
+
+        pass.set_pipeline(&self.rcas);
+        pass.set_bind_group(1, Some(&bind.rcas), &[]);
+        pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
+    }
+
+    /// Rebuilds every intermediate when either allocation moves.
+    ///
+    /// **Both allocations are ceilings and neither moves per frame.** A render
+    /// scale row or a window resize moves them; a resolution controller varying
+    /// the extent inside the ceiling does not, which is the whole point of
+    /// ADR-0037's arrangement and is what makes a per-frame render size cost a
+    /// uniform write here rather than a dozen reallocations.
+    fn resize(&mut self, device: &wgpu::Device, max_render: (u32, u32), upscale: (u32, u32)) {
+        if self
+            .targets
+            .as_ref()
+            .is_some_and(|targets| targets.fits(max_render, upscale))
+        {
+            return;
+        }
+        self.targets = Some(Targets::new(device, max_render, upscale));
+        // A new history is no history. Without this, the first frame after a
+        // resize would reproject through constants describing the old one.
+        self.previous = None;
+    }
+}
+
+#[cfg(test)]
+mod readback;
+#[cfg(test)]
+mod tests;

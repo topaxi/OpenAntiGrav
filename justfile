@@ -64,6 +64,14 @@ test-data:
 link-data:
     bash scripts/link-worktree-data.sh
 
+# Fetches the FidelityFX SDK shader sources the FSR ports are diffed against,
+# into ~/.cache/oag-fsr and never into the repository. Nothing is vendored:
+# ADR-0012 chose a WGSL port over linking the SDK, and the port's only defence
+# against drifting from upstream is that it stays diffable against a pinned
+# tag. See docs/rendering/fsr3.md for the pin and why it is v1.1.4.
+fsr-reference:
+    bash scripts/fetch-fsr-reference.sh
+
 build:
     cargo build --workspace
 
@@ -291,10 +299,17 @@ play-screenshots out="/tmp":
 # way; without it a capture never reaches the blit and every image would be
 # identical. The scale is an argument because a magnifier can only be judged
 # where it is magnifying.
+#
+# `fsr3` is temporal, which makes its image mean something different from the
+# other two: `off` and `fsr1` resolve one frame, while `fsr3` has been
+# accumulating since the race began and the `--ticks` count is therefore part of
+# what it is showing. On an adapter with no compute shaders it degrades to
+# `fsr1` and the two images are identical - that is the fallback working, not
+# the capture failing. See docs/rendering/fsr3.md.
 compare-upscalers image scale="50" out="/tmp":
     #!/usr/bin/env bash
     set -euo pipefail
-    for upscaler in off fsr1; do
+    for upscaler in off fsr1 fsr3; do
         cargo run -q --release -p oag-game -- "{{image}}" --race \
             --screenshot "{{out}}/oag-upscale-{{scale}}-$upscaler.png" \
             --ticks 300 --hold cross --presented \

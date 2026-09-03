@@ -602,6 +602,9 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
             brightness,
             gamma,
         },
+        // No scene inputs: this test drives the bilinear path, which is the
+        // rung `None` falls to.
+        None,
     );
     ui.overlay(
         &device,

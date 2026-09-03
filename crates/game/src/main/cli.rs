@@ -837,3 +837,38 @@ pub(crate) struct Cli {
     #[arg(long, requires = "write_icon", default_value_t = 256)]
     pub(crate) icon_size: u32,
 }
+
+impl Cli {
+    /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing` and
+    /// `--motion-blur` to one render profile.
+    ///
+    /// **One function because there are two callers and they disagreed.**
+    /// `main.rs` applies these by walking `settings.render_profiles`, which is
+    /// keyed by title - and a headless `--race` capture has no title in hand,
+    /// so it built a `RenderProfile::default()` instead and every one of these
+    /// four flags was silently discarded. That made `just compare-upscalers`
+    /// produce three byte-identical images, which is exactly the failure a
+    /// comparison instrument cannot survive: it reported "these upscalers look
+    /// the same" and nobody could tell that from "the flag did nothing".
+    ///
+    /// `render_scale` is parsed by the caller because it is the one of the four
+    /// that can fail.
+    pub(crate) fn apply_render_overrides(
+        &self,
+        profile: &mut crate::settings::RenderProfile,
+        render_scale: Option<crate::display::Scale>,
+    ) {
+        if let Some(render_scale) = render_scale {
+            profile.render_scale = render_scale;
+        }
+        if let Some(upscaler) = self.upscaler {
+            profile.upscaler = upscaler;
+        }
+        if let Some(anti_aliasing) = self.anti_aliasing {
+            profile.anti_aliasing = anti_aliasing;
+        }
+        if let Some(motion_blur) = self.motion_blur {
+            profile.motion_blur = motion_blur;
+        }
+    }
+}

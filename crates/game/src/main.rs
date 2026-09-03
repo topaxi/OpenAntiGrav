@@ -196,18 +196,7 @@ fn main() -> Result<()> {
         None => None,
     };
     for profile in settings.render_profiles.values_mut() {
-        if let Some(render_scale) = render_scale {
-            profile.render_scale = render_scale;
-        }
-        if let Some(upscaler) = cli.upscaler {
-            profile.upscaler = upscaler;
-        }
-        if let Some(anti_aliasing) = cli.anti_aliasing {
-            profile.anti_aliasing = anti_aliasing;
-        }
-        if let Some(motion_blur) = cli.motion_blur {
-            profile.motion_blur = motion_blur;
-        }
+        cli.apply_render_overrides(profile, render_scale);
     }
 
     // Parsed before anything is loaded, and for both ways in: the front end can

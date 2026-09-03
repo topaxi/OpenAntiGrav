@@ -1,7 +1,7 @@
 //! The race stage: a loaded track, and the scene that draws it.
 
 use log::warn;
-use oag_game::{display, race};
+use oag_game::{display, race, upscale};
 
 use crate::gpu::Gpu;
 
@@ -40,7 +40,7 @@ impl RaceStage {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
-        camera_jitter: bool,
+        camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> race::SceneStats {
@@ -68,6 +68,27 @@ impl RaceStage {
             zone_spectrum,
             timestamps,
         )
+    }
+
+    /// What a temporal upscaler needs from this frame, or `None` when nothing
+    /// has been drawn yet or jitter is off.
+    ///
+    /// **Read after [`RaceStage::render`], never before**: it reports the frame
+    /// that was drawn, and a caller that asked first would hand the upscaler the
+    /// *previous* frame's camera and offset - which produces a picture rather
+    /// than an error.
+    pub(crate) fn temporal(&self) -> Option<upscale::Temporal<'_>> {
+        self.scene
+            .temporal()
+            .map(|(depth, velocity, frame)| upscale::Temporal {
+                depth,
+                velocity,
+                sample_count: self.scene.sample_count(),
+                camera: frame.camera,
+                jitter: frame.jitter,
+                phase_count: frame.phase_count,
+                reset: frame.reset,
+            })
     }
 
     /// Draws the HUD, or the results table once the race has one.
@@ -172,10 +193,10 @@ impl RaceStage {
             // Off for the same reason, and one more: jitter is a matrix, not a
             // pipeline variant, so there is nothing here for it to warm. It
             // still costs this frame a phase - `Scene::frame_index` advances on
-            // every render - so with `--camera-jitter` on, the first frame a
-            // player sees is phase one rather than phase zero. Deterministic,
-            // and noted in ADR-0039 so a shifted capture is not a mystery.
-            false,
+            // every render - so with jitter on, the first frame a player sees is
+            // phase one rather than phase zero. Deterministic, and noted in
+            // ADR-0039 so a shifted capture is not a mystery.
+            None,
             // Empty: this frame is discarded, and the Zone visualiser
             // pipeline variant it would warm is the same one every other
             // Zone draw uses regardless of what the lookup holds.

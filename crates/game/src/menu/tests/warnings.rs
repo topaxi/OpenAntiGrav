@@ -90,14 +90,17 @@ fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_a
         .expect("nothing edits graphics.anti_aliasing");
     assert_eq!(
         entry.warnings().len(),
-        4,
-        "the upscaler-conflict and 200%-redundancy warnings, each in two \
-         variants since RENDER SCALE became a ceiling; a fifth would go \
-         unnoticed by the rest of this test"
+        5,
+        "the FSR 1 conflict and the 200%-redundancy warning, each in two \
+         variants since RENDER SCALE became a ceiling, plus the FSR 3.1 one - \
+         which needs only one variant because it does not read RENDER SCALE at \
+         all: a temporal upscaler is destroyed by a pre-blur at every scale. A \
+         sixth would go unnoticed by the rest of this test"
     );
     // Picked out by the condition this test is actually about: the row also
-    // carries the 200%-redundancy warning below, and that one names no
-    // `graphics.upscaler` condition at all.
+    // carries the 200%-redundancy warning below, which names no
+    // `graphics.upscaler` condition at all, and the FSR 3.1 one, which names no
+    // `graphics.render_scale` condition.
     let warning = entry
         .warnings()
         .iter()

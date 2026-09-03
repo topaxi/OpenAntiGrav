@@ -78,7 +78,9 @@
 - The HUD - **done** for the 2D layer, off the disc's own layouts; see
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look. Bloom is **done** and
-  **recovered**; FXAA, SMAA, MSAA 4x and FSR 1 are built as modern additions.
+  **recovered**; FXAA, SMAA, MSAA 4x and FSR 1 are built as modern additions,
+  and [FSR 3.1](fsr3.md) - the temporal one - is a port in flight, one of its
+  eight passes built. That page is the port's spine and says which.
   [Motion blur](motion-blur.md) is **built at its designed per-object
   velocity tier** - every race draw writes measured screen motion, gathered
   by a McGuire-style reconstruction filter behind a live

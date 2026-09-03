@@ -648,7 +648,18 @@ impl Session {
                     pvs_culling,
                     self.anim_seconds,
                     render_profile.motion_blur,
-                    self.camera_jitter,
+                    // **Derived from the upscaler, not read from the flag**,
+                    // and computed here because this is the one place that
+                    // holds both sizes the count depends on: `size` is the
+                    // extent the scene is drawn at and `rect` the rectangle it
+                    // resolves into. See `upscale::jitter_phases`.
+                    upscale::jitter_phases(
+                        self.camera_jitter,
+                        render_profile.upscaler,
+                        self.gpu.temporal,
+                        size,
+                        (rect.2 as u32, rect.3 as u32),
+                    ),
                     &zone_spectrum,
                     self.pass_timer
                         .as_ref()
@@ -696,6 +707,16 @@ impl Session {
                         brightness: self.settings.display.brightness,
                         gamma: self.settings.display.gamma,
                     }
+                },
+                // **Only a race answers, and only on an adapter that can run
+                // it.** Every other stage has no scene to reconstruct from
+                // (ADR-0038) and hands `None`, which falls the fallback ladder
+                // one rung exactly as an unsupported adapter does. Read *after*
+                // the stage rendered above, which is what makes it this frame's
+                // camera rather than the previous one's.
+                match &self.stage {
+                    Stage::Race(stage) if self.gpu.temporal => stage.temporal(),
+                    _ => None,
                 },
             );
         }
