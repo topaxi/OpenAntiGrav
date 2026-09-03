@@ -148,15 +148,21 @@ pub struct Report {
     /// term to read, and a default there is the correct answer, not a gap.
     /// Counted anyway, because the two look identical from this field alone:
     /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have no
-    /// Lambert diffuse either" found one hand-confirmed real chain
-    /// `specular_exponent` misses structurally (its feeding instruction is an
-    /// unnamed opcode, not a literal `DP3`), so a material landing here may be
-    /// unlit, or may be exactly that false negative - a silent fallback would
-    /// make both look the same, which is the failure mode every other counter
-    /// on this struct exists to avoid. **426 of Talon's Junction's 442
-    /// materials (96 %)** land here as of 2026-09-04 - a population too large
-    /// to be all false negative, but too large to wave off as "mostly unlit"
-    /// without checking either; unread, deliberately, rather than assumed.
+    /// Lambert diffuse either" found `Program::dp3_feeding`'s writer search
+    /// lane-unsound in both directions (crediting a `DP3` that wrote the
+    /// wrong lane, and missing a real one behind an unrelated write to a
+    /// different lane) - fixed 2026-09-04, moving the disc-wide resolved
+    /// count from 6,141 to 10,087 fragment blocks - and still, separately,
+    /// found `op3B` a real, minority (~23 %) cause of the population that
+    /// remains unresolved after that fix. A material landing here may be
+    /// unlit, or may be exactly that residual false negative - a silent
+    /// fallback would make both look the same, which is the failure mode
+    /// every other counter on this struct exists to avoid. **422 of Talon's
+    /// Junction's 442 materials (95 %)** land here as of 2026-09-04, after
+    /// the `dp3_feeding` fix (down from 426 before it) - still too large a
+    /// population to be all false negative, but too large to wave off as
+    /// "mostly unlit" without checking either; unread, deliberately, rather
+    /// than assumed.
     pub specular_exponent_unresolved: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///

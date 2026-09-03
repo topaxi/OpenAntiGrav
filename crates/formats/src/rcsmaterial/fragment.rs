@@ -225,20 +225,16 @@ impl Instruction {
             0x36 => "RFL",
             0x3a => "DIV",
             // `NVFX_FP_OP_OPCODE_LITEX2_NV40` in Mesa's `nvfx_shader.h`,
-            // confirmed against the primary source. One source operand
-            // (`nvfx_fragprog.c`'s `TGSI_OPCODE_LIT` emission). Absent from
-            // every fragment block on this disc (`hd_litex2_census.rs`, 0 of
-            // 76,358) - named for completeness, not because any shipped
-            // chain needs it.
+            // confirmed against the primary source; absent from every
+            // fragment block on this disc (`hd_litex2_census.rs`, 0 of
+            // 76,358) - named for completeness, not because it's needed.
             0x3c => "LIT_EX2_NV40",
-            // `0x3b`/`0x3d` occur in shipped programs, genuinely absent
-            // from Mesa's `nvfx_shader.h` (confirmed against the primary
-            // source). `0x3d` has no hypothesis. `0x3b` does - renderer.md
-            // reads it as `NRM` at confidence ~70, deliberately not applied
-            // (not comfortably past this project's rename line, and a
-            // second usage shape found 2026-09-03 shows the semantics are
-            // not uniform even under the hypothesis). Reference decoder:
-            // both stay `op3B`/`op3D`.
+            // `0x3b`/`0x3d` occur in shipped programs, genuinely absent from
+            // Mesa's `nvfx_shader.h`. `0x3d` has no hypothesis; `0x3b` reads
+            // as `NRM` at confidence ~70 (renderer.md), deliberately not
+            // applied - below this project's rename line, and a second usage
+            // shape (2026-09-03) shows the semantics aren't uniform even
+            // under that hypothesis. Reference decoder: both stay unnamed.
             _ => return None,
         })
     }
@@ -470,9 +466,8 @@ impl Program {
     }
 
     /// The literal exponent of a `pow(N.H, e) = exp2(e * log2(N.H))` chain -
-    /// a saturated `DP3` feeding `LG2` then a `MUL` by a constant then
-    /// `EX2` - when that chain's result reaches the program's output
-    /// colour.
+    /// a saturated `DP3` feeding `LG2` then a `MUL` by a constant then `EX2`
+    /// - when that chain's result reaches the program's output colour.
     ///
     /// This is the specular term's exponent on every lit material read so
     /// far: `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have
@@ -483,59 +478,48 @@ impl Program {
     /// `10`, `32`, `26.156`, `40`, `300`).
     ///
     /// **Three filters, none optional, because the bare `LG2`/`MUL`/`EX2`
-    /// shape alone is not specific to specular at all.** Measured disc-wide
-    /// while building this method: the identical three instructions raise a
-    /// texture sample to a power on `track_surface`'s own lightmap curve
-    /// (`pow(lightmap.rgb, k)`, `renderer.md`'s block #9), compute `exp(x)`
-    /// off a saturated dot product by the unrelated `log2(e)` constant, and
-    /// raise several other quantities to a power that reachability alone
-    /// does not separate from a real specular term - excluding only
-    /// Zone-declaring blocks left thousands of chains a reachability filter
-    /// could not distinguish from the roughly 1,800 the disc sweep this
-    /// method reproduces actually found. So:
+    /// shape alone is not specific to specular at all.** Measured disc-wide:
+    /// the identical three instructions raise a texture sample to a power on
+    /// `track_surface`'s own lightmap curve (`pow(lightmap.rgb, k)`,
+    /// `renderer.md`'s block #9), compute `exp(x)` off a saturated dot by the
+    /// unrelated `log2(e)` constant, and raise other quantities to a power
+    /// reachability alone does not separate from a real specular term. So:
     ///
     /// - [`Self::dp3_feeding`] requires the `LG2` to read a register a
     ///   saturated `DP3` most recently wrote - the `N.H`/`N.L` idiom every
     ///   specular and sun-diffuse read in `renderer.md` shares, which a
     ///   texture-fed power curve does not.
     /// - The exponent literal is rejected when it is `log2(e)` (within
-    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, and `mesh.wgsl`'s own fog
-    ///   curve names this exact constant for this exact reason ("a MUL by
-    ///   log2(e) into EX2_SAT"). A saturated dot product raised through
-    ///   `exp()` rather than `pow()` - a Fresnel-style falloff, say - shares
-    ///   both other gates without being this idiom, and `1.4427` is not a
-    ///   shininess.
+    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, the idiom `mesh.wgsl`'s
+    ///   own fog curve names this constant for. A saturated dot raised
+    ///   through `exp()` rather than `pow()` - a Fresnel falloff, say -
+    ///   shares both other gates without being this idiom.
     /// - [`Self::reaches_output`] requires the chain's result to survive to
     ///   the last instruction that writes a colour channel - the same
-    ///   instruction [`Self::taint`]'s own `last` picks out, for the same
-    ///   reason: most lit programs end `MOV H0.w, {const}`, alpha from a
-    ///   constant, and stopping at the final instruction would miss a
-    ///   colour written earlier and never touched again.
+    ///   instruction [`Self::taint`]'s own `last` picks out: most lit
+    ///   programs end `MOV H0.w, {const}`, alpha from a constant, and
+    ///   stopping at the final instruction would miss an earlier colour.
     ///
-    /// Chains are tried **last first**: the specular term is characteristically
-    /// added after the diffuse sum (`renderer.md`'s own block reads all place
-    /// it after the `N.L` term), so the chain closest to the end is the
-    /// likeliest candidate, and the first one found passing every filter wins.
+    /// Chains are tried **last first**: the specular term characteristically
+    /// follows the diffuse sum (`renderer.md`'s block reads all place it
+    /// after `N.L`), so the chain closest to the end wins first.
     ///
     /// `None` when no such chain passes every filter - every unlit and
     /// emissive program, and any block this pattern does not fit.
     ///
     /// **A literal `0.0` is not filtered here and is a real answer this
     /// method can return.** `pow(x, 0) = 1` is not a plausible authored
-    /// shininess, and a disc-wide sweep found it the single largest bucket
-    /// (573 of ~1,050 non-Zone chains) - the strongest candidate for
+    /// shininess, and it is a large real bucket - the strongest candidate for
     /// `SpecularPower` patched at draw time rather than baked in the file,
-    /// matching this page's own RGBE and sun-direction readings of other
-    /// "patched at draw time" constants. Deciding whether to trust a literal
-    /// zero is a caller's policy, not this method's: it reports what the file
-    /// says, faithfully, and `0.0` is what the file says there.
+    /// matching this page's own "patched at draw time" readings elsewhere.
+    /// Deciding whether to trust a literal zero is a caller's policy, not
+    /// this method's: it reports what the file says, faithfully.
     ///
-    /// Confidence 80, inherited from the disc sweep this reproduces: the
-    /// pattern is instruction shape, not block meaning, so a non-specular
-    /// power fed by a saturated dot product and reaching the output - a
-    /// Fresnel-style term using an actual power rather than `exp()`, say -
-    /// would read as this method's answer too. Not observed on the materials
-    /// read by hand so far, but not ruled out either.
+    /// Confidence 80: the pattern is instruction shape, not block meaning, so
+    /// a non-specular power fed by a saturated dot product and reaching the
+    /// output would read as this method's answer too. **Not pinned to a
+    /// disc-wide population count** - [`Self::dp3_feeding`]'s 2026-09-04 fix
+    /// moved every number this page had published; see its own doc comment.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
         self.specular_exponent_chain().map(|(value, ..)| value)
@@ -628,27 +612,46 @@ impl Program {
         None
     }
 
-    /// The index of the saturated `DP3` that most recently wrote the
-    /// register the `LG2` at `at` reads - the `N.H`/`N.L` idiom
+    /// The index of the saturated `DP3` that most recently, lane-soundly
+    /// wrote the register the `LG2` at `at` reads - the `N.H`/`N.L` idiom
     /// `renderer.md` reads under every specular and sun-diffuse term, and
     /// the discriminator a bare `LG2`/`MUL`/`EX2` instruction shape does not
     /// carry on its own: see [`Self::specular_exponent`]'s own doc comment
     /// for what this excludes and why it has to.
     ///
-    /// `None` when the `LG2`'s own operand is not a register (an
-    /// interpolator or an inline constant cannot be a saturated dot
-    /// product's result), when nothing before it in the program wrote that
-    /// register at all, or when the writer was not a saturated `DP3`.
+    /// **Lane-aware and clobber-checked, not "any nonzero mask" - a naive
+    /// version shipped first and was wrong both ways, disc-wide (renderer.md,
+    /// "Ships have no Lambert diffuse either"): 1,679 of 6,141 then-resolved
+    /// blocks were credited off a wrong-lane `DP3`, and 5,556 missed a real
+    /// one behind an unrelated write to a different lane.** `LG2` always
+    /// reads exactly one lane in practice (`hd_lg2_swizzle_check.rs`).
+    ///
+    /// `None` when the `LG2`'s own operand is not a register, when no single
+    /// instruction before it covers every lane it reads in one write, when a
+    /// later partial write to any of those lanes clobbers it before `at`, or
+    /// when the covering writer is not a saturated `DP3`.
     fn dp3_feeding(&self, at: usize) -> Option<usize> {
-        let Some(Source::Register { index, half }) = self.instructions[at].operands().next() else {
+        let reader = &self.instructions[at];
+        let Some(Source::Register { index, half }) = reader.operands().next() else {
             return None;
         };
-        let (i, insn) = self.instructions[..at]
+        let reg = (index, half);
+        let sw = reader.swizzles[0];
+        let needed: u8 = (0..4)
+            .filter(|&i| reader.mask & (1 << i) != 0)
+            .fold(0u8, |acc, i| acc | (1 << sw[i]));
+        let (w, writer) = self.instructions[..at]
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, insn)| insn.mask != 0 && (insn.dst, insn.dst_half) == (index, half))?;
-        (insn.name() == Some("DP3") && insn.saturate).then_some(i)
+            .find(|(_, insn)| (insn.dst, insn.dst_half) == reg && insn.mask & needed == needed)?;
+        if writer.name() != Some("DP3") || !writer.saturate {
+            return None;
+        }
+        let clobbered = self.instructions[w + 1..at]
+            .iter()
+            .any(|insn| (insn.dst, insn.dst_half) == reg && insn.mask & needed != 0);
+        (!clobbered).then_some(w)
     }
 
     /// Whether the value the instruction at `from` writes survives, by

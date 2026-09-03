@@ -18,9 +18,9 @@
 //! **Lane-aware, not the naive "any nonzero mask" check `Program::
 //! dp3_feeding` itself uses.** A first draft of this file copied that naive
 //! check verbatim and got a badly wrong picture: `LG2` reads only the lane(s)
-//! its own swizzle names for the output lanes its mask selects (see
-//! [`read_mask`]'s own doc comment for the unsettled question of whether
-//! that is genuinely elementwise or a scalar broadcast), so a "most recent
+//! its own swizzle names for the output lanes its mask selects - always one
+//! lane in practice, checked disc-wide (see [`read_mask`]'s own doc
+//! comment) - so a "most recent
 //! writer of *any* lane of the register" match both credits a `DP3` that
 //! wrote a lane `LG2` never reads (a false positive) and, just as often,
 //! misses a real `DP3` behind an unrelated write to some *other* lane of the
@@ -78,16 +78,18 @@ enum Category {
 /// three-lane special case.
 ///
 /// **Whether `LG2`'s hardware unit is genuinely elementwise, or a scalar
-/// unit that always reads one lane (broadcasting the swizzle's first entry
-/// regardless of what the other three name), is not settled.** A disc-wide
-/// swizzle check (`hd_lg2_swizzle_check.rs`) found **32,381 of 120,082 `LG2`
-/// instructions (27.0 %) have a non-uniform swizzle** - the two readings
-/// disagree on exactly those. If `LG2` is actually scalar-broadcast, this
-/// function over-demands coverage on that 27.0 % (asking a writer to supply
-/// lanes the hardware never reads), which would inflate `Lg2NotDp3Fed` by an
-/// unknown amount within it. Left as the general elementwise reading -
-/// consistent with every other opcode this project has read - rather than
-/// asserting a scalar special case with no primary-source confirmation.
+/// unit that always reads one lane and broadcasts, turns out to be moot in
+/// practice, checked disc-wide rather than left open.** Mesa's
+/// `nvfx_shader.h` documents a real scalar/vector split for the *vertex*
+/// program (a separate `NVFX_VP_INST_SLOT_SCA` opcode table dual-issued
+/// against `VEC`) but no analogous split for fragment-program opcodes, which
+/// share one flat table - primary source is inconclusive there. What settles
+/// it instead: `hd_lg2_swizzle_check.rs` found **`LG2` never writes more
+/// than one output lane on this disc - 0 of 120,082 occurrences**. The two
+/// readings can only disagree when a multi-lane write reads a differing
+/// source lane per output lane, and that shape simply does not occur, so
+/// this function's answer is the same either way for every `LG2` this file
+/// has ever seen.
 fn read_mask(insn: &Instruction, reg: (u8, bool)) -> Option<u8> {
     let (_, sw) = insn
         .operands()
