@@ -16,11 +16,40 @@
 //! `5`/`10`/`40`/`200`/`250`/`260`/`35`/`26.156` at all, only `0`/`32`/`300`.
 //!
 //! `Program::specular_exponent` names the chain's value; this prints the
-//! `DP3`'s own two operands plus, for each operand that is a register, the
-//! last instruction before the `DP3` that wrote it - the same "read the
-//! instructions by hand" step `renderer.md`'s own worked examples (the
-//! ship's `pow(N.H, 40)`, `track_surface`'s block #7) already used, applied
-//! here to the four values that were never read that way.
+//! `DP3`'s own two operands and classifies each with [`Evidence`] - **lane
+//! aware and clobber-checked**: [`last_writer`] only reports an instruction
+//! that both wrote *every* lane the reader's own swizzle selects and had
+//! nothing else touch any of those lanes afterward, so a value assembled
+//! across several partial writes reports as "no single writer" rather than
+//! naming whichever one happened to sit closest.
+//!
+//! **The honest result of that check: this operand trace does not
+//! discriminate.** Two earlier, less careful passes each claimed a shape
+//! ("every operand carries a normalize tail", then "one confirmed `32`
+//! block's operand comes from `EX2`, unlike the disputed values") - both
+//! were artifacts of a `last_writer` that ignored write masks and,
+//! afterward, ignored a later clobber. Corrected, **164 of 168 operands**
+//! across all 84 `200`/`250`/`260`/`35` occurrences have `NoSingleWriter`:
+//! this microcode overwhelmingly builds a vector's lanes across several
+//! separate, partial-mask instructions rather than one full write, so "the
+//! last instruction that wrote this register" is very rarely a real
+//! answer. Run against the confirmed `32` bucket for comparison, the ratio
+//! is the same - `5,354` of `5,528` (97 %) - so this is not a property of
+//! the four disputed values, it is a property of the microcode itself, and
+//! a single-writer heuristic cannot tell a real specular dot from anything
+//! else here. Real provenance would need a per-lane dataflow trace (the
+//! most recent writer of *each individual lane*, merged), which is a
+//! bigger analysis than this pass built - left as the open item, not a
+//! result this pass can report either way.
+//!
+//! **Unnamed opcodes are printed as `op3B`/`op3C`/`op3D`, never guessed at.**
+//! `Instruction::name()` returns `None` for these three specifically because
+//! they are not in nouveau's table (`fragment.rs`'s own doc comment); an
+//! earlier pass here annotated one as "normalize (mul by 1/|sum|)" from its
+//! position alone, which is exactly the guess-dressed-as-a-name CLAUDE.md's
+//! confidence rubric rules out below 50. `arity()` also defaults an unnamed
+//! opcode to 2 operands, so the second operand this prints for one may not
+//! be real hardware behaviour - flagged, not resolved, by this pass.
 
 use oag_formats::rcsmaterial;
 use oag_formats::rcsmaterial::RcsMaterial;
@@ -99,27 +128,107 @@ fn interpolator_name(input: u8) -> &'static str {
     }
 }
 
+/// The mnemonic, or `op{XX}` (hex opcode) for one `Instruction::name()`
+/// does not know - never a guessed verb. See this module's own doc comment.
+fn opname(insn: &Instruction) -> String {
+    insn.name()
+        .map_or_else(|| format!("op{:02X}", insn.opcode), str::to_string)
+}
+
 fn fmt_insn(i: usize, insn: &Instruction) -> String {
-    let name = insn.name().unwrap_or("???");
     let dst = format!("{}{}", if insn.dst_half { "H" } else { "R" }, insn.dst);
     let sat = if insn.saturate { "_SAT" } else { "" };
+    let lanes: String = (0..4)
+        .filter(|b| insn.mask & (1 << b) != 0)
+        .map(|b| "xyzw".as_bytes()[b] as char)
+        .collect();
     let ops: Vec<String> = insn
         .operands()
         .zip(insn.swizzles)
         .map(|(s, sw)| fmt_source(s, sw, insn.input))
         .collect();
-    format!("[{i:3}] {name}{sat} {dst}, {}", ops.join(", "))
+    format!(
+        "[{i:3}] {}{sat} {dst}.{lanes}, {}",
+        opname(insn),
+        ops.join(", ")
+    )
 }
 
-/// The last instruction before `at` that wrote `reg` (by register identity),
-/// or `None` if nothing before `at` did.
-fn last_writer(program: &Program, at: usize, reg: (u8, bool)) -> Option<usize> {
-    program.instructions[..at]
+/// The single instruction before `at` that supplies **every** lane `read`
+/// selects, as it stands at `at` - `None` when no instruction covers every
+/// lane in one write, *or* when a later, partial write to any of those
+/// lanes lands between it and `at` (so the value `at` actually reads is a
+/// mix of that write and whatever touched it since - not this one
+/// instruction's output). Either way, a caller gets an honest "no single
+/// writer" rather than a nearest-write search silently naming a stale or
+/// partial one.
+fn last_writer(program: &Program, at: usize, reg: (u8, bool), read: [u8; 4]) -> Option<usize> {
+    let read_mask: u8 = read.iter().fold(0u8, |acc, &l| acc | (1 << l));
+    let (w, _) = program.instructions[..at]
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, insn)| insn.mask != 0 && (insn.dst, insn.dst_half) == reg)
-        .map(|(i, _)| i)
+        .find(|(_, insn)| (insn.dst, insn.dst_half) == reg && insn.mask & read_mask == read_mask)?;
+    let clobbered = program.instructions[w + 1..at]
+        .iter()
+        .any(|insn| (insn.dst, insn.dst_half) == reg && insn.mask & read_mask != 0);
+    (!clobbered).then_some(w)
+}
+
+/// What tracing one `DP3` operand back found - see [`classify`]. Over all 84
+/// `200`/`250`/`260`/`35` occurrences (168 operands): `NoSingleWriter` 164,
+/// `Normalize` 2, `Neither` 2, `Sum` 0 - see this module's own doc comment
+/// for why `NoSingleWriter` dominating means the trace does not
+/// discriminate, rather than meaning "not a specular term".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Evidence {
+    /// The operand is `normalize(A + B)` for two distinct registers/inputs -
+    /// the half-vector shape `renderer.md`'s ship reading already carries.
+    Sum,
+    /// The operand traces to a self-dot-then-scale (`DP3 x,v,v` then a
+    /// writer reading `x` and `v`) with a single vector rather than a sum -
+    /// still a unit-vector construction, but not the two-light-directions
+    /// shape a half-vector specifically needs.
+    Normalize,
+    /// A last writer exists but is neither of the above (e.g. `EX2`, `MUL`
+    /// by a constant, another `DP3`'s raw scalar output).
+    Neither,
+    /// No single instruction wrote every lane this operand reads.
+    NoSingleWriter,
+}
+
+fn classify(program: &Program, at: usize, src: Source, swizzle: [u8; 4]) -> Option<Evidence> {
+    let Source::Register { index, half } = src else {
+        return None;
+    };
+    let Some(w) = last_writer(program, at, (index, half), swizzle) else {
+        return Some(Evidence::NoSingleWriter);
+    };
+    let writer = &program.instructions[w];
+    // A normalize tail: an instruction reading the same register (the
+    // un-normalized vector) and a scalar this project does not further
+    // resolve (a reciprocal-length term) - `nvfx_shader.h`'s RSQ/RCP, or one
+    // of the two unnamed opcodes this project has seen adjacent to a DP3
+    // self-dot on this exact shape.
+    let reads_same_reg = writer
+        .operands()
+        .any(|s| matches!(s, Source::Register{index: i, half: h} if (i, h) == (index, half)));
+    if !reads_same_reg {
+        return Some(Evidence::Neither);
+    }
+    // Was the un-normalized vector itself a sum of two distinct sources?
+    let Some(pre) = last_writer(program, w, (index, half), [0, 1, 2, 3]) else {
+        return Some(Evidence::Normalize);
+    };
+    let pre_insn = &program.instructions[pre];
+    if pre_insn.name() == Some("ADD") {
+        let mut operands = pre_insn.operands();
+        let (a, b) = (operands.next(), operands.next());
+        if a != b {
+            return Some(Evidence::Sum);
+        }
+    }
+    Some(Evidence::Normalize)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -127,6 +236,7 @@ fn main() -> anyhow::Result<()> {
     let mut found = 0usize;
     let mut histogram: Vec<(f32, u32)> = Vec::new();
     let mut materials_checked = 0usize;
+    let mut evidence_tally: Vec<(Evidence, u32)> = Vec::new();
 
     for archive in ARCHIVES {
         let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
@@ -168,22 +278,8 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 found += 1;
-                let patched_by_specular_power =
-                    program.specular_exponent_slot().is_some_and(|slot| {
-                        program
-                            .patches(rcsmaterial::SPECULAR_POWER)
-                            .any(|s| s == slot)
-                    });
                 println!(
-                    "=== {archive}:{path} exponent {exponent} declares_sun={} declares_specular_power={} patched_by_specular_power={patched_by_specular_power} declares_zone={}",
-                    program
-                        .declared
-                        .parameters
-                        .contains(&rcsmaterial::SUN_DIRECTION),
-                    program
-                        .declared
-                        .parameters
-                        .contains(&rcsmaterial::SPECULAR_POWER),
+                    "=== {archive}:{path} exponent {exponent} declares_zone={}",
                     declares_zone(&program),
                 );
                 let dp3 = &program.instructions[dp3_i];
@@ -192,16 +288,15 @@ fn main() -> anyhow::Result<()> {
                     println!("  {}", fmt_insn(start + i, insn));
                 }
                 for (opi, (src, sw)) in dp3.operands().zip(dp3.swizzles).enumerate() {
-                    println!("    dp3 operand {opi}: {}", fmt_source(src, sw, dp3.input));
-                    if let Source::Register { index, half } = src {
-                        match last_writer(&program, dp3_i, (index, half)) {
-                            Some(w) => println!(
-                                "      last written by {}",
-                                fmt_insn(w, &program.instructions[w])
-                            ),
-                            None => {
-                                println!("      never written before this point in the program")
-                            }
+                    let evidence = classify(&program, dp3_i, src, sw);
+                    println!(
+                        "    dp3 operand {opi}: {} -> {evidence:?}",
+                        fmt_source(src, sw, dp3.input)
+                    );
+                    if let Some(e) = evidence {
+                        match evidence_tally.iter_mut().find(|(ev, _)| *ev == e) {
+                            Some((_, n)) => *n += 1,
+                            None => evidence_tally.push((e, 1)),
                         }
                     }
                 }
@@ -215,6 +310,10 @@ fn main() -> anyhow::Result<()> {
     histogram.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
     for (v, n) in &histogram {
         println!("  {v}: {n}");
+    }
+    println!("--- operand evidence tally ({} operands)", found * 2);
+    for (e, n) in &evidence_tally {
+        println!("  {e:?}: {n}");
     }
     Ok(())
 }
