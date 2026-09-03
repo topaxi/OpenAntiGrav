@@ -43,7 +43,7 @@ pub(super) fn menu_page(
     frame: &crate::menu::Frame,
     phase: Option<f32>,
 ) -> Result<Vec<crate::frontend::Draw>> {
-    let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
+    let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
     if definition.page(page).is_none() {
         anyhow::bail!(

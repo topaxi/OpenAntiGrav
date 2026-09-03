@@ -26,6 +26,38 @@ fn the_shipped_definition_is_internally_consistent() {
     }
 }
 
+/// A row that names a `string_id` gets whatever `strings` answers for it,
+/// literal `label` and all: the id space is the disc's own, so a table with
+/// nothing under that id still has to fall back to the id itself rather than
+/// silently keeping the label the row moved away from - see
+/// `StringTable::get_or_id`.
+#[test]
+fn a_string_id_is_resolved_against_the_table_parse_is_given() {
+    let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "back"
+label = "IGNORED"
+string_id = "MENU_BACK"
+"#;
+    let found = crate::language::StringTable::from_xml(
+        r#"<StringTable><Entry ID="MENU_BACK" String="RETOUR"></Entry></StringTable>"#,
+    );
+    let definition = Definition::parse(text, &found).expect("parse");
+    assert_eq!(definition.pages[0].entries[0].label(), "RETOUR");
+
+    let absent = crate::language::StringTable::default();
+    let definition = Definition::parse(text, &absent).expect("parse");
+    assert_eq!(
+        definition.pages[0].entries[0].label(),
+        "MENU_BACK",
+        "no table has this id, so the id itself is what a player sees"
+    );
+}
+
 /// Every page except the root must offer a way out, or a player who opens
 /// it with a keyboard that has no cancel key is stuck in it. The root's way
 /// out is `quit`, which is an action rather than a `back`.

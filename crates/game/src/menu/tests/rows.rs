@@ -112,6 +112,7 @@ fn supplying_a_list_keeps_the_value_the_row_was_already_on() {
         setting = "language"
         values_from = "languages"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect("parse");
     let mut menu = Menu::new(definition);
@@ -162,6 +163,7 @@ fn a_supplied_row_shows_its_label_and_reports_its_value() {
         setting = "race.track"
         values_from = "tracks"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect("parse");
     let mut menu = Menu::new(definition);
@@ -205,6 +207,7 @@ fn a_row_with_nothing_supplied_is_inert() {
         setting = "race.track"
         values_from = "tracks"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect("parse");
     let mut menu = Menu::new(definition);
@@ -230,6 +233,7 @@ fn a_choice_cannot_declare_both_a_list_and_a_source() {
         values = ["16_Track"]
         values_from = "tracks"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(error.to_string().contains("alternatives"), "{error}");

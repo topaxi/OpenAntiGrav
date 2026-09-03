@@ -92,6 +92,7 @@ fn an_unbound_button_draws_the_word_rather_than_nothing() {
         label = "THRUST"
         button = "cross"
         "#,
+        &crate::language::StringTable::default(),
     )
     .expect("parse");
     let menu = Menu::new(definition);

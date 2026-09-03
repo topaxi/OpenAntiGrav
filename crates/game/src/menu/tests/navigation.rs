@@ -28,7 +28,8 @@ fn long_page(rows: usize) -> Definition {
             "[[page.entry]]\nkind = \"action\"\nlabel = \"ROW{row}\"\naction = \"quit\"\n"
         ));
     }
-    Definition::parse(&text).expect("the fixture must parse")
+    Definition::parse(&text, &crate::language::StringTable::default())
+        .expect("the fixture must parse")
 }
 
 /// The labels actually on screen, top to bottom.

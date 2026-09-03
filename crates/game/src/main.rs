@@ -324,7 +324,7 @@ fn main() -> Result<()> {
     // source is deliberately not in here: on the launcher route it is not known
     // until a window has been open for a while. See `crate::prepare`.
     let pending = prepare::Pending {
-        definition: prepare::definition(&cli)?,
+        definition: prepare::definition(&cli, settings.language.as_deref())?,
         settings,
         dlc,
         class,

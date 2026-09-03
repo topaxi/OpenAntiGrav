@@ -6,10 +6,23 @@
 //! cut at a line number: everything here is `raw::File` in, a checked
 //! [`Definition`] or an [`Error`] out, and nothing past this file reads
 //! `raw::*` directly.
+//!
+//! # `string_id`
+//!
+//! A row's `label` is resolved once, here, rather than wherever it is drawn:
+//! [`resolve`] takes the same [`StringTable`] `menu::mode_label` already
+//! reads, and looks a row's `string_id` up in it when it names one, falling
+//! back to the literal `label` otherwise. **This is only ever the caller's
+//! own project-owned table, never the disc's** - `Definition::parse` runs
+//! before any disc is open (`prepare::definition`, called from `main()`
+//! before `source::resolve`), so a real disc-merged table is never in hand
+//! here. See `crate::strings::project_table` for the one this build passes,
+//! and the invented-UI-text handover thread for why that split exists.
 
 use std::collections::{BTreeSet, HashMap};
 
 use crate::input::button_from_name;
+use crate::language::StringTable;
 
 use super::{
     Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Restart, Value, ValueSource, Warning,
@@ -134,17 +147,10 @@ mod raw {
         /// the row it describes rather than in the code. Only `choice` and
         /// `toggle` rows may carry it.
         pub restart_required: Option<String>,
-        /// Reserved for localisation: the id of a string in the disc's own
-        /// table, for a build that wants the original's wording.
-        ///
-        /// **Deliberately parsed and not read.** Accepting the field now means
-        /// a definition that carries it loads today rather than failing on an
-        /// unknown key, so adding localisation later is not a format change.
+        /// An id [`super::resolve`] looks up in whatever `StringTable` its
+        /// caller passed, in place of `label`. See this module's own `#
+        /// string_id` doc for which table that actually is at parse time.
         #[serde(default)]
-        #[allow(
-            dead_code,
-            reason = "accepted so the format does not change when localisation lands"
-        )]
         pub string_id: Option<String>,
     }
 
@@ -173,12 +179,15 @@ mod raw {
 impl Definition {
     /// Parses and checks a definition.
     ///
+    /// `strings` resolves a row's `string_id`, when it names one - see this
+    /// module's own doc for which table a caller can actually pass here.
+    ///
     /// # Errors
     ///
     /// Every problem in [`Error`]: malformed TOML, a version this build does
     /// not know, a duplicate or dangling page id, an unknown action or button,
     /// an entry missing a field its kind needs, and a page nothing links to.
-    pub fn parse(text: &str) -> Result<Self, Error> {
+    pub fn parse(text: &str, strings: &StringTable) -> Result<Self, Error> {
         let file: raw::File = toml::from_str(text)?;
         if file.version != FORMAT_VERSION {
             return Err(Error::Version {
@@ -202,7 +211,7 @@ impl Definition {
             let mut entries = Vec::with_capacity(page.entries.len());
             for (row, entry) in page.entries.iter().enumerate() {
                 let context = format!("page {:?} entry {row}", page.id);
-                entries.push(resolve(entry, &context, &index)?);
+                entries.push(resolve(entry, &context, &index, strings)?);
             }
             pages.push(Page {
                 id: page.id.clone(),
@@ -323,8 +332,18 @@ fn resolve(
     entry: &raw::Entry,
     context: &str,
     index: &HashMap<String, usize>,
+    strings: &StringTable,
 ) -> Result<Entry, Error> {
-    let label = entry.label.clone();
+    // A row with no `string_id` keeps its literal label untouched - the
+    // common case today, since nothing in `assets/ui/menu.toml` names one
+    // yet. One that does gets `strings`' answer even when that answer is the
+    // id itself (`StringTable::get_or_id`'s own fallback): once a row opts
+    // in, showing the id it named beats silently ignoring the id and drawing
+    // the literal it moved away from.
+    let label = entry.string_id.as_deref().map_or_else(
+        || entry.label.clone(),
+        |id| strings.get_or_id(id).to_string(),
+    );
     let missing = |field: &str| Error::BadEntry {
         context: context.to_string(),
         problem: format!("a {:?} entry needs {field}", entry.kind),
