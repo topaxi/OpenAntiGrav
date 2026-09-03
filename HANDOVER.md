@@ -393,6 +393,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [2048's four Vita eboots are decrypted and imported; loose ends from getting there](handover/2048s-vita-eboots-are-imported-re-not-started.md)
 - [Race start: the countdown state machine, the launch reaction boost, and whether Zone shows a different countdown](handover/race-start-countdown-and-launch-boost.md) - all four titles, all three questions open
 - [2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track](handover/2048s-track-vex-parses-but-two-binary-formats-changed.md)
+- [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/hd-collisions-flatten-a-severity-tree.md)
 - [The audio queue is ours now, and the frame stalls are what is left](handover/the-device-queue-is-sized-off-the-configured-cap.md)
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/a-circuits-billboard-slots-are-a-9-entry.md)
