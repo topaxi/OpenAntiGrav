@@ -12,13 +12,15 @@ page reads the function that does it.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
-| `0x089038c8` | `Shadow_RenderOccluderVolume` | 88 |
-| `0x0890446c` | `DynamicShadowOccluder_RegisterClass` | 90 |
+| `0x089038c8` | `Shadow_RenderOccluderVolume` | 84 |
+| `0x0890446c` | `DynamicShadowOccluder_RegisterClass` | 84 |
 
-Both sit in the rubric's **85-94 Confident** band: decompilation is
-unambiguous and every call site in the chain from class id to method-table
-slot is consistent, byte for byte. Neither is runtime-verified, so neither
-reaches the 95-100 band.
+Both sit at the ceiling of the rubric's **70-84 Probable** band, under
+"decompilation only, consistent call sites" - not the 85-94 band. The class
+id (`0x3c3`) is an unambiguous plain immediate and the byte-exact pointer
+match at the method table is real, but this is one binary's own internal
+consistency, not corroboration across multiple shipped files or a runtime
+trace, so it does not clear the higher band on its own.
 
 ## Read this before trusting an address
 
@@ -59,40 +61,47 @@ reads them was already strong evidence on its own; the class-ID dispatch
 chain traced below (registration call site to method-table slot) confirms it
 statically rather than by structural inference alone.
 
-### Why it reads the padded box and not the packed one
+### What the padded box carries where it differs from the packed one
 
-The 32 nodes where `+0x30`/`+0x40` does *not* just repeat `+0x0c`/`+0x18`
-were unread until 2026-09-03. They are not noise:
+The 32 nodes where `+0x30`/`+0x40` does *not* match `+0x0c`/`+0x18` within
+this project's `1e-6` tolerance were unread until 2026-09-03, and a first
+pass at reading them **overclaimed a clean deterministic rule from a sample
+that was structurally selected to fit it** - the 32 mismatchers only, never
+checked against the 97 matchers for a counterexample. Corrected the same
+day, against the full corpus rather than the mismatcher subset:
 
-- **On the 119-strong named/local-space population, `+0x30`'s `min.y`
-  always equals `f32::min(header_min.y, 0.0)`** - floored to the ground
-  plane on Y even when the hull's own geometry sits entirely above it (a
-  locator-mounted craft shadow shape, say). A raw copy of the hull's own
-  extent would not give `Shadow_RenderOccluderVolume` a box that reaches the
-  ground; this one does. Where `+0x18`'s `max.y` is the denormal authoring
-  sentinel `0x00800000` (the same one `BEData.wad#20`'s flat hull declares,
-  already known from the payload-closure work), `+0x40`'s `max.y` carries
-  the true vertex-derived value instead of repeating the sentinel - a fix,
-  not a copy.
-- **The 10 unnamed, track-side occluders don't follow that rule on X/Z.**
-  Where their header carries the same denormal sentinel on those axes, the
-  padded copy is a hard `0.0`, not the vertex-derived value the named
-  population gets. Some of these have as few as two face records, which may
-  mean they are not full closed hulls in the same sense - not chased
-  further.
+- **14 nodes have a positive header `min.y`. 12 get `+0x30`'s `min.y`
+  floored to exactly `0.0`** - extending the box down to the ground plane
+  even though the hull's own geometry sits entirely above it. **The other 2
+  keep their real, positive `min.y` unfloored**: both `shadow_lodShape`,
+  both in `Data.wad#809`/`#812`, both the smallest positive `min.y` in the
+  set (`0.7280522`) - a sibling `shadowShape` node at the identical value in
+  the same two files *does* get floored. No discriminator found for the
+  exception; not the same node-type split either, since the pattern
+  reverses on other files (below).
+- **Where the packed header's `max.y` is the denormal authoring sentinel**
+  `0x00800000` (the same one `BEData.wad#20`'s flat hull declares, already
+  known from the payload-closure work): of the roughly 54 nodes where the
+  true vertex-derived `max.y` is not itself exactly `0.0` (where the two
+  possible behaviours would be indistinguishable), **16 get `+0x40`'s
+  `max.y` set to the true vertex-derived value, and about 38 get a hard
+  `0.0` instead.** Neither node name (`shadowShape` vs `shadow_lodShape`)
+  nor the specific numeric value discriminates - the same `max.y` value
+  gets fixed in one file's node and hard-zeroed in another's sibling.
 
-So the padded field this function reads is a **shadow-purpose box**, not a
-geometry cache: floored to the ground on the vertical axis, and patched
-where the packed header's own box is invalid. That is exactly the box a
-support-point step for a ground-projected shadow volume wants, and it is
-further, independent evidence that `self+0x50`'s structure really is this
-payload and that this function really is what consumes it for shadow
-purposes specifically - a generic bounding-box reader would have no reason
-to prefer the ground-floored copy over the packed one. See
+**The honest summary: the padded box leans toward the ground plane far more
+often than away from it, which is still consistent with it being a
+shadow-relevant box rather than a plain geometry cache - but it is not the
+single deterministic rule this page claimed on first read.** Read `HOW`
+this function actually *uses* whichever value lands there (it picks the
+farthest AABB corner along the projection direction, so a floored `min.y`
+changes the answer only when the light-facing direction has a negative Y
+component) before trusting either version further. See
 `PSP_OCCLUDERS_WITH_PADDED_BBOX`'s doc comment in
 [`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)
-for the read; not pinned as an assertion there, since the split depends on
-`vertex_extent`'s own correctness and would be circular as a test.
+for the full numbers; not pinned as an assertion there, since the split
+depends on `vertex_extent`'s own correctness and would be circular as a
+test.
 
 ## What it does
 
@@ -185,30 +194,55 @@ in a `li`, not a pointer needing any relocation correction - no ambiguity
 here at all. Named `DynamicShadowOccluder_RegisterClass`.
 
 The store at `s0+0x38` sets the descriptor's method-table pointer to
-`0x2cd214`, unrelocated for `0x08ad1214`. Reading 136 bytes from there shows
-a 12-byte zero header followed by an 8-byte-stride pointer table (pointer,
-then a zero pad word), eleven entries, all pointing into code:
+`0x2cd214`, unrelocated for `0x08ad1214`. Reading bytes from there shows a
+run of zero and non-zero 4-byte words - a pointer table, non-zero words
+pointing into code:
 
 | Table offset | Raw (unrelocated) | Relocated |
 | --- | --- | --- |
-| `+0x0c` | `0x001404d0` | `0x089408d0` |
-| `+0x14` | `0x0014079c` | `0x0894079c` |
-| `+0x1c` | `0x001407a4` | `0x089407a4` |
-| `+0x24` | `0x001407ac` | `0x089407ac` |
-| `+0x2c` | `0x001407f4` | `0x089407f4` |
-| `+0x34` | `0x000feea8` | `0x0890eea8` |
-| `+0x3c` | `0x0014084c` | `0x0894084c` |
+| `+0x0c` | `0x001404d0` | `0x089444d0` |
+| `+0x14` | `0x0014079c` | `0x0894479c` |
+| `+0x1c` | `0x001407a4` | `0x089447a4` |
+| `+0x24` | `0x001407ac` | `0x089447ac` |
+| `+0x2c` | `0x001407f4` | `0x089447f4` |
+| `+0x34` | `0x000feea8` | `0x08902ea8` |
+| `+0x3c` | `0x0014084c` | `0x0894484c` |
 | **`+0x44`** | **`0x000ff8c8`** | **`0x089038c8`** |
-| `+0x4c` | `0x00140864` | `0x08940864` |
-| `+0x54` | `0x000fec04` | `0x0890ec04` |
+| `+0x4c` | `0x00140864` | `0x08944864` |
+| `+0x54` | `0x000fec04` | `0x08902c04` |
 | … | … | … |
 
-Slot 7 (0-based, `+0x44`) is `0x000ff8c8` - the unrelocated form of
-`0x089038c8` - matching `Shadow_RenderOccluderVolume`'s address to the byte,
-not just to the neighbourhood. That closes the chain fully: class id `0x3c3`
--> `Vex_RegisterClass` call site -> method table `0x08ad1214` -> slot 7 ->
-`Shadow_RenderOccluderVolume`. Every step is either a plain immediate or a
-byte-exact address match; nothing in the chain is inferred from shape alone.
+(Relocated with `python3 -c "print(hex(0x08804000 + v))"` for each value,
+not by hand - an earlier pass at this table added the base incorrectly for
+every row except the one independently cross-checked by the byte-pattern
+search, and the wrong sums went uncaught until redone this way.
+`+0x34`/`0x08902ea8` is a defined function in Ghidra; `+0x0c` and `+0x14`
+are not - no function boundary, consistent with reaching them only through
+this same indirect table the way `billboards.md`'s vtable calls do.)
+
+Byte offset `+0x44` from the table base is `0x000ff8c8` - the unrelocated
+form of `0x089038c8` - matching `Shadow_RenderOccluderVolume`'s address to
+the byte, not to the neighbourhood. That is the load-bearing fact: class id
+`0x3c3` -> `Vex_RegisterClass` call site -> method table `0x08ad1214` ->
+`+0x44` -> `Shadow_RenderOccluderVolume`, with only that one offset and its
+exact byte content asserted.
+
+**What is not claimed**: that `+0x44` is "slot 7" of a fixed-stride table,
+or that method tables sit a fixed distance apart. Checked directly against
+two more registration functions (`FogCube_RegisterClass`, `0x08906b78`, and
+`Mesh_Register`, `0x089100b8`) - their own `s0+0x38` stores give method
+tables at `0x08ad1394` and `0x08ad1694`. Neither delta from
+`0x08ad1214` (`0x180`, `0x480`) is a multiple of `0x88`, so table size
+varies per class and there is no fixed grid to index into. What *does*
+corroborate the table being real rather than coincidental bytes: `FogCube`'s
+table repeats the exact same value at the exact same offset, `+0x0c`
+(`0x001404d0` again), while `Mesh`'s table has a different value there
+(`0x0010884c`) - consistent with `exhaust.md`'s "assign the base method
+table … then overwrite it with the derived table": classes that don't
+override a given virtual slot share the base class's default, and `Mesh`
+overrides this one where `DynamicShadowOccluder` and `FogCube` don't. That
+is evidence the table shape is real; it says nothing about which offset
+means what.
 
 **One sub-lead did not pan out and is recorded rather than silently
 dropped**: the same registration function also passes a second unrelocated
@@ -242,8 +276,13 @@ asserted either way.
 - **No runtime trace exists for any of this.** A PPSSPP watchpoint on
   `self+0x50` during a lap that passes a known occluder-bearing circuit
   section would be the fastest way into the 95-100 band.
-- **The 10 unnamed/track-side occluders' `X`/`Z` padding rule.** They hard-zero
-  a denormal axis rather than substituting the vertex-derived value the named
-  population gets; not explained, and it may mean these low-face-count hulls
-  (`n=2` on at least two) aren't full closed hulls in the sense the named
-  population's are.
+- **What discriminates the padded box's two exceptions from its two rules**
+  (the 2-of-14 unfloored `min.y` nodes, the ~38-of-54 hard-zeroed `max.y`
+  nodes). File/build-version is the leading guess, not checked; node name
+  and specific value are both ruled out.
+- **Whether `f32::min`/hard-zero and true-vertex-value are the only two
+  behaviours, or whether a third population (the unnamed/track-side nodes)
+  behaves differently again on `X`/`Z`.** Not reconfirmed after the
+  min.y/max.y correction above; the original claim about them was made
+  before the sampling-bias problem was found and was not independently
+  re-verified.

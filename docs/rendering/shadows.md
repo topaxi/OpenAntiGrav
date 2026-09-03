@@ -105,7 +105,7 @@ The `0x50` header, as far as it is read:
 | `+0x0c`..`+0x24` | bounding box, min then max, packed 3+3 floats | a real box on 129/129 |
 | `+0x24` | `u32` `5` | **129/129** |
 | `+0x28` | `f32` `1.0` | **129/129** |
-| `+0x30`..`+0x50` | a **shadow-purpose** box: `min.y` floored to the ground plane, `max` patched where the packed box is invalid | 97/129 match the packed box exactly; the other 32 are explained on the named population (`Shadow_RenderOccluderVolume` reads this one, not the packed one, for exactly this reason), open on the 10 unnamed/track-side nodes' `X`/`Z` handling - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
+| `+0x30`..`+0x50` | leans shadow-relevant: `min.y` is floored toward the ground plane on most (not all) nodes above it, `max.y` patched with the true value on some (not most) nodes where the packed box is invalid | 97/129 match the packed box exactly; of the rest, 12/14 positive-`min.y` nodes are floored and 16/~54 denormal-`max.y` nodes are patched - neither exceptionless nor explained - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
 | `+0x50` | `n` records of 32 bytes, **each beginning with a unit vector** | 129/129 |
 | `+0x50 + 32n` | `m` records of 16 bytes; not unit, not points inside the box | open |
 
@@ -290,8 +290,10 @@ Two things follow for the setting:
   (`0x089038c8`, [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
   reads exactly this payload and extrudes a silhouette-edge stencil volume
   from it - not a lineage argument any more, a runtime reader, at confidence
-  88 (Confident: `DynamicShadowOccluder_RegisterClass` statically links class
-  `0x3c3` to this function's own method-table slot, byte for byte).
+  84 (Probable: `DynamicShadowOccluder_RegisterClass` statically links class
+  `0x3c3` to this function's own method table, byte for byte, but it is one
+  binary's own internal consistency rather than cross-file or runtime
+  corroboration).
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
@@ -542,7 +544,7 @@ Each step is a landing that can be reviewed on its own.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
    are `n` planes and `m` vertices, above. ~~What is left of this step is the
    **runtime reader in Ghidra**~~ - **done 2026-09-03**:
-   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 88,
+   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 84,
    [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
    reads the same `n`/`m`/bbox fields this payload decode pinned, derives its
    projection direction from the occluder's **own local axis**, transformed
@@ -550,12 +552,17 @@ Each step is a landing that can be reviewed on its own.
    shadow volume. It is also the craft's own drop-shadow renderer
    (`exhaust.md`'s `g_craft_scale` finding was the same function from a
    different angle). **The static link from vex class `0x3c3` to this
-   function's method-table slot is also traced now**:
-   `DynamicShadowOccluder_RegisterClass` (`0x0890446c`, confidence 90) passes
-   `0x3c3` to `Vex_RegisterClass` and installs the method table whose slot 7
-   holds `Shadow_RenderOccluderVolume`'s address byte for byte. Step 4 is
-   fully closed; only a runtime trace is left, and it is optional polish
-   rather than a blocker on step 5.
+   function's method table is also traced now**:
+   `DynamicShadowOccluder_RegisterClass` (`0x0890446c`, confidence 84) passes
+   `0x3c3` to `Vex_RegisterClass` and installs the method table whose byte
+   offset `+0x44` holds `Shadow_RenderOccluderVolume`'s address, exactly -
+   not a fixed-stride "slot", since two other classes' own tables checked
+   the same way sit at deltas that aren't multiples of any common stride.
+   Both cap at confidence 84 (Probable): the chain is unambiguous but is one
+   binary's own internal consistency, not corroboration across files or a
+   runtime trace. Step 4 is fully closed either way; only a runtime trace
+   would move it higher, and it is optional polish rather than a blocker on
+   step 5.
 5. **`original`, per title.** Pulse: draw the 119 local-space hulls - the
    geometry and the projection are both now decoded, so this is a rendering
    task, not a reverse-engineering one. HD: the shadow-map path its four jobs

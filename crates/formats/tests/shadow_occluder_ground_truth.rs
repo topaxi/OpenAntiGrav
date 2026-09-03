@@ -113,30 +113,44 @@ const PSP_OCCLUDERS_NAMED: usize = 119;
 /// origin - a craft's or a pickup's own hull, rather than a track-side one.
 const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 
-/// How many repeat their bounding box as two padded `vec4`s at `+0x30`.
+/// How many repeat their bounding box as two padded `vec4`s at `+0x30`,
+/// within this test's `1e-6` tolerance.
 ///
-/// **Not all of them, and the 32 that don't are not noise.** Read by hand,
-/// 2026-09-03 (not asserted here - the exact split would make this test
-/// depend on `vertex_extent`'s own correctness circularly):
+/// **Read by hand, 2026-09-03, and an earlier pass at this same comment
+/// overclaimed a clean rule from too small a sample - corrected the same
+/// day.** Not asserted here; the split would make this test depend on
+/// `vertex_extent`'s own correctness circularly. Two real, quantified
+/// patterns, neither exceptionless:
 ///
-/// - On the 119-strong named/local-space population, `+0x30`'s `min.y`
-///   always equals `f32::min(header_min.y, 0.0)` - the padded box is
-///   floored to the ground plane on Y even when the hull's own geometry
-///   sits entirely above it, which is exactly what a shadow volume that has
-///   to reach the ground needs and a raw copy of the hull's own extent does
-///   not give it. Where `+0x18`'s `max.y` is the denormal authoring
-///   sentinel `0x00800000` (the same one `BEData.wad#20`'s flat hull
-///   declares), `+0x40`'s `max.y` carries the true vertex-derived value
-///   instead of repeating the sentinel - a fix, not a copy.
-/// - The 10 unnamed, track-side occluders (some with as few as two faces)
-///   do not follow that rule on `X`/`Z`: where their header carries the
-///   same denormal sentinel on those axes, the padded copy is a hard
-///   `0.0`, not the vertex-derived value. Not explained.
+/// - **14 nodes have a positive header `min.y`. 12 of them get `+0x30`'s
+///   `min.y` floored to exactly `0.0`** (extending the box down to the
+///   ground plane even though the hull's own geometry sits entirely above
+///   it - useful for a shadow volume, useless for a geometry cache). The
+///   **2 exceptions keep their real, positive `min.y`**: both
+///   `shadow_lodShape`, both `Data.wad#809`/`#812`, both the *smallest*
+///   positive `min.y` in the set (`0.7280522`) - a sibling `shadowShape` at
+///   the same value in the same files *does* get floored. No discriminator
+///   found for the exception.
+/// - **Where the packed header's `max.y` is the denormal authoring sentinel
+///   `0x00800000`** (the same one `BEData.wad#20`'s flat hull declares),
+///   of the ~54 nodes where that matters (excluding the ones whose true
+///   vertex `max.y` is itself exactly `0.0`, where the two behaviours are
+///   indistinguishable): **`+0x40`'s `max.y` carries the true
+///   vertex-derived value on 16 of them, and is a hard `0.0` on the other
+///   ~38.** Tried and ruled out as a discriminator: node name/type (both
+///   behaviours occur on both `shadowShape` and `shadow_lodShape`, including
+///   the same numeric `max.y` value split both ways across different
+///   files) and the specific numeric value. May be a per-circuit build/tool
+///   version difference; not chased further.
 ///
-/// See `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the
-/// full readout - `Shadow_RenderOccluderVolume` reads this exact field to
-/// pick a support point, which is why it wants the ground-floored box
-/// rather than the packed one at `+0x0c`/`+0x18`.
+/// So the padded box is doing *something* shadow-relevant rather than
+/// nothing - most divergence pulls the box toward the ground plane rather
+/// than away from it - but it is not the clean deterministic rule an
+/// earlier pass at this comment claimed. See
+/// `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
+/// readout and the correction; `Shadow_RenderOccluderVolume` reads this
+/// exact field, not the packed one at `+0x0c`/`+0x18`, for its support-point
+/// step.
 const PSP_OCCLUDERS_WITH_PADDED_BBOX: usize = 97;
 
 /// Every distinct node name across the named population, sorted.
