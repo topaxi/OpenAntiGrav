@@ -123,10 +123,10 @@ pub struct CaptureOptions {
     /// the cockpit view without a window, and therefore the only way anyone
     /// checks it: `--camera-view internal --screenshot`. `[graphics] camera_view`.
     pub camera_view: crate::display::CameraView,
-    /// Which anti-aliasing the scene draws with. Honoured for the same reason
-    /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
-    /// gets compared against itself off and against the running original.
-    pub anti_aliasing: crate::display::AntiAliasing,
+    /// How many samples the rasterizer takes. Honoured for the same reason
+    /// the two culling tiers are: a capture is how `msaa` gets compared
+    /// against itself off and against the running original.
+    pub msaa: crate::display::Msaa,
     /// Offset the camera by a sub-pixel each frame. `--camera-jitter`.
     ///
     /// Honoured here because a capture is the only way to *see* that jitter is
@@ -363,7 +363,7 @@ pub fn capture(
         options.anisotropy,
         options.bloom,
         visibility,
-        options.anti_aliasing,
+        options.msaa,
         fog_volumes,
         light,
         authored_fog,
@@ -440,14 +440,14 @@ pub fn capture(
     // they already share `Scene`'s own frame counter, and a differing phase
     // count would desynchronise the offsets rather than the indices.
     //
-    // **`Upscaler::Off` on an ordinary capture, and that is correct rather than
-    // a shortcut**: without `--presented` no upscaler runs at all, so nothing
-    // is reconstructing and only the flag can ask for jitter. See
-    // `upscale::jitter_phases`.
+    // **`Reconstruction::Off` on an ordinary capture, and that is correct
+    // rather than a shortcut**: without `--presented` nothing resolves the
+    // frame at all, so nothing is reconstructing and only the flag can ask for
+    // jitter. See `upscale::jitter_phases`.
     let camera_jitter = crate::upscale::jitter_phases(
         options.camera_jitter,
-        presented.map_or(crate::display::Upscaler::Off, |state| {
-            state.presentation.upscaler
+        presented.map_or(crate::display::Reconstruction::Off, |state| {
+            state.presentation.reconstruction
         }),
         temporal_supported,
         (viewport.2 as u32, viewport.3 as u32),

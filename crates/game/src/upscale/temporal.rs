@@ -6,7 +6,7 @@
 //! the difference between reconstructing from several frames and resampling
 //! one, which is the whole distinction `Upscaler::is_temporal` names.
 
-use crate::display::Upscaler;
+use crate::display::Reconstruction;
 use oag_render::post::fsr3;
 
 /// What a temporal upscaler needs that a spatial one does not.
@@ -58,7 +58,7 @@ pub struct Temporal<'a> {
 /// The jitter sequence this frame's scene should be drawn with, or `None` for
 /// no jitter at all.
 ///
-/// **The upscaler decides this, not a settings row**, and that inversion is the
+/// **What resolves the frame decides this, not a separate row**, and that inversion is the
 /// point of the function existing. Sub-pixel jitter is not a picture setting: it
 /// is an input a *temporal* reconstruction needs and a *spatial* one is actively
 /// harmed by, because with nothing resolving the offsets they are a shimmer
@@ -78,7 +78,7 @@ pub struct Temporal<'a> {
 #[must_use]
 pub fn jitter_phases(
     flag: bool,
-    upscaler: Upscaler,
+    reconstruction: Reconstruction,
     supported: bool,
     extent: (u32, u32),
     output: (u32, u32),
@@ -87,7 +87,7 @@ pub fn jitter_phases(
     // that cannot run it falls to FSR 1, which is spatial - and jittering for a
     // spatial resolve is the one combination ADR-0039 says is strictly worse
     // than not jittering at all.
-    if upscaler.is_temporal() && supported {
+    if reconstruction.is_temporal() && supported {
         return Some(oag_render::jitter::phases(extent.0, output.0));
     }
     flag.then_some(oag_render::jitter::DEFAULT_PHASES)

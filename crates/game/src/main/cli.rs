@@ -597,18 +597,19 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) pvs: Option<bool>,
 
-    /// Which resampler carries the frame onto the surface: bilinear or fsr1.
+    /// What resolves the frame onto the surface: off, fxaa, smaa, fsr1 or
+    /// fsr3.
     ///
-    /// Overrides `[render_profiles.<title>] upscaler` for *every* title, for
-    /// this run only; the file on disk is not changed. Every title rather than
-    /// one, because no title is open yet this early to single one out - see
-    /// `crate::main::render_scale` in `main.rs`. Here for the same reason
+    /// Overrides `[render_profiles.<title>] reconstruction` for *every* title,
+    /// for this run only; the file on disk is not changed. Every title rather
+    /// than one, because no title is open yet this early to single one out -
+    /// see `crate::main::render_scale` in `main.rs`. Here for the same reason
     /// `--anisotropy` is, and for one more: two `--presented` captures
-    /// differing only by this flag are how the resamplers get compared, and
-    /// asking somebody to edit a settings file between them is how a comparison
-    /// ends up differing by something else as well.
+    /// differing only by this flag are how these get compared, and asking
+    /// somebody to edit a settings file between them is how a comparison ends
+    /// up differing by something else as well.
     #[arg(long)]
-    pub(crate) upscaler: Option<crate::display::Upscaler>,
+    pub(crate) reconstruction: Option<crate::display::Reconstruction>,
 
     /// What percentage of the displayed size the game is rendered at, 25 to
     /// 200.
@@ -649,22 +650,22 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) camera_jitter: bool,
 
-    /// Anti-aliasing mode: off, fxaa, smaa or msaa4x.
+    /// How many samples the rasterizer takes: off or 4x.
     ///
-    /// Overrides `[render_profiles.<title>] anti_aliasing` for *every* title,
-    /// for this run only; the file on disk is not changed - see `--upscaler`'s
-    /// own doc for why every title rather than one. Here for the same reason
-    /// `--upscaler` is: two `--presented` captures differing only by this flag
-    /// are how the modes get compared.
+    /// Overrides `[render_profiles.<title>] msaa` for *every* title, for this
+    /// run only; the file on disk is not changed - see `--reconstruction`'s own
+    /// doc for why every title rather than one. Here for the same reason
+    /// `--reconstruction` is: two `--presented` captures differing only by this
+    /// flag are how the levels get compared.
     #[arg(long)]
-    pub(crate) anti_aliasing: Option<crate::display::AntiAliasing>,
+    pub(crate) msaa: Option<crate::display::Msaa>,
 
     /// Motion blur strength: off, low, medium or high.
     ///
     /// Overrides `[render_profiles.<title>] motion_blur` for *every* title, for
-    /// this run only; the file on disk is not changed - see `--upscaler`'s own
+    /// this run only; the file on disk is not changed - see `--reconstruction`'s own
     /// doc for why every title rather than one. Here for the reason
-    /// `--anti-aliasing` is: two captures differing only by this flag are how
+    /// `--msaa` is: two captures differing only by this flag are how
     /// the blur gets compared against itself off, and a capture honours it by
     /// rendering a primer frame at the tick-before-last camera first - see
     /// `race::CaptureOptions::motion_blur`.
@@ -861,11 +862,11 @@ impl Cli {
         if let Some(render_scale) = render_scale {
             profile.render_scale = render_scale;
         }
-        if let Some(upscaler) = self.upscaler {
-            profile.upscaler = upscaler;
+        if let Some(reconstruction) = self.reconstruction {
+            profile.reconstruction = reconstruction;
         }
-        if let Some(anti_aliasing) = self.anti_aliasing {
-            profile.anti_aliasing = anti_aliasing;
+        if let Some(msaa) = self.msaa {
+            profile.msaa = msaa;
         }
         if let Some(motion_blur) = self.motion_blur {
             profile.motion_blur = motion_blur;

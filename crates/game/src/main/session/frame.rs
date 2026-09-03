@@ -655,7 +655,7 @@ impl Session {
                     // resolves into. See `upscale::jitter_phases`.
                     upscale::jitter_phases(
                         self.camera_jitter,
-                        render_profile.upscaler,
+                        render_profile.reconstruction,
                         self.gpu.temporal,
                         size,
                         (rect.2 as u32, rect.3 as u32),
@@ -696,9 +696,8 @@ impl Session {
             let presentation = {
                 let render_profile = self.render_profile();
                 upscale::Presentation {
-                    upscaler: render_profile.upscaler,
+                    reconstruction: render_profile.reconstruction,
                     sharpness: render_profile.upscale_sharpness.stops(),
-                    anti_aliasing: render_profile.anti_aliasing,
                     brightness: self.settings.display.brightness,
                     gamma: self.settings.display.gamma,
                 }
@@ -729,7 +728,7 @@ impl Session {
             // back, and four of those end measurement for the run. Claim less,
             // always resolve.
             let will_upscale_temporally = temporal.is_some()
-                && presentation.upscaler == crate::display::Upscaler::Fsr3
+                && presentation.reconstruction == crate::display::Reconstruction::Fsr3
                 && self.framebuffer.temporal_upscaler_viable();
             if will_upscale_temporally && let Some(timer) = self.upscale_timer.as_mut() {
                 timer.begin(self.frame_index);

@@ -362,7 +362,7 @@ pub fn run(
                 bloom: options.settings.graphics.bloom,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,
-                anti_aliasing: render_profile.anti_aliasing,
+                msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.
@@ -372,9 +372,8 @@ pub fn run(
                 presented: options.presented.then_some(race::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: crate::upscale::Presentation {
-                        upscaler: render_profile.upscaler,
+                        reconstruction: render_profile.reconstruction,
                         sharpness: render_profile.upscale_sharpness.stops(),
-                        anti_aliasing: render_profile.anti_aliasing,
                         brightness: options.settings.display.brightness,
                         gamma: options.settings.display.gamma,
                     },

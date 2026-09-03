@@ -17,7 +17,7 @@
 
 use super::*;
 
-/// The upscaler's warning must name exactly the scales it does nothing at.
+/// The `fsr1` warning must name exactly the scales it does nothing at.
 ///
 /// Two places encode "FSR 1 is a magnifier": `upscale::magnifies`, which
 /// declines to run it, and this warning, which says so. They are pinned to
@@ -27,25 +27,20 @@ use super::*;
 #[test]
 fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
     let definition = built_in();
-    let entry = definition
-        .pages
-        .iter()
-        .flat_map(|page| page.entries.iter())
-        .find(|entry| entry.setting() == Some("graphics.upscaler"))
-        .expect("nothing edits graphics.upscaler");
-    let warning = off_variant(entry.warnings(), |w| {
-        w.all.iter().any(|c| c.setting == "graphics.upscaler")
-    });
+    let entry = reconstruction_entry(&definition);
+    let warning = off_variant(entry.warnings(), |w| names_reconstruction(w, &["fsr1"]));
     // One condition names this row's own offending value, the other the
-    // scales. Without the first, the warning fires with the upscaler off.
+    // scales. Without the first, the warning fires with nothing upscaling.
     let own = warning
         .all
         .iter()
-        .find(|c| c.setting == "graphics.upscaler")
-        .expect("the warning must name the upscaler's own value");
+        .find(|c| c.setting == "graphics.reconstruction")
+        .expect("the warning must name the reconstruction's own value");
     assert_eq!(
         own.values,
-        vec![Value::Text(crate::display::Upscaler::Fsr1.to_string())]
+        vec![Value::Text(
+            crate::display::Reconstruction::Fsr1.to_string()
+        )]
     );
     let scales = warning
         .all
@@ -73,97 +68,6 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
     }
 }
 
-/// The anti-aliasing row warns against FXAA/SMAA at exactly the scales
-/// FSR 1 actually magnifies at - the same set the row above is pinned to
-/// above. Below that render scale a spatial post-process pass blurs the
-/// scene before EASU ever reads it, fighting the very edges it reasons
-/// about; at 100 % and above FSR 1 does not run at all (see the test
-/// above) and there is nothing to fight.
-#[test]
-fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_at() {
-    let definition = built_in();
-    let entry = definition
-        .pages
-        .iter()
-        .flat_map(|page| page.entries.iter())
-        .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
-        .expect("nothing edits graphics.anti_aliasing");
-    assert_eq!(
-        entry.warnings().len(),
-        5,
-        "the FSR 1 conflict and the 200%-redundancy warning, each in two \
-         variants since RENDER SCALE became a ceiling, plus the FSR 3.1 one - \
-         which needs only one variant because it does not read RENDER SCALE at \
-         all: `resolve_scene` skips the pass outright when FSR 3.1 resolves, \
-         at every scale. A \
-         sixth would go unnoticed by the rest of this test"
-    );
-    // Picked out by the condition this test is actually about: the row also
-    // carries the 200%-redundancy warning below, which names no
-    // `graphics.upscaler` condition at all, and the FSR 3.1 one, which names no
-    // `graphics.render_scale` condition.
-    let warning = entry
-        .warnings()
-        .iter()
-        .find(|w| {
-            w.all.iter().any(|c| c.setting == "graphics.upscaler")
-                && w.all.iter().any(|c| c.setting == "graphics.render_scale")
-        })
-        .expect("anti-aliasing warns against the upscaler");
-
-    let own = warning
-        .all
-        .iter()
-        .find(|c| c.setting == "graphics.anti_aliasing")
-        .expect("the warning must name anti-aliasing's own offending values");
-    let warned_modes: Vec<crate::display::AntiAliasing> = own
-        .values
-        .iter()
-        .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
-        .collect();
-    // Every value named must actually be a spatial post-process pass, and
-    // every spatial post-process pass must be named - not a subset either
-    // way, or the warning would mislead about MSAA or miss FXAA/SMAA.
-    for mode in crate::display::AntiAliasing::ALL {
-        assert_eq!(
-            mode.is_spatial_post_process(),
-            warned_modes.contains(&mode),
-            "{mode}: the warning and `is_spatial_post_process` disagree"
-        );
-    }
-
-    let upscaler = warning
-        .all
-        .iter()
-        .find(|c| c.setting == "graphics.upscaler")
-        .expect("the warning must require the upscaler to be fsr1");
-    assert_eq!(
-        upscaler.values,
-        vec![Value::Text(crate::display::Upscaler::Fsr1.to_string())]
-    );
-
-    let scales = warning
-        .all
-        .iter()
-        .find(|c| c.setting == "graphics.render_scale")
-        .expect("the warning must name the scales fsr1 fights at");
-    let warned_scales: Vec<crate::display::Scale> = scales
-        .values
-        .iter()
-        .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
-        .collect();
-    let rect = (1000, 1000);
-    for scale in crate::display::Scale::OFFERED {
-        let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
-        let magnifies = crate::upscale::magnifies(scene, rect);
-        assert_eq!(
-            magnifies,
-            warned_scales.contains(&scale),
-            "{scale}: the guard and the anti-aliasing warning disagree"
-        );
-    }
-}
-
 /// A second, independently-triggered warning on the same row: 200% render
 /// scale oversamples enough on its own that FXAA/SMAA on top of it is
 /// redundant work, not a broken combination - real product policy per
@@ -174,18 +78,12 @@ fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_a
 #[test]
 fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_scale() {
     let definition = built_in();
-    let entry = definition
-        .pages
-        .iter()
-        .flat_map(|page| page.entries.iter())
-        .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
-        .expect("nothing edits graphics.anti_aliasing");
-    // Picked out by the condition that actually distinguishes it from the
-    // upscaler-conflict warning above: this one names no upscaler at all,
-    // because supersampling is redundant with a spatial pass whatever the
-    // upscaler is set to.
+    let entry = reconstruction_entry(&definition);
+    // Picked out by the values it names on its own row, which is what
+    // distinguishes it from the `fsr1` warning above now that both live on
+    // one row: this one is about the spatial passes.
     let warning = off_variant(entry.warnings(), |w| {
-        !w.all.iter().any(|c| c.setting == "graphics.upscaler")
+        names_reconstruction(w, &["fxaa", "smaa"])
     });
     assert_eq!(
         warning.all.len(),
@@ -196,14 +94,17 @@ fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_sc
     let own = warning
         .all
         .iter()
-        .find(|c| c.setting == "graphics.anti_aliasing")
-        .expect("the warning must name anti-aliasing's own offending values");
-    let warned_modes: Vec<crate::display::AntiAliasing> = own
+        .find(|c| c.setting == "graphics.reconstruction")
+        .expect("the warning must name the reconstruction's own offending values");
+    let warned_modes: Vec<crate::display::Reconstruction> = own
         .values
         .iter()
         .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
-    for mode in crate::display::AntiAliasing::ALL {
+    // Every value named must actually be a spatial post-process pass, and
+    // every spatial post-process pass must be named - not a subset either
+    // way, or the warning would mislead about an upscaler or miss FXAA/SMAA.
+    for mode in crate::display::Reconstruction::ALL {
         assert_eq!(
             mode.is_spatial_post_process(),
             warned_modes.contains(&mode),
@@ -333,6 +234,34 @@ fn floor_variant(warnings: &[Warning], distinguish: impl Fn(&Warning) -> bool) -
         .expect("the floor variant of the warning")
 }
 
+/// The RECONSTRUCTION row, which since ADR-0041 carries every warning that
+/// used to be split across an anti-aliasing row and an upscaler row.
+fn reconstruction_entry(definition: &Definition) -> &Entry {
+    definition
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("graphics.reconstruction"))
+        .expect("nothing edits graphics.reconstruction")
+}
+
+/// Whether a warning names exactly `wanted` on the RECONSTRUCTION row.
+///
+/// **What tells the row's two warnings apart.** They used to live on separate
+/// rows and each test could find its own by name; on one row the discriminator
+/// has to be the values, and it is an equality rather than a containment so a
+/// warning that grew a third value fails here instead of matching both tests.
+fn names_reconstruction(warning: &Warning, wanted: &[&str]) -> bool {
+    warning.all.iter().any(|condition| {
+        condition.setting == "graphics.reconstruction"
+            && condition.values
+                == wanted
+                    .iter()
+                    .map(|name| Value::Text((*name).to_string()))
+                    .collect::<Vec<_>>()
+    })
+}
+
 /// Every scale in a condition, parsed.
 fn scales_of(condition: &Condition) -> Vec<crate::display::Scale> {
     condition
@@ -384,10 +313,8 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
         .collect();
     assert!(!dead.is_empty() && dead.len() < crate::display::Scale::OFFERED.len());
 
-    let upscaler = entry("graphics.upscaler");
-    let floored = floor_variant(&upscaler, |w| {
-        w.all.iter().any(|c| c.setting == "graphics.upscaler")
-    });
+    let reconstruction = entry("graphics.reconstruction");
+    let floored = floor_variant(&reconstruction, |w| names_reconstruction(w, &["fsr1"]));
     let floor = floored
         .all
         .iter()
@@ -407,44 +334,29 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
         .expect("the floor variant still names the ceiling");
     assert_eq!(scales_of(ceiling), dead);
 
-    // The anti-aliasing row's own floor variant is the converse: it fires
-    // where the controller *will* magnify, so it names the complement.
-    let magnified: Vec<crate::display::Scale> = crate::display::Scale::OFFERED
-        .into_iter()
-        .filter(|scale| !dead.contains(scale))
-        .collect();
-    let aa = entry("graphics.anti_aliasing");
-    let fights = floor_variant(&aa, |w| {
-        w.all.iter().any(|c| c.setting == "graphics.upscaler")
+    // The redundancy warning's own floor variant is about the *top* of the
+    // range rather than the bottom, so it names one scale and not a set: a
+    // controller whose floor is the ceiling render scale never stops
+    // supersampling, which is the only case where "redundant on top of 200 %"
+    // still holds with a controller running.
+    let redundant = floor_variant(&reconstruction, |w| {
+        names_reconstruction(w, &["fxaa", "smaa"])
     });
-    let floor = fights
-        .all
-        .iter()
-        .find(|c| c.setting == "graphics.minimum_resolution")
-        .expect("the floor variant names the floor");
-    assert_eq!(
-        scales_of(floor),
-        magnified,
-        "FXAA/SMAA fight the upscaler at exactly the floors it magnifies from"
-    );
-    // It has to name a target too, or it would fire with the controller off,
-    // where the floor means nothing at all.
-    let target = fights
-        .all
-        .iter()
-        .find(|c| c.setting == "graphics.target_fps")
-        .expect("the floor variant must require a controller to be running");
-    assert!(
-        !target
-            .values
-            .contains(&Value::Text(crate::drs::Target::OFF.to_string())),
-        "a floor is only meaningful while the controller runs"
-    );
-    assert_eq!(
-        target.values.len(),
-        crate::drs::Target::OFFERED.len() - 1,
-        "every target except off, generated from Target::OFFERED"
-    );
+    let top = *crate::display::Scale::OFFERED
+        .last()
+        .expect("render scale offers at least one value");
+    for setting in ["graphics.render_scale", "graphics.minimum_resolution"] {
+        let condition = redundant
+            .all
+            .iter()
+            .find(|c| c.setting == setting)
+            .unwrap_or_else(|| panic!("the floor variant must name {setting}"));
+        assert_eq!(
+            scales_of(condition),
+            vec![top],
+            "{setting}: only a floor at the ceiling keeps supersampling on every frame"
+        );
+    }
 }
 
 /// The target warns at exactly the frame limits it is above.

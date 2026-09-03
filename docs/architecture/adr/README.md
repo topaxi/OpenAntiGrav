@@ -23,7 +23,7 @@ out to be wrong.
 | [0010](0010-movie-decode-thread.md) | Decode movie frames on a worker thread, one per movie | Accepted |
 | [0011](0011-authored-pvs-before-frustum-culling.md) | Cull with the track's authored PVS, before the view frustum | Accepted; placement and padding rules superseded by [ADR-0014](0014-authored-section-placement.md) |
 | [0012](0012-wgsl-upscalers-not-native-fidelityfx.md) | Port the FSR upscalers to WGSL rather than driving the native SDK | Accepted |
-| [0013](0013-anti-aliasing-architecture.md) | Separate anti-aliasing by class, and gate spatial passes against the upscaler by render scale | Accepted |
+| [0013](0013-anti-aliasing-architecture.md) | Separate anti-aliasing by class, and gate spatial passes against the upscaler by render scale | Accepted; its row shape superseded by [ADR-0041](0041-one-row-for-what-resolves-the-frame.md) |
 | [0014](0014-authored-section-placement.md) | Place draw calls by their authored section group, and pad with bits, not masks | Accepted; union rule refined by [ADR-0015](0015-ordered-visible-set-union.md) |
 | [0015](0015-ordered-visible-set-union.md) | Order the visible-set union, and never rejoin authored alternatives | Accepted |
 | [0016](0016-platform-native-h264-decode.md) | Platform-native H.264 decode as an accelerated path, on Linux first | Superseded by [ADR-0017](0017-gstreamer-native-video.md) |
@@ -51,6 +51,7 @@ out to be wrong.
 | [0038](0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) | A stage with no scene draws entirely at presentation resolution | Accepted; supersedes [ADR-0036](0036-ui-composites-at-presentation-resolution.md)'s seam item |
 | [0039](0039-camera-jitter-post-multiplies-onto-the-view-projection.md) | Camera jitter post-multiplies onto the view-projection, after the frustum and the motion snapshot | Accepted |
 | [0040](0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md) | The dynamic-resolution budget is a share of a frame, not a measured frame | Accepted |
+| [0041](0041-one-row-for-what-resolves-the-frame.md) | One row for what resolves the frame, and MSAA on an axis of its own | Accepted; supersedes [ADR-0013](0013-anti-aliasing-architecture.md)'s row shape |
 
 ## Format
 

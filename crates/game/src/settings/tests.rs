@@ -81,6 +81,10 @@ fn read(text: &str) -> Settings {
     let mut table: toml::Table = text.parse().expect("parse");
     migrate(&mut table);
     migrate_render_profiles(&mut table);
+    // The same order `load` runs them in, and this helper has to keep
+    // mirroring it: a migration added to `load` and not to here is one every
+    // test below silently stops covering.
+    migrate_reconstruction_keys(&mut table);
     let mut settings: Settings = table.try_into().expect("deserialise");
     ensure_known_titles(&mut settings);
     settings
@@ -277,12 +281,17 @@ motion_blur = \"medium\"
     for title in KNOWN_TITLES {
         let profile = &settings.render_profiles[*title];
         assert_eq!(profile.render_scale.percent(), 50, "{title}");
-        assert_eq!(profile.upscaler, crate::display::Upscaler::Fsr1, "{title}");
+        // **Folded onto one axis by `migrate_reconstruction`**, which is the
+        // lossy half of the ADR-0041 migration: the old file asked for `smaa`
+        // *and* `fsr1`, a pairing the new row cannot express and one the menus
+        // already warned about as `FIGHTS THE UPSCALER'S EDGE-ADAPTIVE
+        // RESAMPLE`. The upscaler wins because it was what carried the frame.
         assert_eq!(
-            profile.anti_aliasing,
-            crate::display::AntiAliasing::Smaa,
+            profile.reconstruction,
+            crate::display::Reconstruction::Fsr1,
             "{title}"
         );
+        assert_eq!(profile.msaa, crate::display::Msaa::Off, "{title}");
         assert_eq!(
             profile.motion_blur,
             crate::display::MotionBlur::Medium,
@@ -334,21 +343,103 @@ fn menu_seeds_resolves_the_render_profile_by_title() {
     assert_eq!(value_for(oag_hd::TITLE.name), "100");
 }
 
-/// Every migratable key is a profile key, and the reverse is not required.
+/// Every migratable key either is a profile key or is consumed on the way in.
 ///
 /// The two lists mean different things - "lives in the profile" against "used
-/// to live flat in `[graphics]` and has to be moved" - and the second is a
-/// subset of the first. A key added to `RenderProfile` after the split has no
-/// flat past, so putting it in the migration list would have
-/// `migrate_render_profiles` looking in `[graphics]` for something that was
-/// never written there.
+/// to live flat in `[graphics]` and has to be moved" - and a key added to
+/// `RenderProfile` after the split has no flat past, so putting it in the
+/// migration list would have `migrate_render_profiles` looking in `[graphics]`
+/// for something that was never written there.
+///
+/// **The third case arrived with ADR-0041**: `upscaler` and `anti_aliasing`
+/// still have to be *moved* out of a pre-split `[graphics]`, and are then
+/// folded into `reconstruction` and `msaa` by `migrate_reconstruction`, so
+/// they are migratable without being profile keys. Listing them here is what
+/// keeps that from being a way to sneak a key past the invariant: a migratable
+/// key that is neither a field nor consumed is a value read out of a file and
+/// dropped on the floor.
 #[test]
 fn every_migratable_key_is_a_profile_key() {
+    // Consumed by `migrate_reconstruction` rather than deserialised.
+    const FOLDED: [&str; 2] = ["upscaler", "anti_aliasing"];
     for key in MOVED_TO_RENDER_PROFILES {
         assert!(
-            PROFILE_KEYS.contains(&key),
+            PROFILE_KEYS.contains(&key) || FOLDED.contains(&key),
             "{key} migrates into a profile field that does not exist"
         );
     }
     assert!(PROFILE_KEYS.len() >= MOVED_TO_RENDER_PROFILES.len());
+}
+
+/// ADR-0041's fold, on the shape a file written *after* the render-profile
+/// split actually has: the two old keys already inside a profile table.
+///
+/// The existing migration test covers the other route - a pre-split flat
+/// `[graphics]`, moved into every profile and then folded - and the two are
+/// different code paths through `load`, which is why both are pinned. This is
+/// the one a player upgrading today takes.
+#[test]
+fn the_reconstruction_fold_reads_a_profile_that_was_already_split() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+render_scale = 150
+target_fps = \"120\"
+minimum_resolution = 50
+upscaler = \"fsr3\"
+upscale_sharpness = \"0.2\"
+anti_aliasing = \"msaa4x\"
+motion_blur = \"high\"
+",
+    );
+    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    // The lossless case: the two really were orthogonal, so both survive.
+    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr3);
+    assert_eq!(profile.msaa, crate::display::Msaa::X4);
+    // Untouched keys are still untouched - the fold removes two and inserts
+    // two, and a migration that also reset a neighbour would be invisible here
+    // without this.
+    assert_eq!(profile.render_scale.percent(), 150);
+    assert_eq!(profile.target_fps.hz(), Some(120));
+    assert_eq!(profile.motion_blur, crate::display::MotionBlur::High);
+
+    // The lossy case, argued in `migrate_reconstruction`: a pairing the new
+    // axis cannot express, and one the menus already warned about. The
+    // upscaler wins because it was what carried the frame onto the surface.
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+upscaler = \"fsr1\"
+anti_aliasing = \"fxaa\"
+",
+    );
+    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr1);
+    assert_eq!(profile.msaa, crate::display::Msaa::Off);
+
+    // No upscaler, so the spatial pass was what resolved the frame and it is
+    // what carries over.
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+anti_aliasing = \"smaa\"
+",
+    );
+    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Smaa);
+    assert_eq!(profile.msaa, crate::display::Msaa::Off);
+
+    // A file already on this side of the split is left entirely alone, which
+    // is what stops the fold running twice and resetting `msaa` to off on the
+    // second launch.
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+reconstruction = \"fsr3\"
+msaa = \"4x\"
+",
+    );
+    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr3);
+    assert_eq!(profile.msaa, crate::display::Msaa::X4);
 }

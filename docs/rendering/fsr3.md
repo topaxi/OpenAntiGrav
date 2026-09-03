@@ -13,7 +13,7 @@ and Vulkan-only support, to inherit an FSR4 upgrade path that does not reach a
 native Linux build.
 
 **Status: all eight passes are ported, the chain produces a frame, and the
-UPSCALER row selects it.** `upscale::Framebuffer::resolve_scene` reads
+RECONSTRUCTION row selects it.** `upscale::Framebuffer::resolve_scene` reads
 `oag_render::post::fsr3::Fsr3::output` on a race frame whose adapter has compute
 shaders, and falls one rung to FSR 1 otherwise. It is off by default. What has
 not happened is anybody looking at a *moving* frame it produced;
@@ -140,7 +140,7 @@ enough to be quick is a fixture too small to reach a limit.
 
 ### MSAA makes two of the inputs a different type
 
-`[graphics] anti_aliasing` at either MSAA level makes the scene's depth and
+`msaa = "4x"` makes the scene's depth and
 velocity attachments multisampled, and a multisampled binding is a different
 WGSL type - so `prepare_inputs` is built **twice**, against a single-sampled and
 a multisampled declaration of those two, and the dispatch picks by the sample

@@ -591,9 +591,8 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         &mut encoder,
         whole,
         &Presentation {
-            upscaler: Upscaler::Off,
+            reconstruction: Reconstruction::Off,
             sharpness: 0.0,
-            anti_aliasing: AntiAliasing::Off,
             // Carried but deliberately unread by this half - `resolve_scene`
             // grades neutrally and `composite` is handed the real values
             // below. Passing the real ones here is what a caller does, so the

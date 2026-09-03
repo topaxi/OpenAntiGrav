@@ -257,30 +257,19 @@ impl Session {
         // and the menus, where no race exists yet to compare against - see
         // `Restart::in_effect`.
         //
-        // **Not a single value.** Unlike the renderer, only the MSAA half of
-        // this row is baked into the scene's pipelines - `upscale::Framebuffer::resolve_scene`
-        // reads FXAA/SMAA/off fresh every frame, the same way it already
-        // reads the upscaler. So every mode that shares the built scene's
-        // sample count is equally "in effect": a race built at `off` can move
-        // to `fxaa` or back with no restart note, and only moving to or
-        // between an MSAA tier the scene was not built with earns one.
+        // **A single value, since [ADR-0041] split the row.** This used to
+        // carry a list, because the old `anti_aliasing` row mixed MSAA - baked
+        // into the scene's pipelines at `race::Scene::new` - with FXAA and SMAA,
+        // which `upscale::Framebuffer::resolve_scene` reads fresh every frame;
+        // every mode sharing the built scene's sample count was equally "in
+        // effect". The MSAA row is now nothing but the sample count, so the
+        // only thing in effect is the level the running scene was built with.
+        //
+        // [ADR-0041]: ../../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md
         if let Stage::Race(stage) = &self.stage {
-            let built = stage.scene.anti_aliasing();
-            let live_equivalent: &[display::AntiAliasing] = if built.msaa_samples() == 1 {
-                &[
-                    display::AntiAliasing::Off,
-                    display::AntiAliasing::Fxaa,
-                    display::AntiAliasing::Smaa,
-                ]
-            } else {
-                std::slice::from_ref(&built)
-            };
-            let in_use: Vec<menu::Value> = live_equivalent
-                .iter()
-                .map(|mode| menu::Value::Text(mode.to_string()))
-                .collect();
-            if !model.in_effect("graphics.anti_aliasing", &in_use) {
-                warn!("nothing in the menus defers graphics.anti_aliasing");
+            let in_use = [menu::Value::Text(stage.scene.msaa().to_string())];
+            if !model.in_effect("graphics.msaa", &in_use) {
+                warn!("nothing in the menus defers graphics.msaa");
             }
             // Same story as MSAA above, but a single tier baked in at
             // `Race::start` rather than a range of equivalent modes.

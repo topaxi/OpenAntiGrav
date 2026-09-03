@@ -558,33 +558,45 @@ warn_when = [
     ] },
 ]
 
-# Which resampler carries the frame onto the surface. Directly below the render
-# scale because only that pairing means anything: at 100 % there is nothing to
-# upscale and the choice is between a blit and a sharpen. Applies from the next
-# frame; the pipelines are built the first time `fsr1` is chosen.
+# What resolves the frame onto the surface. Directly below the render scale
+# because the pairing is what makes several of these mean anything: at 100 %
+# there is nothing to upscale, and the choice is between a blit, a spatial
+# anti-aliaser and a temporal reconstruction that has work to do at any scale.
+# Applies from the next frame; each value's pipelines are built the first time
+# it is chosen.
 #
-# `fsr1` has no effect at a render scale of 100 % or above: FSR 1 is a
-# magnifier, and asked to minify it re-introduces the aliasing supersampling
-# just removed, so `upscale::magnifies` declines to run it there.
+# **One row where there were two**, since
+# `docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md`. An
+# ANTI-ALIASING row used to sit below an UPSCALER row and five of this file's
+# seven warnings existed to describe how they interacted. Every value here
+# answers one question - what carries this frame onto the surface - so at most
+# one can be doing it and the wrong pairings are unrepresentable rather than
+# warned about. `fxaa` is a value here rather than a toggle beside the row for
+# exactly that reason: it is only ever right when nothing else is
+# reconstructing, and the ADR records all three cases.
+#
+# There is no `taa` choice. Temporal reconstruction is `fsr3`, which is what
+# ADR-0013 asked for in advance - *"do not expose `Taa` and `Fsr3` as separate
+# user-facing concepts unless a real reason turns up to"*.
 #
 # **`fsr3` is not warned about, and that is not an oversight.** FSR 3.1 is
 # temporal: it reconstructs from several previous frames, so even at 100 % it
 # has more samples per pixel than one frame carries and is doing real work -
-# what upstream calls its native-AA mode. The warnings below are therefore
-# conditioned on `fsr1` by name rather than on "not off".
+# what upstream calls its native-AA mode. It greys the MSAA row below instead,
+# which is a statement about that row rather than about this one.
 #
 # Warned rather than greyed, and the difference is who caused it. A greyed row
-# cannot be changed now because another row rules it out. This one can be
-# changed, is stored, and takes effect the moment the render scale comes back
+# cannot be changed now because another row rules it out. These warnings can be
+# changed, are stored, and take effect the moment the render scale comes back
 # under 100 - it is the *combination* that does nothing, and greying would say
 # "you cannot change this", which is false. The values listed are every one the
 # RENDER SCALE row above offers at 100 or above; the loader rejects a value that
 # row cannot hold, so this list cannot silently stop matching it.
 [[page.entry]]
 kind = "choice"
-label = "UPSCALER"
-setting = "graphics.upscaler"
-values = ["off", "fsr1", "fsr3"]
+label = "RECONSTRUCTION"
+setting = "graphics.reconstruction"
+values = ["off", "fxaa", "smaa", "fsr1", "fsr3"]
 warn_when = [
     # Two entries for one statement, because `Condition.all` is an AND and
     # this needs an OR: FSR 1 does nothing when the frame can never be drawn
@@ -594,110 +606,82 @@ warn_when = [
     # presentation rectangle and FSR 1 magnifies - so warning here would be
     # telling a player a working setting is dead.
     { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
-        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.reconstruction", value = "fsr1" },
         { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
         { setting = "graphics.target_fps", value = "off" },
     ] },
     { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
-        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.reconstruction", value = "fsr1" },
         { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
         { setting = "graphics.minimum_resolution", values = ["100", "125", "150", "200"] },
     ] },
+    # And "redundant on top of supersampling" stops being true the moment the
+    # controller may stop supersampling, so it needs the target off. Real
+    # product policy per `docs/architecture/adr/0013-anti-aliasing-architecture.md`'s
+    # "What the render-scale tiers mean for FXAA/SMAA" section. Only "200" is
+    # named because it is the only value RENDER SCALE offers at or above it -
+    # see `Scale::OFFERED`.
+    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
+        { setting = "graphics.reconstruction", values = ["fxaa", "smaa"] },
+        { setting = "graphics.render_scale", value = "200" },
+        { setting = "graphics.target_fps", value = "off" },
+    ] },
+    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
+        { setting = "graphics.reconstruction", values = ["fxaa", "smaa"] },
+        { setting = "graphics.render_scale", value = "200" },
+        { setting = "graphics.minimum_resolution", value = "200" },
+    ] },
 ]
 
-# How hard FSR 1's RCAS pass sharpens, in **stops**: 0 is maximum and each whole
-# step halves it, which is upstream FidelityFX's own scale and runs the opposite
-# way to what a reader expects. Greyed out on the bilinear path, which has no
-# sharpen to adjust.
+# How hard FSR 1's and FSR 3.1's RCAS pass sharpens, in **stops**: 0 is maximum
+# and each whole step halves it, which is upstream FidelityFX's own scale and
+# runs the opposite way to what a reader expects. Greyed out on the three
+# values that run no sharpen at all.
 [[page.entry]]
 kind = "choice"
 label = "UPSCALER SHARPNESS"
 setting = "graphics.upscale_sharpness"
 values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
-disabled_by = { setting = "graphics.upscaler", value = "off" }
+disabled_by = { setting = "graphics.reconstruction", values = ["off", "fxaa", "smaa"] }
 
-# Which anti-aliasing the scene draws with. MSAA, FXAA and SMAA are three
-# different classes - rasterization, and two spatial post-process passes - not
-# three quality tiers of one thing; see
-# `docs/architecture/adr/0013-anti-aliasing-architecture.md`. There is no `taa`
-# choice, and since FSR 3.1 that is a placement decision rather than a missing
-# feature: temporal reconstruction lives on the UPSCALER row, because it
-# resolves the frame as well as anti-aliasing it and cannot be stacked with a
-# resampler the way a post-process pass can.
+# How many samples the rasterizer takes. **Its own axis since ADR-0041**, where
+# it used to be a fourth value of an anti-aliasing row, competing with two
+# fullscreen passes it has nothing in common with: this is a property of the
+# rasterizer, read once at `race::Scene::new` and baked into every scene
+# pipeline, while everything on the RECONSTRUCTION row reads the *resolved*
+# result. It composes with `off`, `fxaa`, `smaa` and `fsr1` rather than
+# competing with them - as this file has always recorded, MSAA "resolves before
+# any of this runs and composes with FSR 1 rather than fighting it".
 #
-# `off`, `fxaa` and `smaa` take effect the frame they are chosen, the same as
-# UPSCALER: `Framebuffer::resolve` reads this fresh every frame. Only moving
-# to or between the two MSAA levels waits for the next race, because that is
-# what rebuilds the scene pipelines MSAA's sample count is baked into.
-# `restart_required` is the same mechanism RENDERER uses, told from what the
-# race on screen was actually built with rather than from the device - see
-# `Session::open_menus` for how it tells the two cases above apart, which is
-# why the message names a race instead of the game.
+# **Greyed under `fsr3`, not warned.** That is the reverse of how this file
+# treats the RECONSTRUCTION row's own pairings, and the reason is that here the
+# other row really does rule this one out: FSR 3.1 anti-aliases the same frame
+# temporally, and MSAA on top costs a rasterization pass, a resolve and three
+# discarded samples on the depth and velocity attachments - `INPUTS_MULTISAMPLED`
+# reads sample 0 only. The niche it would serve is served better by RENDER
+# SCALE, which already goes to 200. A greyed row still takes the cursor and
+# still shows its stored value, so leaving `fsr3` gives a player their `4x`
+# back untouched. ADR-0041 argues the choice.
 #
-# Warned rather than greyed against the upscaler, for the same reason UPSCALER
-# above warns against RENDER SCALE: FXAA and SMAA are spatial passes that blur
-# before FSR 1's edge-adaptive EASU ever sees the picture, fighting the very
-# edges it reasons about. The two render scales named are exactly the ones
-# `upscale::magnifies` runs FSR 1 at - see
-# `the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at` for the
-# equivalent pinning on the row above. MSAA is not named here: it resolves
-# before any of this runs and composes with FSR 1 rather than fighting it.
+# There is no `2x`: sample count 2 needs
+# `wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`, which nothing here
+# requests, so a pipeline built at it fails device validation on every adapter -
+# see ADR-0013's Consequences.
 #
-# A second, independently-triggered warning for the render scale's *top* end:
-# at 200% render scale is enough oversampling on its own that a spatial pass
-# on top reads as redundant work, not a broken combination - real product
-# policy per `docs/architecture/adr/0013-anti-aliasing-architecture.md`'s
-# "What the render-scale tiers mean for FXAA/SMAA" section. Only "200" is
-# named because it is the only value RENDER SCALE offers at or above it - see
-# `Scale::OFFERED`.
+# **Always waits for the next race**, because the whole row is the sample count
+# the scene pipelines are built with. That is unconditional now where the old
+# combined row had a live half, which is why the note no longer needs
+# `Session::open_menus` to tell two cases apart. `restart_required` is the same
+# mechanism RENDERER uses, told from what the race on screen was actually built
+# with rather than from the device, which is why the message names a race
+# instead of the game.
 [[page.entry]]
 kind = "choice"
-label = "ANTI-ALIASING"
-setting = "graphics.anti_aliasing"
-values = ["off", "fxaa", "smaa", "msaa4x"]
+label = "MSAA"
+setting = "graphics.msaa"
+values = ["off", "4x"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
-warn_when = [
-    # The same reading of RENDER SCALE the UPSCALER row makes, and wrong in
-    # both directions once it is a ceiling. This fires below 100 - and also
-    # at any ceiling whose floor is below 100, because that is where the
-    # controller will spend its time.
-    { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
-        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-        { setting = "graphics.upscaler", value = "fsr1" },
-        { setting = "graphics.render_scale", values = ["50", "75"] },
-    ] },
-    { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
-        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-        { setting = "graphics.upscaler", value = "fsr1" },
-        { setting = "graphics.target_fps", values = ["30", "60", "90", "120", "144"] },
-        { setting = "graphics.minimum_resolution", values = ["50", "75"] },
-    ] },
-    # And "redundant on top of supersampling" stops being true the moment the
-    # controller may stop supersampling, so it needs the target off.
-    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
-        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-        { setting = "graphics.render_scale", value = "200" },
-        { setting = "graphics.target_fps", value = "off" },
-    ] },
-    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
-        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-        { setting = "graphics.render_scale", value = "200" },
-        { setting = "graphics.minimum_resolution", value = "200" },
-    ] },
-    # Against FSR 3.1 the complaint is different and needs no render-scale
-    # condition at all, which is why this is one entry where FSR 1 needs four.
-    # A temporal upscaler reconstructs from the sub-pixel detail each jittered
-    # frame carries, and a spatial pass that blurs before it runs would destroy
-    # exactly the samples accumulation exists to gather - so `resolve_scene`
-    # does not feed it one, at any render scale including 100 %. **The
-    # consequence for a player is that the row does nothing**, which is what
-    # this says: the pass is skipped outright rather than run and discarded,
-    # so it costs neither the picture nor a frame's worth of fill.
-    { message = "NO EFFECT WITH FSR3, WHICH READS THE UNFILTERED SCENE", all = [
-        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-        { setting = "graphics.upscaler", value = "fsr3" },
-    ] },
-]
+disabled_by = { setting = "graphics.reconstruction", value = "fsr3" }
 
 # A strength, not a boolean - each value is a shutter fraction of one
 # simulation tick, and the technique underneath can improve without this row

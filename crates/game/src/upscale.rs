@@ -72,21 +72,25 @@ use log::{info, warn};
 
 use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
-use crate::display::{AntiAliasing, Brightness, Gamma, Scale, Upscaler};
+use crate::display::{Brightness, Gamma, Reconstruction, Scale};
 
 /// Everything the blit needs that a player chose, gathered so the window's
 /// frame loop and a capture can be handed the same thing.
 #[derive(Debug, Clone, Copy)]
 pub struct Presentation {
-    /// Which resampler carries the frame onto the surface.
-    pub upscaler: Upscaler,
-    /// FSR 1's RCAS sharpness in stops. Ignored by the bilinear path.
-    pub sharpness: f32,
-    /// FXAA or SMAA, run before the upscaler - see [`Framebuffer::resolve_scene`]
-    /// and [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md).
+    /// What resolves the frame onto the surface.
+    ///
+    /// **One field where there were two.** Anti-aliasing and the upscaler used
+    /// to arrive here separately and the ladder below had to reconcile them;
+    /// since [ADR-0041](../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md)
+    /// they are one axis, so a pairing like FXAA-under-FSR-3.1 is
+    /// unrepresentable rather than something this function has to skip.
+    ///
     /// MSAA is not read here: its sample count is baked into the scene's own
     /// pipelines rather than being a blit-time choice - see `race::Scene`.
-    pub anti_aliasing: AntiAliasing,
+    pub reconstruction: Reconstruction,
+    /// FSR 1's RCAS sharpness in stops. Ignored by the bilinear path.
+    pub sharpness: f32,
     pub brightness: Brightness,
     pub gamma: Gamma,
 }
@@ -410,13 +414,13 @@ impl Framebuffer {
         // FSR 1 is load-bearing rather than a stepping stone.
         //
         // [ADR-0012]: ../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md
-        let temporal = temporal.filter(|_| presentation.upscaler == Upscaler::Fsr3);
-        let effective = match (presentation.upscaler, temporal.is_some()) {
-            (Upscaler::Fsr3, true) => Upscaler::Fsr3,
+        let temporal = temporal.filter(|_| presentation.reconstruction == Reconstruction::Fsr3);
+        let effective = match (presentation.reconstruction, temporal.is_some()) {
+            (Reconstruction::Fsr3, true) => Reconstruction::Fsr3,
             // Every other reading of `fsr3` falls one rung: a menu frame with
             // no scene, an adapter with no compute shaders, and a race whose
             // stage could not answer all arrive here as a `None` bundle.
-            (Upscaler::Fsr3, false) => Upscaler::Fsr1,
+            (Reconstruction::Fsr3, false) => Reconstruction::Fsr1,
             (chosen, _) => chosen,
         };
 
@@ -484,79 +488,80 @@ impl Framebuffer {
             view
         });
 
-        // **Anti-aliasing is skipped entirely when FSR 3.1 resolved**, rather
-        // than run and discarded. A spatial post-process blurs the edges a
-        // temporal reconstruction reasons about, so its output is deliberately
-        // not what FSR 3.1 reads - the anti-aliasing row already warns a player
-        // about the pairing. Running the pass anyway to bind nothing was a
-        // full-screen pass's cost paid for a frame nobody reads, which is why
-        // the resolve above happens first: `temporally_resolved` is the exact
-        // answer to "did FSR 3.1 run", where the setting alone is not.
-        let post_process: Option<&wgpu::TextureView> = if temporally_resolved.is_some() {
-            None
-        } else {
-            match presentation.anti_aliasing {
-                AntiAliasing::Fxaa => {
-                    let fxaa = self
-                        .fxaa
-                        .get_or_insert_with(|| fxaa::Fxaa::new(device, self.format));
-                    match fxaa {
-                        Ok(fxaa) => {
-                            fxaa.render(
-                                device,
-                                queue,
-                                encoder,
-                                fxaa::Frame {
-                                    source: &self.perceptual,
-                                    size: allocation,
-                                    viewport: extent,
-                                },
-                            );
-                            fxaa.output()
-                        }
-                        // A shader that will not compile is a build-time mistake,
-                        // but it must not be a crash in a player's frame loop: say
-                        // so once and carry on unfiltered.
-                        Err(why) => {
-                            warn!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
-                            None
-                        }
+        // **A spatial post-process cannot coexist with a reconstruction any
+        // more**, so this is a plain match where it used to be a match behind a
+        // `temporally_resolved.is_some()` guard. A spatial pass blurs the edges
+        // a temporal reconstruction reasons about, and the old shape had to run
+        // the resolve first just to know whether to skip it; since ADR-0041 the
+        // two are values on one axis and the pairing is unrepresentable. The
+        // resolve still happens above, because `temporally_resolved` is what
+        // decides the source rectangle further down.
+        let post_process: Option<&wgpu::TextureView> = match presentation.reconstruction {
+            Reconstruction::Fxaa => {
+                let fxaa = self
+                    .fxaa
+                    .get_or_insert_with(|| fxaa::Fxaa::new(device, self.format));
+                match fxaa {
+                    Ok(fxaa) => {
+                        fxaa.render(
+                            device,
+                            queue,
+                            encoder,
+                            fxaa::Frame {
+                                source: &self.perceptual,
+                                size: allocation,
+                                viewport: extent,
+                            },
+                        );
+                        fxaa.output()
+                    }
+                    // A shader that will not compile is a build-time mistake,
+                    // but it must not be a crash in a player's frame loop: say
+                    // so once and carry on unfiltered.
+                    Err(why) => {
+                        warn!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
+                        None
                     }
                 }
-                AntiAliasing::Smaa => {
-                    let smaa = self
-                        .smaa
-                        .get_or_insert_with(|| smaa::Smaa::new(device, queue, self.format));
-                    match smaa {
-                        Ok(smaa) => {
-                            smaa.render(
-                                device,
-                                queue,
-                                encoder,
-                                smaa::Frame {
-                                    source: &self.perceptual,
-                                    size: allocation,
-                                    viewport: extent,
-                                },
-                            );
-                            smaa.output()
-                        }
-                        // A shader that will not compile is a build-time mistake,
-                        // but it must not be a crash in a player's frame loop: say
-                        // so once and carry on unfiltered.
-                        Err(why) => {
-                            warn!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
-                            None
-                        }
-                    }
-                }
-                AntiAliasing::Off | AntiAliasing::Msaa4x => None,
             }
+            Reconstruction::Smaa => {
+                let smaa = self
+                    .smaa
+                    .get_or_insert_with(|| smaa::Smaa::new(device, queue, self.format));
+                match smaa {
+                    Ok(smaa) => {
+                        smaa.render(
+                            device,
+                            queue,
+                            encoder,
+                            smaa::Frame {
+                                source: &self.perceptual,
+                                size: allocation,
+                                viewport: extent,
+                            },
+                        );
+                        smaa.output()
+                    }
+                    // A shader that will not compile is a build-time mistake,
+                    // but it must not be a crash in a player's frame loop: say
+                    // so once and carry on unfiltered.
+                    Err(why) => {
+                        warn!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
+                        None
+                    }
+                }
+            }
+            // Every other value on this axis is doing the resolving itself,
+            // which is what makes the old `temporally_resolved.is_some()` guard
+            // here unnecessary: since ADR-0041 a spatial pass and a
+            // reconstruction cannot both be selected, so there is nothing to
+            // run-and-discard.
+            Reconstruction::Off | Reconstruction::Fsr1 | Reconstruction::Fsr3 => None,
         };
         let upscale_source = post_process.unwrap_or(&self.perceptual);
 
         let resolved = temporally_resolved.or_else(|| {
-            (effective == Upscaler::Fsr1 && magnifies(extent, output_size))
+            (effective == Reconstruction::Fsr1 && magnifies(extent, output_size))
                 .then(|| {
                     let fsr = self
                         .fsr1

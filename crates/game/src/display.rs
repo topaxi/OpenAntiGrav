@@ -37,13 +37,13 @@
 
 use serde::{Deserialize, Serialize};
 
-mod anti_aliasing;
 mod motion_blur;
-mod upscaler;
+mod msaa;
+mod reconstruction;
 
-pub use anti_aliasing::AntiAliasing;
 pub use motion_blur::MotionBlur;
-pub use upscaler::Upscaler;
+pub use msaa::Msaa;
+pub use reconstruction::Reconstruction;
 
 /// The shape the game is drawn at inside its window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

@@ -426,7 +426,7 @@ pub(crate) fn run_race(
                 bloom: settings.graphics.bloom,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
-                anti_aliasing: render_profile.anti_aliasing,
+                msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
                 camera_jitter: cli.camera_jitter,
                 pose_boost: cli.pose_boost,
@@ -435,9 +435,8 @@ pub(crate) fn run_race(
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_game::upscale::Presentation {
-                        upscaler: render_profile.upscaler,
+                        reconstruction: render_profile.reconstruction,
                         sharpness: render_profile.upscale_sharpness.stops(),
-                        anti_aliasing: render_profile.anti_aliasing,
                         brightness: settings.display.brightness,
                         gamma: settings.display.gamma,
                     },

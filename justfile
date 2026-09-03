@@ -313,7 +313,7 @@ compare-upscalers image scale="50" out="/tmp":
         cargo run -q --release -p oag-game -- "{{image}}" --race \
             --screenshot "{{out}}/oag-upscale-{{scale}}-$upscaler.png" \
             --ticks 300 --hold cross --presented \
-            --render-scale "{{scale}}" --upscaler "$upscaler"
+            --render-scale "{{scale}}" --reconstruction "$upscaler"
     done
     # The ceiling to judge both against: the same frame with four times the
     # samples, which is what neither of them can do better than.

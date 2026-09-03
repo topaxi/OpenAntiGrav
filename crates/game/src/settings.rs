@@ -61,7 +61,7 @@ mod render_profile;
 pub use controls::{Controls, TriggerSensitivity};
 pub use race::{Race, Remix};
 pub use render_profile::RenderProfile;
-use render_profile::{ensure_known_titles, migrate_render_profiles};
+use render_profile::{ensure_known_titles, migrate_reconstruction_keys, migrate_render_profiles};
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
 /// does not own. Named the same as `Display`/`FromStr` already spell it in
@@ -686,6 +686,8 @@ pub fn load() -> Result<Settings> {
                 .with_context(|| format!("parsing {}", path.display()))?;
             migrate(&mut table);
             migrate_render_profiles(&mut table);
+            // After it, not before - see `migrate_reconstruction_keys`.
+            migrate_reconstruction_keys(&mut table);
             table
                 .try_into()
                 .with_context(|| format!("parsing {}", path.display()))?
@@ -781,15 +783,15 @@ pub fn menu_seeds(
             "graphics.minimum_resolution",
             text(&profile.minimum_resolution.to_string()),
         ),
-        ("graphics.upscaler", text(&profile.upscaler.to_string())),
+        (
+            "graphics.reconstruction",
+            text(&profile.reconstruction.to_string()),
+        ),
         (
             "graphics.upscale_sharpness",
             text(&profile.upscale_sharpness.to_string()),
         ),
-        (
-            "graphics.anti_aliasing",
-            text(&profile.anti_aliasing.to_string()),
-        ),
+        ("graphics.msaa", text(&profile.msaa.to_string())),
         (
             "graphics.motion_blur",
             text(&profile.motion_blur.to_string()),
