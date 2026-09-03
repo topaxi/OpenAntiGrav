@@ -10,9 +10,13 @@
 //! The volume and bus half lives in [`volumes`], split out when the four AUDIO
 //! rows of [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md)
 //! took this file past 1,000 lines - the other rule the same script keeps.
+//! [`source_switch`] is the same split, for the `MUSIC SOURCE` row's async
+//! fetch - see
+//! `handover/streaming-decode-for-audio-would-break-seek-and.md`.
 
 use super::*;
 
+mod source_switch;
 mod volumes;
 
 #[test]
@@ -275,6 +279,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -364,6 +369,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
 
@@ -413,6 +419,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
@@ -480,6 +487,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     audio.music = audio
@@ -537,6 +545,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     for _ in 0..120 {
@@ -589,6 +598,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     assert!(audio.start_movie(sound), "a free voice");
@@ -640,6 +650,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
@@ -675,6 +686,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     assert_eq!(audio.movie_playhead(), None, "nothing started");
@@ -707,6 +719,7 @@ fn a_run_with_no_dump_accumulates_nothing() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     for _ in 0..120 {
@@ -765,6 +778,7 @@ fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     audio.music = audio
@@ -905,6 +919,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
     audio.race_voice = audio
@@ -962,6 +977,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
         race_prefetch: None,
+        source_switch: None,
         sfx: None,
     };
 
