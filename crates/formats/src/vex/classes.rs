@@ -155,13 +155,16 @@ pub const V6: Classes = Classes {
 /// confidences 92, 90 and 94. `floor_collision` and `wall_collision` were
 /// this table's own measurement first; see their comments below.
 ///
-/// **Everything else here is the class-name table index** (2026-08-11), which
-/// is a second and independent chain reaching the same `0x36b` and `0x36c`
-/// and the reason `reset_collision` can be named at all. `mesh` and
-/// `transform` are the exception on purpose - they sit far outside this run's
-/// `0x36b..=0x383` span because they belong to a separate registration table
-/// whose names are not in the string run, and each was pinned by a property
-/// of its own payload instead.
+/// Most of the rest is the class-name table index (2026-08-11), which is a
+/// second and independent chain reaching the same `0x36b` and `0x36c` and the
+/// reason `reset_collision` can be named at all - see each field's own
+/// comment for whether it was checked against real data yet. `mesh` and
+/// `transform` are the table index's exception on purpose - they sit far
+/// outside this run's `0x36b..=0x383` span because they belong to a separate
+/// registration table whose names are not in the string run. `lod_group` and
+/// `fogcube` (2026-09-03) are also outside the run for the same reason, and
+/// were recovered the same way `mesh`/`transform` were: a property of their
+/// own payload or node shape, not the run.
 pub const V4: Classes = Classes {
     version: 4,
     mesh: Some(0x11e),
@@ -183,7 +186,22 @@ pub const V4: Classes = Classes {
     // length, before this table was found.
     section: Some(0x37b),
     skycube: Some(0x378),
-    fogcube: None,
+    // **Recovered 2026-09-03, structurally rather than by the table index**
+    // (`fogCube`, like `LodGroup`, is a generic Maya class absent from the
+    // 22-entry run). Seven of Pure's 16 shipped circuits carry a node named
+    // `fogCubeShapeN` under a `fogCube3`-style `Transform` parent, class
+    // `0x385`, payload exactly [`crate::fog::PAYLOAD_LEN`] (128 bytes,
+    // matching the field length to the byte, not just close to it). All ten
+    // decoded volumes across those seven files carry `edge == 500.0` -
+    // **the exact figure `crate::fog`'s own doc comment already records as
+    // "500.0 on every shipped track" on Pulse**, an independent invariant
+    // this reading reproduces rather than assumes, plus sane, finite colour
+    // and near/far fields. `crate::fog::volumes` needed no code change: it
+    // was already keyed off this field and returning empty for every Pure
+    // track. Confidence **94**: an exact arithmetic invariant (128-byte
+    // payload length, `edge` exactly `500.0`) across every fogcube instance
+    // in every file that ships one, not runtime-verified.
+    fogcube: Some(0x385),
     speedup_pad: Some(0x36f),
     weapon_pad: Some(0x370),
     start_position: Some(0x36e),
@@ -248,19 +266,49 @@ pub const V4: Classes = Classes {
     // No version-4 or version-3 file authors one; only HD does, and HD is
     // version 6.
     track_wall_collision: None,
-    lod_group: None,
-    // `Anim Transform` is index 8 of the same name run that gives the ten ids
-    // above, which puts it at `0x372`. It stays `None` for the reason
-    // `airbrake` does: no version-4 file has been checked for one and nothing
-    // reads it there, so the derivation is recorded without this table
-    // asserting it.
-    anim_transform: None,
-    // `Airbrake` *is* in the name run, at index 11, so the same arithmetic
-    // gives `0x377`. It stays `None` because nothing has looked for it in
-    // Pure's own files and nothing consumes it yet - the derivation is
-    // written down here so the next reader does not redo it, which is not the
-    // same as this table asserting the id.
-    airbrake: None,
+    // **Recovered 2026-09-03, structurally rather than by the table index**
+    // (`LodGroup` is a generic Maya class name, absent from the 22-entry
+    // string run that gives the ids above): every one of Pure's six
+    // reachable team ships carries exactly one node named `lodGroup1` (or
+    // the same name on a different circuit's scenery), class `0x2de`, with
+    // exactly two `Transform` children - the shape
+    // [`crate::vex`]'s own `LodGroup` reader in `oag-render` already assumes
+    // ("the node whose second child is a mesh's low-detail alternative").
+    // `crates/pure/tests/class_table_ground_truth.rs` re-derives this and
+    // fails if the id stops matching. Confidence **88**: an exact node name
+    // plus exact child-count structure, consistent across all six ships
+    // checked, not runtime-verified.
+    lod_group: Some(0x2de),
+    // **Recovered 2026-09-03.** `Anim Transform` is index 8 of the class-name
+    // run, giving `0x372` by the same table-index arithmetic as the ten ids
+    // above - and unlike `airbrake`/`lod_group`, this one *is* the same table,
+    // just never checked against real data before. Checked now: every one of
+    // Pure's 16 shipped circuits carries at least one `0x372` node, 332 in
+    // total, and **every single one** parses as a valid
+    // [`crate::vex::anim_transform`] payload - a decoder that fails loudly on
+    // a key array running past the payload's end (see its own doc comment),
+    // not one a garbage class id could pass by accident. Confidence **94**:
+    // an exact arithmetic invariant (332 of 332 payloads close under the
+    // decoder's own bounds checks) across every file that ships. The rubric
+    // caps this band regardless, since it is not runtime-verified.
+    anim_transform: Some(0x372),
+    // **Recovered 2026-09-03.** `Airbrake` is index 11 of the same run,
+    // giving `0x377` - previously written down as a derivation nobody had
+    // checked against Pure's own files. Checked now: six of Pure's eight
+    // team ships are reachable on this pressing (the other two hash to
+    // nothing under the Pulse-derived team-directory names, a naming
+    // question this doesn't chase), and every one carries exactly two
+    // `0x377` nodes named `Airbrake_Left`/`Airbrake_Right` (case varies by
+    // team - `mesh.rs`'s own reader already compares case-insensitively),
+    // each with a single `Mesh` (`0x11e`) child under a `Transform` parent -
+    // the exact shape `crates/render/src/mesh.rs` already assumes when it
+    // reads `classes.airbrake`. Before this, that reader could never fire on
+    // a Pure ship at all: Pure's flaps rendered in their base pose with no
+    // deflection. Confidence **90**: exact node names, matching the
+    // reimplementation's own structural assumption, consistent across six of
+    // six ships checked; not runtime-verified, and two ships' directory
+    // names are still unconfirmed on this pressing.
+    airbrake: Some(0x377),
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
 };

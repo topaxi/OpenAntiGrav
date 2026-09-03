@@ -81,6 +81,7 @@ fn the_report_names_both_kinds_of_absence() {
         materials_unread: 1,
         variant_chunks: 300,
         variant_chunks_missed: 4,
+        specular_exponent_unresolved: 12,
         isolated: 0,
     };
     let line = report.describe();
@@ -121,6 +122,10 @@ fn the_report_names_both_kinds_of_absence() {
     );
     assert!(line.contains("2 submesh(es) dropped as strays"), "{line}");
     assert!(line.contains("531904 authored vertex normal(s)"), "{line}");
+    assert!(
+        line.contains("12 material(s) with no specular_exponent chain read (default used)"),
+        "{line}"
+    );
     // And the other way round: a model whose vertices carry no normal says
     // that the shading is this project's derivation, not the disc's data.
     let derived = Report {

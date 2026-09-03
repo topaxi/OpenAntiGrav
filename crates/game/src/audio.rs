@@ -39,8 +39,8 @@ use crate::display::percentage;
 pub mod sfx;
 
 mod race_music;
-pub use race_music::RaceMusicWorker;
-use race_music::locate;
+pub use race_music::MusicFetchWorker;
+use race_music::{PendingSwitch, locate};
 
 /// A bus volume, as a percentage of unattenuated.
 ///
@@ -548,7 +548,7 @@ pub struct Audio {
     /// - the track index it targets, alongside the worker fetching it.
     ///
     /// **This is what keeps a track boundary - or a future skip control -
-    /// from hitching**, the same way [`RaceMusicWorker`] keeps the race
+    /// from hitching**, the same way [`MusicFetchWorker`] keeps the race
     /// launch itself from hitching: [`Self::advance_race_track`] used to
     /// call [`Self::play_race_track`] synchronously the moment the current
     /// track ended, decoding the next one - 0.4 to 2.8 s by this module's own
@@ -569,7 +569,16 @@ pub struct Audio {
     /// checks the two still agree before trusting it, and
     /// [`Self::set_race_music_source`] drops a stale one outright rather than
     /// let it survive a source change it was not fetched for.
-    race_prefetch: Option<(usize, RaceMusicWorker)>,
+    race_prefetch: Option<(usize, MusicFetchWorker)>,
+    /// A `MUSIC SOURCE` row switch presently being fetched off the tick
+    /// thread - see [`Self::set_music_source`]. `None` when the row is not
+    /// mid-switch.
+    ///
+    /// At most one in flight: a fresh request before this lands replaces it
+    /// rather than queuing behind it, the same as [`Self::race_prefetch`]
+    /// does for a stale prefetch - the detaching worker's own result, if it
+    /// lands late, is simply nobody's.
+    source_switch: Option<PendingSwitch>,
 }
 
 /// A music track that has been read and decoded, before a voice is started on
@@ -580,7 +589,7 @@ pub struct Audio {
 /// sixteen soundtrack tracks, which is what decides whether MUSIC SOURCE may
 /// ever move it. See [`MusicSource`].
 ///
-/// `pub` - not its fields - so [`RaceMusicWorker::join`] can hand one back
+/// `pub` - not its fields - so [`MusicFetchWorker::join`] can hand one back
 /// across the crate's own lib/bin boundary, the way [`crate::race::Loaded`]
 /// already does for the circuit's own worker. Nothing outside this module
 /// needs to read a field; it only ever moves one straight into
@@ -644,6 +653,10 @@ impl std::fmt::Debug for Audio {
                 "race_prefetch",
                 &self.race_prefetch.as_ref().map(|(i, _)| i),
             )
+            .field(
+                "source_switch",
+                &self.source_switch.as_ref().map(|pending| pending.wanted),
+            )
             .finish()
     }
 }
@@ -691,6 +704,7 @@ impl Audio {
             menu_sound: None,
             race_context: None,
             race_prefetch: None,
+            source_switch: None,
             sfx: None,
         };
         audio.apply(settings);
@@ -951,101 +965,23 @@ impl Audio {
     /// desync: the row would claim a platform the audible voice was not on, and
     /// the next [`Self::pause_race_music`] would resume the wrong recording.
     /// See [`Self::set_race_music_source`].
+    ///
+    /// **Never blocks any more.** A release read for the first time this
+    /// session used to decode synchronously on whatever thread called this
+    /// (0.4 s for a cached PSP decode, 2.0 s cold for the PS2's 36 MiB of
+    /// PCM), and this row is reachable mid-race, with `apply.rs` applying a
+    /// settings change on the same thread that runs the tick loop - a freeze
+    /// on a player action, not a hypothetical. A release already read this
+    /// session (in [`Self::held`]/[`Self::race_cache`]) still applies on the
+    /// spot, since that path does no I/O, but a fresh one now goes through a
+    /// [`MusicFetchWorker`], the same way [`Self::start_race_music`]'s own
+    /// hand-off does, and [`Self::tick`] applies the result once it lands.
+    /// See `handover/streaming-decode-for-audio-would-break-seek-and.md`.
     pub fn set_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
         if self.race_voice.is_some() {
             self.set_race_music_source(discs, choice, cache_dir);
         } else {
             self.set_menu_music_source(discs, choice, cache_dir);
-        }
-    }
-
-    /// [`Self::set_music_source`]'s menu case, exactly as it always worked.
-    fn set_menu_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        let Some((_, wanted)) = discs.pick(choice) else {
-            return;
-        };
-        let (Some(playing), Some(from)) = (self.music, self.music_from) else {
-            // Either nothing is playing, or what is playing is not one of the
-            // sixteen. Neither is this row's business - see above.
-            return;
-        };
-        if from == wanted {
-            return;
-        }
-
-        let at = self.playhead().unwrap_or(0.0);
-        match self.fetch(discs, choice, cache_dir) {
-            Ok(Some(loaded)) => {
-                self.menu_sound = Some(Arc::clone(&loaded.sound));
-                self.output.with_mixer(|mixer| {
-                    mixer.stop(playing);
-                    let started = mixer.play(Play::looping(loaded.sound, Bus::Music));
-                    if let Some(id) = started {
-                        mixer.seek(id, at);
-                    }
-                    self.music = started;
-                });
-                self.music_from = self.music.and(loaded.from);
-                info!("audio: music {}, from {at:.1} s", loaded.what);
-            }
-            Ok(None) => {
-                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
-            }
-            Err(error) => warn!("audio: the music stays where it is ({error:#})"),
-        }
-    }
-
-    /// [`Self::set_music_source`]'s race case: the same seek-preserving swap,
-    /// against [`Self::race_voice`]/[`Self::race_index`] instead of the menu's
-    /// fields, and through [`Self::fetch_indexed`] rather than [`Self::fetch`]
-    /// so the decode lands in the bounded [`Self::race_cache`], not [`Self::held`].
-    fn set_race_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        let Some((_, wanted)) = discs.pick(choice) else {
-            return;
-        };
-        let (Some(playing), Some(from), Some(index)) =
-            (self.race_voice, self.race_from, self.race_index)
-        else {
-            return;
-        };
-        if from == wanted {
-            return;
-        }
-
-        let at = self.playhead_race().unwrap_or(0.0);
-        match self.fetch_indexed(discs, choice, cache_dir, index) {
-            Ok(Some(loaded)) => {
-                self.output.with_mixer(|mixer| {
-                    mixer.stop(playing);
-                    let started = mixer.play(Play::once(Arc::clone(&loaded.sound), Bus::Music));
-                    if let Some(id) = started {
-                        mixer.seek(id, at);
-                    }
-                    self.race_voice = started;
-                });
-                self.race_from = self.race_voice.and(loaded.from);
-                self.race_cache = loaded.from.map(|platform| (platform, index, loaded.sound));
-                // So a later advance-on-finish (`Self::tick`) fetches the next
-                // track from the release the row now names, not the one it
-                // used to.
-                if let Some((cached_discs, cached_choice, _)) = &mut self.race_context {
-                    *cached_discs = discs.clone();
-                    *cached_choice = choice;
-                }
-                // Dropped rather than kept: a prefetch in flight was started
-                // for the release this row just left, and a track fetched
-                // from the wrong release is exactly the kind of wrong
-                // `Self::advance_race_track` cannot detect by index alone.
-                // `Self::maybe_prefetch_next_race_track` starts a correct one
-                // on the very next tick - the detaching thread's own result,
-                // if it lands late, is simply nobody's.
-                self.race_prefetch = None;
-                info!("audio: race music {}, from {at:.1} s", loaded.what);
-            }
-            Ok(None) => {
-                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
-            }
-            Err(error) => warn!("audio: the race music stays where it is ({error:#})"),
         }
     }
 
@@ -1263,6 +1199,13 @@ impl Audio {
     /// mixer at the hardware's own pace, and pulling here would take samples
     /// out of its mouth.
     pub fn tick(&mut self) {
+        // Before the race-boundary check below: a switch that landed this
+        // tick may have just replaced `race_voice` with a freshly-started
+        // one, and that voice is playing by construction - nothing left for
+        // the boundary check to do with it this tick either way, but polling
+        // first keeps the two from racing each other over which one moves
+        // `race_voice` on a tick they would otherwise both touch it.
+        self.poll_source_switch();
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
         {

@@ -62,7 +62,7 @@ pub(crate) struct LoadingStage {
     /// from, so there is no earlier moment to build it at.
     pub(crate) built_race: Option<Result<Box<RaceStage>, RaceBuildError>>,
     /// The race's music, being located and decoded alongside the circuit -
-    /// see [`audio::RaceMusicWorker`], spawned next to [`Self::race`] in
+    /// see [`audio::MusicFetchWorker`], spawned next to [`Self::race`] in
     /// `Session::launch_race`. `Some` on the race path, `None` on the boot
     /// one, the same split [`Self::race`] itself carries.
     ///
@@ -74,7 +74,7 @@ pub(crate) struct LoadingStage {
     /// mixer is actually touched - never here, and never before the fade
     /// runs out, or the race music would start audibly under the loading
     /// screen.
-    pub(crate) music: Option<audio::RaceMusicWorker>,
+    pub(crate) music: Option<audio::MusicFetchWorker>,
     pub(crate) trace: bool,
 }
 
@@ -119,7 +119,7 @@ impl LoadingStage {
                 && self
                     .music
                     .as_ref()
-                    .is_none_or(audio::RaceMusicWorker::is_finished))
+                    .is_none_or(audio::MusicFetchWorker::is_finished))
     }
 }
 

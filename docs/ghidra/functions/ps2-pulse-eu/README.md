@@ -28,12 +28,15 @@ form, and Ghidra's string search will return all three.
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
 | [Collision feedback](collision-shake.md) | The hull-spark trigger, the shield-bubble hit-flash, and a camera shake on impact - all three shared with the PSP, the shake mislabelled a sound cue there until this page's own read prompted correcting it |
+| [Anim Transform](anim-transform.md) | The scene-graph node the boost plume's anchors ride: one shared per-race clock, not a per-object timer, matching PSP's class field for field |
 
 ## Renames
 
-**Applied.** 169 symbols, collected in [names.tsv](names.tsv). There is no
-`just` recipe for this set yet; run the script directly against a bridge with
-`SCES_547.48` open:
+**175 applied live**, 3 more collected in [names.tsv](names.tsv) but not yet
+applied - the `Anim Transform` page's three data globals, rejected by the
+MCP bridge's `rename_data` name-quality gate (see that page). Run the script
+directly against a bridge with `SCES_547.48` open to pick those up, since it
+does not go through that gate:
 
 ```sh
 scripts/apply-ghidra-names.py --program SCES_547.48 \
@@ -68,6 +71,7 @@ names but the agreements and the disagreements.
 | The four-corner hover selector, the body accumulator offsets, and the craft update's vtable dispatch shape | [engine.md](../psp-pulse-usa/engine.md) | Same globals, same magic value 6, same `+0x100`/`+0x120`/`+0x130`, same `{i16 adjust, fn}` pair with `+0x370` cleared before the call |
 | The abstract button layer and its four edge masks | [input.md](../psp-pulse-usa/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
 | Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse-usa/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
+| `Anim Transform` nodes are driven by one shared per-race clock (`g_ingame`/`g_anim_clock`), not a per-node timer | [anim-transform.md](../psp-pulse-usa/anim-transform.md) | Same fallback-then-primary clock read, same rate-multiplier gate, same pause flag, same `fmodf`-against-`LoopEnd` wrap, same two-writer session object. See [anim-transform.md](anim-transform.md) |
 
 ### Where the two builds disagree
 

@@ -203,3 +203,13 @@
 0x0013eec0	function	Camera_ArmShake	92	collision-shake.md
 0x001eced0	function	ShipCollisionFx_Trigger	90	collision-shake.md
 0x00169af8	function	ShipShield_Hit	85	collision-shake.md
+
+0x001d0350	function	AnimTransform_Update	90	anim-transform.md
+0x0023e098	function	fmodf	88	anim-transform.md
+0x001cffa0	function	AnimTransform_Bind	85	anim-transform.md
+0x001cfed8	function	AnimTransform_Construct	75	anim-transform.md
+0x00123878	function	InGame_Construct	82	anim-transform.md
+0x00123b98	function	InGame_Destruct	82	anim-transform.md
+0x0027ddbc	data	g_ingame	85	anim-transform.md
+0x00299b10	data	g_anim_transform_vtable	80	anim-transform.md
+0x002e3640	data	g_ingame_fallback	70	anim-transform.md
