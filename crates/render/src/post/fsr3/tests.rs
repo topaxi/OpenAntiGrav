@@ -432,6 +432,21 @@ fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
             );
         }
     }
+
+    // And the pass that collapses those three levels into one answer says the
+    // same thing. Not implied by the above: it multiplies the two channels and
+    // takes a maximum across levels, and a sign error in either would still
+    // read zero from zeros - which is why the control below exists.
+    for (index, change) in scene
+        .read_r32(&targets.shading_change.texture)
+        .iter()
+        .enumerate()
+    {
+        assert_eq!(
+            *change, 0.0,
+            "texel {index} reports a shading change in a still scene"
+        );
+    }
 }
 
 #[test]
@@ -483,6 +498,23 @@ fn a_changed_scene_reports_a_signed_shading_change() {
         assert!(
             (*sign_sum - 1.0).abs() < 0.01,
             "texel {index} sign sum {sign_sum}, wanted +1 for a brightening"
+        );
+    }
+
+    // The collapse to one answer: `abs(x * y)` at each of three levels, then
+    // the maximum. On a flat change every level holds the same pair, so the
+    // answer is that pair's product - `0.75 * 1`. **Unsigned**, which is the
+    // point of the `abs`: a darkening and a brightening of the same magnitude
+    // are the same amount of shading change, and only the pyramid keeps the
+    // direction.
+    for (index, change) in scene
+        .read_r32(&targets.shading_change.texture)
+        .iter()
+        .enumerate()
+    {
+        assert!(
+            (*change - 0.75).abs() < 0.01,
+            "texel {index} shading change {change}, wanted 0.75"
         );
     }
 }

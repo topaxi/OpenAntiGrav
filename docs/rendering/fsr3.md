@@ -69,7 +69,7 @@ order, so this table and the code cannot drift apart silently.
 | 1 | `prepare_inputs` | render | **yes** |
 | 2 | `luma_pyramid` (SPD) | render/2 | **yes**, reduced to one dispatch - see below |
 | 3 | `shading_change_pyramid` (SPD) | render/2, mips | **yes**, as a dispatch per level |
-| 4 | `shading_change` | render/2 | no |
+| 4 | `shading_change` | render/2 | **yes** |
 | 5 | `prepare_reactivity` | render | no |
 | 6 | `luma_instability` | render | no |
 | 7 | `accumulate` | **presentation** | no |

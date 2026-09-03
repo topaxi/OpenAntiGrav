@@ -160,7 +160,10 @@ impl Pass {
     pub fn ported(self) -> bool {
         matches!(
             self,
-            Self::PrepareInputs | Self::LumaPyramid | Self::ShadingChangePyramid
+            Self::PrepareInputs
+                | Self::LumaPyramid
+                | Self::ShadingChangePyramid
+                | Self::ShadingChange
         )
     }
 }
@@ -230,6 +233,27 @@ fn store_entry(binding: u32, format: wgpu::TextureFormat) -> wgpu::BindGroupLayo
             access: wgpu::StorageTextureAccess::WriteOnly,
             format,
             view_dimension: wgpu::TextureViewDimension::D2,
+        },
+        count: None,
+    }
+}
+
+/// A texture read with `textureSampleLevel` through the filtering sampler,
+/// across its whole mip chain.
+///
+/// **The one binding kind here that is not `textureLoad`.** `shading_change`
+/// samples the pyramid at three explicit mip levels, interpolating across each
+/// level's coarser grid rather than snapping to it, so the binding has to
+/// declare itself filterable - which `Rgba16Float` is, in the WebGPU baseline,
+/// and which a depth format is not. Nothing depth-shaped reaches this entry.
+fn sample_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
         },
         count: None,
     }
@@ -316,6 +340,8 @@ pub struct Fsr3 {
     shading_change_pyramid_layout: wgpu::BindGroupLayout,
     shading_change_pyramid_mip0: wgpu::ComputePipeline,
     shading_change_pyramid_reduce: wgpu::ComputePipeline,
+    shading_change_layout: wgpu::BindGroupLayout,
+    shading_change: wgpu::ComputePipeline,
     /// One uniform per pyramid level, holding that level's source extent. See
     /// [`level_entry`]; written once, because the extents are a function of the
     /// allocation rather than of the frame.
@@ -429,6 +455,15 @@ impl Fsr3 {
                 ],
             });
 
+        let shading_change_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("fsr3 shading change"),
+                entries: &[
+                    sample_entry(0),
+                    store_entry(1, wgpu::TextureFormat::R32Float),
+                ],
+            });
+
         // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
         // extent, so these never have to be rewritten - see the shader's
         // `pyramid_level_size`.
@@ -503,6 +538,12 @@ impl Fsr3 {
             "cs_shading_change_pyramid_reduce",
             &shading_change_pyramid_layout,
         );
+        let shading_change = pipeline(
+            "fsr3 shading change",
+            include_str!("fsr3/shading_change.wgsl"),
+            "cs_shading_change",
+            &shading_change_layout,
+        );
 
         Ok(Self {
             shared,
@@ -518,6 +559,8 @@ impl Fsr3 {
             shading_change_pyramid_layout,
             shading_change_pyramid_mip0,
             shading_change_pyramid_reduce,
+            shading_change_layout,
+            shading_change,
             levels,
             targets: None,
         })
@@ -731,6 +774,24 @@ impl Fsr3 {
             })
             .collect();
 
+        // The whole pyramid, through a filtering sampler at three explicit mip
+        // levels - so this binds the texture's own view rather than one of the
+        // per-level ones the chain above writes through.
+        let shading_change_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fsr3 shading change"),
+            layout: &self.shading_change_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&targets.spd_mips.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&targets.shading_change.view),
+                },
+            ],
+        });
+
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
         let texels = render.0 * render.1;
 
@@ -777,6 +838,10 @@ impl Fsr3 {
             pass.set_bind_group(1, Some(group), &[]);
             pass.dispatch_workgroups(groups(level_size.0, GROUP), groups(level_size.1, GROUP), 1);
         }
+
+        pass.set_pipeline(&self.shading_change);
+        pass.set_bind_group(1, Some(&shading_change_group), &[]);
+        pass.dispatch_workgroups(groups(half.0, GROUP), groups(half.1, GROUP), 1);
     }
 
     /// Rebuilds every intermediate when either allocation moves.
