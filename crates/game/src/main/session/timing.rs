@@ -35,9 +35,32 @@ impl Session {
     /// `self.shell`, neither of which changed mid-frame, so recomputing it
     /// here would be a second read of the same answer with a chance to
     /// disagree with the first.
+    ///
+    /// `frame_seconds` comes the same way and for a sharper version of the
+    /// same reason: it is the one `elapsed` this loop reads a clock for, the
+    /// same one `Session::meter` is fed, and `drs::Residual` may only be
+    /// handed a wall-clock reading somebody else took - see [ADR-0044]. It is
+    /// `None` on a frame that carried a load, which is the same guard
+    /// `meter.clear()` is behind.
+    ///
+    /// **The instantaneous frame time rather than `meter.stats().mean_ms`**,
+    /// which is the number the overlay's `OTHER` row subtracts from. A mean
+    /// over the last hundred-odd frames against a single frame's timed passes
+    /// is two signals a hundred frames out of phase, and the residual only
+    /// ever tightens on a reading *below* what it holds, so that phase error
+    /// is not noise that averages out - every dip it invents is kept. What is
+    /// paired here is one frame against the passes of the frame before it -
+    /// `PassTimer` resolves exactly one frame late, measured over 5,306
+    /// consecutive readings, and that offset is the reason
+    /// `drs::residual::LEARN_RATE`'s own note gives for a reading that can
+    /// read low while the cost is moving. One frame of skew, not a hundred,
+    /// and the estimate's own smoothing is then the only smoothing.
+    ///
+    /// [ADR-0044]: ../../../../docs/architecture/adr/0044-the-residual-is-a-learned-upper-bound.md
     pub(super) fn read_timing_and_feed_drs(
         &mut self,
         render_profile: &settings::RenderProfile,
+        frame_seconds: Option<f32>,
         drs_limits: drs::Limits,
     ) {
         let read = |timer: &mut Option<oag_render::timing::PassTimer>, device| {
@@ -151,16 +174,28 @@ impl Session {
                 // The same reading, inside the same guard: a load lands in one
                 // frame's timing and would otherwise drive the scale to the
                 // floor and take seconds to climb back.
-                if let Some(extent) = self.drs.record(cost, drs_limits) {
+                if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
+                    // **The reserve is printed beside the costs**, because
+                    // since ADR-0044 it is not a constant a reader can look up:
+                    // two lines a minute apart can divide the same scalable
+                    // cost by two different budgets, and without this there is
+                    // nothing in the log that says so.
                     trace!(
-                        "dynamic resolution: {}x{} ({:.0}% of {}x{}) - scalable {:.3} ms, fixed {:.3} ms",
+                        "dynamic resolution: {}x{} ({:.0}% of {}x{}) - scalable {:.3} ms, \
+                         fixed {:.3} ms, residual {:.3} ms{}",
                         extent.0,
                         extent.1,
                         self.drs.scale() * 100.0,
                         drs_limits.ceiling().0,
                         drs_limits.ceiling().1,
                         cost.scalable * 1000.0,
-                        cost.fixed * 1000.0
+                        cost.fixed * 1000.0,
+                        reserved_ms(&self.drs, drs_limits),
+                        if self.drs.residual().learned().is_some() {
+                            " (learned)"
+                        } else {
+                            " (assumed)"
+                        }
                     );
                 }
                 // Said once per spell rather than per frame - see
@@ -168,11 +203,13 @@ impl Session {
                 if self.drs.unreachable() && !self.drs_unreachable_said {
                     warn!(
                         "dynamic resolution: {} fps is out of reach here - {:.3} ms of this \
-                         frame is fixed cost the render scale cannot shrink, against a \
-                         {:.3} ms budget. Lower the target, or the rows that feed the \
-                         fixed cost (reconstruction, msaa)",
+                         frame is fixed cost the render scale cannot shrink and {:.3} ms is \
+                         held back for work nothing times, against a {:.3} ms budget. Lower \
+                         the target, or the rows that feed the fixed cost (reconstruction, \
+                         msaa)",
                         drs_limits.target(),
                         cost.fixed * 1000.0,
+                        reserved_ms(&self.drs, drs_limits),
                         drs_limits.target().period().unwrap_or(0.0) * 1000.0
                     );
                 }
@@ -186,4 +223,14 @@ impl Session {
             self.frame_index
         );
     }
+}
+
+/// What the controller is holding back this frame, in milliseconds.
+///
+/// A free function rather than a method on `drs::Residual`: the reserve is
+/// seconds against a target period and the log wants milliseconds against a
+/// target that may be off, and neither of those is the controller's business.
+fn reserved_ms(drs: &drs::Controller, limits: drs::Limits) -> f32 {
+    let period = limits.target().period().unwrap_or(0.0);
+    drs.residual().seconds(period) * 1000.0
 }
