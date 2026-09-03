@@ -1,4 +1,4 @@
-# The camera shake on impact is located, on both PSP and PS2 - implementing it is what's left
+# The camera shake on impact is implemented; only its rotation axis is unconfirmed
 
 A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has no shake at all.
 
@@ -13,16 +13,23 @@ A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has 
 - The two arm-call scale constants are read directly from both binaries' `.data`: **magnitude scale `0.3`, duration `0.6` seconds flat** (`DAT_0027e8dc`/`DAT_0027e8e0` on PS2, `DAT_08ab0dfc`/`DAT_08ab0e00` on PSP - identical bytes).
 - **The "offset vector" this thread previously flagged as unconfirmed is not an offset at all.** `param_1 + 0x40` is the first row of the camera's own 3x4 basis matrix. `FUN_0025cbb0` (PS2) and `func_0x002676b4` (PSP, `0x08a6b6b4`) both build a Rodrigues axis-angle rotation matrix from the shake's oscillator output and `vmmul_t` it into that basis - confirmed independently on both binaries. **The shake rotates the camera's orientation; it does not translate the eye.**
 
-What's left is squarely implementation and design, not reading.
+**2026-09-03, implemented.** `oag_render::camera::shake::Shake` reproduces the
+confirmed envelope, timing, severity scale and per-mode combination exactly;
+wired into `oag-game`'s `Race` at the same wall-contact site the hull sparks
+already fire from, applied as a post-rotation on the view matrix. The
+rotation axis is the one unconfirmed piece and is implemented as this
+module's own flagged choice (the camera's local right) rather than a
+reading - see the module's own doc comment for the full accounting of what
+is confirmed and what is not. `just` passes clean with the implementation in.
 
 ## Open
 
-- The rotation *axis* itself - Ghidra drops the carrying (non-GPR) argument from the decompiled C signature at every call level (`FUN_0013e280` -> `FUN_0025cbb0` -> `FUN_0025ca48`), so which axis (or axes, per `shake_mode`) the rotation happens around needs a raw p-code/register read, not another decompile. See collision-shake.md's "Not determined".
-- Whether `oag_render`/`crates/game` should implement this shake, for which title(s), and how it composes with the existing chase-camera smoothing - a design decision, not a reading.
+- The rotation *axis* itself - Ghidra drops the carrying (non-GPR) argument from the decompiled C signature at every call level (`FUN_0013e280` -> `FUN_0025cbb0` -> `FUN_0025ca48`), so which axis (or axes, per `shake_mode`) the rotation happens around needs a raw p-code/register read, not another decompile. See collision-shake.md's "Not determined". The implementation's own choice is flagged in `oag_render::camera::shake`'s doc comment and would need revisiting if this is ever settled.
 - Whether Pure, HD/Fury and 2048 carry the same mechanism - a maintainer's guess that it continues into newer titles, not yet checked on any of them.
+- Whether the shake reads right on screen against the real games - nobody has yet compared this implementation's motion against a capture or a play session, only against the recovered arithmetic.
 
 ## Next Steps
 
-- Decide whether to implement the shake in `oag_render`, and for which title(s). Given the axis is unresolved, an initial implementation would need to pick a reasoned, clearly-flagged axis choice (e.g. the camera's own right/up axes) rather than the exact original - document that as an approximation per this project's own rule against invented stand-ins, distinct from the fully-confirmed envelope/timing/severity maths.
-- If time allows, read `FUN_0025ca48`'s `in_a1_qw` argument's register origin via p-code to settle the axis before committing to an approximation.
+- If time allows, read `FUN_0025ca48`'s `in_a1_qw` argument's register origin via p-code to settle the axis; if it turns out to differ from a fixed local-right choice, `oag_render::camera::shake::AXIS` and `Shake::rotation` are the only things that would need to change.
 - Check HD/Fury and 2048 for the same collision-response shape (a `min(|impulse| * k, 1)` severity feeding both a spark trigger and a camera-shake arm) if/when either title's collision path is read for other reasons - not worth a dedicated pass on its own yet.
+- Play-test or capture-compare the landed implementation against the real games at some point, the way `crates/game/tests/chase_camera_ground_truth.rs` did for the chase camera - nothing here has been checked against a running original yet, only against its decompiled arithmetic.
