@@ -431,6 +431,23 @@ pub fn capture(
         ),
         None => rect,
     };
+    // Computed once for all three `Scene::render` calls below, so the primer,
+    // the bench loop and the real frame cannot disagree about the sequence -
+    // they already share `Scene`'s own frame counter, and a differing phase
+    // count would desynchronise the offsets rather than the indices.
+    //
+    // **`Upscaler::Off` on an ordinary capture, and that is correct rather than
+    // a shortcut**: without `--presented` no upscaler runs at all, so nothing
+    // is reconstructing and only the flag can ask for jitter. See
+    // `upscale::jitter_phases`.
+    let camera_jitter = crate::upscale::jitter_phases(
+        options.camera_jitter,
+        presented.map_or(crate::display::Upscaler::Off, |state| {
+            state.presentation.upscaler
+        }),
+        (viewport.2 as u32, viewport.3 as u32),
+        (rect.2 as u32, rect.3 as u32),
+    );
 
     // The primer frame a motion blur capture needs: the scene at the
     // tick-before-last pose, drawn into the same target and then entirely
@@ -469,7 +486,7 @@ pub fn capture(
             options.pvs_culling,
             options.anim_seconds,
             options.motion_blur,
-            options.camera_jitter,
+            camera_jitter,
             &spectrum,
             // **No timestamps on any capture path**, deliberately: this
             // project compares captures byte for byte, and a measurement is
@@ -528,7 +545,7 @@ pub fn capture(
                 options.pvs_culling,
                 options.anim_seconds,
                 options.motion_blur,
-                options.camera_jitter,
+                camera_jitter,
                 &spectrum,
                 // `OAG_RENDER_BENCH` measures the CPU side of encoding this
                 // pass and says so; a GPU timestamp is a different number
@@ -565,7 +582,7 @@ pub fn capture(
         // the smear a player sees is the smear the PNG shows. Off, the pass
         // never observed a previous camera and encodes nothing.
         options.motion_blur,
-        options.camera_jitter,
+        camera_jitter,
         &spectrum,
         // Untimed, as the primer above is and for the same reason.
         None,

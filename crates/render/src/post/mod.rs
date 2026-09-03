@@ -32,6 +32,7 @@
 
 pub mod bloom;
 pub mod fsr1;
+pub mod fsr3;
 pub mod fxaa;
 pub mod hd_bloom;
 pub mod motion_blur;

@@ -134,19 +134,25 @@ impl super::Scene {
     /// Returned as a pair for the caller to shadow its own bindings with: the
     /// dozen use sites downstream then pick the jittered matrices up without one
     /// of them being missed, and a miss would be wrong only with jitter on.
+    ///
+    /// `phases` is `None` for off, and otherwise the sequence length - which is
+    /// a property of whatever is *resolving* these frames, not of the camera.
+    /// A temporal upscaler wants more phases the further it is magnifying
+    /// ([`oag_render::jitter::phases`]); nothing at all wants
+    /// [`oag_render::jitter::DEFAULT_PHASES`].
     pub(super) fn jittered(
         &self,
-        on: bool,
+        phases: Option<u32>,
         viewport: (f32, f32, f32, f32),
         view_projection: Mat4,
         prev_vp: Mat4,
     ) -> (Mat4, Mat4) {
         let frame = self.frame_index.get();
         self.frame_index.set(frame.wrapping_add(1));
-        if !on {
+        let Some(phases) = phases else {
             return (view_projection, prev_vp);
-        }
-        let jitter = oag_render::jitter::matrix(frame, (viewport.2, viewport.3));
+        };
+        let jitter = oag_render::jitter::matrix(frame, phases, (viewport.2, viewport.3));
         (jitter * view_projection, jitter * prev_vp)
     }
 }

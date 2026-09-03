@@ -91,6 +91,39 @@ pub struct Presentation {
     pub gamma: Gamma,
 }
 
+/// The jitter sequence this frame's scene should be drawn with, or `None` for
+/// no jitter at all.
+///
+/// **The upscaler decides this, not a settings row**, and that inversion is the
+/// point of the function existing. Sub-pixel jitter is not a picture setting: it
+/// is an input a *temporal* reconstruction needs and a *spatial* one is actively
+/// harmed by, because with nothing resolving the offsets they are a shimmer
+/// bought for nothing
+/// ([ADR-0039](../../../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)).
+/// So FSR 3.1 turns it on whether or not `flag` is set, and everything else
+/// leaves it to the flag.
+///
+/// `flag` is `--camera-jitter`, which stays an override for looking at jitter on
+/// its own. It gets [`oag_render::jitter::DEFAULT_PHASES`] rather than a
+/// ratio-derived count, because with no upscaler behind it there is no ratio -
+/// nothing is resolving the frames it jitters.
+///
+/// `extent` is the rectangle the scene is actually drawn into and `output` the
+/// presentation rectangle; the count is quadratic in their ratio, so it has to
+/// be recomputed as a resolution controller moves the extent.
+#[must_use]
+pub fn jitter_phases(
+    flag: bool,
+    upscaler: Upscaler,
+    extent: (u32, u32),
+    output: (u32, u32),
+) -> Option<u32> {
+    if upscaler.is_temporal() {
+        return Some(oag_render::jitter::phases(extent.0, output.0));
+    }
+    flag.then_some(oag_render::jitter::DEFAULT_PHASES)
+}
+
 mod blit;
 
 use blit::{Grade, Source, grade_buffer};

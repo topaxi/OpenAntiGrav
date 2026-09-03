@@ -648,7 +648,17 @@ impl Session {
                     pvs_culling,
                     self.anim_seconds,
                     render_profile.motion_blur,
-                    self.camera_jitter,
+                    // **Derived from the upscaler, not read from the flag**,
+                    // and computed here because this is the one place that
+                    // holds both sizes the count depends on: `size` is the
+                    // extent the scene is drawn at and `rect` the rectangle it
+                    // resolves into. See `upscale::jitter_phases`.
+                    upscale::jitter_phases(
+                        self.camera_jitter,
+                        render_profile.upscaler,
+                        size,
+                        (rect.2 as u32, rect.3 as u32),
+                    ),
                     &zone_spectrum,
                     self.pass_timer
                         .as_ref()

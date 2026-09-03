@@ -64,6 +64,14 @@ test-data:
 link-data:
     bash scripts/link-worktree-data.sh
 
+# Fetches the FidelityFX SDK shader sources the FSR ports are diffed against,
+# into ~/.cache/oag-fsr and never into the repository. Nothing is vendored:
+# ADR-0012 chose a WGSL port over linking the SDK, and the port's only defence
+# against drifting from upstream is that it stays diffable against a pinned
+# tag. See docs/rendering/fsr3.md for the pin and why it is v1.1.4.
+fsr-reference:
+    bash scripts/fetch-fsr-reference.sh
+
 build:
     cargo build --workspace
 

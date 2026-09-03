@@ -563,9 +563,15 @@ warn_when = [
 # upscale and the choice is between a blit and a sharpen. Applies from the next
 # frame; the pipelines are built the first time `fsr1` is chosen.
 #
-# Has no effect at a render scale of 100 % or above: FSR 1 is a magnifier, and
-# asked to minify it re-introduces the aliasing supersampling just removed, so
-# `upscale::magnifies` declines to run it there.
+# `fsr1` has no effect at a render scale of 100 % or above: FSR 1 is a
+# magnifier, and asked to minify it re-introduces the aliasing supersampling
+# just removed, so `upscale::magnifies` declines to run it there.
+#
+# **`fsr3` is not warned about, and that is not an oversight.** FSR 3.1 is
+# temporal: it reconstructs from several previous frames, so even at 100 % it
+# has more samples per pixel than one frame carries and is doing real work -
+# what upstream calls its native-AA mode. The warnings below are therefore
+# conditioned on `fsr1` by name rather than on "not off".
 #
 # Warned rather than greyed, and the difference is who caused it. A greyed row
 # cannot be changed now because another row rules it out. This one can be
@@ -578,7 +584,7 @@ warn_when = [
 kind = "choice"
 label = "UPSCALER"
 setting = "graphics.upscaler"
-values = ["off", "fsr1"]
+values = ["off", "fsr1", "fsr3"]
 warn_when = [
     # Two entries for one statement, because `Condition.all` is an AND and
     # this needs an OR: FSR 1 does nothing when the frame can never be drawn
@@ -614,8 +620,10 @@ disabled_by = { setting = "graphics.upscaler", value = "off" }
 # different classes - rasterization, and two spatial post-process passes - not
 # three quality tiers of one thing; see
 # `docs/architecture/adr/0013-anti-aliasing-architecture.md`. There is no `taa`
-# choice: temporal reconstruction needs motion vectors, jitter and a history
-# buffer that do not exist yet.
+# choice, and since FSR 3.1 that is a placement decision rather than a missing
+# feature: temporal reconstruction lives on the UPSCALER row, because it
+# resolves the frame as well as anti-aliasing it and cannot be stacked with a
+# resampler the way a post-process pass can.
 #
 # `off`, `fxaa` and `smaa` take effect the frame they are chosen, the same as
 # UPSCALER: `Framebuffer::resolve` reads this fresh every frame. Only moving
@@ -675,6 +683,16 @@ warn_when = [
         { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
         { setting = "graphics.render_scale", value = "200" },
         { setting = "graphics.minimum_resolution", value = "200" },
+    ] },
+    # Against FSR 3.1 the complaint is different and needs no render-scale
+    # condition at all, which is why this is one entry where FSR 1 needs four.
+    # A temporal upscaler reconstructs from the sub-pixel detail each jittered
+    # frame carries; a spatial pass that blurs before it runs is destroying
+    # exactly the samples the accumulation exists to gather, and it does that at
+    # every render scale including 100 %.
+    { message = "DESTROYS THE SUB-PIXEL DETAIL FSR3 RECONSTRUCTS FROM", all = [
+        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+        { setting = "graphics.upscaler", value = "fsr3" },
     ] },
 ]
 

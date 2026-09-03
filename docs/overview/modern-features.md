@@ -76,8 +76,29 @@ in ADR-0036 rather than hidden.
 
 **Every row is now filled.** Camera jitter, the last of them, landed on
 2026-09-02 - see [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md).
-What FSR 3.1 needs from the renderer, the renderer now has; what remains is the
-port itself.
+What FSR 3.1 needs from the renderer, the renderer now has.
+
+**The port itself started on 2026-09-03** and has its own page,
+[fsr3.md](../rendering/fsr3.md), which is where the pass table, the pinned
+upstream commit and the three deviations live. One of eight passes is built.
+Two findings from it belong here rather than there, because they correct this
+section's own expectations:
+
+- **The jitter was already upstream's function.**
+  `ffxFsr3UpscalerGetJitterOffset` is `halton(index % phaseCount + 1, 2) - 0.5`
+  on x and base 3 on y, which is what `oag_render::jitter` had been doing since
+  ADR-0039 - written from the same reasoning, before anyone read the SDK. Only
+  the phase *count* was ours, and `jitter::PHASES`' own doc comment had said so
+  and named the port as what would replace it. It did.
+- **FSR 3.1 requests no GPU feature.** ADR-0012 accepted, as a consequence,
+  that "requesting GPU features stops being free" and that a probe with a
+  fallback chain would be needed because the temporal path's storage-texture
+  formats sit outside the WebGPU baseline. The formats do, but the fix turned
+  out to be widening the intermediates to baseline-storable ones rather than
+  probing for adapter-specific support - so the ladder has one rung to check
+  (compute shaders at all) instead of several, and the cost moved from a second
+  code path to a larger allocation. The ADR's *requirement* - degrade, never
+  fail to boot - is unchanged and still what the ladder implements.
 
 It paid for itself twice over on the way. The HUD and the menus are no longer
 resampled at all, which was a picture-quality complaint in its own right; and it
@@ -182,7 +203,7 @@ be most of the win for a fraction of the machinery.
 | Feature | Licence status | Early decision |
 | --- | --- | --- |
 | FSR 1 upscaling | MIT, ported | **Built.** `oag_render::post::fsr1`, off by default, magnification only |
-| FSR 3.1 upscaling | MIT, open | Port to WGSL ([ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)); every renderer-side prerequisite - motion vectors, readable depth, jitter, a UI-free scene - is now in place |
+| FSR 3.1 upscaling | MIT, open | **In flight**, one of eight passes built - [fsr3.md](../rendering/fsr3.md). Ported to WGSL per [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md), against a pinned FidelityFX-SDK `v1.1.4` with nothing vendored; every renderer-side prerequisite was in place before it opened |
 | FSR3 frame generation | MIT, open | Skip - interpolated presentation from the 60 Hz simulation is the better fit |
 | FSR4 | Signed DLLs, no source; driver upgrade is Windows-only | Ship nothing proprietary and hard-code nothing FSR4-specific. Do not plan around inheriting it |
 | Steam Input | Proprietary SDK | `gilrs`/SDL baseline in `oag-input`; optional non-vendored `steamworks` feature; keep the input layer action-shaped |

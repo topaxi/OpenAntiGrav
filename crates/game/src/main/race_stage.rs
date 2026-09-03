@@ -40,7 +40,7 @@ impl RaceStage {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
-        camera_jitter: bool,
+        camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> race::SceneStats {
@@ -172,10 +172,10 @@ impl RaceStage {
             // Off for the same reason, and one more: jitter is a matrix, not a
             // pipeline variant, so there is nothing here for it to warm. It
             // still costs this frame a phase - `Scene::frame_index` advances on
-            // every render - so with `--camera-jitter` on, the first frame a
-            // player sees is phase one rather than phase zero. Deterministic,
-            // and noted in ADR-0039 so a shifted capture is not a mystery.
-            false,
+            // every render - so with jitter on, the first frame a player sees is
+            // phase one rather than phase zero. Deterministic, and noted in
+            // ADR-0039 so a shifted capture is not a mystery.
+            None,
             // Empty: this frame is discarded, and the Zone visualiser
             // pipeline variant it would warm is the same one every other
             // Zone draw uses regardless of what the lookup holds.

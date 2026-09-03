@@ -1,0 +1,308 @@
+//! What the FSR 3.1 port in [`super`] is asserted to do: the constants against
+//! upstream's arithmetic, the layout against the WGSL that reads it, and the
+//! ported passes compiled and dispatched on a real device.
+//!
+//! Its own file rather than an inline `#[cfg(test)]` block, per the 200-line
+//! rule in `scripts/check-file-size.py`.
+
+use super::*;
+
+/// The camera the race actually draws with, near enough: `oag-render`'s own
+/// `camera::perspective` is built from exactly these three numbers.
+fn camera() -> Camera {
+    Camera {
+        near: 0.1,
+        far: 1000.0,
+        fov_y: 45f32.to_radians(),
+    }
+}
+
+fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
+    Dispatch {
+        render,
+        max_render: render,
+        upscale,
+        jitter: (0.25, -0.125),
+        phase_count: crate::jitter::phases(render.0, upscale.0),
+        camera: camera(),
+        delta_time: 1.0 / 60.0,
+        reset: true,
+    }
+}
+
+#[test]
+fn the_constants_are_the_size_the_wgsl_expects() {
+    // 37 scalars in upstream's `Fsr3UpscalerConstants` - 148 bytes - rounded up
+    // to the 16-byte multiple a uniform buffer's size must be. Written out
+    // rather than derived, because the whole reason this is checkable is that
+    // both sides state the number independently: get it wrong and every pass
+    // reads a field one row out, which produces a picture rather than an error.
+    assert_eq!(Constants::SIZE, 160);
+    assert_eq!(size_of::<Constants>() % 16, 0);
+}
+
+#[test]
+fn a_first_frame_has_no_previous_frame_and_says_so() {
+    // Upstream's `resetAccumulation` path. The four `previousFrame*` fields
+    // describe *this* frame rather than a frame that never happened, because a
+    // reprojection through a zeroed previous size would divide by zero.
+    let c = Constants::new(dispatch((960, 540), (1920, 1080)), None);
+    assert_eq!(c.render_size, [960, 540]);
+    assert_eq!(c.previous_frame_render_size, c.render_size);
+    assert_eq!(c.upscale_size, [1920, 1080]);
+    assert_eq!(c.previous_frame_upscale_size, c.upscale_size);
+    assert_eq!(c.previous_frame_jitter_offset, c.jitter_offset);
+    assert_eq!(c.frame_index, 0.0);
+}
+
+#[test]
+fn the_second_frame_carries_the_first_s_sizes_and_jitter() {
+    let first = Constants::new(dispatch((960, 540), (1920, 1080)), None);
+    let mut second = dispatch((640, 360), (1920, 1080));
+    second.jitter = (-0.5, 0.5);
+    let c = Constants::new(second, Some(&first));
+    assert_eq!(c.render_size, [640, 360]);
+    assert_eq!(c.previous_frame_render_size, [960, 540]);
+    assert_eq!(c.jitter_offset, [-0.5, 0.5]);
+    assert_eq!(c.previous_frame_jitter_offset, [0.25, -0.125]);
+    assert_eq!(c.frame_index, 1.0);
+}
+
+#[test]
+fn the_downscale_factor_is_render_over_presentation() {
+    let c = Constants::new(dispatch((960, 540), (1920, 1080)), None);
+    assert_eq!(c.downscale_factor, [0.5, 0.5]);
+    let native = Constants::new(dispatch((1920, 1080), (1920, 1080)), None);
+    assert_eq!(native.downscale_factor, [1.0, 1.0]);
+}
+
+#[test]
+fn the_motion_vector_scale_reverses_this_renderer_s_velocity() {
+    // `mesh.wgsl`'s `velocity_of` stores current-minus-previous in uv units;
+    // FSR 3.1 reprojects with `uv + motionVector` and therefore wants
+    // previous-minus-current. The whole conversion is the sign, because the
+    // units already agree - and the jitter cancellation is zero because
+    // ADR-0039 cancels it out of the buffer before it is written.
+    let c = Constants::new(dispatch((960, 540), (1920, 1080)), None);
+    assert_eq!(c.motion_vector_scale, [-1.0, -1.0]);
+    assert_eq!(c.motion_vector_jitter_cancellation, [0.0, 0.0]);
+}
+
+#[test]
+fn the_depth_transform_inverts_this_project_s_own_projection() {
+    // The claim that makes `GetViewSpaceDepth` mean anything: run a known
+    // view-space depth through the real projection, then back through the two
+    // constants, and land on the number started with. This is the arithmetic
+    // most easily got subtly wrong - a sign or a swapped near and far still
+    // produces a plausible-looking depth - and it is checkable without a GPU.
+    use oag_core::math::{Vec4, camera as cam};
+
+    let c = Constants::new(dispatch((1920, 1080), (1920, 1080)), None);
+    let projection = cam::perspective(camera().fov_y, 16.0 / 9.0, camera().near, camera().far);
+    for view_z in [0.5f32, 5.0, 50.0, 500.0] {
+        // A point `view_z` in front of a right-handed camera is at -z.
+        let clip = projection * Vec4::new(0.0, 0.0, -view_z, 1.0);
+        let device_depth = clip.z / clip.w;
+        let recovered = c.device_to_view_depth[1] / (device_depth - c.device_to_view_depth[0]);
+        assert!(
+            (recovered - view_z).abs() < view_z * 1e-3,
+            "device depth {device_depth} recovered {recovered}, wanted {view_z}"
+        );
+    }
+}
+
+#[test]
+fn the_phase_count_walks_to_its_target_one_frame_at_a_time() {
+    // Upstream ramps rather than jumping, so that a render-scale change does
+    // not re-index the jitter sequence discontinuously mid-accumulation. A
+    // straight assignment here would pass every other test in this file.
+    let mut previous = Constants::new(dispatch((1920, 1080), (1920, 1080)), None);
+    assert_eq!(previous.jitter_phase_count, 8.0);
+    // Now ask for 32, which is what a 50 % render scale wants.
+    let wanted = dispatch((960, 540), (1920, 1080));
+    assert_eq!(wanted.phase_count, 32);
+    for expected in [9.0, 10.0, 11.0] {
+        previous = Constants::new(wanted, Some(&previous));
+        assert_eq!(previous.jitter_phase_count, expected);
+    }
+    // And back down again, one at a time.
+    let back = dispatch((1920, 1080), (1920, 1080));
+    previous = Constants::new(back, Some(&previous));
+    assert_eq!(previous.jitter_phase_count, 10.0);
+}
+
+#[test]
+fn a_projection_round_trips_through_the_camera_it_was_built_from() {
+    use oag_core::math::camera as cam;
+
+    let want = camera();
+    let projection = cam::perspective(want.fov_y, 16.0 / 9.0, want.near, want.far);
+    let got = camera_from_projection(projection);
+    assert!((got.near - want.near).abs() < 1e-3, "near {}", got.near);
+    assert!((got.fov_y - want.fov_y).abs() < 1e-4, "fov {}", got.fov_y);
+    // **A tenth of a percent on `far`, not an exact match**, and the loss is
+    // real rather than a loose bound hiding a bug: `far` is recovered as
+    // `e / (c + 1)` where `c + 1` is `near / (near - far)`, a small number
+    // formed by adding two that nearly cancel. At 0.1 and 1000.0 in `f32` that
+    // costs three digits. It matters here and nowhere else - the depth
+    // transform this file also tests uses `far / (near - far)`, which is
+    // insensitive to it, and passes to a thousandth.
+    assert!(
+        (got.far - want.far).abs() < want.far * 2e-3,
+        "far {}",
+        got.far
+    );
+}
+
+#[test]
+fn the_pass_list_is_upstream_s_dispatch_order() {
+    // The port's spine. A pass reads what the ones before it wrote, so the
+    // order is a correctness property rather than presentation - and the table
+    // in `docs/rendering/fsr3.md` has to keep saying the same thing.
+    let names: Vec<&str> = Pass::ALL.iter().map(|pass| pass.name()).collect();
+    assert_eq!(
+        names,
+        [
+            "prepare_inputs",
+            "luma_pyramid",
+            "shading_change_pyramid",
+            "shading_change",
+            "prepare_reactivity",
+            "luma_instability",
+            "accumulate",
+            "rcas",
+        ]
+    );
+}
+
+/// Compiles every ported pass and dispatches it on a real device.
+///
+/// The arithmetic above is CPU-side and says nothing about whether the WGSL
+/// parses, whether the bind group layouts agree with their `@group`/`@binding`
+/// declarations, or whether the storage-texture formats are ones the adapter
+/// will actually accept - all of which are runtime failures in wgpu, not build
+/// ones.
+///
+/// **Skips when there is no adapter**, so a green CI run is not evidence that
+/// it ran. Run it locally on real hardware.
+#[test]
+fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    assert!(
+        supported(&adapter),
+        "this machine's adapter reports no compute shaders, which is what the \
+         fallback to FSR 1 exists for - but then this test cannot run at all"
+    );
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no device; skipping");
+        return;
+    };
+
+    let mut fsr3 = Fsr3::new(&device).expect("the FSR 3.1 shaders must compile");
+
+    let render = (64u32, 32u32);
+    let upscale = (128u32, 64u32);
+    let texture = |label, size: (u32, u32), format, usage| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: wgpu::Extent3d {
+                    width: size.0,
+                    height: size.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    };
+    let colour = texture(
+        "scene",
+        render,
+        wgpu::TextureFormat::Rgba16Float,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+    );
+    // A real depth format, not a colour one standing in for it: binding a
+    // depth view as an unfilterable float is exactly the arrangement that
+    // would fail, and a colour texture here would not exercise it.
+    let depth = texture(
+        "depth",
+        render,
+        wgpu::TextureFormat::Depth32Float,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+    );
+    let velocity = texture(
+        "velocity",
+        render,
+        crate::mesh_render::VELOCITY_FORMAT,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+    );
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    fsr3.render(
+        &device,
+        &queue,
+        &mut encoder,
+        Frame {
+            colour: &colour,
+            depth: &depth,
+            velocity: &velocity,
+            dispatch: dispatch(render, upscale),
+        },
+    );
+    queue.submit([encoder.finish()]);
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("device poll");
+
+    assert_eq!(fsr3.constants().map(|c| c.render_size), Some([64, 32]));
+    assert!(
+        fsr3.output().is_none(),
+        "the chain is incomplete, so it must hand back nothing rather than a \
+         half-resolved intermediate - see `Fsr3::output`"
+    );
+}
+
+#[test]
+fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no device; skipping");
+        return;
+    };
+
+    let targets = Targets::new(&device, (960, 540), (1920, 1080));
+    assert!(targets.fits((960, 540), (1920, 1080)));
+    assert!(!targets.fits((640, 360), (1920, 1080)));
+
+    let sizes = targets.sizes();
+    assert!(sizes.render > 0 && sizes.half_render > 0 && sizes.upscale > 0);
+    assert_eq!(
+        sizes.total(),
+        sizes.render + sizes.half_render + sizes.upscale
+    );
+    // The presentation-resolution set dominates, which is what makes the
+    // *upscale* ceiling the number worth watching on a handheld rather than the
+    // render one - and it stays true at every scale, because lowering the
+    // render scale only shrinks the smaller half.
+    assert!(
+        sizes.upscale > sizes.render,
+        "render {} vs upscale {}",
+        sizes.render,
+        sizes.upscale
+    );
+}

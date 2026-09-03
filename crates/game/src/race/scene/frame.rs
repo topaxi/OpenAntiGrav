@@ -25,9 +25,12 @@ impl Scene {
     /// Returns what the track's frustum culling did, for the performance
     /// overlay - see [`SceneStats`].
     ///
-    /// `camera_jitter` is `--camera-jitter`, **off by default and not a
-    /// settings key**: nothing reconstructs from it yet, so on its own it is a
-    /// worse picture. See [`Scene::jittered`].
+    /// `camera_jitter` is the jitter sequence's length, or `None` for no
+    /// jitter at all. **Not a bool, because the length is a property of what is
+    /// resolving the frames** - a temporal upscaler magnifying by two wants
+    /// four times the phases it wants at native. `--camera-jitter` on its own,
+    /// with nothing reconstructing from it, is a worse picture and passes
+    /// [`oag_render::jitter::DEFAULT_PHASES`]. See [`Scene::jittered`].
     ///
     /// `timestamps` brackets this pass with a GPU timestamp pair, and is
     /// `Some` only on the window's own frame loop - see
@@ -60,7 +63,7 @@ impl Scene {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: crate::display::MotionBlur,
-        camera_jitter: bool,
+        camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> SceneStats {
