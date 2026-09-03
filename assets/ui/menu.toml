@@ -17,9 +17,12 @@
 # Edit it and run `cargo nextest run -p oag-game menu::` to check it, or pass
 # `--menu <path>` to try a copy without rebuilding.
 #
-# Labels are literal text on purpose. `string_id` is reserved for a build that
-# wants the original's own wording out of the disc's string table, and nothing
-# reads it yet.
+# Labels are literal text on purpose. A row may also carry `string_id`, an id
+# `crate::menu::definition::resolve` looks up in a project-owned
+# `assets/ui/strings/<language>.toml` and shows in place of `label` when found
+# - see `crate::strings`. **This build's own labels below still don't name
+# one**: nothing yet ships a translation for them to look up, so adding
+# `string_id` rows here is a later, separate step from the mechanism itself.
 #
 # Identifiers in `values` are archive path components, never display names:
 # `Assegai` is a directory on the disc. Anything a player should read in their
