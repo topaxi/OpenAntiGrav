@@ -177,7 +177,9 @@ draw call - it is walked as a `std::vector`-shaped object (`param_1[2]`/
 helper), one 16-byte `{index-buffer ptr, vertex-buffer ptr, index count,
 vertex count}` entry pushed per **outer** loop iteration inside
 `Shadow_ParseStencilVolumeGeometry`, not per `n`-record. The draw reads each
-entry's index-count field (offset `+8`) as the primitive count - see the
+entry's index-count field (offset `+8`) as the draw's index count (`m`, 108
+for the 39 real files below - 36 triangles, not 36 "primitives" in the
+loose sense) - see the
 next section for how `Shadow_AllocateStencilVolumeBuffers` settles what `n`
 and `m` actually are.
 
@@ -480,11 +482,21 @@ extrusion at all), not merely unconfirmed.
   checked directly against both draw functions: neither varies
   `extrusionDistance` between them, so both stencil passes test the *same*
   once-shifted box, not a near-cap/far-cap pair (confidence 84) - see above
-- Why the exporter emits 24 degenerate (zero-area) triangles per box when
-  the 12 real face-quad triangles alone are already watertight - a fixed
-  per-vertex triangle-fan template that always walks all three of a
-  corner's per-face copies regardless of whether they coincide is the
-  leading guess, unconfirmed
+- **Why the 24 degenerate triangles and the vertex shader's dead
+  `dot(normal, lightDirection)` both exist, when neither does anything in
+  the shipped path.** Put together, they're not independent oddities: `12
+  real face triangles + 24 corner-bridging triangles` is exactly the
+  topology a true near-cap/side-wall silhouette-extrusion volume needs
+  (cap the object's faces, bridge each silhouette edge from an undisplaced
+  copy to a displaced one), and `dot(normal, lightDirection)` is exactly
+  the term such a shader would need to decide *which* corner copies to
+  displace. The strongest reading is that this asset and shader were
+  authored for a real silhouette extrusion, and the shipped vertex program
+  simply doesn't take that branch - shifting every vertex uniformly
+  instead and leaving both the dead dot product and the degenerate
+  triangles as vestiges. A hypothesis, not confirmed: nothing here says
+  *why* the branch is unused (a build/config flag, an abandoned feature,
+  a fallback path) - the next reader should chase this first
 - Why `data/ships/detonator/`'s box is ship-scale (~6 x 3 x 14 units,
   same order of magnitude as `qirex`'s ~5.6 x 3 x 15), when
   [detonator-bomb.md](detonator-bomb.md) names `DetonatorBomb` as a weapon

@@ -123,6 +123,21 @@ asserting what the body had already retracted, in the doc page's own
 heading, `shadows.md`, and `HANDOVER.md` - fixed to name what was actually
 confirmed: a stencil test over a rigidly-shifted box proxy.
 
+**A third advisor pass connected the two loose ends from the last two
+findings into one hypothesis, from facts already on the page.** The vertex
+shader computes `dot(normal, lightDirection)` and never reads it; the
+geometry has 12 real face triangles plus 24 degenerate corner-bridging
+ones. Both are exactly what a real near-cap/side-wall silhouette-extrusion
+volume needs and doesn't get: the dot product is exactly the term such a
+shader would use to decide which corner copies to displace, and 12+24 is
+exactly that construction's topology. Leading hypothesis, not confirmed:
+this asset and shader were authored for a genuine silhouette extrusion, and
+the shipped vertex program takes a simpler, uniform-shift path instead,
+leaving the dead dot product and the degenerate triangles as vestiges of
+the unused branch. Recorded as the leading Open item on
+`shadow-stencilvolume.md` for whoever picks this up next; nothing here
+explains *why* the branch went unused.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
