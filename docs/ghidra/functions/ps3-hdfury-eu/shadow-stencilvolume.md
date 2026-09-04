@@ -73,10 +73,11 @@ flag (`self+0xe4 & 2`) set, runs:
 2. **`Shadow_AccumulateStencilVolume`** (`0x005ed658`, confidence 84) - the
    depth-fail ("Carmack's Reverse") stencil-write pass.
 3. `SET_COLOR_MASK(1,1,1,0)` - RGB on, alpha off.
-4. `FUN_004053e0` (not renamed - a large, generic scene-chunk render
-   submission function: PVS culling via `Pvs_IsUsable`/`Pvs_NearestCellCached`,
-   zone-texture binding, `Shader_GetVariantHash`-based technique selection,
-   its own alpha blending enabled with `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA`).
+4. `FUN_004053e0` (not renamed - PVS culling via
+   `Pvs_IsUsable`/`Pvs_NearestCellCached`, zone-texture binding,
+   `Shader_GetVariantHash`-based technique selection, its own alpha blending
+   enabled with `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA` - see below for what it
+   submits and how).
 5. `SET_COLOR_MASK(0,0,0,0)` - colour writes off again.
 6. **`Shadow_ClearStencilVolume`** (`0x005ede20`, confidence 84) - stencil
    test and reset, no colour output.
@@ -88,6 +89,26 @@ is retracted. What *is* confirmed: it is the only one of the three calls
 with colour writes on, and the only one with blending enabled, which makes
 it the stronger candidate for whatever actually puts a visible darkening on
 screen - the two `Shadow_*StencilVolume` passes write no colour at all.
+
+**Checked further, 2026-09-04: `FUN_004053e0` doesn't draw immediately at
+all.** It never calls `FUN_005a3e58` (the low-level primitive draw the two
+stencil passes use directly - confirmed by listing every caller of
+`FUN_005a3e58` and `0x004053e0` is not among them). Instead it compiles a
+small bytecode-shaped command stream (shader-parameter-binding opcodes,
+terminated) and hands it to `FUN_005fc728`, which builds DMA-list-shaped
+descriptors matching this project's own already-documented SPU job pattern
+(`engine-trail.md`'s "the SPU job's setup"). `FUN_005fc728` itself has
+**seven** callers in this same rendering module - a shared, generic
+job-submission primitive, making `FUN_004053e0` one of several sibling
+"build a chunk-render job, then submit it" functions in this file, not a
+bespoke one-off written just for this shadow path. That is evidence for
+"generic infrastructure" again, same as the first correction, but through an
+SPU-offloaded path rather than the immediate draw the stencil passes use -
+it narrows the *mechanism* without settling *what geometry* gets submitted.
+Fully resolving that would need SPU-job-level tracing at the scale
+`engine-trail.md`'s `Trails` job investigation used, and this directory's
+own `README.md` scopes HD as "opportunistic," not a milestone target - not
+attempted here.
 
 Every RSX register identity here was checked call-by-call against a local
 `rpcs3` checkout's own `Emu/RSX/gcm_enums.h`, not assumed from general OpenGL
@@ -259,11 +280,13 @@ unread).
   reading. Finding and decoding the real file would turn the closed record
   format above from a strong static reading into a byte-verified closure
   test, the way `shadow_occluder_ground_truth.rs` does for Pulse.
-- **`FUN_004053e0` in full.** Read only far enough to confirm it is a
-  generic scene-chunk submission function reused here with colour on and
-  blending enabled - the strongest candidate for the shadow's actual visible
-  effect, but what geometry it submits is unconfirmed; not decompiled to
-  completion.
+- **`FUN_004053e0`'s SPU job in full.** Confirmed it hands off to
+  `FUN_005fc728` (a shared job-submission primitive, seven callers in this
+  module) rather than drawing immediately - the strongest candidate for the
+  shadow's actual visible effect, colour-on and blend-enabled, but what
+  geometry the job actually contains is unconfirmed and would need
+  SPU-job-level tracing to settle, the scale `engine-trail.md`'s `Trails`
+  job investigation used. Not attempted here.
 - **What the other three of the six input floats per vertex hold.** Bbox
   min/max only consumes three (`0xc`/`0x10`/`0x14`); the transform-copy into
   the new vertex buffer touches all six, but what the vertex format actually
@@ -286,9 +309,10 @@ unread).
   the binary for unrelated hashed-path resources - not searched for
 - Whether the path-join truly resolves to a fixed, non-per-model directory
   entry - confidence 65, resting on six unverified string-utility readings
-- What `FUN_004053e0` actually draws, and thus what the shadow's visible
-  effect actually is - the strongest lead is that it is the only colour-on,
-  blend-enabled call in the whole sequence, but its geometry source is
-  unconfirmed
+- What geometry `FUN_004053e0`'s SPU job actually contains, and thus what
+  the shadow's visible effect actually is - the strongest lead is that it is
+  the only colour-on, blend-enabled call in the whole sequence, and that its
+  job-submission mechanism (`FUN_005fc728`) is shared generic infrastructure
+  rather than a one-off, but its geometry source is unconfirmed either way
 - What the byte flag at `self+0x140` gates - not established as "visible" or
   anything else, just observed as a nonzero check
