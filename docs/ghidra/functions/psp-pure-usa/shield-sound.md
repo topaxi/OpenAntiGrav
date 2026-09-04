@@ -85,32 +85,43 @@ equivalent gate exists here is open.
 `~SHIELD` (4 waveforms, 2 looping) and `shieldactive` (1 waveform, undotted,
 matching the executable's own literal) both present, same bank as Pulse.
 
-## `func_0x001209e0` is not `FUN_0883e9b0`'s direct counterpart, and that is left open
+## `func_0x001209e0`'s own chain mirrors Pulse's `FUN_0883e9b0`, three hops deep on both sides
 
-Pulse's dry-play helper (`FUN_0883e9b0`) is a flat, one-hop forward to
-`Sound_Play`. Pure's `func_0x001209e0` (`0x089249e0`) gates on a similar
-`craft+0x488 == 0` condition (Pulse's own gate reads `craft+0x368`, a
-different offset - the same struct-drift pattern seen throughout this
-project's Pure/Pulse comparisons) but forwards into `func_0x0002c8f0`
-(`0x088308f0`), which does **not** have `Sound_Play`'s six-parameter shape -
-it is a two-parameter table index into `_DAT + n*4 + 0x110`, the exact
-expression `Sound_Play` itself uses internally for a bank lookup - forwarding
-again into `func_0x00031a90` (`0x08835a90`), a seven-parameter function that
-checks a `0x6b6c4253` (`"SBlk"`, little-endian) magic and dispatches through
-two more unread helpers (`func_0x00032a5c`, `func_0x00031d94`), with an error
-path (`func_0x000db788`) shaped like SCREAM's own `"Didn't find ... named ->
-%s"` diagnostics documented on `psp-pulse-usa/sound.md`.
+**Correction: this section originally called Pulse's dry-play helper "a flat,
+one-hop forward to `Sound_Play`" and left Pure's three-hop chain as an
+unresolved oddity. That was wrong - it never checked what Pulse's own helper
+calls.** Decompiling it: `FUN_0883e9b0` gates on `craft+0x368 == 0` and
+forwards into `FUN_0893a768` (`func_0x00136768` printed), which does
+`*(param_1 + param_2*4 + 0x124)` - the identical bank-index expression
+`Sound_Play` uses internally, at the identical offset the two share
+(`_DAT_002bde10`) - and forwards *that* into `func_0x0018db20`, which
+resolves to `0x08991b20`: **`Scream_PlaySoundByName`, already named on
+Pulse's own disc** (`sound.md`, confidence 85). So Pulse's own dry-play path
+is `FUN_0883e9b0` -> `FUN_0893a768` -> `Scream_PlaySoundByName`, three hops,
+not one - matching `sfx.rs`'s own citation for `Disengaging`
+("`FUN_0883e9b0` -> `FUN_0893a768`, the path that takes no emitter at all"),
+which this page should have cross-checked before writing the wrong claim.
 
-**Not chased further.** This looks like a lower-level "play by bank+index"
-SCREAM primitive sitting *underneath* the by-name `Sound_Play` wrapper on
-Pure's side, rather than a mis-identification - the magic check and the
-matching error-dispatch shape both corroborate it belongs to the sound
-engine - but confirming that costs decompiling three more unnamed functions
-that are not specific to any cue this project has wired. Pulse's own
-equivalent internals (`Scream_FindSoundInBank`, `Scream_PlaySoundByName` and
-friends, `sound.md`) are similarly left as named-but-not-fully-chased
-primitives, so this is consistent with the project's existing precedent
-rather than a new gap. `func_0x001209e0` and its callees are **not renamed**.
+**Pure's chain is the same three hops, and the terminal one is now named.**
+`func_0x001209e0` (`0x089249e0`) gates on `craft+0x488 == 0` (Pulse's `0x368`
+- the usual struct-drift), forwards into `func_0x0002c8f0` (`0x088308f0`,
+the same `_DAT + n*4 + 0x110` bank-index expression at Pure's own offset),
+which forwards into `func_0x00031a90` (`0x08835a90`) - decompiled side by
+side with `Scream_PlaySoundByName` above, the two are a near-exact structural
+match: identical control flow, the identical `0x6b6c4253` (`"SBlk"`,
+little-endian) magic check, the identical two-callee dispatch
+(`func_0x00032a5c`/`func_0x00031d94` here against `func_0x0018e304`/
+`func_0x0018dc70` there), the identical error-path shape
+(`func_0x000db788` here against `func_0x0016e454` there). **Renamed
+`Scream_PlaySoundByName`, confidence 82** - same evidence class as
+`Sound_Play`'s own rename (structural match against a named Pulse
+counterpart), one notch below it because the match, while exact in shape, is
+still decompilation-only with no runtime leg on either side.
+
+`func_0x001209e0` and `func_0x0002c8f0` stay unrenamed, matching Pulse's own
+`FUN_0883e9b0`/`FUN_0893a768` - the project already chose not to name these
+two on the binary where they were found first, so naming only Pure's copies
+would be an inconsistency this page introduces rather than removes.
 
 ## Confidence
 
@@ -125,9 +136,7 @@ call site is unverified (blocked on the `jal` wart, per
 logic (absent from Pulse's simpler `Shield_Activate`) is unexplained - a real
 structural difference, not assumed to be equivalent.
 
-**Not scored / not renamed**: `func_0x001209e0`, `func_0x0002c8f0`,
-`func_0x00031a90` and their callees - read only far enough to establish they
-are plausibly sound-engine code, not to confirm what they do.
+**82** for the `Scream_PlaySoundByName` rename, above.
 
 ## What is not verified
 
@@ -136,11 +145,21 @@ are plausibly sound-engine code, not to confirm what they do.
   (`_DAT_002bddfc != 0`) - Pure's call is unconditional in the read section
   above; the entity-lifecycle logic before it may or may not be an equivalent
   gate, not chased.
-- **The `func_0x001209e0` / `func_0x0002c8f0` / `func_0x00031a90` chain**,
-  see above.
+- **`func_0x001209e0`/`func_0x0002c8f0`'s own callers beyond the nine found
+  for `SpeedupPad`/`Disengaging`/`ShieldActive`** - `sfx.rs`'s remaining dry
+  cues (`Blowup`, `LockOn`) did not turn up among those nine, so either they
+  reach this chain through a call site not yet found, or they use a different
+  path entirely; see `dry-play-cues.md`.
 - **Runtime verification.** No PPSSPP leg for either binary.
 
 ## History
 
+- **2026-09-04, second pass.** Corrected this page's own claim that Pulse's
+  dry-play helper is a flat one-hop call - it is the same three-hop chain
+  Pure's is, ending in `Scream_PlaySoundByName` on both sides. Renamed
+  `FUN_08835a90` to `Scream_PlaySoundByName` (confidence 82) off a
+  side-by-side structural match. The same chain's other call sites turned up
+  `SpeedupPad` and `Disengaging` too - written up in `dry-play-cues.md`
+  rather than here, since this page stays scoped to `Shield`/`ShieldActive`.
 - **2026-09-04.** Written answering `every-sfx-trigger-is-a-pulse-reading-applied.md`'s
   `Shield`/`ShieldActive` pair for Pure.

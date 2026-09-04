@@ -25,15 +25,17 @@
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
 //! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
-//! looked at** until [`Cue::Collision`], [`Cue::Absorb`], [`Cue::Shield`] and
-//! [`Cue::ShieldActive`]'s own doc comments: Pure's counterparts of
-//! `ShipCollisionFx_Trigger`, its absorb-effect caller and its shield-activate
-//! function each fire the same cue at the same point in the same gate,
-//! corroborated confidence 80-82. That is four cues on one of the two other
-//! titles; firing the remaining five on Pure and all nine on HD is still a
-//! bet that games in one series with the same cue names and the same
-//! middleware fire them at the same moments. Reasonable, and not a reading;
-//! confidence 50, which is below this project's naming threshold and so is
+//! looked at** until [`Cue::Collision`], [`Cue::Absorb`], [`Cue::Shield`],
+//! [`Cue::ShieldActive`], [`Cue::SpeedupPad`] and [`Cue::Disengaging`]'s own
+//! doc comments: Pure's counterparts of `ShipCollisionFx_Trigger`, its
+//! absorb-effect caller, its shield-activate function and the dry-play chain
+//! shared by three more cues each fire the same cue at the same point in the
+//! same gate, corroborated confidence 78-82. That is six cues on one of the
+//! two other titles; firing the remaining three (`Engine`, `Blowup`,
+//! `LockOn`) on Pure and all nine on HD is still a bet that games in one
+//! series with the same cue names and the same middleware fire them at the
+//! same moments. Reasonable, and not a reading; confidence 50, which is
+//! below this project's naming threshold and so is
 //! written down rather than implied.
 //!
 //! # Two things here are honest placeholders, and both are load-bearing
@@ -480,6 +482,11 @@ pub enum Cue {
     /// so this fires on exactly the edge `oag_game::race::Race::test_speedup_pads`
     /// already arms the flare on. `docs/ghidra/functions/psp-pulse-usa/pads.md`,
     /// confidence 88.
+    ///
+    /// Pure's `FUN_0886b548` is the same two-branch (positional/dry)
+    /// dispatcher in one function, firing the same `SPEEDUPPAD` on either
+    /// branch. `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`,
+    /// confidence 78.
     SpeedupPad,
     /// Hull against wall or track.
     ///
@@ -554,6 +561,11 @@ pub enum Cue {
     /// in `hud.bnk` is a held loop the handler *stops* and no located code
     /// starts, and `autopilot_eng` sits beside this one in `speech.bnk` with no
     /// call site at all. An effect whose trigger is not recovered stays silent.
+    ///
+    /// Pure's `FUN_0884c794` fires the same undotted `disengaging` through the
+    /// same dry chain `ShieldActive` uses, at the same volume.
+    /// `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`, confidence 78 -
+    /// the countdown threshold itself is unread on Pure's side.
     Disengaging,
     /// The player's own craft blowing up.
     ///
