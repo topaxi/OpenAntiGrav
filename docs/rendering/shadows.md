@@ -105,7 +105,7 @@ The `0x50` header, as far as it is read:
 | `+0x0c`..`+0x24` | bounding box, min then max, packed 3+3 floats | a real box on 129/129 |
 | `+0x24` | `u32` `5` | **129/129** |
 | `+0x28` | `f32` `1.0` | **129/129** |
-| `+0x30`..`+0x50` | the same box again as two padded `vec4`s | 97/129; what the other 32 hold there is open |
+| `+0x30`..`+0x50` | leans shadow-relevant: `min.y` is floored toward the ground plane on most (not all) nodes above it, `max.y` patched with the true value on some (not most) nodes where the packed box is invalid | 97/129 match within `1e-6` tolerance, which hides some hard-zero substitutions as "matches" against the `~1e-38` denormal sentinel; of the rest, 12/14 positive-`min.y` nodes are floored and 16/54 denormal-`max.y` nodes are patched - neither exceptionless nor explained - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
 | `+0x50` | `n` records of 32 bytes, **each beginning with a unit vector** | 129/129 |
 | `+0x50 + 32n` | `m` records of 16 bytes; not unit, not points inside the box | open |
 
@@ -285,10 +285,60 @@ Two things follow for the setting:
 - **HD carries a stencil-volume path** - `LiveStencilShadow_vp`/`_fp` and
   `/shadow.stencilvolume` - beside its shadow maps. A stencil shadow volume is
   extruded from an occluder's silhouette **planes and edges**, which is exactly
-  the shape `0x3c3`'s two record arrays have. That is the strongest reason yet
-  to expect the "planes and edges" reading to hold, and it names the mechanism
-  step 4 should look for. It is still a lineage argument, not a decode: the
-  interpretation stays at 60 until a runtime reader is found.
+  the shape `0x3c3`'s two record arrays have. **Confirmed on Pulse's own
+  binary, 2026-09-03**: `Shadow_RenderOccluderVolume`
+  (`0x089038c8`, [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
+  reads exactly this payload and extrudes a silhouette-edge stencil volume
+  from it - not a lineage argument any more, a runtime reader, at confidence
+  84 (Probable: `DynamicShadowOccluder_RegisterClass` statically links class
+  `0x3c3` to this function's own method table, byte for byte, but it is one
+  binary's own internal consistency rather than cross-file or runtime
+  corroboration).
+- **Now traced on HD's own binary too, 2026-09-04**:
+  [`shadow-stencilvolume.md`](../ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md).
+  The `LiveStencilShadow` technique is a real registered shader (three named
+  constants: `worldViewProj`, `lightDirection`, `extrusionDistance` -
+  `lightDirection` is new evidence that HD's version, unlike Pulse's, may take
+  a light as input), and a per-model flag bit (`self+0xe4`, bit `0x2`) builds a
+  path ending in the literal leaf `shadow.stencilvolume` (confidence 65 that
+  the directory it joins into is fixed rather than per-model - see that
+  page) and loads it through a hashed resource cache into an explicit
+  vertex-buffer/index-buffer pair plus a computed bounding box - the same
+  coarse shape as Pulse's `.vex` payload (leading counts, a geometry array, a
+  bbox) but a genuinely different topology encoding (confidence 82 on the
+  vertex/index split, closed by an exact arithmetic invariant between two
+  independently-read allocator functions - see that page). **The draw call
+  is found too**: a two-sided depth-fail stencil test over a rigidly-shifted
+  box proxy (see below - not a true silhouette-derived volume), colour-mask
+  bracketed, its RSX register identities (stencil test/func/op, two-sided
+  stencil, cull-face and colour-mask toggling) cross-checked against a local
+  `rpcs3`'s own `gcm_enums.h` rather than assumed. **The record format is now
+  byte-verified, 2026-09-04**: all 39 real `shadow.stencilvolume` files on
+  the disc (one per `data/ships/<name>/`) decode with an identical header
+  and reveal a fixed, unwelded six-face box (24 vertices, 108 indices - 12
+  real face-quad triangles plus 24 degenerate, zero-area ones, checked
+  across all 39 files), with only vertex positions varying per ship - the
+  topology itself is byte-identical across every file (confidence 82 -> 92).
+  This retracts an
+  earlier reading of the min/max fields as a "bounding box": the offsets
+  they actually reduce over are the vertex *normal*, not the position, per
+  this closed layout. **The vertex shader is disassembled too, same day**:
+  `LiveStencilShadow_vp` applies a *uniform* `lightDirection *
+  extrusionDistance` shift to every vertex regardless of facing - the
+  normal is read into a dot product that is never used again - so this is
+  a rigid-body shift of the sealed box, not a per-vertex silhouette
+  extrusion the way Pulse's runtime reader builds one (confidence 84,
+  disassembly with hash-confirmed parameter names). This explains why a
+  fixed, disc-wide box template works: there's nothing model-specific left
+  for the vertex program to key off of. Checked directly against both draw
+  functions: neither re-uploads a different `extrusionDistance` between the
+  two stencil passes, so there is no separate near-cap/far-cap pair either -
+  both passes submit the same, once-shifted box. What HD actually renders is
+  closer to **"does this pixel's depth sample fall inside a fixed box
+  template, shifted toward the light and positioned at the caster"** than to
+  a true silhouette-derived shadow volume.
+  See [`shadow-stencilvolume.md`](../ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md)
+  for the full numbers.
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
@@ -537,18 +587,33 @@ Each step is a landing that can be reviewed on its own.
    [`draw-order.md`](draw-order.md)'s queue, so it costs more than it looks.
    Two days.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
-   are `n` planes and `m` vertices, above. What is left of this step is the
-   **runtime reader in Ghidra**, with a page under
-   `docs/ghidra/functions/psp-pulse-usa/` and a `names.tsv` row in the same
-   change. That is what would say how the hull is *projected*, which the data
-   alone does not. `original` on Pulse can now be built without it - there is
-   geometry to draw - but how faithfully it is drawn depends on it.
+   are `n` planes and `m` vertices, above. ~~What is left of this step is the
+   **runtime reader in Ghidra**~~ - **done 2026-09-03**:
+   `Shadow_RenderOccluderVolume` (`0x089038c8`, confidence 84,
+   [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md))
+   reads the same `n`/`m`/bbox fields this payload decode pinned, derives its
+   projection direction from the occluder's **own local axis**, transformed
+   by its own world matrix - not from any light - and extrudes a stencil
+   shadow volume. It is also the craft's own drop-shadow renderer
+   (`exhaust.md`'s `g_craft_scale` finding was the same function from a
+   different angle). **The static link from vex class `0x3c3` to this
+   function's method table is also traced now**:
+   `DynamicShadowOccluder_RegisterClass` (`0x0890446c`, confidence 84) passes
+   `0x3c3` to `Vex_RegisterClass` and installs the method table whose byte
+   offset `+0x44` holds `Shadow_RenderOccluderVolume`'s address, exactly -
+   not a fixed-stride "slot", since two other classes' own tables checked
+   the same way sit at deltas that aren't multiples of any common stride.
+   Both cap at confidence 84 (Probable): the chain is unambiguous but is one
+   binary's own internal consistency, not corroboration across files or a
+   runtime trace. Step 4 is fully closed either way; only a runtime trace
+   would move it higher, and it is optional polish rather than a blocker on
+   step 5.
 5. **`original`, per title.** Pulse: draw the 119 local-space hulls - the
-   geometry is decoded, and what step 4 still owes is the projection. HD: the
-   shadow-map path its four jobs and material flags describe. 2048: the
-   `track_proximity_shadow` pair plus the precomputed environment shadows,
-   with the shadow direction read straight out of `.EnvSettings`. Pure:
-   absence, reported.
+   geometry and the projection are both now decoded, so this is a rendering
+   task, not a reverse-engineering one. HD: the shadow-map path its four jobs
+   and material flags describe. 2048: the `track_proximity_shadow` pair plus
+   the precomputed environment shadows, with the shadow direction read
+   straight out of `.EnvSettings`. Pure: absence, reported.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.

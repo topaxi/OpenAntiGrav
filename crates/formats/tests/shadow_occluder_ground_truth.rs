@@ -113,11 +113,59 @@ const PSP_OCCLUDERS_NAMED: usize = 119;
 /// origin - a craft's or a pickup's own hull, rather than a track-side one.
 const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 
-/// How many repeat their bounding box as two padded `vec4`s at `+0x30`.
+/// How many repeat their bounding box as two padded `vec4`s at `+0x30`,
+/// within this test's `1e-6` tolerance.
 ///
-/// **Not all of them**, which is the interesting part: what the other 32 carry
-/// there is unread. Pinned so that a decode which explains them shows up as
-/// this number moving.
+/// **The tolerance hides a mixed population inside this number.** The
+/// denormal authoring sentinel `0x00800000` is `1.1754944e-38`, so a node
+/// whose packed `max.y` is the sentinel and whose padded `max.y` is a hard
+/// `0.0` differs by ~`1e-38` - well inside `1e-6` - and counts as a
+/// "match" here even though it is one of the hard-zero substitutions
+/// described below, not an identical copy. How many of the 97 are that
+/// case rather than a true copy is computable but not computed.
+///
+/// **Read by hand, 2026-09-03, and an earlier pass at this same comment
+/// overclaimed a clean rule from too small a sample - corrected the same
+/// day.** Not asserted here; the split would make this test depend on
+/// `vertex_extent`'s own correctness circularly. Two real, quantified
+/// patterns, neither exceptionless:
+///
+/// - **14 nodes have a positive header `min.y`. 12 of them get `+0x30`'s
+///   `min.y` floored to exactly `0.0`** (extending the box down to the
+///   ground plane even though the hull's own geometry sits entirely above
+///   it - useful for a shadow volume, useless for a geometry cache). The
+///   **2 exceptions keep their real, positive `min.y`**: both
+///   `shadow_lodShape`, both `Data.wad#809`/`#812`, both the *smallest*
+///   positive `min.y` in the set (`0.7280522`) - a sibling `shadowShape` at
+///   the same value in the same files *does* get floored. No discriminator
+///   found for the exception.
+/// - **Where the packed header's `max.y` is the denormal authoring sentinel
+///   `0x00800000`** (the same one `BEData.wad#20`'s flat hull declares): 70
+///   nodes carry it, 16 of which have a true vertex-derived `max.y` that is
+///   itself exactly `0.0` (where the two possible behaviours are
+///   indistinguishable and excluded below). **Of the other 54: `+0x40`'s
+///   `max.y` carries the true vertex-derived value on 16, and is a hard
+///   `0.0` on the other 38.** Tried and ruled out as a discriminator: node
+///   name/type (both behaviours occur on both `shadowShape` and
+///   `shadow_lodShape`, including the same numeric `max.y` value split
+///   both ways across different files), the specific numeric value (14 of
+///   17 repeated values agree on kept-vs-hard-zero, 3 don't), and file
+///   identity - there is no per-entry build/version field in the WAD
+///   directory to begin with, and the 3 exceptions above sit in adjacent
+///   file entries anyway. Checked 2026-09-04 with
+///   `examples/shadow_padding_probe.rs`; see
+///   `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
+///   readout, including that the unnamed/world-space population diverges
+///   on `x`/`z` rather than `y`.
+///
+/// So the padded box is doing *something* shadow-relevant rather than
+/// nothing - most divergence pulls the box toward the ground plane rather
+/// than away from it - but it is not the clean deterministic rule an
+/// earlier pass at this comment claimed. See
+/// `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
+/// readout and the correction; `Shadow_RenderOccluderVolume` reads this
+/// exact field, not the packed one at `+0x0c`/`+0x18`, for its support-point
+/// step.
 const PSP_OCCLUDERS_WITH_PADDED_BBOX: usize = 97;
 
 /// Every distinct node name across the named population, sorted.
