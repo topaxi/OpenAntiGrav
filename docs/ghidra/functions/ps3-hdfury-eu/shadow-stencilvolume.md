@@ -1,4 +1,4 @@
-# HD's stencil-volume shadow path: a real shader, a real companion file, and a textbook two-pass draw call
+# HD's stencil-volume shadow path: a real shader, a real companion file, and a two-pass stencil test over a shifted box proxy
 
 2026-09-04. Traced from `docs/rendering/shadows.md`'s open item: HD carries a
 `LiveStencilShadow_vp`/`_fp` shader pair and a `/shadow.stencilvolume` string
@@ -59,7 +59,7 @@ source here (`docs/rendering/shadows.md`'s cost table already assumes this)
 but is not itself proof of it - the constant's *value* at draw time is
 unread; this only shows the shader accepts one.
 
-## The draw call is found: a two-sided depth-fail stencil shadow volume, colour-mask bracketed
+## The draw call is found: a two-sided depth-fail stencil test over a rigidly-shifted box proxy, colour-mask bracketed
 
 **`Shadow_DrawOccluderStencilVolumes`** (`0x003e6918`, confidence 80) is the
 per-frame draw call. It walks the model-instance array (`PTR_DAT_008b7da0`,
@@ -325,14 +325,32 @@ distinct unit-length axis-aligned normals** - `(±1,0,0)`, `(0,±1,0)`,
 `-3.28e-08` in place of an exact `0`) - with 4 vertices sharing each normal:
 **a 6-face box, unwelded so each face gets its own flat normal**, exactly
 matching the "24 vertices, 4 per face" split. The `m=108` index buffer
-(36 triangles) splits cleanly into two groups: indices `0..35` (12
-triangles, 2 per face x 6 faces) draw each face as a quad; indices `36..107`
-(24 triangles, 2 per edge x 12 edges) bridge each face's border to its
-neighbours, sealing the box into one closed manifold rather than 6 floating
-quads. Vertex *positions* vary per file - `feisar`'s box is a different size
-than `detonator`'s or `qirex`'s bounding footprint - but the **topology
-(vertex count, normal set, index list) is byte-identical across every one of
-the 39 files**. This is the exact arithmetic-invariant-across-many-real-files
+(36 triangles) splits into two groups by *position*, not just by index
+range: indices `0..35` (12 triangles, 2 per face x 6 faces) are the box's
+only real geometry, and each face's 4 corners already coincide in 3D space
+with the matching corners of its neighbouring faces (a duplicate-vertex-
+per-face-normal box is watertight by *position* even though every corner
+has 3 separate index-carrying copies, one per adjacent face). Indices
+`36..107` (24 triangles) are **degenerate on all 39 of 39 files, not a
+sample**: every one of these 24 has two of its three vertices at the exact
+same position (two of a corner's three per-face copies), so it rasterizes
+zero area and contributes nothing to the stencil count - and the raw
+108-`u32` index array is **byte-identical across all 39 files**, not merely
+same-shaped, confirming the index list really is one fixed disc-wide
+constant rather than 39 coincidentally-matching ones.
+
+**An earlier version of this page called these 24 "edge-bridging
+triangles... sealing the box into one closed manifold" - that overstated
+their role.** The box was already watertight from the 12 real triangles
+alone; the other 24 are inert padding, not sealing geometry. Why the
+exporter emits them at all - a fixed per-vertex triangle-fan template that
+always walks all three of a corner's copies regardless of whether they
+coincide, most likely - is unconfirmed and left as an open question rather
+than guessed at. Vertex *positions* vary per file - `feisar`'s box is a
+different size than `detonator`'s or `qirex`'s bounding footprint - but the
+**topology (vertex count, normal set, index list, and which 24 of 36
+triangles are degenerate) is byte-identical across every one of the 39
+files**. This is the exact arithmetic-invariant-across-many-real-files
 case the confidence rubric scores 85-94; record format confidence raised
 from 82 to **92**.
 
@@ -458,8 +476,15 @@ extrusion at all), not merely unconfirmed.
   `lightDirection`/`extrusionDistance`.~~ **Disassembled 2026-09-04**: no -
   it applies a *uniform* `lightDirection * extrusionDistance` shift to
   every vertex regardless of facing, not a per-vertex silhouette extrusion;
-  the normal is read into a dot product that is never used again (confidence
-  88) - see above
+  the normal is read into a dot product that is never used again. Also
+  checked directly against both draw functions: neither varies
+  `extrusionDistance` between them, so both stencil passes test the *same*
+  once-shifted box, not a near-cap/far-cap pair (confidence 84) - see above
+- Why the exporter emits 24 degenerate (zero-area) triangles per box when
+  the 12 real face-quad triangles alone are already watertight - a fixed
+  per-vertex triangle-fan template that always walks all three of a
+  corner's per-face copies regardless of whether they coincide is the
+  leading guess, unconfirmed
 - Why `data/ships/detonator/`'s box is ship-scale (~6 x 3 x 14 units,
   same order of magnitude as `qirex`'s ~5.6 x 3 x 15), when
   [detonator-bomb.md](detonator-bomb.md) names `DetonatorBomb` as a weapon

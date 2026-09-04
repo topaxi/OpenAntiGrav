@@ -38,10 +38,10 @@ files disc-wide (one per `data/ships/<name>/`) and every one matches
 `16 + n*24 + m*4` exactly, with an identical `(n=24, m=108)` header on all
 39 - not a sample. Decoding the vertex records closes what was still open:
 they are `(x, y, z, nx, ny, nz)`, and the 24 vertices/108 indices form a
-fixed, unwelded six-face box (4 verts/face, 2 face-quad triangles + 4
-edge-bridging triangles per face-boundary) with only vertex *positions*
-varying per ship to fit its own bounding footprint - the topology itself is
-byte-identical across all 39. Record-format confidence raised 82 -> 92, the
+fixed, unwelded six-face box (4 verts/face, 12 face-quad triangles, plus 24
+more triangles that turned out to be degenerate padding - see below) with
+only vertex *positions* varying per ship to fit its own bounding footprint -
+the topology itself is byte-identical across all 39. Record-format confidence raised 82 -> 92, the
 "exact arithmetic invariant across many real files" band. This also forced
 a correction: a previous pass here called the min/max reduction at
 `param_1+0x20`/`+0x30` a "bounding box"; the offsets it actually reads
@@ -107,6 +107,22 @@ box template, shifted toward the light and positioned at the caster"** than
 to a true silhouette-derived shadow volume. Confirmed by decompile, not
 assumed - see `shadow-stencilvolume.md`.
 
+**A second advisor check, same session, caught an overstated claim about
+the mesh itself: "sealing the box into one closed manifold" was never
+verified.** Checked directly across all 39 real files: the 24 "bridging"
+triangles the previous pass named are **degenerate on every one of the 39
+files** - each has two of its three vertices at the exact same 3D position
+(two of a box corner's three per-face-normal copies coincide), so they
+rasterize zero area. The box was already watertight from its 12 real
+face-quad triangles alone (adjacent faces' corners already coincide in
+position, just not by index); the other 24 triangles are inert padding, not
+sealing geometry - the earlier "sealing... rather than 6 floating quads"
+framing overstated their role and is retracted. Two headline labels
+("a two-sided depth-fail stencil shadow volume") were also caught still
+asserting what the body had already retracted, in the doc page's own
+heading, `shadows.md`, and `HANDOVER.md` - fixed to name what was actually
+confirmed: a stencil test over a rigidly-shifted box proxy.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
@@ -122,7 +138,7 @@ assumed - see `shadow-stencilvolume.md`.
 - ~~Where the light direction for a Pulse shadow comes from.~~ **Answered 2026-09-03**: nowhere. `Shadow_RenderOccluderVolume` derives it from the occluder's own local axis, transformed by its own world matrix - Pulse never reads a light for this, consistent with the disc having no light rig to read one from
 - Whether the 10 world-space occluders are a track feature at all, or authored-and-inert the way `DirectionalLight` turned out to be. Their bbox extents run to 882 units, so they are not craft
 - Whether `original` should be the default once it exists, on a title where the tier is not obviously better-looking than `blob`
-- ~~HD's stencil-volume draw call is still unfound.~~ **Found 2026-09-04**: `Shadow_DrawOccluderStencilVolumes` (`0x003e6918`) walks the model-instance array for the flagged ones and runs a two-sided depth-fail stencil shadow volume, colour-mask bracketed - `Shadow_AccumulateStencilVolume`, a colour-on/blend-on submit (`FUN_004053e0`) whose geometry is unconfirmed, then `Shadow_ClearStencilVolume` (a stencil reset, not a "resolve") - RSX register identities cross-checked against a local `rpcs3`'s own `gcm_enums.h`, not assumed. **`FUN_004053e0` turns out not to draw immediately at all**: it compiles a small command stream and hands it to a shared, seven-caller SPU-job-submission primitive matching this project's own already-documented job pattern (`engine-trail.md`) - generic infrastructure, but through a path that would need SPU-job-level tracing to say what geometry it actually carries. See `shadow-stencilvolume.md`
+- ~~HD's stencil-volume draw call is still unfound.~~ **Found 2026-09-04**: `Shadow_DrawOccluderStencilVolumes` (`0x003e6918`) walks the model-instance array for the flagged ones and runs a two-sided depth-fail stencil test, colour-mask bracketed - `Shadow_AccumulateStencilVolume`, a colour-on/blend-on submit (`FUN_004053e0`) whose geometry is unconfirmed, then `Shadow_ClearStencilVolume` (a stencil reset, not a "resolve") - RSX register identities cross-checked against a local `rpcs3`'s own `gcm_enums.h`, not assumed. **Later found (below) to be a test over a rigidly-shifted box proxy, not a true silhouette-derived volume.** **`FUN_004053e0` turns out not to draw immediately at all**: it compiles a small command stream and hands it to a shared, seven-caller SPU-job-submission primitive matching this project's own already-documented job pattern (`engine-trail.md`) - generic infrastructure, but through a path that would need SPU-job-level tracing to say what geometry it actually carries. See `shadow-stencilvolume.md`
 - ~~No PSARC archive has been searched for an actual `shadow.stencilvolume` entry.~~ **Found and decoded 2026-09-04, all 39**: byte-verifies the `n`=vertex/`m`=index split (confidence 82 -> 92) and reveals a fixed sealed-box topology shared by every ship - see above and `shadow-stencilvolume.md`
 - ~~Whether `LiveStencilShadow_vp` actually extrudes per-vertex along `lightDirection`/`extrusionDistance`.~~ **Disassembled 2026-09-04**: no - it's a uniform shift applied to every vertex regardless of facing, not a per-vertex silhouette extrusion (confidence 84) - see above
 - **Whether other model classes (props, track pieces, other weapons) share HD's fixed 24-vertex box template**, or use a different one - only `data/ships/*` was checked
@@ -156,9 +172,10 @@ unblocked by it:
   bounding box) are both found - see
   [shadow-stencilvolume.md](../docs/ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md).
   **The draw call is traced too, same day**: `Shadow_DrawOccluderStencilVolumes`
-  runs a two-sided depth-fail stencil shadow volume, colour-mask bracketed,
-  RSX register identities cross-checked against a local `rpcs3`'s own
-  source. **The record format is closed and byte-verified, same day**: an
+  runs a two-sided depth-fail stencil test, colour-mask bracketed, RSX
+  register identities cross-checked against a local `rpcs3`'s own source
+  (later found to be over a rigidly-shifted box proxy, not a true
+  silhouette-derived volume - see below). **The record format is closed and byte-verified, same day**: an
   `n`-vertex, `m`-index (`u32`) buffer pair, settled first by an exact
   arithmetic invariant between two independently-read functions, then
   confirmed against all 39 real `shadow.stencilvolume` files disc-wide -

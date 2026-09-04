@@ -308,15 +308,18 @@ Two things follow for the setting:
   bbox) but a genuinely different topology encoding (confidence 82 on the
   vertex/index split, closed by an exact arithmetic invariant between two
   independently-read allocator functions - see that page). **The draw call
-  is found too**: a two-sided depth-fail stencil shadow volume, colour-mask
+  is found too**: a two-sided depth-fail stencil test over a rigidly-shifted
+  box proxy (see below - not a true silhouette-derived volume), colour-mask
   bracketed, its RSX register identities (stencil test/func/op, two-sided
   stencil, cull-face and colour-mask toggling) cross-checked against a local
   `rpcs3`'s own `gcm_enums.h` rather than assumed. **The record format is now
   byte-verified, 2026-09-04**: all 39 real `shadow.stencilvolume` files on
   the disc (one per `data/ships/<name>/`) decode with an identical header
-  and reveal a fixed, unwelded six-face box (24 vertices, 108 indices),
-  with only vertex positions varying per ship - the topology itself is
-  byte-identical across every file (confidence 82 -> 92). This retracts an
+  and reveal a fixed, unwelded six-face box (24 vertices, 108 indices - 12
+  real face-quad triangles plus 24 degenerate, zero-area ones, checked
+  across all 39 files), with only vertex positions varying per ship - the
+  topology itself is byte-identical across every file (confidence 82 -> 92).
+  This retracts an
   earlier reading of the min/max fields as a "bounding box": the offsets
   they actually reduce over are the vertex *normal*, not the position, per
   this closed layout. **The vertex shader is disassembled too, same day**:
