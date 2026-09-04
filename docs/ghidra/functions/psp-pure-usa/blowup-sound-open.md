@@ -71,11 +71,16 @@ pattern the corrected `.COLLISIONS`/`ABSORB` reads used, not the direct
 5. **Every direct caller of the chain's middle hop**
    (`func_0x0002c8f0`, real `0x088308f0`) - the same shape `LockOn` reaches
    directly, bypassing the gate helper (`lockon-sound.md`). 44 call sites
-   found; none in the ship-lifecycle address neighbourhood
-   (`0x0884xxxx`) `Blowup` would plausibly live in, and checking a
-   representative sample (`FUN_08925d7c`, a countdown-crossing-zero dry-play
-   call at a *different* string offset, `0x2764b0`) turned up an unrelated
-   cue, not `~BLOWUP`.
+   found; none builds `~BLOWUP`, and a representative sample
+   (`FUN_08925d7c`, a countdown-crossing-zero dry-play call at a *different*
+   string offset, `0x2764b0`) turned up an unrelated cue on inspection. This
+   does **not** rule out `Blowup` living outside these 44 sites: `Disengaging`'s
+   own confirmed caller (`FUN_0884c794`, `dry-play-cues.md`) reaches the chain
+   through the **gate helper** (method 4 above), not this middle hop, and
+   Pulse's own `Blowup` trigger goes through its gate helper too (see the
+   re-verification below) - so a middle-hop-only sweep was never guaranteed to
+   see it in the first place. Methods 4 and 5 together cover the two known
+   entry points into the chain; neither found it.
 6. **Fuzzy-matching Pulse's `Ship_SetState` (`0x08844100`) against Pure**
    (`find_similar_functions_fuzzy`, threshold 0.6) - 4,614 matches, all
    weakly and closely tied (0.73-0.76), the exact "false positive shape"
@@ -95,6 +100,20 @@ methodology, a search dead end is written down rather than pushed through on
 a guess - nothing here is renamed, and `oag_game::audio::sfx::Cue::Blowup`
 stays on the module-level confidence-50 bet for Pure, same as it already was
 for every cue before this thread started.
+
+**One mechanism this session never checked: a register-indirect call
+(`jalr`).** Methods 4 and 5 both used `search_instructions` for direct `jal`
+targets against the chain's two known entry points. That finds every static
+caller, but not a call reached through a register - and the one confirmed
+fact about *how* both binaries reach a `Blowup`-shaped state handler is that
+`Ship_SetState`'s own case 4 is itself only reachable through an indirect
+jump table (see the Pulse re-verification below), never a direct `jal`. If
+Pure's caller into the dry-play chain for `Blowup` is likewise reached only
+through an indirect table - and calls the chain's gate or middle hop via a
+register rather than a literal `jal` immediate - neither of this session's
+two caller sweeps would ever have seen it. A future pass should search for
+`jalr` instructions whose target register was just loaded from the gate
+helper's or middle hop's address, not just literal `jal 0x...` targets.
 
 ## What is not verified
 
