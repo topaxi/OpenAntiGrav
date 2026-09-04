@@ -950,7 +950,10 @@ change how this list should be read:
       it now **draws**: the craft's own hull, its silhouette taken against the
       direction the executable authors (`(1, -10, 2)` normalized, carried by
       all three Pulse builds and neither Pure one) and projected onto the
-      surface under the craft.
+      surface under the craft. **On HD/Fury it draws too, by that title's own
+      mechanism**: the craft render into a *coverage* map - which is what its
+      track material's microcode says it samples, projectively and with no
+      compare - and the track reads it.
       **What is built is the tier below it**: `graphics.shadows` with `off`
       and `blob`, a ground-aligned quad per craft placed by a downward cast
       against the circuit's own collision geometry. `blob` plays Wipeout HD's

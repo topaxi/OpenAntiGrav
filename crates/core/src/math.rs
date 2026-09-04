@@ -108,7 +108,9 @@ pub fn quat_from_axis_angle(axis: Vec3, angle: f32) -> Quat {
 /// would put everything at the wrong depth. Re-exported here so the renderer
 /// takes its math from one place, like everything else.
 pub mod camera {
-    pub use glam::camera::rh::proj::directx::{perspective, perspective_infinite_reverse};
+    pub use glam::camera::rh::proj::directx::{
+        orthographic, perspective, perspective_infinite_reverse,
+    };
     pub use glam::camera::rh::view::look_at_mat4 as look_at;
 }
 

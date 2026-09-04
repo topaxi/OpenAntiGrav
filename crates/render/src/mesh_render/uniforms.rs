@@ -594,6 +594,57 @@ pub struct Zone {
     pub base_alt: [f32; 4],
 }
 
+/// The shadow map's projection and how hard it darkens what it covers.
+///
+/// **Wipeout HD's own mechanism, and it is not a depth-compare shadow map.**
+/// Its track material samples `shadowMapTex` *projectively* and uses the
+/// sample directly - `TXP R1.x, f[TC0] unit2` then `ADD H0.w, -R1.xxxx, {1}`,
+/// with no compare against any interpolated reference anywhere in the block.
+/// So the texture holds shadow **coverage**, not depth, and the shader's job
+/// is `1 - coverage`. Read from `talons_junction/track_surface.rcsmaterial`
+/// block #9 with `scripts/ps3-microcode.py`; see
+/// [`renderer.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+/// "the lit track material".
+///
+/// **Where it lands is ours.** The original puts `1 - shadow` in the fragment's
+/// *alpha* - which is what the `ShadowToAlpha` material flag names - and a
+/// later compositing pass consumes it; that pass is unread. This renderer's
+/// alpha is the bloom's glow mask ([`super::GlowMask`]), so writing there would
+/// bloom the shadow. The term multiplies colour instead, and
+/// [`Self::strength`] is this project's number, not the original's.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ShadowMap {
+    /// World to shadow-map clip space, as the projective sample's coordinate.
+    pub matrix: [[f32; 4]; 4],
+    /// How hard a fully covered texel darkens the surface, `0.0` for off.
+    pub strength: f32,
+    /// Padding to the 16-byte boundary a uniform's own size needs.
+    pub _pad: [f32; 3],
+}
+
+impl ShadowMap {
+    /// No shadow at all: the identity matrix and zero strength, which is what
+    /// every title but the one being shadowed binds.
+    ///
+    /// **Zero strength is what makes the sample inert**, not the placeholder
+    /// texture - a caller that binds a real map without asking for it still
+    /// gets the picture it had before.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            matrix: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            strength: 0.0,
+            _pad: [0.0; 3],
+        }
+    }
+}
+
 /// Everything bind group 2 carries: the fog volume and the light rig.
 ///
 /// One buffer rather than two groups because `wgpu`'s default
@@ -620,6 +671,8 @@ pub struct Scene {
     /// `enabled` included - for every draw that is not a Zone race, which is
     /// the identity on the albedo.
     pub zone: Zone,
+    /// The shadow map's projection and strength, or [`ShadowMap::off`].
+    pub shadow: ShadowMap,
 }
 
 impl Scene {
@@ -632,6 +685,7 @@ impl Scene {
             light: Light::stand_in(),
             time: [0.0; 4],
             zone: Zone::default(),
+            shadow: ShadowMap::off(),
         }
     }
 }
@@ -643,6 +697,14 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),
     "WGSL puts Scene.zone at a 16-aligned offset; Rust must agree"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, shadow).is_multiple_of(16),
+    "and Scene.shadow, whose first field is a mat4x4"
+);
+const _: () = assert!(
+    std::mem::size_of::<ShadowMap>() == 80,
+    "mesh.wgsl's ShadowMap is a mat4x4 and one padded vec4"
 );
 const _: () = assert!(
     std::mem::size_of::<Scene>().is_multiple_of(16),

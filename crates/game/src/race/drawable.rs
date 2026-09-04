@@ -55,6 +55,13 @@ pub(super) struct Drawable {
     /// All-black until [`Self::write_zone_vis`] is called, which
     /// `race::Scene::render` does once a frame alongside [`Self::fog`].
     zone_vis: wgpu::Texture,
+    /// This model's opaque index ranges, kept so the shadow caster pass can
+    /// draw them without walking the draw list again every frame.
+    ///
+    /// **Opaque only**: a hull casts, and the transparent flare bolted to it
+    /// does not - a shadow map of a craft's glow would darken the road under
+    /// its own light.
+    opaque_ranges: Vec<std::ops::Range<u32>>,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -79,6 +86,11 @@ impl Drawable {
         blend: wgpu::BlendState,
         glow: mesh_render::GlowMask,
         zone: Option<&std::sync::Arc<oag_render::mesh::ModelTexture>>,
+        // The frame's shadow map and whether this model's surfaces read it -
+        // the track's do and a craft's do not, which is Wipeout HD's own split.
+        // See `mesh_render::build`.
+        shadow_map: Option<&wgpu::TextureView>,
+        receives_shadow: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -114,6 +126,8 @@ impl Drawable {
             // `race::Scene::velocity`.
             mesh_render::Velocity::Write,
             zone,
+            shadow_map,
+            receives_shadow,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -131,7 +145,9 @@ impl Drawable {
             }],
         });
 
+        let opaque_ranges = model.draws.iter().map(|draw| draw.range.clone()).collect();
         Ok(Self {
+            opaque_ranges,
             model,
             pipeline,
             alpha_test_pipeline,
@@ -151,6 +167,31 @@ impl Drawable {
             node_anims: node_anim_buffer,
             zone_vis: zone_vis_texture,
         })
+    }
+
+    /// This model's own bounding radius, in model space.
+    ///
+    /// What the shadow map's light view is fitted to - a box sized to the
+    /// craft's *centres* alone clips the craft themselves, which draws a
+    /// shadow the size of the overlap rather than of the hull.
+    pub(super) fn radius(&self) -> f32 {
+        self.model.radius
+    }
+
+    /// This drawable as a shadow caster: its own buffers, its opaque ranges
+    /// and the matrix that places it.
+    ///
+    /// **Borrowed, not copied.** The caster pass draws the geometry already on
+    /// the GPU with a second pipeline rather than re-uploading it - a full grid
+    /// is some twelve thousand triangles, which would be more traffic per frame
+    /// than the whole rest of the pass.
+    pub(super) fn caster(&self, model: Mat4) -> oag_render::shadow::map::Caster<'_> {
+        oag_render::shadow::map::Caster {
+            vertices: &self.vertices,
+            indices: &self.indices,
+            ranges: &self.opaque_ranges,
+            model,
+        }
     }
 
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by

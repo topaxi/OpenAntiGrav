@@ -448,6 +448,10 @@ fn draw(
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::None,
         stage,
+        // No shadow map and no receiver: this test draws one model against
+        // nothing.
+        None,
+        false,
     )
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));

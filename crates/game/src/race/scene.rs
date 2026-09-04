@@ -175,6 +175,14 @@ pub struct Scene {
     /// [`crate::race::shadow`], which split what is the disc's from what is
     /// ours.
     shadow: std::cell::RefCell<oag_render::shadow::Pipeline>,
+    /// The `original` tier's shadow map on Wipeout HD: what the craft cast
+    /// into and the track samples. `RefCell` for the reason [`Self::exhaust`]
+    /// is - its pass is encoded inside `render`'s `&self`.
+    ///
+    /// Built for every race and bound by every drawable, because the setting
+    /// applies live; the strength in `Scene::shadow` is what turns it on. See
+    /// `oag_render::shadow::map`.
+    shadow_map: std::cell::RefCell<oag_render::shadow::map::Map>,
     /// The `original` tier's geometry, one authored hull per grid slot where
     /// the craft's model carries one. CPU-side: it is projected afresh every
     /// frame against the surface under the craft, so there is nothing to
@@ -423,6 +431,11 @@ impl Scene {
             .and_then(|grade| grade.stage_art())
             .cloned();
         let zone_art = zone_art.as_ref();
+        // **Built for every race, whatever the setting says**, and bound by
+        // every drawable: `Scene::shadow.strength` at zero is what makes it
+        // inert, so the shadow row applies live without rebuilding a pipeline.
+        // A caller that never casts pays one megabyte and a cleared pass.
+        let shadow_map = oag_render::shadow::map::Map::new(device);
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -437,6 +450,8 @@ impl Scene {
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
                     zone_art,
+                    Some(shadow_map.view()),
+                    false,
                 )
             })
             .transpose()?;
@@ -451,6 +466,11 @@ impl Scene {
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
             zone_art,
+            Some(shadow_map.view()),
+            // **The one receiver**, which is what Wipeout HD's own materials
+            // say: the track surface declares `shadowMapTex` and a craft's
+            // does not. See `mesh_render::build`.
+            true,
         )?;
         // One per grid slot, each drawing **its own team's hull**. Built up
         // front rather than on demand, because a `Drawable` needs the device
@@ -472,6 +492,8 @@ impl Scene {
                 mesh_render::TRANSPARENT_BLEND,
                 mesh_render::GlowMask::Protected,
                 zone_art,
+                Some(shadow_map.view()),
+                false,
             )?);
         }
         let collision = collision_model
@@ -487,6 +509,8 @@ impl Scene {
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
                     zone_art,
+                    Some(shadow_map.view()),
+                    false,
                 )
             })
             .transpose()?;
@@ -505,6 +529,8 @@ impl Scene {
                         mesh_render::TRANSPARENT_BLEND,
                         mesh_render::GlowMask::Protected,
                         zone_art,
+                        Some(shadow_map.view()),
+                        false,
                     )
                 })
                 .transpose()
@@ -700,6 +726,8 @@ impl Scene {
                         mesh_render::ADDITIVE_BLEND,
                         mesh_render::GlowMask::Protected,
                         zone_art,
+                        Some(shadow_map.view()),
+                        false,
                     )?),
                     None => None,
                 },
@@ -729,6 +757,8 @@ impl Scene {
                     // mask, which is the shape of the effect a player notices.
                     mesh_render::GlowMask::Written,
                     zone_art,
+                    Some(shadow_map.view()),
+                    false,
                 )?));
             }
         }
@@ -779,6 +809,8 @@ impl Scene {
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
                 zone_art,
+                Some(shadow_map.view()),
+                false,
             )?));
         }
         // The cockpit sphere, on the shell's own pipeline: same additive blend,
@@ -796,6 +828,8 @@ impl Scene {
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
                 zone_art,
+                Some(shadow_map.view()),
+                false,
             )?),
             None => None,
         };
@@ -818,6 +852,8 @@ impl Scene {
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
                     zone_art,
+                    Some(shadow_map.view()),
+                    false,
                 )?);
             }
         }
@@ -922,6 +958,7 @@ impl Scene {
             exhaust,
             sparks,
             shadow,
+            shadow_map: std::cell::RefCell::new(shadow_map),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),
             depth,

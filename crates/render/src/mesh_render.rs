@@ -17,7 +17,7 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
-    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, UNIFORMS_SIZE, Zone, write_uniforms,
+    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, UNIFORMS_SIZE, Zone, write_uniforms,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
@@ -33,6 +33,7 @@ pub use target::{fragment_options, is_linear_target, linear_constants};
 mod anisotropy;
 pub use anisotropy::Anisotropy;
 
+mod shadow_map;
 mod texture;
 pub mod zone;
 
@@ -253,6 +254,18 @@ pub fn build(
     glow: GlowMask,
     velocity: Velocity,
     zone: Option<&std::sync::Arc<crate::mesh::ModelTexture>>,
+    // The frame's shadow map, or `None` for the placeholder - see
+    // `shadow_map::resources`. A `Built` binds whichever it was given for its
+    // whole life, so a caller that gains a map mid-race rebuilds rather than
+    // rebinding, the same way a Zone stage texture does.
+    shadow_map: Option<&wgpu::TextureView>,
+    // Whether this model's surfaces sample that map at all. **The track's, and
+    // nothing else's**, which is what Wipeout HD does: the *track surface*
+    // material declares `shadowMapTex` and a craft's own material does not, so
+    // a craft is a caster and never a receiver. A pipeline constant rather
+    // than a uniform field keeps it a property of the model, like `flame_*`
+    // and `colour_is_light` beside it.
+    receives_shadow: bool,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -293,6 +306,9 @@ pub fn build(
     // the recovered PSP reference - stands. See `mesh::rcs::cutout`.
     if let Some(reference) = model.alpha_test_ref {
         constants.push(("alpha_test_ref", f64::from(reference)));
+    }
+    if receives_shadow {
+        constants.push(("receives_shadow", 1.0));
     }
     if let Some(flame) = model.flame {
         constants.extend([
@@ -358,6 +374,7 @@ pub fn build(
     });
 
     let zone_entries = zone::layout_entries();
+    let shadow_entries = shadow_map::layout_entries();
     let fog_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         // Labelled for what the buffer holds, which is `Scene` - fog *and* the
         // light rig. The three "fog" labels here predated `Light` joining it.
@@ -384,6 +401,14 @@ pub fn build(
             zone_entries[2],
             zone_entries[3],
             zone_entries[4],
+            // The shadow map, in the scene group for the same reason the Zone
+            // stage's texture is: it is a property of the frame, not of a
+            // material slot. Bound on every pipeline whether or not anything
+            // shadows - `Scene::shadow.strength` at zero is what makes it
+            // inert, so a title with no map still binds a placeholder rather
+            // than needing a second layout.
+            shadow_entries[0],
+            shadow_entries[1],
         ],
     });
 
@@ -399,6 +424,7 @@ pub fn build(
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
     let zone_resources = zone::resources(device, queue, anisotropy, zone);
+    let shadow_resources = shadow_map::resources(device, queue, shadow_map);
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &fog_layout,
@@ -426,6 +452,14 @@ pub fn build(
             wgpu::BindGroupEntry {
                 binding: 5,
                 resource: wgpu::BindingResource::Sampler(&zone_resources.vis_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::TextureView(&shadow_resources.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::Sampler(&shadow_resources.sampler),
             },
         ],
     });
@@ -916,59 +950,4 @@ pub fn build(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A model with no geometry must write a frame rather than panic.
-    ///
-    /// `wgpu::Buffer::slice` panics on a zero-length buffer, which is how
-    /// `oag-view --collision` died on any `.vex` with no recognised collision
-    /// class - see `docs/formats/pure-status.md`. Worth knowing if this ever
-    /// regresses: `create_buffer(size: 0)` and `write_buffer(&[])` both
-    /// *succeed*, so the death is two frames later at `set_vertex_buffer`, and
-    /// clamping the buffer to a nonzero size is the fix that looks right and
-    /// still crashes.
-    ///
-    /// Deliberately not `#[ignore]`d, unlike `tests/collision_capture.rs`: that
-    /// one exists to produce a picture, this one guards a regression, and an
-    /// `#[ignore]`d regression test is a test nobody runs. The adapter probe is
-    /// the pattern `post::fxaa` and `post::fsr1` already use, so a machine
-    /// without a GPU skips instead of failing.
-    #[test]
-    fn an_empty_model_captures_a_frame_instead_of_panicking() {
-        // Probed here rather than left to `capture_from`, which reports a
-        // missing adapter as an error - indistinguishable, from the test's
-        // side, from the guard not working.
-        let instance = wgpu::Instance::default();
-        if pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .is_err()
-        {
-            eprintln!("no GPU adapter: skipping");
-            return;
-        }
-
-        // Built the way the bug arrived rather than hand-assembled: a `.vex`
-        // with no recognised collision class decodes to zero nodes, and
-        // `build_model` over zero nodes is what reached the render pass.
-        let model =
-            crate::collision::build_model("empty", &[], crate::collision::Style::Wireframe, true);
-        assert!(model.vertices.is_empty() && model.indices.is_empty());
-
-        let path = std::env::temp_dir().join("oag-empty-model.png");
-        capture_from(&model, &path, 64, 64, 0.9, 0.85, Anisotropy::default(), 0.0)
-            .expect("capturing an empty model");
-
-        // Checked through the PNG header rather than the pixels: reaching this
-        // line at all is the regression, since the old code panicked inside the
-        // render pass and never wrote a file. Byte length carries no signal -
-        // `oag_formats::png` emits stored deflate blocks, so every 64x64 frame
-        // is the same ~16 KB whatever is in it.
-        let bytes = std::fs::read(&path).expect("reading the capture back");
-        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");
-        assert_eq!(
-            &bytes[16..24],
-            &[0, 0, 0, 64, 0, 0, 0, 64],
-            "wrong IHDR size"
-        );
-    }
-}
+mod tests;

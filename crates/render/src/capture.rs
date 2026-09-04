@@ -163,6 +163,10 @@ pub fn capture_pixels_from(
         Velocity::None,
         // No Zone stage: the offscreen helper draws one model, not a race.
         None,
+        // And no shadow map, and nothing receiving one: this helper draws a
+        // single model against nothing, which is what makes it a comparison.
+        None,
+        false,
     )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

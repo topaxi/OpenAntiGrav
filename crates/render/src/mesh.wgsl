@@ -134,6 +134,20 @@ struct Scene {
     // flame path below reads it. See `mesh_render::Scene::time`.
     time: vec4<f32>,
     zone: Zone,
+    shadow: ShadowMap,
+};
+
+// The shadow map's projection and how hard it darkens. See
+// `mesh_render::ShadowMap`, which carries the microcode this is read from and
+// the line between what Wipeout HD does and what this renderer decided.
+struct ShadowMap {
+    // World to the map's own clip space.
+    matrix: mat4x4<f32>,
+    // Zero for off, which is what every title but a shadowed one binds.
+    strength: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 };
 
 // 1.0 when the render target holds linear light - Wipeout HD's float scene
@@ -157,6 +171,13 @@ override linear_out: f32 = 0.0;
 // by the asset viewer. The defaults are zero rather than the shipped values on
 // purpose: a model that reaches this path without its parameters must draw
 // nothing recognisable, not a flame with numbers this file invented.
+// **1.0 only for a model whose surfaces receive shadow**, which on Wipeout HD
+// is the track and nothing else: its *track surface* material is what declares
+// `shadowMapTex`, and a craft's own material does not - so a craft casts and
+// never receives. A pipeline constant rather than a uniform field because it
+// is a property of the model, exactly as `colour_is_light` is.
+override receives_shadow: f32 = 0.0;
+
 override flame_shading: f32 = 0.0;
 override flame_rim_power: f32 = 0.0;
 override flame_rim_scale: f32 = 0.0;
@@ -204,6 +225,11 @@ override colour_is_light: f32 = 0.0;
 // and `crates/render/src/mesh_render/zone.rs`.
 @group(2) @binding(4) var zone_vis_tex: texture_2d<f32>;
 @group(2) @binding(5) var zone_vis_sampler: sampler;
+// The shadow map, and the sampler that reads it. Bound on every pipeline, a
+// black one-texel placeholder where nothing casts - see
+// `mesh_render::shadow_map::resources`.
+@group(2) @binding(6) var shadow_tex: texture_2d<f32>;
+@group(2) @binding(7) var shadow_sampler: sampler;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -371,6 +397,32 @@ fn velocity_of(in: VertexOutput) -> vec2<f32> {
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
+// How much of this surface point the shadow map covers, `0.0` to `1.0`.
+//
+// **A projective sample of a coverage map, not a depth compare** - which is
+// what Wipeout HD's own track material does: `TXP R1.x, f[TC0] unit2`, then
+// `1 - R1.x`, with nothing compared against anything. See
+// `mesh_render::ShadowMap`.
+//
+// Outside the map's own frustum the sample is clamped to its border, which the
+// caster pass leaves at zero, so a surface the map does not cover is lit.
+fn shadow_coverage(world: vec3<f32>) -> f32 {
+    if receives_shadow == 0.0 || scene.shadow.strength <= 0.0 {
+        return 0.0;
+    }
+    let clip = scene.shadow.matrix * vec4<f32>(world, 1.0);
+    if clip.w <= 0.0 {
+        return 0.0;
+    }
+    let ndc = clip.xyz / clip.w;
+    // Behind the map's near plane or past its far one: nothing to sample.
+    if ndc.z < 0.0 || ndc.z > 1.0 {
+        return 0.0;
+    }
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    return textureSample(shadow_tex, shadow_sampler, uv).r * scene.shadow.strength;
+}
+
 fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     let distance = length(world - scene.fog.camera);
     let span = max(scene.fog.far - scene.fog.near, 1e-6);
@@ -885,7 +937,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
+    // **Before the fog, and on colour rather than alpha.** The original puts
+    // `1 - shadow` in the fragment's alpha and lets a later pass consume it -
+    // the `ShadowToAlpha` flag - and that pass is unread; this renderer's alpha
+    // is the bloom's glow mask, so the term multiplies colour here instead.
+    // Recorded as a deviation in `docs/rendering/shadows.md`.
+    let shadowed = shaded.rgb * (1.0 - shadow_coverage(in.world));
+    return vec4<f32>(fogged(shadowed, in.world, in.view_depth), 1.0);
 }
 
 // Used only by the blended pipeline - see
@@ -896,7 +954,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), shaded.a);
+    let shadowed = shaded.rgb * (1.0 - shadow_coverage(in.world));
+    return vec4<f32>(fogged(shadowed, in.world, in.view_depth), shaded.a);
 }
 
 // The GE's real alpha-test call **is** recovered now:

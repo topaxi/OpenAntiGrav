@@ -5,8 +5,9 @@
 > the occluder's record arrays and its runtime reader, the 2048 measurement,
 > and - on **Pulse only** - `original`. **`mapped` (step 7) is still design
 > only** and is not offered as a value until it exists; nor is `original` on
-> HD, 2048 or Pure, where selecting it draws nothing and the load report says
-> so.
+> 2048 or Pure, where selecting it draws nothing and the load report says so.
+> **`original` draws on Pulse and on HD/Fury**, by each title's own mechanism -
+> authored occluder hulls there, a coverage map here.
 > The page was written before any of it, so the setting's shape was agreed
 > before an enum and a menu row made it expensive to change, the way
 > [`motion-blur.md`](motion-blur.md) did for its own row.
@@ -784,13 +785,58 @@ Each step is a landing that can be reviewed on its own.
    `HULL_DARKNESS`, how dark the polygon is drawn. What a stencil volume is
    *darkened by* is decided by the pass that fills it, and that pass is unread.
    At full alpha the first capture of this tier was a black hole in the road,
-   so `0.55` was chosen to sit near where the `blob` tier's own coverage peaks.
+   and `0.35` is what it draws at now. **That number is not derived from
+   anything** - an earlier note here read as though it came from HD's own
+   `ambient_shadow.gtf` peak of `212/255`, which it does not; that asset is a
+   different title's, a different mechanism's, and half again as dark.
 
-   HD: the shadow-map path its four jobs and material flags describe. 2048: the
-   `track_proximity_shadow` pair plus the precomputed environment shadows, with
-   the shadow direction read straight out of `.EnvSettings`. Pure: absence,
-   reported - and now with evidence on the *direction* too, since the three
-   immediates that make Pulse's axis appear in neither Pure build.
+   **HD landed 2026-09-04 too, and its mechanism is a different one.** 2048:
+   the `track_proximity_shadow` pair plus the precomputed environment shadows,
+   with the shadow direction read straight out of `.EnvSettings`. Pure:
+   absence, reported - and now with evidence on the *direction* too, since the
+   three immediates that make Pulse's axis appear in neither Pure build.
+
+### HD's `original` is a coverage map, and the microcode is what says so
+
+The obvious reading of "shadow map" is a depth buffer compared against an
+interpolated reference. **HD does not do that**, and the receiving side settles
+it rather than either job's name. `talons_junction/track_surface.rcsmaterial`
+block #9, disassembled with
+[`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py):
+
+```text
+@0x18  TXP R1.x, f[TC0] unit2            <- shadowMapTex (0x730df9ee), projected
+@0x19  ADD H0.w, -R1.xxxx, {0, 0, 0, 1}  <- H0.w = 1 - shadow
+@0x1b  MAD H0.xyz, R0.xxxx, R2, {fog}    END
+```
+
+One channel, sampled projectively, used directly. **Nothing in the block
+compares anything against anything**, so the texture holds shadow *coverage*
+and not depth - which is why `oag_render::shadow::map` renders casters as flat
+coverage into an `R8Unorm` target with no depth attachment, no bias and no
+comparison sampler.
+
+| | The original's | This project's |
+| --- | --- | --- |
+| what the map holds | coverage, per the microcode | the same |
+| who casts | models (`Job RenderModelShadowMaps`) | the craft |
+| who receives | the track surface, whose material declares `shadowMapTex` | the same, as a per-model pipeline constant |
+| the projection | `shadowMatrix`, built around the `.envsettings` sun | the same sun; the *fit* is ours |
+| the map's size | `shadowMapTexSize`, **value unread** | 1024, ours |
+| where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by a compositing pass that is **unread** | multiplied into colour, because this renderer's alpha is the bloom's glow mask |
+| how dark | whatever that unread pass does | `MAP_STRENGTH`, `0.5`, ours |
+
+**Proved inert where it should be**: every pipeline binds the map and samples
+it, so a Pulse capture is the guard - `original` on Pulse before and after this
+landed is byte-identical, 0 pixels differing at threshold 0. On HD the same
+comparison against `off` changes 1,289 pixels at a worst delta of 58.
+
+The caster pass has one observable and it is not the frame: a shadow map is
+consumed by a sampler inside another shader, so
+[`shadow_map_coverage.rs`](../../crates/render/tests/shadow_map_coverage.rs)
+renders one caster, reads the texels back, and asserts coverage at the centre,
+clear texels at the border, the fitted edges within two texels, and that a
+second pass with no casters clears it.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
@@ -802,6 +848,11 @@ Steps 1-6 have landed, step 5 on Pulse only. **What is next is a title, not a
 step**: `original` on HD is its shadow-map pipeline and on 2048 its
 proximity pair, and both are their own piece of work. Step 7, `mapped`, is
 untouched and stays that way until someone wants it.
+
+**Verified on HD against `off`**, one camera pose, 2026-09-04: 1,289 pixels
+change at a worst delta of 58, and the difference carries the road's own
+hexagon pattern - which is what a multiply into the surface colour looks like
+and a flat decal does not.
 
 **Verified on Pulse against both other tiers**, at one camera pose, 2026-09-04:
 `off` against `original` changes 4,625 pixels at a worst delta of 134, `off`

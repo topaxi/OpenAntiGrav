@@ -151,6 +151,10 @@ fn render_and_resolve(
         mesh_render::Velocity::None,
         // No Zone stage: this test draws a model, not a race.
         None,
+        // No shadow map and no receiver: this test draws one model against
+        // nothing.
+        None,
+        false,
     )
     .expect("building the mesh pipeline");
 

@@ -1,4 +1,4 @@
-# `original` draws on Pulse; HD's, 2048's and `mapped` are the tiers left
+# `original` draws on Pulse and HD; 2048's and `mapped` are what is left
 
 2026-09-04. Rewritten from the file that split off
 [shadows-are-planned-and-pulses-occluder-payload-closes.md](shadows-are-planned-and-pulses-occluder-payload-closes.md)
@@ -40,10 +40,18 @@ Two things worth carrying forward from doing it:
   found, fanned from each ring's centroid. Diffed against both other tiers at
   one camera pose: `blob` against `original` changes 5,720 pixels at a worst
   delta of 126, which is the check that says they draw different things.
-- **`original` on HD and on 2048.** Different mechanisms, each its own piece of
-  work: HD's four shadow-map jobs and its `LiveStencilShadow` path, 2048's
-  `track_proximity_shadow` pair and its precomputed environment shadows.
-  Selecting `original` there today draws nothing and the load report says so.
+- ~~`original` on HD~~ **Landed 2026-09-04**, and its mechanism is not Pulse's:
+  the craft render into a **coverage** map from the `.envsettings` sun and the
+  track samples it projectively. That the map holds coverage rather than depth
+  is the microcode's own statement - `TXP R1.x, f[TC0] unit2` then
+  `ADD H0.w, -R1.xxxx, {1}`, with nothing compared anywhere - so there is no
+  depth attachment, no bias and no comparison sampler in the pass.
+- **`original` on 2048**: the `track_proximity_shadow` pair and the
+  precomputed environment shadows, and it needs 2048 to race first.
+- **HD's `LiveStencilShadow` path is not built either**, and it is a separate
+  thing from the map: a two-sided depth-fail stencil test over a rigidly
+  shifted box proxy, decoded down to all 39 `shadow.stencilvolume` files. What
+  it is *for* - which craft, when - is unread.
 - **Two bugs that still drew a plausible dark shape**, both fixed, and worth
   carrying because neither would have failed a "was anything drawn" test: a
   centroid fan over a *non-convex* silhouette (53 of 129 hulls are concave)
@@ -53,9 +61,18 @@ Two things worth carrying forward from doing it:
   footprint covers 93 % of the craft mesh's and spills 4 % beyond it.
 - **`HULL_DARKNESS` is ours and unevidenced.** What a stencil volume is
   darkened by is decided by the pass that fills it, and that pass is unread; at
-  full alpha the tier drew a black hole in the road, so `0.55` was picked to
-  sit near where `blob`'s own coverage peaks. Reading the fill pass would
-  replace a choice with a measurement.
+  full alpha the tier drew a black hole in the road, so `0.35` is a number
+  picked to read as a shadow and derived from nothing. **HD's own
+  `MAP_STRENGTH` is the same kind of number** and for the same reason - its
+  compositing pass is unread too. Reading either would replace a choice with a
+  measurement.
+- **Two numbers with no evidence behind them, one per title**: Pulse's
+  `HULL_DARKNESS` and HD's `MAP_STRENGTH`. Both exist because the pass that
+  turns the original's shadow term into pixels is unread on both titles - HD
+  puts `1 - shadow` in the fragment's alpha (`ShadowToAlpha`) and composites it
+  later, and that compositing pass has never been traced.
+- **HD's map size is ours too.** `shadowMapTexSize` is a real engine parameter
+  and its value is unread; 1024 is a choice.
 - **Nothing shadows anything but the road.** The polygon is the volume's ground
   cap, so a craft under a bridge does not darken the bridge and one craft does
   not shadow another. Whether that is worth a real stencil volume is a
@@ -109,5 +126,8 @@ Two things worth carrying forward from doing it:
 - Look at both drawn tiers in a window on one title and judge the four numbers
   that are ours: the fade, the falloff's darkness, the lift, and
   `HULL_DARKNESS`. Every judgement so far is from a headless capture.
-- `original` on HD, which is the biggest remaining piece of this thread and is
-  a shadow-map pipeline rather than a projection.
+- Read the compositing pass on either title - `RenderModelShadowsOnTrack` on
+  HD is the nearer one, since its material flag `ShadowToAlpha` is already
+  bound at `0x405d48` - and replace both darkness constants with measurements.
+- `mapped`, this project's own cascaded shadow map, which now has the whole
+  caster and receiver path built under it.
