@@ -245,3 +245,6 @@
 0x003e6918	function	Shadow_DrawOccluderStencilVolumes	80	shadow-stencilvolume.md
 0x005ed658	function	Shadow_AccumulateStencilVolume	84	shadow-stencilvolume.md
 0x005ede20	function	Shadow_ClearStencilVolume	84	shadow-stencilvolume.md
+0x003ee398	function	Resource_FindOrLoadByHashedPath	75	shadow-stencilvolume.md
+0x005ee2c0	function	Shadow_AllocateStencilVolumeBuffers	82	shadow-stencilvolume.md
+0x005ee7d0	function	Shadow_ParseStencilVolumeGeometry	75	shadow-stencilvolume.md

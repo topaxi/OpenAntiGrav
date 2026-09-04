@@ -302,13 +302,15 @@ Two things follow for the setting:
   a light as input), and a per-model flag bit (`self+0xe4`, bit `0x2`) builds a
   path ending in the literal leaf `shadow.stencilvolume` (confidence 65 that
   the directory it joins into is fixed rather than per-model - see that
-  page) and loads it through a hashed resource cache into a parsed record
-  array plus a computed bounding box - the same coarse shape as Pulse's `.vex`
-  payload (leading counts, a geometry array, a bbox) but a different, only
-  partly-understood byte layout (confidence 50 - see that page's Open
-  section). **The draw call is found too**: a textbook two-sided depth-fail
-  stencil shadow volume, its RSX register identities (stencil test/func/op,
-  two-sided stencil, cull-face toggling) cross-checked against a vendored
+  page) and loads it through a hashed resource cache into an explicit
+  vertex-buffer/index-buffer pair plus a computed bounding box - the same
+  coarse shape as Pulse's `.vex` payload (leading counts, a geometry array, a
+  bbox) but a genuinely different topology encoding (confidence 82 on the
+  vertex/index split, closed by an exact arithmetic invariant between two
+  independently-read allocator functions - see that page). **The draw call
+  is found too**: a two-sided depth-fail stencil shadow volume, colour-mask
+  bracketed, its RSX register identities (stencil test/func/op, two-sided
+  stencil, cull-face and colour-mask toggling) cross-checked against a local
   `rpcs3`'s own `gcm_enums.h` rather than assumed. The actual PSARC entry is
   still unfound.
 
