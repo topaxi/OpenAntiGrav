@@ -94,6 +94,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in
     // the colour the layout authors. See [`ALWAYS_ON`] for the frame.
+    //
+    // Confirmed directly, 2026-09-04: `HUD_pickup_background.xml`'s
+    // `PickupBackground` widget carries no `Color=` attribute at all, unlike
+    // every `<Type>Icon` beside it (all thirteen author `Color="FEConst->
+    // HudColour1"`) and unlike Pulse's own `PickupBackground` - it draws
+    // whatever `HUD_Components.gtf` bakes at that UV rect, with nothing for a
+    // runtime tint to override.
     pickup_backdrop_colour: None,
     // Same reasoning: an outline needs no colour substituted into it, per
     // weapon or otherwise.
