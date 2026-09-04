@@ -25,17 +25,14 @@
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
 //! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
-//! looked at** until [`Cue::Collision`], [`Cue::Absorb`], [`Cue::Shield`],
-//! [`Cue::ShieldActive`], [`Cue::SpeedupPad`], [`Cue::Disengaging`] and
-//! [`Cue::Engine`]'s own doc comments: Pure's counterparts of
-//! `ShipCollisionFx_Trigger`, its absorb-effect caller, its shield-activate
-//! function, the dry-play chain shared by two more cues, and its own
-//! engine-flare constructor each fire the same cue at the same point in the
-//! same gate, corroborated confidence 78-82. That is seven cues on one of
-//! the two other titles; firing the remaining two (`Blowup`, `LockOn`) on
-//! Pure and all nine on HD is still a bet that games in one series with the
-//! same cue names and the same middleware fire them at the same moments.
-//! Reasonable, and not a reading; confidence 50, which is
+//! looked at** until each `Cue` variant's own doc comment started citing a
+//! Pure trigger too: eight of the nine now have one, each independently
+//! decompiled and structurally corroborated against its Pulse counterpart,
+//! confidence 78-82. Only [`Cue::Blowup`] is still unconfirmed on Pure - see
+//! its own doc comment - and all nine are still unconfirmed on HD, which is
+//! still a bet that games in one series with the same cue names and the same
+//! middleware fire them at the same moments. Reasonable, and not a reading;
+//! confidence 50, which is
 //! below this project's naming threshold and so is
 //! written down rather than implied.
 //!
@@ -622,6 +619,12 @@ pub enum Cue {
     /// recover either way. If the two turn out to be the other way round, the
     /// seeking blip and the lock chime are swapped and nothing else changes.
     /// `--sound` writes a WAV and settles it by ear.
+    ///
+    /// Pure's own `HudSight_UpdateTone` is a near line-for-line match: same
+    /// three-state toggle, same `0x400` volume, same choice to call the
+    /// dry-play chain's middle hop directly rather than through its gate
+    /// helper. `docs/ghidra/functions/psp-pure-usa/lockon-sound.md`,
+    /// confidence 82.
     LockOn,
 }
 
