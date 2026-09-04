@@ -37,12 +37,17 @@
 //! recovered; see its doc comment. Everything below plays at it.
 //!
 //! **Which waveform of a cue sounds.** `.COLLISIONS` binds fifteen impact
-//! samples and the opcode that chooses between them is one of the 41 that are
-//! unread, so [`Bank::pick`] chooses with its own generator. That is a
-//! deliberate approximation rather than a stand-in for missing data: the
-//! fifteen alternates *are* the disc's own audio, all of them within a tenth of
-//! a second of each other in length, and playing all fifteen at once - the only
-//! reading that needs no choice - is the one thing that is certainly wrong.
+//! samples and the opcode that chooses between them, `0x19`, is decoded on
+//! Wipeout HD's binary and corroborated on PSP (confidence 88 both sides;
+//! PS2 grouped with PSP/Pure by operand byte layout, not independently
+//! checked): [`Banks::pick`] now matches it - a uniform draw that never
+//! repeats the immediately previous pick for a cue. That is still an approximation
+//! rather than a full reading, not a stand-in for missing data: the fifteen
+//! alternates *are* the disc's own audio, all of them within a tenth of a
+//! second of each other in length, so playing all fifteen at once - the only
+//! reading that needs no choice at all - is the one thing that is certainly
+//! wrong. See
+//! [`sound.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#0x19---alternate-selection-decoded).
 //!
 //! The same approximation now reaches one level further down on Wipeout HD,
 //! where `.COLLISIONS` plays `c_CShipShip` and `c_CShipWall` and each of those
@@ -560,12 +565,15 @@ pub enum Cue {
     ///
     /// **Which waveform is which is inference, at 55.** What is read is that the
     /// parameter takes `0` while seeking and `1` once locked; that those values
-    /// index the cue's two waveforms *in that order* is the obvious reading and
-    /// not one taken off the bank's command list, whose selecting opcode is
-    /// unread - the same gap [`Banks::pick`] exists because of. If the two turn
-    /// out to be the other way round, the seeking blip and the lock chime are
-    /// swapped and nothing else changes. `--sound` writes a WAV and settles it
-    /// by ear.
+    /// index the cue's two waveforms *in that order* is the obvious reading,
+    /// not one taken off the bank's command list. This is a different gap from
+    /// the one [`Banks::pick`] closes: `0x19` decodes which *randomly-chosen*
+    /// alternate a multi-waveform cue plays, and `LockOn`'s two waveforms are
+    /// never reached that way - `pick_at` selects between them by the
+    /// seeking/locked parameter above, a mapping no command-list reading would
+    /// recover either way. If the two turn out to be the other way round, the
+    /// seeking blip and the lock chime are swapped and nothing else changes.
+    /// `--sound` writes a WAV and settles it by ear.
     LockOn,
 }
 

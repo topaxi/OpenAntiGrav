@@ -52,18 +52,24 @@ which is a completely different global.
 | `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 82 | Resolve a child cue by index or name, play it with a computed volume and pan |
 | `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 78 | Resolve a child cue by index or name, stop every active voice currently playing it |
 | `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 84 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
-| `0x19` | `0x00625e88` | `Scream_DoGrainAlternate` | 80 | Pick a random one of the next N key-ons (never repeating the previous pick), jump the program counter to it |
-| `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 84 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
-| `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 78 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
-| `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 80 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
+| `0x19` | `0x00625e88` | `Scream_DoGrainAlternate` | 88 | Pick a random one of the next N key-ons (never repeating the previous pick), jump the program counter to it |
+| `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 88 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
+| `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 82 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
+| `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 88 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
 
-Confidence is capped at 84 for every grain opcode by the rubric's
-"decompilation only, consistent call sites" band - none of this is
-runtime-verified, and no second binary corroborates it yet (see
-[Not corroborated on PSP](#not-corroborated-on-psp-yet)). `Scream_OpKeyOn`
-and its callees sit above that cap: they also carry an exact arithmetic
-invariant across many real files, not just a decompiled reading - see
-[below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain).
+Confidence is capped at 84 for every grain opcode not yet corroborated
+elsewhere, by the rubric's "decompilation only, consistent call sites"
+band - none of this is runtime-verified. **`0x19`/`0x22`/`0x23`/`0x24` moved
+past that cap on 2026-09-04**: a second binary (`psp-pulse-usa`) now
+corroborates all four, independently decompiled on a different CPU with no
+shared analysis - see
+[Corroborated on PSP](#corroborated-on-psp-2026-09-04), which replaces the
+"Not corroborated" section below. That is one of the two legs the 95-100
+band needs, putting the four in 85-94, short of Established by the other
+leg - a runtime trace. `Scream_OpKeyOn` and its callees sit above the
+single-binary cap for a different reason: they also carry an exact
+arithmetic invariant across many real files, not just a decompiled reading -
+see [below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain).
 
 ### `0x08` - the located handler, `snd_SFX_GRAIN_TYPE_BRANCH`
 
@@ -280,11 +286,12 @@ byte var_ref = operand[1];
 byte value = (var_ref < 0) ? sysvar_table[~var_ref] : voice->local_vars[var_ref];  // +0xa4
 byte mode = operand[2];
 byte threshold = operand[3];
-bool keep_going;
-if (mode == 1)      keep_going = (value == threshold);
-else if (mode == 2) keep_going = (value >  threshold);
-else                keep_going = (value <  threshold);   // mode 0
-if (!keep_going) voice->pc += 1;                          // +0xa2, a `short`
+// mode is bounded, not a catch-all else: values other than 0/1/2 skip nothing
+// and fall straight through - re-verified against the live decompile 2026-09-04,
+// which uses `mode == 1`/`mode == 2`/`mode == 0` rather than a bare else.
+if (mode == 1)      { if (value != threshold) voice->pc += 1; }
+else if (mode == 2) { if (value <= threshold) voice->pc += 1; }
+else if (mode == 0) { if (threshold <= value) voice->pc += 1; }
 return 0;
 ```
 
@@ -348,16 +355,16 @@ to `i - 1` - a jump target, not an increment. A separate path in the same
 function, taken when a recursion-depth guard at the same runtime global `0x22`
 reads is exceeded (`sysvar_table + 0x20`, an `int`, capped at 8), *decrements*
 `voice + 0xa2` by `1` instead - a distinct, error-reporting action, not part
-of the jump logic; the two should not be conflated. This matches
-[`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#not-determined)'s
-own hypothesis, *"`0x23` looks like a marker and `0x24` like a goto"*, from
-the PSP side of the same engine - independent, if not yet corroborating,
-since the PSP handlers themselves were not reachable this session (see below).
+of the jump logic; the two should not be conflated. **Corroborated on PSP,
+2026-09-04** (see [below](#corroborated-on-psp-2026-09-04)) - `Scream_OpGoto`
+scans the same 8-byte-entry table, assigns the same pc field the same way on
+a match, and decrements it the same way past the same recursion-depth guard,
+capped at the same figure, 8.
 
-Confidence: `0x24`'s mechanism is read as cleanly as `0x22`'s (**80**); `0x23`
+Confidence: `0x24`'s mechanism is read as cleanly as `0x22`'s (**88**); `0x23`
 being a no-op is certain, but the *name* "marker" is inferred entirely from
 what `0x24` does with it, not from anything in `0x23` itself, so it is capped
-lower (**78**) than the certainty of the two instructions alone would suggest.
+lower (**82**) than the certainty of the two instructions alone would suggest.
 
 ### `0x19` - alternate selection, decoded
 
@@ -392,12 +399,14 @@ same bytes the thread's `b * count` arithmetic already predicted from data
 alone. It also lands cleanly on the pc reading above: the jump distance is
 literally `pick * voicesPerAlternate` grains forward, which is exactly how a
 "pick one of N key-ons that follow" selector would use a running program
-counter. Not corroborated on PSP this session (see below).
+counter. **Corroborated on PSP, 2026-09-04** (see
+[below](#corroborated-on-psp-2026-09-04)).
 
-Confidence **80**: the random-pick-with-no-immediate-repeat shape and the
-pc arithmetic are both unambiguous reads; capped in the probable band because
-`FUN_0062a618` (the RNG call) and the log call's exact fields were not
-separately verified.
+Confidence **88**: the random-pick-with-no-immediate-repeat shape and the
+pc arithmetic are both unambiguous reads and now cross-binary corroborated;
+short of Established because `FUN_0062a618` (the RNG call) and the log call's
+exact fields were not separately verified, and neither reading is
+runtime-traced.
 
 ## Dead end: `0x008c0060` is not a dispatch table
 
@@ -416,20 +425,42 @@ not the code address), which is what a real indirect-call table holds on
 PPC64. Writing this down so the next session does not re-walk `0x008c0060`
 expecting a table.
 
-## Not corroborated on PSP yet
+## Corroborated on PSP, 2026-09-04
 
-The table's base and stride are cross-binary-confirmed (above), but the
-individual `0x22`/`0x23`/`0x24`/`0x19` **handler readings** are not: PSP's
-`g_scream_opcode_table` (`0x08ac326c`, single TOC, none of PPC64's problem)
-gives their PSP addresses directly by the same index arithmetic
-(`0x0018a594`/`0x0018a658`/`0x0018a660`/`0x0018a178`), but
+The table's base and stride were already cross-binary-confirmed (above); the
+individual `0x22`/`0x23`/`0x24`/`0x19` **handler readings** now are too.
+PSP's `g_scream_opcode_table` (`0x08ac326c`, single TOC, none of PPC64's
+problem) gives their PSP addresses by the same index arithmetic
+(`0x0018a594`/`0x0018a658`/`0x0018a660`/`0x0018a178`), and a prior session's
 `decompile_function`, `disassemble_function` and `create_function` all
-refused on them this session - that address range is outside whatever
+refused on them - that address range read as outside whatever
 `psp-pulse-usa`'s auto-analysis already covered, and `disassemble_bytes`
-reported success with zero instructions decoded rather than an error. Not
-chased further; a fresh analysis pass (or `create_function` after first fixing
-whatever blocks it) is what a second-binary corroboration of the four
-handler readings on this page needs.
+reported success with zero instructions decoded rather than an error.
+
+**The blocker was the address, not the code.** Those four values are raw
+`.text`-relative offsets the table stores unrelocated - the same wart
+[`workflow.md`](../../workflow.md#known-imperfect-and-why-it-does-not-block)
+already documents for `jal` targets and manually-found jump-table bases on
+`psp-pulse-usa`, one shape further: a data table of function pointers the
+auto-analyzer never walked, so nothing patched its entries to real
+addresses. `real = pseudo + 0x08804000` (this binary's own image base)
+resolves all four to real, already-disassemblable code -
+`decompile_function` had never been *wrong* about them, it had been pointed
+at addresses six megabytes short of where the functions actually are. Full
+writeup, decompiled handlers and the corrected addresses:
+[`psp-pulse-usa/sound.md`](../psp-pulse-usa/sound.md#four-opcodes-corroborated-against-hd-2026-09-04).
+
+Each PSP handler is the same algorithm as this page's own reading, field for
+field: `Scream_OpAlternate`'s `rand() % count` with the identical
+roll-once-advance-and-wrap re-roll and per-voice re-entry guard;
+`Scream_OpGuard`'s three-way compare; `Scream_OpGoto`'s marker-table scan and
+recursion-depth guard capped at 8; `Scream_OpMarker`'s bare `return 0`. Two
+binaries, two different CPUs (PPC64 here, Allegrex MIPS there), no shared
+analysis between the sessions that found them - a fingerprint match, the same
+kind the table's own base and stride rested on. Confidence for all four moved
+from 80/84/78/80 to 88/88/82/88 in the table above; see the confidence
+rubric's reasoning on the PSP page linked above rather than repeating it
+here.
 
 ## Not determined
 

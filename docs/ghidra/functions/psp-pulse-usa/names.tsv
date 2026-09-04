@@ -394,6 +394,10 @@
 0x0898efd8	function	Scream_StepCommandList	88	sound.md
 0x08ac326c	data	g_scream_opcode_table	85	sound.md
 0x0898fc78	function	Scream_OpKeyOn	90	sound.md
+0x0898e178	function	Scream_OpAlternate	88	sound.md
+0x0898e594	function	Scream_OpGuard	88	sound.md
+0x0898e658	function	Scream_OpMarker	82	sound.md
+0x0898e660	function	Scream_OpGoto	88	sound.md
 0x08878874	function	Camera_SubmitScene	80	camera.md
 0x08885d78	function	Camera_PublishTripod	88	camera.md
 0x08845ed0	function	Ship_UpdateCameraRigs	82	camera.md

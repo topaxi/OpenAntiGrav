@@ -145,6 +145,19 @@ same raw offset the `jal`-target wart does, corrected the same way. Suspect
 this wherever a function's jump table was found by manual disassembly rather
 than by Ghidra's own analysis.
 
+**A fourth instance, found 2026-09-04** (`docs/ghidra/functions/psp-pulse-usa/sound.md`):
+the jump table itself can carry the wart, not just code that reads it. Reading
+`g_scream_opcode_table` (`0x08ac326c`, in `.data`) back gave forty
+`0x0018xxxx`-range values, nowhere near `.text`
+(`0x08804000`-`0x08a76a3b`) - and `decompile_function`/`disassemble_function`/
+`create_function` on any of them refused outright, which reads exactly like
+"nothing is there" rather than "the address is wrong". `real = pseudo +
+0x08804000` resolved every entry checked to real, disassemblable code, one of
+them already sitting under an existing function. The table is read by
+`Scream_StepCommandList`'s own interpreter loop - runtime indirection no
+static jump-table analysis would recognise as one - so it fits the
+generalisation above exactly: unwalked, unfixed, same correction.
+
 ### Naming programs
 
 Name each program for its origin, so a documentation page's "Binary" field is
