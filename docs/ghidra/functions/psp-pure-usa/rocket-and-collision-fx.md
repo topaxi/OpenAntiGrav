@@ -41,18 +41,27 @@ string-loading pair is very often in a `jal`'s delay slot, and
 Filtering by `mnemonic: "addiu"` alone silently misses these; search by
 `operand_pattern` only, mnemonic empty, to catch both.
 
-**The `jal` call-target wart layers on top of the string wart.**
-`get_function_callers` returns nothing for any of the four functions below,
-for the same reason `psp-pulse-usa/billboards.md` recorded for `jal`: targets
-print as unrelocated pseudo-addresses (`jal 0x0006de1c`, not
-`jal 0x08871e1c`), so Ghidra's own call-graph is built against the wrong
-address and finds nothing at the real one. Finding a caller means the same
-`off + 0x08804000` arithmetic against a `jal`'s printed operand, searched with
-`mnemonic: "jal"` and the pseudo-target's hex tail as `operand_pattern`. This
-is how the 26 call sites of the shared spawn helper below were found; it did
-**not** turn up a caller for any of the four renamed functions themselves, so
-none of the four has a verified call site - the reason each stays inside the
-70-84 decompilation-only band regardless of how clean its own body reads.
+**The `jal` call-target wart layers on top of the string wart, and it is the
+same defect on a different operand class.** `get_function_callers` returns
+nothing for any of the four functions below, for the same reason
+`psp-pulse-usa/billboards.md` recorded for `jal`: targets print as
+unrelocated pseudo-addresses (`jal 0x0006de1c`, not `jal 0x08871e1c`), so
+Ghidra's own call-graph is built against the wrong address and finds nothing
+at the real one. This is not a display quirk with its own separate cause -
+the `.rel.text` relocations were never applied (the string wart's own
+finding), so a `jal`'s 26-bit immediate field still encodes a target computed
+for load base `0`, and `imm26 << 2` is a **file offset**, not a runtime
+address, exactly the way an un-rebuilt `lui`/`addiu` string address is. `off
++ 0x08804000` recovers the real target for the identical reason it recovers a
+real string address: `0x08804000` is not a fitted constant, it is this
+program's own image base, the thing the never-applied relocation was
+supposed to add. Finding a caller means that arithmetic against a `jal`'s
+printed operand, searched with `mnemonic: "jal"` and the pseudo-target's hex
+tail as `operand_pattern`. This is how the 26 call sites of the shared spawn
+helper below were found; it did **not** turn up a caller for any of the four
+renamed functions themselves, so none of the four has a verified call site -
+the reason each stays inside the 70-84 decompilation-only band regardless of
+how clean its own body reads.
 
 ## One generic spawn helper, 26 call sites, shared with everything else
 
