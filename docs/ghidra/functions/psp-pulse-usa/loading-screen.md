@@ -271,6 +271,15 @@ boundary: `x` wrapped back to 0, `disp`/`raw` for both layers read exactly
 confirming the reset-to-zero, the phase advance, and the envelope indexing
 together, not just the recurrence inside one call.
 
+**`Loading_SlewToward`'s own gate and step size are live-confirmed, and only
+for one layer.** In capture 2, `raw0` peaked at `4.4546` - past the `4.0`
+gate - around `x` ~= 322, and `disp0` then stepped in exact `-0.5`
+increments across 80 consecutive columns, matching the gate and the step
+literal exactly, not just the pass-through case. `raw1` peaked at `3.4384`
+and never crossed `4.0` in either capture, so `disp1` stayed exactly `0.0`
+throughout both - layer 1's slew path itself is still unexercised, only its
+no-op case is.
+
 Confidence **96**: a live, bit-level match over hundreds of consecutive
 column transitions plus one observed call boundary, on one binary and one
 emulator version - the residual risk is the untested case of `pulse != 0`
@@ -309,21 +318,22 @@ below) and reading `a0`/`a1` - the emitted `(x, y)` - directly, predicting
 Three captures, **52 of 52 emitted `y` values matched their prediction
 exactly**, across both the per-layer call site (`ra=0x0890ab60`) and the
 third-band call site (`ra=0x0890ac10`). That confirms the wiring: the right
-register carries the right value, `trunc.w.s` is applied, the `220.0`
-literal from `f26` is used, exactly as the disassembly at both call sites
-(`0890ab38: add.s f12,f12,f26` / `0890ab3c: trunc.w.s f12,f12` /
-`0890ab40: mfc1 a1,f12`) reads.
+register carries the right value, and the `220.0` literal from `f26` is
+used. `trunc.w.s` itself (`0890ab3c`) is a static disassembly reading, not
+something this capture independently confirms - see why below.
 
 **This is narrower than it sounds, and confidence reflects that: 90, not
 96.** All three captures landed entirely inside `x=0..14` - a handful of
 columns, well before `raw`/`disp` develop any real amplitude - so every
-predicted `y` in every capture was `220`, from every call site. The check
-still has content (a wiring bug - wrong register, wrong constant, a missing
-truncation - would have shown up as a mismatch even at `y=220`), but it does
-not exercise the formula at a value where a wiring bug would produce a
-visibly *different* wrong number, and it never distinguished `layer0` from
-`layer1` (both predict the same `220` there, so the classifier's
-first-match tie-break always reads `layer0`). See "Not determined".
+predicted `y` in every capture was `220`, from every call site, with `raw`/
+`disp` themselves within a fraction of `0.0`. A wrong-register or
+wrong-constant bug would still have shown up as a mismatch even at `y=220`,
+but `220.0` truncated, rounded or floored are all `220` - so this capture
+cannot tell truncation apart from rounding, and a spurious scale or
+multiply on a near-zero `raw` would not have shown up either. It also never
+distinguished `layer0` from `layer1` (both predict the same `220` there, so
+the classifier's first-match tie-break always reads `layer0`). See "Not
+determined".
 
 **A fourth trap, found getting this capture to work at all**: arming this
 breakpoint only after reaching the tip screen (the approach that works for

@@ -358,7 +358,7 @@
 0x0890a4ec	function	Loading_DrawText	85	loading-screen.md
 0x0890ac68	function	Loading_DrawBootLogo	75	loading-screen.md
 0x0890a280	function	Loading_Ramp255	88	loading-screen.md
-0x0890a3e8	function	Loading_SlewToward	85	loading-screen.md
+0x0890a3e8	function	Loading_SlewToward	92	loading-screen.md
 0x0890a2fc	function	Loading_LerpColour	88	loading-screen.md
 0x0890a2c4	function	Loading_LerpByte	85	loading-screen.md
 0x0890c958	function	Texture_LoadEffectSurfaces	78	loading-screen.md
