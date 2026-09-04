@@ -358,7 +358,7 @@
 0x0890a4ec	function	Loading_DrawText	85	loading-screen.md
 0x0890ac68	function	Loading_DrawBootLogo	75	loading-screen.md
 0x0890a280	function	Loading_Ramp255	88	loading-screen.md
-0x0890a3e8	function	Loading_SlewToward	85	loading-screen.md
+0x0890a3e8	function	Loading_SlewToward	92	loading-screen.md
 0x0890a2fc	function	Loading_LerpColour	88	loading-screen.md
 0x0890a2c4	function	Loading_LerpByte	85	loading-screen.md
 0x0890c958	function	Texture_LoadEffectSurfaces	78	loading-screen.md
@@ -366,8 +366,8 @@
 0x08abf45c	data	g_loading_screen_type	88	loading-screen.md
 0x08abf448	data	g_loading_thread_id	90	loading-screen.md
 0x08abf460	data	g_loading_start_time	85	loading-screen.md
-0x08abf470	data	g_loading_wave_phase	85	loading-screen.md
-0x08abf474	data	g_loading_wave_rates	85	loading-screen.md
+0x08abf470	data	g_loading_wave_phase	95	loading-screen.md
+0x08abf474	data	g_loading_wave_rates	95	loading-screen.md
 0x08a88034	data	g_loading_wave_envelope	90	loading-screen.md
 0x08abf454	data	g_loading_finished	80	loading-screen.md
 0x08af25c0	data	g_loading_tip	85	loading-screen.md
