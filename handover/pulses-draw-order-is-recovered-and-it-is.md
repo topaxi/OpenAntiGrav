@@ -103,15 +103,57 @@ where to look next, it doesn't name what draws. See
 [renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes)
 for the slot evidence on all five.
 
+**2026-09-04: the `FrontendRoot` vtable question is answered - identity, not
+indirection - and it isn't drawing a HUD.** A direct memory read of
+`0x008ab774` (the slot `FrontendRoot_Construct` assigns to its own object)
+shows its first word *is* `0x00864cb8`; the earlier hedge is resolved.
+Its vtable slot `0x1c` - the callback `RenderManager_FlushDrawQueue`
+dispatches for a queued entry - is `FrontendRoot_ApplyLayerMatrix_q`
+(`0x001635a0`, confidence 65): it switches on the entry's own key across
+five layer constants (`0x52`, `0x57`, `0x60`, `0x65`, `0x6a`, collapsing to
+three code paths since `0x52`/`0x65` and `0x57`/`0x6a` each share one,
+`0x13` apart both times) and **all three write into both of
+`RenderManager`'s matrix-stack arrays** - the exact `+0x120`/`+0x3a0`
+fields, indexed by `+0x620`/`+0x624`, at the exact `0x40`-byte stride the
+constructor already established, but only at the *current* index: neither
+counter is ever stored to in this function, so it replaces the top-of-stack
+matrix rather than pushing one. An unexplained numeric correspondence, not
+leaned on as corroboration: the 2026-08-26 trace's ten observed `extra`
+values for the *other* queued family, `82, 86, 87, 91, 96, 100, 101, 105,
+106, 109` decimal, are `0x52, 0x56, 0x57, 0x5b, 0x60, 0x64, 0x65, 0x69,
+0x6a, 0x6d` in hex, and all five of this switch's constants appear in that
+set - but `FrontendRoot`'s own enqueue site was never found among the five
+in the idiom above, so there's no evidence it writes its key the same way,
+and the same trace recorded its *other* family as full 32-bit words, not a
+right-shifted byte - one capture, two encodings, needs explaining before
+this counts as agreement. Read as a **layer-boundary
+matrix swap**, not a HUD draw: `FrontendRoot` enqueues itself once per
+layer transition so its own queued "draw" callback replaces whatever
+transform is on top with the one the *next* layer's real draws need - a
+transform-stack marker riding the same queue, not front-end geometry.
+**This narrows the `oag_render::mesh::rcs`/`LAYER_DEFAULT` question, it
+doesn't close it**: the second live-observed object family (`0x00867e58`)
+is still unidentified, and the trace only inspected 16 of that frame's 118
+entries, so whether anything in this queue draws an actual HUD element is
+still unread. Full evidence:
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support).
+
+**Also 2026-09-04, a dead end worth recording so it isn't retried**:
+`0x00109028` (the `MagstripWake.cpp` site) has no static caller at all -
+its only xref is its own OPD entry, meaning it's reached exclusively
+through indirect/virtual dispatch, the same shape as `FrontendRoot`'s
+`0x1c` slot above. Confirming its owning *class* (not just file) needs
+either a live trace or reading `MagstripWake.cpp`'s other functions for a
+vtable that names it at slot `0x1c` - a call-graph search from `map`'s
+attribution alone won't find it.
+
 ## Open
 
-- Who writes the per-frame depth override is unread in **both** titles, and it's one question now, not two: Pulse's `display+0x1180` and HD's `instance+0x11c` play the identical role (the sentinel-checked override the enqueue idiom reads before falling back to a computed or zero depth) in the identical key layout
+- Who writes the per-frame depth override is unread in **both** titles, and it's one question now, not two: Pulse's `display+0x1180` and HD's `instance+0x11c` play the identical role (the sentinel-checked override the enqueue idiom reads before falling back to a computed or zero depth) in the identical key layout. HD's does have one constraint now: `RenderManager_Construct`/`_ConstructComplete` both initialise it to the `0xffffffff` sentinel itself (`li r0,-1` before the store, checked by disassembly), so at construction the override starts *disabled*, the expected direction - something still has to write an actual depth value to enable it, and nothing found so far does. A blind `stw ...,0x11c(...)` search across the binary does not find that writer - `0x11c` is a near-universal stack-frame offset, hundreds of irrelevant hits to one real one
 - What the `0x40000000` set holds and what its distance test does is unread
-- What class each of HD's five confirmed enqueue call sites belongs to - what effect it draws - is unread (below 50 confidence); three now have a plausible owning *file* (`0x000a3c38` in `Camera.cpp`, `0x0012fba8` in `BombManager.cpp`, `0x00109028` in `MagstripWake.cpp`), not yet a class or a confirmed purpose
-- Whether the `0x00864cb8` queued vtable relates to `FrontendRoot`'s own vtable by identity or only by indirection (a base subobject or secondary vtable) is unread past one xref-agreement check (below 50 confidence)
+- What class each of HD's five confirmed enqueue call sites belongs to - what effect it draws - is unread (below 50 confidence); three now have a plausible owning *file* (`0x000a3c38` in `Camera.cpp`, `0x0012fba8` in `BombManager.cpp`, `0x00109028` in `MagstripWake.cpp`), not yet a class or a confirmed purpose - and the class-level question needs a vtable search or a live trace, not more static call-graph reading, since these sites have no static caller at all
 
 ## Next Steps
 
 - Find where `instance+0x11c` gets written (bracketing around one of the five known enqueue sites, or a write-watchpoint attempt despite the earlier `+0x630` one coming back unsupported) to close out the key format's last unknown
-- Confirm `0x00109028`'s class within `MagstripWake.cpp` and read enough of it to say what it actually draws - a magstrip's own wake trail is the most concrete guess so far, given the `0x4d0` glow-bucket layer and the direct slot match
-- If `0x00864cb8` turns out to be `FrontendRoot`'s own vtable rather than merely related to it, that would mean HD draws its HUD/front-end through the same sorted queue as world geometry - worth confirming before assuming `oag_render::mesh::rcs`'s `LAYER_DEFAULT`-for-everything is the only gap versus Pulse's per-mesh layer
+- Confirm `0x00109028`'s class within `MagstripWake.cpp` by reading its other functions for a vtable that names it at slot `0x1c` - a magstrip's own wake trail is still the most concrete guess, given the `0x4d0` glow-bucket layer and the direct slot match, but the enqueue site itself is reached only indirectly so a call-graph search won't confirm it

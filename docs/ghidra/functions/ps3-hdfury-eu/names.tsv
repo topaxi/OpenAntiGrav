@@ -53,6 +53,8 @@
 0x002d6300	function	RenderManager_FlushDrawQueue	90	renderer.md
 0x002d6a78	function	RenderManager_PrepareEye	55	renderer.md
 0x002d4b58	function	RenderManager_CompareQueueKeys	82	renderer.md
+0x00864cb8	data	g_FrontendRootVtable	84	renderer.md
+0x001635a0	function	FrontendRoot_ApplyLayerMatrix	65	renderer.md
 0x002bebb0	function	MeshImporter_Construct	78	renderer.md
 0x00650330	function	Gcm_Init	88	renderer.md
 0x005c9194	function	Gcm_InitDevice	82	renderer.md

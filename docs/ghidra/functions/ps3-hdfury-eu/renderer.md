@@ -132,6 +132,8 @@ around `0x006bxxxx`:
 | `0x002d6300` | `RenderManager_FlushDrawQueue` | 90 |
 | `0x002d6a78` | `RenderManager_PrepareEye_q` | 55 |
 | `0x002d4b58` | `RenderManager_CompareQueueKeys` | 82 |
+| `0x00864cb8` | `g_FrontendRootVtable` (data) | 84 |
+| `0x001635a0` | `FrontendRoot_ApplyLayerMatrix_q` | 65 |
 | `0x002bebb0` | `MeshImporter_Construct` | 78 |
 | `0x00650330` | `Gcm_Init` | 88 |
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
@@ -470,8 +472,21 @@ proximity:
 
 Below 50 confidence for what *class* any of the five draws, file-level
 attribution or not - the enqueue tail itself is read directly and is not in
-question. **Still open**: where `instance+0x11c` gets computed - no call
-site here computes it, it is only ever read.
+question. **Still open**: where `instance+0x11c` gets an actual value - no
+call site among the five computes one, it is only ever read. One real
+constraint, found and worth recording so the next pass doesn't repeat the
+search: `RenderManager_Construct` and `_ConstructComplete` both initialise
+it to the `0xffffffff` sentinel itself (`li r0,-1` immediately precedes
+`stw r0, 0x11c(r30)` in both, checked by disassembly rather than assumed
+from the store alone), so at construction the override starts *disabled*,
+the expected direction - something still has to write an actual depth
+value to *enable* it, and nothing found so far does. A blind binary-wide
+search for `stw ...,0x11c(...)` is not the way to find that writer -
+`0x11c` is a near-universal stack-frame local-variable offset, and the
+search returns hundreds of unrelated hits on `r1` (the stack pointer) for
+one relevant hit on an object register; the same shape as the `0x00109028`
+dead end
+below, recorded so it isn't retried the same way.
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
@@ -522,18 +537,65 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   ([`SortRoot`](#what-was-deliberately-not-read),
   [`DetonatorBomb`](detonator-bomb.md)) that objects queue themselves with
   the render layer from gameplay-side code rather than the render layer
-  owning them. **2026-09-04**: `0x00864cb8` has an xref from `0x008ab774`,
-  the same slot `FrontendRoot_Construct` (`0x00164270`) writes into its own
-  object with `*param_1 = PTR_PTR_008ab774` - related to `FrontendRoot`'s
-  vtable through at least one indirection, not established as identity (a
-  base-subobject or secondary vtable would produce the same xref). Not read
-  past that one field-agreement check (`FrontendRoot_Construct`'s own body
-  decompiles unreliably - register-allocation junk (`in_cr0`, `unaff_cr4`)
-  that reads as a bad decompile, not evidence). Below 50, unnamed; recorded
-  as a hypothesis rather than dropped, since a `FrontendRoot` instance
-  submitting draws mid-race (this was observed on a live Talon's Junction
-  breakpoint) needs explaining either way - HUD overlay during a race is the
-  obvious guess, and is exactly that, a guess.
+  owning them. **2026-09-04, confirmed as identity, not merely related**:
+  a direct memory read of `0x008ab774` (the slot `FrontendRoot_Construct`,
+  `0x00164270`, writes into its own object with `*param_1 =
+  PTR_PTR_008ab774`) shows its own first word **is** `0x00864cb8` - the
+  earlier "related through at least one indirection, not established as
+  identity" hedge is resolved: this queued vtable *is* `FrontendRoot`'s.
+  **84** - a raw read of static data, no TOC or decompiler trust involved.
+
+  Its own vtable slot `0x1c` (the callback `RenderManager_FlushDrawQueue`
+  dispatches, resolved through a further OPD indirection to `0x001635a0`)
+  is not HUD drawing at all: it switches on the entry's own key
+  (`param_3`, the same "extra" word the enqueue idiom writes) across five
+  layer constants - `0x52`, `0x57`, `0x60`, `0x65`, `0x6a` (twelve-bit
+  values, `>> 20`) - collapsing to **three code paths**: `0x52`/`0x65`
+  share one (`0x13` apart), `0x57`/`0x6a` share another (also `0x13`
+  apart), and `0x60` has its own. **All three write into both of
+  `RenderManager`'s matrix-stack arrays**, `param_2 + *(param_2+0x624)*0x40
+  + 0x3a0` and `param_2 + *(param_2+0x620)*0x40 + 0x120` - the exact fields
+  and exact `0x40`-byte stride `RenderManager_Construct` already
+  established, but **only at the current index**: no store to `+0x620` or
+  `+0x624` appears anywhere in this function, both are read-only here, so
+  this replaces the top-of-stack matrix rather than pushing a new one.
+
+  **An unexplained numeric correspondence, recorded rather than leaned
+  on**: the 2026-08-26 trace's ten observed `extra` values for the *other*
+  queued family (`82, 86, 87, 91, 96, 100, 101, 105, 106, 109` - decimal)
+  are `0x52, 0x56, 0x57, 0x5b, 0x60, 0x64, 0x65, 0x69, 0x6a, 0x6d` in hex,
+  and this switch's five constants all appear in that set (alternating
+  positions, not "the low five" - a slip an earlier pass here made).
+  **This is not read as corroboration**: `FrontendRoot`'s own enqueue site
+  was never found among the five in the idiom above, so there is no
+  evidence it writes its key the same way (`layer << 20 | depth`) rather
+  than some other encoding, and the trace's *other* family in the same
+  capture was recorded as full 32-bit words (`0x58002a90`, not a
+  right-shifted byte) - one capture recording two families two different
+  ways is exactly the thing that would need explaining first. Whether
+  `FrontendRoot`'s keys are these five values directly, or `layer << 20`
+  values that happen to share these bytes, is the open question a located
+  enqueue site would settle. The unhandled values aren't random either:
+  four of the five handled constants have a companion exactly `+4` that
+  falls through this switch as a no-op (`0x56`, `0x5b`, `0x64`, `0x69`;
+  `0x6a`'s is `0x6d`, `+3`) - a second structured pattern alongside the
+  `0x13`-apart pairing above, recorded as a lead rather than explained.
+
+  Read as a **layer-boundary matrix swap, not a push**: `FrontendRoot`
+  enqueues itself once per layer transition so that, when the sorted queue
+  reaches that point, its own "draw" callback fires and replaces whatever
+  matrix is currently at the top of the stack with the one the *next*
+  layer's real draws need (e.g. an orthographic pass after a perspective
+  one) - a transform-stack marker riding the same queue, not a HUD element
+  drawing itself. **65**, `_q`: the mechanism (write into the confirmed
+  matrix-stack arrays, keyed by layer) is read directly; the purpose (why a
+  swap specifically, and which layer needs which matrix) is inference, not
+  read. Named `FrontendRoot_ApplyLayerMatrix_q` (`0x001635a0`) accordingly.
+  **What this does not establish**: whether anything else in the queue draws a
+  HUD element - the second live-observed object family (`0x00867e58`) is
+  still unidentified, and the 2026-08-26 trace inspected 16 of that
+  frame's 118 entries, so the `oag_render::mesh::rcs`/`LAYER_DEFAULT`
+  question this lead was chasing narrows, it doesn't close.
 - A `Z2` (write watchpoint) armed on `instance+0x630` to try to catch the
   enqueue site's own PC got back an **empty reply**, not `OK` - RPCS3's GDB
   stub does not implement write watchpoints on this build. Recorded because
