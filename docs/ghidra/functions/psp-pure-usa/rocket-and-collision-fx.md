@@ -45,7 +45,7 @@ Filtering by `mnemonic: "addiu"` alone silently misses these; search by
 `get_function_callers` returns nothing for any of the four functions below,
 for the same reason `psp-pulse-usa/billboards.md` recorded for `jal`: targets
 print as unrelocated pseudo-addresses (`jal 0x0006de1c`, not
-`jal 0x0886de1c`), so Ghidra's own call-graph is built against the wrong
+`jal 0x08871e1c`), so Ghidra's own call-graph is built against the wrong
 address and finds nothing at the real one. Finding a caller means the same
 `off + 0x08804000` arithmetic against a `jal`'s printed operand, searched with
 `mnemonic: "jal"` and the pseudo-target's hex tail as `operand_pattern`. This
@@ -56,7 +56,20 @@ none of the four has a verified call site - the reason each stays inside the
 
 ## One generic spawn helper, 26 call sites, shared with everything else
 
-`0x0886de1c` (printed as `func_0x0006de1c` throughout, per the `jal` wart
+**Correction, 2026-09-04: this section's own address had the exact arithmetic
+error the paragraph above warns about** - `0x0006de1c + 0x08804000` was
+computed as `0x0886de1c` (using `0x08800000`), which is not a function entry
+at all - `get_function_by_address` resolves it to the *middle* of an
+unrelated function (`FUN_0886db80`, body `0x0886db80`-`0x0886de2f`). The
+correct sum is **`0x08871e1c`**, which is a real function entry
+(`get_function_by_address` confirms the boundary) and decompiles to exactly
+the shape described below (a hash-name lookup via `func_0x001376f8` forwarded
+into `func_0x0006e894`). Caught while chasing the `Absorb` cue's own trigger
+for `every-sfx-trigger-is-a-pulse-reading-applied.md` and cross-checking this
+page's `Sound_Play`-call formula against a case (`0x0002dddc` -> `0x08831ddc`,
+the `Sound_Play` rename above) that was independently verified two ways.
+
+`0x08871e1c` (printed as `func_0x0006de1c` throughout, per the `jal` wart
 above) is Pure's counterpart of Pulse's `Psys_Spawn_q` (`0x08915484`): second
 argument a name pointer, third a four-character tag, little-endian, called
 from a small allocate-tag-init-call sequence (`func_0x00090f34` /
@@ -254,22 +267,84 @@ thread's third `## Open` question for the `Collision` cue specifically: the
 gating matches, not just the call site's existence.
 
 Scored **82** for both the call site and the `Sound_Play` rename: decompilation
-only (the `jal` wart below blocks a verified caller for `ShipCollisionFx_Trigger`
-itself), but corroborated by an independently-recovered Pulse function of near
+only, but corroborated by an independently-recovered Pulse function of near
 identical shape and by the disc's own bank data agreeing on the cue name - the
 same evidence class `ShipCollisionFx_Trigger` itself was scored on, short of
 the rubric's 85+ band absent a runtime trace.
 
+## `FUN_08925e20` fires `ABSORB` and is `ShipCollisionFx_Trigger`'s own first verified caller
+
+Answers `every-sfx-trigger-is-a-pulse-reading-applied.md`'s next pick,
+`oag_game::audio::sfx::Cue::Absorb`, and corrects the "no call site for any of
+the four functions above" claim below: with the spawn-helper correction above
+in hand, the same `off + 0x08804000` search
+(`search_instructions jal, mnemonic jal, operand_pattern "8a340"`, the
+pseudo-target for `ShipCollisionFx_Trigger`'s real `0x0888e340`) finds two
+hits, one of which - `FUN_08925e20` - also appears in `Sound_Play`'s own
+36-site caller list. **Decompiled in full:**
+
+```c
+void FUN_08925e20(int param_1)
+{
+  int iVar1;
+  int iVar2;
+
+  iVar1 = func_0x0012010c();
+  if ((iVar1 != 0) && (*(int *)(param_1 + 0xc10) != 0)) {
+    func_0x0002dddc(0x3f800000, *(undefined4 *)(param_1 + 0xd4), _DAT_00288f14, 0, 0x2764bc, 0);
+    iVar1 = *(int *)(param_1 + 0xbf0);
+    for (iVar2 = 0; (iVar1 != 0 && (iVar2 < 8)); iVar2 = iVar2 + 1) {
+      _DAT_0028b5c0 = (float)iVar2 * 0.1;
+      func_0x0008a340(0x3f800000, *(undefined4 *)(param_1 + 0xbf0), 1, 0);
+      iVar1 = *(int *)(param_1 + 0xbf4);
+      param_1 = param_1 + 4;
+    }
+  }
+  return;
+}
+```
+
+This is Pulse's `FUN_08840640` (`contact-response.md`) almost exactly: a gate
+check, a second `!= 0` field check, one `Sound_Play` call, then a stagger loop
+that calls `ShipCollisionFx_Trigger` with the absorb `kind` (`1` here, `2` on
+Pulse - the numbering difference the `ShipCollisionFx_Trigger` section above
+already established) and a `0.1`-per-iteration float stagger into a global.
+`0x2764bc + 0x08804000 = 0x08a7a4bc` reads `ABSORB\0` directly - built with a
+direct `lui a3,0x27` / `addiu a3,a3,0x64bc` pair (`0x08925e6c`/`0x08925e80`),
+not an indirect table load - undotted, matching Pulse's own literal
+(`contact-response.md`) and the cue already confirmed present in Pure's
+`WEP_CLA` bank (`ABSORB`, undotted, `just wad sounds`).
+
+**One real difference, not an error: the loop runs 8 times on Pure, 10 on
+Pulse.** `iVar2 < 8` here against `iVar2 < 10` in `FUN_08840640` - read
+directly off each disassembly, not inferred. Consistent with a smaller
+attached-instance cap on Pure's `ShipCollisionFx` list (`Ship_DispatchCollisionFx`'s
+own "up to 10" search on Pulse, `contact-response.md`) rather than a
+reading error; not chased further to confirm the cap's own source field.
+
+**Not renamed**, matching this project's own precedent on this exact
+function's Pulse twin: `contact-response.md` left `FUN_08840640` unrenamed at
+a comparable confidence "for now rather than renamed", pending a dedicated
+rename-and-document pass rather than the pass that answered a different
+question first. Scored **80**: the same evidence class as the section above
+(structural match to an independently-recovered Pulse function, corroborated
+disc data) minus one leg - this reading, unlike `Sound_Play`'s, has not had
+its callee bodies (`func_0x0012010c`, the gate) read at all.
+
 ## What is not verified
 
-- **No call site for any of the four functions above**, blocked on the `jal`
-  relocation wart - see the trap section. `Sound_Play`'s own callers beyond
+- **No call site for `Rocket_Init`, `Rocket_SpawnCraftExplosion` or
+  `Rocket_Update`**, still blocked on the `jal` relocation wart - see the trap
+  section. `ShipCollisionFx_Trigger` now has one verified caller
+  (`FUN_08925e20`, above); its other call sites and `Sound_Play`'s own beyond
   `ShipCollisionFx_Trigger` are equally unfound for the same reason.
 - **Pure's Leach Beam trigger**, if it exists and if it shares
   `ShipCollisionFx_Trigger` at all.
-- **The other eight `Cue` variants** (`SpeedupPad`, `Absorb`, `Engine`,
-  `Shield`, `ShieldActive`, `Disengaging`, `Blowup`, `LockOn`) - only
-  `Collision` has had its Pure trigger read.
+- **The other seven `Cue` variants** (`SpeedupPad`, `Engine`, `Shield`,
+  `ShieldActive`, `Disengaging`, `Blowup`, `LockOn`) - only `Collision` and
+  `Absorb` have had their Pure trigger read so far.
+- **`func_0x0012010c`, `FUN_08925e20`'s own gate check** - read only by its
+  call shape (parameterless, boolean-ish return), not decompiled.
 - **Wipeout HD's PPC64/TOC binary** - untouched by this finding, per the
   handover thread above.
 - **Runtime verification.** Nothing here has a PPSSPP leg; every score is
@@ -279,6 +354,12 @@ the rubric's 85+ band absent a runtime trace.
 
 ## History
 
+- **2026-09-04, second pass.** Fixed the generic spawn helper's own address
+  (`0x0886de1c` -> `0x08871e1c`, an arithmetic slip caught while cross-checking
+  the `jal`-wart formula) and added the `Absorb` section: `FUN_08925e20`
+  fires `ABSORB` then loops `ShipCollisionFx_Trigger` eight times, Pulse's
+  `FUN_08840640` shape with a real (not erroneous) 8-vs-10 loop-count
+  difference. This is also `ShipCollisionFx_Trigger`'s first verified caller.
 - **2026-09-04.** Added the `Sound_Play` section, answering
   `every-sfx-trigger-is-a-pulse-reading-applied.md`'s first pick (`Collision`)
   for Pure: the same call site, the same `.COLLISIONS` cue name (confirmed

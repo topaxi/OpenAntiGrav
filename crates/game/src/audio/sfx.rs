@@ -25,14 +25,15 @@
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
 //! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
-//! looked at** until [`Cue::Collision`]'s own doc comment: Pure's counterpart
-//! of `ShipCollisionFx_Trigger` fires the same `.COLLISIONS` cue at the same
-//! point in its own cooldown gate, corroborated confidence 82. That is one
-//! cue on one of the two other titles; firing the remaining eight on Pure and
-//! all nine on HD is still a bet that games in one series with the same cue
-//! names and the same middleware fire them at the same moments. Reasonable,
-//! and not a reading; confidence 50, which is below this project's naming
-//! threshold and so is written down rather than implied.
+//! looked at** until [`Cue::Collision`] and [`Cue::Absorb`]'s own doc
+//! comments: Pure's counterparts of `ShipCollisionFx_Trigger` and its
+//! absorb-effect caller fire the same `.COLLISIONS`/`ABSORB` cues at the same
+//! points in the same cooldown gate, corroborated confidence 80-82. That is
+//! two cues on one of the two other titles; firing the remaining seven on
+//! Pure and all nine on HD is still a bet that games in one series with the
+//! same cue names and the same middleware fire them at the same moments.
+//! Reasonable, and not a reading; confidence 50, which is below this
+//! project's naming threshold and so is written down rather than implied.
 //!
 //! # Two things here are honest placeholders, and both are load-bearing
 //!
@@ -499,6 +500,12 @@ pub enum Cue {
     /// `ABSORB` sound once" before staggering its ten spark instances. Same
     /// page. This is the sound of the contact the shield *ate*, which is why it
     /// fires exactly where the sparks are suppressed.
+    ///
+    /// Pure's own counterpart (`FUN_08925e20`) does the same thing - one
+    /// `Sound_Play` of the same undotted `ABSORB`, then a stagger loop into
+    /// `ShipCollisionFx_Trigger` - with one real difference: the loop runs
+    /// eight times, not ten. `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
+    /// confidence 80.
     Absorb,
     /// The engine, held for as long as the craft is running.
     ///
