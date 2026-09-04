@@ -414,12 +414,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
          the original's (livery.rs)",
         slot_teams.join(", ")
     ));
-    // Beside the liveries, off the same directory and in the same slot order,
-    // and loaded whatever the setting says: the tier applies live.
-    let shadows = super::shadow::silhouettes(
+    let (shadows, shadow_hulls) = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
-        craft_title.race.ship_dir,
+        craft_title.race,
+        options.mode,
         &mut report,
     );
     // The Rocket's own model, on the same terms as the boost plume: absence is
@@ -995,6 +994,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         trail_blend,
         trail_shape,
         shadows,
+        shadow_hulls,
         report,
     })
 }

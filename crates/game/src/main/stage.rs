@@ -369,6 +369,7 @@ impl Stage {
             trail_blend,
             trail_shape,
             shadows,
+            shadow_hulls,
             ..
         } = loaded;
         let scene = race::Scene::new(
@@ -399,6 +400,7 @@ impl Stage {
             hd_bloom,
             zone_grade,
             shadows,
+            shadow_hulls,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.

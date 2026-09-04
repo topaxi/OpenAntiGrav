@@ -175,6 +175,11 @@ pub struct Scene {
     /// [`crate::race::shadow`], which split what is the disc's from what is
     /// ours.
     shadow: std::cell::RefCell<oag_render::shadow::Pipeline>,
+    /// The `original` tier's geometry, one authored hull per grid slot where
+    /// the craft's model carries one. CPU-side: it is projected afresh every
+    /// frame against the surface under the craft, so there is nothing to
+    /// upload until then. See [`crate::race::shadow::hulls`].
+    shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
     /// The four vertex lists [`Scene::render`] gathers each frame, kept so
     /// their capacity is.
     ///
@@ -365,6 +370,7 @@ impl Scene {
         hd_bloom: Option<oag_render::post::hd_bloom::Params>,
         zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
+        shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -916,6 +922,7 @@ impl Scene {
             exhaust,
             sparks,
             shadow,
+            shadow_hulls,
             scratch: std::cell::RefCell::default(),
             depth,
             msaa_color,

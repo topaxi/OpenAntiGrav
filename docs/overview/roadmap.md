@@ -946,7 +946,11 @@ change how this list should be read:
       the Pulse disc), and `0x3c3` is decoded and read but not yet drawn: its
       payload closes at `0x50 + 32n + 16m` on 129/129 nodes and its runtime
       reader `Shadow_RenderOccluderVolume` (`0x089038c8`) is recovered, which
-      is step 5 of [shadows.md](../rendering/shadows.md)'s plan and unbuilt.
+      is step 5 of [shadows.md](../rendering/shadows.md)'s plan, and on Pulse
+      it now **draws**: the craft's own hull, its silhouette taken against the
+      direction the executable authors (`(1, -10, 2)` normalized, carried by
+      all three Pulse builds and neither Pure one) and projected onto the
+      surface under the craft.
       **What is built is the tier below it**: `graphics.shadows` with `off`
       and `blob`, a ground-aligned quad per craft placed by a downward cast
       against the circuit's own collision geometry. `blob` plays Wipeout HD's

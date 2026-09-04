@@ -375,6 +375,64 @@ impl Occluder {
 }
 
 impl Occluder {
+    /// This hull with a 4x4 (row-major, as `vex` stores them) baked into it.
+    ///
+    /// **A `.vex` node's payload is in the space of whatever `Transform` nodes
+    /// enclose it**, not in the model's own - on Pulse's craft a
+    /// `Dynamic Shadow Occluder` sits under that chain like every other node,
+    /// and `vex::world_transforms` is what resolves it. A hull drawn without
+    /// this is the right shape in the wrong frame, which is the one failure
+    /// that still *looks* like a shadow.
+    ///
+    /// Normals are carried through the matrix's rotation and renormalised.
+    /// That is exact for the rigid and uniformly-scaled placements a `.vex`
+    /// chain produces and wrong under non-uniform scale, where the
+    /// inverse-transpose is what a plane needs; nothing on either disc places
+    /// an occluder that way, and a caller that finds one gets a normal that
+    /// tilts rather than a panic.
+    #[must_use]
+    pub fn placed(&self, matrix: &[f32; 16]) -> Self {
+        let rotate = |v: [f32; 3]| {
+            let out = [
+                matrix[0] * v[0] + matrix[4] * v[1] + matrix[8] * v[2],
+                matrix[1] * v[0] + matrix[5] * v[1] + matrix[9] * v[2],
+                matrix[2] * v[0] + matrix[6] * v[1] + matrix[10] * v[2],
+            ];
+            let length = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
+            if length > 1e-12 {
+                [out[0] / length, out[1] / length, out[2] / length]
+            } else {
+                v
+            }
+        };
+        let point = |v: [f32; 3]| {
+            [
+                matrix[0] * v[0] + matrix[4] * v[1] + matrix[8] * v[2] + matrix[12],
+                matrix[1] * v[0] + matrix[5] * v[1] + matrix[9] * v[2] + matrix[13],
+                matrix[2] * v[0] + matrix[6] * v[1] + matrix[10] * v[2] + matrix[14],
+            ]
+        };
+        Self {
+            bounds: (point(self.bounds.0), point(self.bounds.1)),
+            faces: self
+                .faces
+                .iter()
+                .map(|face| Face {
+                    normal: rotate(face.normal),
+                    ..*face
+                })
+                .collect(),
+            // An unused slot stays at the origin rather than being carried to
+            // the placement's own: `m` counts slots, and moving the padding
+            // would put stray vertices inside the hull's box.
+            vertices: self
+                .vertices
+                .iter()
+                .map(|v| if *v == [0.0; 3] { *v } else { point(*v) })
+                .collect(),
+        }
+    }
+
     /// The hull's outline against `direction`: [`Self::silhouette_loops`]'
     /// closed rings, with a ring that is another traversed the other way
     /// dropped.

@@ -251,6 +251,7 @@ pub fn capture(
     let (width, height) = options.size;
     let Loaded {
         shadows,
+        shadow_hulls,
         setup,
         hud,
         track_model,
@@ -378,6 +379,7 @@ pub fn capture(
         hd_bloom,
         zone_grade,
         shadows,
+        shadow_hulls,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

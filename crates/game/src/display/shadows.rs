@@ -20,13 +20,12 @@ use serde::{Deserialize, Serialize};
 /// "not one dial", and worse here: a blob quad, a projected occluder hull and
 /// a shadow map act at different points in the frame and compose differently.
 ///
-/// **Two of the design's four tiers are missing on purpose.** `original` -
-/// Pulse's 129 `Dynamic Shadow Occluder` hulls, HD's shadow-map jobs, 2048's
-/// track-proximity pair - and `mapped`, this project's own cascaded shadow
-/// map, are both designed and neither is built. They are not offered until
-/// they exist, per ADR-0013's own rule that a row for infrastructure that is
-/// not there is worse than no row. The enum grows when they land; a settings
-/// file written today keeps meaning what it says.
+/// **One of the design's four tiers is still missing on purpose.** `mapped`,
+/// this project's own cascaded shadow map, is designed and unbuilt, and is not
+/// offered until it exists - ADR-0013's own rule that a row for infrastructure
+/// that is not there is worse than no row. [`Self::Original`] joined the list
+/// on 2026-09-04 and is built **on Pulse only**; see its own doc for what the
+/// other titles get.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Shadows {
@@ -55,6 +54,22 @@ pub enum Shadows {
     /// cheap tier a weaker machine can afford, on the same footing as
     /// [`super::MotionBlur`] and FSR 1.
     Blob,
+    /// What the title itself authors.
+    ///
+    /// **Built on Pulse and nowhere else yet**, and a title with nothing built
+    /// draws no shadow at all rather than falling back to [`Self::Blob`] - the
+    /// load report says which happened, because a tier that silently becomes
+    /// another tier is how a missing feature stops being noticed. Wipeout
+    /// Pure's `original` is *honest absence*: it authors none of the seven
+    /// shadow classes, so nothing is the correct picture there.
+    ///
+    /// On Pulse it is the craft's own `Dynamic Shadow Occluder` `0x3c3` hull -
+    /// 119 of them across the disc - projected along the direction the
+    /// executable authors (`oag_pulse::shadow::AUTHORED_AXIS`) onto the
+    /// surface under the craft. See `oag_render::shadow::hull_triangles` for
+    /// what that shares with the original's stencil volume and what it does
+    /// not.
+    Original,
 }
 
 impl Shadows {
@@ -64,11 +79,12 @@ impl Shadows {
         match self {
             Self::Off => "off",
             Self::Blob => "blob",
+            Self::Original => "original",
         }
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 2] = [Self::Off, Self::Blob];
+    pub const ALL: [Self; 3] = [Self::Off, Self::Blob, Self::Original];
 
     /// Whether anything is drawn at all - the one question the frame asks
     /// before building a shadow pass.
@@ -89,7 +105,7 @@ impl std::str::FromStr for Shadows {
         Self::ALL
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not a shadow setting; try off or blob"))
+            .ok_or_else(|| format!("{text:?} is not a shadow setting; try off, blob or original"))
     }
 }
 

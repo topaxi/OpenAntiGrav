@@ -579,6 +579,13 @@ pub struct Loaded {
     /// `off` because `Scene::render` never uploads a quad. See
     /// [`crate::race::shadow`] and `oag_render::shadow`.
     pub shadows: Vec<oag_render::shadow::Silhouette>,
+    /// One authored shadow hull per grid slot, for the `original` tier, where
+    /// the craft's own model carries one.
+    ///
+    /// `None` where it does not, and the load report says which - a craft with
+    /// no `Dynamic Shadow Occluder` casts no `original` shadow rather than
+    /// borrowing another team's. See [`crate::race::shadow::hulls`].
+    pub shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }

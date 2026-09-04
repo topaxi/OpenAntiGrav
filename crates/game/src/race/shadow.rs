@@ -10,6 +10,9 @@
 //! pose the tick left behind, rather than being recorded during the step. See
 //! `docs/architecture/determinism.md`.
 
+use oag_formats::ByteOrder;
+use oag_formats::shadow_occluder::Occluder;
+use oag_formats::vex;
 use oag_physics::collide::{Ray, Raycaster, Surface};
 use oag_render::shadow::{self, Placement};
 
@@ -192,4 +195,97 @@ fn decode_silhouette(blob: &[u8]) -> Option<shadow::Silhouette> {
         height,
         rgba: rgba.into_iter().flatten().collect(),
     })
+}
+
+/// One craft's authored shadow hull per grid slot, where its model carries one.
+///
+/// **The `original` tier's geometry**, read out of the same `.vex` the hull
+/// mesh comes from: a `Dynamic Shadow Occluder` `0x3c3` node, which 119 of the
+/// Pulse disc's 129 are. A model with none contributes `None` and the report
+/// says so - a craft with no authored hull casts no `original` shadow rather
+/// than borrowing another team's.
+///
+/// **The first one in the file, and the file order is the tie-break.** A model
+/// can author more than one (`shadowShape` beside `shadow_lodShape`, the LOD
+/// variant), and which of them the original picks per frame is *unread* - so
+/// this takes the first and says how many it passed over, rather than choosing
+/// a rule nothing supports.
+pub fn hulls(
+    archives: &mut oag_assets::Archives,
+    teams: &[String],
+    race: &oag_title::RaceDefaults,
+    mode: oag_race::Mode,
+    report: &mut Vec<String>,
+) -> Vec<Option<Occluder>> {
+    let mut out = Vec::with_capacity(teams.len());
+    for (slot, team) in teams.iter().enumerate() {
+        let name = crate::race::ship_entry_name(race.ships_for(team), team, mode);
+        let found = archives.read_name(&name).ok().and_then(|blob| {
+            let tree = vex::nodes(&blob).ok()?;
+            let found: Vec<usize> = tree
+                .iter()
+                .enumerate()
+                .filter(|(_, node)| node.class_id == CLASS_OCCLUDER)
+                .map(|(index, _)| index)
+                .collect();
+            let first = *found.first()?;
+            let hull = Occluder::parse(&blob[tree[first].payload()], ByteOrder::Little)?;
+            // **Placed, not raw.** The payload's vertices are in the space of
+            // whatever `Transform` nodes enclose the occluder, exactly as a
+            // mesh node's are; `world_transforms` composes that chain, and the
+            // occluder's own class contributes the identity to it. Skipping
+            // this draws the right hull in the wrong frame - which still looks
+            // like a shadow, and is how it went unnoticed until someone said
+            // the shape was off.
+            let placement = vex::world_transforms(&blob, &tree);
+            let hull = hull.placed(placement.get(first)?);
+            Some((
+                hull,
+                found.len(),
+                tree[first].name.clone().unwrap_or_default(),
+            ))
+        });
+        match found {
+            Some((hull, count, node)) => {
+                report.push(format!(
+                    "slot {slot}: {name} authors {count} shadow hull(s); {node} is the one \
+                     drawn - {} face(s), {} vertex slot(s)",
+                    hull.faces.len(),
+                    hull.vertices.len()
+                ));
+                out.push(Some(hull));
+            }
+            None => {
+                report.push(format!(
+                    "slot {slot}: {name} authors no Dynamic Shadow Occluder - this craft casts \
+                     no `original` shadow, and nothing stands in for it"
+                ));
+                out.push(None);
+            }
+        }
+    }
+    out
+}
+
+/// Class id of `Dynamic Shadow Occluder`, from the class-ID table at
+/// `0x08ab2370`.
+const CLASS_OCCLUDER: u32 = 0x3c3;
+
+/// Both shadow tiers' per-slot assets, in one call.
+///
+/// One call rather than two at the load site, which is at the 1,000-line rule.
+/// They belong together anyway: read off the same models in the same slot
+/// order, and loaded whatever `graphics.shadows` says, because the setting
+/// applies live and a race must not have to reload to honour it: `blob`'s silhouettes ([`silhouettes`]) and `original`'s
+/// hulls ([`hulls`]).
+pub fn assets(
+    archives: &mut oag_assets::Archives,
+    teams: &[String],
+    race: &oag_title::RaceDefaults,
+    mode: oag_race::Mode,
+    report: &mut Vec<String>,
+) -> (Vec<shadow::Silhouette>, Vec<Option<Occluder>>) {
+    let silhouettes = silhouettes(archives, teams, race.ship_dir, report);
+    let hulls = hulls(archives, teams, race, mode, report);
+    (silhouettes, hulls)
 }

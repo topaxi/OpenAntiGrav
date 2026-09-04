@@ -158,3 +158,135 @@ fn a_one_texel_falloff_does_not_divide_by_zero() {
     assert_eq!(image.rgba.len(), 4);
     assert_eq!(image.rgba[3], 0xff);
 }
+
+/// A tetrahedron built as a decoded hull rather than as bytes: this crate
+/// draws an `Occluder`, and how one is parsed is `oag_formats`' own business.
+fn hull() -> Occluder {
+    use oag_formats::shadow_occluder::{Face, NO_NEIGHBOUR};
+    let faces = [
+        ([0.0, -1.0, 0.0], [0, 1, 2], [2, 3, 1]),
+        ([-1.0, 0.0, 0.0], [0, 2, 3], [0, 3, 2]),
+        ([0.0, 0.0, -1.0], [0, 3, 1], [1, 3, 0]),
+        ([0.577_35, 0.577_35, 0.577_35], [1, 3, 2], [2, 1, 0]),
+    ];
+    Occluder {
+        bounds: ([0.0; 3], [1.0; 3]),
+        faces: faces
+            .iter()
+            .map(|(normal, index, neighbour)| Face {
+                normal: *normal,
+                count: 3,
+                vertices: [index[0], index[1], index[2], index[0]],
+                neighbours: [neighbour[0], neighbour[1], neighbour[2], NO_NEIGHBOUR],
+            })
+            .collect(),
+        vertices: vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+        ],
+    }
+}
+
+/// A cast of that hull straight down onto `y = 0`, from `height` above it.
+fn cast_from(hull: &Occluder, height: f32, strength: f32) -> Cast<'_> {
+    Cast {
+        hull,
+        model: Mat4::from_translation(Vec3::new(0.0, height, 0.0)),
+        axis: Vec3::new(0.0, -1.0, 0.0),
+        contact: Vec3::ZERO,
+        normal: Vec3::Y,
+        strength,
+    }
+}
+
+#[test]
+fn the_projected_hull_lies_flat_on_the_surface() {
+    let hull = hull();
+    let mut out = Vec::new();
+    let rings = hull_triangles(&cast_from(&hull, 5.0, 1.0), &mut out);
+    assert_eq!(rings, 1);
+    // A ring of n vertices fills as n - 2 triangles, which for a triangle is
+    // one: ear clipping fills the ring's interior once, where the fan this
+    // replaced drew one triangle per edge and overlapped them.
+    assert_eq!(out.len(), 3);
+    for vertex in &out {
+        assert!(
+            (vertex.position[1] - LIFT).abs() < 1e-5,
+            "{vertex:?} is not on the plane"
+        );
+    }
+}
+
+#[test]
+fn the_projection_is_parallel_so_height_does_not_change_the_shape() {
+    // The direction is a *direction*, not a point light: a craft twice as far
+    // above the road casts the same outline, only fainter through `fade`.
+    let hull = hull();
+    let mut near = Vec::new();
+    let mut far = Vec::new();
+    hull_triangles(&cast_from(&hull, 2.0, 1.0), &mut near);
+    hull_triangles(&cast_from(&hull, 40.0, 1.0), &mut far);
+    assert_eq!(near.len(), far.len());
+    for (a, b) in near.iter().zip(&far) {
+        for axis in 0..3 {
+            assert!(
+                (a.position[axis] - b.position[axis]).abs() < 1e-4,
+                "{:?} against {:?}",
+                a.position,
+                b.position
+            );
+        }
+    }
+}
+
+#[test]
+fn a_direction_pointing_away_from_the_surface_draws_nothing() {
+    // Up, at a floor: the volume never reaches the plane, and forcing an
+    // intersection would put the shadow behind the craft.
+    let hull = hull();
+    let mut out = Vec::new();
+    let rings = hull_triangles(
+        &Cast {
+            axis: Vec3::Y,
+            ..cast_from(&hull, 5.0, 1.0)
+        },
+        &mut out,
+    );
+    assert_eq!(rings, 0);
+    assert!(out.is_empty());
+}
+
+#[test]
+fn a_hull_carries_the_fade_and_the_tiers_own_darkness() {
+    let hull = hull();
+    let mut out = Vec::new();
+    hull_triangles(&cast_from(&hull, 5.0, 0.5), &mut out);
+    for vertex in &out {
+        assert_eq!(vertex.colour[3], 0.5 * HULL_DARKNESS);
+        assert_eq!(&vertex.colour[..3], &[0.0, 0.0, 0.0]);
+    }
+}
+
+#[test]
+fn a_banked_surface_takes_the_projection_with_it() {
+    let hull = hull();
+    let normal = Vec3::new(1.0, 1.0, 0.0).normalize();
+    let mut out = Vec::new();
+    let rings = hull_triangles(
+        &Cast {
+            normal,
+            ..cast_from(&hull, 5.0, 1.0)
+        },
+        &mut out,
+    );
+    assert_eq!(rings, 1);
+    for vertex in &out {
+        let offset = Vec3::from_array(vertex.position) - Vec3::ZERO;
+        assert!(
+            (offset.dot(normal) - LIFT).abs() < 1e-4,
+            "{vertex:?} is off the banked plane"
+        );
+    }
+}
