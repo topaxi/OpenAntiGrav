@@ -310,6 +310,56 @@ This is where the PS3 pair still goes further:
 `oag_formats::rcsmaterial::fragment` decodes RSX microcode, 37,461 of 37,461
 blocks. Doing the same for USSE is the open thread.
 
+### The opcode field is located, corpus-wide - nothing is named yet
+
+`scripts/vita-gxp.py opcodes` (2026-09-04) sweeps every instruction word in
+both regions' full corpus - both eboots, `data.psarc`/`data1.psarc`/
+`data2.psarc`, `dlc1.psarc`, `dlc2.psarc` - 323,937 programs,
+17,377,433 primary and 1,975,822 secondary instructions, each a 64-bit
+little-endian word. Two findings, both derived from the bytes here and
+checked afterward against Vita3K's own USSE decoder as an **oracle, not a
+source** - see the license note below:
+
+- **The primary op1 field is the top 5 bits of the word.** Nine values cover
+  99.7% of primary instructions; widening the window to 6 or 7 bits does not
+  split those nine further - the extra bits stay constant across each - so 5
+  bits is where the field closes. Secondary code shows the same 5-bit knee,
+  nine values covering 100%.
+- **Secondary code's last instruction always sets bit 50, and by both of the
+  two tests that can find an end bit.** All 247,049 non-empty secondary
+  blocks have bit 50 set on the final instruction (the *sufficiency* test -
+  it never fails to mark the end). And of the 227,944 programs where bit 50
+  fires on exactly one instruction, that one is the last on all 227,944 (the
+  *discrimination* test - when it fires once, it is never early). The
+  remaining 19,105 also set it on an earlier instruction, so it is not
+  exclusively an end marker, but it never misses the end. Confidence **80**:
+  an exact, corpus-wide closure by two independent tests, but a located flag
+  rather than a decoded meaning.
+- **Primary code has no equally clean end bit, by either test.** The best
+  discrimination candidate, bit 56, lands on the last instruction on 92.3%
+  of the programs where it fires exactly once (261,370 of 283,088); the best
+  sufficiency candidate, bit 31, covers 99.6% of programs but is usually also
+  set on earlier instructions, reading more like a commonly-true field than
+  a marker. No primary bit clears both bars the way secondary's bit 50 does -
+  consistent with the 5-bit op1 field selecting between differently-shaped
+  instruction formats rather than one fixed layout, the way NV40's RSX
+  microcode does not either.
+
+**Naming an opcode is still not attempted.** This is the corpus-wide argument
+that would have to hold before any name is trustworthy, the same role the
+container's own region-closure argument played before a single header field
+was named - not a disassembly. **The oracle used, and why it stops here**:
+Vita3K's own USSE decoder is real, independent, and was downloaded and read
+to sanity-check these two findings *after* they were derived from the bytes
+above, never to source them. It is GPL-2.0-or-later; this project's own
+license bar
+([ADR-0024](../architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md))
+accepts a permissive or weak-copyleft dependency linked unmodified and rejects
+a strong copyleft reaching this project's own sources, which rules out landing
+any of Vita3K's opcode tables, bit-field names or instruction-format strings
+here - so nothing past the two bit positions and the histogram above is
+written down, and `scripts/vita-gxp.py` names no opcode.
+
 Two smaller things are also left unread on purpose:
 
 - **The literal record's interpretation.** An 8-byte record reads as
