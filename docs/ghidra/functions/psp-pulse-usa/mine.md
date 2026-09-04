@@ -295,6 +295,37 @@ just raise the bit and let the second loop's uniform teardown call
 `Mine_SpawnExplosion`, so a mine that times out and a mine a craft walks into
 play the identical explosion.
 
+**`+0x164` is the pool's live count, kept exact by a swap-with-last removal in
+the same second loop.** Recovered 2026-09-04, confidence 90 - a direct read of
+`FUN_08867370`'s decompiled second loop, no inference needed. Once the destroy
+bit is set and `Mine_SpawnExplosion` has been called for a slot, the same pass
+clears the entity's flags, sets its pool entry to `0xffffffff` and then:
+
+```c
+live = *(param_2 + 0x164) - 1;
+*(param_2 + 0x164) = live;
+if (live != 0) {
+    // move the last live pointer into the vacated slot
+    entity_ptrs[removed_index] = entity_ptrs[live];
+}
+```
+
+That is an ordinary swap-with-last compaction over the `+0x64` pointer array:
+`+0x164` is decremented exactly once per removal and the array's tail is moved
+down to fill the gap, so it stays a dense count of *live* entries rather than a
+high-water mark or a rotating cursor. A prior live breakpoint measured
+`craftArray->0x164 == 1` mid-race, before any mine had been dropped by that
+session's own account - read against the mechanism above, a swap-with-last
+live count reading `1` mid-race is exactly what one already-active mine
+produces, so the measurement and the mechanism now agree rather than merely
+coexisting. This is also the counter-example to `+0xa4`/`FUN_0886a920` being the same
+field under a different name (`contact-response.md`'s own read already noted
+the two write different offsets): `+0xa4` gates a capacity check before an
+*allocation* and never decrements, where `+0x164` here demonstrably both
+increments (elsewhere, at spawn) and decrements (here, at removal) - a live
+count and a write-cursor are different shapes even when they bound the same
+kind of pool.
+
 **The Bomb's own explosion call is not chased here.** `mine.md`'s own reading
 elsewhere records the Bomb keeps a separate pool cursor (`+0xc4`/cap 32,
 against the Mine's `+0x164`/`+0x64`), so `Weapon_FireBomb`'s teardown is very
