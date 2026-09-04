@@ -457,9 +457,12 @@ Reached from reaction #1 above. **Decompiled in full.** It takes
    already-clamped `fVar21 = min(|p| * 0.0125, 1.0)` reaction #1 receives, not
    raw `|p|`** - see the correction below the reaction list, which is the
    important part of this entry.
-4. **A `"COLLISIONS"` sound cue** (`FUN_089392b0(1.0, ..., "COLLISIONS", ...)`),
-   fired once per surviving kind-0/1 call, separate from and in addition to
-   the proximity cue `Ship_DispatchCollisionFx` itself plays.
+4. **A `.COLLISIONS` sound cue** (`Sound_Play(1.0, ..., ".COLLISIONS", ...)`,
+   `0x08924864`/`0x089392b0`), fired once per surviving kind-0/1 call,
+   separate from and in addition to the proximity cue
+   `Ship_DispatchCollisionFx` itself plays. **Correction, 2026-09-04: the dot
+   is in the executable, not added by the port** - see the caveat below,
+   which this entry's own earlier "COLLISIONS" reading got wrong.
 
 Confidence **85**: unambiguous, branch-clear decompile with three literal
 string names pinning the variant selection and clean, self-contained
@@ -616,18 +619,33 @@ further:
   (`DAT_08abf564`) by `0.1` per iteration - unrelated to wall/track contact.
 
 **Both cues are now played**, and they are the same `Sound_Play` calls this page
-found rather than a reconstruction: `"COLLISIONS"` on a contact past the
+found rather than a reconstruction: `.COLLISIONS` on a contact past the
 0.8-second gate, `"ABSORB"` when the shield is up and the sparks are therefore
-suppressed. Two caveats are recorded rather than papered over. `"COLLISIONS"`
-is stored in `ship.bnk` as **`".COLLISIONS"`** and no bank on either disc holds
-the undotted name, so the port looks up the dotted one - SCREAM's own
-sound/child-sound distinction, at confidence 70. And `"ABSORB"` is re-armed on
-the same 0.8 seconds, where `FUN_08840640` **bypasses** that gate and has its
-own 0.1-second stagger; how often the game calls it is not recovered, so a
-shared cooldown is a stated approximation and the alternative - no gate at all -
-would fire it sixty times a second through a scrape. See
+suppressed. One caveat, corrected below, is recorded rather than papered over.
+And `"ABSORB"` is re-armed on the same 0.8 seconds, where `FUN_08840640`
+**bypasses** that gate and has its own 0.1-second stagger; how often the game
+calls it is not recovered, so a shared cooldown is a stated approximation and
+the alternative - no gate at all - would fire it sixty times a second through
+a scrape. See
 [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table)
 and `oag_game::audio::sfx`.
+
+**Correction, 2026-09-04: the executable passes `".COLLISIONS"`, dot
+included - this page's own earlier reading of the call site's string argument
+as bare `"COLLISIONS"` was wrong, and so was the confidence-70 "the port
+bridges a naming mismatch" conclusion drawn from it.** The call site
+(`0x08924854`: `lw a3,0x46ec(a2)` with `a2 = 0x00280000`, i.e. an *indirect*
+load) reads a pointer out of a small table at `0x08a886ec` (the raw offset
+`0x2846ec` plus this program's `0x08804000` image base) rather than building a
+string address directly the way the three spark-name arguments two lines
+above it do - so the pseudocode's `"COLLISIONS"` was the decompiler showing
+the *table slot's* apparent literal, not the string it points at. The pointer
+stored there, read directly as memory rather than inferred, is `0x002846e0`;
+correcting that the same way lands on `0x08a886e0`, which reads
+`.COLLISIONS\0` - the dot is in the executable's own data, not something
+`ship.bnk`/`ship_zone.bnk` add and the port bridges to. `oag_game::audio::sfx`'s
+own `# COLLISIONS is stored as .COLLISIONS` section carried the same wrong
+premise and is corrected alongside this page.
 
 **Also checked and ruled out**: the `Ship Collision Fx` `0x3d0` class's own
 registration wrapper, `FUN_08924bf0` (`Vex_RegisterClass(&DAT_08b63f18,

@@ -209,8 +209,13 @@ to the other eight `Cue` variants.
 **The cue exists on Pure's disc**, confirmed independently of anything in
 Ghidra: `just wad sounds "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad"`
 lists a `.COLLISIONS` cue (10 waveforms) in both `SHIP_CL` (bank `#471`) and
-`SHIP_ZM` (bank `#472`) - the same bare name, dot included, `sfx.rs`'s
-`BankName` mapping uses for Pulse's own `Cue::Collision`.
+`SHIP_ZM` (bank `#472`) - the same dotted name Pulse's own executable passes
+(confirmed while chasing this: `psp-pulse-usa/contact-response.md`'s call site
+turned out to be an indirect pointer-table load the earlier pass had misread
+as a bare `"COLLISIONS"` literal - corrected there the same day). Pure's own
+call, by contrast, builds `0x24a780` directly the way its three spark names
+do, not through a table - read as memory rather than inferred either way, and
+landing on the identical dotted string both times.
 
 **`ShipCollisionFx_Trigger`'s decompile (above) calls it at the same point
 Pulse's does.** Right after the cooldown gate (`func_0x0013492c(...) == 0`)

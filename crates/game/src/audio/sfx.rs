@@ -636,28 +636,28 @@ impl Cue {
 
     /// The string to look up in that bank's name table.
     ///
-    /// # `COLLISIONS` is stored as `.COLLISIONS`
+    /// # The dot in `.COLLISIONS` is the executable's own, not a lookup fix-up
     ///
-    /// The executable passes `"COLLISIONS"`; no bank on either disc holds a cue
-    /// by that name, and `ship.bnk` and `ship_zone.bnk` both hold
-    /// `".COLLISIONS"`. SCREAM's error strings distinguish *a sound* from *a
-    /// child sound* (`"Didn't find sound named -> %s"` against `"Didn't find
-    /// child sound named -> %s"`), so the leading dot is almost certainly that
-    /// distinction and the lookup the game makes is the child one.
+    /// **Correction, 2026-09-04**: this section used to read the executable as
+    /// passing bare `"COLLISIONS"` and claimed the leading dot was added here
+    /// to bridge a SCREAM sound/child-sound naming split, at confidence 70.
+    /// That was a misread of the call site - `ShipCollisionFx_Trigger`'s
+    /// string argument is not built in place the way its three spark names
+    /// are; it is loaded indirectly out of a small pointer table
+    /// (`0x08924854: lw a3,0x46ec(a2)`), and the decompiler's inline literal
+    /// showed the table slot's own apparent text, not the string the pointer
+    /// it holds actually points at. Reading that pointer's target directly
+    /// (`0x08a886e0`) gives `.COLLISIONS\0` - the dot is already in the
+    /// executable's own data. See the correction paragraph in
+    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
-    /// **The dot is written here rather than stripped at lookup**, so that
-    /// [`Bank::cue`](oag_formats::sblk::Bank::cue_named) stays the runtime's own
-    /// 16-byte comparison and cannot resolve a name the original would have
-    /// rejected. The name is otherwise exact and it is the only candidate on
-    /// any disc.
-    ///
-    /// This comment used to add "if a child cue turns out to select among its
-    /// parents rather than the other way round, this is the line that is
-    /// wrong", and Wipeout HD's bank now answers it: `.COLLISIONS` is the
-    /// **parent**, and the cues it plays are the plainly named `c_CShipShip`
-    /// and `c_CShipWall`. So the leading dot does not mark a cue as somebody's
-    /// child - it is a naming convention, and the lookup stands.
-    /// See [`oag_formats::sblk::child`].
+    /// So this is a plain, exact match: no bridging, no SCREAM child-sound
+    /// theory needed, just the same name the game itself passes. It happens
+    /// to be the only cue named `.COLLISIONS` on any disc, and Wipeout HD's
+    /// bank independently confirms the dot is a plain naming convention, not
+    /// a parent/child marker: `.COLLISIONS` is the **parent**, and the cues
+    /// it plays are the plainly named `c_CShipShip` and `c_CShipWall`. See
+    /// [`oag_formats::sblk::child`].
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
