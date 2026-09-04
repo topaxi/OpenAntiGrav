@@ -220,8 +220,16 @@ address, 0x008bd3c4}` - an ordinary PPC64 **OPD descriptor**, the
 decompile rather than inferred from variable names: an outer repeat-count
 taken from the resource buffer's own first `u32`, stored back onto the
 destination object's offset `0x0`; offsets `0x8`/`0xc`/`0x10` are a
-`std::vector`'s begin/end/capacity pointers, and `0x20`/`0x30` the min/max
-bbox `vec4`s. Per outer iteration: a header of **two `u32` fields** (not
+`std::vector`'s begin/end/capacity pointers. Offsets `0x20`/`0x30` hold a
+running min/max reduction over the same three per-record floats (byte
+offsets `0xc`/`0x10`/`0x14`) - **this page previously called that pair a
+"bounding box"; it is not**. The byte-verified record layout below (position
+at offsets `0`/`4`/`8`, unit normal at `0xc`/`0x10`/`0x14`) means this
+reduction runs over *normals*, not positions, and a min/max over the set of
+face normals in a fixed six-face box is a constant (`[-1,-1,-1]..[1,1,1]`)
+regardless of the model - not a meaningful spatial bound. What `0x20`/`0x30`
+are actually for is unresolved; the "bbox" framing is retracted everywhere
+below and in `HANDOVER.md`/the thread file. Per outer iteration: a header of **two `u32` fields** (not
 `u16` - both are read through a `uint *`), followed by a third leading `u32`
 word whose role is unread, then **`Shadow_AllocateStencilVolumeBuffers`**
 (`0x005ee2c0`, confidence 82) allocates two buffers sized by the header:
@@ -245,41 +253,90 @@ band ("an exact arithmetic invariant... is worth more than any amount of
 re-reading"). `FUN_005a88c8`/`FUN_005a8750` are both confirmed generic buffer
 constructors (read in full, neither is shadow-specific - not renamed).
 
-So, closed: (if `n` is positive) a loop of `n` 24-byte input records feeds
-three of its six floats (byte offsets `0xc`/`0x10`/`0x14`) into a running
-min/max bbox and also gets copied/transformed into the new vertex buffer -
-what the other three floats (offsets `0`/`4`/`8`) hold is still unread. The
-`m`-sized, `m*4`-byte index blob that follows the `n` records is `memcpy`'d
-into the new index buffer. One `{index-buf ptr, vertex-buf ptr, m, n}` entry
-is then `push_back`'d per outer iteration - **`n` is the vertex count and
-`m` is the drawn index count**, read by
-`Shadow_AccumulateStencilVolume`/`Shadow_ClearStencilVolume` as exactly that.
+So, closed: (if `n` is positive) a loop of `n` 24-byte input records is
+copied/transformed into the new vertex buffer, and separately feeds a
+running min/max reduction over three of its six floats (see the retraction
+above - this is not a bounding box). The `m`-sized, `m*4`-byte index blob
+that follows the `n` records is `memcpy`'d into the new index buffer. One
+`{index-buf ptr, vertex-buf ptr, m, n}` entry is then `push_back`'d per outer
+iteration - **`n` is the vertex count and `m` is the drawn index count**,
+read by `Shadow_AccumulateStencilVolume`/`Shadow_ClearStencilVolume` as
+exactly that.
 
 That is the same coarse shape as the PSP `DynamicShadowOccluder` `.vex`
 payload documented in [shadow-occluder.md](../psp-pulse-usa/shadow-occluder.md)
-- small leading counts, a geometry array, a derived bounding box - but a
-**different topology encoding, not merely different bytes**: HD pairs an
-explicit vertex buffer with a separate index buffer, where Pulse's `n`
-(faces) and `m` (vertex slots) each index their own same-shaped record array
-with no separate index list at all. Bridging the two into one
-implementation-facing representation, if that is ever wanted, means
-resolving an indexed-triangle-list encoding against a face-list-with-inline-
-indices one, not just a byte-for-byte remap.
+- small leading counts and a geometry array - but a **different topology
+encoding, not merely different bytes**: HD pairs an explicit vertex buffer
+with a separate index buffer, where Pulse's `n` (faces) and `m` (vertex
+slots) each index their own same-shaped record array with no separate index
+list at all. Bridging the two into one implementation-facing representation,
+if that is ever wanted, means resolving an indexed-triangle-list encoding
+against a face-list-with-inline-indices one, not just a byte-for-byte remap.
 
-Confidence 82 on the `n`=vertex/`m`=index-`u32` split (the arithmetic
-invariant plus three independent call sites - the allocator, the vector
-push, the draw - agreeing); 75 on `Shadow_ParseStencilVolumeGeometry`'s and
-`Resource_FindOrLoadByHashedPath`'s own overall roles (single call site
-each, not runtime-traced, and the other three input floats per vertex
-unread).
+Confidence 82 on the `n`=vertex/`m`=index-`u32` split as read from
+`EBOOT.elf` alone (the arithmetic invariant plus three independent call
+sites - the allocator, the vector push, the draw - agreeing); see the next
+section for why the on-disc **record layout** itself now sits higher than
+that, at 92, once real files closed it byte-for-byte. 75 on
+`Shadow_ParseStencilVolumeGeometry`'s and `Resource_FindOrLoadByHashedPath`'s
+own overall roles as functions (single call site each, not runtime-traced);
+the copy loop's own internal byte-shuffling (which destination offset gets
+which source float, across the vectorized/decompiler-mangled code above) is
+lower confidence still and is flagged unresolved rather than guessed at.
+
+## Byte-verified: 39/39 real files close the record format and reveal a fixed box topology
+
+2026-09-04. `scripts/psarc.py list|extract` against all seven PSARC archives
+on `data/images/hdfury-ps3-eu-dec.iso` (`PS3_GAME/USRDIR/DATA0{0,2,3,6}.PSARC`)
+finds **39** `data/ships/<name>/shadow.stencilvolume` entries disc-wide, one
+per ship/skin variant (`feisar`, `feisar_c1`, `feisar_n1`, `detonator`,
+`qirex`, ... - every entry under `data/ships/`, none anywhere else on the
+disc). Every one of the 39 decodes with the exact same big-endian header,
+`struct.unpack_from('>IIII', data, 0)` = `(outer=1, n=24, m=108, pad=0)`, and
+every one's file size matches `16 + n*24 + m*4 = 1024` bytes exactly - **39
+for 39**, not a sample.
+
+Decoding `n=24` vertex records as `(x, y, z, nx, ny, nz)` `f32`s (the layout
+`Shadow_ParseStencilVolumeGeometry`'s copy loop implied, now checked against
+real bytes rather than only the decompile) gives, per file, exactly **6
+distinct unit-length axis-aligned normals** - `(±1,0,0)`, `(0,±1,0)`,
+`(0,0,±1)` (each recovered as `±1` to float rounding noise, e.g.
+`-3.28e-08` in place of an exact `0`) - with 4 vertices sharing each normal:
+**a 6-face box, unwelded so each face gets its own flat normal**, exactly
+matching the "24 vertices, 4 per face" split. The `m=108` index buffer
+(36 triangles) splits cleanly into two groups: indices `0..35` (12
+triangles, 2 per face x 6 faces) draw each face as a quad; indices `36..107`
+(24 triangles, 2 per edge x 12 edges) bridge each face's border to its
+neighbours, sealing the box into one closed manifold rather than 6 floating
+quads. Vertex *positions* vary per file - `feisar`'s box is a different size
+than `detonator`'s or `qirex`'s bounding footprint - but the **topology
+(vertex count, normal set, index list) is byte-identical across every one of
+the 39 files**. This is the exact arithmetic-invariant-across-many-real-files
+case the confidence rubric scores 85-94; record format confidence raised
+from 82 to **92**.
+
+What this does *not* close: **why** the topology is a fixed sealed box
+rather than a per-model silhouette hull (the way Pulse's `Shadow_RenderOccluderVolume`
+computes one at runtime) is inference, not read - the natural explanation is
+that `LiveStencilShadow_vp` extrudes each vertex along `lightDirection` by
+`extrusionDistance` in the vertex shader, and a sealed box is exactly the
+shape you want it to seal into regardless of which pairs of triangles end up
+front- or back-facing to the light. `LiveStencilShadow_vp`'s own Cg/RSX
+bytecode is unread, so that mechanism claim is scored separately at
+**confidence 65** - it explains the shape but isn't confirmed against the
+shader itself. Cross-title lineage worth stating plainly: HD's `n`/`m` are
+invariant across the *entire disc*, where Pulse's `DynamicShadowOccluder`
+varies per weapon (`pulse_mine` at 4/4, `pulse_bomb` at 11/12, per
+[shadow-occluder.md](../psp-pulse-usa/shadow-occluder.md)) - Pulse authors a
+hull per object; HD authors one topology once and refits its vertices per
+caster.
+
+Reproduce: `scripts/psarc.py list data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA0{0,2,3,6}.PSARC | grep stencilvolume`,
+then `extract` any entry and `struct.unpack_from('>IIII', data, 0)` /
+`'>6f'` per 24-byte record / `'>{m}I'` for the index blob.
 
 ## What was deliberately not chased this pass
 
-- **The actual PSARC entry.** No archive has been searched for a
-  `shadow.stencilvolume` file; this pass is entirely `EBOOT.elf` static
-  reading. Finding and decoding the real file would turn the closed record
-  format above from a strong static reading into a byte-verified closure
-  test, the way `shadow_occluder_ground_truth.rs` does for Pulse.
 - **`FUN_004053e0`'s SPU job in full.** Confirmed it hands off to
   `FUN_005fc728` (a shared job-submission primitive, seven callers in this
   module) rather than drawing immediately - the strongest candidate for the
@@ -287,21 +344,36 @@ unread).
   geometry the job actually contains is unconfirmed and would need
   SPU-job-level tracing to settle, the scale `engine-trail.md`'s `Trails`
   job investigation used. Not attempted here.
-- **What the other three of the six input floats per vertex hold.** Bbox
-  min/max only consumes three (`0xc`/`0x10`/`0x14`); the transform-copy into
-  the new vertex buffer touches all six, but what the vertex format actually
-  is (position+normal? two positions?) is unread.
+- **`LiveStencilShadow_vp`'s own Cg/RSX bytecode.** The box-mesh finding
+  above makes a per-vertex extrusion in the vertex shader the natural
+  reading, but the shader's actual instructions are unread - see confidence
+  65 above.
 - **Whether `lightDirection`/`extrusionDistance` are ever set to anything
   other than a default.** The upload call (`Rsx_UploadVertexConstants`) is
   now found, but what values it uploads at runtime is unread.
+- **Why `Shadow_ParseStencilVolumeGeometry`'s copy loop reads the way it
+  does.** The loop's per-vertex source/destination offsets are heavily
+  vectorized and decompiler-mangled (see the retracted "bbox" note above);
+  the on-disc format is now closed independently, against real files, so
+  this doesn't block anything further, but the loop's own internals are
+  still not confidently mapped byte-for-byte.
 
 ## Open
 
-- Where in the PS3 PSARC archives (if anywhere) an actual
-  `shadow.stencilvolume` entry lives - unsearched
-- What the vertex buffer's other three floats hold, and the exact on-disc
-  resource layout (the strong static reading above still isn't a
-  byte-verified closure)
+- Whether `LiveStencilShadow_vp` actually extrudes per-vertex along
+  `lightDirection`/`extrusionDistance` - the sealed fixed-box topology
+  strongly suggests it (confidence 65), but the shader bytecode is unread
+- Why `data/ships/detonator/`'s box is ship-scale (~6 x 3 x 14 units,
+  same order of magnitude as `qirex`'s ~5.6 x 3 x 15), when
+  [detonator-bomb.md](detonator-bomb.md) names `DetonatorBomb` as a weapon
+  class - either this path is a distinct ship-sized entity that happens to
+  share the name, or a weapon's own shadow proxy is authored ship-sized and
+  the box is not simply "fitted to the caster's own bounds"; not resolved
+  here
+- Whether every other model class on the disc (props, track pieces, other
+  weapons) that casts a `LiveStencilShadow` shares this same fixed 24-vertex
+  box template, or whether some use a different fixed topology - only the
+  `data/ships/*` entries were checked
 - Whether anything besides `Shadow_DrawOccluderStencilVolumes` reads
   `self+0x128`, or feeds the `+0x933c4`/`+0x933c8` instance list - single
   known caller each, not traced further
@@ -316,3 +388,5 @@ unread).
   rather than a one-off, but its geometry source is unconfirmed either way
 - What the byte flag at `self+0x140` gates - not established as "visible" or
   anything else, just observed as a nonzero check
+- What offsets `param_1+0x20`/`+0x30` (the retracted "bbox") are actually
+  for, now that they're known to reduce over normals rather than positions

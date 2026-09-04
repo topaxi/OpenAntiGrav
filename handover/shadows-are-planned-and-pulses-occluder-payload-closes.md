@@ -32,6 +32,36 @@
 
 **The record format closed the same day, once `Shadow_AllocateStencilVolumeBuffers` (`0x005ee2c0`) was decompiled.** It allocates an `n`-element, 24-byte-stride vertex buffer and a separate `m`-element index buffer - and the index buffer's own width computation (`FUN_005a8750`'s branchless format select, evaluated for the literal `param_2=0` this call site passes) comes out to exactly `4` bytes, matching `Shadow_ParseStencilVolumeGeometry`'s own `m << 2`-byte `memcpy` of the index blob without either function citing the other. That's an exact arithmetic invariant between two independently-read functions - the confidence rubric's own top band short of a runtime trace - and it settles what the first pass over this function left as a guess: **`n` is the vertex count, `m` is the drawn `u32` index count.** Same coarse shape as Pulse's `.vex` occluder payload (leading counts, a geometry array, a derived bbox), but a genuinely different topology encoding, not just different bytes: HD pairs an explicit vertex+index buffer, Pulse indexes its own face/vertex-slot arrays with no separate index list. `Resource_FindOrLoadByHashedPath` (the renamed `0x003ee398`) and `Shadow_ParseStencilVolumeGeometry` (the renamed `0x005ee7d0`) are both named now too - the former deliberately *not* `Shadow_`-prefixed, since nothing in it is shadow-specific and the path is entirely the caller's.
 
+**The record format is byte-verified now, same-thread continuation on
+2026-09-04: `scripts/psarc.py` finds all 39 real `shadow.stencilvolume`
+files disc-wide (one per `data/ships/<name>/`) and every one matches
+`16 + n*24 + m*4` exactly, with an identical `(n=24, m=108)` header on all
+39 - not a sample. Decoding the vertex records closes what was still open:
+they are `(x, y, z, nx, ny, nz)`, and the 24 vertices/108 indices form a
+fixed, unwelded six-face box (4 verts/face, 2 face-quad triangles + 4
+edge-bridging triangles per face-boundary) with only vertex *positions*
+varying per ship to fit its own bounding footprint - the topology itself is
+byte-identical across all 39. Record-format confidence raised 82 -> 92, the
+"exact arithmetic invariant across many real files" band. This also forced
+a correction: a previous pass here called the min/max reduction at
+`param_1+0x20`/`+0x30` a "bounding box"; the offsets it actually reads
+(`0xc`/`0x10`/`0x14`) are the *normal*, not the position, per this
+byte-verified layout, and a min/max over a fixed box's six face normals is
+a constant, not a spatial bound - the "bbox" framing is retracted from the
+doc page, the plate comment, and here. The sealed-box shape is consistent
+with per-vertex extrusion happening in `LiveStencilShadow_vp` rather than a
+CPU-computed silhouette hull the way Pulse's `Shadow_RenderOccluderVolume`
+builds one - a plausible mechanism reading, not a confirmed one (confidence
+65; the shader's own bytecode is unread). Cross-title note worth keeping:
+Pulse authors a distinct hull per weapon (`pulse_mine` 4/4, `pulse_bomb`
+11/12); HD authors one topology once, disc-wide, and only refits vertex
+positions per caster. One loose end found along the way, not resolved:
+`data/ships/detonator/`'s box is ship-scale, similar order of magnitude to
+`feisar`'s and `qirex`'s, despite `detonator-bomb.md` naming `DetonatorBomb`
+as a weapon class - whether this is a distinct ship-sized entity sharing the
+name, or a weapon shadow proxy authored at ship scale, is unresolved. Full
+numbers and the reproduce command are in `shadow-stencilvolume.md`.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
@@ -48,7 +78,10 @@
 - Whether the 10 world-space occluders are a track feature at all, or authored-and-inert the way `DirectionalLight` turned out to be. Their bbox extents run to 882 units, so they are not craft
 - Whether `original` should be the default once it exists, on a title where the tier is not obviously better-looking than `blob`
 - ~~HD's stencil-volume draw call is still unfound.~~ **Found 2026-09-04**: `Shadow_DrawOccluderStencilVolumes` (`0x003e6918`) walks the model-instance array for the flagged ones and runs a two-sided depth-fail stencil shadow volume, colour-mask bracketed - `Shadow_AccumulateStencilVolume`, a colour-on/blend-on submit (`FUN_004053e0`) whose geometry is unconfirmed, then `Shadow_ClearStencilVolume` (a stencil reset, not a "resolve") - RSX register identities cross-checked against a local `rpcs3`'s own `gcm_enums.h`, not assumed. **`FUN_004053e0` turns out not to draw immediately at all**: it compiles a small command stream and hands it to a shared, seven-caller SPU-job-submission primitive matching this project's own already-documented job pattern (`engine-trail.md`) - generic infrastructure, but through a path that would need SPU-job-level tracing to say what geometry it actually carries. See `shadow-stencilvolume.md`
-- **No PSARC archive has been searched for an actual `shadow.stencilvolume` entry.** Finding one is what would turn the record format's strong static reading (confidence 82 on the `n`=vertex/`m`=index split) into a byte-verified closure test
+- ~~No PSARC archive has been searched for an actual `shadow.stencilvolume` entry.~~ **Found and decoded 2026-09-04, all 39**: byte-verifies the `n`=vertex/`m`=index split (confidence 82 -> 92) and reveals a fixed sealed-box topology shared by every ship - see above and `shadow-stencilvolume.md`
+- **Whether `LiveStencilShadow_vp` actually extrudes per-vertex along `lightDirection`/`extrusionDistance`.** The fixed sealed-box topology fits that reading (confidence 65) but the shader bytecode is unread
+- **Whether other model classes (props, track pieces, other weapons) share HD's fixed 24-vertex box template**, or use a different one - only `data/ships/*` was checked
+- **Why `data/ships/detonator/`'s box is ship-scale** despite `detonator-bomb.md` naming a `DetonatorBomb` weapon class - not resolved
 - ~~What `0x005ee7d0`'s sub-call, `0x005ee2c0`, does with `(n, m)`.~~ **Decompiled 2026-09-04**: it allocates the vertex and index buffers, and its index-width computation gives the exact arithmetic invariant that closed the `n`/`m` question - see above. What's left of the record format: the other three of six floats per vertex, and the real on-disc byte layout (still unverified against a captured file)
 
 **`Ile` and `Nova` are two generations of Studio Liverpool's baked-lighting pipeline, and 2048 replaced the first with the second.** HD's lightmaps are `ile_mesh_combine_*-lmap.gtf`; 2048's are `nova_mesh_combine_*-lmap.gxt`, **941 of 941**, the thirteen ported HD/Fury DLC circuits included - not one HD lightmap survived. HD's executable has no `nova` string and 2048's has no `Ile` string, so the two never coexist. The material flags map one to one: HD's `IleLightmap`/`IleVertex` is 2048's `DirectionalNovaTexture`/`DirectionalNovaVertex` - **which means [`rcsmaterial.md`](../docs/formats/rcsmaterial.md)'s already-documented `Ile*` tokens now have a name for what they belong to.** Every ported circuit was baked twice, forward and reversed. Confidence 90. What Nova actually *computes* is unread and unassessed.
@@ -80,14 +113,16 @@ unblocked by it:
   **The draw call is traced too, same day**: `Shadow_DrawOccluderStencilVolumes`
   runs a two-sided depth-fail stencil shadow volume, colour-mask bracketed,
   RSX register identities cross-checked against a local `rpcs3`'s own
-  source. **The record format is closed the same day too**: an `n`-vertex,
-  `m`-index (`u32`) buffer pair, settled by an exact arithmetic invariant
-  between two independently-read functions - see above. **What's left, not
+  source. **The record format is closed and byte-verified, same day**: an
+  `n`-vertex, `m`-index (`u32`) buffer pair, settled first by an exact
+  arithmetic invariant between two independently-read functions, then
+  confirmed against all 39 real `shadow.stencilvolume` files disc-wide -
+  every one an identical fixed sealed-box topology, only vertex positions
+  varying per ship - see above (confidence 92). **What's left, not
   attempted this pass**: what `FUN_004053e0` (the actual visible-effect
-  candidate) draws, and finding an actual `shadow.stencilvolume` entry in one
-  of the seven PSARC archives to turn the closed record format into a
-  byte-verified closure test the way `shadow_occluder_ground_truth.rs` does
-  for Pulse
+  candidate) draws, and whether `LiveStencilShadow_vp`'s own bytecode
+  confirms the per-vertex-extrusion reading the box topology suggests
+  (confidence 65, unread)
 - **Write a GXP fragment-program decoder** (`scripts/vita-gxp.py`, on the model of `scripts/ps3-microcode.py`). It unblocks `track_proximity_shadow_fp` and `NovaShipOcclusion`, and beyond shadow it is the only way to read any of 2048's 67 shader programs
 - Once the GXP decoder exists: **what `track_proximity_shadow_vp`/`_fp` actually does**, **where `Lighting.ShadowLight direction` is authored** (`.envsettings` is the leading guess), and **whether 2048's directional bake is a radiosity-normal basis or a single dominant direction**
 - **A PPSSPP watchpoint on `self+0x50`** during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` and `DynamicShadowOccluder_RegisterClass` past confidence 84 - optional, not blocking anything
