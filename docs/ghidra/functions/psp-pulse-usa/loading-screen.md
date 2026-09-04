@@ -170,10 +170,12 @@ integer ramp `((t - lo) * 255) / (hi - lo)`:
 | `Loading_Ramp255(30, 286, x)` | wave amplitude across the screen |
 | `Loading_Ramp255(30, 60, t)` | screen fade-in, `t` in 33,333 us ticks - 1.0 s to 2.0 s |
 
-Confidence **96** for the motion model, up from 85 - see "Confirmed at
-runtime: the recurrence matches exactly" below. It was read from the
-decompiler alone; every constant is now also checked against the game
-actually computing it.
+Confidence **96** for `local_70`'s own state recurrence (`raw`/`disp`/
+`energy` evolving correctly column to column), up from 85 - see "Confirmed
+at runtime: the recurrence matches exactly" below. **90** for the emitted
+draw arguments matching that state (`0x0890ab60`'s and `0x0890ac10`'s own
+`(x, y)`), narrower for a reason recorded in the "narrowly" runtime section
+just after it - both were read from the decompiler alone before this pass.
 
 ### The pulse
 
@@ -237,8 +239,9 @@ and one emulator version.
 
 ### Confirmed at runtime: the recurrence matches exactly
 
-The remaining open question - whether the motion model above is what the
-game actually computes, not just a plausible reading of the decompiler - is
+Whether `local_70`'s own state evolution - not yet whether that state
+reaches the screen unchanged, see the next section - is what the game
+actually computes, not just a plausible reading of the decompiler, is
 closed. `scripts/psp-loading-wave-capture.py` breaks once per column inside
 `Loading_DrawWave`, right after both layers update (`0x0890abbc`), and reads
 `local_70[6]` off the function's own `sp` - Ghidra reports the array as
@@ -288,6 +291,58 @@ it mid-capture (`--timeout` has nothing left to wait for once nothing else
 drives the front end forward) - both captures above ended in the debugger's
 socket closing out from under a `cpu.resume` call, not a clean stop, which
 is why the row counts are what they are rather than a round number.
+
+### Confirmed at runtime, narrowly: the emitted draw arguments match too
+
+The recurrence check above only ever reads `local_70` itself - it does not
+confirm those values are what actually reaches the draw call, which is a
+separate claim (a bug between the two would draw a wrong wave from
+correctly-computed state). `scripts/psp-loading-wave-emit-capture.py`
+closes that gap by breaking on the generic quad emitter both call sites
+target (`0x08810f84` - `0x08804000 + 0xcf84`, the unrelocated
+`func_0x0000cf84` call target; confirmed against PPSSPP's own live
+`memory.disasm`, not just Ghidra's, since Ghidra's function manager has no
+`Function` object at that address despite the doc naming it `FUN_08810f84`
+below) and reading `a0`/`a1` - the emitted `(x, y)` - directly, predicting
+`y` from `local_70` and comparing.
+
+Three captures, **52 of 52 emitted `y` values matched their prediction
+exactly**, across both the per-layer call site (`ra=0x0890ab60`) and the
+third-band call site (`ra=0x0890ac10`). That confirms the wiring: the right
+register carries the right value, `trunc.w.s` is applied, the `220.0`
+literal from `f26` is used, exactly as the disassembly at both call sites
+(`0890ab38: add.s f12,f12,f26` / `0890ab3c: trunc.w.s f12,f12` /
+`0890ab40: mfc1 a1,f12`) reads.
+
+**This is narrower than it sounds, and confidence reflects that: 90, not
+96.** All three captures landed entirely inside `x=0..14` - a handful of
+columns, well before `raw`/`disp` develop any real amplitude - so every
+predicted `y` in every capture was `220`, from every call site. The check
+still has content (a wiring bug - wrong register, wrong constant, a missing
+truncation - would have shown up as a mismatch even at `y=220`), but it does
+not exercise the formula at a value where a wiring bug would produce a
+visibly *different* wrong number, and it never distinguished `layer0` from
+`layer1` (both predict the same `220` there, so the classifier's
+first-match tie-break always reads `layer0`). See "Not determined".
+
+**A fourth trap, found getting this capture to work at all**: arming this
+breakpoint only after reaching the tip screen (the approach that works for
+the column breakpoint above) never fires, because the boot logo screen
+(type 0, drawn first) already calls this same generic emitter for its own
+two sprites, and that JIT-compiles the block before this script gets a
+chance to arm anything - `cpu.breakpoint.list` shows it armed exactly as it
+should, but a breakpoint on already-JIT-compiled code does not take, with
+no error and no distinguishing symptom. The fix is arming it before the
+very first `cpu.resume`, from cold boot, then filtering hits in Python by
+return address. That filtering also removes the need for a separate
+sp-learning step: caught at the callee's very first instruction, before its
+own prologue runs, `sp` is still `Loading_DrawWave`'s own `sp` - `local_70`'s
+address directly, since `jal` never touches `sp`. And this breakpoint is far
+hotter than any other on this page - every quad drawn anywhere this early in
+boot goes through it - which comes with its own cost: all three runs stopped
+within the same narrow band, about 130-140 total hits, `PPSSPPHeadless`
+left running and burning CPU rather than exiting cleanly. Not root-caused;
+recorded so a future capture attempt does not waste time rediscovering it.
 
 ### What it looks like
 
@@ -442,18 +497,32 @@ traced back to a filename.
 
 ## Not determined
 
-- **The motion model is runtime-verified except for the `pulse != 0` case.**
-  See "Confirmed at runtime: the recurrence matches exactly" above - both
-  captures happened to land on `g_loading_wave_envelope` entries of 0 and 10,
-  never one of the table's two 99-peaks, so the `pulse / 99.0 + 0.1`
+- **The internal recurrence is runtime-verified except for the `pulse != 0`
+  case.** See "Confirmed at runtime: the recurrence matches exactly" above -
+  both captures happened to land on `g_loading_wave_envelope` entries of 0
+  and 10, never one of the table's two 99-peaks, so the `pulse / 99.0 + 0.1`
   amplitude term is exercised structurally but not at its largest live
   value. A longer `scripts/psp-loading-wave-capture.py --hits` run, or one
   timed to start nearer a beat, would close this; nothing about the
   arithmetic being checked would change.
+- **The emitted draw arguments are runtime-verified only at undeveloped
+  amplitude.** See "Confirmed at runtime, narrowly" above - all three
+  `scripts/psp-loading-wave-emit-capture.py` captures landed inside
+  `x=0..14`, where every predicted `y` is `220` regardless of layer or band,
+  so the wiring is confirmed but a value-dependent bug (as opposed to a
+  wiring bug) would not have shown up. `layer0` versus `layer1` has also
+  never been distinguished for the same reason - both predict the same
+  number that early. Closing this needs a capture that reaches well past
+  x=14 *and* catches the draw arguments, which no run has done in the same
+  pass yet; the script's own docstring records the ~130-140-hit ceiling that
+  has stopped every attempt so far, unresolved.
 - The exact signatures of `FUN_08810f68` and `FUN_08810f84`. Read here as
   `(src_w, src_h, dst_w, dst_h)` and `(x, y, z, u, v, ...)` from four
-  consistent call sites, which is enough for this page but not enough to name
-  them.
+  consistent call sites, which is enough for this page but not enough to
+  name them - and, per the runtime capture above, `FUN_08810f84` currently
+  has no `Function` object in Ghidra's own database at all, despite being
+  reachable and named from this page; PPSSPP's live `memory.disasm` is what
+  confirmed the address, not Ghidra's function manager.
 - `FUN_08813328`, `FUN_08820e90` and `FUN_0888c408`, the three non-main-loop
   callers of `Loading_Show`, and therefore what distinguishes type 6 from
   type 4. Both take the tip path; no difference in behaviour was found.
