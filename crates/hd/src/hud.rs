@@ -95,6 +95,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // *outline* rather than a filled white one, so the icon on it is visible in
     // the colour the layout authors. See [`ALWAYS_ON`] for the frame.
     pickup_backdrop_colour: None,
+    // Same reasoning: an outline needs no colour substituted into it, per
+    // weapon or otherwise.
+    pickup_colours: None,
     // The fifteen rungs' names. Which rung a zone is on is a different
     // question and an open one - see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),

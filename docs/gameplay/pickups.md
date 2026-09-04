@@ -229,21 +229,81 @@ like that, so **it must set at least one of the two colours at runtime**, and
 that is unrecovered. `0x0883b3b8` is the known place the runtime reaches into
 these widgets - it forces the icon id - and is where to look.
 
-**What this build does instead is a substitution, not a recovery.** The backdrop
-is drawn in `HudBGColour`, the only background colour the layout defines
-(`0x40000000`, a quarter-alpha black), and the icon keeps its authored white.
-Every value still comes off the player's own disc; what is ours is the choice of
-which constant. The precedent is the front end's title colour, substituted the
-same way while the widget behind it is unbuilt.
+**What this build did until 2026-09-04 was a substitution, not a recovery.**
+The backdrop was drawn in `HudBGColour`, the only background colour the layout
+defines (`0x40000000`, a quarter-alpha black), and the icon kept its authored
+white. Every value still came off the player's own disc; what was ours was the
+choice of which constant. The precedent is the front end's title colour,
+substituted the same way while the widget behind it is unbuilt.
 
-Two ground-truth assertions keep it honest, both against the shipped file: that
-the backdrop and the icon really are authored in one colour - if that ever
-stopped being true the substitution would no longer be needed - and that the
-layout really defines `HudBGColour`, without which the substitution would
-silently not happen and the icon would go back to being invisible.
+Two ground-truth assertions keep the fallback honest, both against the shipped
+file: that the backdrop and the icon really are authored in one colour - if
+that ever stopped being true the substitution would no longer be needed - and
+that the layout really defines `HudBGColour`, without which the substitution
+would silently not happen and the icon would go back to being invisible. Both
+still hold and both still run; the fallback is what `Bomb`/`Mine` draw today,
+per the next section.
 
-**A reference frame of the original's own pickup box would settle it** and has
-not been taken. It is the cheapest open thing on this page.
+### The backdrop is colour-coded per weapon, and a reference frame settled it
+
+**2026-09-04.** The reference frame this page asked for above has now been
+taken - a PSP under Xvfb (`docs/reverse-engineering/ppsspp-debugger.md`)
+driven onto Talon's Junction's own weapon pads and, once, sat on its Time
+Trial start line, screenshotted while holding what it picked up. Four frames:
+`ShieldIcon` and `AutopilotIcon` came up on a green hexagon, `MissileIcon` on
+a magenta one, and `TurboIcon` - Time Trial's own free-pickup grant, the one
+weapon a placement cannot be aimed at - on a third, brighter-reading green shot
+against open sky rather than a tunnel interior.
+
+**That is a category, not thirteen independent colours, and the grouping for
+the other nine weapons comes from a second, independent source.**
+`Data\Plugins\loading\Definition.xml` points every weapon's own *loading
+screen* tip at `Data\Defaults\Loading\Pulse\<Name>.mip`, and each of those
+authors the same hexagon-and-glyph picture the HUD does. Sampling all thirteen
+files turns up exactly three flat fills: `Bomb`/`Mine` at `(0, 0, 255)`, eight
+more (`Rocket`, `Missile`, `Quake`, `Cannon`, `Plasma`, `LeachBeam`,
+`Repulser`, `Shuriken`) at `(250, 1, 189)`, and `AutoPilot`/`Shield`/`Turbo` at
+`(0, 255, 0)` - the same three-way split the in-race frames show for the four
+weapons they cover.
+
+**The `Turbo` frame reads differently from the other two green ones, and why
+is not established.** Shot against bright sky rather than a dark tunnel, its
+hexagon carries a real blue channel where `Shield`'s and `Autopilot`'s read
+near zero. Two explanations were checked and ruled out: the same frame's
+`TimeIcon`, a widget authored `HudColour2` with no substitution, samples
+within antialiasing noise of that constant's own declared value, so this is
+not the whole HUD reading brighter that frame; and `TimeTrial_HUD.xml` (this
+frame's own layout) authors `PickupBackground`/`TurboIcon` identically to
+`Arcade_HUD.xml`'s, checked directly. Two explanations remain open and neither
+is confirmed: the backdrop blends with the scene behind it, which would read
+brighter over sky than over a tunnel exactly this way; or `Turbo`'s own
+runtime colour genuinely differs from `Shield`'s and `Autopilot`'s despite the
+loading screen filing all three under one authored fill, since that fill
+being independently authored art settles the *category* rather than that
+every member is byte-identical at runtime. **The loading screen's own fill
+running consistently brighter than every in-race frame** (Missile's red and
+blue, Shield's green, each roughly half) is consistent with either
+explanation too, not a tiebreaker.
+
+`oag_pulse::hud::PICKUP_COLOURS` draws each of the eleven weapons the loading
+screen groups opaque, in the colour `Shield` and `Autopilot` agree on rather
+than an average that would let the `Turbo` anomaly quietly move the number -
+not a claim that the original draws it opaque, but the simplest thing this
+build can draw without picking between two unconfirmed explanations. `Bomb`
+and `Mine` have no frame at all, so they still draw the fallback above.
+Confidence **70** for the green category (two agreeing frames), **60** for
+pink (one frame, `Missile`, standing for all eight members its loading-screen
+category carries). See the constant's own doc comment for the numbers and the
+full account, including an earlier version of this table that extrapolated a
+`Bomb`/`Mine` colour from the loading screen's brightness ratio and was
+retracted the same day once that ratio turned out not to settle even the
+`Turbo` question it was trying to explain.
+
+**Open**: a weapon pad placement that comes up `Bomb` or `Mine`; a second
+frame of any pink weapon besides `Missile` to check against it; and, the one
+that would resolve the `Turbo` question either way, a capture harness that can
+read the pixel actually occluded by the hexagon rather than estimate it from
+a screen-space neighbour.
 
 The forced id `6` was briefly read as evidence that the `1.2` pickup is the
 Turbo. **It is not**: `6` lands on `Shield` or `Autopilot` depending on where

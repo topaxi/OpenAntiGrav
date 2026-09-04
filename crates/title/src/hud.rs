@@ -161,6 +161,7 @@ pub enum Sights {
 /// | [`Self::texture_extension`] | `None` - the layouts name shipped entries | `.gtf` |
 /// | [`Self::always_on`] | seven names | fifteen names |
 /// | [`Self::pickup_backdrop_colour`] | `HudBGColour` | `None` - drawn as authored |
+/// | [`Self::pickup_colours`] | eleven of thirteen weapons | `None` - unmeasured |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudArt {
     /// The extension a layout's `src=` reference takes to become an archive
@@ -219,6 +220,32 @@ pub struct HudArt {
     /// substitution, and applying Pulse's turned its backdrop into the
     /// quarter-alpha smudge an HD race drew until 2026-08-25.
     pub pickup_backdrop_colour: Option<&'static str>,
+    /// A per-weapon backdrop colour that overrides [`Self::pickup_backdrop_colour`]
+    /// for the slots this title has actually measured, or `None` for a title
+    /// that has measured none.
+    ///
+    /// Indexed in `oag_formats::weapons::Weapon::ALL`'s declared order -
+    /// `[Rocket, Missile, Quake, Cannon, Turbo, Shield, Autopilot, Plasma,
+    /// Bomb, Mine, LeachBeam, Repulser, Shuriken]` - rather than carrying that
+    /// type, the same reason this crate is `oag-disc` and nothing heavier per
+    /// its own module doc: the vocabulary lives here, the `Weapon` type and
+    /// the index into it stay in `oag_game::hud`, which already depends on
+    /// `oag-formats` to draw a pickup at all. A slot's own `None` draws
+    /// [`Self::pickup_backdrop_colour`] instead, the same way that field's
+    /// `None` falls back to the layout's own authored colour - two widening
+    /// rings, each optional.
+    ///
+    /// **Why a colour per weapon at all**: `oag_game::hud::pickup_sprites`
+    /// drew every pickup in one placeholder colour until 2026-09-04, because
+    /// the runtime writer that tints `PickupBackground` was unrecovered. It
+    /// still is, but the *picture* is no longer unread - see
+    /// `oag_pulse::hud::PICKUP_COLOURS` for what closed it and the confidence
+    /// split between the three categories.
+    ///
+    /// Values are `0xAARRGGBB`, the same convention every colour in a HUD
+    /// layout is written in, so a reader comparing this table against one
+    /// does not have to convert anything by hand.
+    pub pickup_colours: Option<[Option<u32>; 13]>,
     /// What this title calls each rung of its Zone escalation ladder, or `None`
     /// for a title whose ladder has not been read.
     ///

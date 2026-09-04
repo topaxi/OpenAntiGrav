@@ -106,6 +106,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // answer for a title whose pickup backdrop colour nothing has measured -
     // Pulse's colour substitution is the one that would need evidence.
     pickup_backdrop_colour: None,
+    // No reference frame of this title's own pickup box has been taken.
+    pickup_colours: None,
     // `None`: 2048's Zone HUD shows a class per *band* of zones off
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.

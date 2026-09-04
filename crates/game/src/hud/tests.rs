@@ -347,12 +347,13 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
 }
 
 /// **The backdrop is retinted and the icon is not**, which is the whole
-/// reason a held pickup is legible - see [`oag_pulse::hud::PICKUP_BACKDROP_COLOUR`]. Both
-/// widgets are authored `HudColour1`, which is opaque white, and the art
-/// behind them is a solid white hexagon and a white glyph, so drawing them
-/// as authored is an opaque hexagon with nothing visible on it.
+/// reason a held pickup is legible - see
+/// [`oag_pulse::hud::PICKUP_COLOURS`]. Both widgets are authored
+/// `HudColour1`, which is opaque white, and the art behind them is a solid
+/// white hexagon and a white glyph, so drawing them as authored is an opaque
+/// hexagon with nothing visible on it.
 #[test]
-fn the_pickup_backdrop_is_retinted_and_the_icon_keeps_its_authored_colour() {
+fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_authored_one() {
     use oag_formats::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
@@ -376,10 +377,14 @@ fn the_pickup_backdrop_is_retinted_and_the_icon_keeps_its_authored_colour() {
         drawn[0].color, authored.color,
         "the backdrop must not keep the authored white"
     );
-    // `HudBGColour` is `0x40000000` - a quarter-alpha black - so the
-    // substituted backdrop is dark and mostly transparent.
-    assert_eq!(drawn[0].color[3], 0x40 as f32 / 255.0);
-    assert_eq!(drawn[0].color[0..3], [0.0, 0.0, 0.0]);
+    // `PICKUP_COLOURS`' green, opaque - Turbo is one of the three weapons
+    // that category covers.
+    assert_eq!(
+        drawn[0].color,
+        crate::screen::argb_to_rgba(
+            oag_pulse::hud::PICKUP_COLOURS[Weapon::Turbo as usize].unwrap()
+        )
+    );
     assert_eq!(
         drawn[1].color, icon.color,
         "the icon keeps what the disc authored"
@@ -388,6 +393,29 @@ fn the_pickup_backdrop_is_retinted_and_the_icon_keeps_its_authored_colour() {
     // a second widget.
     assert_eq!(drawn[0].rect, authored.rect);
     assert_eq!(drawn[0].uv, authored.uv);
+}
+
+/// **A weapon `PICKUP_COLOURS` has not measured falls back to
+/// `pickup_backdrop_colour`**, the single quarter-alpha substitute this
+/// build drew for every weapon before 2026-09-04 - see
+/// [`oag_pulse::hud::PICKUP_BACKDROP_COLOUR`]. `Bomb` and `Mine` are that
+/// case today: no weapon pad placement taken came up either, so this table
+/// has no frame to draw them in.
+#[test]
+fn a_weapon_with_no_measured_colour_falls_back_to_the_single_substitute() {
+    use oag_formats::weapons::Weapon;
+    let layout = Layout::from_xml(SAMPLE);
+
+    assert_eq!(
+        oag_pulse::hud::PICKUP_COLOURS[Weapon::Bomb as usize],
+        None,
+        "this test is asserting the fallback path, which only fires when this is None"
+    );
+
+    let drawn = pickup_sprites(&layout, Weapon::Bomb, oag_pulse::hud::ART);
+    // `HudBGColour` is `0x40000000` - a quarter-alpha black.
+    assert_eq!(drawn[0].color[3], 0x40 as f32 / 255.0);
+    assert_eq!(drawn[0].color[0..3], [0.0, 0.0, 0.0]);
 }
 
 #[test]
