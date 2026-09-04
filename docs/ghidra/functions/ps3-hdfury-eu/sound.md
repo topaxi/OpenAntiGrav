@@ -286,11 +286,12 @@ byte var_ref = operand[1];
 byte value = (var_ref < 0) ? sysvar_table[~var_ref] : voice->local_vars[var_ref];  // +0xa4
 byte mode = operand[2];
 byte threshold = operand[3];
-bool keep_going;
-if (mode == 1)      keep_going = (value == threshold);
-else if (mode == 2) keep_going = (value >  threshold);
-else                keep_going = (value <  threshold);   // mode 0
-if (!keep_going) voice->pc += 1;                          // +0xa2, a `short`
+// mode is bounded, not a catch-all else: values other than 0/1/2 skip nothing
+// and fall straight through - re-verified against the live decompile 2026-09-04,
+// which uses `mode == 1`/`mode == 2`/`mode == 0` rather than a bare else.
+if (mode == 1)      { if (value != threshold) voice->pc += 1; }
+else if (mode == 2) { if (value <= threshold) voice->pc += 1; }
+else if (mode == 0) { if (threshold <= value) voice->pc += 1; }
 return 0;
 ```
 

@@ -149,10 +149,10 @@
 0x006274b0	function	Scream_DoGrainPlayChild	82	sound.md
 0x00625988	function	Scream_DoGrainStopChild	78	sound.md
 0x00625fc0	function	Scream_DoGrainBranch	84	sound.md
-0x00623690	function	Scream_DoGrainGuard	84	sound.md
-0x00623770	function	Scream_DoGrainMarker	78	sound.md
-0x006255f8	function	Scream_DoGrainGoto	80	sound.md
-0x00625e88	function	Scream_DoGrainAlternate	80	sound.md
+0x00623690	function	Scream_DoGrainGuard	88	sound.md
+0x00623770	function	Scream_DoGrainMarker	82	sound.md
+0x006255f8	function	Scream_DoGrainGoto	88	sound.md
+0x00625e88	function	Scream_DoGrainAlternate	88	sound.md
 0x00626728	function	Scream_OpKeyOn	90	sound.md
 0x00630310	function	Scream_KeyOnVoice	90	sound.md
 0x00633c80	function	CellMs_QueueVoice	90	sound.md

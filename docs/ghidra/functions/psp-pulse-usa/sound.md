@@ -372,8 +372,22 @@ drives, and it is a straightforward dispatch:
 cmd    = *(u32 *)(cue + 8) + pc * 8;              /* 8-byte commands */
 opcode = *(u8 *)(cmd + 3);
 if (opcode > 0x2c) { error(); return 1; }
-r = (*(code **)0x08ac326c)[opcode](handler, cue);
+r = (*(code **)0x08ac326c)[opcode](handler, cue, cmd);
 ```
+
+**Three arguments, not two** - `handler`/`cue` per the dispatch above, and
+`cmd` itself in `$a2`, verified in the raw disassembly rather than the
+decompile: `move a2,a0` where `a0` was just computed as `cmd` a few
+instructions earlier, in the branch's delay slot before `jalr a3`. Every
+handler this page names below receives its own command's 8 bytes directly,
+which is what makes `Scream_OpAlternate`'s `param_3[0]`/`[1]`/`[2]` (below)
+`cmd + 0`/`+ 1`/`+ 2` - the three operand bytes - rather than something a
+level removed. The `lui a1,0x2c; addiu a1,a1,-0xd94` pair building
+`0x2bf26c` two instructions before the call is an independent, in-code
+confirmation of `g_scream_opcode_table`'s raw address from inside this
+already-analysed function - the same `real = pseudo + 0x08804000` correction
+[below](#four-opcodes-corroborated-against-hd-2026-09-04) needed for the
+table's *entries*, here on the table's own base.
 
 Three things follow. The command stride is **8 bytes**, matching the format
 page. The opcode is the **high byte of the first word**, which is consistent

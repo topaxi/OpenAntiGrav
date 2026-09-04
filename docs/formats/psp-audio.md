@@ -562,14 +562,17 @@ different CPU with no shared analysis between the two sessions that found
 them.
 
 Where the count sits at opposite ends of the operand on the two platforms is
-likely endianness rather than two designs, though this is a lead and not
-traced through: PSP's opcode byte is the word's most-significant byte
-(`*(u8 *)(cmd + 3)` on a little-endian word) and count sits at `cmd + 0`, the
-byte *furthest* from the opcode; if HD's opcode byte is the equivalent
-most-significant byte of a big-endian word at `cmd + 0`, its count at
-`operand[1]` (`cmd + 1`) is the byte *closest* to the opcode - the same
-relative position, read through opposite byte orders, not confirmed by
-tracing HD's own opcode-byte offset this session.
+likely endianness rather than two designs. **PSP's side is traced, not
+assumed**: `Scream_OpAlternate` receives `cmd` itself as its third argument
+(`$a2`, confirmed in `Scream_StepCommandList`'s raw disassembly - see
+[psp-pulse-usa/sound.md](../ghidra/functions/psp-pulse-usa/sound.md#the-command-list-is-a-45-entry-jump-table)),
+so `param_3[0]` really is `cmd + 0`; the opcode byte is `cmd + 3`, the
+word's most-significant byte on this little-endian build, and count sits at
+the byte *furthest* from it. Whether HD's side mirrors this - opcode at the
+equivalent most-significant byte of a big-endian word, count at the byte
+*closest* to it - is not traced: HD's own opcode-byte offset was not
+confirmed this session, so the "same relative position, opposite byte
+orders" reading stays a lead on that half.
 
 An earlier version of this section reported **61 of 87** for a weaker form of
 the same rule. That number came from a scan whose run-length walk did not stop

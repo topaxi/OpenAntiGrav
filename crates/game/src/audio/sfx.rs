@@ -38,9 +38,10 @@
 //!
 //! **Which waveform of a cue sounds.** `.COLLISIONS` binds fifteen impact
 //! samples and the opcode that chooses between them, `0x19`, is decoded on
-//! Wipeout HD's binary (confidence 80, not corroborated on PSP/PS2):
-//! [`Banks::pick`] now matches it - a uniform draw that never repeats the
-//! immediately previous pick for a cue. That is still an approximation
+//! Wipeout HD's binary and corroborated on PSP (confidence 88 both sides;
+//! PS2 grouped with PSP/Pure by operand byte layout, not independently
+//! checked): [`Banks::pick`] now matches it - a uniform draw that never
+//! repeats the immediately previous pick for a cue. That is still an approximation
 //! rather than a full reading, not a stand-in for missing data: the fifteen
 //! alternates *are* the disc's own audio, all of them within a tenth of a
 //! second of each other in length, so playing all fifteen at once - the only

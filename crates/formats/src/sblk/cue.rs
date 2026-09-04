@@ -37,14 +37,19 @@
 //! so they are excluded by the runtime's own gate rather than by a relaxation
 //! invented here. See [`Cue::plays`].
 //!
-//! # What this still does not decide
+//! # What this still returns the whole set for
 //!
 //! **Which** of a cue's waveforms plays. 623 of the 1,282 playable cues bind
 //! exactly one and are unambiguous; `.COLLISIONS` binds fifteen. The opcode
-//! that chooses between them (`0x19`, whose low operand byte equals the key-ons
-//! that follow it in 61 of 87 occurrences and so is *not* a finding) is
-//! unread, along with 42 others. [`Bank::cue_sounds`] therefore returns the
-//! whole set in command order and leaves the choice to the caller.
+//! that chooses between them (`0x19`) is decoded and corroborated on both HD
+//! and PSP - see `docs/ghidra/functions/psp-pulse-usa/sound.md`'s
+//! `Scream_OpAlternate` - and it is a random draw, per play, that never
+//! repeats the immediately previous pick. `oag_game::audio::sfx::Banks::pick`
+//! implements that choice; [`Bank::cue_sounds`] still returns the whole set
+//! in command order, because the decoded opcode is a *runtime* draw, not
+//! something a static WAD parse can resolve to one waveform - the choice
+//! stays the caller's to make, on every play, not this format layer's to
+//! make once.
 
 use super::{Bank, COMMAND_LEN, CUE_LEN, Sound};
 
