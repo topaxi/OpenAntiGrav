@@ -26,15 +26,16 @@
 //! Pulse does, HD keeps two of them elsewhere, see
 //! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
 //! looked at** until [`Cue::Collision`], [`Cue::Absorb`], [`Cue::Shield`],
-//! [`Cue::ShieldActive`], [`Cue::SpeedupPad`] and [`Cue::Disengaging`]'s own
-//! doc comments: Pure's counterparts of `ShipCollisionFx_Trigger`, its
-//! absorb-effect caller, its shield-activate function and the dry-play chain
-//! shared by three more cues each fire the same cue at the same point in the
-//! same gate, corroborated confidence 78-82. That is six cues on one of the
-//! two other titles; firing the remaining three (`Engine`, `Blowup`,
-//! `LockOn`) on Pure and all nine on HD is still a bet that games in one
-//! series with the same cue names and the same middleware fire them at the
-//! same moments. Reasonable, and not a reading; confidence 50, which is
+//! [`Cue::ShieldActive`], [`Cue::SpeedupPad`], [`Cue::Disengaging`] and
+//! [`Cue::Engine`]'s own doc comments: Pure's counterparts of
+//! `ShipCollisionFx_Trigger`, its absorb-effect caller, its shield-activate
+//! function, the dry-play chain shared by two more cues, and its own
+//! engine-flare constructor each fire the same cue at the same point in the
+//! same gate, corroborated confidence 78-82. That is seven cues on one of
+//! the two other titles; firing the remaining two (`Blowup`, `LockOn`) on
+//! Pure and all nine on HD is still a bet that games in one series with the
+//! same cue names and the same middleware fire them at the same moments.
+//! Reasonable, and not a reading; confidence 50, which is
 //! below this project's naming threshold and so is
 //! written down rather than implied.
 //!
@@ -521,6 +522,12 @@ pub enum Cue {
     /// constructor and writes pitch and volume to it every tick;
     /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, confidence 80. The law
     /// is in [`Engine`].
+    ///
+    /// Pure's `ExhaustFlare_Init` opens the same `~ENGINE` voice, and two of
+    /// its tuning constants (the `-1143.0` base pitch, the `0.01` lerp rate)
+    /// match Pulse's bit-for-bit, not just structurally.
+    /// `docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`, confidence 82 -
+    /// the per-tick pitch/volume write itself is unchecked on Pure's side.
     Engine,
     /// The shield, held for as long as it is up.
     ///
