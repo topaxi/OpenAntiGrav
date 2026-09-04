@@ -4,12 +4,13 @@ Split out 2026-09-02 from `hds-bnk-sound-banks-read-and-hd-makes.md`, whose own 
 
 ## Open
 
-- Whether Pure's executable calls the same `Sound_Play`/`Sound_PlayLooping` sites at the same simulation edges Pulse does, for each of the nine cues - Pure has never been opened in Ghidra for this at all.
-- Whether Wipeout HD's PS3 executable does the same. HD's `ShipCollisionFx_Trigger`, `Exhaust_UpdateEngineSound`, `Shield_Activate` and so on are presumably different functions at different addresses in a different binary (PPC64, per-function TOC defect - see `docs/ghidra/functions/ps3-hdfury-eu/memory.md`), not yet located.
-- Whether the *gating* logic matches, not just the call site's existence - e.g. Pulse's `Collision` cue rides the same 0.8-second spark cooldown as the spark effect; if Pure or HD's cooldown differs, playing the sound on Pulse's cadence would be audibly wrong even though the cue itself is right.
+- Whether Pure's executable calls the same `Sound_Play`/`Sound_PlayLooping` sites at the same simulation edges Pulse does, for the remaining **eight** cues - `Collision` is now confirmed (2026-09-04, see `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`'s `Sound_Play` section), the rest are still unopened.
+- Whether Wipeout HD's PS3 executable does the same, for all nine cues. HD's `ShipCollisionFx_Trigger`, `Exhaust_UpdateEngineSound`, `Shield_Activate` and so on are presumably different functions at different addresses in a different binary (PPC64, per-function TOC defect - see `docs/ghidra/functions/ps3-hdfury-eu/memory.md`), not yet located.
+- Whether the *gating* logic matches, not just the call site's existence - confirmed for `Collision` on Pure (same 0.8-second cooldown, bit for bit), still open for the other eight cues and for HD entirely.
 
 ## Next Steps
 
-- Pick one cue - `Collision` is the best first target, since `docs/ghidra/functions/psp-pulse-usa/contact-response.md` already gives a precise trigger shape ("once per surviving kind-0/1 call") to look for an analogue of - and open Wipeout Pure's PSP executable in Ghidra to find its `ShipCollisionFx_Trigger`-equivalent, or whatever calls `Sound_Play(..., "COLLISIONS", ...)` there.
-- If Pure corroborates, that alone raises the finding past confidence 50 (a second binary agreeing, per the confidence rubric) without needing HD at all; HD's PPC64/TOC binary is the harder half and can follow once the PSP-side pattern (Pure vs Pulse) is established.
-- `oag-wad sounds <archive>` lists the cues each bank actually carries per title, useful for confirming a candidate cue name exists on Pure/HD before spending time hunting its trigger.
+- Pick the next cue - `Absorb` is a reasonable second target, since `ShipCollisionFx_Trigger`'s `kind == 1` (Pure) / `kind == 2` (Pulse) branch already spawns `WO_WEAPON_ABSORB` in both binaries and Pulse's own `FUN_08840640` (contact-response.md) plays `"ABSORB"` right next to it - or work down the `Cue` list in `crates/game/src/audio/sfx.rs` in whatever order the module doc's citations make cheapest to chase.
+- `Collision`'s corroboration was decompilation-only (confidence 82, capped by the `85`+ band needing a runtime trace); a PPSSPP capture of `ShipCollisionFx_Trigger` on Pure, the way `docs/reverse-engineering/ppsspp-debugger.md` already does for Pulse, would raise it past that ceiling if anyone picks this thread up for verification instead of coverage.
+- `oag-wad sounds <archive>` lists the cues each bank actually carries per title, useful for confirming a candidate cue name exists on Pure/HD before spending time hunting its trigger - this is how `Collision`'s `.COLLISIONS` cue was confirmed present in Pure's `SHIP_CL`/`SHIP_ZM` banks before the Ghidra read.
+- HD's PPC64/TOC binary is still the harder half and can follow once more of the PSP-side pattern (Pure vs Pulse) is established, or be picked up independently.
