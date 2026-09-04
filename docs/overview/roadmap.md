@@ -689,8 +689,16 @@ seen from the authoring side.
       past its radius is *not started* rather than started quiet. See
       [positional-audio.md](../ghidra/functions/psp-pulse-usa/positional-audio.md)
       and `oag_audio::spatial`.
-      **What is still not placed**: the three `.vex` classes above - a track's
-      own authored sound sources, still unread - the emitter cone (recovered,
+      **The three classes above are read now (2026-09-04)** and share one
+      80-byte payload: a bank label, a cue name, a radius stored both as an
+      `f32` and as a one-key animation curve, and - on a `soundcone` - two cone
+      angles. Twelve circuits author **1,298** emitters between them, each
+      placed by its parent transform chain, and 1,277 of them name a cue that
+      really is in the bank they name. `speaker` `0x3cc` has a registered class
+      and no instance on the disc at all. See
+      [track-sound-emitters.md](../ghidra/functions/psp-pulse-usa/track-sound-emitters.md);
+      `oag_formats::sound_emitters` parses them and **nothing plays them yet**.
+      **What is still not placed**: the emitter cone (recovered,
       defaulted off, and nothing found turns it on), the doppler term
       (`-(dd/dt) * scale * 1536`, read but in the unrecovered pitch unit), and
       `shieldactive`, whose call site plays dry at full volume.
