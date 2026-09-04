@@ -131,6 +131,9 @@ around `0x006bxxxx`:
 | `0x002d5710` | `RenderManager_Construct` | 76 |
 | `0x002d6300` | `RenderManager_FlushDrawQueue` | 90 |
 | `0x002d6a78` | `RenderManager_PrepareEye_q` | 55 |
+| `0x002d4b58` | `RenderManager_CompareQueueKeys` | 82 |
+| `0x00864cb8` | `g_FrontendRootVtable` (data) | 84 |
+| `0x001635a0` | `FrontendRoot_ApplyLayerMatrix_q` | 65 |
 | `0x002bebb0` | `MeshImporter_Construct` | 78 |
 | `0x00650330` | `Gcm_Init` | 88 |
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
@@ -266,42 +269,224 @@ instance itself as `param_1` - confirmed by field agreement, not guessed:
 1. Zeroes the two matrix-stack depth counters at `+0x620`/`+0x624` - the same
    counters the constructor sets to zero at startup, so this is a per-frame
    stack reset, not a one-time initialisation.
-2. Walks an array at `+0x630` of `{object, extra}` 8-byte pairs, index `0` to
-   the count held at `+0x44b0`, calling `(*object->vtable[0x1c])(object,
+2. **Sorts** the array at `+0x630` - see the correction below; this step was
+   missed on first read.
+3. Walks the (now sorted) array at `+0x630` of `{object, extra}` 8-byte pairs,
+   index `0` to the count held at `+0x44b0`, calling `(*object->vtable[0x1c])(object,
    render_manager, extra)` on each - a virtual dispatch through the queued
    object's own vtable, not RenderManager's.
-3. Zeroes `+0x44b0` at the end, so the same array at `+0x630` is empty again
+4. Zeroes `+0x44b0` at the end, so the same array at `+0x630` is empty again
    for the next frame's `Prepare`/`Flush` pair. Its capacity is not
    established - nothing read here bounds the allocation, only the live
    count.
 
-**The walk is strict index order, `0` to count, with no comparison against any
-per-entry value anywhere in the loop** - no distance term, no material/layer
-read, no branch keyed on the entry's contents at all. Whatever populates
-`+0x630` decides the draw order; this function only ever plays it back in
-insertion order.
+**2026-09-04 correction: the walk is strict index order with no
+comparison, but the walk is not the whole function.** The paragraph this
+replaces read the dispatch *loop* correctly - no distance term, no
+material/layer read, no branch keyed on the entry's contents inside the
+loop itself - and wrongly generalised that to the function as a whole.
+`RenderManager_FlushDrawQueue` opens by loading a function-pointer OPD
+(`PTR_PTR_008b3d94`, resolved by direct memory read as `{0x002d4b58,
+0x008ad4d8}` - a real OPD pair, not a decompiler artefact) and calling
+`FUN_00677088(param_1 + 0x630, count@+0x44b0, 8, comparator)`, where
+`FUN_00677088` is a one-line trampoline whose body the decompiler already
+resolves to a literal `qsort(...)` call. **`0x002d4b58` is
+`RenderManager_CompareQueueKeys`**: `return *(int*)(a+4) - *(int*)(b+4);` -
+an ascending sort on the entry's `+0x04` word, four instructions, the exact
+comparator shape as Pulse's `Gfx_CompareQueueKeys`
+([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md)) on the identical `{item,
+key}` 8-byte layout. **This happens before the dispatch loop runs**, so
+"whatever populates `+0x630` decides the draw order" is wrong: the sort
+does, same as Pulse. What still isn't established is what values the `extra`
+word holds going into the sort (layer+depth, like Pulse, or something
+else) - that question moves to the enqueue site, unchanged from before.
+The comparator's own OPD carries TOC `0x008ad4d8`, the module-A TOC Ghidra
+already assumes correctly binary-wide - `0x002d4b58` sits below this page's
+`0x0032d5e0` module-A/B boundary, so its decompile is trustworthy at face
+value with no [`ps3-toc.py`](memory.md#every-function-has-its-own-toc-and-ghidra-uses-one-for-all-of-them)
+correction needed.
 
 **90**, runtime-verified 2026-08-26 (below): a live breakpoint confirmed `r3`
 at entry is the `RenderManager` instance and that `+0x44b0`/`+0x630` hold a
 real, populated draw queue during an actual race, not just field-offset
 agreement with the constructor. Capped short of the rubric's 94 ceiling for a
 single-binary trace because the breakpoint confirms the *dispatch* loop's
-shape and data, not every claim on this page - the enqueue site itself is
-still unread. `PrepareEye` is unaffected by that trace and stays where it
+shape and data, not every claim on this page - the enqueue site itself was
+still unread at the time of this trace (it has since been read separately,
+below). `PrepareEye` is unaffected by that trace and stays where it
 was (**55**, `_q`): it does per-eye resolution/aspect bookkeeping (writes
 `+0x104`/`+0x108`, the same pair `RenderManager_Construct` seeds from a
 sub-720/720-and-above split) and conditionally calls `0x0027cd60`, but nothing
 pins its exact purpose beyond "runs once before each eye's draws".
 
-**What this does not establish**: where `+0x630` gets populated. No `stw`
-with a literal `0x630` offset appears anywhere in the render layer's address
-range - the enqueue site, if it stores through a computed offset rather than
-a literal one, needs a different search (register-indexed stores, or working
-backward from what implements each queued class's vtable slot `0x1c`). So this
-narrows the open question to "no sort in the dispatch/flush step, on whatever
-list end up in this array" - it does not yet show the array holds every
-transparent draw, or that no sort happens on the *enqueue* side before an
-entry lands in it.
+**What this did not establish, and does now (below): where `+0x630` gets
+populated.** No `stw` with a literal `0x630` offset appears anywhere in the
+*render layer's own address range* - correctly so, per the enqueue idiom
+below, since every confirmed call site lives outside that range. The open
+question this left - "no sort in the dispatch/flush step, on whatever list
+ends up in this array" not yet showing whether the array holds every
+transparent draw, or whether a sort happens on the enqueue side before an
+entry lands in it - is answered by the idiom's own key computation: yes, a
+sort-relevant term (the depth bits) is computed at enqueue time, before the
+entry ever reaches the array this section describes.
+
+### The enqueue idiom, and what the `+0x04` key encodes
+
+**2026-09-04.** Found by getting xrefs to `RenderManager_CreateInstance`'s own
+singleton slot (`render_globals + 0x14`, itself reached through
+`PTR_DAT_008b3d00`) and, separately, by searching the whole binary (not just
+the render layer's address range) for the literal immediates `0x630` and
+`0x44b0` together - the enqueue call is not a single shared function the way
+Pulse's `Gfx_Enqueue` is. It is an **inlined idiom repeated at every producer
+site**, one instantiation per caller, which is exactly why no literal `0x630`
+store was ever found inside the render layer's own `0x00279xxx`-`0x002ecxxx`
+range: none of these sites live there.
+
+Confirmed on the same object `RenderManager_Construct` builds, not a
+coincidentally-shaped struct: two of the five sites below
+(`0x000ba268`, `0x000a3c38`) read `instance+0x624` and index into
+`instance + count*0x40 + 0x3a0` - exactly the constructor's documented
+"`0x40`-byte block copies into arrays at `+0x120` and `+0x3a0` indexed by
+counters at `+0x620` and `+0x624`" (above).
+
+The idiom, read identically at five independent call sites, takes one of two
+observed forms. Four sites carry only a per-caller layer constant, defaulting
+to zero depth unless a shared per-instance field overrides it:
+
+```c
+uint key = LAYER << 20;                   // a per-caller 12-bit constant: 0x300, 0x4d0, 0x570 or 0x5b0
+if (instance->depth_override != 0xffffffff)  // instance+0x11c; 0xffffffff is "no override"
+    key = (instance->depth_override & 0xfffff) | (LAYER << 20);
+instance->queue[instance->count].key  = key;   // entry+0x04, at instance+0x630+count*8+4
+instance->queue[instance->count].item = self;  // entry+0x00
+instance->count += 1;                          // instance+0x44b0
+```
+
+(`0x00084e08` - twice, back to back, under layers `0x570` and `0x5b0` -
+`0x000a3c38`, `0x000ba268`, all with layer `0x300`.)
+
+The fifth site, `0x0012fba8`, computes its **own** depth term instead of
+defaulting to zero, and only lets `instance+0x11c` override that when
+present - direct evidence for "back-to-front", not just a name inherited
+from Pulse's wording:
+
+```c
+float distance = /* a vector transform against a per-object matrix, then */ ...;
+uint key = 0x4d300000;                                  // layer 0x4d3, zero depth by default
+if (distance < DAT_008aa60c) {
+    distance *= DAT_008aa600;
+    if (distance <= DAT_008aa604)
+        key = (~(uint)(long long)distance & 0xfffff) | 0x4d300000;  // complemented: farther -> smaller key
+}
+if (instance->depth_override != 0xffffffff)              // same override field as the other four sites
+    key = (instance->depth_override & 0xfffff) | (key & 0xfff00000);
+```
+
+The bitwise complement (`~distance & 0xfffff`) is the mechanism: a larger
+raw distance produces a *smaller* depth field, so the ascending `qsort`
+(above) draws farther objects first - back-to-front, read directly rather
+than assumed from Pulse's naming.
+
+**This is Pulse's exact key layout - twelve bits of layer over twenty bits of
+back-to-front depth** ([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md),
+`Gfx_CompareQueueKeys`/`Gfx_Enqueue`), not just a similarly-shaped mechanism:
+the bit widths match (`& 0xfffff` is 20 bits; the layer constants observed -
+`0x300`, `0x4d0`, `0x4d3`, `0x570`, `0x5b0` - all sit in bits 20-31, a 12-bit
+field) and the sentinel-for-no-override idiom (`0xffffffff`) matches Pulse's
+own "a mesh batch set enqueues with its bare layer and no depth term at all"
+default for the four sites that don't compute their own depth. **One layer
+value overlaps Pulse's own**: `0x4d0` (`0x00109028`) shares its top byte
+with `ExhaustFlare_Submit`'s key, `0x4d000000`. Pulse's own census
+([above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order))
+shows a layer is a coarse family bucket, not a per-effect identity - 21,055
+mesh nodes split across only two values - so this is read as a bucket
+match, not a claim the two titles enqueue the identical effect: `0x00109028`
+attributes to `MagstripWake.cpp` (below), and a magstrip's glowing wake
+trail sharing an additive-glow bucket with an engine's exhaust flare is an
+expected pairing, not a coincidence needing a stronger explanation.
+
+`instance+0x11c` plays the same role in this key layout that
+`display+0x1180` does in Pulse's `Gfx_Enqueue`
+([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md#gfx_enqueue) - same
+"replaces the key's low twenty bits, keeps the top twelve" shape, same
+`0xffffffff` sentinel) - a per-frame depth override neither codebase has
+identified the writer of. Same open question, one title each, not two
+unrelated ones; both are tracked as still-open in the handover thread this
+finding belongs to, not repeated here.
+
+**82** - five independent sites decompiling to the same key-construction
+shape (four identical, one a computed-depth variant that still shares the
+override field and the bit layout), matched bit-for-bit against Pulse's
+already-confirmed scheme. Capped by this page's static-reading ceiling (84);
+would be higher with a runtime trace confirming a queued entry's key against
+its visible draw order, which hasn't been attempted.
+
+None of the five call sites is named - each is a large, otherwise-unread
+function - but `scripts/ps3-toc.py map` (2026-09-04) narrows which
+translation unit three of the five belong to. Byte-distance-to-the-nearest-
+attributed-function is a weak signal on its own (a translation unit's *code*
+and an unrelated one's can interleave); what's read here instead is each
+site's own TOC-relative global-data slots against the confirmed
+constructor's - the linker groups a translation unit's slots contiguously,
+so a shared or immediately-adjacent slot is structural evidence, not
+proximity:
+
+- `0x00109028` reads `PTR_DAT_008a98c0`, which falls **inside**
+  `MagstripWake.cpp`'s own slot range (`008a98b0`-`008a98dc`, confirmed
+  directly via `PTR_s_MagstripWake_cpp_008a98d8`) - between its own slots,
+  not merely adjacent, the strongest of the three. **`MagstripWake.cpp`**,
+  not the more obvious first-guess `DebrisManager.cpp` its code address
+  sits closer to; code address and TOC-slot address don't have to agree;
+  here they didn't.
+- `0x0012fba8` (the site that computes its own depth) reads
+  `008aa5fc`-`008aa60c`, immediately after `BombManager_Construct`'s own
+  slots (`008aa570`-`008aa5e4`, confirmed directly via
+  `PTR_s_BombManager_cpp_008aa5dc`) - one contiguous run, no gap.
+  **`BombManager.cpp`** - which itself constructs `DetonatorBomb`
+  (`BombManager_Construct` calls `DetonatorBomb_Construct` directly), tying
+  this to the same `DetonatorBomb.cpp` the `SortRoot` investigation named,
+  though `DetonatorBomb.cpp`'s own attributed range (`0x00134b48`) is a
+  separate file, well past this site - a bomb's blast computing its own
+  back-to-front depth fits `BombManager.cpp` owning the effect, not
+  necessarily `DetonatorBomb` itself.
+- `0x000a3c38` (the matrix-stack-push site) reads `008a7cc4`-`008a7d04`,
+  immediately after `Camera.cpp`'s own confirmed range
+  (`008a7c78`-`008a7cc0`, via `PTR_s_Camera_cpp_008a7cb4`) - one contiguous
+  run. **`Camera.cpp`.** (It also reads `PTR_g_PhysicsHalfStep_008a7cb8`,
+  the same slot `Camera.cpp`'s constructor reads for that name - consistent
+  with the same TU, but `g_PhysicsHalfStep` is a game-wide global reached
+  through a per-TU slot, so this corroborates rather than proves anything
+  past the contiguous-range evidence on its own.)
+- The other two do not resolve as cleanly. `0x000ba268`'s slots
+  (`008a82a4`-`008a82b4`) fall in the gap *between* `WorldManager.cpp`'s own
+  range (ending `008a8274`) and `AIManager.cpp`'s (starting `008a82c0`) -
+  neither attributed file covers it, which is itself informative about
+  `map`'s own coverage: a third translation unit with no constructor call
+  of its own sits silently in that gap. `0x00084e08`'s slots
+  (`008a75b8`-`008a76bc`) overlap the same broad neighbourhood as both
+  `Demo_RaceManager.cpp`'s and `HUD.cpp`'s without landing inside or
+  adjacent to either specifically, and its own content (a zone-list lookup
+  against `RaceManager_GetInstance()` and a ratio between two fields of a
+  zone record) doesn't disambiguate which file it belongs to - left
+  unattributed.
+
+Below 50 confidence for what *class* any of the five draws, file-level
+attribution or not - the enqueue tail itself is read directly and is not in
+question. **Still open**: where `instance+0x11c` gets an actual value - no
+call site among the five computes one, it is only ever read. One real
+constraint, found and worth recording so the next pass doesn't repeat the
+search: `RenderManager_Construct` and `_ConstructComplete` both initialise
+it to the `0xffffffff` sentinel itself (`li r0,-1` immediately precedes
+`stw r0, 0x11c(r30)` in both, checked by disassembly rather than assumed
+from the store alone), so at construction the override starts *disabled*,
+the expected direction - something still has to write an actual depth
+value to *enable* it, and nothing found so far does. A blind binary-wide
+search for `stw ...,0x11c(...)` is not the way to find that writer -
+`0x11c` is a near-universal stack-frame local-variable offset, and the
+search returns hundreds of unrelated hits on `r1` (the stack pointer) for
+one relevant hit on an object register; the same shape as the `0x00109028`
+dead end
+below, recorded so it isn't retried the same way.
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
@@ -328,11 +513,21 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   array. Their `extra` fields also rise monotonically, in steps of exactly
   **2** (`0x58002a90, 92, 94, 96, 98, 9a`).
 - **Both families' `extra` sequences are sorted ascending with no
-  exceptions.** That is what plain sequential iteration over a backing
-  array produces; a spatial or material sort would not reliably come out
-  monotonic entry after entry across two unrelated object families in the
-  same frame. This is the strongest evidence on this page against a sort
-  existing anywhere upstream of the dispatch loop, not just inside it.
+  exceptions.** **2026-09-04: reread after finding
+  `RenderManager_CompareQueueKeys` (above) - this reads as evidence *for* a
+  sort, not against one.** Family 1's keys (`82`-`109`) and family 2's
+  (`0x58002a90`-`0x58002a9a`) sit three orders of magnitude apart, and the
+  small-key family occupies the low indices while the large-key family
+  follows - global ascending order across two unrelated object families is
+  exactly what a completed ascending sort on this key produces, not what
+  independent per-family enqueue order would be expected to coincide into.
+  Whether the breakpoint (at `RenderManager_FlushDrawQueue`'s entry,
+  `0x002d6300`) caught the array before or after its own internal `qsort`
+  call is not established either way from this trace alone, and does not
+  need to be: the sort's existence is read straight off the decompile
+  (above), not inferred from this data. The claim these two bullets
+  supported - "no sort exists anywhere upstream of the dispatch loop" - is
+  retracted regardless of which side of the `qsort` call this trace caught.
 - Neither vtable's constructors sit in the render layer's own address range
   (`0x00864cb8`'s at `0x0016xxxx`/`0x0046xxxx`, `0x00867e58`'s at
   `0x0020xxxx`/`0x005ebxxx`) - both outside `0x00279xxx`-`0x002ecxxx`. Below
@@ -342,7 +537,65 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   ([`SortRoot`](#what-was-deliberately-not-read),
   [`DetonatorBomb`](detonator-bomb.md)) that objects queue themselves with
   the render layer from gameplay-side code rather than the render layer
-  owning them.
+  owning them. **2026-09-04, confirmed as identity, not merely related**:
+  a direct memory read of `0x008ab774` (the slot `FrontendRoot_Construct`,
+  `0x00164270`, writes into its own object with `*param_1 =
+  PTR_PTR_008ab774`) shows its own first word **is** `0x00864cb8` - the
+  earlier "related through at least one indirection, not established as
+  identity" hedge is resolved: this queued vtable *is* `FrontendRoot`'s.
+  **84** - a raw read of static data, no TOC or decompiler trust involved.
+
+  Its own vtable slot `0x1c` (the callback `RenderManager_FlushDrawQueue`
+  dispatches, resolved through a further OPD indirection to `0x001635a0`)
+  is not HUD drawing at all: it switches on the entry's own key
+  (`param_3`, the same "extra" word the enqueue idiom writes) across five
+  layer constants - `0x52`, `0x57`, `0x60`, `0x65`, `0x6a` (twelve-bit
+  values, `>> 20`) - collapsing to **three code paths**: `0x52`/`0x65`
+  share one (`0x13` apart), `0x57`/`0x6a` share another (also `0x13`
+  apart), and `0x60` has its own. **All three write into both of
+  `RenderManager`'s matrix-stack arrays**, `param_2 + *(param_2+0x624)*0x40
+  + 0x3a0` and `param_2 + *(param_2+0x620)*0x40 + 0x120` - the exact fields
+  and exact `0x40`-byte stride `RenderManager_Construct` already
+  established, but **only at the current index**: no store to `+0x620` or
+  `+0x624` appears anywhere in this function, both are read-only here, so
+  this replaces the top-of-stack matrix rather than pushing a new one.
+
+  **An unexplained numeric correspondence, recorded rather than leaned
+  on**: the 2026-08-26 trace's ten observed `extra` values for the *other*
+  queued family (`82, 86, 87, 91, 96, 100, 101, 105, 106, 109` - decimal)
+  are `0x52, 0x56, 0x57, 0x5b, 0x60, 0x64, 0x65, 0x69, 0x6a, 0x6d` in hex,
+  and this switch's five constants all appear in that set (alternating
+  positions, not "the low five" - a slip an earlier pass here made).
+  **This is not read as corroboration**: `FrontendRoot`'s own enqueue site
+  was never found among the five in the idiom above, so there is no
+  evidence it writes its key the same way (`layer << 20 | depth`) rather
+  than some other encoding, and the trace's *other* family in the same
+  capture was recorded as full 32-bit words (`0x58002a90`, not a
+  right-shifted byte) - one capture recording two families two different
+  ways is exactly the thing that would need explaining first. Whether
+  `FrontendRoot`'s keys are these five values directly, or `layer << 20`
+  values that happen to share these bytes, is the open question a located
+  enqueue site would settle. The unhandled values aren't random either:
+  four of the five handled constants have a companion exactly `+4` that
+  falls through this switch as a no-op (`0x56`, `0x5b`, `0x64`, `0x69`;
+  `0x6a`'s is `0x6d`, `+3`) - a second structured pattern alongside the
+  `0x13`-apart pairing above, recorded as a lead rather than explained.
+
+  Read as a **layer-boundary matrix swap, not a push**: `FrontendRoot`
+  enqueues itself once per layer transition so that, when the sorted queue
+  reaches that point, its own "draw" callback fires and replaces whatever
+  matrix is currently at the top of the stack with the one the *next*
+  layer's real draws need (e.g. an orthographic pass after a perspective
+  one) - a transform-stack marker riding the same queue, not a HUD element
+  drawing itself. **65**, `_q`: the mechanism (write into the confirmed
+  matrix-stack arrays, keyed by layer) is read directly; the purpose (why a
+  swap specifically, and which layer needs which matrix) is inference, not
+  read. Named `FrontendRoot_ApplyLayerMatrix_q` (`0x001635a0`) accordingly.
+  **What this does not establish**: whether anything else in the queue draws a
+  HUD element - the second live-observed object family (`0x00867e58`) is
+  still unidentified, and the 2026-08-26 trace inspected 16 of that
+  frame's 118 entries, so the `oag_render::mesh::rcs`/`LAYER_DEFAULT`
+  question this lead was chasing narrows, it doesn't close.
 - A `Z2` (write watchpoint) armed on `instance+0x630` to try to catch the
   enqueue site's own PC got back an **empty reply**, not `OK` - RPCS3's GDB
   stub does not implement write watchpoints on this build. Recorded because
@@ -2445,16 +2698,19 @@ The whole table, in file order:
   inline command-buffer writing and finding it needs a search for RSX method
   constants inside whatever implements vtable slot `0x1c` for each queued
   class, not a call graph.
-- **Where `RenderManager+0x630` gets populated.** The dispatch/flush loop
-  only ever plays the array back in insertion order, and a live read of it
-  mid-race is now good (not certain) evidence that order is plain sequential
-  submission rather than a hidden sort - [see
-  above](#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support).
-  But nothing yet reads the enqueue site itself: no literal `0x630` store
-  exists anywhere in the render layer's address range, and a `Z2` write
-  watchpoint on the live instance came back unsupported by this RPCS3 GDB
-  stub build (empty reply), so the enqueue site needs bracketing or working
-  backward from an identified queued class rather than trapping the write.
+- **Where `RenderManager+0x630` gets populated.** **2026-09-04: answered -
+  see [the enqueue idiom](#the-enqueue-idiom-and-what-the-0x04-key-encodes)
+  above.** The "plain sequential submission, not a hidden sort" reading two
+  bullets up is retracted for the same reason: `RenderManager_FlushDrawQueue`
+  calls `qsort` on the array via `RenderManager_CompareQueueKeys` before the
+  dispatch loop runs, and the entry's `+0x04` key is twelve bits of layer over
+  twenty of back-to-front depth, Pulse's exact scheme, written by an idiom
+  inlined at every producer rather than a single shared function - which is
+  also why no literal `0x630` store was ever found *inside the render
+  layer's own address range*: none of the five confirmed call sites sit
+  there. What's still open is which class each producer call site belongs
+  to (below 50, unnamed) and where the depth input (`instance+0x11c`) itself
+  gets computed.
 - **What the two live-observed queued object classes are.** One vtable at
   `0x00864cb8`, one at `0x00867e58` - see the runtime section above for the
   constructor addresses. Neither sits in the render layer's own address

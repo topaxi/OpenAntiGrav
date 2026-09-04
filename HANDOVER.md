@@ -924,11 +924,23 @@ further landed in `DetonatorBomb.cpp` - a bomb weapon's constructor, now named
 ([`detonator-bomb.md`](docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)) -
 tied to `RaceManager_GetInstance()`. `SortRoot`'s only located use is gameplay
 code two hops from the render layer, not the "draw-order root" the table entry
-guessed; treat that guess as refuted, not merely unconfirmed. See
-[renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#what-was-deliberately-not-read)
-and [the handover thread](handover/hds-see-through-surfaces-draw-with-the-files.md) -
-the render draw-order question needs a fresh lead (RSX method constants in
-the render layer's own address range), not more of this one; and -
+guessed; treat that guess as refuted, not merely unconfirmed. **The render
+draw-order question itself is now answered anyway, 2026-09-04, and not via the
+RSX-method-constant search this entry used to point at**: rereading
+`RenderManager_FlushDrawQueue` directly found the `qsort` call the earlier
+pass missed, with a comparator (`RenderManager_CompareQueueKeys`, `0x002d4b58`)
+byte-identical in shape to Pulse's `Gfx_CompareQueueKeys` - same `{item, key}`
+layout, same ascending `a->key - b->key` on `+0x04`. See
+[renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)
+and [the handover thread](handover/pulses-draw-order-is-recovered-and-it-is.md).
+**What HD's `+0x04` key encodes is answered too, same day**: an enqueue
+idiom inlined at five confirmed producer call sites, twelve bits of layer
+over twenty of back-to-front depth - Pulse's exact split, one layer constant
+(`0x4d0`) even matching Pulse's own `ExhaustFlare_Submit` key byte for byte.
+See [renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes).
+What still isn't established is which class each of the five sites belongs
+to, and where the per-instance depth-override field they all read
+(`instance+0x11c`) gets written - and -
 **now closed** - where the engine-owned shader
 programs' microcode lives: 124 `SHO` blocks linked into `EBOOT.elf` against
 exactly 124 registered names, same container as a `.rcsmaterial`. Two things
