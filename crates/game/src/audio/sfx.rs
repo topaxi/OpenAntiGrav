@@ -24,12 +24,17 @@
 //! Every trigger below was read out of a **PSP Wipeout Pulse** executable.
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
-//! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch has ever been
-//! looked at**. Firing a Pulse-recovered edge on those titles is a bet that
-//! games in one series with the same cue names and the same middleware fire
-//! them at the same moments. Reasonable, and not a reading; confidence 50,
-//! which is below this project's naming threshold and so is written down
-//! rather than implied.
+//! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
+//! looked at** until each `Cue` variant's own doc comment started citing a
+//! Pure trigger too: eight of the nine now have one, each independently
+//! decompiled and structurally corroborated against its Pulse counterpart,
+//! confidence 78-82. Only [`Cue::Blowup`] is still unconfirmed on Pure - see
+//! its own doc comment - and all nine are still unconfirmed on HD, which is
+//! still a bet that games in one series with the same cue names and the same
+//! middleware fire them at the same moments. Reasonable, and not a reading;
+//! confidence 50, which is
+//! below this project's naming threshold and so is
+//! written down rather than implied.
 //!
 //! # Two things here are honest placeholders, and both are load-bearing
 //!
@@ -475,6 +480,11 @@ pub enum Cue {
     /// so this fires on exactly the edge `oag_game::race::Race::test_speedup_pads`
     /// already arms the flare on. `docs/ghidra/functions/psp-pulse-usa/pads.md`,
     /// confidence 88.
+    ///
+    /// Pure's `FUN_0886b548` is the same two-branch (positional/dry)
+    /// dispatcher in one function, firing the same `SPEEDUPPAD` on either
+    /// branch. `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`,
+    /// confidence 78.
     SpeedupPad,
     /// Hull against wall or track.
     ///
@@ -482,6 +492,13 @@ pub enum Cue {
     /// kind-0/1 call" - that is, once per contact that gets past the 0.8-second
     /// spark cooldown - so it rides the same gate the collision sparks do.
     /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, confidence 85.
+    ///
+    /// Pure's own `ShipCollisionFx_Trigger` (`0x0888e340`) does the same thing:
+    /// same `.COLLISIONS` cue (confirmed present in its `SHIP_CL`/`SHIP_ZM`
+    /// banks), same point in the same 0.8-second cooldown gate.
+    /// `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
+    /// confidence 82 - the only one of the nine cues checked on a second
+    /// title so far; the module doc's confidence-50 bet still covers the rest.
     Collision,
     /// A contact a raised shield absorbed.
     ///
@@ -489,6 +506,12 @@ pub enum Cue {
     /// `ABSORB` sound once" before staggering its ten spark instances. Same
     /// page. This is the sound of the contact the shield *ate*, which is why it
     /// fires exactly where the sparks are suppressed.
+    ///
+    /// Pure's own counterpart (`FUN_08925e20`) does the same thing - one
+    /// `Sound_Play` of the same undotted `ABSORB`, then a stagger loop into
+    /// `ShipCollisionFx_Trigger` - with one real difference: the loop runs
+    /// eight times, not ten. `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
+    /// confidence 80.
     Absorb,
     /// The engine, held for as long as the craft is running.
     ///
@@ -496,6 +519,12 @@ pub enum Cue {
     /// constructor and writes pitch and volume to it every tick;
     /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, confidence 80. The law
     /// is in [`Engine`].
+    ///
+    /// Pure's `ExhaustFlare_Init` opens the same `~ENGINE` voice, and two of
+    /// its tuning constants (the `-1143.0` base pitch, the `0.01` lerp rate)
+    /// match Pulse's bit-for-bit, not just structurally.
+    /// `docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`, confidence 82 -
+    /// the per-tick pitch/volume write itself is unchecked on Pure's side.
     Engine,
     /// The shield, held for as long as it is up.
     ///
@@ -504,6 +533,11 @@ pub enum Cue {
     /// keeping the handle - so it runs for the pickup's duration and is
     /// released when the shield drops.
     /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    ///
+    /// Pure's `FUN_0892425c` fires the same `~SHIELD` at the same point in the
+    /// same two-cue order (after `ShieldActive`, below), with a matching
+    /// handle-out-slot call shape. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
+    /// confidence 80.
     Shield,
     /// The announcer, on the same activation.
     ///
@@ -511,6 +545,12 @@ pub enum Cue {
     /// `Sound_Play(entity, ..., "shieldactive", 0x400, 0)`. It lives in
     /// `speech.bnk` rather than `weapons.bnk`, which is what says it is a voice
     /// line and not an effect.
+    ///
+    /// Pure's counterpart fires the same undotted `shieldactive` at the same
+    /// volume (`0x400`), first of the pair - but through a deeper call chain
+    /// than Pulse's flat one-hop dry helper, unread past confirming it looks
+    /// like sound-engine code. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
+    /// confidence 80.
     ShieldActive,
     /// The announcer, one second before an Autopilot pickup lets go.
     ///
@@ -525,6 +565,11 @@ pub enum Cue {
     /// in `hud.bnk` is a held loop the handler *stops* and no located code
     /// starts, and `autopilot_eng` sits beside this one in `speech.bnk` with no
     /// call site at all. An effect whose trigger is not recovered stays silent.
+    ///
+    /// Pure's `FUN_0884c794` fires the same undotted `disengaging` through the
+    /// same dry chain `ShieldActive` uses, at the same volume.
+    /// `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`, confidence 78 -
+    /// the countdown threshold itself is unread on Pure's side.
     Disengaging,
     /// The player's own craft blowing up.
     ///
@@ -540,6 +585,13 @@ pub enum Cue {
     /// **An opponent's destruction plays nothing here**, and that is the
     /// reading rather than a gap in it - whatever an opponent's explosion
     /// sounds like comes from somewhere this pass did not find.
+    ///
+    /// **The one cue of nine with no confirmed Pure trigger.** The `~BLOWUP`
+    /// string exists in Pure's executable and the cue exists on its disc,
+    /// but its call site was not found - six search methods that found every
+    /// other cue this thread chased all came up empty here.
+    /// `docs/ghidra/functions/psp-pure-usa/blowup-sound-open.md` records
+    /// what was tried, so a future pass does not repeat it.
     Blowup,
     /// The lock-on reticle, seeking and then locked.
     ///
@@ -574,6 +626,12 @@ pub enum Cue {
     /// recover either way. If the two turn out to be the other way round, the
     /// seeking blip and the lock chime are swapped and nothing else changes.
     /// `--sound` writes a WAV and settles it by ear.
+    ///
+    /// Pure's own `HudSight_UpdateTone` is a near line-for-line match: same
+    /// three-state toggle, same `0x400` volume, same choice to call the
+    /// dry-play chain's middle hop directly rather than through its gate
+    /// helper. `docs/ghidra/functions/psp-pure-usa/lockon-sound.md`,
+    /// confidence 82.
     LockOn,
 }
 
@@ -626,28 +684,28 @@ impl Cue {
 
     /// The string to look up in that bank's name table.
     ///
-    /// # `COLLISIONS` is stored as `.COLLISIONS`
+    /// # The dot in `.COLLISIONS` is the executable's own, not a lookup fix-up
     ///
-    /// The executable passes `"COLLISIONS"`; no bank on either disc holds a cue
-    /// by that name, and `ship.bnk` and `ship_zone.bnk` both hold
-    /// `".COLLISIONS"`. SCREAM's error strings distinguish *a sound* from *a
-    /// child sound* (`"Didn't find sound named -> %s"` against `"Didn't find
-    /// child sound named -> %s"`), so the leading dot is almost certainly that
-    /// distinction and the lookup the game makes is the child one.
+    /// **Correction, 2026-09-04**: this section used to read the executable as
+    /// passing bare `"COLLISIONS"` and claimed the leading dot was added here
+    /// to bridge a SCREAM sound/child-sound naming split, at confidence 70.
+    /// That was a misread of the call site - `ShipCollisionFx_Trigger`'s
+    /// string argument is not built in place the way its three spark names
+    /// are; it is loaded indirectly out of a small pointer table
+    /// (`0x08924854: lw a3,0x46ec(a2)`), and the decompiler's inline literal
+    /// showed the table slot's own apparent text, not the string the pointer
+    /// it holds actually points at. Reading that pointer's target directly
+    /// (`0x08a886e0`) gives `.COLLISIONS\0` - the dot is already in the
+    /// executable's own data. See the correction paragraph in
+    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
-    /// **The dot is written here rather than stripped at lookup**, so that
-    /// [`Bank::cue`](oag_formats::sblk::Bank::cue_named) stays the runtime's own
-    /// 16-byte comparison and cannot resolve a name the original would have
-    /// rejected. The name is otherwise exact and it is the only candidate on
-    /// any disc.
-    ///
-    /// This comment used to add "if a child cue turns out to select among its
-    /// parents rather than the other way round, this is the line that is
-    /// wrong", and Wipeout HD's bank now answers it: `.COLLISIONS` is the
-    /// **parent**, and the cues it plays are the plainly named `c_CShipShip`
-    /// and `c_CShipWall`. So the leading dot does not mark a cue as somebody's
-    /// child - it is a naming convention, and the lookup stands.
-    /// See [`oag_formats::sblk::child`].
+    /// So this is a plain, exact match: no bridging, no SCREAM child-sound
+    /// theory needed, just the same name the game itself passes. It happens
+    /// to be the only cue named `.COLLISIONS` on any disc, and Wipeout HD's
+    /// bank independently confirms the dot is a plain naming convention, not
+    /// a parent/child marker: `.COLLISIONS` is the **parent**, and the cues
+    /// it plays are the plainly named `c_CShipShip` and `c_CShipWall`. See
+    /// [`oag_formats::sblk::child`].
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
