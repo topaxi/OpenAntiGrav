@@ -413,10 +413,14 @@ backdrop and `TurboIcon` alone** - which is the disc's own event text
 **The backdrop's colour is substituted, and it has to be.** `PickupBackground`
 and every `<Type>Icon` are authored `HudColour1`, which is `0xFFFFFFFF`, and
 their art is a solid white hexagon and a white glyph - so drawn as authored the
-icon is invisible inside an opaque white hexagon. The original must set a colour
-at runtime and that is unrecovered; this build draws the backdrop in the
-layout's own `HudBGColour` instead. The measurement and what is and is not
-claimed are on [pickups](../gameplay/pickups.md).
+icon is invisible inside an opaque white hexagon. The original sets a colour at
+runtime, and the *exact* mechanism is still unrecovered, but **the picture is
+not**: reference frames taken 2026-09-04 show eleven of the thirteen weapons
+sharing one of two colours, green or magenta, corroborated by the disc's own
+loading-screen art for the other nine. This build draws those eleven in the
+colour their frames show and the remaining two (`Bomb`, `Mine`, no frame taken)
+in the layout's own `HudBGColour` still. The measurement, the confidence and
+what is and is not claimed are on [pickups](../gameplay/pickups.md).
 
 ### The place and the total time are authored at one anchor, so one of them has to go
 

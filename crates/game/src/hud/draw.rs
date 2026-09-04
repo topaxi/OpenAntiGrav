@@ -11,8 +11,8 @@
 //! HUD would draw. [`super::Overlay`] is the half that does.
 
 use super::{
-    Draw, Font, Label, Layout, Precision, Readout, Sprite, VertAlign, colour, format_lap_time,
-    is_screen_positioned,
+    Draw, Font, Label, Layout, Precision, Readout, Sprite, VertAlign, argb_to_rgba, colour,
+    format_lap_time, is_screen_positioned,
 };
 
 /// The colour a glyph's baked outline takes when a widget names none.
@@ -422,12 +422,14 @@ pub fn pickup_icon_name(weapon: oag_formats::weapons::Weapon) -> String {
 
 /// The sprites a held pickup adds to the frame, in paint order.
 ///
-/// Empty when nothing is held. The backdrop is retinted on a title whose
-/// `art.pickup_backdrop_colour` names a constant, and drawn as authored
-/// otherwise; see [`PICKUP_BACKDROP_COLOUR`] for the measurement behind Pulse's
-/// answer. It is skipped entirely on a title that already draws it as part of
-/// `art.always_on`, so HD's backdrop is one quad whether or not a pickup is
-/// held rather than two stacked on the same pixels.
+/// Empty when nothing is held. The backdrop takes the held weapon's own colour
+/// when `art.pickup_colours` has measured one - see `oag_pulse::hud::
+/// PICKUP_COLOURS` for what that measurement is and is not - and otherwise
+/// falls back to a title whose `art.pickup_backdrop_colour` names a constant,
+/// or is drawn as authored if neither answers. It is skipped entirely on a
+/// title that already draws it as part of `art.always_on`, so HD's backdrop is
+/// one quad whether or not a pickup is held rather than two stacked on the
+/// same pixels.
 pub(super) fn pickup_sprites(
     layout: &Layout,
     weapon: oag_formats::weapons::Weapon,
@@ -443,18 +445,27 @@ pub(super) fn pickup_sprites(
         .filter_map(|name| layout.sprite(name))
         .map(|sprite| {
             let mut sprite = sprite.clone();
-            // Only when this title asks for the substitution *and* the layout
-            // defines the constant it names. A source that does not gets the
-            // authored colour and, on Pulse, the unreadable picture - which is
-            // the honest failure: this build does not know what colour the
-            // backdrop is, and inventing one for a layout that never offered it
-            // would be a second guess on top of the first.
-            if sprite.name == PICKUP_BACKGROUND
-                && let Some(raw) = art
+            if sprite.name == PICKUP_BACKGROUND {
+                // `pickup_colours` is positional - see its own doc comment -
+                // indexed the same way `Weapon::ALL` declares its thirteen.
+                if let Some(argb) = art
+                    .pickup_colours
+                    .and_then(|colours| colours[weapon as usize])
+                {
+                    sprite.color = argb_to_rgba(argb);
+                } else if let Some(raw) = art
                     .pickup_backdrop_colour
                     .and_then(|key| layout.constants.get(key))
-            {
-                sprite.color = colour(&layout.constants, Some(raw));
+                {
+                    // Only when this title asks for the substitution *and* the
+                    // layout defines the constant it names. A source that does
+                    // not gets the authored colour and, on Pulse, the
+                    // unreadable picture - which is the honest failure: this
+                    // build does not know what colour the backdrop is, and
+                    // inventing one for a layout that never offered it would
+                    // be a second guess on top of the first.
+                    sprite.color = colour(&layout.constants, Some(raw));
+                }
             }
             sprite
         })

@@ -125,6 +125,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
     },
     pickup_backdrop_colour: None,
+    pickup_colours: None,
     zone_speed_classes: None,
 };
 
@@ -519,6 +520,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         always_on: &[],
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
+        pickup_colours: None,
         zone_speed_classes: None,
     };
 

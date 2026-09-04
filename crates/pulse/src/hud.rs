@@ -63,6 +63,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         inner: "missile_sight_inner",
     },
     pickup_backdrop_colour: Some(PICKUP_BACKDROP_COLOUR),
+    pickup_colours: Some(PICKUP_COLOURS),
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
 };
@@ -108,9 +109,154 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// Pulse's substitution turned HD's backdrop into a quarter-alpha smudge. See
 /// [`oag_title::HudArt::pickup_backdrop_colour`].
 ///
-/// Recorded in `docs/gameplay/pickups.md`. A reference frame of *this* game's
-/// own pickup box would settle it and has not been taken; HD's has.
+/// Recorded in `docs/gameplay/pickups.md`. Reference frames of this game's own
+/// pickup box have now been taken - see [`PICKUP_COLOURS`], which draws the
+/// backdrop close to the colour those frames show, for the eleven weapons they
+/// settled the *category* of. This constant is what the remaining two
+/// (`Bomb`, `Mine`) still fall back to.
 pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
+
+/// The pickup backdrop's own colour, per weapon - what [`PICKUP_BACKDROP_COLOUR`]
+/// was a placeholder for.
+///
+/// # Four frames, not a guess at one
+///
+/// A PSP under Xvfb (`Xvfb :97`, `PPSSPPSDL --appendconfig=/tmp/debugger.ini`,
+/// `pulse-psp-usa.chd`, 2026-09-04 - see
+/// `docs/reverse-engineering/ppsspp-debugger.md`) was driven onto Talon's
+/// Junction's own weapon pads (`scripts/psp-drive.py place --pad-class
+/// weapon`) and, once, sat on its Time Trial start line - which this disc's
+/// own event text says hands out a free `Turbo` every lap, `Turbo` being the
+/// one pickup a placement cannot be aimed at - and screenshotted (`import
+/// -window root`) while holding what it picked up. Four frames: `ShieldIcon`
+/// and `AutopilotIcon` on green, `MissileIcon` on magenta, `TurboIcon` on a
+/// third, brighter-looking green shot against open sky rather than a tunnel
+/// interior. Each colour below is the dominant cluster of the hexagon's
+/// interior pixels, away from the glyph and the antialiased edge, from the
+/// two `Shield`/`Autopilot` frames - not a single sample, and not the
+/// `Turbo` frame, for the reason its own paragraph gives.
+///
+/// # Eleven weapons share two colours, and the other two are named
+///
+/// `Data\Plugins\loading\Definition.xml` points every weapon's *loading
+/// screen* tip at its own `Data\Defaults\Loading\Pulse\<Name>.mip`, and each
+/// of those authors the same hexagon-and-glyph picture the HUD does - same
+/// glyph shapes, confirmed by eye against `PulseHUD.mip`'s own thirteen. Its
+/// hexagon is a **flat, unblurred fill**, and sampling all thirteen files
+/// (`oag-wad cat 0x<hash>`, hashed by `oag_formats::wad::hash_name`) turns up
+/// exactly **three** distinct fills: `Bomb` and `Mine` are `(0, 0, 255)`,
+/// eight of the rest are `(250, 1, 189)`, and `AutoPilot`/`Shield`/`Turbo` are
+/// `(0, 255, 0)`. That is a category, not thirteen independent authored
+/// colours, and it is the *only* source for the grouping below - nothing here
+/// has an in-race frame of `Rocket`, `Quake`, `Cannon`, `Plasma`, `LeachBeam`,
+/// `Repulser` or `Shuriken`, only of the two other members of their pink
+/// category.
+///
+/// # The `Turbo` frame reads differently, and why is not established
+///
+/// The `Shield`/`Autopilot` pair and the `Missile` frame all read as an
+/// interior flat enough to look opaque, and an early version of this comment
+/// called that settled. **The `Turbo` frame does not match them**: shot
+/// against bright sky rather than a dark tunnel, its hexagon reads `(62, 177,
+/// 120)` - a real blue channel where the other two green frames read
+/// `22`-`47`. One ruled-out explanation and two still-live ones:
+///
+/// - **Ruled out: a whole-frame exposure or tonemap difference.** The same
+///   screenshot's `TimeIcon` - a widget authored `Color="FEConst->
+///   HudColour2"`, `0xFF7DEFC0` - samples `(127, 244, 195)` against the
+///   declared `(125, 239, 192)`, within antialiasing noise. A widget with no
+///   substitution reads correctly, unscaled, in the very frame the pickup
+///   backdrop reads high - so this is not the whole HUD being brighter that
+///   frame.
+/// - **Ruled out: a different layout.** `TimeTrial_HUD.xml` (this frame's
+///   own layout, `Turbo` being Time Trial's own free-lap grant per
+///   `docs/gameplay/pickups.md`) authors `PickupBackground` and `TurboIcon`
+///   with the identical `x`, `y`, size, `U`/`V` and `Color="FEConst->
+///   HudColour1"` that `Arcade_HUD.xml` does - checked directly, not
+///   assumed.
+/// - **Still live: the backdrop blends with the scene behind it.** A
+///   translucent hexagon reads brighter over open sky than over a dark
+///   tunnel, which is the shape of what was measured.
+/// - **Still live: `Turbo`'s own runtime colour genuinely differs from
+///   `Shield`/`Autopilot`'s**, despite the loading screen filing all three
+///   under one `(0, 255, 0)`. The loading screen is independently authored
+///   art (see the ratio note below) and settles the *category*, not that
+///   every member of it is byte-identical at runtime.
+///
+/// Neither live hypothesis is confirmed: a single shared alpha checked
+/// against all four frames' own nearby-pixel background estimates does not
+/// fit cleanly on one value, on any channel weighting tried, which could mean
+/// there is no single alpha, or could mean a screen-space "nearby" pixel is
+/// not what is actually occluded and every estimate here is too coarse to
+/// solve for one. The loading screen's own fill running brighter than every
+/// in-race frame (Missile's red `123/250 ≈ 0.49`, its blue `44/189 ≈ 0.49`;
+/// Shield's green `108/255 ≈ 0.42`) is consistent with either hypothesis too.
+/// So this table draws each colour **opaque**, from the two frames that agree
+/// with each other (`Shield`, `Autopilot`) rather than from an average that
+/// would let the `Turbo` anomaly quietly move the number - which is not a
+/// claim that the original draws it opaque, only the simplest thing this
+/// build can draw without picking between two unconfirmed explanations.
+///
+/// # Bomb and Mine are the one category with no frame at all
+///
+/// Neither weapon pad reachable from Talon's Junction's own start line handed
+/// out an explosive in the placements taken. An earlier version of this table
+/// extrapolated `(0, 0, 125)` for the pair by scaling the loading screen's
+/// `(0, 0, 255)` by the ~0.49 ratio measured above - and that scaling is
+/// exactly the relationship the paragraph above just found does not hold
+/// cleanly even for the two categories it was measured on, so extrapolating
+/// it a third time to a category with no frame at all compounds an already
+/// shaky number. **This build draws no colour for `Bomb`/`Mine`** and falls
+/// back to [`PICKUP_BACKDROP_COLOUR`] instead, rather than ship a number
+/// nothing here has seen and this same table just found reason to doubt.
+///
+/// Confidence **70** for `GREEN`: two frames of two different weapons
+/// (`Shield`, `Autopilot`) agreeing closely, on the real disc, sampled rather
+/// than eyeballed - docked below the 90s a clean measurement earns because a
+/// third frame of a third category member (`Turbo`) does not agree with them
+/// and why is unresolved, per the section above. Confidence **60** for
+/// `PINK`: the same disc, the same method, but one frame of one weapon
+/// (`Missile`) standing for all eight members its loading-screen category
+/// carries, with no second frame to check it against the way `GREEN` has.
+/// Both are opaque approximations rather than a solved blend - see above.
+///
+/// Open: a weapon pad placement that comes up `Bomb` or `Mine`; a second
+/// frame each of `Rocket`, `Quake`, `Cannon`, `Plasma`, `LeachBeam`,
+/// `Repulser` or `Shuriken` to check against `Missile`'s; and a capture
+/// harness that can read the pixel actually occluded by the hexagon rather
+/// than estimate it from a screen-space neighbour, which is what the `Turbo`
+/// anomaly above needs to resolve either way. See `docs/gameplay/pickups.md`.
+///
+/// Positional rather than keyed by `oag_formats::weapons::Weapon`: this crate
+/// is deliberately tables only, with no non-test edge to `oag-formats` (see
+/// this file's `Cargo.toml`), so the index is a data contract with
+/// `oag_game::hud` - which does own that dependency - the same way
+/// [`oag_title::HudArt::pickup_colours`] documents it.
+pub const PICKUP_COLOURS: [Option<u32>; 13] = {
+    // Values are `0xAARRGGBB`, drawn opaque - see this constant's own doc
+    // comment for why that is a simplification and not a measurement of the
+    // backdrop's real alpha.
+    const PINK: Option<u32> = Some(0xFF7B_2D5D);
+    const GREEN: Option<u32> = Some(0xFF1A_7021);
+    // `Bomb`/`Mine` have no frame at all - see this constant's own doc
+    // comment - so this category falls back to `PICKUP_BACKDROP_COLOUR`.
+    const BLUE: Option<u32> = None;
+    [
+        PINK,  // Rocket
+        PINK,  // Missile
+        PINK,  // Quake
+        PINK,  // Cannon
+        GREEN, // Turbo
+        GREEN, // Shield
+        GREEN, // Autopilot
+        PINK,  // Plasma
+        BLUE,  // Bomb
+        BLUE,  // Mine
+        PINK,  // LeachBeam
+        PINK,  // Repulser
+        PINK,  // Shuriken
+    ]
+};
 
 /// The sprite widgets Pulse draws whenever its HUD is up.
 ///

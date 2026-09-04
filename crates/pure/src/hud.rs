@@ -72,6 +72,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // recorded as Pulse's answer rather than as `None`, because `None` here
     // would read as the measured "drawn as authored" that HD carries.
     pickup_backdrop_colour: Some("HudBGColour"),
+    // Moot for the same reason as the row above, and `None` rather than
+    // Pulse's table: nothing on this disc has been sampled, so there is
+    // nothing here that is even an inherited guess.
+    pickup_colours: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
 };
