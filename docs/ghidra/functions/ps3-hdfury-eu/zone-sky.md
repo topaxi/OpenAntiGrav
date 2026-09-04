@@ -179,13 +179,106 @@ directory.
   is the more interesting half of the correction, and it is the reason the
   "all four share one cubemap" measurement never explained the observation.
 
+## The gradient dome: what `Sky_DrawGradientDome` (`0x005ebd58`) draws
+
+**Read 2026-09-04.** It is a dome, not a screen-space quad and not a fog term
+- the two forks the previous revision of this page named as open are both
+settled. Confidence **82**, capped at 84 per this page's own static-reading
+rule.
+
+**Correction to this section's first pass, same day.** The first read of the
+disassembly called `fRam008bf4b4`/`fRam008bf4b0`/`fRam008bf4c0` unknown
+per-call inputs and described the loop as 18 latitude bands climbing from
+horizon toward zenith. Both were wrong. Ghidra's `fRam` naming was misleading:
+these are not mystery RAM values, they are **fixed constants in this
+function's own TOC**, read directly with `scripts/ps3-toc.py resolve
+0x005ebd58 <disp>` (`0x20ec`, `0x20f0`, `0x20f4`, `0x20f8`, `0x20fc`) and
+decoded as IEEE-754 floats:
+
+| symbol | TOC slot | value | role |
+| --- | --- | ---: | --- |
+| scale | `0x008bf4b0` | `0.017453291` | exactly `π/180` - degrees to radians |
+| `θ0` | `0x008bf4b4` | `0.0` | the sweep's starting angle, degrees |
+| apex ratio (up) | `0x008bf4b8` | `0.75` | `× radius`, the upper apex height |
+| apex ratio (down) | `0x008bf4bc` | `-0.75` | `× radius`, one lower apex height |
+| step | `0x008bf4c0` | `20.0` | degrees advanced per iteration |
+
+**So this is not a multi-band dome - it is one 18-segment ring swept through a
+full 360° (`18 × 20°`), forming a double cone.** The 0.0 starting angle plus
+the constant `0.0` written into the base-ring vertices' shared field
+(`fmr f26,f23` once, before the loop, never reassigned) both point at a base
+ring sitting at a fixed height - call it `Y=0` - tessellated into 18 points
+around a full circle in the horizontal plane, not climbing latitude at all.
+The eight `_FSin(angle, cursor, sin_or_cos)` calls per iteration are the
+sin/cos of two **adjacent azimuth angles** (`θ`, `θ+20°`), i.e. the x/z of two
+consecutive base-ring points, not two different latitudes.
+
+Two vertex-emission helpers consume those ring positions plus two apex points
+that are computed once and reused across all 18 segments (`f24 = radius×0.75`,
+`f25 = radius×-0.75`, and a third, `f20 = -radius`, used once more for a
+steeper closing triangle):
+
+- **`FUN_005e9e50`** (decompiled in full) pushes **two triangles from four
+  vertex+colour pairs** - `(v2,c2) (v3,c3) (v4,c4)` then `(v5,c5) (v3,c3)
+  (v4,c4)` - the standard quad-as-two-triangles shape, into a triangle-strip
+  index buffer with its own restart-marker bookkeeping (`0xffffffff` sentinel,
+  a `+0x10` per-strip vertex count).
+- **`FUN_005ea308`** (decompiled in full) is the same restart-marker logic
+  pushing **one triangle from three vertex+colour pairs** - a fan segment
+  closing on the shared apex, rather than a quad between two rings.
+
+Each iteration builds four primitive groups per 20° segment: a quad and a
+closing triangle toward the **upper** apex (`0.75×radius`), then a quad and a
+closing triangle toward the **lower** apex (`-0.75×radius`, with one segment's
+triangle reaching all the way to `-radius`). That is a **double cone fanned
+from one 18-gon equator ring** - an upper cone whose vertices blend toward one
+colour as they approach its apex, and a lower cone held solid in the other -
+not a hemisphere built from many latitude bands as the first pass described.
+
+**The two packed colours are the vertex colours, not a per-pixel term.** The
+upper-cone primitives take `(param_3, param_3, param_4)` and `(param_4,
+param_4, param_4)` - blending toward the caller's second colour as the
+vertices approach the upper apex - while the lower-cone primitives take
+`(param_3, param_3, param_3)` throughout, uniformly. So one colour
+(`param_3`) covers the lower cone solid and the blend toward the other
+(`param_4`) happens only going up, GPU-interpolated across each quad the way
+vertex colours always are - a genuine two-colour gradient, built as geometry
+and colour, not sampled or computed per fragment.
+
+**The submit call confirms it reaches the GPU as ordinary geometry.** The loop
+ends with a call to `FUN_005e6870` (861 instructions, calls `Rsx_SetMethod` and
+`Rsx_UploadVertexConstants` among 47 callees) - a generic draw-batch submit
+shared by several other renderer routines including the already-named
+`Environment_UpdateStageBlend`, not something sky-specific. It is deliberately
+**not renamed** here: nothing about this pass narrows what it does beyond
+"submit the accumulated batch," and every one of its many callers would need
+checking before a name could mean anything general.
+
+Renamed `Sky_DrawGradientDome`. **Confidence 82 on the shape** (a double cone
+on one azimuth ring, upper half blending, lower half solid) - every number in
+the table above is a direct TOC decode, not an inference. **Confidence drops
+to inference-level (~65, not separately scored) for "upper = sky, lower =
+ground/underside skirt"**: nothing read ties the vertex field the apex heights
+write into to world-space up specifically, as opposed to whatever local frame
+this draw happens in - it is the conventional reading (a sky gradient's
+visible half blends toward its horizon colour going up and a hidden
+below-horizon half doesn't need to), not a measured one. **What blocks
+drawing this safely**: no blend mode or depth state is set adjacent to the
+call site (`0x003ae1bc`) or within the eight instructions either side of it -
+whatever state is active was set earlier, upstream of where this pass looked,
+and how this double cone composites with the `ZoneSky.gtf` cubemap the same
+function already draws (same colour buffer? drawn before or after? additive,
+alpha, or opaque?) is unread. Guessing a compositing mode is exactly the kind
+of stand-in this project's rules exist to prevent, so the shape is documented
+and nothing is drawn on it yet.
+
 ## What is **not** established
 
-**The gradient.** `Sky horizon colour` and `Sky zenith colour` *are* consumed,
-and this page locates the consumer - which the thread's own next-step note
-listed as unknown. The four cross-faded vec4s at `0x00c81560`-`0x00c81590` are
-loaded together at `0x003adf58`-`0x003adf78`, inside the same function as
-`Scene_PrepareFrame`, under **the same gate byte**:
+**The gradient's vertex colours.** `Sky horizon colour` and `Sky zenith
+colour` *are* consumed, and this page locates the consumer. The four
+cross-faded vec4s at `0x00c81560`-`0x00c81590` are loaded together at
+`0x003adf58`-`0x003adf78`, inside the same function as `Scene_PrepareFrame`,
+under **the same gate byte**:
 
 ```text
 003ad598  lbz  r0, 0(r17)         ; r17 = 0x00d45f84, unchanged since 003aaea0
@@ -211,17 +304,14 @@ Read from there, with confidence **80** because each step is a direct decode:
   byte is which channel is deliberately not stated**: the shifts come out
   `<<24`, `<<16`, `<<8` in an order that does not follow the load order, and
   nothing here pins the channel assignment;
-- both are passed to `FUN_005ebd58`, which has **exactly one caller in the
-  whole image** - this site.
+- both are passed to `Sky_DrawGradientDome`, which has **exactly one caller in
+  the whole image** - this site.
 
-**What that draw does with them is unread, and nothing is drawn on it.**
-`FUN_005ebd58` builds a dozen four-float groups on the stack and calls one
-helper twenty-odd times; whether that is a dome, a screen-space quad, a fog
-term or something else has not been established, and the *shape* is the whole
-question a port would need answered. A horizon-to-zenith lerp over a sky dome
-is the obvious guess and remains exactly the guess this page exists to avoid
-making. `FUN_005ebd58` is deliberately **not renamed** (confidence that it
-draws a sky gradient: 55, below the threshold).
+**What that draw does with them is read now** - see the section above. It is
+a dome, blended per-vertex from these two colours across the climbing half of
+the sweep, with a solid-horizon-colour skirt on the other half. Nothing is
+drawn on it yet in this port; the shape question a horizon-to-zenith lerp
+would have guessed at is answered rather than guessed.
 
 Also not established, and unchanged from
 [zone-effectsettings-loader.md](zone-effectsettings-loader.md): what advances
@@ -240,6 +330,16 @@ python3 scripts/ps3-toc.py u32    0x008b80b4      # -> 0x00d42c60
 llvm-objdump -d --mcpu=pwr6 --start-address=0x3f4030 --stop-address=0x3f4170 $ELF
 llvm-objdump -d --mcpu=pwr6 --start-address=0x3f4e24 --stop-address=0x3f4ea0 $ELF
 llvm-objdump -d --mcpu=pwr6 --start-address=0x3adf58 --stop-address=0x3ae1d0 $ELF
+llvm-objdump -d --mcpu=pwr6 --start-address=0x5ebd58 --stop-address=0x5ec3b4 $ELF  # Sky_DrawGradientDome
+llvm-objdump -d --mcpu=pwr6 --start-address=0x5ea308 --stop-address=0x5ea46c $ELF  # FUN_005ea308, the triangle emitter
+llvm-objdump -d --mcpu=pwr6 --start-address=0x5e9e50 --stop-address=0x5ea2cc $ELF  # FUN_005e9e50, the quad emitter
+
+python3 scripts/ps3-toc.py toc     0x005ebd58   # -> 0x008bd3c4
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20ec  # scale, 0x3c8efa34 = pi/180
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f0  # theta0, 0x00000000 = 0.0
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f4  # apex ratio up, 0x3f400000 = 0.75
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f8  # apex ratio down, 0xbf400000 = -0.75
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20fc  # step, 0x41a00000 = 20.0
 
 python3 scripts/psarc.py list $ISO:PS3_GAME/USRDIR/DATA02.PSARC | grep -i zonesky
 python3 scripts/psarc.py cat  $ISO:PS3_GAME/USRDIR/DATA02.PSARC \
@@ -279,6 +379,12 @@ again here:
   HD's Zone/Detonator scene effects: set for mode ids 6, 13, 14 and 21 and
   cleared otherwise, read by the sky branch here and by `Scene_PrepareFrame`
   twice.
+- `Sky_DrawGradientDome` (`0x005ebd58`, function, 82) - builds and submits a
+  procedural, vertex-coloured double cone (one 18-segment ring swept through a
+  full 360°, fanned to two fixed apexes at `±0.75×radius`) that blends the
+  caller's two packed colours toward one apex and holds one colour solid
+  toward the other. Exactly one caller, `Scene_PrepareFrame`, passing the two
+  colours this page's gradient section decodes.
 
 ## See also
 
