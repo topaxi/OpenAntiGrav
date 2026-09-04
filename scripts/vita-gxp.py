@@ -68,25 +68,45 @@ holds `lightmap`/`DiffuseMap`/`shadowMap`.
 **Instructions are located, and the opcode field is now too, but nothing is
 named.** The USSE stream's extent is exact - both programs' extents close on
 their own declared counts, see `Program.regions` - and each instruction is a
-64-bit little-endian word. `opcodes` sweeps every word in the corpus (both
-eboots, `data.psarc`/`data1.psarc`/`data2.psarc`, `dlc1.psarc`, `dlc2.psarc`,
-both regions) and finds, independently of any published decoder:
+64-bit little-endian word; every bit position cited below is that word's own
+bit index (`instruction & (1 << n)`), **not** a position counted from the
+byte layout or from any external ISA reference's own numbering. `opcodes`
+sweeps every word in the corpus (both eboots, `data.psarc`/`data1.psarc`/
+`data2.psarc`, `dlc1.psarc`, `dlc2.psarc`, both regions - the base and patch
+archives are counted separately and likely repeat much of the same shipped
+material, so instruction *counts* below overweight whatever is common to
+both builds; the *ratios* the findings actually rest on are not sensitive to
+that) and finds, independently of any published decoder:
 
-- **The primary op1 field is the top 5 bits of the word.** Nine values cover
-  99.7% of 17,377,433 primary instructions; widening the window to 6 or 7 bits
-  does not split those nine further (the extra bits stay constant across
-  each), so 5 bits is where the field closes. Secondary code shows the same
-  5-bit knee over 1,975,822 instructions, nine values covering 100%.
+- **Primary op1 is a variable-width prefix, not one fixed field width.** At
+  5 bits, primary code resolves into 9 dominant values covering 99.7% of
+  17,377,433 instructions. Widening to 6 bits leaves 8 of those 9 unchanged
+  (each one's dominant 6-bit child still holds >99.9% of it), but the
+  largest, `00000` (1,750,703 instructions, 10.1% of the corpus), is not one
+  opcode at 5 bits - it splits roughly 2:1 into `000001`/`000000` at bit 6,
+  and several of the resulting groups keep splitting through at least 8 bits
+  (each split's dominant child settling around 97-99%, never fully closing
+  the way the other 8 groups do by 6-7 bits). So 5 bits picks out most of
+  the field cleanly, but at least one format needs 6 or more, consistent
+  with a real variable-length instruction-group prefix rather than a single
+  N-bit opcode. Secondary code shows the same shape at a smaller scale: 8 of
+  9 dominant 5-bit groups are stable by 6 bits, and the ninth (`11111`, 7.9%
+  of 1,975,822 secondary instructions) splits roughly 86/14 at bit 6 before
+  settling.
 - **Secondary code's last instruction always sets bit 50, cleanly - by both
-  of the two different tests that can find an end bit.** Of 247,049 non-empty
-  secondary blocks, all 247,049 have bit 50 set on the final instruction
-  (100%, the *sufficiency* test - it never fails to mark the last
-  instruction). And of the 227,944 programs where bit 50 fires on exactly one
-  instruction, that one is the last on all 227,944 (100%, the
-  *discrimination* test - when it fires once, it is never early). The
-  remaining 19,105 set it on the last instruction plus at least one earlier
-  one, so it is not exclusively an end marker, but it never misses the end.
-  This is the secondary-code analogue of the closure
+  of the two different tests that can find an end bit, and the discrimination
+  test survives excluding the vacuous single-instruction case.** Of 247,049
+  non-empty secondary blocks, all 247,049 have bit 50 set on the final
+  instruction (100%, the *sufficiency* test - it never fails to mark the
+  last instruction). Of the 227,944 programs where bit 50 fires on exactly
+  one instruction, that one is the last on all 227,944 (100%, the
+  *discrimination* test) - and restricting that test to the 230,422 blocks
+  with **two or more** instructions (excluding the 16,627 single-instruction
+  blocks, where "fires once" and "fires on the last" are the same statement
+  by construction) still gives 211,317 of 211,317, 100%. The remaining
+  19,105 set it on the last instruction plus at least one earlier one, so it
+  is not exclusively an end marker, but it never misses the end. This is the
+  secondary-code analogue of the closure
   `+0x74 == +0x40 + 8 * primary_instruction_count` already gives primary
   code, found the same way `ps3-microcode.py` found the RSX END bit: search
   every bit position for one that singles out the last instruction.
@@ -97,10 +117,10 @@ both regions) and finds, independently of any published decoder:
   99.6% of programs but is *not* discriminating - it is usually also set on
   earlier instructions (only 4,183 of 322,752 fire exactly once), so it
   reads more like a commonly-true field than a marker. No primary bit clears
-  both bars the way secondary's bit 50 does - evidence the end flag's bit
-  position is not fixed across primary-code formats, consistent with the
-  5-bit op1 field selecting between formats of different shapes rather than
-  one fixed layout.
+  both bars the way secondary's bit 50 does - consistent with the primary
+  op1 field's own variable width above: an end flag whose bit position moves
+  with the instruction format cannot show up as one clean bit across every
+  format at once.
 
 None of this names an opcode. `oag_formats::rcsmaterial::fragment`'s RSX
 decoder is what "named" looks like; this is the corpus-wide argument that has
@@ -461,8 +481,28 @@ def cmd_grep(spec: str, text: str) -> int:
     return 0
 
 
-def _topbits(words: list[int], k: int) -> "collections.Counter[int]":
-    return collections.Counter(w >> (64 - k) for w in words)
+def _split_report(words: list[int], k: int) -> None:
+    """Does each dominant k-bit group stay one group at k+1 bits, or split?
+
+    `top-9 coverage` alone can't show this: the top 9 at k+1 aren't the same
+    nine as at k, so the statistic is monotone by construction and a real
+    split reads as noise rather than a finding - that is exactly how the
+    primary `00000` group's 2:1 split at bit 6 was missed on a first pass
+    here. This instead follows each dominant group to its children and
+    reports the mass that stays in the largest one - a value near 100% means
+    the extra bit carries no information for that group; anything lower is a
+    real split, however large the group.
+    """
+    hist = collections.Counter(w >> (64 - k) for w in words)
+    print(f"  top {k} bits: {len(hist)} distinct value(s) over {len(words)} instructions")
+    for val, cnt in hist.most_common(9):
+        children = collections.Counter((w >> (64 - k - 1)) for w in words if (w >> (64 - k)) == val)
+        top_child = children.most_common(1)[0][1]
+        flag = "" if top_child / cnt >= 0.999 else "  SPLIT"
+        print(
+            f"    {format(val, f'0{k}b')} {cnt:9d} ({100 * cnt / len(words):5.1f}%)  "
+            f"-> top child {100 * top_child / cnt:5.1f}% of it{flag}"
+        )
 
 
 def _endbit_scan(programs: list["Program"], block: str) -> None:
@@ -483,8 +523,11 @@ def _endbit_scan(programs: list["Program"], block: str) -> None:
     bits that are simply often 1 regardless of position.
     """
     total = 0
+    multi = 0  # programs with >= 2 instructions in this block
     exactly_one = [0] * 64
     on_last_of_exactly_one = [0] * 64
+    exactly_one_multi = [0] * 64
+    on_last_of_exactly_one_multi = [0] * 64
     on_last_loose = [0] * 64
     zero_case = [0] * 64
     for p in programs:
@@ -492,6 +535,8 @@ def _endbit_scan(programs: list["Program"], block: str) -> None:
         if not w:
             continue
         total += 1
+        is_multi = len(w) >= 2
+        multi += is_multi
         for b in range(64):
             mask = 1 << b
             flags = [1 if (word & mask) else 0 for word in w]
@@ -500,17 +545,30 @@ def _endbit_scan(programs: list["Program"], block: str) -> None:
                 zero_case[b] += 1
             elif n == 1:
                 exactly_one[b] += 1
-                if flags[-1]:
+                last = flags[-1]
+                if last:
                     on_last_of_exactly_one[b] += 1
+                if is_multi:
+                    exactly_one_multi[b] += 1
+                    if last:
+                        on_last_of_exactly_one_multi[b] += 1
             if flags[-1]:
                 on_last_loose[b] += 1
-    print(f"  {block}: {total} program(s) with a non-empty {block} block")
+    print(f"  {block}: {total} program(s) with a non-empty {block} block ({multi} with >= 2 instructions)")
     print("  by exactly-one discrimination (a bit set once, and is that once the last instruction):")
     for b in sorted(range(64), key=lambda b: -on_last_of_exactly_one[b])[:5]:
         pct = 100 * on_last_of_exactly_one[b] / exactly_one[b] if exactly_one[b] else 0.0
+        # The >= 2-instruction variant: on a single-instruction block, "fires
+        # once" and "fires on the last" are the same statement by
+        # construction, so the plain figure above can look cleaner than the
+        # bit actually is. Recomputed excluding those blocks.
+        pct_multi = (
+            100 * on_last_of_exactly_one_multi[b] / exactly_one_multi[b] if exactly_one_multi[b] else 0.0
+        )
         print(
             f"    bit {b:2d}: exactly-one={exactly_one[b]:8d}  "
-            f"on-last-when-so={on_last_of_exactly_one[b]:8d} ({pct:5.1f}%)"
+            f"on-last-when-so={on_last_of_exactly_one[b]:8d} ({pct:5.1f}%)  "
+            f"| >=2-instr only: {exactly_one_multi[b]:8d} -> {on_last_of_exactly_one_multi[b]:8d} ({pct_multi:5.1f}%)"
         )
     print("  by loose sufficiency (last instruction's bit set, whatever else fires):")
     for b in sorted(range(64), key=lambda b: -on_last_loose[b])[:5]:
@@ -535,15 +593,8 @@ def cmd_opcodes(specs: list[str]) -> int:
         for p in programs:
             all_words.extend(p.words(block))
         print(f"{block}: {len(all_words)} instructions")
-        for k in (4, 5, 6, 7):
-            hist = _topbits(all_words, k)
-            top = hist.most_common(3)
-            covered = sum(c for _, c in hist.most_common(9))
-            print(
-                f"  top {k} bits: {len(hist)} distinct value(s), "
-                f"top-9 cover {100 * covered / len(all_words):5.1f}%, "
-                f"most common: {[(format(v, f'0{k}b'), c) for v, c in top]}"
-            )
+        for k in (5, 6, 7):
+            _split_report(all_words, k)
 
     print("end-bit search (set on exactly the last instruction of a block):")
     _endbit_scan(programs, "primary")

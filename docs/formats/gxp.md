@@ -316,34 +316,57 @@ blocks. Doing the same for USSE is the open thread.
 both regions' full corpus - both eboots, `data.psarc`/`data1.psarc`/
 `data2.psarc`, `dlc1.psarc`, `dlc2.psarc` - 323,937 programs,
 17,377,433 primary and 1,975,822 secondary instructions, each a 64-bit
-little-endian word. Two findings, both derived from the bytes here and
+little-endian word, bit-indexed by the word's own bit position (`bit 0` is
+the LSB of the unpacked `u64`, not a position from any external ISA
+reference). The base and patch archives are counted separately and likely
+repeat much of the same shipped material, so the instruction *counts* below
+overweight whatever both builds carry, but the *ratios* the findings rest on
+are not sensitive to that. Two findings, both derived from the bytes here and
 checked afterward against Vita3K's own USSE decoder as an **oracle, not a
 source** - see the license note below:
 
-- **The primary op1 field is the top 5 bits of the word.** Nine values cover
-  99.7% of primary instructions; widening the window to 6 or 7 bits does not
-  split those nine further - the extra bits stay constant across each - so 5
-  bits is where the field closes. Secondary code shows the same 5-bit knee,
-  nine values covering 100%.
+- **Primary op1 is a variable-width prefix, not one fixed field width.** At
+  5 bits, primary code resolves into 9 dominant values covering 99.7% of
+  instructions. Widening to 6 bits leaves 8 of those 9 unchanged - each
+  one's dominant 6-bit child still holds over 99.9% of it - but the largest,
+  `00000` (1,750,703 instructions, 10.1% of the corpus), is not one opcode
+  at 5 bits: it splits roughly 2:1 into `000001`/`000000` at bit 6, and
+  several of the resulting groups keep splitting through at least 8 bits,
+  never closing the clean way the other 8 groups do by 6-7 bits. **A first
+  pass here read "9 of 9 groups cover 99.7%+ regardless of width" as a knee
+  at 5 bits and was wrong** - the statistic it used (top-9 coverage) is
+  monotone by construction across widths and can't show a split; following
+  each dominant group to its own children is what catches one, the same
+  "check the claim against the population it was read from" trap this
+  project keeps re-finding elsewhere in its own reverse-engineering work.
+  Secondary
+  code shows the same shape at smaller scale: 8 of 9 dominant 5-bit groups
+  are stable by 6 bits, and the ninth, `11111` (155,211 instructions, 7.9%
+  of secondary code), splits roughly 86/14 at bit 6 before settling.
 - **Secondary code's last instruction always sets bit 50, and by both of the
-  two tests that can find an end bit.** All 247,049 non-empty secondary
-  blocks have bit 50 set on the final instruction (the *sufficiency* test -
-  it never fails to mark the end). And of the 227,944 programs where bit 50
-  fires on exactly one instruction, that one is the last on all 227,944 (the
-  *discrimination* test - when it fires once, it is never early). The
-  remaining 19,105 also set it on an earlier instruction, so it is not
-  exclusively an end marker, but it never misses the end. Confidence **80**:
-  an exact, corpus-wide closure by two independent tests, but a located flag
-  rather than a decoded meaning.
+  two tests that can find an end bit - surviving a check for the vacuous
+  case too.** All 247,049 non-empty secondary blocks have bit 50 set on the
+  final instruction (the *sufficiency* test - it never fails to mark the
+  end). Of the 227,944 programs where bit 50 fires on exactly one
+  instruction, that one is the last on all 227,944 (the *discrimination*
+  test - when it fires once, it is never early) - and restricting that test
+  to the 230,422 blocks with **two or more** instructions, excluding the
+  16,627 single-instruction ones where "fires once" and "fires on the last"
+  are the same statement by construction, still gives 211,317 of 211,317,
+  100%. The remaining 19,105 also set it on an earlier instruction, so it is
+  not exclusively an end marker, but it never misses the end. Confidence
+  **80**: an exact, corpus-wide closure by two independent tests that
+  survives the vacuous-case check, but a located flag rather than a decoded
+  meaning.
 - **Primary code has no equally clean end bit, by either test.** The best
   discrimination candidate, bit 56, lands on the last instruction on 92.3%
   of the programs where it fires exactly once (261,370 of 283,088); the best
   sufficiency candidate, bit 31, covers 99.6% of programs but is usually also
   set on earlier instructions, reading more like a commonly-true field than
   a marker. No primary bit clears both bars the way secondary's bit 50 does -
-  consistent with the 5-bit op1 field selecting between differently-shaped
-  instruction formats rather than one fixed layout, the way NV40's RSX
-  microcode does not either.
+  consistent with primary op1's own variable width above: an end flag whose
+  bit position moves with the instruction format cannot show up as one clean
+  bit across every format at once.
 
 **Naming an opcode is still not attempted.** This is the corpus-wide argument
 that would have to hold before any name is trustworthy, the same role the

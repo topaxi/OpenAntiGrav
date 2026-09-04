@@ -13,19 +13,26 @@ The instruction stream is **located, its opcode field is now found too, and
 no opcode is named** - the last of those is where this stops being
 comparable to the PS3 side. **2026-09-04**: `scripts/vita-gxp.py opcodes`
 swept both regions' full corpus (323,937 programs, 19.3M instructions) and
-found the primary and secondary op1 field is the top 5 bits of the 64-bit
-instruction word (nine values cover 99.7%/100% of instructions, and 6-7 bits
-don't split them further), and that secondary code's last instruction sets
-bit 50 with a full corpus-wide closure by two independent tests - primary
-code has no equally clean end bit by either test, evidence its end flag
-moves with a format the 5-bit op1 selects. See
+found the primary and secondary op1 field is a **variable-width prefix, not
+one fixed width** - at 5 bits, 8 of 9 dominant groups (89.9% of primary
+instructions) close cleanly, but the largest (`00000`, 10.1%) is not one
+opcode there and keeps splitting through at least 8 bits, evidence of a real
+variable-length instruction-group selector rather than a single N-bit field
+- and that secondary code's last instruction sets bit 50 with a full
+corpus-wide closure by two independent tests, holding even when
+single-instruction blocks are excluded. Primary code has no equally clean
+end bit by either test, consistent with its own end flag moving with the
+variable-width format selector. See
 [`docs/formats/gxp.md`](../docs/formats/gxp.md)'s "The opcode field is
 located" section for the numbers and the license reasoning: Vita3K's own
 USSE decoder (GPL-2.0-or-later) was read as an **oracle** to check these two
 findings after they were derived from the bytes, never as a source to
 transcribe from - this project's own license bar rules a GPL decoder's
 tables out of an MIT/Apache-2.0 tree, so naming an actual opcode from here
-needs an independently-derived reading, not a port.
+needs an independently-derived reading, not a port. (A first pass here also
+claimed "5 bits is where the field closes" outright and was wrong - caught
+by following each dominant group to its own children rather than trusting a
+monotone coverage statistic; see `gxp.md`'s own note on the trap.)
 
 The working notes from the session that did it - the derivation route and the
 four things that were wrong on the way - are in
@@ -82,10 +89,11 @@ both together.
 ## Next Steps
 
 1. ~~**Decode the USSE stream**, on the model of `scripts/ps3-microcode.py`.~~
-   **The opcode field's location is done, 2026-09-04**: top 5 bits, both
-   primary and secondary, plus secondary's end bit at bit 50 - see above.
-   **What's left is naming a single op1 value.** `scripts/vita-gxp.py
-   opcodes` gives the field and the corpus to check any candidate against
+   **The opcode field's location is done, 2026-09-04**: a variable-width
+   prefix, 5-6+ bits depending on the instruction, both primary and
+   secondary, plus secondary's end bit at bit 50 - see above. **What's left
+   is naming a single op1 value.** `scripts/vita-gxp.py opcodes` gives the
+   field and the corpus to check any candidate against
    (17.4M primary / 2.0M secondary instructions, both regions); `Vita3K`'s
    own USSE translator remains the external corroboration to check a reading
    against, never to transcribe from, per the license reasoning above.
