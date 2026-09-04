@@ -97,6 +97,12 @@ Two structural facts to expect, both different from every other binary here:
   mechanism `.COLLISIONS`' severity and ship/wall split runs on, still
   undecoded past the opcode itself), and `0x19`'s alternate-selection
   handler - a random pick that never repeats the previous one.
+- [shadow-stencilvolume.md](shadow-stencilvolume.md) - the `LiveStencilShadow`
+  shader technique's registration and its three named constants, the
+  per-model flag bit that builds a fixed-named `shadow.stencilvolume` sibling
+  path and loads it through a hashed resource cache, and the record shape
+  that loader parses - which rhymes with, but does not byte-match, Pulse's
+  `DynamicShadowOccluder` `.vex` payload.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not
