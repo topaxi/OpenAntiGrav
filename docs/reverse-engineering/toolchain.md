@@ -342,6 +342,20 @@ project. Program paths: `/vita-2048-eu-v104/eboot.elf` (target of record),
 `/vita-2048-usa-v104/eboot.elf`, `/vita-2048-eu-base/eboot.elf`,
 `/vita-2048-usa-base/eboot.elf` (corroboration-only).
 
+**`FixupVLRImportThunks.java` (shipped with VitaLoaderRedux) is not needed
+here, checked directly rather than left unevaluated.** Its own README frames
+it as a fallback for when the NID Analyzer's import-thunk naming doesn't
+resolve cleanly - renaming a thunk's target to `Library_NID` form. On
+`eu-v104` (fully auto-analyzed), that naming is already clean without it:
+`list_imports` returns systematic `Library_NID` names directly (e.g.
+`SceCtrl_67E7AB83`, `SceAppMgrUser_10B5765F`), and a decompile of `Game_Main`
+calls through those same systematic names at each call site
+(`SceLibc_9A004680(...)`, `SceAppUtil_5DFB9CA0(...)`) rather than through
+`FUN_`-prefixed thunk placeholders. VitaLoaderRedux's loader and its own NID
+Analyzer are doing this at import time, before the optional script would run.
+Re-check if a future program (or a `FixupVLRImportThunks`-adjacent script
+update) starts showing `FUN_`-named call targets for known imports.
+
 #### `eboot.bin` is still NpDrm-encrypted under the SELF wrapper
 
 **An earlier `strip-vita-self.py` only ever cut the SCE header off - it never

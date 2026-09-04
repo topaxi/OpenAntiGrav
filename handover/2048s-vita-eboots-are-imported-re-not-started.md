@@ -59,16 +59,30 @@ is loose ends unrelated to either.
   since regenerating it needs nothing but network access to
   nopaystation.com and is cheap, but a stale zRIF for a title NoPayStation
   later delists would not be.
-- `FixupVLRImportThunks.java` (shipped with VitaLoaderRedux) - still
-  unevaluated. Its own README frames it as a fallback for when the NID
-  Analyzer's import-thunk naming doesn't resolve cleanly, not a mandatory
-  step like PS3's `AssignPs3R2FromOpd`.
+
+**`FixupVLRImportThunks.java` is resolved, not just evaluated**: checked
+directly against `eu-v104` (already fully auto-analyzed) rather than left
+open - VitaLoaderRedux's loader and NID Analyzer already assign systematic
+`Library_NID` names to import thunks and their call sites without it, so the
+script's fallback case doesn't apply here. Evidence in
+[toolchain.md#vita](../docs/reverse-engineering/toolchain.md#vita).
 
 ## Next Steps
 
 - The other three programs (`usa-v104`, `eu-base`, `usa-base`) are imported
   but not fully analyzed - run auto-analysis on them opportunistically, same
   "corroboration only" role as `psp-pulse-eu`/`psp-pure-eu`, not urgent.
+  **In progress as of 2026-09-04**: `run_analysis` triggered on all three in
+  the shared Ghidra JVM; confirmed via `get_metadata` (distinct executable
+  paths, sizes) that each is a genuinely separate binary, not one program
+  analyzed three times under a colliding path. `usa-v104` climbed from 1,197
+  to 9,623+ functions over ~10 minutes and is still running; `eu-base` and
+  `usa-base` had not started moving past their pre-analysis 1,197 in the same
+  window, apparently queued behind `usa-v104` in the one JVM (also contended
+  by a concurrent session's `oag-view` GXP work). Whoever picks this up next:
+  check `analysis_status` for all three, and once each reports
+  `analyzing: false`, run `save_program` (or `save_all_programs`) - Ghidra
+  analysis lives in memory until saved and is not otherwise durable.
 - Decide whether `data/keys/vita-zrif.tsv` should also record DLC1/DLC2
   zRIFs now that the recovery method (nopaystation.com's TSV export, grepped
   directly) is fast and repeatable - not needed yet since DLC PKGs carry no
