@@ -60,14 +60,40 @@ none of the four has a verified call site - the reason each stays inside the
 error the paragraph above warns about** - `0x0006de1c + 0x08804000` was
 computed as `0x0886de1c` (using `0x08800000`), which is not a function entry
 at all - `get_function_by_address` resolves it to the *middle* of an
-unrelated function (`FUN_0886db80`, body `0x0886db80`-`0x0886de2f`). The
-correct sum is **`0x08871e1c`**, which is a real function entry
-(`get_function_by_address` confirms the boundary) and decompiles to exactly
-the shape described below (a hash-name lookup via `func_0x001376f8` forwarded
-into `func_0x0006e894`). Caught while chasing the `Absorb` cue's own trigger
-for `every-sfx-trigger-is-a-pulse-reading-applied.md` and cross-checking this
-page's `Sound_Play`-call formula against a case (`0x0002dddc` -> `0x08831ddc`,
-the `Sound_Play` rename above) that was independently verified two ways.
+unrelated function (`FUN_0886db80`, body `0x0886db80`-`0x0886de2f`). Caught
+while chasing the `Absorb` cue's own trigger for
+`every-sfx-trigger-is-a-pulse-reading-applied.md` and cross-checking this
+page's `Sound_Play`-call formula against a second, independently-derived
+case (`0x0002dddc` -> `0x08831ddc`, the `Sound_Play` rename above).
+
+**The correct sum is `0x08871e1c`, and this is not arithmetic alone: it is
+the same structural-match evidence class `Sound_Play` earned, run against the
+function this section actually claims a counterpart of.** Both `0x08871e1c`
+and `0x08831ddc` were derived by the identical `+0x08804000` delta, so a
+single wrong constant could in principle have produced two wrong-but-plausible
+answers - what rules that out is decompiling `0x08871e1c` and comparing it
+directly against `Psys_Spawn_q` (`0x08915484`) itself, not just checking that
+it's *a* function entry:
+
+```c
+// Pure, 0x08871e1c                      // Pulse, Psys_Spawn_q (0x08915484)
+int FUN_08871e1c(int param_1, ...)       int Psys_Spawn_q(int param_1, ...)
+{                                        {
+  func_0x0007d824();                       func_0x001273bc();
+  *(undefined4*)(param_1+0x3c) = ...;      *(undefined4*)(param_1+0x38) = ...;
+  uVar1 = func_0x001376f8(                 uVar1 = func_0x000efcf4(
+            _DAT_002b0304, param_2);                 _DAT_002ae248, param_2);
+  func_0x0006e894(param_1, uVar1, ...);    func_0x00112200(param_1, uVar1, ...);
+  return param_1;                          return param_1;
+}                                        }
+```
+
+Four statements, identical shape and order, the same six-parameter signature,
+and the offset shift (`0x3c` vs `0x38`) is the same struct-layout-drift
+pattern `Sound_Play`'s own comparison already showed. This is decisive in a
+way "it's a function entry with a plausible body" is not - the binary holds
+thousands of small wrapper functions, and a coincidental hit on one of them
+was the real risk an arithmetic-only argument couldn't rule out.
 
 `0x08871e1c` (printed as `func_0x0006de1c` throughout, per the `jal` wart
 above) is Pure's counterpart of Pulse's `Psys_Spawn_q` (`0x08915484`): second
