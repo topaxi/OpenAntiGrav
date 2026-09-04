@@ -106,7 +106,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // answer for a title whose pickup backdrop colour nothing has measured -
     // Pulse's colour substitution is the one that would need evidence.
     pickup_backdrop_colour: None,
-    // No reference frame of this title's own pickup box has been taken.
+    // Not just unmeasured: `HUD_pickups.xml`'s `PickupBackground` authors no
+    // `<Values>` at all, and the icon is one widget (`PickupIcon`) whose UV
+    // rect a runtime table this build has not found must rewrite per weapon,
+    // rather than thirteen names `pickup_icon_name` can select between the
+    // way Pulse's and HD's own dialects allow. A colour table keyed by name
+    // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
+    // is not done".
     pickup_colours: None,
     // `None`: 2048's Zone HUD shows a class per *band* of zones off
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
