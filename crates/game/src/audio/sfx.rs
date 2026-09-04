@@ -25,15 +25,16 @@
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
 //! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
-//! looked at** until [`Cue::Collision`] and [`Cue::Absorb`]'s own doc
-//! comments: Pure's counterparts of `ShipCollisionFx_Trigger` and its
-//! absorb-effect caller fire the same `.COLLISIONS`/`ABSORB` cues at the same
-//! points in the same cooldown gate, corroborated confidence 80-82. That is
-//! two cues on one of the two other titles; firing the remaining seven on
-//! Pure and all nine on HD is still a bet that games in one series with the
-//! same cue names and the same middleware fire them at the same moments.
-//! Reasonable, and not a reading; confidence 50, which is below this
-//! project's naming threshold and so is written down rather than implied.
+//! looked at** until [`Cue::Collision`], [`Cue::Absorb`], [`Cue::Shield`] and
+//! [`Cue::ShieldActive`]'s own doc comments: Pure's counterparts of
+//! `ShipCollisionFx_Trigger`, its absorb-effect caller and its shield-activate
+//! function each fire the same cue at the same point in the same gate,
+//! corroborated confidence 80-82. That is four cues on one of the two other
+//! titles; firing the remaining five on Pure and all nine on HD is still a
+//! bet that games in one series with the same cue names and the same
+//! middleware fire them at the same moments. Reasonable, and not a reading;
+//! confidence 50, which is below this project's naming threshold and so is
+//! written down rather than implied.
 //!
 //! # Two things here are honest placeholders, and both are load-bearing
 //!
@@ -521,6 +522,11 @@ pub enum Cue {
     /// keeping the handle - so it runs for the pickup's duration and is
     /// released when the shield drops.
     /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    ///
+    /// Pure's `FUN_0892425c` fires the same `~SHIELD` at the same point in the
+    /// same two-cue order (after `ShieldActive`, below), with a matching
+    /// handle-out-slot call shape. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
+    /// confidence 80.
     Shield,
     /// The announcer, on the same activation.
     ///
@@ -528,6 +534,12 @@ pub enum Cue {
     /// `Sound_Play(entity, ..., "shieldactive", 0x400, 0)`. It lives in
     /// `speech.bnk` rather than `weapons.bnk`, which is what says it is a voice
     /// line and not an effect.
+    ///
+    /// Pure's counterpart fires the same undotted `shieldactive` at the same
+    /// volume (`0x400`), first of the pair - but through a deeper call chain
+    /// than Pulse's flat one-hop dry helper, unread past confirming it looks
+    /// like sound-engine code. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
+    /// confidence 80.
     ShieldActive,
     /// The announcer, one second before an Autopilot pickup lets go.
     ///
