@@ -426,12 +426,88 @@ order matches `sceSasSetVoice`'s.
 becomes a byte offset - turns out to be plain arithmetic on data the format page
 already had.
 
+## Four opcodes corroborated against HD, 2026-09-04
+
+[`ps3-hdfury-eu/sound.md`](../ps3-hdfury-eu/sound.md) decoded `0x19`, `0x22`,
+`0x23` and `0x24` on Wipeout HD's binary and left them **not corroborated on
+PSP** - the four handler addresses it derived from `g_scream_opcode_table`
+(`0x0018a178`/`0x0018a594`/`0x0018a658`/`0x0018a660`) refused
+`decompile_function`, `disassemble_function` and `create_function` alike, and
+`disassemble_bytes` reported success with zero instructions decoded.
+
+**The blocker was the same wart [`workflow.md`](../../workflow.md#known-imperfect-and-why-it-does-not-block)
+already names for `jal` targets and manually-found jump-table bases, one
+shape further: a data table of function pointers the auto-analyzer never
+walked.** `g_scream_opcode_table`'s 40 entries read back as `0x0018xxxx`-range
+values - nowhere near `.text` (`0x08804000`-`0x08a76a3b`) - because the table
+itself sits in `.data`, outside whatever the analyzer recognised as a jump
+table to fix up. `real = pseudo + 0x08804000`, this binary's own image base,
+same as every other instance of this wart: index `0x19` (25) reads
+`0x0018a178`, `+ 0x08804000` is `0x0898e178`, and that address already had a
+function on it - `disassemble_bytes` had been decoding real code the whole
+time, just under a name nothing pointed `decompile_function` at. The same
+correction unblocks `0x22` (`0x0898e594`), `0x23` (`0x0898e658`) and `0x24`
+(`0x0898e660`); the last needed `create_function` first (auto-analysis had not
+found its entry either), which now succeeds cleanly on the corrected address.
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x19` | `0x0898e178` | `Scream_OpAlternate` | 88 | Pick a random one of the next N key-ons, re-rolling once - advance one and wrap - if the draw matches the cache from the cue's last play; jump the program counter to it |
+| `0x22` | `0x0898e594` | `Scream_OpGuard` | 88 | Three-way compare a variable (a runtime global for a negative index, a per-voice local for a non-negative one) against an immediate; skip the next grain unless the comparison holds |
+| `0x23` | `0x0898e658` | `Scream_OpMarker` | 82 | No-op - `return 0`, nothing else. Same two-instruction shape as HD's `li r3,0; blr` |
+| `0x24` | `0x0898e660` | `Scream_OpGoto` | 88 | Scan a marker table by id, jump the program counter to the match; recursion-depth-guarded at 8, decrementing the counter and logging instead past the guard |
+
+Each is the same algorithm as HD's reading, decompiled independently on a
+different CPU (Allegrex MIPS, not PPC64) and a different binary, with no
+shared analysis between the two sessions that found them:
+
+```c
+// Scream_OpAlternate (0x0898e178) - PSP
+if (*(char *)(param_1 + 0x50) == '\0') {          // first call for this voice
+    pick = rand() % (int)*param_3;                 // count is param_3[0] here
+    if (pick == param_3[2]) {                       // cache from the last play
+        pick += 1;
+        if (pick == *param_3) pick = 0;             // wrap
+    }
+    param_3[2] = pick;                               // write the cache back
+    voice->pc += pick * param_3[1];                  // param_3[1]: voices per alternate
+    ...
+    voice->pc_dirty = 1;                             // guards re-entry, +0x50
+    return 0;
+}
+// second call for this voice: log and refuse, exactly as HD's handler does
+```
+
+That is `Scream_DoGrainAlternate` (HD, `0x00625e88`) field for field: the same
+`rand() % count`, the same "roll once, advance-and-wrap on a repeat" shape
+rather than reject-and-retry, the same per-voice re-entry guard gating a
+one-shot roll per play, and the same cache write-back into the operand's own
+byte. `Scream_OpGuard`'s three-way compare and `Scream_OpGoto`'s marker-table
+scan plus recursion-depth guard (capped at 8, the same figure HD's page
+records) match their HD counterparts the same way. `Scream_OpMarker` being a
+bare `return 0` on both binaries is as certain as a two-instruction function
+can be; **the *name* "marker" still rests entirely on what `Scream_OpGoto`
+does with it**, exactly as HD's own page says of `Scream_DoGrainMarker` -
+that inference is not strengthened by a second binary agreeing the function
+itself does nothing.
+
+Confidence **88** for `0x19`/`0x22`/`0x24`, **82** for `0x23`: per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md), a
+second binary corroborating a decompiled reading is one of the two legs the
+95-100 band needs and puts the claim in the 85-94 band on both sides now,
+short of Established by the missing leg - a runtime trace. `0x23` stays lower
+because agreement that a function does nothing corroborates the *shape*, not
+the *name* built on top of it. This raises the same four rows on
+[`ps3-hdfury-eu/sound.md`](../ps3-hdfury-eu/sound.md#opcodes-read-so-far) from
+their prior 80/84/78/80.
+
 ## Not determined
 
-- **43 of the 45 opcode handlers.** `0x01` and `0x09` are read; the rest are
-  not. The format page's other observed opcodes (`0x05`, `0x06`, `0x15`, `0x16`,
-  `0x1e`, `0x22`-`0x24`, `0x29`) are what a bank actually uses, so they are the
-  ones worth reading, and eight of the 45 share one handler.
+- **39 of the 45 opcode handlers.** `0x01`, `0x09`, `0x19`, `0x22`, `0x23` and
+  `0x24` are read; the rest are not. The format page's other observed opcodes
+  (`0x05`, `0x06`, `0x15`, `0x16`, `0x1e`, `0x29`) are what a bank actually
+  uses, so they are the ones worth reading next, and eight of the 45 share one
+  handler.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
 - ~~**The extraction itself.**~~ **Done.** Both rules are implemented in
@@ -453,13 +529,12 @@ already had.
   What the *fixup itself* does - which function walks the cues at load and adds
   the base - is still unread; the arithmetic no longer needs it. Its `+0x04` is
   also read as the handler's `+0x12`, a `s16` the play loop tests against zero.
-- **Which command in a cue's run selects the waveform that sounds.** A cue may
-  own fifteen key-ons (`ship.bnk`'s `.COLLISIONS`); something picks one, and
-  `0x19` is the candidate - its low operand byte equals the key-ons that follow
-  it in **61 of 87** occurrences, which is a lead rather than a finding. This
-  is now the most valuable of the 43 unread opcodes, because it is the one
-  thing standing between `oag_game::audio::sfx` and playing what the original
-  plays rather than one of the right set.
+- ~~**Which command in a cue's run selects the waveform that sounds.**~~
+  **Decoded.** `0x19` is `Scream_OpAlternate`, corroborating
+  [HD's reading](#four-opcodes-corroborated-against-hd-2026-09-04): a random
+  pick among the key-ons that follow, never repeating the immediately
+  previous pick. Wired into `oag_game::audio::sfx::Banks::pick`
+  (`crates/game/src/audio/sfx/banks.rs`), 2026-09-04.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
   array walks linearly - but needed to reproduce a lookup faithfully.
 - **What consumes the cue-request list.** `Sound_Play` pushes 0x30-byte nodes

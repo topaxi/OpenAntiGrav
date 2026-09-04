@@ -25,18 +25,34 @@
   `oag_game::audio::sfx::Banks::pick` is real, unblocked work now~~ **wired
   2026-09-04**, matching the re-roll-once-on-repeat shape rather than a naive
   retry loop; see `Banks::pick`'s own doc comment in
-  `crates/game/src/audio/sfx/banks.rs`. What is still open on this finding is
-  the PSP/PS2 corroboration below, not the Rust side.
+  `crates/game/src/audio/sfx/banks.rs`.
+- ~~Corroborate `0x22`/`0x23`/`0x24`/`0x19` on the PSP side.~~ **Done
+  2026-09-04**: the blocker was never the code, it was the address - the
+  table stores `.text`-relative offsets the auto-analyzer never walked, so
+  `real = pseudo + 0x08804000` (this binary's own image base) unblocks
+  `decompile_function`/`create_function` outright. All four now read on
+  `psp-pulse-usa`, field for field the same as HD's own readings. See
+  [ps3-hdfury-eu/sound.md#corroborated-on-psp-2026-09-04](../docs/ghidra/functions/ps3-hdfury-eu/sound.md#corroborated-on-psp-2026-09-04)
+  and the fuller writeup on
+  [psp-pulse-usa/sound.md](../docs/ghidra/functions/psp-pulse-usa/sound.md#four-opcodes-corroborated-against-hd-2026-09-04).
+  PS2's own binary (a third, separate SCREAM build) is not independently
+  checked - it is grouped with PSP/Pure as "the same library generation" by
+  operand byte layout, not by having been read itself.
 
 ## Next Steps
 
-- Read `sysvar_table` (`0x008c0038` in HD's `EBOOT.elf`, a runtime pointer -
-  its target needs a live process, not a disassembly) or catch a real
-  collision with a breakpoint on `Scream_DoGrainGuard` (`0x00623690`), to learn
-  which `var_ref` value is severity and which is ship-vs-wall.
-- Corroborate `0x22`/`0x23`/`0x24`/`0x19` on the PSP side:
-  `g_scream_opcode_table` (`0x08ac326c` in `psp-pulse-usa`) names the same
-  four indices, but `decompile_function`/`disassemble_function`/
-  `create_function` all refused on them this session - that address range
-  needs a fresh analysis pass first. See
-  [ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet](../docs/ghidra/functions/ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet).
+- Read `sysvar_table` to learn which `var_ref` value is severity and which is
+  ship-vs-wall. On HD it is a runtime pointer (`0x008c0038` in `EBOOT.elf`)
+  needing a live process. **PSP's equivalent is a static address, found
+  2026-09-04 tracing `Scream_OpGuard`/`Scream_OpGoto`'s own constants**:
+  `Scream_OpGuard`'s `0x2bf247 - iVar3` and `Scream_OpGoto`'s recursion-depth
+  counter `_DAT_002bf268` agree on one base (`0x2bf248` raw, `0x08ac3268 -
+  0x08ac3248 = 0x20` matching HD's own "`sysvar_table + 0x20`" for the same
+  counter) - `0x08ac3248` corrected, reading as 36 bytes of zero in the
+  static image immediately before `g_scream_opcode_table`
+  (`0x08ac326c`), consistent with runtime-populated state rather than
+  disc-authored data. `get_xrefs_to` on both the raw and corrected addresses
+  found no references this session, which reads as writes computed rather
+  than a literal load `xref` analysis catches - a byte-pattern search for the
+  `lui`/`addiu` pair building `0x08ac3248` (or a live trace, same as HD)
+  is what finding the writer needs next. Not chased further this session.

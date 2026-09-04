@@ -555,9 +555,21 @@ byte layout could show: HD's handler **writes the chosen pick back into the
 operand's own third byte** as a per-cue "last alternate" cache, so a cue's
 command data is mutated at runtime, not read-only once loaded - worth knowing
 before assuming any SBLK command byte reflects only what shipped on disc.
-Not corroborated on PSP/PS2 this session; see the sound page's own
-not-corroborated note. What the two library generations put at opposite ends
-of the operand is still worth knowing before reading either build's handler.
+**Corroborated on PSP, 2026-09-04**: `Scream_OpAlternate`
+(`docs/ghidra/functions/psp-pulse-usa/sound.md#four-opcodes-corroborated-against-hd-2026-09-04`)
+reads field for field the same algorithm, independently decompiled on a
+different CPU with no shared analysis between the two sessions that found
+them.
+
+Where the count sits at opposite ends of the operand on the two platforms is
+likely endianness rather than two designs, though this is a lead and not
+traced through: PSP's opcode byte is the word's most-significant byte
+(`*(u8 *)(cmd + 3)` on a little-endian word) and count sits at `cmd + 0`, the
+byte *furthest* from the opcode; if HD's opcode byte is the equivalent
+most-significant byte of a big-endian word at `cmd + 0`, its count at
+`operand[1]` (`cmd + 1`) is the byte *closest* to the opcode - the same
+relative position, read through opposite byte orders, not confirmed by
+tracing HD's own opcode-byte offset this session.
 
 An earlier version of this section reported **61 of 87** for a weaker form of
 the same rule. That number came from a scan whose run-length walk did not stop
@@ -567,9 +579,11 @@ walk is clipped now.
 What the *data* says regardless of the opcode is that these are **alternates,
 not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
-one of them, chosen by its own generator, and says so - whether that generator
-matches "random, never repeats the immediately previous pick" is not checked
-by this page and is a Rust-side task of its own, not assumed here.
+one of them, chosen by its own generator, and says so - **`Banks::pick`
+matches "random, never repeats the immediately previous pick" as of
+2026-09-04** (`crates/game/src/audio/sfx/banks.rs`), the same
+roll-once-advance-and-wrap shape the decoded opcode uses rather than a naive
+reject-and-retry.
 
 ## A cue that plays other cues
 
