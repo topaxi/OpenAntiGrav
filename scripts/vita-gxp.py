@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Reads the PS Vita `GXP` shader containers Wipeout 2048 ships.
 
-    vita-gxp.py census <source> [...]     N of M programs decode, per source
-    vita-gxp.py list   <source>           one line per program
-    vita-gxp.py dump   <source> <index>   header, region map and parameters
-    vita-gxp.py grep   <source> <text>    programs binding a parameter by name
+    vita-gxp.py census  <source> [...]     N of M programs decode, per source
+    vita-gxp.py list    <source>           one line per program
+    vita-gxp.py dump    <source> <index>   header, region map and parameters
+    vita-gxp.py grep    <source> <text>    programs binding a parameter by name
+    vita-gxp.py opcodes <source> [...]     op1 histogram and end-bit search, corpus-wide
 
 A `<source>` is a loose file scanned for the magic (`eboot.elf`), a `.psarc`
 whose every entry is scanned, or `<psarc>:<substring>` to narrow the walk to
@@ -64,14 +65,58 @@ categories are named from the names they carry, which is as direct as evidence
 gets: 0 holds `position`/`normal`/`uv1`, 1 holds `viewProj`/`fogColour`, 2
 holds `lightmap`/`DiffuseMap`/`shadowMap`.
 
-**Instructions are not decoded.** The USSE stream is located exactly - both
-programs' extents close on their own declared counts, see `Program.regions` -
-and left as bytes. Naming its opcodes is a separate piece of work; there is no
-half-read disassembly here to mistake for one.
+**Instructions are located, and the opcode field is now too, but nothing is
+named.** The USSE stream's extent is exact - both programs' extents close on
+their own declared counts, see `Program.regions` - and each instruction is a
+64-bit little-endian word. `opcodes` sweeps every word in the corpus (both
+eboots, `data.psarc`/`data1.psarc`/`data2.psarc`, `dlc1.psarc`, `dlc2.psarc`,
+both regions) and finds, independently of any published decoder:
+
+- **The primary op1 field is the top 5 bits of the word.** Nine values cover
+  99.7% of 17,377,433 primary instructions; widening the window to 6 or 7 bits
+  does not split those nine further (the extra bits stay constant across
+  each), so 5 bits is where the field closes. Secondary code shows the same
+  5-bit knee over 1,975,822 instructions, nine values covering 100%.
+- **Secondary code's last instruction always sets bit 50, cleanly - by both
+  of the two different tests that can find an end bit.** Of 247,049 non-empty
+  secondary blocks, all 247,049 have bit 50 set on the final instruction
+  (100%, the *sufficiency* test - it never fails to mark the last
+  instruction). And of the 227,944 programs where bit 50 fires on exactly one
+  instruction, that one is the last on all 227,944 (100%, the
+  *discrimination* test - when it fires once, it is never early). The
+  remaining 19,105 set it on the last instruction plus at least one earlier
+  one, so it is not exclusively an end marker, but it never misses the end.
+  This is the secondary-code analogue of the closure
+  `+0x74 == +0x40 + 8 * primary_instruction_count` already gives primary
+  code, found the same way `ps3-microcode.py` found the RSX END bit: search
+  every bit position for one that singles out the last instruction.
+- **Primary code has no equally clean end bit, by either test.** The best
+  discrimination candidate, bit 56, fires exactly once on 283,088 programs
+  and lands on the last instruction on 261,370 of them (92.3%, not 100%);
+  the best sufficiency candidate, bit 31, is set on the last instruction of
+  99.6% of programs but is *not* discriminating - it is usually also set on
+  earlier instructions (only 4,183 of 322,752 fire exactly once), so it
+  reads more like a commonly-true field than a marker. No primary bit clears
+  both bars the way secondary's bit 50 does - evidence the end flag's bit
+  position is not fixed across primary-code formats, consistent with the
+  5-bit op1 field selecting between formats of different shapes rather than
+  one fixed layout.
+
+None of this names an opcode. `oag_formats::rcsmaterial::fragment`'s RSX
+decoder is what "named" looks like; this is the corpus-wide argument that has
+to exist before any name is trustworthy, the same role the container's own
+region-closure argument played before a single field was named. A real,
+independent, GPL-licensed USSE decoder exists (Vita3K) and was checked as an
+**oracle** against these two findings after they were derived from the bytes
+here, never transcribed from it - this project's own license bar
+(`docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md`)
+rules out landing GPL-derived structure in an MIT/Apache-2.0 tree, so nothing
+past these two bit positions and this histogram is written down.
 """
 
 from __future__ import annotations
 
+import collections
 import os
 import struct
 import sys
@@ -270,6 +315,14 @@ class Program:
             last = max(last, end)
         return self.size - covered
 
+    def words(self, block: str) -> list[int]:
+        """Every instruction of `block` ('primary' or 'secondary') as a u64."""
+        if block == "primary":
+            code, n = self.raw[self.primary_offset : self.primary_end], self.primary_count
+        else:
+            code, n = self.raw[self.secondary_offset : self.secondary_end], self.secondary_count
+        return [struct.unpack_from("<Q", code, i * 8)[0] for i in range(n)]
+
     def kind(self) -> str:
         return "fragment" if self.fragment else "vertex"
 
@@ -408,6 +461,96 @@ def cmd_grep(spec: str, text: str) -> int:
     return 0
 
 
+def _topbits(words: list[int], k: int) -> "collections.Counter[int]":
+    return collections.Counter(w >> (64 - k) for w in words)
+
+
+def _endbit_scan(programs: list["Program"], block: str) -> None:
+    """For every bit position, does it single out the last instruction?
+
+    The RSX analogue in `ps3-microcode.py` scored dword orderings on END-bit
+    placement; this does the same search but over the *position*, since that
+    is what is unknown here. Two different questions, both worth asking, and
+    conflating them is the trap: "`exactly_one[b]` and, when it fires exactly
+    once, is it always the last?" (`on_last_of_exactly_one`) finds a
+    *discriminating* bit even if it is not set on every program - that is
+    what turned up bit 56 for primary. "Is the last instruction's bit set,
+    full stop, ignoring how many other instructions also set it?"
+    (`on_last_loose`) finds a bit that is *sufficient* to locate the last
+    instruction even if it is not exclusive to it - that is what turned up
+    bit 50 for secondary, 100% clean by this measure and not by the first.
+    Ranking on the loose measure alone is misleading: it is dominated by
+    bits that are simply often 1 regardless of position.
+    """
+    total = 0
+    exactly_one = [0] * 64
+    on_last_of_exactly_one = [0] * 64
+    on_last_loose = [0] * 64
+    zero_case = [0] * 64
+    for p in programs:
+        w = p.words(block)
+        if not w:
+            continue
+        total += 1
+        for b in range(64):
+            mask = 1 << b
+            flags = [1 if (word & mask) else 0 for word in w]
+            n = sum(flags)
+            if n == 0:
+                zero_case[b] += 1
+            elif n == 1:
+                exactly_one[b] += 1
+                if flags[-1]:
+                    on_last_of_exactly_one[b] += 1
+            if flags[-1]:
+                on_last_loose[b] += 1
+    print(f"  {block}: {total} program(s) with a non-empty {block} block")
+    print("  by exactly-one discrimination (a bit set once, and is that once the last instruction):")
+    for b in sorted(range(64), key=lambda b: -on_last_of_exactly_one[b])[:5]:
+        pct = 100 * on_last_of_exactly_one[b] / exactly_one[b] if exactly_one[b] else 0.0
+        print(
+            f"    bit {b:2d}: exactly-one={exactly_one[b]:8d}  "
+            f"on-last-when-so={on_last_of_exactly_one[b]:8d} ({pct:5.1f}%)"
+        )
+    print("  by loose sufficiency (last instruction's bit set, whatever else fires):")
+    for b in sorted(range(64), key=lambda b: -on_last_loose[b])[:5]:
+        print(
+            f"    bit {b:2d}: on-last={on_last_loose[b]:8d} ({100 * on_last_loose[b] / total:5.1f}%)  "
+            f"zero={zero_case[b]:8d}"
+        )
+
+
+def cmd_opcodes(specs: list[str]) -> int:
+    """The op1 field's width and the end-bit search - see the module docstring."""
+    programs: list[Program] = []
+    for spec in specs:
+        for _label, p, _at in walk(spec):
+            if isinstance(p, Broken):
+                continue
+            programs.append(p)
+    print(f"{len(specs)} source(s), {len(programs)} programs decoded")
+
+    for kind, block in (("primary", "primary"), ("secondary", "secondary")):
+        all_words: list[int] = []
+        for p in programs:
+            all_words.extend(p.words(block))
+        print(f"{block}: {len(all_words)} instructions")
+        for k in (4, 5, 6, 7):
+            hist = _topbits(all_words, k)
+            top = hist.most_common(3)
+            covered = sum(c for _, c in hist.most_common(9))
+            print(
+                f"  top {k} bits: {len(hist)} distinct value(s), "
+                f"top-9 cover {100 * covered / len(all_words):5.1f}%, "
+                f"most common: {[(format(v, f'0{k}b'), c) for v, c in top]}"
+            )
+
+    print("end-bit search (set on exactly the last instruction of a block):")
+    _endbit_scan(programs, "primary")
+    _endbit_scan(programs, "secondary")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__)
@@ -421,6 +564,8 @@ def main(argv: list[str]) -> int:
         return cmd_dump(argv[2], int(argv[3]))
     if cmd == "grep" and len(argv) > 3:
         return cmd_grep(argv[2], argv[3])
+    if cmd == "opcodes":
+        return cmd_opcodes(argv[2:])
     print(__doc__)
     return 2
 
