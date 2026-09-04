@@ -48,8 +48,10 @@ Two things worth carrying forward from doing it:
   the vertices it indexes. `Occluder::silhouette` is the edge walk step 5
   needs.
 - ~~The projection direction is what now blocks the draw~~ **Read
-  2026-09-04**: `normalize(0.5, -5, 1)`, a *local* axis the node's own world
-  matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
+  2026-09-04**: `(1, -10, 2)` normalized (`z / x` bit-exactly `2.0`, and the
+  vector `4.8e-6` short of unit - a fast reciprocal square root, so the shipped
+  bits are what `oag_pulse::shadow::AUTHORED_AXIS` keeps), a *local* axis the
+  node's own world matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
   (`0x08b62540`), written by `Shadow_RegisterClass` (`0x08923518`) - the same
   function that registers class `0x3cb`, `shadow`. **The reason it read as
   unfindable is worth carrying**: both candidate addresses are reached through

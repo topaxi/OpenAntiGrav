@@ -209,11 +209,15 @@ the *payload* closure rather than this indexing.
 on: a shadow cannot be drawn without a direction, and picking one would have
 been an invention.
 
-`Shadow_RenderOccluderVolume` projects along `normalize(0.5, -5, 1)` -
-`(+0.09758954, -0.97589540, +0.19517908)`, unit to `0.999995`, 12.60 degrees
-off straight down, with `x : z` exactly `0.5`. It is a **local** axis: the
-node's own world matrix carries it into world space, so a craft's shadow
-direction tilts with the craft.
+`Shadow_RenderOccluderVolume` projects along `(1, -10, 2)` normalized -
+`(+0.09758954, -0.97589540, +0.19517908)`, 12.60 degrees off straight down.
+The ratios are what settle it: `z / x` is *bit-exactly* `2.0` and `y / x` is
+`-10.0000003`. The vector is `4.8e-6` short of unit, uniformly, which is one
+normalize done with a fast reciprocal square root rather than an exact one -
+so `oag_pulse::shadow::AUTHORED_AXIS` carries the shipped bits rather than a
+recomputed exact vector. It is a **local** axis: the node's own world matrix
+carries it into world space, so a craft's shadow direction tilts with the
+craft.
 
 The constant lives in `.bss` at `0x08b62540` (`g_shadow_direction`) and is
 written by `Shadow_RegisterClass` (`0x08923518`) from four immediates, in the
