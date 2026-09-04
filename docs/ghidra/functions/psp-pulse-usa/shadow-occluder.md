@@ -401,6 +401,22 @@ override reading, which rests on the increment/decrement pair and the shared
 method table rather than on a full decompilation of the class. Neither is
 runtime-verified, which is what keeps both under the 95-100 band.
 
+**The three data rows this adds to `names.tsv` have not been applied through a
+Ghidra bridge**, only checked offline by `just check-names`, which proves the
+row cites its evidence and not that Ghidra can rename at the address. The
+argument that it can is by containment: `.bss` runs `0x08adb300`-`0x08b95ac0`
+at this base and already carries an applied row at `0x08b66450`
+(`g_wad_...`/`g_decompress_staging_buffer`, `wad-subsystem.md`), which is
+*above* both of these, and `0x08abffd0` sits in `.data` beside
+`g_display` (`0x08abf5d4`). Worth confirming with `just apply-names` the next
+time a bridge is up.
+
+Everything above is re-derivable without a bridge:
+[`scripts/psp-reloc.py`](../../../../scripts/psp-reloc.py) is the instrument -
+`pair` resolves what a `lui`/`addiu` pair actually points at, `at` prints the
+relocation entries on an instruction, and `refs` finds every site that forms a
+given address.
+
 ## Open
 
 - ~~The fixed local axis constant's value~~ **Read 2026-09-04**: it is
