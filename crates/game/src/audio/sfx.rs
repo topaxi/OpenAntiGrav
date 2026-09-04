@@ -24,12 +24,15 @@
 //! Every trigger below was read out of a **PSP Wipeout Pulse** executable.
 //! The cue names and the banks are each title's own data - Pure spells them as
 //! Pulse does, HD keeps two of them elsewhere, see
-//! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch has ever been
-//! looked at**. Firing a Pulse-recovered edge on those titles is a bet that
-//! games in one series with the same cue names and the same middleware fire
-//! them at the same moments. Reasonable, and not a reading; confidence 50,
-//! which is below this project's naming threshold and so is written down
-//! rather than implied.
+//! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch had ever been
+//! looked at** until [`Cue::Collision`]'s own doc comment: Pure's counterpart
+//! of `ShipCollisionFx_Trigger` fires the same `.COLLISIONS` cue at the same
+//! point in its own cooldown gate, corroborated confidence 82. That is one
+//! cue on one of the two other titles; firing the remaining eight on Pure and
+//! all nine on HD is still a bet that games in one series with the same cue
+//! names and the same middleware fire them at the same moments. Reasonable,
+//! and not a reading; confidence 50, which is below this project's naming
+//! threshold and so is written down rather than implied.
 //!
 //! # Two things here are honest placeholders, and both are load-bearing
 //!
@@ -482,6 +485,13 @@ pub enum Cue {
     /// kind-0/1 call" - that is, once per contact that gets past the 0.8-second
     /// spark cooldown - so it rides the same gate the collision sparks do.
     /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, confidence 85.
+    ///
+    /// Pure's own `ShipCollisionFx_Trigger` (`0x0888e340`) does the same thing:
+    /// same `.COLLISIONS` cue (confirmed present in its `SHIP_CL`/`SHIP_ZM`
+    /// banks), same point in the same 0.8-second cooldown gate.
+    /// `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
+    /// confidence 82 - the only one of the nine cues checked on a second
+    /// title so far; the module doc's confidence-50 bet still covers the rest.
     Collision,
     /// A contact a raised shield absorbed.
     ///
