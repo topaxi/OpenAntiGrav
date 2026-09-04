@@ -30,14 +30,24 @@ branches - non-zero calls `Sound_Play` (`func_0x0002dddc`) directly with a
 positional emitter, zero calls the dry chain
 (`func_0x001209e0(entity, bank, name, 0x400, 0)`). Both branches pass the
 same string, built once and moved through registers rather than rebuilt:
-`0x244fb8`-family offset - read directly, `0x002450b8 + 0x08804000 =
-0x08a490b8` reads `SPEEDUPPAD\0`, matching `sfx.rs`'s literal and the disc's
-own `SPEEDUPPAD` cue (`just wad sounds`, confirmed present).
+`0x002450b8 + 0x08804000 = 0x08a490b8`, independently confirmed by
+`search_strings` (not just the arithmetic) landing on that exact address for
+`SPEEDUPPAD`, matching `sfx.rs`'s literal and the disc's own `SPEEDUPPAD` cue
+(`just wad sounds`, confirmed present).
 
 **Three near-identical sibling functions sit beside it**
-(`0x0886b600`/`0x0886b6b8`/`0x0886b770`), same shape, different strings
-(`TURBO`, `FLIP`, `TURBO` again) - the same family of weapon/pad-effect
-dispatchers `SPEEDUPPAD`'s function belongs to, not separately wired cues.
+(`0x0886b600`/`0x0886b6b8`/`0x0886b770`), same shape, different string
+offsets read directly off each disassembly's own `addiu` operand: `0x50c4`
+(`0x0886b600`), `0x50cc` (`0x0886b6b8`), `0x50c4` again (`0x0886b770`) -
+`TURBO`, `FLIP`, and `TURBO` a second time. **The repeat is recorded as read,
+not chased**: `search_strings` does not index the bare `TURBO` text at
+`0x08a490c4` the way it does the cues above (no defined string data item
+there, unlike `SPEEDUPPAD`/`disengaging`/`shieldactive`/`~SHIELD`), so this
+one rests on the raw memory bytes alone. Whether two genuinely distinct
+functions both fire `TURBO` or one of the four operands was misread is open;
+neither reading changes anything about `SpeedupPad` itself, which sits on its
+own, independently-confirmed offset. None of the three siblings are wired
+cues either way.
 
 Not renamed - matching this project's precedent of leaving `sfx.rs`-cited
 Pulse functions like `FUN_0883e9b0` unnamed even when their role is well
@@ -54,8 +64,9 @@ crosses `1.0`, through the same `FUN_0883e9b0` -> `FUN_0893a768` ->
 Pure's `FUN_0884c794` calls the same chain's gate helper
 (`func_0x001209e0`) with volume `0x400` and a string built directly
 (`lui a2,0x24` / `addiu a2,a2,0x3dbc`, `0x00243dbc + 0x08804000 =
-0x08a47dbc`, reads `disengaging\0` - undotted, lowercase, matching `sfx.rs`'s
-literal and the disc's own `disengaging` cue). The function's own gate shape
+0x08a47dbc`), independently confirmed by `search_strings` landing on that
+exact address for `disengaging` - undotted, lowercase, matching `sfx.rs`'s
+literal and the disc's own `disengaging` cue. The function's own gate shape
 - a countdown field compared against a threshold before the call, matching
 `sfx.rs`'s "the tick the remaining time crosses `1.0`" description - is
 structurally consistent with an autopilot countdown, though this pass did
@@ -66,8 +77,9 @@ Not renamed, same reasoning as `SpeedupPad` above.
 
 ## Confidence
 
-**78** for both: each cue's string is read directly from memory, matching
-`sfx.rs`'s literal exactly, through the same dry-play chain
+**78** for both: each cue's string address is confirmed by `search_strings`
+against Ghidra's own index, not arithmetic alone, and matches `sfx.rs`'s
+literal exactly, through the same dry-play chain
 `shield-sound.md` already corroborated structurally against Pulse
 (`Scream_PlaySoundByName`) at confidence 82 - one point below that page's own
 82 because neither caller function here was itself compared field-for-field
