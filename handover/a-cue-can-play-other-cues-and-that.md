@@ -21,10 +21,12 @@
 - ~~Alternate selection remains open - `0x19` counts a key-on group but does
   not choose from it.~~ **Decoded 2026-08-27**, while confirming the dispatch
   table's base rather than by design: random pick among the group, never
-  repeating the immediately previous pick. Wiring it into
-  `oag_game::audio::sfx::Banks::pick` is real, unblocked work now, split into
-  its own thread:
-  [`handover/alternate-selection-never-repeats-the-previous-pick.md`](alternate-selection-never-repeats-the-previous-pick.md).
+  repeating the immediately previous pick. ~~Wiring it into
+  `oag_game::audio::sfx::Banks::pick` is real, unblocked work now~~ **wired
+  2026-09-04**, matching the re-roll-once-on-repeat shape rather than a naive
+  retry loop; see `Banks::pick`'s own doc comment in
+  `crates/game/src/audio/sfx/banks.rs`. What is still open on this finding is
+  the PSP/PS2 corroboration below, not the Rust side.
 
 ## Next Steps
 
