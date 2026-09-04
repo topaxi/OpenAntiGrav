@@ -29,6 +29,54 @@
 //! [`crate::race`]'s docs give at length: an absent entry is a fact, and a
 //! constant naming a file this disc does not carry would be an invention.
 //!
+//! # The weapon icons are `<Model>`s, not `<Image>`s, and colour-coded as such
+//!
+//! **Corrects a claim this file made until 2026-09-04**: `pickup_colours`
+//! used to read `None` on the grounds that "this disc has no per-weapon icon
+//! widget of any kind to colour". That was checked by grepping `<Image
+//! name=` alone, and it was wrong, not merely incomplete - `Arcade_HUD.xml`'s
+//! and `TimeTrial_HUD.xml`'s own `<Mode3D>` block authors ten weapon icons as
+//! `<Model>` widgets, each with an authored `colour="0xAARRGGBB"` beside its
+//! `.vex`, e.g. `<Model name="TURBO_icon"><Values
+//! Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" .../></Model>`. Byte-
+//! identical between the two files, so this is the played mode's data, not a
+//! Time-Trial-only quirk. Confidence **95**: read directly off
+//! `pure-psp-usa.chd`'s `Data.wad`, both layouts, no inference.
+//!
+//! Ten names, one colour each: `ROCKET_icon`/`MISSILE_icon`/`DISRUPTOR_icon`
+//! (`0xff40acff`), `QUAKE_icon`/`PLASMA_icon` (`0xff0000ff`),
+//! `TURBO_icon`/`SHIELD_icon`/`AUTOPILOT_icon` (`0xff40ff40`) and
+//! `MINE_icon`/`BOMB_icon` (`0xffffc040`) - a four-colour scheme, not
+//! thirteen distinct ones, the same shape Pulse's own measured table has.
+//!
+//! **`DISRUPTOR_icon` names a weapon `oag_formats::weapons::Weapon` has no
+//! variant for** (prose, not a link - this crate does not depend on
+//! `oag-formats` outside tests, for the same "tables only" reason
+//! [ADR-0022] gives). Pure's own executable strings carry `WO_DISRUPTOR_EXPLO`
+//! alongside `WO_MISSILE_EXPLO` and the rest
+//! (`docs/formats/pure-status.md`'s rocket/collision-fx section), so this is
+//! a weapon this disc's roster genuinely has and Pulse's does not - not a
+//! second spelling of `Cannon`, which has no icon here at all. Pure's ten
+//! also omit `LeachBeam`, `Repulser` and `Shuriken`, three of Pulse's
+//! thirteen. `Weapon`'s variant list is scoped to what Pulse's own
+//! `WeaponStats_*.xml` ships (`crates/formats/src/weapons.rs`'s module doc),
+//! so a title with a different roster needing its own vocabulary is expected,
+//! not a bug to reconcile by guessing a mapping.
+//!
+//! **Why `ART.pickup_colours` still reads `None` below, correctly this
+//! time**: that field exists to *override* a single backdrop sprite's colour
+//! at runtime, which is what Pulse's `PickupBackground` needs since one
+//! `<Image>` stands in for thirteen weapons. Pure needs no such table: each
+//! of its ten `<Model>`s already carries its own final colour in the XML,
+//! read by `oag_game::hud::Model::colour` with no substitution step at all
+//! (this crate does not depend on `oag-game`, so that is prose, not a link).
+//! Drawing them - selecting the held weapon's model by name and
+//! painting it tinted - is not done as of 2026-09-04; the `.vex` mesh has no
+//! recovered size/UV convention the way the sight brackets' `SIGHT_SIZE` does,
+//! and building one on a guess is exactly what `CLAUDE.md`'s "never invent
+//! what the assets already author" rule forbids. See
+//! `docs/gameplay/pickups.md`'s Pure section.
+//!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`oag_pulse::hud`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/pulse/src/hud.rs
 
@@ -44,12 +92,16 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// How Pure's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 ///
-/// **There is nothing for it to reach, and that is the measurement.** Composed
-/// off `pure-psp-eu.chd` on 2026-08-25, Pure's three layouts hold **37, 32 and
-/// 18 `<Text>` widgets and not one `<Image>`** - no sprites and no fills at all,
-/// which is the same finding the "no atlas" section above states from the other
-/// end. So [`ALWAYS_ON`] is empty rather than Pulse's seven names copied over:
-/// there is no widget of that name here to be always on.
+/// **There is nothing `<Image>`-shaped for it to reach, and that is still true -
+/// there is a `<Model>`-shaped one instead.** Composed off `pure-psp-eu.chd` on
+/// 2026-08-25, Pure's three layouts hold **37, 32 and 18 `<Text>` widgets and
+/// not one `<Image>`** - no sprites and no fills at all, which is the same
+/// finding the "no atlas" section above states from the other end. So
+/// [`ALWAYS_ON`] is empty rather than Pulse's seven names copied over: there is
+/// no *sprite* of that name here to be always on. What the `<Image>` count does
+/// not show is the ten weapon-icon `<Model>`s the "weapon icons are `<Model>`s"
+/// section above measures separately - a different widget kind with its own
+/// colour, not covered by this field's `Image`-shaped substitution mechanism.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Moot on a disc whose layouts name no texture, and `None` on the same
     // terms as Pulse's: this is a PSP disc, and its own XML asks for `.mip`.
@@ -72,10 +124,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // recorded as Pulse's answer rather than as `None`, because `None` here
     // would read as the measured "drawn as authored" that HD carries.
     pickup_backdrop_colour: Some("HudBGColour"),
-    // Moot for the same reason as the row above, and `None` rather than
-    // Pulse's table: this disc has no per-weapon icon widget of any kind to
-    // colour, confirmed rather than merely unsampled - see the module doc's
-    // "no atlas" section.
+    // `None`, correctly rather than merely unmeasured - see the module doc's
+    // "weapon icons are `<Model>`s" section. This disc's ten weapon icons are
+    // `<Model>` widgets, each with its own authored `colour`, not one
+    // `<Image>` backdrop needing a runtime substitute the way Pulse's is. This
+    // field exists to override a single sprite's colour; Pure's icons need no
+    // override, so `None` is the disc's own answer, not a placeholder for one.
     pickup_colours: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
