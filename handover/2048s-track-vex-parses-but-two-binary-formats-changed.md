@@ -673,9 +673,61 @@ TITLE entry rather than showing them under 2048 - see
 9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_formats::pvrtc`,
    confidence 92, see the section above.
 10. **What is worth doing next, now that a race draws textured.** In order of
-    what a screenshot would gain: `.envsettings` (the sun direction, colour,
+    what a screenshot would gain: ~~`.envsettings` (the sun direction, colour,
     ambient, fog and bloom blocks all fail to parse for this title, so the
-    race lights off a stand-in rig and draws unfogged); `track.pvs` (header
-    word 2 is `16777216`, not the `16` `docs/formats/hd-pvs.md` describes, so
-    every chunk draws); and the HD-derived roster, which one `ship_dir` string
-    still cannot address alongside 2048's own five teams.
+    race lights off a stand-in rig and draws unfogged)~~ - the light rig is
+    fixed, 2026-09-04, see below; `track.pvs` (header word 2 is `16777216`,
+    not the `16` `docs/formats/hd-pvs.md` describes, so every chunk draws);
+    and ~~the HD-derived roster, which one `ship_dir` string still cannot
+    address alongside 2048's own five teams~~ - also done, see
+    `oag_title::TeamVariants`/`GuestRoster` in the 2026-09-01 sections above
+    (this bullet was never updated when that landed).
+
+## 2026-09-04: the light rig is fixed - 2048 authors its own key names, not HD's, and one of its keys is a confirmed-live trap
+
+Picked up from Next Steps item 10 above. `envsettings_light` was reading
+every title's `.envsettings`/`.EnvSettings` against HD's own key constants
+(`SUN_COLOUR = "Lighting.Sun color"`, `AMBIENT_COLOUR = "Lighting.Constant
+ambient color"`), which is why 2048 always reported *"no usable sun
+direction, colour and ambient; lighting with the stand-in rig"* even though
+every circuit ships a `track.EnvSettings` in the identical syntax
+`oag_formats::envsettings::EnvSettings::parse` already reads.
+
+**Confirmed from the executable, not guessed from the file.**
+`Environment_RegisterLightingSchema` (`0x810175fc` in
+`vita-2048-eu-v104/eboot.elf`, confidence 85, named this session - see
+[lighting-schema.md](../docs/ghidra/functions/vita-2048-eu-v104/lighting-schema.md))
+registers every key a `track.EnvSettings` can carry, in the file's own order,
+and spells the ambient term `"Lighting.Constant ambient colour"` (British) and
+splits HD's single sun colour into `"Lighting.Sun diffuse colour"` +
+`"Lighting.Sun specular colour"` - genuinely different keys, not a
+reformatting. `oag_formats::envsettings::PSP2_AMBIENT_COLOUR`/
+`PSP2_SUN_DIFFUSE_COLOUR` are the new constants; `envsettings_light` and
+`environment::staging` pick between HD's and 2048's key sets on a new
+`GeometryKind` (replacing the `ps3_geometry: bool` that used to conflate
+"has an `.rcsmodel`" with "is it HD's" - both HD and 2048 have one).
+`just play 2048 --race` now reports the circuit's real sun/ambient rather
+than falling back, and `data/shots/` (not committed, see the session's own
+screenshot) shows Altima genuinely lit rather than flat.
+
+**One trap worth carrying forward, not closed.** 2048's file *also* authors a
+literal `"Lighting.Sun color"`, spelled exactly like HD's, bound by the
+registrar to its own address - not a parser alias. It is deliberately **not**
+wired as the diffuse term: five of the 14 circuits sampled carry the exact
+value the registrar's own compiled-in default initialises it to, which reads
+as an untouched, vestigial field rather than a real one, but a proper
+consumer search needs the field traced from an actual call site's return
+value forward (this binary accesses this address at a fixed *displacement*
+off `Environment_RegisterLightingSchema()`'s own return pointer, not by
+absolute address - the same trap `docs/formats/envsettings.md`'s HD notes
+already record for a TOC-relative load, on a different binary). Full account,
+including which search techniques already came back empty or inapplicable:
+[lighting-schema.md](../docs/ghidra/functions/vita-2048-eu-v104/lighting-schema.md).
+
+**Fog and bloom are untouched, on purpose.** 2048's own fog block is
+structurally unrelated to HD's (`Lighting.Fog colour`/`Fog Region Colour
+Override %d`, no `Fog.*`-prefixed keys at all), so reading it against HD's
+`FOG_COLOUR`/`FOG_DENSITY` would repeat the exact key-mismatch this session
+fixed for the light rig. `environment::staging` still gates both readers to
+HD's geometry only; modelling 2048's own fog/bloom schema is a fresh, unstarted
+piece of work, not a continuation of this one.
