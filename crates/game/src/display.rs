@@ -42,10 +42,7 @@ mod msaa;
 mod reconstruction;
 mod shadows;
 
-pub use motion_blur::MotionBlur;
-pub use msaa::Msaa;
-pub use reconstruction::Reconstruction;
-pub use shadows::Shadows;
+pub use {motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction, shadows::Shadows};
 
 /// The shape the game is drawn at inside its window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

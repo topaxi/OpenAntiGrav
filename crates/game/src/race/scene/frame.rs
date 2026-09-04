@@ -61,6 +61,7 @@ impl Scene {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: crate::display::MotionBlur,
+        shadows: crate::display::Shadows,
         camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
@@ -659,6 +660,21 @@ impl Scene {
             alpha,
         );
 
+        // The blob shadows, gathered here with the rest of the per-frame
+        // geometry and uploaded whether or not the tier is on - `upload` with
+        // no placements clears the runs, which is what makes turning the row
+        // off take effect on the next frame rather than leaving the last
+        // frame's quads in the buffer.
+        let placements = if shadows.draws() {
+            race.shadow_placements()
+        } else {
+            Vec::new()
+        };
+        self.shadow
+            .borrow_mut()
+            .upload(queue, &view_projection.to_cols_array_2d(), &placements);
+        oag_render::perfprobe::mark("shadow-gather");
+
         oag_render::perfprobe::mark("psys-gather");
         let depth_view = &self.attachment_views.depth;
         // Under the HD chain the whole scene draws into its linear float
@@ -776,6 +792,15 @@ impl Scene {
         if let Some(pads) = &self.weapon_pads {
             stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
         }
+        // After the track and the pads, before the hulls: the road's depth has
+        // to be in the buffer for the quad to be occluded by the geometry in
+        // front of it, and the hulls are opaque and write depth, so a craft
+        // drawn afterwards covers its own shadow where the two overlap. Draws
+        // nothing at all while `graphics.shadows` is `off` - the upload above
+        // gave it no placements. **Where in the frame this sits is ours**: the
+        // original's own draw-order key has no layer for a blob, because no
+        // title in the lineage draws one. See `docs/rendering/draw-order.md`.
+        self.shadow.borrow().draw(&mut pass);
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
@@ -943,58 +968,5 @@ impl Scene {
     }
 }
 
-pub(super) fn depth_texture(
-    device: &wgpu::Device,
-    size: (u32, u32),
-    sample_count: u32,
-) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("race depth"),
-        size: wgpu::Extent3d {
-            width: size.0.max(1),
-            height: size.1.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count,
-        dimension: wgpu::TextureDimension::D2,
-        format: mesh_render::DEPTH_FORMAT,
-        // `TEXTURE_BINDING` because the motion blur pass reads the depth the
-        // scene just wrote to reproject each pixel against the previous
-        // camera - see `oag_render::post::motion_blur`. Declared even at MSAA
-        // sample counts, where that pass does not run: the flag costs
-        // nothing, and a conditional usage would be one more thing the two
-        // call sites could disagree about.
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    })
-}
-
-/// The multisampled colour attachment MSAA draws into, resolved into the
-/// caller's own target at the end of [`Scene::render`]'s one pass.
-///
-/// `None` at `sample_count` 1: a single-sample scene draws straight into the
-/// caller's view and there is nothing here to resolve.
-pub(super) fn msaa_color_texture(
-    device: &wgpu::Device,
-    format: wgpu::TextureFormat,
-    size: (u32, u32),
-    sample_count: u32,
-) -> Option<wgpu::Texture> {
-    (sample_count > 1).then(|| {
-        device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("race msaa colour"),
-            size: wgpu::Extent3d {
-                width: size.0.max(1),
-                height: size.1.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
-    })
-}
+mod attachments;
+pub(super) use attachments::{depth_texture, msaa_color_texture};

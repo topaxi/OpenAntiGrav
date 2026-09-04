@@ -1,8 +1,13 @@
 # Shadows: a ladder of four techniques, and only one of them is the original's
 
-> **Design, not status.** Nothing in this page is built. It exists so the
-> setting's shape is agreed before an enum and a menu row make it expensive to
-> change, the way [`motion-blur.md`](motion-blur.md) did for its own row.
+> **Design, and now partly status.** Steps 1-4 and 6 of [the plan](#the-plan-in-order)
+> have landed: the census, the setting (`graphics.shadows`, `off` and `blob`),
+> the `blob` tier itself, the occluder's record arrays and its runtime reader,
+> and the 2048 measurement. **`original` (step 5) and `mapped` (step 7) are
+> still design only**, and neither is offered as a value until it exists.
+> The page was written before any of it, so the setting's shape was agreed
+> before an enum and a menu row made it expensive to change, the way
+> [`motion-blur.md`](motion-blur.md) did for its own row.
 
 Three things settled this page's shape, and all three were measured against the
 discs rather than assumed:
@@ -574,18 +579,48 @@ Each step is a landing that can be reviewed on its own.
    split and Pure's zero. Every number on this page is asserted there, so the
    design below rests on something `just test-data` can re-check rather than on
    a survey nobody can reproduce.
-2. **The setting, with only `off` and `blob` live.**
-   `crates/game/src/display/shadows.rs` - its own file from the start, since
-   `display.rs` is already why `reconstruction.rs` and `motion_blur.rs` were
-   split out - tests in `display/tests.rs`, a `graphics.shadows` key, and a
-   menu row on the GRAPHICS page. `original` and `mapped` are **not** offered
-   until they exist. One day.
-3. **`blob`.** A quad under each craft, sampling HD's own `ambient_shadow.gtf`
-   where the title has one and a generated falloff where it does not, ray-cast
-   down onto the track ribbon for its height and orientation. This is the tier
-   that gets the pass plumbed into
-   [`draw-order.md`](draw-order.md)'s queue, so it costs more than it looks.
-   Two days.
+2. **The setting, with only `off` and `blob` live - done, 2026-09-04.**
+   [`crates/game/src/display/shadows.rs`](../../crates/game/src/display/shadows.rs),
+   its own file from the start since `display.rs` is already why
+   `reconstruction.rs` and `motion_blur.rs` were split out; tests in
+   `display/tests.rs` naming `original` and `mapped` as values that must
+   *not* parse, so whoever lands one deletes their line beside a new variant.
+   The key lives in `[render_profiles.<title>]` rather than flat in
+   `[graphics]`, for both of that table's reasons: a quad per craft on a grid
+   of eight is render cost, and what a value *means* is per title. The
+   GRAPHICS row landed with step 3 rather than with this step - a row for
+   infrastructure that is not there is worse than no row (ADR-0013) - and
+   `--shadows` was the override in between.
+3. **`blob` - done, 2026-09-04.** [`oag_render::shadow`](../../crates/render/src/shadow.rs)
+   draws a ground-aligned quad per craft;
+   [`oag_game::race::shadow`](../../crates/game/src/race/shadow.rs) places it,
+   casting along the craft's **own** down axis (not world gravity, so a
+   magstrip and an inverted section work) against the circuit's own collision
+   geometry, filtered to `Floor`/`MagFloor` so a craft beside a barrier does
+   not get its shadow up the wall. Blended `SrcAlpha`/`OneMinusSrcAlpha` over
+   black, which is `dst * (1 - a)`; depth-tested and not depth-writing; drawn
+   after the track and the pads and before the hulls.
+
+   **The silhouette is the disc's where the disc has one.** All nine of HD's
+   `ambient_shadow.gtf` load and draw, and the polarity is *measured* rather
+   than assumed - decoded, the corner texel is 0 and the craft's own outline
+   runs to 212 of 255, so the stored byte is coverage and the shader reads the
+   red channel (the descriptor's `remap` broadcasts it there and forces alpha
+   opaque, so reading `.a` would draw a full-strength rectangle). Every other
+   title gets `Silhouette::falloff`, which is ours, reported per slot in the
+   load report, and is why `off` stays the default.
+
+   **What is ours besides the falloff, each said where it is written**: the
+   height fade and its `FADE_REACH`, the `LIFT` off the surface, and where in
+   the frame the quad is drawn - the original's own draw-order key has no
+   layer for a blob, because no title in the lineage draws one.
+
+   **The fade's first cut was wrong in a way only a capture showed.** Faded
+   linearly from the ground, a craft resting at its own ride height came out
+   at strength `0.030`: uploaded, drawn, and invisible - 5,262 pixels changed
+   by a maximum of 2. The fade is full strength up to the craft's own hover
+   target and only falls off above it. Captured on Pulse PSP, Pulse PS2, Pure
+   and HD/Fury; 2048 does not race yet.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
    are `n` planes and `m` vertices, above. ~~What is left of this step is the
    **runtime reader in Ghidra**~~ - **done 2026-09-03**:
@@ -621,9 +656,14 @@ Each step is a landing that can be reviewed on its own.
    it ships *alongside* the authored path rather than above it, with `original`
    still the default there.
 
-Step 1 has landed. Steps 2 and 3 are unblocked and are the useful thing to
-start; step 4 is the one with an unknown in it, and steps 2-3 do not wait on
-it.
+Steps 1, 2, 3, 4 and 6 have landed. **Step 5 is what is next**, and it is
+unblocked: the geometry and the projection are both decoded, so drawing
+Pulse's 119 local-space hulls is a rendering task. Its one open question is
+the `m` face-to-vertex index mapping's exact byte layout, which
+[`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md)
+records - worth resolving *before* the draw code needs it, since a
+plausible-looking but wrong winding is exactly the invented stand-in this
+project's own rule warns against.
 
 ## Constraints this touches
 

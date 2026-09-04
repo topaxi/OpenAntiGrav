@@ -399,16 +399,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
-    // HD's red-trail flag, from each slot's ship directory: the runtime sets
-    // it by the model-variant name (`concept1`/`nitro`/`detonator`/
-    // `chrome_c1`), and on the disc those variants live in `*_c1`, `*_n1` and
-    // `detonator` directories. See `Loaded::hd_trail_red`.
-    let hd_trail_red = std::array::from_fn(|slot| {
-        let fury = slot_teams.get(slot).is_some_and(|team| {
-            team.ends_with("_c1") || team.ends_with("_n1") || team == "detonator"
-        });
-        if fury { 1.0 } else { 0.0 }
-    });
+    let hd_trail_red = roster::hd_trail_red(&slot_teams);
     let liveries = livery::load(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
@@ -423,6 +414,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
          the original's (livery.rs)",
         slot_teams.join(", ")
     ));
+    // Beside the liveries, off the same directory and in the same slot order,
+    // and loaded whatever the setting says: the tier applies live.
+    let shadows = super::shadow::silhouettes(
+        craft_of(&mut craft, &mut archives),
+        &slot_teams,
+        craft_title.race.ship_dir,
+        &mut report,
+    );
     // The Rocket's own model, on the same terms as the boost plume: absence is
     // reported, not fatal. It is not per-team and not per-track - one entry
     // serves every rocket in the game, which is why it loads here once and the
@@ -995,6 +994,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         trail_blend,
         trail_shape,
+        shadows,
         report,
     })
 }

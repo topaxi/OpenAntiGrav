@@ -699,6 +699,27 @@ label = "MOTION BLUR"
 setting = "graphics.motion_blur"
 values = ["off", "low", "medium", "high"]
 
+# What casts a shadow, and what draws it. **A technique, not a strength** - the
+# ladder is not monotonic in quality, which is what `docs/rendering/shadows.md`
+# settled before this row existed: a flat authored hull projected onto the road
+# can read worse than a soft circle on a track whose floor curves under the
+# craft.
+#
+# Two of the design's four tiers are missing on purpose. `original` - Pulse's
+# 129 `Dynamic Shadow Occluder` hulls, HD's shadow-map jobs - and `mapped`, an
+# opt-in cascaded shadow map, are designed and unbuilt, and a row for
+# infrastructure that is not there is worse than no row (ADR-0013).
+#
+# `blob` plays the disc's own silhouette where there is one: Wipeout HD ships
+# nine `ambient_shadow.gtf`, one per team. Every other title gets a generated
+# falloff, which is this project's and is why `off` is the default. Applies
+# live: `Scene::render` reads the tier fresh each frame.
+[[page.entry]]
+kind = "choice"
+label = "SHADOWS"
+setting = "graphics.shadows"
+values = ["off", "blob"]
+
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.
 [[page.entry]]

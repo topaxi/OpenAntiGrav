@@ -173,7 +173,7 @@ explains *why* the branch went unused.
 **The RE half of this thread (steps 1 and 4) is done.** Building anything on
 it - the setting, `blob`, Pulse's `original` tier - is a rendering task now,
 not a reverse-engineering one, and lives in its own thread:
-[shadow-setting-blob-and-pulses-original-tier-are.md](shadow-setting-blob-and-pulses-original-tier-are.md).
+[original-on-pulse-is-the-tier-still-unbuilt.md](original-on-pulse-is-the-tier-still-unbuilt.md).
 What's left here is the RE work that thread doesn't need and isn't
 unblocked by it:
 

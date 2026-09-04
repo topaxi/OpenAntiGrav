@@ -569,6 +569,16 @@ pub struct Loaded {
     /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report
     /// says so - it is not a silent substitution.
     pub flare: Option<FlareTexture>,
+    /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
+    ///
+    /// The disc's own where the source ships one - Wipeout HD's nine
+    /// `ambient_shadow.gtf`, one per team - and a generated falloff where it
+    /// does not, which is every other title. Loaded whatever
+    /// `[render_profiles.<title>] shadows` says, so moving that row applies
+    /// live rather than at the next race; the tier costs nothing while it is
+    /// `off` because `Scene::render` never uploads a quad. See
+    /// [`crate::race::shadow`] and `oag_render::shadow`.
+    pub shadows: Vec<oag_render::shadow::Silhouette>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }

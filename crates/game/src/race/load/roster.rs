@@ -63,3 +63,23 @@ pub(super) fn available(
     };
     declared.into_iter().map(|team| team.id).collect()
 }
+
+/// Wipeout HD's red-trail flag per grid slot, from each slot's own ship
+/// directory.
+///
+/// The runtime sets it by the model-variant name
+/// (`concept1`/`nitro`/`detonator`/`chrome_c1`), and on the disc those
+/// variants live in `*_c1`, `*_n1` and `detonator` directories. See
+/// `Loaded::hd_trail_red`.
+///
+/// Here rather than in `load.rs` under the 1,000-line rule in
+/// `scripts/check-file-size.py`; a move, with no behaviour change, and this is
+/// the file that already answers "which team flies which slot".
+pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHIPS] {
+    std::array::from_fn(|slot| {
+        let fury = slot_teams.get(slot).is_some_and(|team| {
+            team.ends_with("_c1") || team.ends_with("_n1") || team == "detonator"
+        });
+        if fury { 1.0 } else { 0.0 }
+    })
+}

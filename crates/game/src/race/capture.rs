@@ -186,6 +186,13 @@ pub struct CaptureOptions {
     /// the frame that is written out. See `oag_render::post::motion_blur` and
     /// `docs/rendering/motion-blur.md`.
     pub motion_blur: crate::display::MotionBlur,
+    /// What casts a shadow in the captured frame: `--shadows`.
+    ///
+    /// Honoured the same way [`Self::motion_blur`] is, and here for the same
+    /// reason: two captures differing only by this flag are how the tier gets
+    /// compared against itself off. Unlike the blur it needs no primer frame -
+    /// a blob is placed from the tick's own pose, with no history.
+    pub shadows: crate::display::Shadows,
     /// Replaces the live audio spectrum with a fixed synthetic ramp before
     /// the frame is drawn. `--zone-spectrum-test`.
     ///
@@ -243,6 +250,7 @@ pub fn capture(
 ) -> Result<()> {
     let (width, height) = options.size;
     let Loaded {
+        shadows,
         setup,
         hud,
         track_model,
@@ -369,6 +377,7 @@ pub fn capture(
         authored_fog,
         hd_bloom,
         zone_grade,
+        shadows,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -491,6 +500,7 @@ pub fn capture(
             options.pvs_culling,
             options.anim_seconds,
             options.motion_blur,
+            options.shadows,
             camera_jitter,
             &spectrum,
             // **No timestamps on any capture path**, deliberately: this
@@ -553,6 +563,7 @@ pub fn capture(
                 options.pvs_culling,
                 options.anim_seconds,
                 options.motion_blur,
+                options.shadows,
                 camera_jitter,
                 &spectrum,
                 // `OAG_RENDER_BENCH` measures the CPU side of encoding this
@@ -592,6 +603,7 @@ pub fn capture(
         // the smear a player sees is the smear the PNG shows. Off, the pass
         // never observed a previous camera and encodes nothing.
         options.motion_blur,
+        options.shadows,
         camera_jitter,
         &spectrum,
         // Untimed, as the primer above is and for the same reason.
