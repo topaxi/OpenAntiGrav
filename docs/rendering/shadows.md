@@ -300,13 +300,13 @@ Two things follow for the setting:
   constants: `worldViewProj`, `lightDirection`, `extrusionDistance` -
   `lightDirection` is new evidence that HD's version, unlike Pulse's, may take
   a light as input), and a per-model flag bit (`self+0xe4`, bit `0x2`) builds a
-  **fixed-named** sibling path (`.../shadow.stencilvolume`, not per-model
-  named) and loads it through a hashed resource cache into a parsed record
+  path ending in the literal leaf `shadow.stencilvolume` (confidence 65 that
+  the directory it joins into is fixed rather than per-model - see that
+  page) and loads it through a hashed resource cache into a parsed record
   array plus a computed bounding box - the same coarse shape as Pulse's `.vex`
-  payload (leading counts, a geometry array, a bbox) but a different byte
-  layout (24-byte/6-float flat records, no visible face/vertex split). The
-  draw call and the actual PSARC entry are both still unfound - see that
-  page's Open section.
+  payload (leading counts, a geometry array, a bbox) but a different, only
+  partly-understood byte layout (confidence 50 - see that page's Open
+  section). The draw call and the actual PSARC entry are both still unfound.
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
