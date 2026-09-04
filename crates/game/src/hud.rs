@@ -324,6 +324,14 @@ impl Layout {
                 number(&self.constants, node.value("y")).unwrap_or(0.0),
                 number(&self.constants, node.value("z")).unwrap_or(0.0),
             ],
+            // Pure's own spelling, `colour` rather than `Color` - see
+            // `Model::colour`'s doc for why this is read as an `Option` rather
+            // than through the `colour()` helper's white-when-absent default.
+            colour: node
+                .value("colour")
+                .and_then(|v| resolve(&self.constants, v))
+                .and_then(parse_argb)
+                .map(argb_to_rgba),
         })
     }
 

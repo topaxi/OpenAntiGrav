@@ -204,6 +204,17 @@ pub struct Fill {
 /// which the runtime overwrites every frame. Four brackets around a centre is a
 /// lock-on reticle anchored on the *locked craft*. Drawn as of 2026-08-26; see
 /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md` for the placement law.
+///
+/// # `colour`, and why Pulse's and HD/Fury's own sight models never set it
+///
+/// Pure authors a `colour="0xAARRGGBB"` on every one of its ten weapon-icon
+/// `<Model>`s (`Data\XML\Arcade_HUD.xml`, `TimeTrial_HUD.xml`) and on none of
+/// its three sight/bar models beside them - the same split [`Sprite::color`]
+/// and [`Fill::color`] draw for `<Image>`. Pulse's and HD/Fury's own `<Model>`
+/// widgets (the missile/leach-beam sight brackets) carry no such attribute on
+/// either disc, so this is Pure's own dialect rather than a general one: a
+/// mesh with `colour: None` draws whatever `.vex` bakes into it, the same way
+/// a `<Model>` with no attribute always has.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Model {
     /// The `name` attribute.
@@ -212,4 +223,7 @@ pub struct Model {
     pub src: String,
     /// Position in the 3D overlay's own space.
     pub position: [f32; 3],
+    /// The `colour` attribute, split into RGBA. `None` when absent, which is
+    /// every model on Pulse and HD/Fury and three of Pure's own thirteen.
+    pub colour: Option<[f32; 4]>,
 }

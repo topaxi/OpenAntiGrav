@@ -268,6 +268,36 @@ fn the_sample_yields_every_widget_it_declares() {
         "nothing should be skipped: {:?}",
         layout.skipped
     );
+    assert_eq!(
+        layout.models[0].colour, None,
+        "SAMPLE's ReadyGo model authors no colour, the same as every sight \
+         model on Pulse and HD/Fury"
+    );
+}
+
+/// `Data\XML\TimeTrial_HUD.xml`'s own spelling of a weapon icon, cut to one
+/// widget: `colour="0xff40ff40"`, lowercase, no `FEConst->` indirection.
+/// `crates/pure/src/hud.rs`'s module doc has the other nine.
+const PURE_WEAPON_ICON: &str = r#"
+<Screen>
+<Mode3D>
+<Model name="TURBO_icon">
+<Values Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" x="240" y="250" z="-10" ztest="0"></Values>
+</Model>
+</Mode3D>
+</Screen>
+"#;
+
+#[test]
+fn a_models_own_colour_attribute_parses_where_pulse_and_hd_never_author_one() {
+    let layout = Layout::from_xml(PURE_WEAPON_ICON);
+    assert_eq!(layout.models.len(), 1);
+    assert_eq!(
+        layout.models[0].colour,
+        Some(argb_to_rgba(0xff40_ff40)),
+        "Pure's own `colour` spelling, not `Color`, and not routed through \
+         the white-when-absent `colour()` helper Image/Text widgets use"
+    );
 }
 
 /// The single most important thing this parser does. A child of an `<Item>`

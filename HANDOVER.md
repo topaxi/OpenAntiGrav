@@ -409,6 +409,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's loading screen is recovered from its own constructor; three threads left](handover/hds-loading-screen-is-recovered-from-its-own.md)
 - [The race mix saturates; the per-voice SAS volume would settle whether it should](handover/the-race-mix-saturates-the-per-voice-sas.md)
 - [The Autopilot pickup is built off its own two handlers; three of its parts are still ours](handover/the-autopilot-pickup-is-built-off-its-own.md)
+- [Pure's weapon-icon `<Model>`s carry their own authored colour; drawing them is not built](handover/pures-weapon-icon-models-carry-their-own-colour.md)
 - [Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`](handover/positional-audio-is-recovered-whole-and-the-pan.md)
 - [HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks](handover/hds-exhaust-is-measured-from-the-running-game.md)
 - [HD's engine trail is one of four ribbons, and a craft flying through one sparks](handover/hds-engine-trail-is-one-of-four-ribbons.md)

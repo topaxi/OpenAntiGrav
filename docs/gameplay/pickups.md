@@ -310,6 +310,51 @@ Turbo. **It is not**: `6` lands on `Shield` or `Autopilot` depending on where
 the class-name pool starts counting, and the turbo turned out to be a different
 term entirely - see below.
 
+### Pure does the same thing with a different widget kind, not a different answer
+
+**2026-09-04.** Pure's weapon icons are not `<Image>` sprites at all -
+`Arcade_HUD.xml` and `TimeTrial_HUD.xml` (`Data.wad`, both byte-identical on
+this point) draw each one as a `<Mode3D><Model>`, and ten of them carry a
+`colour="0xAARRGGBB"` attribute directly, e.g. `<Model name="TURBO_icon">
+<Values Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" .../></Model>`.
+Confidence **95**: read straight off the disc, no inference, no reference
+frame needed the way Pulse's fill required one - a colour written in the XML
+answers the question Pulse's authored-white backdrop leaves for a runtime
+substitution table to answer instead.
+
+The same four-colour split Pulse's own reference frames found shows up again,
+independently: green (`0xff40ff40`) for `Turbo`/`Shield`/`Autopilot`, one blue
+(`0xff40acff`) for `Rocket`/`Missile`/`Disruptor`, a second, purer blue
+(`0xff0000ff`) for `Quake`/`Plasma`, and orange (`0xffffc040`) for
+`Mine`/`Bomb` - four categories, not ten independent colours, the same shape
+as Pulse's pink/green/fallback grouping even though neither the colours nor
+the exact membership match weapon-for-weapon.
+
+**`Disruptor` is a weapon Pure's roster has that Pulse's does not.** Pure's
+own executable strings carry `WO_DISRUPTOR_EXPLO` alongside every other
+weapon's explosion effect name, so this is not a second spelling of `Cannon` -
+`Cannon` has no icon in either layout, and Pure's ten omit `LeachBeam`,
+`Repulser` and `Shuriken` from Pulse's thirteen as well. `Weapon`
+(`crates/formats/src/weapons.rs`) is scoped to Pulse's own weapon table, so a
+per-title roster difference like this is expected rather than a gap to
+reconcile by guessing a mapping - see `crates/pure/src/hud.rs`'s module doc
+for the full accounting.
+
+**This corrects a claim made and merged the same day**: `oag_pure::hud::ART`
+briefly stated Pure "has no per-weapon icon widget of any kind to colour",
+concluded from grepping `<Image name=` alone and never checking for `<Model
+name=` inside a `<Mode3D>` block. The retraction and the corrected reading are
+both in `crates/pure/src/hud.rs` now.
+
+**Not done: actually drawing Pure's icons.** `oag_game::hud::Model::colour`
+parses the attribute, but nothing yet selects a `<WEAPON>_icon` model by the
+held weapon or turns a `.vex` mesh into a `Draw::Sprite` the way the existing
+sight-bracket models are. That needs a recovered size/UV convention per mesh -
+the sight brackets have one (`SIGHT_SIZE`), read off one model by hand, and
+ten more meshes is not a case for inventing a rule and hoping it generalises.
+Left as a named next step rather than a guessed-at render path, per
+`CLAUDE.md`'s rule against a plausible-looking stand-in.
+
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
