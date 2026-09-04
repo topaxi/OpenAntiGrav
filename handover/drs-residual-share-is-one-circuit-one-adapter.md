@@ -143,6 +143,26 @@ does not prove the budget was the only thing wrong. The Deck reading above
 tells them apart: if `SCENE` alone reads near the whole frame period while the
 frame rate is fine, the reading is the suspect, not the reserve.
 
+**A third explanation for the same freeze, found by static read on 2026-09-04
+and fixed the same day, and it needs no build failure at all.** The four
+`PassTimer` rings were each read one reading per frame, and the loop polls
+them one after another - so a GPU completion landing between two of those
+polls reached the later ring that frame and the earlier ring the next. From
+then on the earlier ring carried a backlog of one and handed back the older
+reading on every call, its reading was a frame behind the other three's on
+every call, and only a frame with *no* arrival - which a vsync-paced loop at a
+steady rate never has - could resync them. Every frame after that was a
+mismatch, `Cost::fixed` read as "not measured yet" under `fsr3`, and the
+controller went silent wherever the scale happened to be: the same picture as
+the shader-build freeze, on a machine whose shaders built fine. With
+`reconstruction = off` on a Pulse circuit the same skew instead dropped the
+motion-blur term out of `scalable` - not a freeze, but a budget that read
+cheaper than the frame was. `PassTimer::drain` and
+`Session::read_timing_and_feed_drs` now take every ready reading a frame and
+match by frame across the lot; `docs/rendering/dynamic-resolution.md`'s fourth
+timer property is the record. The Deck reading below still tells the
+remaining two apart, and should be taken with this fix in as well.
+
 **Whether AI/physics cost for a full grid should be its own measured term**,
 the way `hd_bloom` stopped being a residual guess. ADR-0044 is the inference
 from the clock the loop already reads, not a measurement, and it says where it

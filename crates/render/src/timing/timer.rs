@@ -208,6 +208,10 @@ struct Buffers {
 }
 
 impl PassTimer {
+    /// How many readings [`Self::drain`] can hand back at once - the ring's
+    /// size, and the size of the array a caller lends it.
+    pub const SLOTS: usize = SLOTS;
+
     /// A timer, or `None` on a device that cannot be asked.
     ///
     /// Takes the **device** rather than the adapter, deliberately: an adapter
@@ -386,12 +390,64 @@ impl PassTimer {
     /// that has been submitted, and the callback fires when the GPU is done
     /// with it.
     ///
-    /// One per call rather than a batch, because a batch would allocate every
-    /// frame to hand back a list that is almost always one item long. A
-    /// backlog drains oldest first, one a frame, and each item still names its
-    /// own frame - so a caller loses ordering information by ignoring
-    /// [`Reading::frame`], not by calling this once.
+    /// One per call rather than a batch, so a caller that wants exactly one
+    /// number a frame gets it with no buffer to hand over. A backlog drains
+    /// oldest first, one a frame, and each item still names its own frame - so
+    /// a caller loses ordering information by ignoring [`Reading::frame`],
+    /// not by calling this once. **A caller pairing this ring's readings
+    /// against another ring's wants [`Self::drain`] instead**, for the reason
+    /// its documentation gives.
     pub fn read(&mut self, device: &wgpu::Device) -> Option<Reading> {
+        self.start_maps();
+        // Non-blocking, unlike the probe in `timing/tests.rs`: waiting here
+        // would drain the pipeline this is measuring.
+        let _ = device.poll(wgpu::PollType::Poll);
+        let (slot, frame) = self.ready()?;
+        self.take(slot, frame)
+    }
+
+    /// Everything that has come back, oldest first, into `out`.
+    ///
+    /// The same round trip as [`Self::read`] with one difference that matters
+    /// to a caller reading **several rings for one frame**: this takes every
+    /// reading that is ready, not the oldest one. `read`'s one-a-call shape
+    /// lets a ring fall permanently one frame behind its neighbours - the
+    /// map callbacks for one submission fire in whichever `poll` happens to
+    /// run after the GPU finishes it, and a frame loop polls once per ring,
+    /// so a completion landing between two of those polls hands the second
+    /// ring a reading the first ring will only see next frame. From then on
+    /// the first ring holds two ready readings, returns the older, and its
+    /// newest is exactly one frame behind the other ring's on *every* call;
+    /// nothing short of a frame with no arrival at all resyncs them. A caller
+    /// that only trusts readings naming the same frame then never sees a
+    /// match again. Taking everything that is ready keeps a ring's backlog
+    /// at zero, so two rings can disagree by at most the one frame the race
+    /// itself costs, and are back in step on the next.
+    ///
+    /// `out` is caller-owned and fixed-size so that this allocates nothing
+    /// per frame; a ring holds at most [`Self::SLOTS`] readings. Unfilled
+    /// entries are left `None`, and the filled ones are contiguous from the
+    /// front.
+    pub fn drain(&mut self, device: &wgpu::Device, out: &mut [Option<Reading>; SLOTS]) {
+        self.start_maps();
+        let _ = device.poll(wgpu::PollType::Poll);
+        for entry in out.iter_mut() {
+            *entry = None;
+        }
+        let mut count = 0;
+        // Bounded by the ring, whatever `ready` does: every iteration frees
+        // a slot, so this ends within `SLOTS` rounds.
+        while let Some((slot, frame)) = self.ready() {
+            let reading = self.take(slot, frame);
+            if let Some(reading) = reading {
+                out[count] = Some(reading);
+                count += 1;
+            }
+        }
+    }
+
+    /// Start a map on every slot whose copy has been submitted.
+    fn start_maps(&mut self) {
         for slot in 0..SLOTS {
             if !self.ring.is_copied(slot) {
                 continue;
@@ -414,12 +470,16 @@ impl PassTimer {
                 });
             self.ring.mapping(slot);
         }
-        // Non-blocking, unlike the probe in `timing/tests.rs`: waiting here
-        // would drain the pipeline this is measuring.
-        let _ = device.poll(wgpu::PollType::Poll);
-        let (slot, frame) = self
-            .ring
-            .ready(|slot| self.buffers[slot].mapped.load(Ordering::Acquire))?;
+    }
+
+    /// The oldest slot whose map has landed.
+    fn ready(&self) -> Option<(usize, u64)> {
+        self.ring
+            .ready(|slot| self.buffers[slot].mapped.load(Ordering::Acquire))
+    }
+
+    /// Take the reading out of a slot [`Self::ready`] returned, and free it.
+    fn take(&mut self, slot: usize, frame: u64) -> Option<Reading> {
         let buffers = &self.buffers[slot];
         buffers.mapped.store(false, Ordering::Release);
         let ticks = {

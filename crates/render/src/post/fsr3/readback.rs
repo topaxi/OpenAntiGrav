@@ -82,6 +82,22 @@ impl Scene {
         frames: &[Input<'_>],
         jittered: bool,
     ) -> Option<Self> {
+        Self::run_resetting(render, frames, jittered, |index| index == 0)
+    }
+
+    /// [`Scene::run_with`], with `reset` deciding which frames throw the
+    /// history away rather than only the first.
+    ///
+    /// **One `Fsr3` and one set of targets across every frame**, which is the
+    /// point: a reset into targets that still hold a previous sequence is the
+    /// race-restart case, and a fresh allocation - zero-initialised by wgpu -
+    /// cannot show what a reset fails to wipe.
+    pub(super) fn run_resetting(
+        render: (u32, u32),
+        frames: &[Input<'_>],
+        jittered: bool,
+        reset: impl Fn(usize) -> bool,
+    ) -> Option<Self> {
         let texels = (render.0 * render.1) as usize;
         let upscale = (render.0 * 2, render.1 * 2);
 
@@ -177,7 +193,7 @@ impl Scene {
                         phase_count: crate::jitter::phases(render.0, upscale.0),
                         camera: CAMERA,
                         delta_time: 1.0 / 60.0,
-                        reset: index == 0,
+                        reset: reset(index),
                         sample_count: 1,
                         sharpness: crate::post::fsr1::Sharpness::DEFAULT,
                     },

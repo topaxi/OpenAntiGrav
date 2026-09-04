@@ -201,6 +201,32 @@ a mip chain over `(log(luma), luma)` down to 1x1 and the
 `ComputeAutoExposureFromLavg` smoothing - goes back into `luma_pyramid.wgsl`,
 which says so. It is left out rather than left half-built.
 
+### A reset clears the accumulation it reads, as a render pass
+
+Not a deviation in *what* happens but in *how*, and recorded because the first
+version of this port did not do it at all. Upstream's `resetAccumulation` path
+in `ffx_fsr3upscaler.cpp` schedules a backend clear of the accumulation SRV -
+the half of `ACCUMULATION_1`/`_2` this frame will read - and of `SPD_MIPS`,
+before the passes run. Setting `frameIndex` to zero is only the other half of a
+reset: it makes every presentation pixel a *new sample*, so `accumulate` never
+reprojects a history colour, but the history **weight** it blends that zeroed
+colour in at still comes from `prepare_reactivity`, which reads the previous
+frame's accumulation texture. Into targets that already ran a sequence - a race
+restart, which is the common case, since `Fsr3` and its `Targets` outlive a
+`Scene` - that texture says "fully accumulated" at every texel, and the first
+frames of the new race come out darkened rather than being the plain
+initial-sample upsample they are on a fresh allocation.
+
+Here the clear is an empty render pass with `LoadOp::Clear`, the same wipe
+`new_locks` gets every frame, so `accumulation` carries `RENDER_ATTACHMENT`
+alongside its storage usage. `spd_mips` is **not** cleared: every level of that
+pyramid is rewritten by the dispatch chain each frame, where upstream's
+single-pass downsampler writes only the levels it reaches. Pinned by
+`a_reset_reads_no_history_even_when_the_targets_still_hold_one`, which runs
+three still frames into one set of targets with the third a reset, and reads
+two thirds of a frame of history on that frame without the clear and none with
+it.
+
 ## What is checked, and how
 
 Nothing downstream consumes these passes yet, so a wrong reduction has no

@@ -212,7 +212,7 @@ impl Controller {
             return None;
         }
         if ratio < *DEADBAND.start() {
-            self.under += 1;
+            self.under = self.under.saturating_add(1);
             self.unreachable = 0;
             if self.under < RISE_PATIENCE {
                 return None;

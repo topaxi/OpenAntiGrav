@@ -748,31 +748,62 @@ impl Fsr3 {
             .expect("built just above")
             .groups(frame_index);
 
+        // An empty render pass is the cheapest wipe available: no pipeline,
+        // no draw, just the hardware's fast clear.
+        let clear = |encoder: &mut wgpu::CommandEncoder, label, view| {
+            encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                })
+                .forget_lifetime();
+        };
+
         // **The lock target, wiped before anything writes it.** `new_locks` is
         // written by a scatter, so most presentation texels are never touched
         // and last frame's locks would otherwise survive into this one.
         // Upstream avoids the clear by having `accumulate` zero each texel as
         // it reads it, which would need a read-write storage texture - see
-        // `resources::CLEARABLE`. An empty render pass is the cheapest wipe
-        // available: no pipeline, no draw, just the hardware's fast clear.
-        encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("fsr3 clear new locks"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &targets.new_locks.view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            })
-            .forget_lifetime();
+        // `resources::CLEARABLE`.
+        clear(encoder, "fsr3 clear new locks", &targets.new_locks.view);
+
+        // **A reset also wipes the accumulation this frame reads**, which is
+        // upstream's `resetAccumulation` clearing the accumulation SRV, and it
+        // is the half of a reset that forgetting `previous` above cannot do.
+        // `frame_index == 0` already makes every presentation pixel a new
+        // sample, so no history *colour* is reprojected - but the history
+        // *weight* comes from `prepare_reactivity`, which reads the previous
+        // frame's accumulation texture, and after a race restart into the
+        // same targets that texture still says "fully accumulated" at every
+        // texel. `accumulate` would then blend its zeroed history in at that
+        // weight against a few percent of the fresh upsample, and the first
+        // frames of the new race come out darkened rather than being the
+        // plain initial-sample upsample they are on a fresh allocation.
+        //
+        // Only the *previous* half: the current half is written before
+        // anything reads it. Upstream's reset also clears `spd_mips`, which
+        // this port does not need to: every level of the pyramid is rewritten
+        // by the dispatch chain each frame, where upstream's single-pass
+        // downsampler writes only the levels it reaches.
+        if wanted.frame_index == 0.0 {
+            clear(
+                encoder,
+                "fsr3 clear accumulation on reset",
+                &targets.accumulation.previous(frame_index).view,
+            );
+        }
 
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
 
@@ -872,3 +903,7 @@ impl Fsr3 {
 mod readback;
 #[cfg(test)]
 mod tests;
+// A second test file rather than more of `tests`, which is already past 900
+// lines against `just check-size`'s 1,000-line ratchet.
+#[cfg(test)]
+mod reset_tests;
