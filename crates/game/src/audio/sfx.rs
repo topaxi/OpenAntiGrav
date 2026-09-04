@@ -585,6 +585,13 @@ pub enum Cue {
     /// **An opponent's destruction plays nothing here**, and that is the
     /// reading rather than a gap in it - whatever an opponent's explosion
     /// sounds like comes from somewhere this pass did not find.
+    ///
+    /// **The one cue of nine with no confirmed Pure trigger.** The `~BLOWUP`
+    /// string exists in Pure's executable and the cue exists on its disc,
+    /// but its call site was not found - six search methods that found every
+    /// other cue this thread chased all came up empty here.
+    /// `docs/ghidra/functions/psp-pure-usa/blowup-sound-open.md` records
+    /// what was tried, so a future pass does not repeat it.
     Blowup,
     /// The lock-on reticle, seeking and then locked.
     ///
