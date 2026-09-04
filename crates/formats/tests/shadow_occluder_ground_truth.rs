@@ -148,8 +148,15 @@ const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 ///   `0.0` on the other 38.** Tried and ruled out as a discriminator: node
 ///   name/type (both behaviours occur on both `shadowShape` and
 ///   `shadow_lodShape`, including the same numeric `max.y` value split
-///   both ways across different files) and the specific numeric value. May
-///   be a per-circuit build/tool version difference; not chased further.
+///   both ways across different files), the specific numeric value (14 of
+///   17 repeated values agree on kept-vs-hard-zero, 3 don't), and file
+///   identity - there is no per-entry build/version field in the WAD
+///   directory to begin with, and the 3 exceptions above sit in adjacent
+///   file entries anyway. Checked 2026-09-04 with
+///   `examples/shadow_padding_probe.rs`; see
+///   `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
+///   readout, including that the unnamed/world-space population diverges
+///   on `x`/`z` rather than `y`.
 ///
 /// So the padded box is doing *something* shadow-relevant rather than
 /// nothing - most divergence pulls the box toward the ground plane rather

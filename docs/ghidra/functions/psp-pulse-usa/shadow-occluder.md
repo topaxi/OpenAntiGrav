@@ -105,6 +105,46 @@ component) before trusting either version further. See
 `PSP_OCCLUDERS_WITH_PADDED_BBOX`'s doc comment in
 [`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)
 for the full numbers; not pinned as an assertion there, since the split
+
+### File/build-version, checked and ruled out; the world-space population does differ on X/Z
+
+2026-09-04, [`shadow_padding_probe.rs`](../../../../crates/formats/examples/shadow_padding_probe.rs)
+(`cargo run -q -p oag-formats --example shadow_padding_probe`) walked all 32
+mismatching nodes by archive path and directory index to check the two
+remaining Open items directly, rather than guess further.
+
+**File identity is not the discriminator.** There is no per-entry
+build/version field to check in the first place - `docs/formats/wad.md`'s
+directory has no timestamp, so "file/build-version" as literally stated
+cannot be tested. What can be checked is whether *which file* a node sits in
+predicts its behaviour, and it does not: the two `min.y` exceptions
+(`Data.wad#809`/`#812`) sit in the same two files as the sibling
+`shadowShape` nodes that *do* get floored, and three of the seventeen
+distinct repeated `max.y` values split behaviour between sibling nodes in
+adjacent file entries (`#589` hard-zero / `#592` kept at `-0.40124527`;
+`#597` hard-zero / `#600` kept at `-0.02563141`; `#718`/`#721` kept /
+`#724` hard-zero at `-0.39955962`). A same-file, same-value pair disagreeing
+rules out both file identity and the specific numeric value at once.
+
+**The repeated true-vertex value is a strong but incomplete predictor.**
+Grouping the 32 mismatchers' `max.y` cases by their exact vertex-derived
+value gives 17 distinct values; 14 of the 17 agree on kept-vs-hard-zero
+across every node that shares them (up to seven repeats, e.g. `-0.44388673`
+hard-zero on all 14 of its occurrences), and only the three listed above
+disagree. That is a much stronger correlation than "no discriminator" reads,
+but it is not a rule, and the three exceptions are exactly where the
+mechanism actually needs explaining: whatever decides kept-vs-hard-zero
+depends on something beyond the node's own geometry, since two nodes that
+authored the identical value diverge.
+
+**The 10 unnamed/world-space occluders do behave differently, confirmed on
+real data.** Two of them - `Data.wad#142` and `Data.wad#144`, each carrying
+two occluder nodes - diverge on `x` (one node of each pair also on `z`),
+where every local/named node in the 32 diverges on `y` alone. This settles
+the open question below: the world-space population is not just "the same
+Y-axis behaviour on different nodes", it diverges on a different axis
+entirely, consistent with a track-side occluder's hull genuinely extending
+in `x`/`z` where a craft's local hull does not.
 depends on `vertex_extent`'s own correctness and would be circular as a
 test.
 
@@ -281,13 +321,17 @@ asserted either way.
 - **No runtime trace exists for any of this.** A PPSSPP watchpoint on
   `self+0x50` during a lap that passes a known occluder-bearing circuit
   section would be the fastest way into the 95-100 band.
-- **What discriminates the padded box's two exceptions from its two rules**
-  (the 2-of-14 unfloored `min.y` nodes, the 38-of-54 hard-zeroed `max.y`
-  nodes). File/build-version is the leading guess, not checked; node name
-  and specific value are both ruled out.
-- **Whether `f32::min`/hard-zero and true-vertex-value are the only two
+- ~~What discriminates the padded box's two exceptions from its two rules~~
+  **Checked 2026-09-04: file/build-version ruled out** (no such field exists
+  in the WAD directory to begin with, and sibling nodes in the same file
+  disagree regardless); **the repeated exact vertex-derived value predicts
+  behaviour on 14 of 17 groups but not the other 3** - see the new section
+  above. What actually decides the 3 exceptions, and the 2-of-14 `min.y`
+  ones, is still open: it depends on something other than the node's own
+  geometry, file, or name.
+- ~~Whether `f32::min`/hard-zero and true-vertex-value are the only two
   behaviours, or whether a third population (the unnamed/track-side nodes)
-  behaves differently again on `X`/`Z`.** Not reconfirmed after the
-  min.y/max.y correction above; the original claim about them was made
-  before the sampling-bias problem was found and was not independently
-  re-verified.
+  behaves differently again on `X`/`Z`~~ **Confirmed 2026-09-04**: two
+  world-space nodes (`Data.wad#142`, `Data.wad#144`) diverge on `x` (one also
+  on `z`), where every local/named node only ever diverges on `y` - see the
+  new section above.
