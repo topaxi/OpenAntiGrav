@@ -559,10 +559,11 @@ fn a_shadow_tier_round_trips_and_refuses_what_it_does_not_offer() {
         assert_eq!(tier.to_string(), tier.name());
     }
     assert_eq!("BLOB".parse::<Shadows>(), Ok(Shadows::Blob));
-    // The two designed tiers nothing has built yet. Naming them here is what
-    // makes the refusal deliberate rather than incidental: whoever lands
-    // either one deletes the line beside their new variant.
-    assert!("original".parse::<Shadows>().is_err());
+    // `original` landed 2026-09-04 and its refusal line went with it.
+    assert_eq!("original".parse::<Shadows>(), Ok(Shadows::Original));
+    // The one designed tier nothing has built yet. Naming it here is what makes
+    // the refusal deliberate rather than incidental: whoever lands it deletes
+    // this line beside their new variant.
     assert!("mapped".parse::<Shadows>().is_err());
 }
 

@@ -660,19 +660,15 @@ impl Scene {
             alpha,
         );
 
-        // The blob shadows, gathered here with the rest of the per-frame
-        // geometry and uploaded whether or not the tier is on - `upload` with
-        // no placements clears the runs, which is what makes turning the row
-        // off take effect on the next frame rather than leaving the last
-        // frame's quads in the buffer.
-        let placements = if shadows.draws() {
-            race.shadow_placements()
-        } else {
-            Vec::new()
-        };
-        self.shadow
-            .borrow_mut()
-            .upload(queue, &view_projection.to_cols_array_2d(), &placements);
+        // Both shadow tiers' geometry, gathered with the rest of the frame's.
+        // Its own file under the 1,000-line rule - see `frame/shadow.rs`.
+        let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
+        self.shadow.borrow_mut().upload(
+            queue,
+            &view_projection.to_cols_array_2d(),
+            &quads,
+            &hull_vertices,
+        );
         oag_render::perfprobe::mark("shadow-gather");
 
         oag_render::perfprobe::mark("psys-gather");
@@ -969,4 +965,5 @@ impl Scene {
 }
 
 mod attachments;
+mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};

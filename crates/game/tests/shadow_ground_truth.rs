@@ -21,6 +21,7 @@
 
 use std::path::{Path, PathBuf};
 
+use oag_core::math::Vec3;
 use oag_game::race;
 use oag_physics::SpeedClass;
 
@@ -124,4 +125,268 @@ fn every_craft_on_the_grid_casts_a_blob_shadow_onto_the_floor() {
             placement.half_width * 2.0
         );
     }
+}
+
+/// The `original` tier's projected hull lands on the surface, under the craft.
+///
+/// The composition `oag_render::shadow::hull_triangles`' own tests cannot
+/// check: a real hull, a real craft pose and a real contact plane. What breaks
+/// here is a space mismatch - a hull in one space projected against a plane in
+/// another - which produces a shadow drawn on the craft rather than under it.
+#[test]
+#[ignore = "needs a real disc image under data/images/"]
+fn the_projected_hull_lands_on_the_surface_under_the_craft() {
+    let Some(loaded) = load_with_opponents() else {
+        return;
+    };
+    let hulls = loaded.shadow_hulls.clone();
+    let race = race::Race::start(loaded.setup);
+    let placements = race.shadow_placements();
+    let placement = &placements[0];
+    let hull = hulls[0].as_ref().expect("the player's craft authors one");
+
+    let mut vertices = Vec::new();
+    let rings = oag_render::shadow::hull_triangles(
+        &oag_render::shadow::Cast {
+            hull,
+            model: race.ship_model_matrix_of(0),
+            axis: Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS),
+            contact: placement.contact,
+            normal: placement.normal,
+            strength: placement.strength,
+        },
+        &mut vertices,
+    );
+    assert!(rings > 0, "no ring was drawn");
+    assert_eq!(vertices.len() % 3, 0);
+
+    let craft = race.world.ships[0].physics.body.position;
+    println!(
+        "craft at {craft:?}, contact {:?}, {rings} ring(s), {} vertices",
+        placement.contact,
+        vertices.len()
+    );
+    let mut lowest = f32::MAX;
+    let mut highest = f32::MIN;
+    for vertex in &vertices {
+        let point = Vec3::from_array(vertex.position);
+        let height = (point - placement.contact).dot(placement.normal);
+        lowest = lowest.min(height);
+        highest = highest.max(height);
+    }
+    println!("projected height above the contact plane: {lowest} .. {highest}");
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+    for vertex in &vertices {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(vertex.position[axis]);
+            max[axis] = max[axis].max(vertex.position[axis]);
+        }
+    }
+    let span = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    println!("projected span {span:?}");
+    // And it lands *under the craft*, not beside it: the projection is nearly
+    // vertical, so the polygon's own centre is within a hull length of the
+    // contact point. A hull projected in the wrong space still comes out flat
+    // on the plane - this is the assertion that catches that.
+    let centre = Vec3::new(
+        (min[0] + max[0]) * 0.5,
+        (min[1] + max[1]) * 0.5,
+        (min[2] + max[2]) * 0.5,
+    );
+    // The ring itself, in the plane, so a bad *outline* can be told from a bad
+    // *fill*: shoelace area against the area of its own convex hull.
+    let outline = hull.outline(oag_pulse::shadow::AUTHORED_AXIS);
+    println!(
+        "{} ring(s), lengths {:?}",
+        outline.len(),
+        outline.iter().map(|r| r.len()).collect::<Vec<_>>()
+    );
+    let model = race.ship_model_matrix_of(0);
+    let direction = model
+        .transform_vector3(Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS))
+        .normalize();
+    let facing = direction.dot(placement.normal);
+    let flat: Vec<[f32; 2]> = outline[0]
+        .iter()
+        .map(|slot| {
+            let local = Vec3::from_array(hull.vertices[usize::from(*slot)]);
+            let world = model.transform_point3(local);
+            let travel = (placement.contact - world).dot(placement.normal) / facing;
+            let point = world + direction * travel;
+            [point.x, point.z]
+        })
+        .collect();
+    let shoelace = |ring: &[[f32; 2]]| {
+        let mut sum = 0.0;
+        for i in 0..ring.len() {
+            let a = ring[i];
+            let b = ring[(i + 1) % ring.len()];
+            sum += a[0] * b[1] - b[0] * a[1];
+        }
+        (sum * 0.5).abs()
+    };
+    println!("ring area {:.2}", shoelace(&flat));
+    for point in &flat {
+        print!("({:.2},{:.2}) ", point[0], point[1]);
+    }
+    println!();
+    // What the fill actually covers, against what the ring encloses: a
+    // triangulation that gives up early draws a smaller shape, and on screen
+    // that reads as a shadow far too small for the craft.
+    let mut filled = 0.0;
+    for triangle in vertices.as_chunks::<3>().0 {
+        let p: Vec<Vec3> = triangle
+            .iter()
+            .map(|v| Vec3::from_array(v.position))
+            .collect();
+        filled += (p[1] - p[0]).cross(p[2] - p[0]).length() * 0.5;
+    }
+    println!(
+        "filled area {filled:.2} against ring area {:.2}",
+        shoelace(&flat)
+    );
+    let drift = (centre - placement.contact).length();
+    println!("projected centre is {drift:.3} from the contact point");
+    assert!(
+        drift < placement.half_length * 2.0,
+        "the shadow is {drift} from under the craft, whose hull is {} long",
+        placement.half_length * 2.0
+    );
+    println!(
+        "hull local span {:?}",
+        [
+            hull.bounds.1[0] - hull.bounds.0[0],
+            hull.bounds.1[1] - hull.bounds.0[1],
+            hull.bounds.1[2] - hull.bounds.0[2],
+        ]
+    );
+    // Every vertex sits on the plane, one lift above it - that is what
+    // "projected onto the surface" means, and a hull drawn in its own space
+    // instead would span the craft's own height here.
+    assert!(
+        (lowest - oag_render::shadow::LIFT).abs() < 1e-3
+            && (highest - oag_render::shadow::LIFT).abs() < 1e-3,
+        "the projection is not flat on the surface: {lowest} .. {highest}"
+    );
+}
+
+/// The shadow hull is an approximation of the ship it belongs to.
+///
+/// **The check that catches loading the wrong node, or losing its placement in
+/// the `.vex` tree** - both of which draw a shadow that is still a plausible
+/// dark shape on the road. Rasterizes the craft's own mesh and its shadow hull
+/// from above into one grid and compares coverage; the grids are printed too,
+/// because the picture is the evidence and the percentages stand in for it.
+#[test]
+#[ignore = "needs a real disc image under data/images/"]
+fn the_shadow_hull_is_the_shape_of_the_ship_it_belongs_to() {
+    let Some(loaded) = load_with_opponents() else {
+        return;
+    };
+    let hull = loaded.shadow_hulls[0].as_ref().expect("a hull");
+    let model = &loaded.liveries[0].hull;
+
+    // One grid, one scale, both shapes: the ship's triangles and the hull's
+    // faces rasterized from above.
+    let mut min = [f32::MAX; 2];
+    let mut max = [f32::MIN; 2];
+    let mut note = |x: f32, z: f32| {
+        min[0] = min[0].min(x);
+        max[0] = max[0].max(x);
+        min[1] = min[1].min(z);
+        max[1] = max[1].max(z);
+    };
+    for vertex in &model.vertices {
+        note(vertex.position[0], vertex.position[2]);
+    }
+    for vertex in &hull.vertices {
+        if *vertex != [0.0; 3] {
+            note(vertex[0], vertex[2]);
+        }
+    }
+    println!(
+        "plan extent x {:.2}..{:.2}, z {:.2}..{:.2}",
+        min[0], max[0], min[1], max[1]
+    );
+
+    const W: usize = 96;
+    const H: usize = 40;
+    let cell = |x: f32, z: f32| {
+        let u = ((x - min[0]) / (max[0] - min[0]) * (W - 1) as f32).round() as usize;
+        let v = ((z - min[1]) / (max[1] - min[1]) * (H - 1) as f32).round() as usize;
+        (u.min(W - 1), v.min(H - 1))
+    };
+    let fill = |grid: &mut Vec<Vec<char>>, a: [f32; 3], b: [f32; 3], c: [f32; 3], mark: char| {
+        // Scanline-free: sample the triangle's barycentric grid coarsely, which
+        // is enough for a picture.
+        for i in 0..=24 {
+            for j in 0..=24 - i {
+                let (u, v) = (i as f32 / 24.0, j as f32 / 24.0);
+                let w = 1.0 - u - v;
+                let x = a[0] * w + b[0] * u + c[0] * v;
+                let z = a[2] * w + b[2] * u + c[2] * v;
+                let (cx, cy) = cell(x, z);
+                grid[cy][cx] = mark;
+            }
+        }
+    };
+
+    let mut ship = vec![vec![' '; W]; H];
+    for triangle in model.indices.as_chunks::<3>().0 {
+        let p: Vec<[f32; 3]> = triangle
+            .iter()
+            .map(|i| model.vertices[*i as usize].position)
+            .collect();
+        fill(&mut ship, p[0], p[1], p[2], '#');
+    }
+    let mut shadow = vec![vec![' '; W]; H];
+    for face in &hull.faces {
+        let index = face.indices();
+        for corner in 1..index.len().saturating_sub(1) {
+            let p: Vec<[f32; 3]> = [index[0], index[corner], index[corner + 1]]
+                .iter()
+                .map(|slot| hull.vertices[usize::from(*slot)])
+                .collect();
+            fill(&mut shadow, p[0], p[1], p[2], '#');
+        }
+    }
+
+    println!("the ship's mesh from above:");
+    for row in &ship {
+        println!("|{}|", row.iter().collect::<String>());
+    }
+    println!("its shadow hull from above:");
+    for row in &shadow {
+        println!("|{}|", row.iter().collect::<String>());
+    }
+
+    let count = |grid: &Vec<Vec<char>>| {
+        grid.iter()
+            .flat_map(|row| row.iter())
+            .filter(|c| **c == '#')
+            .count()
+    };
+    let both = (0..H)
+        .flat_map(|y| (0..W).map(move |x| (x, y)))
+        .filter(|(x, y)| ship[*y][*x] == '#' && shadow[*y][*x] == '#')
+        .count();
+    let (ship_cells, shadow_cells) = (count(&ship), count(&shadow));
+    let covered = 100.0 * both as f32 / ship_cells as f32;
+    let spilled = 100.0 * (shadow_cells - both) as f32 / ship_cells as f32;
+    println!(
+        "hull covers {covered:.0}% of the ship's footprint and spills {spilled:.0}% beyond it"
+    );
+    // Generous bounds on purpose: what is being caught is a hull in the wrong
+    // space or from the wrong node, which misses by most of the ship, not a
+    // few percent of coverage. The shadow hull is a simplification and is
+    // *expected* to be a little fatter than the mesh in places.
+    assert!(
+        covered > 80.0,
+        "the hull covers only {covered:.0}% of the ship it belongs to"
+    );
+    assert!(
+        spilled < 40.0,
+        "the hull spills {spilled:.0}% beyond the ship it belongs to"
+    );
 }

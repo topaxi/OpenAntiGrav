@@ -1,10 +1,12 @@
 # Shadows: a ladder of four techniques, and only one of them is the original's
 
-> **Design, and now partly status.** Steps 1-4 and 6 of [the plan](#the-plan-in-order)
-> have landed: the census, the setting (`graphics.shadows`, `off` and `blob`),
-> the `blob` tier itself, the occluder's record arrays and its runtime reader,
-> and the 2048 measurement. **`original` (step 5) and `mapped` (step 7) are
-> still design only**, and neither is offered as a value until it exists.
+> **Design, and now mostly status.** Steps 1-6 of [the plan](#the-plan-in-order)
+> have landed: the census, the setting (`graphics.shadows`), the `blob` tier,
+> the occluder's record arrays and its runtime reader, the 2048 measurement,
+> and - on **Pulse only** - `original`. **`mapped` (step 7) is still design
+> only** and is not offered as a value until it exists; nor is `original` on
+> HD, 2048 or Pure, where selecting it draws nothing and the load report says
+> so.
 > The page was written before any of it, so the setting's shape was agreed
 > before an enum and a menu row made it expensive to change, the way
 > [`motion-blur.md`](motion-blur.md) did for its own row.
@@ -209,11 +211,15 @@ the *payload* closure rather than this indexing.
 on: a shadow cannot be drawn without a direction, and picking one would have
 been an invention.
 
-`Shadow_RenderOccluderVolume` projects along `normalize(0.5, -5, 1)` -
-`(+0.09758954, -0.97589540, +0.19517908)`, unit to `0.999995`, 12.60 degrees
-off straight down, with `x : z` exactly `0.5`. It is a **local** axis: the
-node's own world matrix carries it into world space, so a craft's shadow
-direction tilts with the craft.
+`Shadow_RenderOccluderVolume` projects along `(1, -10, 2)` normalized -
+`(+0.09758954, -0.97589540, +0.19517908)`, 12.60 degrees off straight down.
+The ratios are what settle it: `z / x` is *bit-exactly* `2.0` and `y / x` is
+`-10.0000003`. The vector is `4.8e-6` short of unit, uniformly, which is one
+normalize done with a fast reciprocal square root rather than an exact one -
+so `oag_pulse::shadow::AUTHORED_AXIS` carries the shipped bits rather than a
+recomputed exact vector. It is a **local** axis: the node's own world matrix
+carries it into world space, so a craft's shadow direction tilts with the
+craft.
 
 The constant lives in `.bss` at `0x08b62540` (`g_shadow_direction`) and is
 written by `Shadow_RegisterClass` (`0x08923518`) from four immediates, in the
@@ -735,12 +741,56 @@ Each step is a landing that can be reviewed on its own.
    runtime trace. Step 4 is fully closed either way; only a runtime trace
    would move it higher, and it is optional polish rather than a blocker on
    step 5.
-5. **`original`, per title.** Pulse: draw the 119 local-space hulls - the
-   geometry and the projection are both now decoded, so this is a rendering
-   task, not a reverse-engineering one. HD: the shadow-map path its four jobs
-   and material flags describe. 2048: the `track_proximity_shadow` pair plus
-   the precomputed environment shadows, with the shadow direction read
-   straight out of `.EnvSettings`. Pure: absence, reported.
+5. **`original`, per title. Pulse landed 2026-09-04; the rest have not.**
+   A craft's own `Dynamic Shadow Occluder` hull, its silhouette taken against
+   `oag_pulse::shadow::AUTHORED_AXIS` in the hull's own space, projected along
+   that axis through the craft's world matrix onto the surface the craft's
+   downward cast found, and fanned into triangles - `oag_render::shadow`'s
+   `Cast` and `hull_triangles`.
+
+   **What this shares with the original and what it does not.**
+   `Shadow_RenderOccluderVolume` extrudes a stencil volume from the same
+   silhouette; this rasterizes that volume's *ground cap* directly. For an
+   attached occluder - which every craft hull is - the original's own far cap
+   is a ground plane too: it reads a height off the parent and divides by the
+   direction's vertical component rather than casting a ray, so the polygon is
+   the same one. **What it loses is shadowing on anything that is not that
+   plane**: a craft passing under a bridge does not darken the bridge, and one
+   craft does not shadow another.
+
+   **Two bugs on the way to it, both of which still drew a plausible dark
+   shape** - which is why the check that landed with them is a *shape*
+   comparison and not a "something was drawn" one:
+
+   - The fill was fanned from the ring's centroid. A craft's silhouette is not
+     convex (53 of the disc's 129 hulls are concave, the worst by 1.6 times its
+     own scale), so the fan produced overlapping and inverted triangles: a
+     22-edge ring enclosing 27 square units drew as a crumpled star. Ear
+     clipping fills it once, and the filled area now equals the ring's exactly
+     (26.96 against 26.96 on Assegai's).
+   - The hull was projected in the payload's own space. A `.vex` node's
+     vertices are in the space of whatever `Transform` nodes enclose it, and
+     `vex::world_transforms` composes that chain - `Occluder::placed` bakes it.
+     On Pulse's craft that chain happens to be the identity, so this one cost
+     nothing visible; it would have cost everything on a model where it is not.
+
+   The assertion that now guards both: the shadow hull's plan-view footprint
+   against the craft mesh's own, rasterized into one grid -
+   **covers 93 % of the ship and spills 4 % beyond it**
+   (`the_shadow_hull_is_the_shape_of_the_ship_it_belongs_to`). The hull *is* a
+   simplified ship: same wingspan, same taper, same forked tail.
+
+   **One number in it is ours and has no evidence behind it**:
+   `HULL_DARKNESS`, how dark the polygon is drawn. What a stencil volume is
+   *darkened by* is decided by the pass that fills it, and that pass is unread.
+   At full alpha the first capture of this tier was a black hole in the road,
+   so `0.55` was chosen to sit near where the `blob` tier's own coverage peaks.
+
+   HD: the shadow-map path its four jobs and material flags describe. 2048: the
+   `track_proximity_shadow` pair plus the precomputed environment shadows, with
+   the shadow direction read straight out of `.EnvSettings`. Pure: absence,
+   reported - and now with evidence on the *direction* too, since the three
+   immediates that make Pulse's axis appear in neither Pure build.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
@@ -748,14 +798,20 @@ Each step is a landing that can be reviewed on its own.
    it ships *alongside* the authored path rather than above it, with `original`
    still the default there.
 
-Steps 1, 2, 3, 4 and 6 have landed. **Step 5 is what is next**, and it is
-unblocked: the geometry and the projection are both decoded, so drawing
-Pulse's 119 local-space hulls is a rendering task. Its one open question is
-the `m` face-to-vertex index mapping's exact byte layout, which
-[`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md)
-records - worth resolving *before* the draw code needs it, since a
-plausible-looking but wrong winding is exactly the invented stand-in this
-project's own rule warns against.
+Steps 1-6 have landed, step 5 on Pulse only. **What is next is a title, not a
+step**: `original` on HD is its shadow-map pipeline and on 2048 its
+proximity pair, and both are their own piece of work. Step 7, `mapped`, is
+untouched and stays that way until someone wants it.
+
+**Verified on Pulse against both other tiers**, at one camera pose, 2026-09-04:
+`off` against `original` changes 4,625 pixels at a worst delta of 134, `off`
+against `blob` 5,259 at 70, and - the check that says the two tiers draw
+*different things* rather than the same thing twice - `blob` against
+`original` 5,720 at 126. The projected hull's own placement is asserted rather
+than eyeballed: every vertex lands exactly one `LIFT` above the contact plane,
+and the polygon's centre sits `0.836` units from the contact point under a
+craft whose hull is `10.5` long
+(`crates/game/tests/shadow_ground_truth.rs`).
 
 ## Constraints this touches
 

@@ -712,13 +712,20 @@ values = ["off", "low", "medium", "high"]
 #
 # `blob` plays the disc's own silhouette where there is one: Wipeout HD ships
 # nine `ambient_shadow.gtf`, one per team. Every other title gets a generated
-# falloff, which is this project's and is why `off` is the default. Applies
-# live: `Scene::render` reads the tier fresh each frame.
+# falloff, which is this project's and is why `off` is the default.
+#
+# `original` is the craft's own authored `Dynamic Shadow Occluder` hull,
+# projected along the direction the executable authors - and it is built **on
+# Pulse only**. On a title with nothing built it draws nothing and the load
+# report says so, rather than quietly becoming `blob`; on Wipeout Pure that is
+# also the correct picture, since it authors no shadow class at all.
+#
+# Applies live: `Scene::render` reads the tier fresh each frame.
 [[page.entry]]
 kind = "choice"
 label = "SHADOWS"
 setting = "graphics.shadows"
-values = ["off", "blob"]
+values = ["off", "blob", "original"]
 
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.

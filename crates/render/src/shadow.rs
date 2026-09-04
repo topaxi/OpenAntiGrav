@@ -32,7 +32,8 @@
 //! a way a screenshot does not show, so the part that decides where a shadow
 //! goes is testable on a machine with no graphics driver.
 
-use oag_core::math::Vec3;
+use oag_core::math::{Mat4, Vec3};
+use oag_formats::shadow_occluder::Occluder;
 
 use crate::mesh::GpuVertex;
 
@@ -55,7 +56,24 @@ pub const LIFT: f32 = 0.05;
 pub const MAX_QUADS: usize = 8;
 
 /// Six vertices per quad, two triangles, as [`quad`] builds them.
-pub const MAX_VERTICES: usize = MAX_QUADS * 6;
+pub const MAX_QUAD_VERTICES: usize = MAX_QUADS * 6;
+
+/// The longest ring on the Pulse disc, rounded up.
+///
+/// Measured: a hull's silhouette ring runs 3 to 39 vertices across all 129
+/// hulls and six directions (`shadow_occluder_records.rs`).
+const MAX_RING: usize = 40;
+
+/// At most two rings per craft - `Data.wad#597` `shadow_lodShape` is the one
+/// hull that gives two, and nothing on the disc gives three.
+const MAX_RINGS_PER_CRAFT: usize = 2;
+
+/// Room for every craft's projected hull: a ring fans into one triangle per
+/// edge.
+pub const MAX_HULL_VERTICES: usize = MAX_QUADS * MAX_RINGS_PER_CRAFT * MAX_RING * 3;
+
+/// What [`Pipeline`]'s one vertex buffer holds: the quads, then the hulls.
+pub const MAX_VERTICES: usize = MAX_QUAD_VERTICES + MAX_HULL_VERTICES;
 
 /// How far above its own ride height a craft keeps any shadow at all, as a
 /// multiple of that height.
@@ -168,6 +186,206 @@ pub fn quad(placement: &Placement) -> [GpuVertex; 6] {
     [bl, br, tl, br, tr, tl]
 }
 
+/// How dark a projected hull is drawn, before [`fade`] scales it.
+///
+/// **Ours, and the one number in this tier with no evidence behind it.** The
+/// hull, its silhouette and the direction it projects along are all the
+/// original's; what a stencil shadow volume is *darkened by* is decided by the
+/// pass that fills it, and that pass has not been read. A hull rasterized at
+/// full alpha is a black hole in the road rather than a shadow - the first
+/// capture of this tier showed exactly that - so this is chosen to sit near
+/// where the `blob` tier's own coverage peaks (Wipeout HD's authored
+/// silhouette reaches `212/255`), which at least makes the two tiers
+/// comparable to a player switching between them.
+pub const HULL_DARKNESS: f32 = 0.35;
+
+/// One craft's authored hull, and where its shadow lands.
+///
+/// The `original` tier's counterpart to [`Placement`], and deliberately a
+/// separate type: a blob is a texture on a rectangle and this is geometry
+/// projected onto a plane, with none of the same inputs.
+#[derive(Debug, Clone, Copy)]
+pub struct Cast<'a> {
+    /// The hull, in its own model space -
+    /// `Data\Ships\<Team>\Ship.vex`'s `Dynamic Shadow Occluder` node.
+    pub hull: &'a Occluder,
+    /// Model to world for the craft the hull belongs to.
+    pub model: Mat4,
+    /// The **local** axis to project along, before [`Self::model`] rotates it:
+    /// `oag_pulse::shadow::AUTHORED_AXIS` on Pulse.
+    ///
+    /// A local axis and not a light, which is what the original does - see
+    /// that constant, and `shadow-occluder.md` for the read.
+    pub axis: Vec3,
+    /// Where the craft's own downward cast hit the surface.
+    pub contact: Vec3,
+    /// That surface's normal.
+    pub normal: Vec3,
+    /// [`fade`]'s result, as for a blob.
+    pub strength: f32,
+}
+
+/// Fans one craft's projected hull into triangles, appending to `out`.
+///
+/// **What the original does and what this does instead, stated plainly.**
+/// `Shadow_RenderOccluderVolume` extrudes a stencil shadow volume from the
+/// same silhouette and lets the stencil test decide what is inside it. This
+/// rasterizes the volume's *ground cap* directly: the silhouette projected
+/// along the same direction onto the plane the craft's own downward cast
+/// found. For an attached occluder the original's own far cap is a ground
+/// plane too - it reads a height off the parent and divides by the direction's
+/// vertical component rather than casting a ray - so the polygon is the same
+/// one. **What it loses is shadowing on anything that is not that plane**: a
+/// craft passing under a bridge does not darken the bridge, and one craft does
+/// not shadow another.
+///
+/// Returns how many rings it drew. Zero means the shadow would have been cast
+/// *away* from the surface - up a wall, or behind the craft on a near-vertical
+/// plane - which is skipped rather than drawn folded over.
+pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
+    let normal = cast.normal.normalize_or_zero();
+    // The direction in world space: the authored local axis through the
+    // craft's own rotation, as `Shadow_RenderOccluderVolume` does it.
+    let direction = cast.model.transform_vector3(cast.axis).normalize_or_zero();
+    let facing = direction.dot(normal);
+    // Parallel to the surface, or pointing away from it: there is no
+    // intersection to draw, and forcing one puts a shadow behind the craft.
+    if facing > -1e-3 {
+        return 0;
+    }
+    let mut rings = 0;
+    for ring in cast.hull.outline(cast.axis.to_array()) {
+        let projected: Vec<Vec3> = ring
+            .iter()
+            .map(|slot| {
+                let local = cast
+                    .hull
+                    .vertices
+                    .get(usize::from(*slot))
+                    .copied()
+                    .unwrap_or([0.0; 3]);
+                let world = cast.model.transform_point3(Vec3::from_array(local));
+                // Where the ray from this vertex meets the contact plane.
+                let travel = (cast.contact - world).dot(normal) / facing;
+                world + direction * travel
+            })
+            .collect();
+        if projected.len() < 3 || projected.iter().any(|p| !p.is_finite()) {
+            continue;
+        }
+        let lift = normal * LIFT;
+        let vertex = |at: Vec3| GpuVertex {
+            position: (at + lift).to_array(),
+            normal: normal.to_array(),
+            colour: [0.0, 0.0, 0.0, cast.strength * HULL_DARKNESS],
+            // Centre of the solid texture: coverage is 1 everywhere on it, so
+            // the shape is the polygon rather than an image. See
+            // `Pipeline::new`.
+            texcoord: [0.5, 0.5],
+            lit: 0.0,
+            ..bytemuck::Zeroable::zeroed()
+        };
+        // **Ear clipping, not a fan**, and the difference is the whole picture.
+        // A craft's silhouette is not convex - it has a long thin nose whose
+        // outline doubles back on itself as a sliver - so a fan from the ring's
+        // centroid produces overlapping and inverted triangles. Measured on
+        // Assegai's own hull: a 22-edge ring enclosing 27 square units drew as
+        // a crumpled star a couple of units across. Ear clipping fills exactly
+        // the ring's interior, once.
+        let (right, up) = (
+            normal.any_orthonormal_pair().0,
+            normal.any_orthonormal_pair().1,
+        );
+        let flat: Vec<[f32; 2]> = projected
+            .iter()
+            .map(|point| [point.dot(right), point.dot(up)])
+            .collect();
+        for [a, b, c] in ear_clip(&flat) {
+            out.push(vertex(projected[a]));
+            out.push(vertex(projected[b]));
+            out.push(vertex(projected[c]));
+        }
+        rings += 1;
+    }
+    rings
+}
+
+/// Triangulates a simple polygon by ear clipping, in the plane it lies in.
+///
+/// Returns index triples into `points`. **Ear clipping rather than a fan**
+/// because a silhouette ring is not convex: see [`hull_triangles`], which is
+/// the only caller and carries the measurement that settled it.
+///
+/// A polygon that runs out of ears - which a self-intersecting one does, and
+/// no hull on the disc produces - has its remainder emitted as a fan rather
+/// than dropped: some fill is closer to right than none, and the alternative
+/// is a shadow with a bite out of it.
+fn ear_clip(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
+    let mut out = Vec::new();
+    if points.len() < 3 {
+        return out;
+    }
+    let cross = |o: [f32; 2], a: [f32; 2], b: [f32; 2]| {
+        (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    };
+    // The ring's own winding: an ear is a corner that turns the same way the
+    // polygon does, and the two windings do occur - a silhouette comes out
+    // wound by the faces that produced it.
+    let area: f32 = (0..points.len())
+        .map(|i| {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum();
+    let sign = if area < 0.0 { -1.0 } else { 1.0 };
+
+    let mut remaining: Vec<usize> = (0..points.len()).collect();
+    while remaining.len() > 3 {
+        let before = remaining.len();
+        let mut at = 0;
+        while at < remaining.len() {
+            let previous = remaining[(at + remaining.len() - 1) % remaining.len()];
+            let current = remaining[at];
+            let next = remaining[(at + 1) % remaining.len()];
+            let (a, b, c) = (points[previous], points[current], points[next]);
+            // Convex in the polygon's own winding, and empty: no other vertex
+            // of the ring inside the candidate ear.
+            if cross(a, b, c) * sign <= 0.0 {
+                at += 1;
+                continue;
+            }
+            let inside = remaining.iter().any(|other| {
+                if *other == previous || *other == current || *other == next {
+                    return false;
+                }
+                let p = points[*other];
+                let (u, v, w) = (
+                    cross(a, b, p) * sign,
+                    cross(b, c, p) * sign,
+                    cross(c, a, p) * sign,
+                );
+                u >= 0.0 && v >= 0.0 && w >= 0.0
+            });
+            if inside {
+                at += 1;
+                continue;
+            }
+            out.push([previous, current, next]);
+            remaining.remove(at);
+            break;
+        }
+        if remaining.len() == before {
+            // No ear anywhere: fan what is left rather than leaving a hole.
+            break;
+        }
+    }
+    for at in 1..remaining.len().saturating_sub(1) {
+        out.push([remaining[0], remaining[at], remaining[at + 1]]);
+    }
+    out
+}
+
 /// The alpha-over blend a shadow darkens with.
 ///
 /// [`crate::psys::BLEND_ALPHA_OVER`] by another name, and deliberately that
@@ -193,6 +411,20 @@ pub struct Silhouette {
 }
 
 impl Silhouette {
+    /// A one-texel image that is coverage everywhere.
+    ///
+    /// What the `original` tier's projected hulls sample: their shape is the
+    /// polygon, so the texture has to contribute nothing. A one-texel bind is
+    /// cheaper than a shader branch and keeps both tiers on one pipeline.
+    #[must_use]
+    pub fn solid() -> Self {
+        Self {
+            width: 1,
+            height: 1,
+            rgba: vec![0xff; 4],
+        }
+    }
+
     /// A soft elliptical falloff, for a title that ships no silhouette of its
     /// own.
     ///
@@ -304,8 +536,11 @@ pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    /// One per distinct silhouette, indexed by [`Placement::silhouette`].
+    /// One per distinct silhouette, indexed by [`Placement::silhouette`], with
+    /// [`Silhouette::solid`] appended at the end for the hull path.
     silhouettes: Vec<wgpu::BindGroup>,
+    /// Where that appended solid one sits.
+    solid: usize,
     vertices: wgpu::Buffer,
     /// `(silhouette, first vertex, count)` per run, as the last
     /// [`Pipeline::upload`] grouped them.
@@ -460,8 +695,14 @@ impl Pipeline {
             mapped_at_creation: false,
         });
 
+        // The caller's, then one appended solid texel: the `original` tier's
+        // polygons carry their own shape and need the sampler to contribute
+        // nothing. Appended rather than prepended so a `Placement`'s index
+        // still means what the caller passed.
+        let solid = silhouettes.len();
         let silhouettes = silhouettes
             .iter()
+            .chain(std::iter::once(&Silhouette::solid()))
             .enumerate()
             .map(|(index, image)| {
                 image.bind(
@@ -478,6 +719,7 @@ impl Pipeline {
             uniforms,
             bind_group,
             silhouettes,
+            solid,
             vertices,
             runs: Vec::new(),
         }
@@ -496,6 +738,7 @@ impl Pipeline {
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
         placements: &[Placement],
+        hulls: &[GpuVertex],
     ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
@@ -507,12 +750,16 @@ impl Pipeline {
 
         self.runs.clear();
         let mut vertices: Vec<GpuVertex> = Vec::with_capacity(MAX_VERTICES);
-        for index in 0..self.silhouettes.len() {
+        // The blob quads first, grouped so each texture is one draw; then the
+        // `original` tier's polygons, which all sample the solid texel and are
+        // therefore one draw however many craft cast one.
+        for index in 0..self.solid {
             let first = vertices.len() as u32;
             for placement in placements
                 .iter()
                 .filter(|p| p.silhouette == index && p.strength > 0.0)
                 .take(MAX_QUADS.saturating_sub(vertices.len() / 6))
+                .take(MAX_QUAD_VERTICES / 6)
             {
                 vertices.extend(quad(placement));
             }
@@ -520,6 +767,15 @@ impl Pipeline {
             if count > 0 {
                 self.runs.push((index, first, count));
             }
+        }
+        let first = vertices.len() as u32;
+        let room = MAX_VERTICES - vertices.len();
+        // Truncated at a whole triangle: a partial one is a stray wedge across
+        // the road, which is worse than a shadow that stops.
+        let kept = hulls.len().min(room) / 3 * 3;
+        vertices.extend_from_slice(&hulls[..kept]);
+        if kept > 0 {
+            self.runs.push((self.solid, first, kept as u32));
         }
         if !vertices.is_empty() {
             queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices));
@@ -546,7 +802,7 @@ impl Pipeline {
         }
     }
 
-    /// How many quads the last [`Pipeline::upload`] kept.
+    /// How many blob quads the last [`Pipeline::upload`] kept.
     ///
     /// An observable for the tests and the loader report: a pass that uploads
     /// nothing and a pass that draws nothing produce the same picture, so the
@@ -555,7 +811,18 @@ impl Pipeline {
     pub fn quads(&self) -> usize {
         self.runs
             .iter()
+            .filter(|(index, _, _)| *index != self.solid)
             .map(|(_, _, count)| *count as usize / 6)
+            .sum()
+    }
+
+    /// How many hull triangles it kept, the same way.
+    #[must_use]
+    pub fn hull_triangles(&self) -> usize {
+        self.runs
+            .iter()
+            .filter(|(index, _, _)| *index == self.solid)
+            .map(|(_, _, count)| *count as usize / 3)
             .sum()
     }
 }

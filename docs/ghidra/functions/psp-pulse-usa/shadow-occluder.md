@@ -371,11 +371,21 @@ has for `0x3c3`:
 | `+0x08` | `0x3e47dd06` | `+0.19517908` |
 | `+0x0c` | `0x00000000` | `0.0` |
 
-Length `0.999995`, and **`x : z` is exactly `0.5`**: this is
-`normalize(0.5, -5, 1)`, an authored triple rather than a fitted one, 12.60
-degrees off straight down. That exactness is the tell - three independently
-stored floats agreeing on one clean rational direction is not what a
-misidentified address produces.
+The ratios are the tell: **`z / x` is bit-exactly `2.0`** - the two floats
+differ by one exponent step and nothing else - and `y / x` is `-10.0000003`.
+So this is `(1, -10, 2)` normalized, an authored whole-number direction rather
+than a fitted one, 12.60 degrees off straight down. Three independently stored
+floats agreeing on one clean rational direction is not what a misidentified
+address produces.
+
+**And it is `4.8e-6` short of unit, uniformly** - length `0.9999952`, with
+every component the same relative distance from the exact normalization. That
+is one normalize done with a *fast* reciprocal square root rather than an exact
+one, which is what this hardware offers and what
+[`determinism.md`](../../../architecture/determinism.md) already records as the
+reason this project cannot be bit-identical with the original. The shipped bits
+are what `oag_pulse::shadow::AUTHORED_AXIS` carries, not a recomputed exact
+vector: what the original projects along is this one.
 
 ### `shadow` `0x3cb` is a direction override, not dead weight
 
@@ -420,7 +430,7 @@ given address.
 ## Open
 
 - ~~The fixed local axis constant's value~~ **Read 2026-09-04**: it is
-  `normalize(0.5, -5, 1)` in `g_shadow_direction` (`0x08b62540`), and the
+  `(1, -10, 2)` normalized, in `g_shadow_direction` (`0x08b62540`), and the
   second candidate is an override a live `shadow` `0x3cb` node installs. See
   the section above.
 - **What `0x0892342c` belongs to.** Its tail fills

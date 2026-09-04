@@ -1,4 +1,4 @@
-# `original` on Pulse is the tier still unbuilt; `off` and `blob` are built
+# `original` draws on Pulse; HD's, 2048's and `mapped` are the tiers left
 
 2026-09-04. Rewritten from the file that split off
 [shadows-are-planned-and-pulses-occluder-payload-closes.md](shadows-are-planned-and-pulses-occluder-payload-closes.md)
@@ -34,11 +34,32 @@ Two things worth carrying forward from doing it:
 
 ## Open
 
-- **Step 5, `original` on Pulse: draw the 119 local-space hulls.** Everything
-  it needs is decoded - the `0x3c3` payload
-  (`crates/formats/tests/shadow_occluder_ground_truth.rs`),
-  `Shadow_RenderOccluderVolume`'s own projection math (its **own local axis**,
-  never a light), and the static class link. This is now a rendering task.
+- ~~Step 5, `original` on Pulse~~ **Landed 2026-09-04.** The craft's own hull,
+  its silhouette taken in hull space against `oag_pulse::shadow::AUTHORED_AXIS`,
+  projected through the craft's world matrix onto the surface its downward cast
+  found, fanned from each ring's centroid. Diffed against both other tiers at
+  one camera pose: `blob` against `original` changes 5,720 pixels at a worst
+  delta of 126, which is the check that says they draw different things.
+- **`original` on HD and on 2048.** Different mechanisms, each its own piece of
+  work: HD's four shadow-map jobs and its `LiveStencilShadow` path, 2048's
+  `track_proximity_shadow` pair and its precomputed environment shadows.
+  Selecting `original` there today draws nothing and the load report says so.
+- **Two bugs that still drew a plausible dark shape**, both fixed, and worth
+  carrying because neither would have failed a "was anything drawn" test: a
+  centroid fan over a *non-convex* silhouette (53 of 129 hulls are concave)
+  drew a crumpled star, and the hull was projected without the `Transform`
+  chain above its node - identity on Pulse's craft, and not on a model where
+  it is not. The guard is now a shape comparison: the hull's plan-view
+  footprint covers 93 % of the craft mesh's and spills 4 % beyond it.
+- **`HULL_DARKNESS` is ours and unevidenced.** What a stencil volume is
+  darkened by is decided by the pass that fills it, and that pass is unread; at
+  full alpha the tier drew a black hole in the road, so `0.55` was picked to
+  sit near where `blob`'s own coverage peaks. Reading the fill pass would
+  replace a choice with a measurement.
+- **Nothing shadows anything but the road.** The polygon is the volume's ground
+  cap, so a craft under a bridge does not darken the bridge and one craft does
+  not shadow another. Whether that is worth a real stencil volume is a
+  question about how it looks in motion, which nobody has seen.
 - ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
   2026-09-04**, and the parser is `oag_formats::shadow_occluder`: `u16[4]` of
   per-edge adjacent faces at `+0x10`, `u16[4]` of vertex indices at `+0x18`,
@@ -48,8 +69,10 @@ Two things worth carrying forward from doing it:
   the vertices it indexes. `Occluder::silhouette` is the edge walk step 5
   needs.
 - ~~The projection direction is what now blocks the draw~~ **Read
-  2026-09-04**: `normalize(0.5, -5, 1)`, a *local* axis the node's own world
-  matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
+  2026-09-04**: `(1, -10, 2)` normalized (`z / x` bit-exactly `2.0`, and the
+  vector `4.8e-6` short of unit - a fast reciprocal square root, so the shipped
+  bits are what `oag_pulse::shadow::AUTHORED_AXIS` keeps), a *local* axis the
+  node's own world matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
   (`0x08b62540`), written by `Shadow_RegisterClass` (`0x08923518`) - the same
   function that registers class `0x3cb`, `shadow`. **The reason it read as
   unfindable is worth carrying**: both candidate addresses are reached through
@@ -83,8 +106,8 @@ Two things worth carrying forward from doing it:
 
 ## Next Steps
 
-- **Step 5**, in the order the design page gives: resolve the `m` indexing
-  question, then draw Pulse's 119 local-space hulls through
-  `Shadow_RenderOccluderVolume`'s own projection.
-- Look at `blob` in a window on one title and judge the fade, the darkness and
-  the lift - the three numbers that are ours.
+- Look at both drawn tiers in a window on one title and judge the four numbers
+  that are ours: the fade, the falloff's darkness, the lift, and
+  `HULL_DARKNESS`. Every judgement so far is from a headless capture.
+- `original` on HD, which is the biggest remaining piece of this thread and is
+  a shadow-map pipeline rather than a projection.

@@ -195,3 +195,36 @@ fn an_open_hull_keeps_its_boundary_edges() {
     let edges = occluder.silhouette([0.0, -1.0, 0.0]);
     assert_eq!(edges.len(), 3, "{edges:?}");
 }
+
+#[test]
+fn the_silhouette_chains_into_one_closed_ring() {
+    let occluder = Occluder::parse(&tetrahedron(), ByteOrder::Little).expect("closes");
+    let rings = occluder.silhouette_loops([0.0, -1.0, 0.0]);
+    assert_eq!(rings.len(), 1, "{rings:?}");
+    assert!(rings[0].closed);
+    // The floor face's own winding, which is what makes a ring fannable
+    // without reordering it first.
+    assert_eq!(rings[0].vertices, vec![0, 1, 2]);
+    assert_eq!(occluder.outline([0.0, -1.0, 0.0]), vec![vec![0, 1, 2]]);
+}
+
+#[test]
+fn a_tetrahedron_outlines_three_edges_from_every_direction() {
+    // A convex hull's silhouette is one ring from any direction that is not
+    // exactly edge-on, and a tetrahedron's is always three edges. Six
+    // directions rather than one: a walk that only works for the direction it
+    // was written against is not a silhouette walk.
+    let occluder = Occluder::parse(&tetrahedron(), ByteOrder::Little).expect("closes");
+    for direction in [
+        [0.097_589_54, -0.975_895_4, 0.195_179_08],
+        [0.0, -1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.577_35, 0.577_35, 0.577_35],
+    ] {
+        let rings = occluder.outline(direction);
+        assert_eq!(rings.len(), 1, "{direction:?}: {rings:?}");
+        assert_eq!(rings[0].len(), 3, "{direction:?}: {rings:?}");
+    }
+}

@@ -23,6 +23,7 @@ pub mod hud;
 pub mod loading;
 pub mod movies;
 pub mod race;
+pub mod shadow;
 pub mod textures;
 
 use oag_assets::{Archives, Result};

@@ -307,5 +307,177 @@ impl Occluder {
     }
 }
 
+/// One closed ring of the silhouette, as vertex indices in winding order.
+///
+/// A convex hull viewed from any direction has exactly one; the two open hulls
+/// on the Pulse disc are what [`Loop::closed`] exists for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loop {
+    /// The ring's vertices, first to last. The closing edge from the last back
+    /// to the first is implicit, and present only when [`Self::closed`].
+    pub vertices: Vec<u16>,
+    /// Whether the walk returned to where it started.
+    ///
+    /// **Reported rather than hidden.** An open chain drawn as though it were
+    /// a ring is a plausible-looking wrong shape, which is the failure mode
+    /// this whole module is written against.
+    pub closed: bool,
+}
+
+impl Occluder {
+    /// [`Self::silhouette`]'s edges, chained into rings.
+    ///
+    /// Each edge is walked from its `from` vertex to its `to`, so a ring comes
+    /// out in the winding order the front faces gave it - which is what makes
+    /// it directly fannable into triangles.
+    ///
+    /// **Not a triangulation and not a projection**: what is returned is the
+    /// hull's own outline in its own space, and the caller is the side that
+    /// knows where to project it.
+    #[must_use]
+    pub fn silhouette_loops(&self, direction: [f32; 3]) -> Vec<Loop> {
+        let edges = self.silhouette(direction);
+        // Successors by `from` vertex. A vertex on a convex hull's silhouette
+        // has exactly one outgoing edge; a `Vec` rather than a single slot so
+        // a hull that does not behave that way produces short rings instead of
+        // losing edges silently.
+        let mut next: Vec<(u16, u16, bool)> =
+            edges.iter().map(|(from, to)| (*from, *to, false)).collect();
+        let mut out = Vec::new();
+        for start in 0..next.len() {
+            if next[start].2 {
+                continue;
+            }
+            let first = next[start].0;
+            let mut vertices = vec![first];
+            let mut cursor = start;
+            let mut closed = false;
+            loop {
+                next[cursor].2 = true;
+                let to = next[cursor].1;
+                if to == first {
+                    closed = true;
+                    break;
+                }
+                vertices.push(to);
+                match next
+                    .iter()
+                    .position(|(from, _, used)| *from == to && !*used)
+                {
+                    Some(step) => cursor = step,
+                    None => break,
+                }
+            }
+            out.push(Loop { vertices, closed });
+        }
+        out
+    }
+}
+
+impl Occluder {
+    /// This hull with a 4x4 (row-major, as `vex` stores them) baked into it.
+    ///
+    /// **A `.vex` node's payload is in the space of whatever `Transform` nodes
+    /// enclose it**, not in the model's own - on Pulse's craft a
+    /// `Dynamic Shadow Occluder` sits under that chain like every other node,
+    /// and `vex::world_transforms` is what resolves it. A hull drawn without
+    /// this is the right shape in the wrong frame, which is the one failure
+    /// that still *looks* like a shadow.
+    ///
+    /// Normals are carried through the matrix's rotation and renormalised.
+    /// That is exact for the rigid and uniformly-scaled placements a `.vex`
+    /// chain produces and wrong under non-uniform scale, where the
+    /// inverse-transpose is what a plane needs; nothing on either disc places
+    /// an occluder that way, and a caller that finds one gets a normal that
+    /// tilts rather than a panic.
+    #[must_use]
+    pub fn placed(&self, matrix: &[f32; 16]) -> Self {
+        let rotate = |v: [f32; 3]| {
+            let out = [
+                matrix[0] * v[0] + matrix[4] * v[1] + matrix[8] * v[2],
+                matrix[1] * v[0] + matrix[5] * v[1] + matrix[9] * v[2],
+                matrix[2] * v[0] + matrix[6] * v[1] + matrix[10] * v[2],
+            ];
+            let length = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
+            if length > 1e-12 {
+                [out[0] / length, out[1] / length, out[2] / length]
+            } else {
+                v
+            }
+        };
+        let point = |v: [f32; 3]| {
+            [
+                matrix[0] * v[0] + matrix[4] * v[1] + matrix[8] * v[2] + matrix[12],
+                matrix[1] * v[0] + matrix[5] * v[1] + matrix[9] * v[2] + matrix[13],
+                matrix[2] * v[0] + matrix[6] * v[1] + matrix[10] * v[2] + matrix[14],
+            ]
+        };
+        Self {
+            bounds: (point(self.bounds.0), point(self.bounds.1)),
+            faces: self
+                .faces
+                .iter()
+                .map(|face| Face {
+                    normal: rotate(face.normal),
+                    ..*face
+                })
+                .collect(),
+            // An unused slot stays at the origin rather than being carried to
+            // the placement's own: `m` counts slots, and moving the padding
+            // would put stray vertices inside the hull's box.
+            vertices: self
+                .vertices
+                .iter()
+                .map(|v| if *v == [0.0; 3] { *v } else { point(*v) })
+                .collect(),
+        }
+    }
+
+    /// The hull's outline against `direction`: [`Self::silhouette_loops`]'
+    /// closed rings, with a ring that is another traversed the other way
+    /// dropped.
+    ///
+    /// **The dedup is not tidying, it is a property of the data.** Two of the
+    /// Pulse disc's hulls carry a doubled shell - every face has a twin with
+    /// the opposite normal - so their silhouette comes back as the same ring
+    /// twice, once each way round. Filling both would darken the same ground
+    /// twice under an alpha-over blend. Measured against the authored axis,
+    /// across the 119 local-space hulls: 117 give one ring, `Data.wad#840`
+    /// `shadowShape` gives that doubled pair, and `Data.wad#597`
+    /// `shadow_lodShape` gives two rings that are genuinely different lobes
+    /// and are both kept.
+    ///
+    /// An **open** chain is dropped outright rather than closed by force: a
+    /// ring that did not close is not an outline, and inventing its closing
+    /// edge is exactly the plausible-looking wrong shape this module is
+    /// written against.
+    ///
+    /// **That branch is a guard with no known input, and saying so is the
+    /// point.** Every face contributes a closed cycle of edges by
+    /// construction, so a silhouette is a union of cycles unless the payload
+    /// is malformed in a way nothing on either disc is: 0 open chains over 774
+    /// walks (129 hulls, six directions), and no hand-built fixture here
+    /// produces one either. It is kept because the alternative to dropping an
+    /// open chain is drawing it.
+    #[must_use]
+    pub fn outline(&self, direction: [f32; 3]) -> Vec<Vec<u16>> {
+        let mut out: Vec<Vec<u16>> = Vec::new();
+        let mut seen: Vec<Vec<u16>> = Vec::new();
+        for ring in self.silhouette_loops(direction) {
+            if !ring.closed {
+                continue;
+            }
+            let mut key = ring.vertices.clone();
+            key.sort_unstable();
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.push(key);
+            out.push(ring.vertices);
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests;
