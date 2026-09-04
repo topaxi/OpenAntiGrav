@@ -17,7 +17,8 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
-    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, UNIFORMS_SIZE, Zone, write_uniforms,
+    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowReceiver, UNIFORMS_SIZE, Zone,
+    write_uniforms,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
@@ -259,13 +260,14 @@ pub fn build(
     // whole life, so a caller that gains a map mid-race rebuilds rather than
     // rebinding, the same way a Zone stage texture does.
     shadow_map: Option<&wgpu::TextureView>,
-    // Whether this model's surfaces sample that map at all. **The track's, and
-    // nothing else's**, which is what Wipeout HD does: the *track surface*
-    // material declares `shadowMapTex` and a craft's own material does not, so
-    // a craft is a caster and never a receiver. A pipeline constant rather
-    // than a uniform field keeps it a property of the model, like `flame_*`
-    // and `colour_is_light` beside it.
-    receives_shadow: bool,
+    // The `mapped` tier's depth map, bound beside it and read in that tier's
+    // own mode - see `ShadowMap::mode`.
+    shadow_depth_map: Option<&wgpu::TextureView>,
+    // Which maps this model's surfaces may read - see `ShadowReceiver`, which
+    // carries why there are three states. A pipeline constant rather than a
+    // uniform field keeps it a property of the model, like `flame_*` and
+    // `colour_is_light` beside it.
+    receives_shadow: ShadowReceiver,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -307,8 +309,8 @@ pub fn build(
     if let Some(reference) = model.alpha_test_ref {
         constants.push(("alpha_test_ref", f64::from(reference)));
     }
-    if receives_shadow {
-        constants.push(("receives_shadow", 1.0));
+    if receives_shadow != ShadowReceiver::Never {
+        constants.push(("receives_shadow", receives_shadow.constant()));
     }
     if let Some(flame) = model.flame {
         constants.extend([
@@ -409,6 +411,8 @@ pub fn build(
             // than needing a second layout.
             shadow_entries[0],
             shadow_entries[1],
+            shadow_entries[2],
+            shadow_entries[3],
         ],
     });
 
@@ -424,7 +428,7 @@ pub fn build(
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
     let zone_resources = zone::resources(device, queue, anisotropy, zone);
-    let shadow_resources = shadow_map::resources(device, queue, shadow_map);
+    let shadow_resources = shadow_map::resources(device, queue, shadow_map, shadow_depth_map);
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &fog_layout,
@@ -460,6 +464,14 @@ pub fn build(
             wgpu::BindGroupEntry {
                 binding: 7,
                 resource: wgpu::BindingResource::Sampler(&shadow_resources.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::TextureView(&shadow_resources.depth_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: wgpu::BindingResource::Sampler(&shadow_resources.depth_sampler),
             },
         ],
     });

@@ -186,10 +186,11 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model) -> [u8; 4] {
         mesh_render::GlowMask::Written,
         mesh_render::Velocity::None,
         None,
-        // No shadow map and no receiver: this test draws one model against
-        // nothing.
+        // No shadow map, no depth map and no receiver: this test draws one
+        // model against nothing.
         None,
-        false,
+        None,
+        mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));

@@ -166,7 +166,8 @@ pub fn capture_pixels_from(
         // And no shadow map, and nothing receiving one: this helper draws a
         // single model against nothing, which is what makes it a comparison.
         None,
-        false,
+        None,
+        crate::mesh_render::ShadowReceiver::Never,
     )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

@@ -21,6 +21,34 @@ use crate::race::Race;
 /// it, and it is the first thing to replace once the compositing pass is read.
 const MAP_STRENGTH: f32 = 0.5;
 
+/// How dark the `mapped` tier draws a shadowed pixel.
+///
+/// **Ours, like everything else in that tier**, which is this project's own
+/// and has no original to be faithful to. Lighter than [`MAP_STRENGTH`]
+/// because it applies to *every* surface rather than to the road alone: a
+/// craft's own hull shadowed at the same weight reads as a black panel.
+const MAPPED_STRENGTH: f32 = 0.4;
+
+/// How far a receiver is pushed towards the light before its depth is
+/// compared, in the map's own `0..1` units.
+///
+/// **Ours, and small on purpose**: the slope-scaled bias in the caster
+/// pipeline (`shadow::map::Map::new`) does the work, because it can see how
+/// steeply a surface runs away from the light and a shader-side constant
+/// cannot. This is the floor under it, for the flat cases that slope scaling
+/// leaves at zero.
+const MAPPED_DEPTH_BIAS: f32 = 0.0004;
+
+/// How far in front of the camera the `mapped` tier's own box is centred, and
+/// how wide it is.
+///
+/// **Ours.** One cascade has to choose where its texels go; putting the box
+/// around the craft and the road ahead of it spends them where a player is
+/// looking. A cascade ladder would not have to choose - see
+/// `docs/rendering/shadows.md`.
+const MAPPED_AHEAD: f32 = 40.0;
+const MAPPED_RADIUS: f32 = 70.0;
+
 /// How far past the grid's own bounds the light's view is fitted.
 ///
 /// **Ours.** The map covers the casters and nothing else - a track-sized
@@ -99,13 +127,28 @@ impl super::super::Scene {
         shadows: crate::display::Shadows,
     ) -> oag_render::mesh_render::ShadowMap {
         let map = self.shadow_map.borrow();
-        if shadows != crate::display::Shadows::Original || map.casters() == 0 {
-            return oag_render::mesh_render::ShadowMap::off();
-        }
-        oag_render::mesh_render::ShadowMap {
-            matrix: map.matrix().to_cols_array_2d(),
-            strength: MAP_STRENGTH,
-            _pad: [0.0; 3],
+        match shadows {
+            crate::display::Shadows::Original if map.casters() > 0 => {
+                oag_render::mesh_render::ShadowMap {
+                    matrix: map.matrix().to_cols_array_2d(),
+                    strength: MAP_STRENGTH,
+                    mode: oag_render::mesh_render::ShadowMap::COVERAGE,
+                    depth_bias: 0.0,
+                    _pad: 0.0,
+                }
+            }
+            crate::display::Shadows::Mapped if map.depth_casters() > 0 => {
+                oag_render::mesh_render::ShadowMap {
+                    matrix: map.depth_matrix().to_cols_array_2d(),
+                    strength: MAPPED_STRENGTH,
+                    mode: oag_render::mesh_render::ShadowMap::DEPTH,
+                    depth_bias: MAPPED_DEPTH_BIAS,
+                    _pad: 0.0,
+                }
+            }
+            // Every other case, `off` included: a strength of zero is what
+            // makes the sample every pipeline carries inert.
+            _ => oag_render::mesh_render::ShadowMap::off(),
         }
     }
 
@@ -128,11 +171,15 @@ impl super::super::Scene {
         shadows: crate::display::Shadows,
     ) -> usize {
         let mut map = self.shadow_map.borrow_mut();
+        if shadows == crate::display::Shadows::Mapped {
+            return self.render_depth_map(&mut map, queue, encoder, race);
+        }
         // A hull the craft authors is Pulse's mechanism; if any slot has one,
         // this title shadows that way and not this one.
         let hulls = self.shadow_hulls.iter().any(Option::is_some);
         if shadows != crate::display::Shadows::Original || hulls {
             map.render(queue, encoder, &default_fit(), &[]);
+            map.render_depth(queue, encoder, &default_fit(), &[]);
             return 0;
         }
         let drawn = usize::from(race.ship_count());
@@ -182,6 +229,69 @@ impl super::super::Scene {
         map.render(queue, encoder, &fit, &casters);
         casters.len()
     }
+}
+
+impl super::super::Scene {
+    /// The `mapped` tier's own pass: **everything** casts, into a depth map.
+    ///
+    /// The track goes in first and the craft after it, which is the whole
+    /// difference from the tier above - a map that only the craft cast into
+    /// cannot shadow a road with a bridge over it, and one only the track cast
+    /// into cannot shadow a craft at all.
+    fn render_depth_map(
+        &self,
+        map: &mut oag_render::shadow::map::Map,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        race: &Race,
+    ) -> usize {
+        let mut casters = vec![self.track.caster(oag_core::math::Mat4::IDENTITY)];
+        let drawn = usize::from(race.ship_count());
+        for slot in 0..drawn.min(self.ships.len()) {
+            if !race.ship_active(slot) {
+                continue;
+            }
+            casters.push(self.ships[slot].caster(race.ship_model_matrix_of(slot)));
+        }
+        // Centred ahead of the player rather than on it: one cascade's texels
+        // go where the camera is pointed. See `MAPPED_AHEAD`.
+        let player = race.ship_model_matrix_of(0);
+        let centre = player.transform_point3(Vec3::ZERO)
+            + player.transform_vector3(Vec3::Z).normalize_or_zero() * MAPPED_AHEAD;
+        let fit = oag_render::shadow::map::Fit {
+            centre,
+            radius: MAPPED_RADIUS,
+            towards_light: mapped_light(&self.light),
+        };
+        // The coverage map stays cleared while this tier is on: two maps are
+        // bound at once and only one of them may have anything in it, or a
+        // switch between tiers would show the other's leftovers.
+        map.render(queue, encoder, &default_fit(), &[]);
+        map.render_depth(queue, encoder, &fit, &casters);
+        casters.len()
+    }
+}
+
+/// Which way the `mapped` tier's light points, per title.
+///
+/// **The circuit's own sun where there is one**, which on Wipeout HD there is;
+/// **the direction that title's own shadows are cast along** where there is
+/// not, which on Pulse is `oag_pulse::shadow::AUTHORED_AXIS` - so switching
+/// between `original` and `mapped` changes what is shadowed and not where the
+/// light is.
+///
+/// The fallback matters more than it looks: `Light::stand_in`'s direction is
+/// straight up, and a vertical light puts every craft's shadow exactly beneath
+/// it, where the craft itself hides it. That is what the first capture of this
+/// tier showed - a frame with shadows on the scenery and nothing under the
+/// ship.
+fn mapped_light(light: &oag_render::mesh_render::Light) -> Vec3 {
+    if light.enabled != 0.0 {
+        return Vec3::from_array(light.direction);
+    }
+    // The axis points *along* the shadow; the fit wants the direction towards
+    // the light.
+    -Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS)
 }
 
 /// The fit an empty pass uses: anywhere, one unit across, straight down.

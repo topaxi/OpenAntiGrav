@@ -90,7 +90,8 @@ impl Drawable {
         // the track's do and a craft's do not, which is Wipeout HD's own split.
         // See `mesh_render::build`.
         shadow_map: Option<&wgpu::TextureView>,
-        receives_shadow: bool,
+        shadow_depth_map: Option<&wgpu::TextureView>,
+        receives_shadow: mesh_render::ShadowReceiver,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -127,6 +128,7 @@ impl Drawable {
             mesh_render::Velocity::Write,
             zone,
             shadow_map,
+            shadow_depth_map,
             receives_shadow,
         )?;
 
@@ -145,7 +147,19 @@ impl Drawable {
             }],
         });
 
-        let opaque_ranges = model.draws.iter().map(|draw| draw.range.clone()).collect();
+        // **Both opaque lists**, and the second is not an optimisation: a
+        // Pulse hull's batches are largely *alpha-tested* rather than plain
+        // opaque, so a caster built from `draws` alone contributes nothing at
+        // all for a craft on that title - which is exactly how the `mapped`
+        // tier first drew shadows on the scenery and none under the ship.
+        // The cutout itself is ignored in the caster pass: a chain-link fence
+        // casts a solid shadow, which is a divergence and a cheap one.
+        let opaque_ranges = model
+            .draws
+            .iter()
+            .chain(model.alpha_tested_draws.iter())
+            .map(|draw| draw.range.clone())
+            .collect();
         Ok(Self {
             opaque_ranges,
             model,

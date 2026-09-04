@@ -953,7 +953,10 @@ change how this list should be read:
       surface under the craft. **On HD/Fury it draws too, by that title's own
       mechanism**: the craft render into a *coverage* map - which is what its
       track material's microcode says it samples, projectively and with no
-      compare - and the track reads it.
+      compare - and the track reads it. **`mapped` is built too**, this
+      project's own depth map that everything casts into and every lit surface
+      reads, offered on every title and carrying one named gap - a craft's own
+      shadow on the road - rather than a tuned-away one.
       **What is built is the tier below it**: `graphics.shadows` with `off`
       and `blob`, a ground-aligned quad per craft placed by a downward cast
       against the circuit's own collision geometry. `blob` plays Wipeout HD's

@@ -1,4 +1,4 @@
-# `original` draws on Pulse and HD; 2048's and `mapped` are what is left
+# All four shadow tiers draw; `mapped` has one named gap and 2048 has none of it
 
 2026-09-04. Rewritten from the file that split off
 [shadows-are-planned-and-pulses-occluder-payload-closes.md](shadows-are-planned-and-pulses-occluder-payload-closes.md)
@@ -48,6 +48,25 @@ Two things worth carrying forward from doing it:
   depth attachment, no bias and no comparison sampler in the pass.
 - **`original` on 2048**: the `track_proximity_shadow` pair and the
   precomputed environment shadows, and it needs 2048 to race first.
+- **`mapped` landed 2026-09-04 with a gap that is written down rather than
+  tuned away: a craft's own shadow does not appear on the road.** Everything
+  else does - scenery on scenery, and the frame at large. Ruled out by separate
+  runs: the depth pass writes depth (the texels are read back in
+  `shadow_map_coverage.rs`), the map has content at the road's texels, the road
+  computes a `uv` inside the map, road and craft land 13 texels apart at 2048
+  exactly as the light's tilt predicts, and the craft's caster carries 13
+  ranges and 4,335 indices. **The first thing to check** is the one difference
+  between the two vertex paths: `caster.wgsl` does `mvp * position` where
+  `mesh.wgsl` does `model * (node_anims.transform[xform] * position)`, and the
+  caster pass binds no node matrices at all - so anything baked in an anim
+  node's space is cast from the wrong place.
+- **Two bugs the `mapped` work turned up, both of which shadowed *something***
+  and so read as working: the map lookup was mirrored vertically (glam's
+  `rh::proj::directx` projections are **Y-down**, and HD's coverage tier had
+  the same bug hidden by a caster sitting near its own map's centre), and the
+  shadow term reached one fragment entry point of five - **a race draws through
+  the `_velocity` pair**, which is why the road went untouched while the
+  scenery did not.
 - **HD's `LiveStencilShadow` path is not built either**, and it is a separate
   thing from the map: a two-sided depth-fail stencil test over a rigidly
   shifted box proxy, decoded down to all 39 `shadow.stencilvolume` files. What
@@ -129,5 +148,7 @@ Two things worth carrying forward from doing it:
 - Read the compositing pass on either title - `RenderModelShadowsOnTrack` on
   HD is the nearer one, since its material flag `ShadowToAlpha` is already
   bound at `0x405d48` - and replace both darkness constants with measurements.
-- `mapped`, this project's own cascaded shadow map, which now has the whole
-  caster and receiver path built under it.
+- Bind the node matrices in the caster pass, which is the named gap above and
+  the likeliest reason a craft casts nothing onto the road.
+- A real cascade ladder: `mapped` is one cascade fitted ahead of the camera,
+  which is a choice about where its texels go rather than a solution.

@@ -720,12 +720,18 @@ values = ["off", "low", "medium", "high"]
 # report says so, rather than quietly becoming `blob`; on Wipeout Pure that is
 # also the correct picture, since it authors no shadow class at all.
 #
+# `mapped` is this project's own: a shadow map everything casts into and
+# everything reads, offered on every title because it asks the disc for nothing
+# but geometry. It is **more** shadows rather than better ones - on a title with
+# its own mechanism it ignores what the disc would have drawn, which is why
+# `original` stays the one to prefer where it exists.
+#
 # Applies live: `Scene::render` reads the tier fresh each frame.
 [[page.entry]]
 kind = "choice"
 label = "SHADOWS"
 setting = "graphics.shadows"
-values = ["off", "blob", "original"]
+values = ["off", "blob", "original", "mapped"]
 
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.

@@ -619,11 +619,36 @@ pub struct ShadowMap {
     pub matrix: [[f32; 4]; 4],
     /// How hard a fully covered texel darkens the surface, `0.0` for off.
     pub strength: f32,
+    /// Which map is bound and who may read it.
+    ///
+    /// [`ShadowMap::COVERAGE`] is Wipeout HD's own mechanism - a coverage map,
+    /// read by the track surface alone. [`ShadowMap::DEPTH`] is the `mapped`
+    /// tier, which is this project's: a depth map every lit surface compares
+    /// against, so a craft can shadow another craft and a bridge can shadow
+    /// the road under it.
+    ///
+    /// A uniform rather than a pipeline constant because the setting applies
+    /// live: switching tiers must not rebuild a pipeline per model.
+    pub mode: f32,
+    /// How far, in the map's own depth units, a receiver is pushed towards the
+    /// light before comparing.
+    ///
+    /// **Ours, and unavoidable**: a depth comparison against a quantised map
+    /// makes a lit surface shadow itself, and the fix is either a bias or a
+    /// per-texel derivative. Ignored in [`ShadowMap::COVERAGE`], which
+    /// compares nothing.
+    pub depth_bias: f32,
     /// Padding to the 16-byte boundary a uniform's own size needs.
-    pub _pad: [f32; 3],
+    pub _pad: f32,
 }
 
 impl ShadowMap {
+    /// [`Self::mode`] for Wipeout HD's coverage map, read by the track alone.
+    pub const COVERAGE: f32 = 1.0;
+
+    /// [`Self::mode`] for the `mapped` tier's depth map, read by everything.
+    pub const DEPTH: f32 = 2.0;
+
     /// No shadow at all: the identity matrix and zero strength, which is what
     /// every title but the one being shadowed binds.
     ///
@@ -640,7 +665,41 @@ impl ShadowMap {
                 [0.0, 0.0, 0.0, 1.0],
             ],
             strength: 0.0,
-            _pad: [0.0; 3],
+            mode: 0.0,
+            depth_bias: 0.0,
+            _pad: 0.0,
+        }
+    }
+}
+
+/// Which shadow maps a model's surfaces may read, if any.
+///
+/// **Three states rather than a flag**, because the two tiers have different
+/// receivers and one surface must be out of both. Wipeout HD's coverage map is
+/// read by the *track surface* alone - that is what its materials declare - so
+/// a craft casts and never receives it. The `mapped` tier's depth map is read
+/// by everything that is lit, which is what makes it *more* shadows rather
+/// than better ones. And the sky is neither: it is drawn at infinity with the
+/// depth test disabled, so a shadow on it is a dark patch hanging in the air.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShadowReceiver {
+    /// Reads no map at all. The sky.
+    Never,
+    /// Reads the `mapped` tier's depth map only. Craft, scenery, everything
+    /// else that is lit.
+    Mapped,
+    /// Reads both, which on Wipeout HD is the track surface.
+    Both,
+}
+
+impl ShadowReceiver {
+    /// The pipeline constant `mesh.wgsl` compares against.
+    #[must_use]
+    pub fn constant(self) -> f64 {
+        match self {
+            Self::Never => 0.0,
+            Self::Mapped => 1.0,
+            Self::Both => 2.0,
         }
     }
 }

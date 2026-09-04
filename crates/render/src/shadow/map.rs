@@ -134,6 +134,24 @@ pub struct Caster<'a> {
     pub model: Mat4,
 }
 
+/// The depth map's format, for the `mapped` tier.
+///
+/// **A second target rather than a second meaning for the first.** The
+/// coverage map answers "is anything between this point and the light", which
+/// is all Wipeout HD's own track shadows need; a cascaded shadow map answers
+/// "what is the *nearest* thing", which needs real depth and a depth test to
+/// resolve overlapping casters. Storing depth in the `R8Unorm` target would
+/// quantise a whole circuit's depth range to 256 steps.
+pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+/// The depth map's resolution, square.
+///
+/// **Ours, and larger than [`SIZE`] on purpose**: the coverage map is fitted
+/// to a grid of craft, where this one covers everything in front of the
+/// camera - a far larger box, so it needs more texels to keep a comparable
+/// world size per texel.
+pub const DEPTH_SIZE: u32 = 2048;
+
 /// The map, its caster pipeline, and the per-caster uniforms.
 #[derive(Debug)]
 pub struct Map {
@@ -148,6 +166,16 @@ pub struct Map {
     matrix: Mat4,
     /// How many casters it actually drew.
     drawn: usize,
+    /// The `mapped` tier's depth target, its view and the pipeline that fills
+    /// it - built beside the coverage map so one type carries both tiers'
+    /// plumbing and a caller switches between them per frame.
+    depth: wgpu::Texture,
+    depth_view: wgpu::TextureView,
+    depth_pipeline: wgpu::RenderPipeline,
+    /// The matrix the last [`Map::render_depth`] projected with.
+    depth_matrix: Mat4,
+    /// How many casters that pass drew.
+    depth_drawn: usize,
 }
 
 /// The most casters one pass holds: a full grid.
@@ -275,6 +303,82 @@ impl Map {
             })
             .collect();
 
+        let depth = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("shadow depth map"),
+            size: wgpu::Extent3d {
+                width: DEPTH_SIZE,
+                height: DEPTH_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("shadow caster depth"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+                })],
+                compilation_options: Default::default(),
+            },
+            // **No fragment stage at all**: the depth pass writes depth and
+            // nothing else, so there is no colour target to declare and no
+            // shader to run per pixel.
+            fragment: None,
+            primitive: wgpu::PrimitiveState {
+                // Front faces culled rather than back: shadowing from the far
+                // side of a caster moves the depth comparison a whole object
+                // away from the receiving surface, which is the cheapest way
+                // to keep a flat lit surface from shadowing itself. See
+                // `DEPTH_BIAS` in `mesh_render::ShadowMap`, which is what
+                // handles the rest.
+                // **Nothing culled**, and this is the one that cost the most
+                // to find. Culling front faces is the usual trick against
+                // self-shadowing, and here it removes exactly the surfaces
+                // that should shadow: a craft's *top* is what the light sees,
+                // so with it gone the map holds the road's own underside and
+                // the comparison decides the road is lit. Two-sided plus the
+                // slope-scaled bias below keeps the acne down without throwing
+                // the caster away.
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                // **Slope-scaled, in the rasterizer**, which is where a depth
+                // bias belongs: a surface seen edge-on from the light spans
+                // many depth units per texel, and a constant bias big enough
+                // for it detaches every other shadow from what casts it. The
+                // first cut used a shader-side constant alone and covered a
+                // circuit's lattice towers in acne. Ours - nothing on any disc
+                // authors it - and the shader's own `depth_bias` stays as the
+                // small constant floor beside it.
+                bias: wgpu::DepthBiasState {
+                    constant: 2,
+                    slope_scale: 3.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
         Self {
             texture,
             view,
@@ -283,6 +387,90 @@ impl Map {
             binds,
             matrix: Mat4::IDENTITY,
             drawn: 0,
+            depth,
+            depth_view,
+            depth_pipeline,
+            depth_matrix: Mat4::IDENTITY,
+            depth_drawn: 0,
+        }
+    }
+
+    /// The depth map's view, for the `mapped` tier's own binding.
+    #[must_use]
+    pub fn depth_view(&self) -> &wgpu::TextureView {
+        &self.depth_view
+    }
+
+    /// The projection [`Self::render_depth`] last used.
+    #[must_use]
+    pub fn depth_matrix(&self) -> Mat4 {
+        self.depth_matrix
+    }
+
+    /// How many casters that pass drew.
+    #[must_use]
+    pub fn depth_casters(&self) -> usize {
+        self.depth_drawn
+    }
+
+    /// The depth texture, for a caller that reads it back.
+    #[must_use]
+    pub fn depth_texture(&self) -> &wgpu::Texture {
+        &self.depth
+    }
+
+    /// Fills the depth map: the same casters, from the same light, recorded by
+    /// distance instead of by coverage.
+    ///
+    /// **This is the `mapped` tier's half and none of it is the original's.**
+    /// No title in the lineage renders a depth map: HD's is a coverage map
+    /// (see this module's header) and Pulse projects an authored hull. What
+    /// this buys over either is that *everything* can receive - a craft under
+    /// a bridge, a craft beside another - which is the whole reason the tier
+    /// exists.
+    ///
+    /// Cleared to the far plane every frame, for the reason [`Self::render`]
+    /// clears its own target: a stale depth is a shadow that stays behind.
+    pub fn render_depth(
+        &mut self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        fit: &Fit,
+        casters: &[Caster<'_>],
+    ) {
+        self.depth_matrix = fit.matrix();
+        self.depth_drawn = casters.len().min(MAX_CASTERS);
+        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
+            let mvp = self.depth_matrix * caster.model;
+            queue.write_buffer(
+                &self.uniforms,
+                UNIFORM_STRIDE * slot as u64,
+                bytemuck::cast_slice(&mvp.to_cols_array()),
+            );
+        }
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("shadow depth map"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&self.depth_pipeline);
+        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
+            pass.set_bind_group(0, &self.binds[slot], &[]);
+            pass.set_vertex_buffer(0, caster.vertices.slice(..));
+            pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
+            for range in caster.ranges {
+                pass.draw_indexed(range.clone(), 0, 0..1);
+            }
         }
     }
 

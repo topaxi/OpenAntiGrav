@@ -4,10 +4,11 @@
 > have landed: the census, the setting (`graphics.shadows`), the `blob` tier,
 > the occluder's record arrays and its runtime reader, the 2048 measurement,
 > and - on **Pulse only** - `original`. **`mapped` (step 7) is still design
-> only** and is not offered as a value until it exists; nor is `original` on
-> 2048 or Pure, where selecting it draws nothing and the load report says so.
-> **`original` draws on Pulse and on HD/Fury**, by each title's own mechanism -
-> authored occluder hulls there, a coverage map here.
+> **All four tiers are built.** `original` draws on Pulse and on HD/Fury by
+> each title's own mechanism - authored occluder hulls there, a coverage map
+> here - and on 2048 or Pure it draws nothing and the load report says so.
+> `mapped` is this project's own and works on every title, with one named gap
+> in step 7 below.
 > The page was written before any of it, so the setting's shape was agreed
 > before an enum and a menu row made it expensive to change, the way
 > [`motion-blur.md`](motion-blur.md) did for its own row.
@@ -840,9 +841,52 @@ second pass with no casters clears it.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
-7. **`mapped`.** A cascaded shadow map, opt-in, this project's own - and on HD
-   it ships *alongside* the authored path rather than above it, with `original`
-   still the default there.
+7. **`mapped` - landed 2026-09-04, one cascade, and with a named gap.** A
+   depth map every surface casts into and every lit surface reads, opt-in, this
+   project's own: `shadow::map::Map::render_depth` fills it and `mesh.wgsl`
+   compares against it. Offered on every title, because unlike `original` it
+   asks the disc for nothing but geometry - and on HD it ships *alongside* the
+   authored path rather than above it, with `original` still the one to prefer
+   there.
+
+   **Nothing in it is recovered.** The depth format, the 2048 resolution, the
+   single cascade and its fit, the four-tap comparison, the slope-scaled bias,
+   the darkness - all this project's. The one thing it takes from a title is
+   the *direction*: the circuit's own sun where there is one, and the direction
+   that title's own shadows are cast along where there is not
+   (`oag_pulse::shadow::AUTHORED_AXIS`), so switching tiers changes what is
+   shadowed rather than where the light is. That fallback is not cosmetic:
+   `Light::stand_in`'s direction is straight *up*, and a vertical light puts
+   every craft's shadow exactly beneath it where the craft hides it.
+
+   **Two bugs found and fixed on the way, both of which shadowed *something* and
+   so looked like they worked:**
+
+   - **The map lookup was mirrored vertically.** `oag_core::math::camera`'s
+     projections are glam's `rh::proj::directx` pair, which output **Y-down**
+     NDC; the receiver computed `uv.y = 0.5 - ndc.y * 0.5` as though it were
+     Y-up. A caster near the middle of its own map still lands near the middle
+     under a mirror, which is why HD's coverage tier appeared to work with the
+     same bug in it.
+   - **The shadow term reached one fragment entry point of five.** `mesh.wgsl`
+     has `fs_main`, `fs_main_blend`, `fs_main_alpha_test` and the two
+     `_velocity` twins, and a **race draws through the `_velocity` pair** - so
+     the first cut shadowed the scenery that a blended material happened to
+     draw and left the entire road untouched. Four debugging passes were spent
+     on the projection maths before the entry points were counted.
+
+   **The gap, stated rather than tuned away: a craft's own shadow does not
+   appear on the road.** Scenery-on-scenery and the rest of the frame do
+   shadow. What has been ruled out, each by a separate run: the depth pass
+   writes depth (`shadow_map_coverage.rs` reads the texels back), the map has
+   content at the road's own texels, the road computes a `uv` inside the map,
+   the road and the craft land 13 texels apart at 2048 as the light's tilt
+   predicts, and the craft's caster carries 13 ranges and 4,335 indices. What
+   is *not* ruled out, and is the first thing to check: the caster shader
+   applies `mvp * position` where `mesh.wgsl`'s vertex stage applies
+   `model * (node_anims.transform[xform] * position)` - so any geometry baked
+   in an anim node's space is cast from the wrong place, and the caster pass
+   binds no node matrices at all.
 
 Steps 1-6 have landed, step 5 on Pulse only. **What is next is a title, not a
 step**: `original` on HD is its shadow-map pipeline and on 2048 its

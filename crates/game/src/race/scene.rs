@@ -451,7 +451,11 @@ impl Scene {
                     mesh_render::GlowMask::Protected,
                     zone_art,
                     Some(shadow_map.view()),
-                    false,
+                    Some(shadow_map.depth_view()),
+                    // The sky reads no map at all: it is drawn at infinity with the
+                    // depth test disabled, so a shadow on it is a dark patch hanging
+                    // in the air.
+                    mesh_render::ShadowReceiver::Never,
                 )
             })
             .transpose()?;
@@ -467,10 +471,12 @@ impl Scene {
             mesh_render::GlowMask::Protected,
             zone_art,
             Some(shadow_map.view()),
-            // **The one receiver**, which is what Wipeout HD's own materials
-            // say: the track surface declares `shadowMapTex` and a craft's
-            // does not. See `mesh_render::build`.
-            true,
+            Some(shadow_map.depth_view()),
+            // **The one receiver of the coverage map**, which is what Wipeout
+            // HD's own materials say: the track surface declares
+            // `shadowMapTex` and a craft's does not. It reads the `mapped`
+            // tier's depth map too, hence `Both`.
+            mesh_render::ShadowReceiver::Both,
         )?;
         // One per grid slot, each drawing **its own team's hull**. Built up
         // front rather than on demand, because a `Drawable` needs the device
@@ -493,7 +499,8 @@ impl Scene {
                 mesh_render::GlowMask::Protected,
                 zone_art,
                 Some(shadow_map.view()),
-                false,
+                Some(shadow_map.depth_view()),
+                mesh_render::ShadowReceiver::Mapped,
             )?);
         }
         let collision = collision_model
@@ -510,7 +517,8 @@ impl Scene {
                     mesh_render::GlowMask::Protected,
                     zone_art,
                     Some(shadow_map.view()),
-                    false,
+                    Some(shadow_map.depth_view()),
+                    mesh_render::ShadowReceiver::Mapped,
                 )
             })
             .transpose()?;
@@ -530,7 +538,8 @@ impl Scene {
                         mesh_render::GlowMask::Protected,
                         zone_art,
                         Some(shadow_map.view()),
-                        false,
+                        Some(shadow_map.depth_view()),
+                        mesh_render::ShadowReceiver::Mapped,
                     )
                 })
                 .transpose()
@@ -727,7 +736,8 @@ impl Scene {
                         mesh_render::GlowMask::Protected,
                         zone_art,
                         Some(shadow_map.view()),
-                        false,
+                        Some(shadow_map.depth_view()),
+                        mesh_render::ShadowReceiver::Mapped,
                     )?),
                     None => None,
                 },
@@ -758,7 +768,8 @@ impl Scene {
                     mesh_render::GlowMask::Written,
                     zone_art,
                     Some(shadow_map.view()),
-                    false,
+                    Some(shadow_map.depth_view()),
+                    mesh_render::ShadowReceiver::Mapped,
                 )?));
             }
         }
@@ -810,7 +821,8 @@ impl Scene {
                 mesh_render::GlowMask::Written,
                 zone_art,
                 Some(shadow_map.view()),
-                false,
+                Some(shadow_map.depth_view()),
+                mesh_render::ShadowReceiver::Mapped,
             )?));
         }
         // The cockpit sphere, on the shell's own pipeline: same additive blend,
@@ -829,7 +841,8 @@ impl Scene {
                 mesh_render::GlowMask::Written,
                 zone_art,
                 Some(shadow_map.view()),
-                false,
+                Some(shadow_map.depth_view()),
+                mesh_render::ShadowReceiver::Mapped,
             )?),
             None => None,
         };
@@ -853,7 +866,8 @@ impl Scene {
                     mesh_render::GlowMask::Protected,
                     zone_art,
                     Some(shadow_map.view()),
-                    false,
+                    Some(shadow_map.depth_view()),
+                    mesh_render::ShadowReceiver::Mapped,
                 )?);
             }
         }
