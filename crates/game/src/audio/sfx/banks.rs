@@ -8,6 +8,7 @@
 //! at load time from per-title data, not one of [`super::Cue`]'s fixed,
 //! statically-named set, so it cannot go through [`load_cue`] itself.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -44,6 +45,25 @@ pub struct Banks {
     pub(super) sounds: BTreeMap<Cue, Loaded>,
     /// What loading did, for the race's own report.
     pub report: Vec<String>,
+    /// The previous pick for each multi-alternate cue, mirroring
+    /// `operand[3]`, the byte `0x19`'s handler mutates in the cue's own
+    /// command data on every play. `RefCell` rather than a `&mut self` on
+    /// [`Self::pick`]: the original's cache is a property of the *bank*, not
+    /// of whichever voice or engine slot happens to be calling, and every
+    /// call site here holds only a shared `&Banks`. See
+    /// [`sound.md`](../../../../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#0x19---alternate-selection-decoded).
+    ///
+    /// **One slot per [`Cue`], shared across every voice that ever plays it -
+    /// including [`Cue::Engine`]'s eight simultaneously-live craft.** That
+    /// `operand[3]` sits in command data rather than voice state is read
+    /// directly; that eight concurrently-open `~ENGINE` voices actually
+    /// contend on that one byte, rather than each craft's `ExhaustFlare`
+    /// holding a copy, is not - `sound.md`'s own `+0xa8` gate is scoped to
+    /// *one* voice's re-entry within a single play, and says nothing about
+    /// two different voices' plays of the same cue. Read as sharing here
+    /// because that is what the byte's storage location implies, not because
+    /// a multi-voice case was traced.
+    pub(super) last_pick: RefCell<BTreeMap<Cue, usize>>,
 }
 
 impl Banks {
@@ -102,7 +122,11 @@ impl Banks {
         for line in &report {
             info!("{line}");
         }
-        Self { sounds, report }
+        Self {
+            sounds,
+            report,
+            ..Default::default()
+        }
     }
 
     /// Whether anything at all decoded.
@@ -116,8 +140,8 @@ impl Banks {
     /// For the one cue whose alternates are **not** interchangeable:
     /// [`Cue::LockOn`] binds two, and which of them plays is the original's
     /// seeking/locked parameter rather than a draw. Every other cue goes
-    /// through [`Self::pick`] and should - see the module docs on why the
-    /// selecting opcode being unread makes a random draw the honest default.
+    /// through [`Self::pick`] instead, which now matches the decoded `0x19`
+    /// shape - see its own doc comment.
     ///
     /// Clamped rather than `None` on an out-of-range index: a bank that binds
     /// one waveform where this expects two should play the one it has, not go
@@ -132,13 +156,26 @@ impl Banks {
 
     /// One waveform for a cue, chosen by `rng` when the cue has alternates.
     ///
-    /// `None` when the cue did not load. See the module docs for why the choice
-    /// is made here rather than by the bank: the selecting opcode is unread.
+    /// `None` when the cue did not load. Opcode `0x19` is decoded now (see
+    /// [`Self::last_pick`]): a uniform draw that never repeats the
+    /// immediately previous pick for the same cue, re-rolled by advancing one
+    /// alternate and wrapping rather than by drawing again - matching the
+    /// original's own shape rather than a naive reject-and-retry, which would
+    /// bias a small `count` differently.
     #[must_use]
     pub fn pick(&self, cue: Cue, rng: &mut Rng) -> Option<(Arc<Sound>, bool)> {
         let loaded = self.sounds.get(&cue)?;
         let index = match u32::try_from(loaded.waveforms.len()) {
-            Ok(len) if len > 1 => rng.below(len) as usize,
+            Ok(len) if len > 1 => {
+                let draw = rng.below(len) as usize;
+                let mut last_pick = self.last_pick.borrow_mut();
+                let index = match last_pick.get(&cue) {
+                    Some(&previous) if previous == draw => (draw + 1) % len as usize,
+                    _ => draw,
+                };
+                last_pick.insert(cue, index);
+                index
+            }
             _ => 0,
         };
         let (sound, looping) = &loaded.waveforms[index];

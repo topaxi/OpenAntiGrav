@@ -36,6 +36,7 @@ fn banks(entries: &[(Cue, usize, bool)]) -> Banks {
             .map(|&(cue, count, looping)| (cue, loaded(count, looping)))
             .collect(),
         report: Vec::new(),
+        ..Default::default()
     }
 }
 

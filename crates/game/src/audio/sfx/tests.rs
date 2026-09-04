@@ -32,6 +32,7 @@ fn banks(entries: &[(Cue, usize, bool)]) -> Banks {
             .map(|&(cue, count, looping)| (cue, loaded(count, looping)))
             .collect(),
         report: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -60,6 +61,47 @@ fn a_cue_with_alternates_reaches_all_of_them() {
         pointers.insert(Arc::as_ptr(&sound) as usize);
     }
     assert_eq!(pointers.len(), 15, "some alternate is never chosen");
+}
+
+#[test]
+fn a_cue_with_alternates_never_repeats_the_previous_pick() {
+    // `0x19`'s decoded handler re-rolls once, by advancing to the next
+    // alternate and wrapping, whenever the draw matches the cache from the
+    // cue's last play - see `sound.md`'s own `0x19` section. `Scream_DoGrain`
+    // never plays the same alternate on two consecutive calls for one cue.
+    let banks = banks(&[(Cue::Collision, 15, false)]);
+    let mut rng = Rng::new(7);
+    let mut previous = None;
+    for _ in 0..600 {
+        let (sound, _) = banks.pick(Cue::Collision, &mut rng).expect("loaded");
+        let identity = Arc::as_ptr(&sound) as usize;
+        if let Some(previous) = previous {
+            assert_ne!(
+                identity, previous,
+                "the same alternate played twice in a row"
+            );
+        }
+        previous = Some(identity);
+    }
+}
+
+#[test]
+fn a_two_alternate_cue_strictly_alternates() {
+    // The narrowest case the `(draw + 1) % len` wrap has to get right: with
+    // only two alternates, "never repeat" leaves no choice at all past the
+    // first play, so a wrapping bug would show up as a repeat here almost
+    // immediately rather than after hundreds of draws.
+    let banks = banks(&[(Cue::Collision, 2, false)]);
+    let mut rng = Rng::new(11);
+    let mut previous = None;
+    for _ in 0..50 {
+        let (sound, _) = banks.pick(Cue::Collision, &mut rng).expect("loaded");
+        let identity = Arc::as_ptr(&sound) as usize;
+        if let Some(previous) = previous {
+            assert_ne!(identity, previous, "a two-alternate cue repeated itself");
+        }
+        previous = Some(identity);
+    }
 }
 
 #[test]
@@ -138,6 +180,7 @@ fn a_bank_that_mixes_looping_and_one_shot_waveforms_keeps_them_apart() {
     let banks = Banks {
         sounds: [(Cue::Collision, mixed)].into_iter().collect(),
         report: Vec::new(),
+        ..Default::default()
     };
 
     let mut rng = Rng::new(23);
