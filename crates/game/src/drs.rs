@@ -122,19 +122,27 @@ pub const RESIDUAL_SHARE: f32 = 0.20;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cost {
     /// What falls when the render extent does: the `race` pass, the
-    /// motion-blur chain and the HD/Fury bloom chain - all three drawn
-    /// through the extent, all three timed. See
+    /// motion-blur chain, the HD/Fury bloom chain, and FSR 3.1's six
+    /// render-resolution dispatches - all four drawn or dispatched through the
+    /// extent, all four timed. See
     /// [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md)
-    /// for the third.
+    /// for the third and
+    /// [ADR-0045](../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)
+    /// for the fourth.
     pub scalable: f32,
-    /// What does not: the FSR 3.1 chain, measured, and **all of it**.
+    /// What does not: FSR 3.1's `accumulate` and `rcas`, measured. They run at
+    /// presentation resolution, so a lower render scale buys nothing back from
+    /// them.
     ///
-    /// Conservative rather than exact - the chain's render-resolution passes
-    /// do shrink with the extent, and only its accumulate and RCAS passes are
-    /// truly presentation-bound. Counting the whole reading as fixed makes the
-    /// budget smaller than the truth and so biases the controller toward
-    /// falling, which is the safe direction for the bug ADR-0042 exists to
-    /// fix. Splitting it needs a second pair inside `Fsr3::render`.
+    /// **This used to be the whole chain, and the over-count was deliberate.**
+    /// ADR-0042 had one timestamp pair to work with, so counting all eight
+    /// dispatches here made the budget smaller than the truth and biased the
+    /// controller toward falling - the safe direction for the bug that ADR
+    /// exists to fix. Since
+    /// [ADR-0045](../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)
+    /// there are two pairs and the pessimism is gone, so what bounds the error
+    /// now is [`RESIDUAL_SHARE`] and the learned reserve above it, not a
+    /// deliberate thumb on this scale.
     ///
     /// Zero on every frame no temporal reconstruction ran, which is honest
     /// rather than a default: nothing fixed was paid.

@@ -15,7 +15,7 @@ fn camera() -> Camera {
     readback::CAMERA
 }
 
-fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
+pub(super) fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
     Dispatch {
         render,
         max_render: render,

@@ -272,12 +272,41 @@ counts in findings 4 and 5 are work removed, not a profile.
   `adapter.get_texture_format_features()` on the device's own adapter rather
   than on a feature name (the guarantees have moved since `resources.rs`
   chose the baseline, and it chose deliberately), and take the FP16 path
-  behind `wgpu::Features::SHADER_F16`. Both need a per-pass breakdown first:
-  the timer is one pair over the whole chain, so nothing yet says whether the
-  render-resolution passes or the presentation-resolution ones dominate, and
-  the two levers do not help the same passes. Read this file's finding 1
-  before adding pairs - eight claims a frame is eight chances to reintroduce
-  the unresolved-slot trap.
+  behind `wgpu::Features::SHADER_F16`. The two do not help the same passes,
+  so which to spend first is a question about *where in the chain* the time
+  goes - and **that instrument now exists**, see below.
+
+- **The chain is timed in two halves, since 2026-09-04.**
+  [ADR-0045](../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md):
+  `Fsr3::render` encodes two compute passes rather than one, split where the
+  resolution changes, and `ChainTimestamps` carries a pair for each. The
+  overlay's one `FSR3` row became two - `FSR3 REN` for the six dispatches at
+  the render extent or half of it, `FSR3 OUT` for `accumulate` and `rcas` at
+  presentation resolution. **Nobody has read them on the Deck yet**, and that
+  reading is what picks the lever: a large `FSR3 OUT` points at the two
+  presentation-resolution shaders (`accumulate.wgsl` is the port's biggest, at
+  606 lines, and its history sample is 16 Lanczos taps a pixel), a large
+  `FSR3 REN` points at the widened intermediates, which are mostly what the
+  render-resolution passes read and write.
+
+  Two pairs and not eight, deliberately: `TIMESTAMP_QUERY_INSIDE_PASSES` is
+  not WebGPU-portable, so a per-dispatch breakdown means a compute pass per
+  dispatch - eight claims a frame against a ring of four slots, and eight
+  chances to reintroduce finding 1's unresolved-slot trap. **That trap was
+  live for about twenty minutes while ADR-0045 was being written**, in the
+  most ordinary way possible: a scripted edit inserted the new ring's
+  `resolve` at the first `upscale_timer` match in `frame.rs`, which is the
+  *claim* site, not the resolve site. The result compiled, the full `just`
+  gate passed, and every frame after the fourth would have been silently
+  unmeasured - a claimed slot that is never resolved never comes back. Nothing
+  in the test suite reaches the frame loop's timer plumbing, which is why the
+  gate was no evidence at all. Read `frame.rs`'s claim/abandon/resolve trio
+  together before touching any of them.
+
+  The split's own cost is unmeasured: the chain was one compute pass and is
+  now two, so the sum of the two readings is not exactly what the single pair
+  reported. A `--presented` capture is byte-identical either side of it, so
+  the *picture* is untouched.
 - **The fallback ladder's lowest rung cannot be exercised here.** Both adapters
   on this machine report `DownlevelFlags::COMPUTE_SHADERS`, so a green run is
   not evidence that a compute-less adapter degrades to FSR 1 rather than
@@ -285,7 +314,11 @@ counts in findings 4 and 5 are work removed, not a profile.
 
 ## Next Steps
 
-1. **Play it, and read the two numbers while you do.**
+1. **Read `FSR3 REN` against `FSR3 OUT` on the Deck.** That single comparison
+   is what decides between the two levers above, and it is now one look at the
+   overlay rather than a profiling project. Everything else in this list is
+   older than that question.
+2. **Play it, and read the two numbers while you do.**
    `just play --race --upscaler fsr3 --render-scale 50` with
    `[graphics] perf_overlay = dev`, and look at a *moving* frame: the capture is
    nearly static and is the wrong instrument for the one thing a temporal
@@ -293,7 +326,7 @@ counts in findings 4 and 5 are work removed, not a profile.
    are what to watch; `GPU SCENE x.xx MS  FSR3 x.xx MS` is what the chain costs,
    and the `info` line at the first race frame is what it holds. Both are wired
    and neither has been read.
-2. ~~**Read the same two on a Steam Deck.**~~ Half done, 2026-09-04: the
+3. ~~**Read the same two on a Steam Deck.**~~ Half done, 2026-09-04: the
    `FSR3` row reads **4-5 ms** there with dynamic resolution on - see Open
    above for what that number does and does not settle. **What is still
    unread is the `info` line**, which is the one the widening argument has
@@ -301,9 +334,9 @@ counts in findings 4 and 5 are work removed, not a profile.
    1080p/50 % is the number to check against what the device actually has. It
    is logged at `info` on the first race frame of an allocation, so it wants a
    run with the log level up rather than another look at the overlay.
-3. Decide whether `fsr3` should be a default anywhere. It is off by default and
+4. Decide whether `fsr3` should be a default anywhere. It is off by default and
    the row already offers it; `Scale::default` is `FULL`, so like `fsr1` it is
    inert until a player lowers the render scale - except that unlike `fsr1` it
    is *not* inert at 100 %, because a temporal resolve still has more samples
    than one frame carries.
-4. Reset the history on a camera cut, which nothing does yet - see above.
+5. Reset the history on a camera cut, which nothing does yet - see above.

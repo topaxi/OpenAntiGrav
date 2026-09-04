@@ -210,7 +210,8 @@ residual learns" below:
 | The `race` pass (`race/scene/frame.rs`) | `drs::Cost::scalable` | Falls with the render extent, timed every frame |
 | `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes` |
 | `hd_bloom` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain the same way since ADR-0043. `Scene::has_hd_bloom` tells "ring full" from "no chain to measure" - Pulse, Pure, and an HD circuit with no `HDR and Bloom` block all have none |
-| The FSR 3.1 chain | `drs::Cost::fixed` | Timed (`Session::upscale_cost`), but does not fall with the extent - its temporal accumulate and RCAS passes run at presentation size. Counted in full rather than split, which is conservative: some of the chain does shrink with the extent, and treating it all as fixed under-states the true budget |
+| The FSR 3.1 chain's six render-resolution dispatches | `drs::Cost::scalable` | Also fall with the extent; timed as their own compute pass (`Session::upscale_cost`) since [ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md) |
+| The FSR 3.1 chain's `accumulate` and `rcas` | `drs::Cost::fixed` | Timed (`Session::upscale_presented_cost`), and the one part of the frame that genuinely does not fall with the extent: both run at presentation size. Until ADR-0045 the *whole* chain was counted here, which was deliberately conservative and, on a Steam Deck where the chain costs 4-5 ms, no longer a small thumb on the scale |
 | `bloom` | The residual | Not timed. Draws at a fixed 240x136 regardless of scale, so - unlike `hd_bloom` - it does not belong in `scalable` even once it is timed |
 | FXAA, SMAA, FSR 1, the blit, the HUD, the composite, the perf overlay, AI/physics for opponents beyond the player | The residual | Presentation-resolution, driver overhead, or CPU-side work off the render-extent path entirely - permanently outside the extent's reach |
 
@@ -368,8 +369,11 @@ inside the one module whose selling point is that it has none. See
 What changed, in [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md):
 `drs::SCENE_SHARE`, a single constant standing in for everything the scene pass
 was not, is gone. The budget is now `period - fixed - residual`, where `fixed`
-is `drs::Cost::fixed` - the FSR 3.1 chain's own GPU timing, already measured
-and previously discarded - and the residual opens each session at
+is `drs::Cost::fixed` - FSR 3.1's own GPU timing, already measured and
+previously discarded, and since
+[ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)
+only the presentation-resolution half of it - and the residual opens each
+session at
 `RESIDUAL_SHARE = 0.20` of the period and covers what genuinely cannot be reached by a render-extent change: the HUD,
 the composite, the blit, the perf overlay, the MSAA resolve, and, per
 [ADR-0043](../architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md), the
