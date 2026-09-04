@@ -53,9 +53,14 @@ override") is set - masked to 20 bits, the same layer-over-depth split as
 Pulse. The fifth (`0x0012fba8`) instead **computes its own depth term**
 (a vector distance, bitwise-complemented so farther is a smaller key -
 direct evidence for "back-to-front", not just inherited wording) and only
-lets `instance+0x11c` override *that*. **One layer value is a direct
-cross-title match, not merely a similar shape**: `0x4d0` shares its top byte
-with Pulse's own `ExhaustFlare_Submit` key, `0x4d000000` - see
+lets `instance+0x11c` override *that*. **One layer value overlaps Pulse's
+own, read as a bucket match rather than an identical-effect claim**: `0x4d0`
+shares its top byte with `ExhaustFlare_Submit`'s key, `0x4d000000`, and
+(below) attributes to `MagstripWake.cpp` - a glowing wake trail sharing an
+additive-glow layer bucket with an engine's exhaust flare is the expected
+pairing Pulse's own census already implies (a layer is a coarse family
+bucket - 21,055 meshes split across just two values - not a per-effect
+identity). See
 [renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes)
 for the full evidence and all five decompiles.
 
@@ -72,15 +77,41 @@ vtable - which would suggest HUD/front-end elements are drawn through this
 same queue mid-race if it holds up. See renderer.md's "What was
 deliberately not read" for the field-agreement evidence and its limits.
 
+**2026-09-04: three of the five enqueue call sites now attribute to a file,
+via shared TOC-slot ranges rather than code-address proximity** (code
+address and TOC-slot address don't have to agree, and one of the three
+corrects a weaker first guess that used address gaps alone - see
+renderer.md). `0x00109028` (the `0x4d0`-layer site) is the strongest: it
+sits *inside* `MagstripWake.cpp`'s own slot range, not the more obvious
+`DebrisManager.cpp` its code address sits closer to. `0x0012fba8` (the site
+that computes its own depth) sits in the slot range immediately following
+`BombManager.cpp`'s - `BombManager_Construct` itself calls
+`DetonatorBomb_Construct`, tying back to the `DetonatorBomb.cpp` the
+`SortRoot` investigation already named, but `DetonatorBomb.cpp`'s own
+attributed range sits well past this site, so a bomb's blast effect fits
+`BombManager.cpp` owning it, not necessarily `DetonatorBomb` itself.
+`0x000a3c38` sits in the slot range immediately following `Camera.cpp`'s -
+the weakest of the three, since one corroborating slot it shares with
+`Camera.cpp`'s constructor is a game-wide global reached through a
+per-file slot, not exclusive to this file. The other two (`0x00084e08`,
+`0x000ba268`) don't resolve cleanly by either method; `0x000ba268` in
+particular falls in a gap between two confirmed files that neither covers -
+a third, silent translation unit `map`'s constructor-only attribution
+misses, not just an attribution failure. File attribution is not class
+attribution - `map` only sees constructors and allocators, so this narrows
+where to look next, it doesn't name what draws. See
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes)
+for the slot evidence on all five.
+
 ## Open
 
 - Who writes the per-frame depth override is unread in **both** titles, and it's one question now, not two: Pulse's `display+0x1180` and HD's `instance+0x11c` play the identical role (the sentinel-checked override the enqueue idiom reads before falling back to a computed or zero depth) in the identical key layout
 - What the `0x40000000` set holds and what its distance test does is unread
-- What class each of HD's five confirmed enqueue call sites belongs to - what effect it draws - is unread (below 50 confidence); the key format and mechanism are settled, only the callers' identities are open
+- What class each of HD's five confirmed enqueue call sites belongs to - what effect it draws - is unread (below 50 confidence); three now have a plausible owning *file* (`0x000a3c38` in `Camera.cpp`, `0x0012fba8` in `BombManager.cpp`, `0x00109028` in `MagstripWake.cpp`), not yet a class or a confirmed purpose
 - Whether the `0x00864cb8` queued vtable relates to `FrontendRoot`'s own vtable by identity or only by indirection (a base subobject or secondary vtable) is unread past one xref-agreement check (below 50 confidence)
 
 ## Next Steps
 
 - Find where `instance+0x11c` gets written (bracketing around one of the five known enqueue sites, or a write-watchpoint attempt despite the earlier `+0x630` one coming back unsupported) to close out the key format's last unknown
-- Identify at least one of the five enqueue call sites' owning class via `.cpp` attribution (`scripts/ps3-toc.py map`) - `0x000a3c38`'s matrix-stack push at `+0x620`/`+0x624` and `0x00109028`'s shared `0x4d0` layer with Pulse's exhaust flare are both promising starting threads
+- Confirm `0x00109028`'s class within `MagstripWake.cpp` and read enough of it to say what it actually draws - a magstrip's own wake trail is the most concrete guess so far, given the `0x4d0` glow-bucket layer and the direct slot match
 - If `0x00864cb8` turns out to be `FrontendRoot`'s own vtable rather than merely related to it, that would mean HD draws its HUD/front-end through the same sorted queue as world geometry - worth confirming before assuming `oag_render::mesh::rcs`'s `LAYER_DEFAULT`-for-everything is the only gap versus Pulse's per-mesh layer

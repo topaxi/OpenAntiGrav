@@ -393,11 +393,15 @@ the bit widths match (`& 0xfffff` is 20 bits; the layer constants observed -
 field) and the sentinel-for-no-override idiom (`0xffffffff`) matches Pulse's
 own "a mesh batch set enqueues with its bare layer and no depth term at all"
 default for the four sites that don't compute their own depth. **One layer
-value is a direct cross-title match, not merely a similar shape**: `0x4d0`
-(`0x00109028`) shares its top byte with Pulse's own `ExhaustFlare_Submit`
-key, `0x4d000000` - the same layer constant surviving into a completely
-different renderer on different hardware is strong evidence these constants
-are inherited engine data, not independently re-derived per title.
+value overlaps Pulse's own**: `0x4d0` (`0x00109028`) shares its top byte
+with `ExhaustFlare_Submit`'s key, `0x4d000000`. Pulse's own census
+([above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order))
+shows a layer is a coarse family bucket, not a per-effect identity - 21,055
+mesh nodes split across only two values - so this is read as a bucket
+match, not a claim the two titles enqueue the identical effect: `0x00109028`
+attributes to `MagstripWake.cpp` (below), and a magstrip's glowing wake
+trail sharing an additive-glow bucket with an engine's exhaust flare is an
+expected pairing, not a coincidence needing a stronger explanation.
 
 `instance+0x11c` plays the same role in this key layout that
 `display+0x1180` does in Pulse's `Gfx_Enqueue`
@@ -415,12 +419,59 @@ already-confirmed scheme. Capped by this page's static-reading ceiling (84);
 would be higher with a runtime trace confirming a queued entry's key against
 its visible draw order, which hasn't been attempted.
 
-None of the five call sites is named: each is a large, otherwise-unread
-function and what *class* each belongs to - what effect it draws - is not
-established. Below 50 confidence for that question; the enqueue tail itself
-is read directly and is not in question. **Still open**: where
-`instance+0x11c` gets computed - no call site here computes it, it is only
-ever read.
+None of the five call sites is named - each is a large, otherwise-unread
+function - but `scripts/ps3-toc.py map` (2026-09-04) narrows which
+translation unit three of the five belong to. Byte-distance-to-the-nearest-
+attributed-function is a weak signal on its own (a translation unit's *code*
+and an unrelated one's can interleave); what's read here instead is each
+site's own TOC-relative global-data slots against the confirmed
+constructor's - the linker groups a translation unit's slots contiguously,
+so a shared or immediately-adjacent slot is structural evidence, not
+proximity:
+
+- `0x00109028` reads `PTR_DAT_008a98c0`, which falls **inside**
+  `MagstripWake.cpp`'s own slot range (`008a98b0`-`008a98dc`, confirmed
+  directly via `PTR_s_MagstripWake_cpp_008a98d8`) - between its own slots,
+  not merely adjacent, the strongest of the three. **`MagstripWake.cpp`**,
+  not the more obvious first-guess `DebrisManager.cpp` its code address
+  sits closer to; code address and TOC-slot address don't have to agree;
+  here they didn't.
+- `0x0012fba8` (the site that computes its own depth) reads
+  `008aa5fc`-`008aa60c`, immediately after `BombManager_Construct`'s own
+  slots (`008aa570`-`008aa5e4`, confirmed directly via
+  `PTR_s_BombManager_cpp_008aa5dc`) - one contiguous run, no gap.
+  **`BombManager.cpp`** - which itself constructs `DetonatorBomb`
+  (`BombManager_Construct` calls `DetonatorBomb_Construct` directly), tying
+  this to the same `DetonatorBomb.cpp` the `SortRoot` investigation named,
+  though `DetonatorBomb.cpp`'s own attributed range (`0x00134b48`) is a
+  separate file, well past this site - a bomb's blast computing its own
+  back-to-front depth fits `BombManager.cpp` owning the effect, not
+  necessarily `DetonatorBomb` itself.
+- `0x000a3c38` (the matrix-stack-push site) reads `008a7cc4`-`008a7d04`,
+  immediately after `Camera.cpp`'s own confirmed range
+  (`008a7c78`-`008a7cc0`, via `PTR_s_Camera_cpp_008a7cb4`) - one contiguous
+  run. **`Camera.cpp`.** (It also reads `PTR_g_PhysicsHalfStep_008a7cb8`,
+  the same slot `Camera.cpp`'s constructor reads for that name - consistent
+  with the same TU, but `g_PhysicsHalfStep` is a game-wide global reached
+  through a per-TU slot, so this corroborates rather than proves anything
+  past the contiguous-range evidence on its own.)
+- The other two do not resolve as cleanly. `0x000ba268`'s slots
+  (`008a82a4`-`008a82b4`) fall in the gap *between* `WorldManager.cpp`'s own
+  range (ending `008a8274`) and `AIManager.cpp`'s (starting `008a82c0`) -
+  neither attributed file covers it, which is itself informative about
+  `map`'s own coverage: a third translation unit with no constructor call
+  of its own sits silently in that gap. `0x00084e08`'s slots
+  (`008a75b8`-`008a76bc`) overlap the same broad neighbourhood as both
+  `Demo_RaceManager.cpp`'s and `HUD.cpp`'s without landing inside or
+  adjacent to either specifically, and its own content (a zone-list lookup
+  against `RaceManager_GetInstance()` and a ratio between two fields of a
+  zone record) doesn't disambiguate which file it belongs to - left
+  unattributed.
+
+Below 50 confidence for what *class* any of the five draws, file-level
+attribution or not - the enqueue tail itself is read directly and is not in
+question. **Still open**: where `instance+0x11c` gets computed - no call
+site here computes it, it is only ever read.
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
