@@ -423,7 +423,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Every SFX trigger is a Pulse reading, applied to Pure and HD on a bet](handover/every-sfx-trigger-is-a-pulse-reading-applied.md)
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/pulses-draw-order-is-recovered-and-it-is.md)
-- [HD's see-through surfaces: the blend-equation fix landed, and the texture-coordinate/second-texture residue this file tracked is now resolved elsewhere](handover/hds-see-through-surfaces-draw-with-the-files.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
 - [`Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded](handover/material-states-upper-bits-bit-7-is-measured-mode.md)
