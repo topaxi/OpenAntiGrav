@@ -114,6 +114,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
     // is not done".
     pickup_colours: None,
+    // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect a runtime
+    // table rewrites, the same widget kind `pickup_colours`' comment above
+    // names - not `<Mode3D><Model>`s, so this field is moot here too.
+    pickup_icon_models: None,
+    pickup_icon_backdrop_model: None,
     // `None`: 2048's Zone HUD shows a class per *band* of zones off
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.

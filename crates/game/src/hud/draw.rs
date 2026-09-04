@@ -472,6 +472,81 @@ pub(super) fn pickup_sprites(
         .collect()
 }
 
+/// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's
+/// icon as a `<Mode3D><Model>` draw, plus its backdrop grid, rather than
+/// `<Image>` sprites.
+///
+/// Empty whenever `cx.art.pickup_icon_models` is `None` (every title but
+/// Pure, so far), whenever the held weapon's slot in it is `None` - Pure
+/// authors no icon for `Cannon`, `LeachBeam`, `Repulser` or `Shuriken`, and a
+/// Pure race can hand out the last of those (`oag_gameplay::pickup::
+/// IMPLEMENTED`), so this is a live path and not a dead branch - or whenever
+/// the model failed to build or its art did not reach the sheet, which
+/// [`crate::race::hud::vex_model_art`] reports and this draws nothing for
+/// rather than guessing a placeholder size.
+///
+/// **Draws the backdrop grid first**, the same paint order [`pickup_sprites`]
+/// puts the icon over `PICKUP_BACKGROUND` in, and for the same reason: the
+/// icon sits on it.
+pub(super) fn pickup_model_draws(
+    cx: &Context<'_>,
+    weapon: oag_formats::weapons::Weapon,
+) -> Vec<Draw> {
+    let Some(models) = cx.art.pickup_icon_models else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    if let Some(name) = cx.art.pickup_icon_backdrop_model {
+        out.extend(model_draw(cx, name, [1.0, 1.0, 1.0, 1.0]));
+    }
+    if let Some(name) = models[weapon as usize] {
+        // The model's own authored `colour` - see `Model::colour`'s doc for
+        // why this is not routed through `pickup_colours`' substitution at
+        // all: there is nothing to substitute, the XML already carries the
+        // final answer. White is the fallback for a name this table gives
+        // that the layout does not actually author with a `colour=`, which
+        // none of Pure's ten currently are.
+        let tint = cx
+            .layout
+            .models
+            .iter()
+            .find(|model| model.name == name)
+            .and_then(|model| model.colour)
+            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+        out.extend(model_draw(cx, name, tint));
+    }
+    out
+}
+
+/// One `<Mode3D><Model>` widget as a flat, tinted quad - the icon and grid
+/// widgets' shared shape, neither of which rotates the way the sight brackets
+/// do.
+///
+/// `None` when the widget is not in the layout, its model did not resolve
+/// into the sheet, or the sheet holds no [`crate::sprite::Placed::quad_extent`]
+/// for it - the last being why [`crate::race::hud::vex_model_art`] computes
+/// one for every model it decodes rather than leaving it for the sight
+/// brackets' hand-measured `SIGHT_SIZE` to answer for widgets it was never
+/// measured against.
+fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
+    let model = cx.layout.models.iter().find(|model| model.name == name)?;
+    let placed = cx.sheet.get(&model.src)?;
+    let [w, h] = placed.quad_extent?;
+    let [x, y, _z] = model.position;
+    Some(Draw::Sprite {
+        // Centred on its own authored position, the same convention the sight
+        // brackets' quads use - see `bracket_draws`.
+        rect: [x - w * 0.5, y - h * 0.5, w, h],
+        uv: [
+            placed.x as f32,
+            placed.y as f32,
+            placed.width as f32,
+            placed.height as f32,
+        ],
+        color,
+    })
+}
+
 /// Everything the HUD needs that does not change from frame to frame.
 ///
 /// Bundled rather than passed as four arguments because the caller assembles it
@@ -624,6 +699,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         for sprite in pickup_sprites(cx.layout, weapon, cx.art) {
             frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
         }
+        frame.sprites.extend(pickup_model_draws(cx, weapon));
     }
 
     // Zone's next-class bar, which is conditional twice over and so cannot be

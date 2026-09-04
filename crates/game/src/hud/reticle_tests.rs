@@ -50,12 +50,14 @@ fn sheet() -> crate::sprite::Sheet {
                 8,
                 8,
                 vec![255u8; 8 * 8 * 4],
+                None,
             ),
             (
                 r"Data\HUD\missile_sight_inner.vex".to_string(),
                 8,
                 8,
                 vec![255u8; 8 * 8 * 4],
+                None,
             ),
         ],
         &mut report,
@@ -126,6 +128,8 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     },
     pickup_backdrop_colour: None,
     pickup_colours: None,
+    pickup_icon_models: None,
+    pickup_icon_backdrop_model: None,
     zone_speed_classes: None,
 };
 
@@ -138,6 +142,7 @@ fn hd_sheet() -> crate::sprite::Sheet {
             256,
             256,
             vec![255u8; 256 * 256 * 4],
+            None,
         )],
         &mut report,
     )
@@ -521,6 +526,8 @@ fn an_unread_sight_dialect_draws_nothing() {
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
+        pickup_icon_models: None,
+        pickup_icon_backdrop_model: None,
         zone_speed_classes: None,
     };
 

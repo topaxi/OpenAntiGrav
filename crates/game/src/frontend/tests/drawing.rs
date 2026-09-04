@@ -202,6 +202,7 @@ fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
             y: 50,
             width: 128,
             height: 64,
+            quad_extent: None,
         },
     )];
     let frontend = Frontend::new(

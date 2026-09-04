@@ -173,7 +173,7 @@ fn load_atlases(
             "HUD {entry} names no texture; its sprites are drawn from <Model> \
              geometry rather than an atlas"
         ));
-        let extra = sight_art(archives, layout, report);
+        let extra = vex_model_art(archives, title, layout, report);
         if extra.is_empty() {
             return crate::sprite::Sheet::default();
         }
@@ -192,8 +192,11 @@ fn load_atlases(
     }
 
     let mut notes = Vec::new();
-    let sheet =
-        crate::sprite::Sheet::build_with(&blobs, sight_art(archives, layout, report), &mut notes);
+    let sheet = crate::sprite::Sheet::build_with(
+        &blobs,
+        vex_model_art(archives, title, layout, report),
+        &mut notes,
+    );
     report.extend(notes);
     report.push(format!(
         "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",
@@ -212,38 +215,61 @@ fn load_atlases(
     sheet
 }
 
-/// The lock-on reticle's art, decoded out of the `<Mode3D>` models that carry it.
+/// The lock-on reticle's and Pure's weapon icons' art, decoded out of the
+/// `<Mode3D>` models that carry them.
 ///
-/// **The sights are the one HUD widget whose picture is not in a texture file.**
-/// `Arcade_HUD.xml` authors nine of them - `missile_sight_1` … `_4` and
+/// **These are the HUD widgets whose picture is not in a texture file.**
+/// `Arcade_HUD.xml` authors nine sight widgets - `missile_sight_1` … `_4` and
 /// `missile_sight_inner`, then `leachbeam_sight_1` … `_4` - over **three**
-/// `.vex` models, each a single 8-unit quad with its texture embedded. So the
-/// art is reached by building the model and taking the texture it unpacked,
-/// which is what [`crate::sprite::Sheet::build_with`] exists for. See
-/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+/// `.vex` models, each a single flat quad with its texture embedded; Pure adds
+/// ten weapon-icon widgets plus their shared backdrop grid, eleven more
+/// models, one apiece (`oag_title::HudArt::pickup_icon_models` and
+/// `pickup_icon_backdrop_model`). So the art is reached by building the model
+/// and taking the texture it unpacked, which is what
+/// [`crate::sprite::Sheet::build_with`] exists for. See
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md` for the sights' law and
+/// `docs/gameplay/pickups.md` for the icons' colour finding.
 ///
 /// Keyed by the model's own `Src`, so [`crate::race::Race`]'s draw looks it up
 /// the way a sprite looks up its atlas.
 ///
-/// **A model that will not read costs its own reticle and nothing else.** It is
+/// **Each entry's quad extent is read off its own vertices**, not carried as a
+/// per-model constant the way the sights' `SIGHT_SIZE` is - see
+/// [`crate::sprite::Placed::quad_extent`]'s own doc for why the two do not (yet)
+/// share a reading.
+///
+/// **A model that will not read costs its own widget and nothing else.** It is
 /// reported and skipped; the draw then finds no entry and puts nothing on
 /// screen, which is this project's rule for an asset it cannot play rather than
 /// a stand-in that reads as plausible.
-fn sight_art(
+fn vex_model_art(
     archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
     layout: Option<&crate::hud::Layout>,
     report: &mut Vec<String>,
-) -> Vec<(String, u32, u32, Vec<u8>)> {
+) -> Vec<crate::sprite::DecodedImage> {
     let Some(layout) = layout else {
         return Vec::new();
     };
 
+    let icon_names: Vec<&str> = title
+        .hud_art
+        .pickup_icon_models
+        .into_iter()
+        .flatten()
+        .flatten()
+        .chain(title.hud_art.pickup_icon_backdrop_model)
+        .collect();
+
     let mut wanted: Vec<&str> = Vec::new();
     for model in &layout.models {
-        if !crate::race::sight::is_sight_widget(&model.name) || model.src.is_empty() {
+        let is_wanted = crate::race::sight::is_sight_widget(&model.name)
+            || icon_names.contains(&model.name.as_str());
+        if !is_wanted || model.src.is_empty() {
             continue;
         }
-        // Four widgets share one model; the sheet wants it once.
+        // Several widgets can share one model (four sight brackets do); the
+        // sheet wants it once.
         if !wanted.contains(&model.src.as_str()) {
             wanted.push(model.src.as_str());
         }
@@ -254,47 +280,73 @@ fn sight_art(
         let blob = match archives.read_name(src) {
             Ok(blob) => blob,
             Err(why) => {
-                report.push(format!("sight model {src} unavailable ({why})"));
+                report.push(format!("HUD model {src} unavailable ({why})"));
                 continue;
             }
         };
         let model = match oag_render::mesh::build(src, &blob) {
             Ok(model) => model,
             Err(why) => {
-                report.push(format!("sight model {src} did not build ({why})"));
+                report.push(format!("HUD model {src} did not build ({why})"));
                 continue;
             }
         };
-        // One texture apiece, and the reticle is what it draws. A model that
+        // One texture apiece, and the widget is what it draws. A model that
         // embeds none is reported rather than drawn untextured, which for a
         // white-on-nothing bracket would be an invisible quad.
         let Some(texture) = model.textures.iter().flatten().next() else {
-            report.push(format!("sight model {src} embeds no texture"));
+            report.push(format!("HUD model {src} embeds no texture"));
             continue;
         };
         // The sheet is composed on the CPU, so this needs texels rather than a
-        // binding. Every sight model is a PSP `.vex`, whose textures are always
-        // decoded RGBA8; only Wipeout HD's `.gtf` keeps its blocks, and HD
-        // draws no sight. Reported rather than unwrapped, so the day that
-        // stops being true it says so instead of panicking.
+        // binding. Every HUD model on both PSP titles is a `.vex`, whose
+        // textures are always decoded RGBA8; only Wipeout HD's `.gtf` keeps
+        // its blocks, and HD draws no sight or icon this way. Reported rather
+        // than unwrapped, so the day that stops being true it says so instead
+        // of panicking.
         let Some(rgba) = texture.rgba() else {
             report.push(format!(
-                "sight model {src}: its texture is block-compressed, which this sheet cannot compose"
+                "HUD model {src}: its texture is block-compressed, which this sheet cannot compose"
             ));
             continue;
         };
         report.push(format!(
-            "sight model {src}: {}x{}",
-            texture.width, texture.height
+            "HUD model {src}: {}x{}, quad {:?}",
+            texture.width,
+            texture.height,
+            quad_extent(&model)
         ));
         out.push((
             src.to_string(),
             texture.width,
             texture.height,
             rgba.to_vec(),
+            quad_extent(&model),
         ));
     }
     out
+}
+
+/// A model's own flat quad, read off its vertex positions rather than
+/// hand-measured: the widest span on `x` and on `y` across every vertex the
+/// model carries.
+///
+/// `None` for a model with fewer than two vertices - not a quad at all - which
+/// none of the sight or icon models are, but a reader elsewhere handing this a
+/// track or a ship should not get a bogus `[0.0, 0.0]` back.
+fn quad_extent(model: &oag_render::mesh::Model) -> Option<[f32; 2]> {
+    let mut min = [f32::MAX, f32::MAX];
+    let mut max = [f32::MIN, f32::MIN];
+    for vertex in &model.vertices {
+        for axis in 0..2 {
+            min[axis] = min[axis].min(vertex.position[axis]);
+            max[axis] = max[axis].max(vertex.position[axis]);
+        }
+    }
+    if model.vertices.len() < 2 {
+        return None;
+    }
+    Some([max[0] - min[0], max[1] - min[1]])
 }
 
 /// Reads one HUD texture, by the name the layout declares and then by the name

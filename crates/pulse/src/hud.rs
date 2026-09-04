@@ -64,6 +64,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     },
     pickup_backdrop_colour: Some(PICKUP_BACKDROP_COLOUR),
     pickup_colours: Some(PICKUP_COLOURS),
+    // Pulse's icons are `<Image>` sprites (`pickup_icon_name`'s `<Type>Icon`),
+    // not `<Mode3D><Model>`s - this field is Pure's own dialect.
+    pickup_icon_models: None,
+    pickup_icon_backdrop_model: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
 };

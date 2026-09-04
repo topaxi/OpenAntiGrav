@@ -346,14 +346,38 @@ concluded from grepping `<Image name=` alone and never checking for `<Model
 name=` inside a `<Mode3D>` block. The retraction and the corrected reading are
 both in `crates/pure/src/hud.rs` now.
 
-**Not done: actually drawing Pure's icons.** `oag_game::hud::Model::colour`
-parses the attribute, but nothing yet selects a `<WEAPON>_icon` model by the
-held weapon or turns a `.vex` mesh into a `Draw::Sprite` the way the existing
-sight-bracket models are. That needs a recovered size/UV convention per mesh -
-the sight brackets have one (`SIGHT_SIZE`), read off one model by hand, and
-ten more meshes is not a case for inventing a rule and hoping it generalises.
-Left as a named next step rather than a guessed-at render path, per
-`CLAUDE.md`'s rule against a plausible-looking stand-in.
+### Pure's icons draw, and the size comes from the mesh rather than a guess
+
+**2026-09-04, same day.** `oag_title::HudArt::pickup_icon_models` names the
+`<WEAPON>_icon` widget for nine of the nine weapons `oag_gameplay::
+pickup::IMPLEMENTED` can hand out on Pure, plus `Quake` for when it joins that
+pool; `pickup_icon_backdrop_model` names `weapon_icon_grid`, the frame they
+sit in. `oag_game::hud::draw::pickup_model_draws` reads the held weapon's
+model, tints it with its own authored `colour` (Pure's model widgets carry
+one, so there is nothing to substitute the way Pulse's backdrop needs), and
+draws it centred on the widget's authored position.
+
+**The one thing that could not be measured from the XML alone was each
+mesh's own size**, and it is not a hand-measured constant the way the sight
+brackets' `SIGHT_SIZE` is: `oag_game::race::hud::vex_model_art` reads it off
+the model's own vertex positions - the widest span on `x` and `y` across
+every vertex - once, when the model decodes. The ten weapon-icon meshes are
+not one uniform size the way the sight brackets are: read off
+`pure-psp-usa.chd`, they run from `Weapon_turbo.vex`'s `31.4x6.5` units to
+`Weapon_quake.vex`'s `56.6x11.7`, so a single shared constant would have been
+wrong for at least eight of them.
+
+**`Shuriken` is the gap this makes visible rather than papers over.** It is
+in `IMPLEMENTED` and has no icon on Pure's disc - the title predates the
+weapon - so a Pure race that hands one out draws the backdrop grid and no
+icon inside it, which is what `crates/game/tests/pickup_icon_ground_truth.rs`
+and `oag_game::hud::pickup_model_tests` both pin rather than leave to chance.
+
+Verified two ways: a ground-truth test against `pure-psp-usa.chd` confirms
+all nine implemented icons plus the grid decode with a real quad extent, and
+`cargo run -p oag-game -- <pure image> --race --mode single_race --give
+turbo --screenshot out.png` shows a green `TURBO_icon` in its own backdrop -
+the first time this build has drawn any part of Pure's pickup on screen.
 
 ## Only what has an effect is handed out
 

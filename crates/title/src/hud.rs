@@ -162,6 +162,8 @@ pub enum Sights {
 /// | [`Self::always_on`] | seven names | fifteen names |
 /// | [`Self::pickup_backdrop_colour`] | `HudBGColour` | `None` - drawn as authored |
 /// | [`Self::pickup_colours`] | eleven of thirteen weapons | `None` - unmeasured |
+/// | [`Self::pickup_icon_models`] | `None` - icons are `<Image>` sprites | `None` - unmeasured |
+/// | [`Self::pickup_icon_backdrop_model`] | `None` - moot with the row above | `None` - moot with the row above |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudArt {
     /// The extension a layout's `src=` reference takes to become an archive
@@ -246,6 +248,43 @@ pub struct HudArt {
     /// layout is written in, so a reader comparing this table against one
     /// does not have to convert anything by hand.
     pub pickup_colours: Option<[Option<u32>; 13]>,
+    /// The `<Mode3D><Model>` widget that draws a weapon's own icon, when this
+    /// title has one, or `None` for a title whose icons are `<Image>` sprites
+    /// (or unmeasured).
+    ///
+    /// **An axis in the [`Sights`] sense, not a second [`Self::pickup_colours`]
+    /// table.** Pulse's icon widgets are `<Image>` sprites named `<Type>Icon`
+    /// with authored-white art that needs [`Self::pickup_colours`]'s runtime
+    /// substitution to read as anything but a hexagon outline. Pure's are
+    /// `<Mode3D><Model>`s named `<TYPE>_icon`, and each one this table names
+    /// already carries its own final `colour` in the XML - a different widget
+    /// kind that needs no substitution at all, not the same fact spelled
+    /// differently. A title with both kinds has not been measured; this field
+    /// exists for the model kind exclusively.
+    ///
+    /// Indexed in `Weapon::ALL`'s declared order, the same convention
+    /// [`Self::pickup_colours`] uses and for the same reason: the vocabulary
+    /// lives here, `Weapon` and the index into it stay in `oag_game::hud`. A
+    /// slot's own `None` means this title's disc authors no icon for that
+    /// weapon at all - measured absent, not unmeasured, the distinction
+    /// [`Self::pickup_colours`]'s own doc draws. Pure's own table has ten of
+    /// thirteen filled: no `Cannon`, `LeachBeam` or `Repulser` icon exists on
+    /// its disc, and neither does `Shuriken` - a weapon `oag_gameplay::
+    /// pickup::IMPLEMENTED` hands out that predates this title's own roster,
+    /// so a Pure race can genuinely hold a weapon its HUD has no icon for.
+    /// `Quake`'s slot is filled even though nothing hands a Quake out today:
+    /// the disc authors the widget, so recording it costs nothing and saves a
+    /// second reading the day `Quake` joins `IMPLEMENTED`.
+    pub pickup_icon_models: Option<[Option<&'static str>; 13]>,
+    /// The `<Mode3D><Model>` widget the icon in [`Self::pickup_icon_models`]
+    /// sits on, or `None`.
+    ///
+    /// The [`Self::pickup_icon_models`] dialect's own equivalent of
+    /// `PickupBackground` - Pure's `weapon_icon_grid`, authored at the same
+    /// placeholder position as every icon and with no `colour` of its own, so
+    /// it needs no substitution the icon models beside it do not either. Moot
+    /// whenever [`Self::pickup_icon_models`] is `None`.
+    pub pickup_icon_backdrop_model: Option<&'static str>,
     /// What this title calls each rung of its Zone escalation ladder, or `None`
     /// for a title whose ladder has not been read.
     ///
