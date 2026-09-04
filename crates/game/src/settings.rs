@@ -796,6 +796,7 @@ pub fn menu_seeds(
             "graphics.motion_blur",
             text(&profile.motion_blur.to_string()),
         ),
+        ("graphics.shadows", text(&profile.shadows.to_string())),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),
         (
