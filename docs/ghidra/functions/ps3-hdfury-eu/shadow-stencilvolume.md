@@ -1,4 +1,4 @@
-# HD's stencil-volume shadow path: a real shader, a real companion file, an unread record format
+# HD's stencil-volume shadow path: a real shader, a real companion file, and a textbook two-pass draw call
 
 2026-09-04. Traced from `docs/rendering/shadows.md`'s open item: HD carries a
 `LiveStencilShadow_vp`/`_fp` shader pair and a `/shadow.stencilvolume` string
@@ -12,7 +12,12 @@ disassembling the exact block rather than trusting decompiled local-variable
 names, which is what caught a wrong first reading (below).
 
 Nothing here has been run under an emulator; every score is static-only and
-caps at 84 per the confidence rubric.
+caps at 84 per the confidence rubric - except the specific RSX register
+identities in the draw-call section below, cross-checked against a local
+`rpcs3` checkout's own `Emu/RSX/gcm_enums.h` (the source `just
+build-rpcs3-watchpoints` clones) rather than general OpenGL knowledge, the
+same "read an open-source emulator's own source" move `material-state.md`
+already used.
 
 ## The shader technique is registered as a static object
 
@@ -53,6 +58,88 @@ its own world matrix and never reads a light. HD's technique binds a
 source here (`docs/rendering/shadows.md`'s cost table already assumes this)
 but is not itself proof of it - the constant's *value* at draw time is
 unread; this only shows the shader accepts one.
+
+## The draw call is found: a two-sided depth-fail stencil shadow volume, colour-mask bracketed
+
+**`Shadow_DrawOccluderStencilVolumes`** (`0x003e6918`, confidence 80) is the
+per-frame draw call. It walks the model-instance array (`PTR_DAT_008b7da0`,
+with a count/index list at `+0x933c4`/`+0x933c8` - the same global region
+`0x003eeb08` uses for its own material-cache pointer) and, for each instance
+with a byte flag at `self+0x140` set (role unread - not "visible", that was
+an unverified guess in an earlier draft of this page) and the shadow-volume
+flag (`self+0xe4 & 2`) set, runs:
+
+1. `SET_COLOR_MASK(0,0,0,0)` - colour writes off.
+2. **`Shadow_AccumulateStencilVolume`** (`0x005ed658`, confidence 84) - the
+   depth-fail ("Carmack's Reverse") stencil-write pass.
+3. `SET_COLOR_MASK(1,1,1,0)` - RGB on, alpha off.
+4. `FUN_004053e0` (not renamed - a large, generic scene-chunk render
+   submission function: PVS culling via `Pvs_IsUsable`/`Pvs_NearestCellCached`,
+   zone-texture binding, `Shader_GetVariantHash`-based technique selection,
+   its own alpha blending enabled with `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA`).
+5. `SET_COLOR_MASK(0,0,0,0)` - colour writes off again.
+6. **`Shadow_ClearStencilVolume`** (`0x005ede20`, confidence 84) - stencil
+   test and reset, no colour output.
+
+**What FUN_004053e0 draws is not confirmed.** An earlier draft of this page
+guessed "the shadow-casting instance's own regular visible mesh" from
+parameter shapes alone, without decompiling far enough to check - that guess
+is retracted. What *is* confirmed: it is the only one of the three calls
+with colour writes on, and the only one with blending enabled, which makes
+it the stronger candidate for whatever actually puts a visible darkening on
+screen - the two `Shadow_*StencilVolume` passes write no colour at all.
+
+Every RSX register identity here was checked call-by-call against a local
+`rpcs3` checkout's own `Emu/RSX/gcm_enums.h`, not assumed from general OpenGL
+familiarity - including the colour-mask function itself, `0x005c2380`, whose
+header word (`0x40324`) decodes to `NV4097_SET_COLOR_MASK` (`0x324`) the same
+way `material-state.md` already decoded `Rsx_SetMethod`'s header math:
+
+| Call | Register (raw byte offset) | Value |
+| --- | --- | --- |
+| `Shadow_AccumulateStencilVolume` | `0x183c` `NV4097_SET_CULL_FACE_ENABLE` | off - draw both faces |
+| | `0x328` `NV4097_SET_STENCIL_TEST_ENABLE` | on |
+| | `0x348` `NV4097_SET_TWO_SIDED_STENCIL_TEST_ENABLE` | on |
+| | stencil func, both faces | `ALWAYS` (`0x207`), ref 1, mask `0xff` |
+| | stencil op, front / back | `(KEEP, DECR_WRAP, KEEP)` / `(KEEP, INCR_WRAP, KEEP)` |
+| `FUN_004053e0` | `0x310` `NV4097_SET_BLEND_ENABLE` | on |
+| | blend equation | `FUNC_ADD` (`0x8006`) |
+| | blend func | `SRC_ALPHA` (`0x302`) / `ONE_MINUS_SRC_ALPHA` (`0x303`) |
+| | `0x304` `NV4097_SET_ALPHA_TEST_ENABLE` | on |
+| `Shadow_ClearStencilVolume` | `0x183c` | back on |
+| | `0x328` | on (single-sided) |
+| | stencil func | `NOTEQUAL` (`0x205`), ref 0, mask `0xff` |
+| | stencil op | `(KEEP, KEEP, ZERO)` - resets the stencil on pass |
+
+That is a two-sided depth-fail stencil shadow volume, standard except that
+its resolve step both draws nothing (colour off) and self-cleans (zeroes the
+stencil where accumulated, so the next caster in the same frame needs no
+separate clear) - whatever visual effect the shadow actually has must be
+`FUN_004053e0`'s job, not the two named stencil functions'. Both
+`Shadow_*StencilVolume` passes upload the `LiveStencilShadow` technique's
+vertex constants (`Rsx_UploadVertexConstants`, via the technique object
+cached at `PTR_DAT_008bf4c4` - see `Shader_ResolveLiveStencilShadowConstants`
+above) and draw the **same** `self+0x128` handle via `FUN_005a3e58` with a
+literal `5` as an argument that, if it is a GCM primitive type, `gcm_enums.h`
+makes `CELL_GCM_PRIMITIVE_TRIANGLES` - **not** `TRIANGLE_STRIP`, which is `6`
+(GCM's primitive list is 1-based, unlike OpenGL's 0-based one; an earlier
+draft of this page cited `5` as `TRIANGLE_STRIP` without checking the actual
+enum and that was wrong). The parsed shadow-volume geometry is drawn twice,
+once per stencil pass, not once for the volume and once as a full-screen
+quad the way a textbook write-up often shows it.
+
+**This also revises the record-format reading below.** `self+0x128` is not
+walked as a raw `n`-record array by the draw call - it is walked as a
+`std::vector`-shaped object (`param_1[2]`/`[3]`/`[4]` as begin/end/capacity,
+`FUN_00734bd0` as the grow-on-full helper), one 16-byte `{ptr, ptr, count,
+value}` entry pushed per **outer** loop iteration inside `0x005ee7d0`, not
+per `n`-record. The draw reads each entry's `count` field (offset `+8`,
+sourced from `0x005ee2c0`'s still-unread `m`-based computation) as the
+primitive count. So `m` more plausibly governs how much geometry gets drawn
+than "an unrelated following word-blob," the reading the first pass over
+`0x005ee7d0` landed on - see the revised paragraph below. Confidence 70 on
+the vector/push_back shape itself (read directly off the decompile), 50 on
+what `m` and the second buffer actually are (`0x005ee2c0` still unread).
 
 ## The trigger is a per-model flag, and the sibling file is fixed-named
 
@@ -125,20 +212,17 @@ payload documented in [shadow-occluder.md](../psp-pulse-usa/shadow-occluder.md)
 - small leading counts, a geometry array, a derived bounding box - **but
 neither the same byte layout nor, on this reading, the same relationship
 between the two counts**: Pulse's `n` (faces) and `m` (vertex slots) each
-index their own same-shaped record array; HD's `n` indexes 24-byte geometry
-records while `m` sizes an unrelated following word-blob. Confidence 50 on
-this whole paragraph (hypothesis, not layout) - `0x005ee2c0` is unread and is
-exactly what would resolve what the second buffer and the `m`-sized blob
-actually are.
+index their own same-shaped record array; HD's `n` drives the 24-byte
+geometry loop and its bbox reduction, while `m` (via the unread
+`0x005ee2c0`) sizes both a following word-blob *and*, per the draw-call
+section above, the per-outer-iteration vector entry's own drawn-primitive
+count - closer to Pulse's "`m` is a vertex/geometry quantity" shape than the
+first pass's "unrelated blob" reading, but still not confirmed. Confidence
+50 on the byte-level record format; the vector/push_back wrapper around it
+is 70 (see above).
 
 ## What was deliberately not chased this pass
 
-- **The draw call.** Nothing here traces who calls
-  `Shader_ResolveLiveStencilShadowConstants`'s registered technique per
-  object, or reads `lightDirection`/`extrusionDistance` at draw time. The
-  renderer's inline-command-buffer problem
-  (`renderer.md#what-was-deliberately-not-read`) applies here too - RSX
-  method writes aren't calls, so a call-graph search won't find it.
 - **The actual PSARC entry.** No archive has been searched for a
   `shadow.stencilvolume` file; this pass is entirely `EBOOT.elf` static
   reading. Finding and decoding the real file is what would turn the record
@@ -146,17 +230,32 @@ actually are.
   `shadow_occluder_ground_truth.rs` closes Pulse's.
 - **`0x005ee2c0`, the sub-call `0x005ee7d0` makes with `(n, m)`.** Not
   decompiled this pass; it is what actually sizes and locates the second
-  buffer and the `m`-word blob, and is the most direct way to firm up the
-  record-format paragraph above past confidence 50.
+  buffer and the vector entry's count field, and is the most direct way to
+  firm up the record-format paragraph above past confidence 50.
+- **`FUN_004053e0` in full.** Read only far enough to confirm it is a
+  generic scene-chunk submission function reused here with colour on and
+  blending enabled - the strongest candidate for the shadow's actual visible
+  effect, but what geometry it submits is unconfirmed; not decompiled to
+  completion.
+- **Whether `lightDirection`/`extrusionDistance` are ever set to anything
+  other than a default.** The upload call (`Rsx_UploadVertexConstants`) is
+  now found, but what values it uploads at runtime is unread.
 
 ## Open
 
 - Where in the PS3 PSARC archives (if anywhere) an actual
   `shadow.stencilvolume` entry lives - unsearched
-- What `0x005ee2c0` does, and therefore what `m` actually sizes and what the
-  second (transformed-copy) buffer holds - confidence 50 without it
-- Who calls the registered `LiveStencilShadow` technique per object, and
-  whether `lightDirection`/`extrusionDistance` are ever set to anything other
-  than a default - the draw path is unread
+- What `0x005ee2c0` does, and therefore what `m` actually sizes, what the
+  second (transformed-copy) buffer holds, and what count reaches the draw
+  call - confidence 50 without it
+- Whether anything besides `Shadow_DrawOccluderStencilVolumes` reads
+  `self+0x128`, or feeds the `+0x933c4`/`+0x933c8` instance list - single
+  known caller each, not traced further
 - Whether the path-join truly resolves to a fixed, non-per-model directory
   entry - confidence 65, resting on six unverified string-utility readings
+- What `FUN_004053e0` actually draws, and thus what the shadow's visible
+  effect actually is - the strongest lead is that it is the only colour-on,
+  blend-enabled call in the whole sequence, but its geometry source is
+  unconfirmed
+- What the byte flag at `self+0x140` gates - not established as "visible" or
+  anything else, just observed as a nonzero check

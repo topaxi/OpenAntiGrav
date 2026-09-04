@@ -242,3 +242,6 @@
 0x005ee580	function	Shader_SetLiveStencilShadowTechniqueActive	80	shadow-stencilvolume.md
 0x005ee7b0	function	Shader_DestructLiveStencilShadowTechnique	80	shadow-stencilvolume.md
 0x005ee7c0	function	Shader_ConstructLiveStencilShadowTechnique	80	shadow-stencilvolume.md
+0x003e6918	function	Shadow_DrawOccluderStencilVolumes	80	shadow-stencilvolume.md
+0x005ed658	function	Shadow_AccumulateStencilVolume	84	shadow-stencilvolume.md
+0x005ede20	function	Shadow_ClearStencilVolume	84	shadow-stencilvolume.md

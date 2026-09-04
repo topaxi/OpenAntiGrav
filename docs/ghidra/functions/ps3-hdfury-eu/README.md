@@ -100,9 +100,11 @@ Two structural facts to expect, both different from every other binary here:
 - [shadow-stencilvolume.md](shadow-stencilvolume.md) - the `LiveStencilShadow`
   shader technique's registration and its three named constants, the
   per-model flag bit that builds a fixed-named `shadow.stencilvolume` sibling
-  path and loads it through a hashed resource cache, and the record shape
-  that loader parses - which rhymes with, but does not byte-match, Pulse's
-  `DynamicShadowOccluder` `.vex` payload.
+  path and loads it through a hashed resource cache, the draw call itself (a
+  textbook two-sided depth-fail stencil shadow volume, its RSX register
+  identities cross-checked against a vendored `rpcs3`'s own source), and the
+  record shape that loader parses - which rhymes with, but does not
+  byte-match, Pulse's `DynamicShadowOccluder` `.vex` payload.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

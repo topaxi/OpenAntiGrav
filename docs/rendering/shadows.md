@@ -306,7 +306,11 @@ Two things follow for the setting:
   array plus a computed bounding box - the same coarse shape as Pulse's `.vex`
   payload (leading counts, a geometry array, a bbox) but a different, only
   partly-understood byte layout (confidence 50 - see that page's Open
-  section). The draw call and the actual PSARC entry are both still unfound.
+  section). **The draw call is found too**: a textbook two-sided depth-fail
+  stencil shadow volume, its RSX register identities (stencil test/func/op,
+  two-sided stencil, cull-face toggling) cross-checked against a vendored
+  `rpcs3`'s own `gcm_enums.h` rather than assumed. The actual PSARC entry is
+  still unfound.
 
 **What these string comparisons do and do not prove.** A name in a binary is
 strong evidence the code path exists and near-conclusive that an absent one
