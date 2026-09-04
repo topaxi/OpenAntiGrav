@@ -18,7 +18,11 @@ discs rather than assumed:
 2. **`shadow` `0x3cb`, `blob` `0x3e0` and `textureBlob` `0x3df` are authored
    zero times** across all 415 `.vex` files on the Pulse PSP disc, so three of
    the four classes the roadmap lists under shadow are inert - the same kind of
-   converged negative `PointLight` already is.
+   converged negative `PointLight` already is. **"Inert" is about the data, not
+   the code, and for `shadow` `0x3cb` the distinction turned out to matter**:
+   its registration is what installs the direction every shadow projects along,
+   and a live instance would override that direction - see
+   [the direction](#where-the-direction-comes-from-and-it-is-authored).
 3. **Only Wipeout HD has a usable light rig.** That single fact is what stops
    the ladder being one quality dial, and it is the answer to "we'd need proper
    light sources": yes, and today exactly one title has one.
@@ -70,7 +74,7 @@ Measured across all 382 version-6 `.vex` files in every `.wad` on
 | Class | Count | Note |
 | --- | --- | --- |
 | `Dynamic Shadow Occluder` `0x3c3` | **129**, in 83 files | the real mechanism |
-| `shadow` `0x3cb` | **0** | inert |
+| `shadow` `0x3cb` | **0** | none authored - but its *registration* sets the shadow direction, below |
 | `blob` `0x3e0` | **0** | inert |
 | `textureBlob` `0x3df` | **0** | inert |
 | `Dynamic Point Light` `0x3c2` | **0** | inert |
@@ -198,6 +202,34 @@ a triangle's two independently stored descriptions of its own plane agree to
 0.028 degrees. Two things keep it out of the 95-100 band - no runtime trace of
 `Shadow_RenderOccluderVolume` exists, and the second title's six hulls re-prove
 the *payload* closure rather than this indexing.
+
+### Where the direction comes from, and it is authored
+
+**Read 2026-09-04**, and it is the last thing `original` on Pulse was blocked
+on: a shadow cannot be drawn without a direction, and picking one would have
+been an invention.
+
+`Shadow_RenderOccluderVolume` projects along `normalize(0.5, -5, 1)` -
+`(+0.09758954, -0.97589540, +0.19517908)`, unit to `0.999995`, 12.60 degrees
+off straight down, with `x : z` exactly `0.5`. It is a **local** axis: the
+node's own world matrix carries it into world space, so a craft's shadow
+direction tilts with the craft.
+
+The constant lives in `.bss` at `0x08b62540` (`g_shadow_direction`) and is
+written by `Shadow_RegisterClass` (`0x08923518`) from four immediates, in the
+same function that registers class **`0x3cb`** - `shadow`. A second address,
+`g_shadow_direction_override`, is selected instead while any `shadow` node is
+alive, and since the disc authors none, the constant is what every shipped
+scene uses.
+
+**Why it read as unfindable before**: both addresses are reached through PRX
+relocations with `addr_base = 1`, so the loader adds segment 1's base and the
+obvious reading of the `lui`/`addiu` pair lands inside `.text` instead - the
+same trap `shield-pickup.md` records. Full instruction-level evidence,
+including the relocation entries, is on
+[`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md#the-projection-direction-is-normalize05--5-1).
+
+Confidence 88 on the value, 82 on the override.
 
 ### Two populations, and they are not the same feature
 

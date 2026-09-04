@@ -47,13 +47,23 @@ Two things worth carrying forward from doing it:
   every triangle's declared normal within **0.028 degrees** of the geometry of
   the vertices it indexes. `Occluder::silhouette` is the edge walk step 5
   needs.
-- **The projection direction is what now blocks the draw.** The axis
-  `Shadow_RenderOccluderVolume` derives its direction from is read at one of
-  two addresses selected by a global flag, and *neither is backed by concrete
-  bytes in this Ghidra import*, so the constant's value is unknown - see that
-  page's own Open list. Drawing a hull needs a direction, and picking one is
-  precisely the stand-in this project forbids. Settle it before writing draw
-  code.
+- ~~The projection direction is what now blocks the draw~~ **Read
+  2026-09-04**: `normalize(0.5, -5, 1)`, a *local* axis the node's own world
+  matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
+  (`0x08b62540`), written by `Shadow_RegisterClass` (`0x08923518`) - the same
+  function that registers class `0x3cb`, `shadow`. **The reason it read as
+  unfindable is worth carrying**: both candidate addresses are reached through
+  PRX relocations with `addr_base = 1`, so the obvious reading of the
+  `lui`/`addiu` pair lands in `.text` and decodes as instructions - the
+  `shield-pickup.md` trap, one segment over. Read `.rel.text` before believing
+  an address has no bytes behind it.
+- **`shadow` `0x3cb` is a direction override, not dead weight**, and the census
+  line calling it inert now says so: `g_shadow_node_count` is a reference count
+  incremented by its constructor and decremented by its destructor, and while
+  one is alive every shadow projects along that node's own negated vector
+  instead of the constant. No `.vex` on the disc authors one, so nothing
+  shipped ever takes that path. What `0x0892342c` (the function that fills the
+  override) belongs to is unread.
 - **Whether the 10 unnamed/world-space occluders are a track feature at all**,
   or authored-and-inert the way `DirectionalLight` turned out to be. If step 5
   draws only the 119 named ones, say so in the implementation rather than
