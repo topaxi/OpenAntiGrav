@@ -933,8 +933,14 @@ byte-identical in shape to Pulse's `Gfx_CompareQueueKeys` - same `{item, key}`
 layout, same ascending `a->key - b->key` on `+0x04`. See
 [renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)
 and [the handover thread](handover/pulses-draw-order-is-recovered-and-it-is.md).
-What HD's `+0x04` key actually encodes (layer+depth like Pulse, or something
-else) is still open, at the still-unread enqueue site - and -
+**What HD's `+0x04` key encodes is answered too, same day**: an enqueue
+idiom inlined at five confirmed producer call sites, twelve bits of layer
+over twenty of back-to-front depth - Pulse's exact split, one layer constant
+(`0x4d0`) even matching Pulse's own `ExhaustFlare_Submit` key byte for byte.
+See [renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes).
+What still isn't established is which class each of the five sites belongs
+to, and where the per-instance depth-override field they all read
+(`instance+0x11c`) gets written - and -
 **now closed** - where the engine-owned shader
 programs' microcode lives: 124 `SHO` blocks linked into `EBOOT.elf` against
 exactly 124 registered names, same container as a `.rcsmaterial`. Two things

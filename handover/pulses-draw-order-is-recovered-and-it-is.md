@@ -37,11 +37,36 @@ the data doesn't cut the other way either.) Full evidence and the
 correction trail:
 [renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order).
 
-**What the mechanism answer does not yet cover**: whether the entry's `+0x04`
-key encodes layer+depth the way Pulse's does, or something else - that
-depends on the enqueue site, still unread. One lead surfaced along the way,
-below 50 and not acted on: one of the two live-observed queued vtables
-(`0x00864cb8`) is related, through at least one indirection, to
+**2026-09-04: what the `+0x04` key encodes is answered too - it's Pulse's exact
+scheme, twelve bits of layer over twenty of depth, not just a similar
+shape.** Found by tracing `RenderManager_CreateInstance`'s own singleton slot
+and, separately, searching the whole binary for the enqueue idiom's literal
+immediates (`0x630`/`0x44b0` together) - the enqueue call isn't a single
+shared function the way Pulse's `Gfx_Enqueue` is, it's the same few lines
+inlined at every producer, which is exactly why no literal `0x630` store
+ever turned up inside the render layer's own address range: none of the
+five confirmed call sites (`0x00084e08`, `0x000a3c38`, `0x000ba268`,
+`0x00109028`, `0x0012fba8`) live there. Four default to a bare 12-bit layer
+constant (`0x300`, `0x570`, `0x5b0`) with zero depth, overridden when a
+per-instance field (`instance+0x11c`, sentinel `0xffffffff` for "no
+override") is set - masked to 20 bits, the same layer-over-depth split as
+Pulse. The fifth (`0x0012fba8`) instead **computes its own depth term**
+(a vector distance, bitwise-complemented so farther is a smaller key -
+direct evidence for "back-to-front", not just inherited wording) and only
+lets `instance+0x11c` override *that*. **One layer value is a direct
+cross-title match, not merely a similar shape**: `0x4d0` shares its top byte
+with Pulse's own `ExhaustFlare_Submit` key, `0x4d000000` - see
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes)
+for the full evidence and all five decompiles.
+
+None of the five sites is named - what effect each one draws is still open,
+below 50 confidence - and where `instance+0x11c` itself gets written is
+still unread; nothing found so far writes it, only reads it. It plays the
+same role in this key layout that `display+0x1180` (this page's own first
+`## Open` bullet, above) does in Pulse's - one open "who writes the depth
+override" question in two titles, not two unrelated ones. One more lead surfaced along
+the way, below 50 and not acted on: one of the two live-observed queued
+vtables (`0x00864cb8`) is related, through at least one indirection, to
 `FrontendRoot_Construct`'s own vtable slot - not established as the same
 vtable - which would suggest HUD/front-end elements are drawn through this
 same queue mid-race if it holds up. See renderer.md's "What was
@@ -49,13 +74,13 @@ deliberately not read" for the field-agreement evidence and its limits.
 
 ## Open
 
-- What writes the depth override at `display+0x1180` is unread
+- Who writes the per-frame depth override is unread in **both** titles, and it's one question now, not two: Pulse's `display+0x1180` and HD's `instance+0x11c` play the identical role (the sentinel-checked override the enqueue idiom reads before falling back to a computed or zero depth) in the identical key layout
 - What the `0x40000000` set holds and what its distance test does is unread
-- What HD's `+0x04` queue-entry key actually encodes (layer+depth like Pulse, or something else) is unread - the mechanism (an ascending `qsort` before dispatch) is now confirmed identical to Pulse's, but nothing yet reads what values populate the key
-- Where `RenderManager+0x630` (the queued-draw array) gets populated is unread - no literal `0x630` store exists anywhere in the render layer's address range, and a PS3 write watchpoint on the live instance came back unsupported
+- What class each of HD's five confirmed enqueue call sites belongs to - what effect it draws - is unread (below 50 confidence); the key format and mechanism are settled, only the callers' identities are open
 - Whether the `0x00864cb8` queued vtable relates to `FrontendRoot`'s own vtable by identity or only by indirection (a base subobject or secondary vtable) is unread past one xref-agreement check (below 50 confidence)
 
 ## Next Steps
 
-- Find the enqueue site that writes into `RenderManager+0x630` (bracketing around the dispatch loop, or working backward from one of the two live-observed queued classes' vtable-slot-`0x1c` implementation) to read what the `+0x04` key encodes
+- Find where `instance+0x11c` gets written (bracketing around one of the five known enqueue sites, or a write-watchpoint attempt despite the earlier `+0x630` one coming back unsupported) to close out the key format's last unknown
+- Identify at least one of the five enqueue call sites' owning class via `.cpp` attribution (`scripts/ps3-toc.py map`) - `0x000a3c38`'s matrix-stack push at `+0x620`/`+0x624` and `0x00109028`'s shared `0x4d0` layer with Pulse's exhaust flare are both promising starting threads
 - If `0x00864cb8` turns out to be `FrontendRoot`'s own vtable rather than merely related to it, that would mean HD draws its HUD/front-end through the same sorted queue as world geometry - worth confirming before assuming `oag_render::mesh::rcs`'s `LAYER_DEFAULT`-for-everything is the only gap versus Pulse's per-mesh layer

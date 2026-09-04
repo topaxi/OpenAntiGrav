@@ -309,22 +309,118 @@ at entry is the `RenderManager` instance and that `+0x44b0`/`+0x630` hold a
 real, populated draw queue during an actual race, not just field-offset
 agreement with the constructor. Capped short of the rubric's 94 ceiling for a
 single-binary trace because the breakpoint confirms the *dispatch* loop's
-shape and data, not every claim on this page - the enqueue site itself is
-still unread. `PrepareEye` is unaffected by that trace and stays where it
+shape and data, not every claim on this page - the enqueue site itself was
+still unread at the time of this trace (it has since been read separately,
+below). `PrepareEye` is unaffected by that trace and stays where it
 was (**55**, `_q`): it does per-eye resolution/aspect bookkeeping (writes
 `+0x104`/`+0x108`, the same pair `RenderManager_Construct` seeds from a
 sub-720/720-and-above split) and conditionally calls `0x0027cd60`, but nothing
 pins its exact purpose beyond "runs once before each eye's draws".
 
-**What this does not establish**: where `+0x630` gets populated. No `stw`
-with a literal `0x630` offset appears anywhere in the render layer's address
-range - the enqueue site, if it stores through a computed offset rather than
-a literal one, needs a different search (register-indexed stores, or working
-backward from what implements each queued class's vtable slot `0x1c`). So this
-narrows the open question to "no sort in the dispatch/flush step, on whatever
-list end up in this array" - it does not yet show the array holds every
-transparent draw, or that no sort happens on the *enqueue* side before an
-entry lands in it.
+**What this did not establish, and does now (below): where `+0x630` gets
+populated.** No `stw` with a literal `0x630` offset appears anywhere in the
+*render layer's own address range* - correctly so, per the enqueue idiom
+below, since every confirmed call site lives outside that range. The open
+question this left - "no sort in the dispatch/flush step, on whatever list
+ends up in this array" not yet showing whether the array holds every
+transparent draw, or whether a sort happens on the enqueue side before an
+entry lands in it - is answered by the idiom's own key computation: yes, a
+sort-relevant term (the depth bits) is computed at enqueue time, before the
+entry ever reaches the array this section describes.
+
+### The enqueue idiom, and what the `+0x04` key encodes
+
+**2026-09-04.** Found by getting xrefs to `RenderManager_CreateInstance`'s own
+singleton slot (`render_globals + 0x14`, itself reached through
+`PTR_DAT_008b3d00`) and, separately, by searching the whole binary (not just
+the render layer's address range) for the literal immediates `0x630` and
+`0x44b0` together - the enqueue call is not a single shared function the way
+Pulse's `Gfx_Enqueue` is. It is an **inlined idiom repeated at every producer
+site**, one instantiation per caller, which is exactly why no literal `0x630`
+store was ever found inside the render layer's own `0x00279xxx`-`0x002ecxxx`
+range: none of these sites live there.
+
+Confirmed on the same object `RenderManager_Construct` builds, not a
+coincidentally-shaped struct: two of the five sites below
+(`0x000ba268`, `0x000a3c38`) read `instance+0x624` and index into
+`instance + count*0x40 + 0x3a0` - exactly the constructor's documented
+"`0x40`-byte block copies into arrays at `+0x120` and `+0x3a0` indexed by
+counters at `+0x620` and `+0x624`" (above).
+
+The idiom, read identically at five independent call sites, takes one of two
+observed forms. Four sites carry only a per-caller layer constant, defaulting
+to zero depth unless a shared per-instance field overrides it:
+
+```c
+uint key = LAYER << 20;                   // a per-caller 12-bit constant: 0x300, 0x4d0, 0x570 or 0x5b0
+if (instance->depth_override != 0xffffffff)  // instance+0x11c; 0xffffffff is "no override"
+    key = (instance->depth_override & 0xfffff) | (LAYER << 20);
+instance->queue[instance->count].key  = key;   // entry+0x04, at instance+0x630+count*8+4
+instance->queue[instance->count].item = self;  // entry+0x00
+instance->count += 1;                          // instance+0x44b0
+```
+
+(`0x00084e08` - twice, back to back, under layers `0x570` and `0x5b0` -
+`0x000a3c38`, `0x000ba268`, all with layer `0x300`.)
+
+The fifth site, `0x0012fba8`, computes its **own** depth term instead of
+defaulting to zero, and only lets `instance+0x11c` override that when
+present - direct evidence for "back-to-front", not just a name inherited
+from Pulse's wording:
+
+```c
+float distance = /* a vector transform against a per-object matrix, then */ ...;
+uint key = 0x4d300000;                                  // layer 0x4d3, zero depth by default
+if (distance < DAT_008aa60c) {
+    distance *= DAT_008aa600;
+    if (distance <= DAT_008aa604)
+        key = (~(uint)(long long)distance & 0xfffff) | 0x4d300000;  // complemented: farther -> smaller key
+}
+if (instance->depth_override != 0xffffffff)              // same override field as the other four sites
+    key = (instance->depth_override & 0xfffff) | (key & 0xfff00000);
+```
+
+The bitwise complement (`~distance & 0xfffff`) is the mechanism: a larger
+raw distance produces a *smaller* depth field, so the ascending `qsort`
+(above) draws farther objects first - back-to-front, read directly rather
+than assumed from Pulse's naming.
+
+**This is Pulse's exact key layout - twelve bits of layer over twenty bits of
+back-to-front depth** ([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md),
+`Gfx_CompareQueueKeys`/`Gfx_Enqueue`), not just a similarly-shaped mechanism:
+the bit widths match (`& 0xfffff` is 20 bits; the layer constants observed -
+`0x300`, `0x4d0`, `0x4d3`, `0x570`, `0x5b0` - all sit in bits 20-31, a 12-bit
+field) and the sentinel-for-no-override idiom (`0xffffffff`) matches Pulse's
+own "a mesh batch set enqueues with its bare layer and no depth term at all"
+default for the four sites that don't compute their own depth. **One layer
+value is a direct cross-title match, not merely a similar shape**: `0x4d0`
+(`0x00109028`) shares its top byte with Pulse's own `ExhaustFlare_Submit`
+key, `0x4d000000` - the same layer constant surviving into a completely
+different renderer on different hardware is strong evidence these constants
+are inherited engine data, not independently re-derived per title.
+
+`instance+0x11c` plays the same role in this key layout that
+`display+0x1180` does in Pulse's `Gfx_Enqueue`
+([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md#gfx_enqueue) - same
+"replaces the key's low twenty bits, keeps the top twelve" shape, same
+`0xffffffff` sentinel) - a per-frame depth override neither codebase has
+identified the writer of. Same open question, one title each, not two
+unrelated ones; both are tracked as still-open in the handover thread this
+finding belongs to, not repeated here.
+
+**82** - five independent sites decompiling to the same key-construction
+shape (four identical, one a computed-depth variant that still shares the
+override field and the bit layout), matched bit-for-bit against Pulse's
+already-confirmed scheme. Capped by this page's static-reading ceiling (84);
+would be higher with a runtime trace confirming a queued entry's key against
+its visible draw order, which hasn't been attempted.
+
+None of the five call sites is named: each is a large, otherwise-unread
+function and what *class* each belongs to - what effect it draws - is not
+established. Below 50 confidence for that question; the enqueue tail itself
+is read directly and is not in question. **Still open**: where
+`instance+0x11c` gets computed - no call site here computes it, it is only
+ever read.
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
@@ -2489,19 +2585,19 @@ The whole table, in file order:
   inline command-buffer writing and finding it needs a search for RSX method
   constants inside whatever implements vtable slot `0x1c` for each queued
   class, not a call graph.
-- **Where `RenderManager+0x630` gets populated.** **2026-09-04: the "plain
-  sequential submission, not a hidden sort" reading above is retracted** -
-  `RenderManager_FlushDrawQueue` calls `qsort` on the array via
-  `RenderManager_CompareQueueKeys` before the dispatch loop runs (see
-  [above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)), so
-  a sort does exist, just not inside the loop the earlier reading traced.
-  What's still open is what the entry's `+0x04` key actually encodes on this
-  disc (layer+depth like Pulse, or something else) - that answer lives at
-  the enqueue site, still unread: no literal `0x630` store exists anywhere
-  in the render layer's address range, and a `Z2` write watchpoint on the
-  live instance came back unsupported by this RPCS3 GDB stub build (empty
-  reply), so the enqueue site needs bracketing or working backward from an
-  identified queued class rather than trapping the write.
+- **Where `RenderManager+0x630` gets populated.** **2026-09-04: answered -
+  see [the enqueue idiom](#the-enqueue-idiom-and-what-the-0x04-key-encodes)
+  above.** The "plain sequential submission, not a hidden sort" reading two
+  bullets up is retracted for the same reason: `RenderManager_FlushDrawQueue`
+  calls `qsort` on the array via `RenderManager_CompareQueueKeys` before the
+  dispatch loop runs, and the entry's `+0x04` key is twelve bits of layer over
+  twenty of back-to-front depth, Pulse's exact scheme, written by an idiom
+  inlined at every producer rather than a single shared function - which is
+  also why no literal `0x630` store was ever found *inside the render
+  layer's own address range*: none of the five confirmed call sites sit
+  there. What's still open is which class each producer call site belongs
+  to (below 50, unnamed) and where the depth input (`instance+0x11c`) itself
+  gets computed.
 - **What the two live-observed queued object classes are.** One vtable at
   `0x00864cb8`, one at `0x00867e58` - see the runtime section above for the
   constructor addresses. Neither sits in the render layer's own address
