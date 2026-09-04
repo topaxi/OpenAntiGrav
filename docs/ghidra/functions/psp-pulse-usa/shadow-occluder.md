@@ -14,6 +14,10 @@ page reads the function that does it.
 | --- | --- | --- |
 | `0x089038c8` | `Shadow_RenderOccluderVolume` | 84 |
 | `0x0890446c` | `DynamicShadowOccluder_RegisterClass` | 84 |
+| `0x08923518` | `Shadow_RegisterClass` | 84 |
+| `0x08b62540` | `g_shadow_direction` | 88 |
+| `0x08b62530` | `g_shadow_direction_override` | 80 |
+| `0x08abffd0` | `g_shadow_node_count` | 82 |
 
 Both sit at the ceiling of the rubric's **70-84 Probable** band, under
 "decompilation only, consistent call sites" - not the 85-94 band. The class
@@ -185,6 +189,15 @@ test.
    builds an edge list from the boundary between them - the standard
    "silhouette edges separate front-facing from back-facing polygons" step of
    stencil shadow-volume construction.
+
+   **The data side of this step is now read, 2026-09-04**, which is what makes
+   the walk cheap rather than a search: a face record's tail is `u16[4]` of
+   *the face across each edge* at `+0x10` and `u16[4]` of vertex indices at
+   `+0x18`. Adjacency is reciprocal on 14,328 of 14,328 edges disc-wide and a
+   triangle's declared normal agrees with the geometry of the three vertices it
+   indexes to 0.028 degrees, so the boundary this step walks is a lookup per
+   edge. See [`shadows.md`](../../../rendering/shadows.md#the-16-bytes-at-0x10-are-the-edge-graph-and-it-closes-on-itself)
+   and `oag_formats::shadow_occluder`.
 6. **Draws**, through a short run of calls whose shape matches a stencil
    pass: a state/matrix select, a draw call using the edge-list vertex/index
    buffers just built, and calls bracketing it that read as enabling and
@@ -303,8 +316,120 @@ constant needs a different correction than the one that works for `s0+0x38`
 and for the class-ID table's own name column. Left unresolved rather than
 asserted either way.
 
+## The projection direction is `normalize(0.5, -5, 1)`
+
+**Read 2026-09-04**, and it closes the open item that said the axis constant
+was "unbacked by concrete bytes". It is not in `.data` or `.rodata`; it is in
+`.bss`, written at class registration, and the obvious reading of the
+instruction pair lands in `.text` instead - the exact
+[`shield.md`](shield-pickup.md) trap, one segment over.
+
+### The selector, at instruction level
+
+```asm
+08903a1c: lui   a0, 0x002c
+08903a20: lw    a0, -16432(a0)     ; g_shadow_node_count, 0x08abffd0
+08903a24: beq   a0, zero, +4       ; none alive -> take the constant
+08903a28: lui   a0, 0x0009         ; (delay slot)
+08903a2c: lui   a0, 0x0009
+08903a30: b     +2
+08903a34: addiu a0, a0, -29288     ; (delay slot) g_shadow_direction_override
+08903a38: addiu a0, a0, -29272     ; g_shadow_direction
+08903a3c: lv.q  v16, 0(a0)         ; the 4-float axis
+```
+
+Then `lv.q v4..v7` off `self+0xb0` - the node's own world matrix, built
+earlier in the function - a `vtfm4` at `0x08903a5c` and a normalize. So the
+direction is `normalize(M_node * axis)`: the constant is a **local** axis and
+the node's own rotation carries it into world space, which is the reading step
+2 of [What it does](#what-it-does) already gave from the decompiler, arrived at
+here independently from the instruction stream.
+
+### Why the addresses looked unbacked, and where they really are
+
+Both `lui`/`addiu` pairs carry PRX relocations - `.rel.text` entries at offsets
+`0xffa28`/`0xffa2c` (type 5/6) and `0xffa34`/`0xffa38` - with **`addr_base =
+1`**, so the loader adds segment 1's base `0x002d5798` rather than segment 0's
+zero. The encoded `0x00088d98`/`0x00088da8` are therefore
+`0x0035e530`/`0x0035e540`, both inside `.bss` (`0x002d7300`, `0xba7c0` long),
+which is `0x08b62530`/`0x08b62540` at this project's `0x08804000` base. Read as
+segment-0 offsets they land in `.text` and read as instructions, which is
+exactly what "no `.data`/`.rodata` content at either" was seeing.
+
+### The constant, and the arithmetic tell that settles it
+
+`Shadow_RegisterClass` (`0x08923518`) writes `g_shadow_direction` from four
+immediates before calling `Vex_RegisterClass` (`0x08908eb8`) with class
+**`0x3cb`** - `shadow` - and storing that class's method table
+(`0x08ad1c24`) at `+0x38`, the same shape `DynamicShadowOccluder_RegisterClass`
+has for `0x3c3`:
+
+| Slot | Bits | Value |
+| --- | --- | --- |
+| `+0x00` | `0x3dc7dd06` | `+0.09758954` |
+| `+0x04` | `0xbf79d448` | `-0.97589540` |
+| `+0x08` | `0x3e47dd06` | `+0.19517908` |
+| `+0x0c` | `0x00000000` | `0.0` |
+
+Length `0.999995`, and **`x : z` is exactly `0.5`**: this is
+`normalize(0.5, -5, 1)`, an authored triple rather than a fitted one, 12.60
+degrees off straight down. That exactness is the tell - three independently
+stored floats agreeing on one clean rational direction is not what a
+misidentified address produces.
+
+### `shadow` `0x3cb` is a direction override, not dead weight
+
+`g_shadow_node_count` is a **reference count**, not a mode flag: `0x08923234`
+increments it and `0x089232ac` decrements it, each beside a store of the same
+method table (`0x08ad1c24`) into its object's `+0x38` - a constructor and a
+destructor for the `shadow` class. While one is alive,
+`Shadow_RenderOccluderVolume` reads `g_shadow_direction_override` instead, and
+`0x0892342c` is what fills it: three floats at `+0x10` of the object at
+`self+0x30`, **each negated**.
+
+So the class the census recorded as inert is inert *in the shipped data* and
+not in the code: it is a scene node whose job is to point every shadow
+somewhere else. `shadow` `0x3cb` is authored **zero times across all 415
+`.vex` files on the Pulse disc**
+([`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)),
+so the count is zero in any scene the disc can build and every shadow projects
+along the constant.
+
+Confidence **88** on the constant's value (instruction-level immediates, an
+exact rational tell, and the relocation table read directly); **82** on the
+override reading, which rests on the increment/decrement pair and the shared
+method table rather than on a full decompilation of the class. Neither is
+runtime-verified, which is what keeps both under the 95-100 band.
+
+**The three data rows this adds to `names.tsv` have not been applied through a
+Ghidra bridge**, only checked offline by `just check-names`, which proves the
+row cites its evidence and not that Ghidra can rename at the address. The
+argument that it can is by containment: `.bss` runs `0x08adb300`-`0x08b95ac0`
+at this base and already carries an applied row at `0x08b66450`
+(`g_wad_...`/`g_decompress_staging_buffer`, `wad-subsystem.md`), which is
+*above* both of these, and `0x08abffd0` sits in `.data` beside
+`g_display` (`0x08abf5d4`). Worth confirming with `just apply-names` the next
+time a bridge is up.
+
+Everything above is re-derivable without a bridge:
+[`scripts/psp-reloc.py`](../../../../scripts/psp-reloc.py) is the instrument -
+`pair` resolves what a `lui`/`addiu` pair actually points at, `at` prints the
+relocation entries on an instruction, and `refs` finds every site that forms a
+given address.
+
 ## Open
 
+- ~~The fixed local axis constant's value~~ **Read 2026-09-04**: it is
+  `normalize(0.5, -5, 1)` in `g_shadow_direction` (`0x08b62540`), and the
+  second candidate is an override a live `shadow` `0x3cb` node installs. See
+  the section above.
+- **What `0x0892342c` belongs to.** Its tail fills
+  `g_shadow_direction_override` from an object's own vector; its entry is at
+  `0x0892342c` and the rest of it is unread, so it carries no name here.
+- ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
+  2026-09-04**: `u16[4]` of per-edge adjacent faces at `+0x10` and `u16[4]` of
+  vertex indices at `+0x18`, closing on 14,328 of 14,328 reciprocal edges. See
+  step 5 above.
 - **The `s0+0x28` field's real meaning**, from the sub-lead above - not a
   class name pointer as far as this pass could tell, and what it actually is
   was not chased further.

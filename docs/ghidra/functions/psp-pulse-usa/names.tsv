@@ -635,3 +635,7 @@
 0x0888b980	function	Plugin_LoadManifest	80	../../../architecture/frontend-boot.md
 0x089038c8	function	Shadow_RenderOccluderVolume	84	shadow-occluder.md
 0x0890446c	function	DynamicShadowOccluder_RegisterClass	84	shadow-occluder.md
+0x08923518	function	Shadow_RegisterClass	84	shadow-occluder.md
+0x08b62540	data	g_shadow_direction	88	shadow-occluder.md
+0x08b62530	data	g_shadow_direction_override	80	shadow-occluder.md
+0x08abffd0	data	g_shadow_node_count	82	shadow-occluder.md

@@ -39,11 +39,31 @@ Two things worth carrying forward from doing it:
   (`crates/formats/tests/shadow_occluder_ground_truth.rs`),
   `Shadow_RenderOccluderVolume`'s own projection math (its **own local axis**,
   never a light), and the static class link. This is now a rendering task.
-- **The `m` face-to-vertex index mapping's exact byte layout**, per
-  [`shadow-occluder.md`](../docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md)'s
-  own Open section. Resolve it *before* step 5's draw code needs it: a
-  plausible-looking but wrong winding is exactly the invented stand-in
-  `CLAUDE.md`'s rule warns against.
+- ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
+  2026-09-04**, and the parser is `oag_formats::shadow_occluder`: `u16[4]` of
+  per-edge adjacent faces at `+0x10`, `u16[4]` of vertex indices at `+0x18`,
+  the fourth repeating the first on a triangle. Reciprocal on **14,328 of
+  14,328** edges disc-wide, every index in range on 4,381 of 4,381 faces, and
+  every triangle's declared normal within **0.028 degrees** of the geometry of
+  the vertices it indexes. `Occluder::silhouette` is the edge walk step 5
+  needs.
+- ~~The projection direction is what now blocks the draw~~ **Read
+  2026-09-04**: `normalize(0.5, -5, 1)`, a *local* axis the node's own world
+  matrix carries into world space. It sits in `.bss` at `g_shadow_direction`
+  (`0x08b62540`), written by `Shadow_RegisterClass` (`0x08923518`) - the same
+  function that registers class `0x3cb`, `shadow`. **The reason it read as
+  unfindable is worth carrying**: both candidate addresses are reached through
+  PRX relocations with `addr_base = 1`, so the obvious reading of the
+  `lui`/`addiu` pair lands in `.text` and decodes as instructions - the
+  `shield-pickup.md` trap, one segment over. Read `.rel.text` before believing
+  an address has no bytes behind it.
+- **`shadow` `0x3cb` is a direction override, not dead weight**, and the census
+  line calling it inert now says so: `g_shadow_node_count` is a reference count
+  incremented by its constructor and decremented by its destructor, and while
+  one is alive every shadow projects along that node's own negated vector
+  instead of the constant. No `.vex` on the disc authors one, so nothing
+  shipped ever takes that path. What `0x0892342c` (the function that fills the
+  override) belongs to is unread.
 - **Whether the 10 unnamed/world-space occluders are a track feature at all**,
   or authored-and-inert the way `DirectionalLight` turned out to be. If step 5
   draws only the 119 named ones, say so in the implementation rather than
