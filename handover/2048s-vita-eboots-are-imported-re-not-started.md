@@ -51,6 +51,13 @@ and [vita-2048-eu-v104/README.md](../docs/ghidra/functions/vita-2048-eu-v104/REA
 for the codebase-lineage question it raised, now confirmed. What's left here
 is loose ends unrelated to either.
 
+**`FixupVLRImportThunks.java` is resolved, 2026-09-04**: checked directly
+against `eu-v104` (already fully auto-analyzed) rather than left open -
+VitaLoaderRedux's loader and NID Analyzer already assign systematic
+`Library_NID` names to import thunks and their call sites without it, so the
+script's fallback case doesn't apply here. Evidence in
+[toolchain.md#vita](../docs/reverse-engineering/toolchain.md#vita).
+
 ## Open
 
 - `data/keys/` does not exist in every checkout (this session rebuilt it from
@@ -59,16 +66,30 @@ is loose ends unrelated to either.
   since regenerating it needs nothing but network access to
   nopaystation.com and is cheap, but a stale zRIF for a title NoPayStation
   later delists would not be.
-- `FixupVLRImportThunks.java` (shipped with VitaLoaderRedux) - still
-  unevaluated. Its own README frames it as a fallback for when the NID
-  Analyzer's import-thunk naming doesn't resolve cleanly, not a mandatory
-  step like PS3's `AssignPs3R2FromOpd`.
 
 ## Next Steps
 
 - The other three programs (`usa-v104`, `eu-base`, `usa-base`) are imported
   but not fully analyzed - run auto-analysis on them opportunistically, same
   "corroboration only" role as `psp-pulse-eu`/`psp-pure-eu`, not urgent.
+  **In progress as of 2026-09-04, left running rather than finished**:
+  `run_analysis` triggered on all three in the shared Ghidra JVM (PID
+  discoverable via `list_instances`); confirmed via `get_metadata` (distinct
+  executable paths under `data/extracted/vita/PCSA00015`/`PCSF00007`,
+  distinct memory sizes) that each is a genuinely separate binary, not one
+  program analyzed three times under a colliding path. Over roughly 25
+  minutes of polling, `usa-v104` climbed 1,197 -> 12,169 functions then
+  plateaued at 12,169 while still reporting `analyzing: true` (a slower pass
+  past the point new functions are found, not a hang - `eu-v104`'s own
+  final count was 12,420). `eu-base` and `usa-base` never moved off their
+  pre-analysis 1,197 in that same window, apparently queued behind
+  `usa-v104` in the single JVM (also contended by a concurrent session's
+  `oag-view` GXP work in the same instance). The session that triggered this
+  did not wait for completion - background analysis on a shared Ghidra
+  instance outlives any one session. Whoever picks this up next: call
+  `analysis_status` for all three programs first thing, and the moment each
+  reports `analyzing: false`, run `save_program` (or `save_all_programs`) -
+  Ghidra analysis lives in memory until saved and is not otherwise durable.
 - Decide whether `data/keys/vita-zrif.tsv` should also record DLC1/DLC2
   zRIFs now that the recovery method (nopaystation.com's TSV export, grepped
   directly) is fast and repeatable - not needed yet since DLC PKGs carry no
