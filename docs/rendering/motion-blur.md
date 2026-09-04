@@ -256,6 +256,55 @@ This is worth knowing generally: **the reach cap doubles as the tile size, so
 a generous cap makes the tiles large**, and a square reduction over a large
 tile is the one shape where a fullscreen pass can starve the GPU.
 
+#### The extent, not the allocation
+
+Reported from play on a **Steam Deck**, 2026-09-04, with dynamic resolution
+on and `motion_blur = high`: the overlay's `BLUR` row read **4-5 ms**, in the
+same ballpark as the FSR 3.1 chain beside it. That is the first reading of
+this chain on the first-tier target, and it is not the same machine or the
+same resolution as the table above.
+
+Part of it was work on pixels nobody sees. Since
+[ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)
+the scene target is allocated at the render-scale ceiling and the controller
+draws into a *sub-rectangle* of it, and every pass here was a fullscreen
+triangle over the whole target - so the chain paid the ceiling's price at
+every extent. It was invisible in the picture, which is why it survived:
+`fs_reconstruct` already returned the centre tap unchanged outside the
+rectangle and `fs_copy` samples a texel centre exactly, so the two rasters
+produce byte-identical scenes. Each pass now sets a viewport - the tile
+reductions onto the tile grid their own rectangle reduces to - and what is
+left outside is the clear alone.
+
+Two consequences worth carrying:
+
+- **`drs::Cost` counts this chain as `scalable`**, "what falls when the
+  render extent does". Until the raster fell with the extent, that was a
+  claim the code did not honour, and a controller that lowers the resolution
+  chasing a cost that will not move is
+  [ADR-0042](../architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)'s
+  own failure mode.
+- **A load operation has no sub-rectangle.** The four intermediates a later
+  pass reads outside its own rectangle are still cleared whole, which is what
+  keeps them zero rather than stale; the copy pass onto the caller's scene
+  must *not* clear, and clearing it wiped everything outside the rectangle the
+  moment the raster stopped covering it.
+
+A second consequence of the same asymmetry, found beside it: **the tile edge
+is `MAX_STRETCH` of the extent, so it moves on every controller step**, and
+`resize` rebuilt all five scratch targets whenever it did - two of them
+allocation-sized, for a reason that has nothing to do with either. Only the
+three tile targets depend on the edge now, and
+`a_moving_tile_edge_does_not_reallocate_the_full_size_targets` pins that. The
+seven bind groups are still rebuilt on a step, which is the shape the
+`Groups` cache exists to keep off the *per-frame* path and is left there.
+
+The rest is the gather itself and is inherent to the tier: 15 taps, two
+fetches each, at presentation resolution, on a frame where nearly everything
+moves - the `dominant_len <= 0.5` early-out that carries a still scene almost
+never fires in a race. The tap count is the next lever and it is a
+picture-changing one, so it wants a from-play judgement rather than a patch.
+
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_game::display` with `name()`,
 `ALL`, `FromStr`, `Display` and the `TryFrom<String>` / `Into<String>` serde

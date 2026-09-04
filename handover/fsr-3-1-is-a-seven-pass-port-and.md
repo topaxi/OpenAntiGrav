@@ -246,11 +246,38 @@ counts in findings 4 and 5 are work removed, not a profile.
 - **Nothing is compared against upstream's own output.** There is no reference
   implementation to diff against without building the SDK, which ADR-0012
   declined.
-- **The widened intermediates are unmeasured.** `Fsr3::sizes` reports the
-  number and nobody has read it on the Steam Deck, which
-  [goals.md](../docs/overview/goals.md) names in the first tier. The same
+- **The chain has now been timed on a Steam Deck, and the widening has
+  not been.** Reported from play, 2026-09-04, dynamic resolution on: the dev
+  overlay's `FSR3` row read **4-5 ms**, with `BLUR` in the same ballpark
+  beside it. That closes the timer half of Next Step 2 and leaves the other
+  half exactly where it was - the `info` line naming the intermediates' MiB
+  is written once per allocation at `info` level and nobody has read it on
+  the device, which is still the number
+  [goals.md](../docs/overview/goals.md)'s first tier is owed. The same
   question the dynamic-resolution thread left open about the ceiling
   allocation.
+
+  **4-5 ms is coherent rather than anomalous, and this port's own two
+  documented deviations are what predict it.** A shipped FSR2/3 lands in the
+  low single-digit milliseconds on eight RDNA2 CUs at that panel; this one
+  runs no FP16 path (`f32` throughout, where upstream leans on packed math
+  that is double rate on that architecture) and widens every intermediate to
+  the baseline-storable formats `resources.rs` picked - `R32Float` for a
+  scalar upstream keeps at 16 bits, `Rgba16Float` for a two-channel pair - on
+  a part whose memory is shared with the CPU. Roughly 1.5-2x a native chain
+  is what those two together cost, and that is the gap.
+
+  **The two levers, in the order worth trying**, neither of them started:
+  narrow the storage formats behind a probe of
+  `adapter.get_texture_format_features()` on the device's own adapter rather
+  than on a feature name (the guarantees have moved since `resources.rs`
+  chose the baseline, and it chose deliberately), and take the FP16 path
+  behind `wgpu::Features::SHADER_F16`. Both need a per-pass breakdown first:
+  the timer is one pair over the whole chain, so nothing yet says whether the
+  render-resolution passes or the presentation-resolution ones dominate, and
+  the two levers do not help the same passes. Read this file's finding 1
+  before adding pairs - eight claims a frame is eight chances to reintroduce
+  the unresolved-slot trap.
 - **The fallback ladder's lowest rung cannot be exercised here.** Both adapters
   on this machine report `DownlevelFlags::COMPUTE_SHADERS`, so a green run is
   not evidence that a compute-less adapter degrades to FSR 1 rather than
@@ -266,11 +293,14 @@ counts in findings 4 and 5 are work removed, not a profile.
    are what to watch; `GPU SCENE x.xx MS  FSR3 x.xx MS` is what the chain costs,
    and the `info` line at the first race frame is what it holds. Both are wired
    and neither has been read.
-2. **Read the same two on a Steam Deck**, which is the first-tier target
-   [goals.md](../docs/overview/goals.md) names and the reading the widening
-   argument has been waiting on since the port opened. 93.8 MiB against
-   upstream's 70.2 at 1080p/50 % is the number to check against what the device
-   actually has.
+2. ~~**Read the same two on a Steam Deck.**~~ Half done, 2026-09-04: the
+   `FSR3` row reads **4-5 ms** there with dynamic resolution on - see Open
+   above for what that number does and does not settle. **What is still
+   unread is the `info` line**, which is the one the widening argument has
+   been waiting on since the port opened: 93.8 MiB against upstream's 70.2 at
+   1080p/50 % is the number to check against what the device actually has. It
+   is logged at `info` on the first race frame of an allocation, so it wants a
+   run with the log level up rather than another look at the overlay.
 3. Decide whether `fsr3` should be a default anywhere. It is off by default and
    the row already offers it; `Scale::default` is `FULL`, so like `fsr1` it is
    inert until a player lowers the render scale - except that unlike `fsr1` it

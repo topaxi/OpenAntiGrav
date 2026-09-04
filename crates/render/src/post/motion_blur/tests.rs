@@ -83,7 +83,7 @@ fn rg16float_is_multisample_renderable_at_4x_on_this_adapter() {
 }
 
 /// IEEE 754 half precision, for filling the synthetic velocity texture.
-fn f32_to_half(value: f32) -> u16 {
+pub(super) fn f32_to_half(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
     let exponent = ((bits >> 23) & 0xff) as i32 - 127 + 15;

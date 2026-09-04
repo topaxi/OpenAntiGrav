@@ -58,19 +58,31 @@ struct Constants {
 @group(1) @binding(2) var velocity_ms_tex: texture_multisampled_2d<f32>;
 @group(1) @binding(3) var depth_ms_tex: texture_multisampled_2d<f32>;
 
+// **The framebuffer position is the only coordinate any pass here reads, and
+// that is what lets every pass rasterise the render extent rather than the
+// whole allocation.** A `set_viewport` maps this triangle's clip space onto
+// the viewport rectangle, so an interpolated 0..1 uv would measure across the
+// *rectangle* while every texture bound here is the size of the whole target.
+// `@builtin(position)` is in framebuffer pixels either way, so `target_uv`
+// below is the one that keeps meaning the same thing under a viewport - and
+// lands on the texel centre exactly, where the interpolant only did so
+// because the two happened to coincide.
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
 }
 
 // The same fullscreen triangle `fxaa.wgsl` and the blit use.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
+    let corner = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
+    out.position = vec4<f32>(corner * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
     return out;
+}
+
+// This fragment's uv in the *target's* space - see `VertexOutput`.
+fn target_uv(position: vec4<f32>) -> vec2<f32> {
+    return position.xy * constants.inv_size;
 }
 
 // Velocity and depth folded into one texture, so every later pass reads one
@@ -221,10 +233,13 @@ fn reach_px(velocity: vec2<f32>) -> vec2<f32> {
 @fragment
 fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
-    let centre = textureSampleLevel(colour_tex, colour_sampler, in.uv, 0.0);
+    let here = target_uv(in.position);
+    let centre = textureSampleLevel(colour_tex, colour_sampler, here, 0.0);
 
-    // Inside the viewport only: an aspect bar was drawn by no camera.
-    let local = (in.uv - constants.rect_offset) / constants.rect_size;
+    // Inside the viewport only: an aspect bar was drawn by no camera. Still
+    // here with the raster restricted to the viewport, because a rectangle
+    // rounds to whole pixels and this is what the boundary one does.
+    let local = (here - constants.rect_offset) / constants.rect_size;
     if local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0 {
         return centre;
     }
@@ -285,7 +300,7 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
         let t = (f32(i) + dither + 1.0) / f32(TAPS + 1) - 0.5;
         let offset_px = dominant * t;
         let distance = length(offset_px);
-        let uv = in.uv + offset_px / constants.rect_pixels * constants.rect_size;
+        let uv = here + offset_px / constants.rect_pixels * constants.rect_size;
         // Clamped to the viewport, so a smear at the frame's edge stretches
         // the edge rather than pulling an aspect bar's black in.
         let tap_local = clamp((uv - constants.rect_offset) / constants.rect_size, vec2<f32>(0.0), vec2<f32>(1.0));
@@ -335,5 +350,5 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
 // home.
 @fragment
 fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSampleLevel(colour_tex, colour_sampler, in.uv, 0.0);
+    return textureSampleLevel(colour_tex, colour_sampler, target_uv(in.position), 0.0);
 }
