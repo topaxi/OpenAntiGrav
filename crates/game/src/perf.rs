@@ -569,9 +569,11 @@ const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
 /// has a `GpuCost` to draw, so there is nothing there for this to collide
 /// with in practice.
 const GPU_LEFT: f32 = 4.0;
-/// Wide enough for the longest single row, `SCENE 100.00 MS` at three digits -
-/// picked to stay legible, the same way [`PANEL_W`] was.
-const GPU_PANEL_W: f32 = 90.0;
+/// Wide enough for the longest single row, `FSR3 REN 100.00 MS` at three
+/// digits - picked to stay legible, the same way [`PANEL_W`] was. It was
+/// `SCENE 100.00 MS` and 90 until the FSR 3.1 chain became two rows rather
+/// than one (ADR-0045).
+const GPU_PANEL_W: f32 = 110.0;
 
 /// The panel, the text, and the three bands a frame time can fall in.
 const PANEL: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
@@ -673,9 +675,21 @@ pub struct GpuCost {
     /// `HDR and Bloom` block - see `race::Scene::has_hd_bloom` and
     /// [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md).
     pub bloom: Option<f32>,
-    /// FSR 3.1's eight dispatches, or `None` when no temporal upscaler has run
-    /// - which is every frame on every other rung of the ladder.
+    /// FSR 3.1's six render-resolution dispatches, or `None` when no temporal
+    /// upscaler has run - which is every frame on every other rung of the
+    /// ladder.
+    ///
+    /// **Six and not eight since
+    /// [ADR-0045](../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)**:
+    /// the chain is timed in two halves, and this is the one that falls when
+    /// the render extent does.
     pub upscale: Option<f32>,
+    /// FSR 3.1's `accumulate` and `rcas`, at presentation resolution, on the
+    /// same terms as [`GpuCost::upscale`].
+    ///
+    /// The half of the chain a lower render scale does not make cheaper, which
+    /// is why it is the only part in [`crate::drs::Cost::fixed`].
+    pub upscale_presented: Option<f32>,
 }
 
 impl GpuCost {
@@ -705,7 +719,10 @@ impl GpuCost {
             rows.push(format!("BLUR {:.2} MS", blur * 1000.0));
         }
         if let Some(upscale) = self.upscale {
-            rows.push(format!("FSR3 {:.2} MS", upscale * 1000.0));
+            rows.push(format!("FSR3 REN {:.2} MS", upscale * 1000.0));
+        }
+        if let Some(upscale) = self.upscale_presented {
+            rows.push(format!("FSR3 OUT {:.2} MS", upscale * 1000.0));
         }
         if let Some(residual) = self.residual_ms(frame_ms) {
             rows.push(format!("OTHER {residual:.1} MS"));
@@ -739,13 +756,15 @@ impl GpuCost {
             && self.blur.is_none()
             && self.bloom.is_none()
             && self.upscale.is_none()
+            && self.upscale_presented.is_none()
         {
             return None;
         }
         let timed_ms = (self.scene.unwrap_or(0.0)
             + self.blur.unwrap_or(0.0)
             + self.bloom.unwrap_or(0.0)
-            + self.upscale.unwrap_or(0.0))
+            + self.upscale.unwrap_or(0.0)
+            + self.upscale_presented.unwrap_or(0.0))
             * 1000.0;
         Some(frame_ms - timed_ms)
     }

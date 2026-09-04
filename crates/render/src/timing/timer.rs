@@ -353,9 +353,10 @@ impl PassTimer {
     /// descriptors as different types - `ComputePassTimestampWrites` and
     /// `RenderPassTimestampWrites` - with no conversion between them, even
     /// though a slot is a slot and this hands back the same two indices into
-    /// the same query set. Written for FSR 3.1, whose eight dispatches are one
-    /// compute pass and so are one timestamp pair; see
-    /// [`crate::post::fsr3::Fsr3::render`].
+    /// the same query set. Written for FSR 3.1, which since ADR-0045 encodes
+    /// its eight dispatches as two compute passes and takes one of these per
+    /// ring for each; see [`crate::post::fsr3::Fsr3::render`] and
+    /// [`crate::post::fsr3::ChainTimestamps`].
     #[must_use]
     pub fn compute_writes(&self) -> Option<wgpu::ComputePassTimestampWrites<'_>> {
         let slot = self.writing?;

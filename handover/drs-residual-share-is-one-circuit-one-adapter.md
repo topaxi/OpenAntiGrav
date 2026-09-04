@@ -184,12 +184,40 @@ measurement, but nobody has confirmed that. And a second adapter -
 timestamp period between two adapters on one laptop, a reason to distrust any
 single-machine constant on principle.
 
+## The FSR 3.1 chain is two readings now, and it does run on the Deck
+
+Landed 2026-09-04 as
+[ADR-0045](../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md):
+the alternative ADR-0042 declined and ADR-0043 deferred a second time. The
+chain is encoded as two compute passes split where the resolution changes, its
+six render-resolution dispatches join `drs::Cost::scalable`, and only
+`accumulate` and `rcas` stay in `fixed`. **The budget gets bigger on any
+machine running FSR 3.1**, so the controller is more willing to hold or raise
+the scale - the deliberate pessimism ADR-0042 recorded is gone, and what
+bounds the error now is `RESIDUAL_SHARE` and ADR-0044's learned reserve.
+
+**Two things this thread had open are answered by the reading that motivated
+it.** Reported from play on a Steam Deck, 2026-09-04, dynamic resolution on:
+`FSR3` read 4-5 ms and `BLUR` about the same.
+
+- **FSR 3.1 builds and runs on RADV.** Next step 4 below asks why it fails to;
+  a nonzero `FSR3` row is only ever claimed on a frame the chain actually
+  encoded (`will_upscale_temporally` and `resolve_scene`'s own answer both
+  gate it), so the premise is stale. What changed it is not established - the
+  freeze fix and the reset-clear both landed in between.
+- **The residual is not where the Deck's time is going.** 4-5 ms of a 16.7 ms
+  frame in each of two measured chains is most of it.
+
+The Deck reading is still missing the other rows - `SCENE`, `BLOOM`, `OTHER`,
+the render scale and the `residual` field - so next step 1 stands as written,
+with two rows where it says `FSR3`: `FSR3 REN` and `FSR3 OUT`.
+
 ## Next Steps
 
 1. Ask for (or take) a `dev`-overlay reading during the race that motivated
    this thread, now that `BLOOM` and `OTHER` are on screen: `FPS`/`MS`,
-   `SCENE`, `BLOOM`, `BLUR`, `FSR3`, `OTHER` - plus the render scale and the
-   `residual` field on the `dynamic resolution:` trace line. That one reading
+   `SCENE`, `BLOOM`, `BLUR`, `FSR3 REN`, `FSR3 OUT`, `OTHER` - plus the render
+   scale and the `residual` field on the `dynamic resolution:` trace line. That one reading
    tells which of the open questions above is the real one, and whether
    ADR-0044 moved the Deck at all.
 2. If `OTHER` is still large with `BLOOM` small, decide the CPU-floor design
@@ -201,6 +229,7 @@ single-machine constant on principle.
    redoing: does `reconstruction = fsr3` actually resolve there once it stops
    silently going bilinear, and if so, what does the render scale settle at
    with the freeze no longer masking the real number.
-4. Find out why FSR 3.1 fails to build on RADV at all - the `warn!` line's own
-   text (`"the FSR 3.1 pipelines did not build (...); staying bilinear"`)
-   would say, if it can be captured off the Deck.
+4. ~~Find out why FSR 3.1 fails to build on RADV at all.~~ **Stale**: it runs
+   there, per the 2026-09-04 reading above. If the `warn!` line
+   (`"the FSR 3.1 pipelines did not build (...); staying bilinear"`) ever
+   appears on a Deck log again, that is a new question rather than this one.

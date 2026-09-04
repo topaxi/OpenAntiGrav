@@ -279,17 +279,26 @@ that, and it has not been taken.
 
 ### What it costs is measured, not argued
 
-The whole chain is one `begin_compute_pass`, so one `wgpu` timestamp pair
-brackets all eight dispatches - which is the only shape available, because
-bracketing a single dispatch would need `TIMESTAMP_QUERY_INSIDE_PASSES` and
-that is not WebGPU-portable. `oag_render::timing::PassTimer` already existed for
-the scene pass ([dynamic resolution](dynamic-resolution.md)); FSR 3.1 gets a
-ring of its own rather than a share of that one, because a slot spent here is a
-frame the resolution controller does not get a scene reading for.
+The chain is **two** `begin_compute_pass` calls and two `wgpu` timestamp
+pairs, split where the resolution changes: six dispatches at the render extent
+or half of it, then `accumulate` and `rcas` at presentation size. Bracketing a
+single dispatch would need `TIMESTAMP_QUERY_INSIDE_PASSES` and that is not
+WebGPU-portable, so a pass boundary is the finest split available - and this
+is the one both readers want, per
+[ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md):
+a person deciding whether the widened formats or the missing FP16 path is
+worth attacking, and a dynamic-resolution controller that has to know which
+half of the cost it can lower. `oag_render::timing::PassTimer` already existed
+for the scene pass ([dynamic resolution](dynamic-resolution.md)); FSR 3.1 gets
+two rings of its own rather than a share of that one, because a slot spent
+here is a frame the resolution controller does not get a scene reading for.
+The two are claimed, abandoned and resolved together - `Fsr3::render` encodes
+both passes or neither and says which.
 
-The reading lands on the `dev` performance overlay's dedicated GPU-cost panel,
-top left, beside the scene pass's - one row each, `SCENE x.xx MS` and
-`FSR3 x.xx MS`. A render scale moves them in opposite directions: lowering it
+The readings land on the `dev` performance overlay's dedicated GPU-cost panel,
+top left, beside the scene pass's - `SCENE x.xx MS`, then `FSR3 REN x.xx MS`
+for the half that scales and `FSR3 OUT x.xx MS` for the half that does not.
+A render scale moves them in opposite directions: lowering it
 makes the scene pass cheaper and gives the temporal resolve more to
 reconstruct, and this runs *after* the scene pass rather than inside it - so
 choosing a render scale on the scene reading alone is choosing on part of the

@@ -379,18 +379,22 @@ impl Framebuffer {
     /// where the surface is written. See
     /// [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
     ///
-    /// **Returns whether the FSR 3.1 pass actually wrote `upscale_timestamp`.**
-    /// A caller claims a slot before knowing whether the pipelines will build,
-    /// the same as [`oag_render::post::motion_blur::MotionBlur::render`] and
+    /// **Returns whether the FSR 3.1 pass actually wrote both halves of
+    /// `upscale_timestamps`.** A caller claims its slots before knowing
+    /// whether the pipelines will build, the same as
+    /// [`oag_render::post::motion_blur::MotionBlur::render`] and
     /// [`oag_render::post::hd_bloom::Chain::run`] both do for their own
     /// chains - and, like both of those, needs a way to give an unwritten
     /// claim back rather than let it resolve to an unspecified value. `false`
     /// on every path that returns before `fsr.render` runs: no temporal
     /// history yet, an adapter that cannot run it, or - the case this exists
-    /// for - a shader that failed to build.
+    /// for - a shader that failed to build. **One answer for both halves**,
+    /// because `Fsr3::render` encodes both compute passes or neither, and two
+    /// rings that disagree by a frame is exactly what
+    /// `Session::feed_drs`'s frame matching cannot survive.
     #[expect(
         clippy::too_many_arguments,
-        reason = "one timestamp pair, which cannot ride in `Temporal`: \
+        reason = "two timestamp pairs, which cannot ride in `Temporal`: \
                   `ComputePassTimestampWrites` is `Clone` and not `Copy`"
     )]
     #[must_use = "a claimed slot this returns `false` for must be abandoned, \
@@ -403,13 +407,13 @@ impl Framebuffer {
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
         temporal: Option<Temporal<'_>>,
-        upscale_timestamp: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        upscale_timestamps: Option<fsr3::ChainTimestamps<'_>>,
     ) -> bool {
         let output_size = (rect.2 as u32, rect.3 as u32);
         // **The extent, not the allocation**: every pass below is asking
         // "what was drawn", and since ADR-0037 the texture can be larger than
-        // that. The two are equal on every frame the game draws today - see
-        // [`Framebuffer::set_extent`] for what bounds that.
+        // that - which it is on every frame a resolution controller has
+        // stepped down. See [`Framebuffer::set_extent`].
         let extent = self.extent;
         // Every scene-resolution pass reads a view of the **allocation** while
         // drawing the **extent** into it, and since Phase 5 each is told both:
@@ -438,13 +442,12 @@ impl Framebuffer {
             (chosen, _) => chosen,
         };
 
-        // **Whether `upscale_timestamp` was actually written into**, for the
-        // caller to give a claimed-but-unwritten slot back - see the return
-        // value's own doc. Set the moment the pipelines are known to exist,
-        // which is also the moment `fsr.render` - the only call that writes
-        // the pair - is about to run: every path to this point either sets
-        // it and proceeds, or returns out of the closure below it having
-        // never touched it.
+        // **Whether both halves of `upscale_timestamps` were actually written
+        // into**, for the caller to give two claimed-but-unwritten slots back
+        // - see the return value's own doc. Taken from `fsr.render`'s own
+        // answer rather than set beside the call: the chain has an early
+        // return of its own for a missing allocation, and a flag set on the
+        // way in would have claimed that frame as measured.
         let mut upscale_encoded = false;
         let temporally_resolved = temporal.and_then(|temporal| {
             let fsr = self.fsr3.get_or_insert_with(|| fsr3::Fsr3::new(device));
@@ -454,14 +457,13 @@ impl Framebuffer {
                 // it must not be a crash in a player's frame loop: say so once
                 // and carry on down the ladder. `upscale_encoded` stays
                 // `false`: `fsr.render` below is what would have written
-                // `upscale_timestamp`, and this return skips it.
+                // `upscale_timestamps`, and this return skips it.
                 Err(why) => {
                     warn!("the FSR 3.1 pipelines did not build ({why:#}); staying bilinear");
                     return None;
                 }
             };
-            upscale_encoded = true;
-            fsr.render(
+            upscale_encoded = fsr.render(
                 device,
                 queue,
                 encoder,
@@ -489,7 +491,7 @@ impl Framebuffer {
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
                 },
-                upscale_timestamp,
+                upscale_timestamps,
             );
             let sizes = fsr.sizes();
             let view = fsr

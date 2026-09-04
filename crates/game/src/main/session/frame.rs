@@ -795,8 +795,12 @@ impl Session {
             let will_upscale_temporally = temporal.is_some()
                 && presentation.reconstruction == crate::display::Reconstruction::Fsr3
                 && self.framebuffer.temporal_upscaler_viable();
-            if will_upscale_temporally && let Some(timer) = self.upscale_timer.as_mut() {
-                timer.begin(self.frame_index);
+            if will_upscale_temporally {
+                super::timing::claim_upscale(
+                    self.upscale_timer.as_mut(),
+                    self.upscale_presented_timer.as_mut(),
+                    self.frame_index,
+                );
             }
 
             let upscale_encoded = self.framebuffer.resolve_scene(
@@ -806,11 +810,10 @@ impl Session {
                 rect,
                 &presentation,
                 temporal,
-                // One pair around FSR 3.1's whole compute pass, on the frames
-                // the claim above took a slot for.
-                self.upscale_timer
-                    .as_ref()
-                    .and_then(oag_render::timing::PassTimer::compute_writes),
+                super::timing::upscale_timestamps(
+                    self.upscale_timer.as_ref(),
+                    self.upscale_presented_timer.as_ref(),
+                ),
             );
             // **The same rule the blur and HD-bloom claims already follow**:
             // a claim `will_upscale_temporally` made and `resolve_scene` did
@@ -827,11 +830,11 @@ impl Session {
             // failed, with no way back. See
             // `Session::read_timing_and_feed_drs`'s own `has_hd_bloom`-style
             // fix for the read-back half of the same bug.
-            if will_upscale_temporally
-                && !upscale_encoded
-                && let Some(timer) = self.upscale_timer.as_mut()
-            {
-                timer.abandon();
+            if will_upscale_temporally && !upscale_encoded {
+                super::timing::abandon_upscale(
+                    self.upscale_timer.as_mut(),
+                    self.upscale_presented_timer.as_mut(),
+                );
             }
         }
 
@@ -904,7 +907,7 @@ impl Session {
                 extent: self.framebuffer.extent(),
                 allocation: self.framebuffer.allocation(),
             }),
-            // All four GPU readings, whatever the stage: a reading is a
+            // All five GPU readings, whatever the stage: a reading is a
             // frame or more old, so gating this on `has_scene` would blank the
             // row on the menu frame that is finally reporting the last race
             // frame's cost. Each is `None` until its own first reading lands.
@@ -913,6 +916,10 @@ impl Session {
                 blur: self.blur_cost.stats().map(|s| s.mean_ms / 1000.0),
                 bloom: self.hd_bloom_cost.stats().map(|s| s.mean_ms / 1000.0),
                 upscale: self.upscale_cost.stats().map(|s| s.mean_ms / 1000.0),
+                upscale_presented: self
+                    .upscale_presented_cost
+                    .stats()
+                    .map(|s| s.mean_ms / 1000.0),
             },
         );
         if !list.is_empty() {
@@ -932,9 +939,11 @@ impl Session {
         if let Some(timer) = self.pass_timer.as_mut() {
             timer.resolve(&mut encoder);
         }
-        if let Some(timer) = self.upscale_timer.as_mut() {
-            timer.resolve(&mut encoder);
-        }
+        super::timing::resolve_upscale(
+            self.upscale_timer.as_mut(),
+            self.upscale_presented_timer.as_mut(),
+            &mut encoder,
+        );
         if let Some(timer) = self.blur_timer.as_mut() {
             timer.resolve(&mut encoder);
         }

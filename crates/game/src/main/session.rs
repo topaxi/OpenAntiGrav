@@ -90,14 +90,20 @@ pub(crate) struct Session {
     /// be greyed for it: `disabled_by` names a *setting* and an adapter
     /// capability is not one. See `docs/architecture/menus.md`.
     pub(crate) pass_timer: Option<oag_render::timing::PassTimer>,
-    /// What FSR 3.1's eight dispatches cost on the **GPU**, in the seconds
-    /// [`Session::scene_cost`] is fed.
+    /// What FSR 3.1's six **render-resolution** dispatches cost on the GPU, in
+    /// the seconds [`Session::scene_cost`] is fed.
     ///
     /// A second meter because it measures a second thing and one a player
     /// choosing an upscaler actually has to weigh: the temporal resolve runs
     /// *after* the scene pass and is not in its reading, so a render scale
     /// that halved the scene can still cost more overall. Empty on every frame
     /// no temporal upscaler ran, which is most of them.
+    ///
+    /// **Six dispatches and not eight since
+    /// [ADR-0045](../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)**:
+    /// the two that resolve a pixel are [`Session::upscale_presented_cost`],
+    /// because they are the half of the chain a resolution controller cannot
+    /// make cheaper.
     pub(crate) upscale_cost: perf::Meter,
     /// The timer behind [`Session::upscale_cost`].
     ///
@@ -107,6 +113,27 @@ pub(crate) struct Session {
     /// Four slots each is eight tiny buffers - see `PassTimer`'s own note on
     /// what a ring costs.
     pub(crate) upscale_timer: Option<oag_render::timing::PassTimer>,
+    /// What FSR 3.1's `accumulate` and `rcas` cost on the GPU, in the same
+    /// seconds - the half of the chain that runs at presentation resolution
+    /// and does not move when the extent does.
+    ///
+    /// See [ADR-0045](../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)
+    /// for why this is measured apart from [`Session::upscale_cost`] rather
+    /// than summed with it: it is the only part of the chain that belongs in
+    /// [`drs::Cost::fixed`], and counting the whole chain there made the
+    /// budget smaller than the truth.
+    pub(crate) upscale_presented_cost: perf::Meter,
+    /// The timer behind [`Session::upscale_presented_cost`], on its own ring
+    /// for the reason [`Session::upscale_timer`] has one.
+    ///
+    /// **Claimed, abandoned and resolved in lockstep with
+    /// [`Session::upscale_timer`]**, never independently.
+    /// `Framebuffer::resolve_scene` returns one `bool` for both because
+    /// `Fsr3::render` encodes both compute passes or neither, and two rings
+    /// that disagree by a frame are two rings `Session::feed_drs` can never
+    /// match again - it pairs readings by frame index and treats a missing
+    /// one as "not measured yet", which stalls the controller for the run.
+    pub(crate) upscale_presented_timer: Option<oag_render::timing::PassTimer>,
     /// What the motion-blur chain costs on the **GPU**, in the same seconds.
     ///
     /// **The third meter, and the one that made the budget honest.** Motion

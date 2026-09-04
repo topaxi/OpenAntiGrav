@@ -285,6 +285,11 @@ impl App {
         // sharing the scene pass's would cost the resolution controller a
         // reading every frame the upscaler took a slot.
         let upscale_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        // And one more beside it, for the *other* half of that chain: the two
+        // presentation-resolution dispatches are a cost the resolution
+        // controller cannot lower, and telling them apart from the six that
+        // shrink is the whole of ADR-0045.
+        let upscale_presented_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a third, for the same reason again - see `Session::blur_cost`.
         let blur_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a fourth - see `Session::hd_bloom_cost`.
@@ -313,6 +318,8 @@ impl App {
             pass_timer,
             upscale_cost: perf::Meter::new(),
             upscale_timer,
+            upscale_presented_cost: perf::Meter::new(),
+            upscale_presented_timer,
             blur_cost: perf::Meter::new(),
             blur_timer,
             hd_bloom_cost: perf::Meter::new(),

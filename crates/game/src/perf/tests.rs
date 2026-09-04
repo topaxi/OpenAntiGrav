@@ -552,10 +552,10 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
 /// The GPU cost rows say only what has actually been measured.
 ///
 /// A reading arrives a frame or more after the frame it describes, so all
-/// four are legitimately absent at the start of a run - and an `FSR3 0.00 MS`
-/// row on a frame the bilinear blit resolved would be a lie that reads as
-/// "free" rather than as "not running". Each row appears only once its own
-/// field has a number, in pipeline order, with `OTHER` last.
+/// five are legitimately absent at the start of a run - and an
+/// `FSR3 REN 0.00 MS` row on a frame the bilinear blit resolved would be a lie
+/// that reads as "free" rather than as "not running". Each row appears only
+/// once its own field has a number, in pipeline order, with `OTHER` last.
 #[test]
 fn the_gpu_cost_rows_show_only_what_was_measured() {
     assert_eq!(
@@ -569,6 +569,7 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             blur: None,
             bloom: None,
             upscale: None,
+            upscale_presented: None,
         }
         .rows(11.76),
         vec!["SCENE 4.20 MS".to_string(), "OTHER 7.6 MS".to_string()],
@@ -580,14 +581,35 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             blur: Some(0.001_2),
             bloom: Some(0.003_1),
             upscale: Some(0.001_8),
+            upscale_presented: None,
         }
         .rows(11.76),
         vec![
             "SCENE 4.20 MS".to_string(),
             "BLOOM 3.10 MS".to_string(),
             "BLUR 1.20 MS".to_string(),
-            "FSR3 1.80 MS".to_string(),
+            "FSR3 REN 1.80 MS".to_string(),
             "OTHER 1.5 MS".to_string(),
+        ]
+    );
+    // **Both halves of the chain, which is what a reader compares.** The two
+    // rings are claimed together, so in a running race both rows appear or
+    // neither does - and the `OTHER` residual has to subtract both, or the
+    // presentation half reads as unaccounted-for cost.
+    assert_eq!(
+        GpuCost {
+            scene: Some(0.004_2),
+            blur: None,
+            bloom: None,
+            upscale: Some(0.001_8),
+            upscale_presented: Some(0.003_0),
+        }
+        .rows(11.76),
+        vec![
+            "SCENE 4.20 MS".to_string(),
+            "FSR3 REN 1.80 MS".to_string(),
+            "FSR3 OUT 3.00 MS".to_string(),
+            "OTHER 2.8 MS".to_string(),
         ]
     );
     // The upscaler can report before the scene pass does: the four rings are
@@ -598,9 +620,10 @@ fn the_gpu_cost_rows_show_only_what_was_measured() {
             blur: None,
             bloom: None,
             upscale: Some(0.001_8),
+            upscale_presented: None,
         }
         .rows(11.76),
-        vec!["FSR3 1.80 MS".to_string(), "OTHER 10.0 MS".to_string()]
+        vec!["FSR3 REN 1.80 MS".to_string(), "OTHER 10.0 MS".to_string()]
     );
 }
 
@@ -618,6 +641,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         blur: Some(0.001_2),
         bloom: Some(0.003_1),
         upscale: Some(0.001_8),
+        upscale_presented: None,
     };
     let has_panel = |mode| {
         draw_list(&meter, mode, 60, None, None, None, None, cost)
@@ -661,6 +685,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         blur: Some(0.001_2),
         bloom: Some(0.003_1),
         upscale: Some(0.002_8),
+        upscale_presented: None,
     };
     // 2.5 + 1.2 + 3.1 + 2.8 = 9.6 ms accounted for out of an 11.76 ms frame.
     assert!((cost.residual_ms(11.76).unwrap() - 2.16).abs() < 1e-4);
@@ -673,6 +698,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         blur: None,
         bloom: None,
         upscale: None,
+        upscale_presented: None,
     };
     assert!((partial.residual_ms(11.76).unwrap() - 9.26).abs() < 1e-4);
 
@@ -688,6 +714,7 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
         blur: None,
         bloom: None,
         upscale: None,
+        upscale_presented: None,
     };
     assert!(heavy.residual_ms(8.0).unwrap() < 0.0);
 }

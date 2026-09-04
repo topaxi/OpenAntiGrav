@@ -1,7 +1,9 @@
 //! AMD FidelityFX Super Resolution 3.1: the temporal upscaler.
 //!
-//! Eight compute passes, transliterated from AMD's MIT-licensed FidelityFX SDK
-//! `v1.1.4`. The route - port to WGSL, drive no native SDK - is
+//! Eight compute dispatches - upstream's own eight passes - transliterated
+//! from AMD's MIT-licensed FidelityFX SDK `v1.1.4`. They are encoded as *two*
+//! `wgpu` compute passes, split where the resolution changes, so each half
+//! carries its own timestamp pair; see [`ChainTimestamps`]. The route - port to WGSL, drive no native SDK - is
 //! [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md);
 //! what is ported, what deviates and why is
 //! [fsr3.md](../../../../docs/rendering/fsr3.md), which is the page to read
@@ -92,6 +94,35 @@ pub fn supported(adapter: &wgpu::Adapter) -> bool {
         .get_downlevel_capabilities()
         .flags
         .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+}
+
+/// One timestamp pair for each half of the chain.
+///
+/// **Two readings rather than one, because the chain is two costs.** Six of
+/// the eight dispatches run at the render extent or half of it and shrink when
+/// a resolution controller lowers it; `accumulate` and `rcas` run at
+/// presentation resolution and do not move at all. One pair over the lot
+/// answers "what did FSR 3.1 cost" and nothing else, and a dynamic-resolution
+/// budget that has to divide by the part that moves cannot use it - which is
+/// why [ADR-0042](../../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
+/// counted the whole reading as fixed and
+/// [ADR-0045](../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)
+/// is where that changed.
+///
+/// **Both or neither.** The two halves come from two rings, and a caller that
+/// claims one slot without the other hands `Session::feed_drs` a frame whose
+/// readings do not match - so this is one struct with two non-optional fields
+/// rather than two independent arguments, and [`Fsr3::render`]'s `bool` is
+/// what says whether both were written. The same shape, and the same reason,
+/// as `super::motion_blur::ChainTimestamps`.
+#[derive(Debug)]
+pub struct ChainTimestamps<'a> {
+    /// Around the six dispatches that scale with the render extent: the
+    /// input clear and prepare, the luma pyramid, the shading-change pyramid
+    /// and its resolve, reactivity, and luma instability.
+    pub scaled: wgpu::ComputePassTimestampWrites<'a>,
+    /// Around `accumulate` and `rcas`, both at presentation resolution.
+    pub presented: wgpu::ComputePassTimestampWrites<'a>,
 }
 
 /// One frame's worth of input.
@@ -682,18 +713,25 @@ impl Fsr3 {
         self.targets.as_ref()
     }
 
-    /// Runs every ported pass over `frame`.
+    /// Runs every ported pass over `frame`, reporting whether it encoded them.
     ///
-    /// `timestamp` times the whole chain. **One pair for eight dispatches**,
-    /// which is what the single compute pass below makes possible and is the
-    /// only shape available: `TIMESTAMP_QUERY_INSIDE_PASSES` would be needed
-    /// to bracket a dispatch, and it is not WebGPU-portable. So this measures
-    /// "what FSR 3.1 cost", which is the number a player choosing an upscaler
-    /// and a Steam Deck reading both want, rather than a per-pass breakdown
-    /// nobody has asked for yet. `None` leaves the pass untimed, which is what
-    /// a device without [`wgpu::Features::TIMESTAMP_QUERY`] gets.
+    /// `timestamps` times the chain in **two halves**, which is the shape
+    /// [`ChainTimestamps`] exists to explain: the six dispatches that scale
+    /// with the render extent, and the two that do not.
+    /// `TIMESTAMP_QUERY_INSIDE_PASSES` would be needed to bracket a *single*
+    /// dispatch and is not WebGPU-portable, so two compute passes is as fine
+    /// a breakdown as this can have and it is exactly the one both readers
+    /// want. `None` leaves both untimed, which is what a device without
+    /// [`wgpu::Features::TIMESTAMP_QUERY`] gets.
     ///
-    /// **The clear of `new_locks` is deliberately outside it.** That is a
+    /// **The return value is what a caller must gate `abandon` on.** A pair
+    /// claimed and never written does not read back as zero - its value is
+    /// unspecified and the query set is not cleared between frames - so a
+    /// caller that claimed two slots and got `false` here has to give both
+    /// back. `false` means neither pass was encoded, and the only way to it is
+    /// the missing-`targets` return below, which sits above both.
+    ///
+    /// **The clear of `new_locks` is deliberately outside both.** That is a
     /// render pass, and a timestamp pair cannot span two passes; it is one
     /// hardware fast clear against eight dispatches, so the reading is the
     /// chain either way.
@@ -703,8 +741,8 @@ impl Fsr3 {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
-        timestamp: Option<wgpu::ComputePassTimestampWrites<'_>>,
-    ) {
+        timestamps: Option<ChainTimestamps<'_>>,
+    ) -> bool {
         let dispatch = frame.dispatch;
         self.resize(device, dispatch.max_render, dispatch.upscale);
 
@@ -727,7 +765,7 @@ impl Fsr3 {
         self.previous = Some(wanted);
 
         if self.targets.is_none() {
-            return;
+            return false;
         }
         // Both parities, rebuilt only when the scene views or the sample count
         // move - `resize` above has already dropped them if an allocation did.
@@ -807,9 +845,19 @@ impl Fsr3 {
 
         let render = (dispatch.render.0.max(1), dispatch.render.1.max(1));
 
+        // **Two compute passes, split where the resolution changes.** Every
+        // dispatch in this one runs at the render extent or half of it, so its
+        // cost falls when a resolution controller lowers the extent; the two
+        // in the second do not. `drs::Cost` needs those apart to divide a
+        // budget by the half that moves - see
+        // [ADR-0045](../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md).
+        let (scaled, presented) = match timestamps {
+            Some(pair) => (Some(pair.scaled), Some(pair.presented)),
+            None => (None, None),
+        };
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("fsr3"),
-            timestamp_writes: timestamp,
+            label: Some("fsr3 scaled"),
+            timestamp_writes: scaled,
         });
         pass.set_bind_group(0, Some(&self.shared), &[]);
 
@@ -864,8 +912,15 @@ impl Fsr3 {
         pass.dispatch_workgroups(groups(render.0, GROUP), groups(render.1, GROUP), 1);
 
         // **Presentation resolution, where every pass above is at render
-        // resolution or half of it.** This is the one that decides a pixel.
+        // resolution or half of it.** This is the one that decides a pixel,
+        // and the boundary the two readings are taken either side of.
+        drop(pass);
         let upscale = (dispatch.upscale.0.max(1), dispatch.upscale.1.max(1));
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("fsr3 presented"),
+            timestamp_writes: presented,
+        });
+        pass.set_bind_group(0, Some(&self.shared), &[]);
         pass.set_pipeline(&self.accumulate);
         pass.set_bind_group(1, Some(&bind.accumulate), &[]);
         pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
@@ -873,6 +928,7 @@ impl Fsr3 {
         pass.set_pipeline(&self.rcas);
         pass.set_bind_group(1, Some(&bind.rcas), &[]);
         pass.dispatch_workgroups(groups(upscale.0, GROUP), groups(upscale.1, GROUP), 1);
+        true
     }
 
     /// Rebuilds every intermediate when either allocation moves.
@@ -903,6 +959,8 @@ impl Fsr3 {
 mod readback;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod timing_tests;
 // A second test file rather than more of `tests`, which is already past 900
 // lines against `just check-size`'s 1,000-line ratchet.
 #[cfg(test)]
