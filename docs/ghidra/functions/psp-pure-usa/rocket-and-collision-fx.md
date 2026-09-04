@@ -17,6 +17,7 @@ exist on this disc under any name (see that page).
 | `0x088561f0` | `Rocket_SpawnCraftExplosion` | 78 |
 | `0x0885f28c` | `Rocket_Update` | 80 |
 | `0x0888e340` | `ShipCollisionFx_Trigger` | 82 |
+| `0x08831ddc` | `Sound_Play` | 82 |
 
 ## The import trap applies here too, and the workaround is the same
 
@@ -198,12 +199,74 @@ of second-binary corroboration the confidence rubric weighs above a second
 reading of the same file - short of a runtime trace, which neither binary has
 for this function, so it does not clear the rubric's 85+ band.
 
+## `ShipCollisionFx_Trigger` also fires the `.COLLISIONS` sound cue, same as Pulse
+
+Answers, for `oag_game::audio::sfx::Cue::Collision`'s own doc comment (see
+`crates/game/src/audio/sfx.rs`), whether Pure calls the same `Sound_Play` site
+at the same edge Pulse does, and whether the gating matches. Not yet extended
+to the other eight `Cue` variants.
+
+**The cue exists on Pure's disc**, confirmed independently of anything in
+Ghidra: `just wad sounds "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad"`
+lists a `.COLLISIONS` cue (10 waveforms) in both `SHIP_CL` (bank `#471`) and
+`SHIP_ZM` (bank `#472`) - the same bare name, dot included, `sfx.rs`'s
+`BankName` mapping uses for Pulse's own `Cue::Collision`.
+
+**`ShipCollisionFx_Trigger`'s decompile (above) calls it at the same point
+Pulse's does.** Right after the cooldown gate (`func_0x0013492c(...) == 0`)
+passes - the same gate that guards the spark spawn - and before the
+damaged/no-damage branch, so it fires once for either branch, matching
+Pulse's "fired once per surviving kind-0/1 call" (`contact-response.md`):
+
+```c
+if (*(int *)(param_2 + 0x14c) != 0) {
+    func_0x0002dddc(0x3f800000, *(undefined4 *)(*(int *)(param_2 + 0x14c) + 0xd4),
+                    _DAT_00288f1c, 0, 0x24a780, 0);
+}
+```
+
+`0x24a780 + 0x08804000 = 0x08a4e780` (the import-relocation wart above applies
+to this literal too), read directly as memory rather than inferred from the
+constant: `.COLLISIONS\0`. `0x3f800000` is `1.0`, the same leading volume
+argument Pulse's own call carries.
+
+**`func_0x0002dddc` (`0x08831ddc`) renamed `Sound_Play`.** Its body is Pulse's
+`Sound_Play` (`0x089392b0`,
+[`sound.md`](../psp-pulse-usa/sound.md)) near-verbatim: the same six-parameter
+shape, the same linked-list insertion at the end (`entity+0x38`/`+0x34` here
+vs `entity+0x58`/`+0x54` there), the same `bit 0 of entity+0x3c` voice-steal
+gate (`+0x5c` there) and the same conditional bank-bake lookup
+(`_DAT+idx*4+0x110` here, `_DAT+idx*4+0x124` there) - offsets shifted by a
+constant throughout, consistent with a different struct layout in the older
+build rather than a logic change, the same shape `corroboration.md`'s other
+five matches show.
+
+**The cooldown constant is `0.8` too.** `ShipCollisionFx_Trigger` sets
+`*(param_2 + 0x144) = now + 0.8` on a successful gate pass, the same field the
+gate check reads - bit-for-bit the same literal Pulse's own function uses for
+the spark/sound shared cooldown (`contact-response.md`). Answers this
+thread's third `## Open` question for the `Collision` cue specifically: the
+gating matches, not just the call site's existence.
+
+Scored **82** for both the call site and the `Sound_Play` rename: decompilation
+only (the `jal` wart below blocks a verified caller for `ShipCollisionFx_Trigger`
+itself), but corroborated by an independently-recovered Pulse function of near
+identical shape and by the disc's own bank data agreeing on the cue name - the
+same evidence class `ShipCollisionFx_Trigger` itself was scored on, short of
+the rubric's 85+ band absent a runtime trace.
+
 ## What is not verified
 
 - **No call site for any of the four functions above**, blocked on the `jal`
-  relocation wart - see the trap section.
+  relocation wart - see the trap section. `Sound_Play`'s own callers beyond
+  `ShipCollisionFx_Trigger` are equally unfound for the same reason.
 - **Pure's Leach Beam trigger**, if it exists and if it shares
   `ShipCollisionFx_Trigger` at all.
+- **The other eight `Cue` variants** (`SpeedupPad`, `Absorb`, `Engine`,
+  `Shield`, `ShieldActive`, `Disengaging`, `Blowup`, `LockOn`) - only
+  `Collision` has had its Pure trigger read.
+- **Wipeout HD's PPC64/TOC binary** - untouched by this finding, per the
+  handover thread above.
 - **Runtime verification.** Nothing here has a PPSSPP leg; every score is
   capped by the decompilation-only ceiling for exactly that reason.
 - **The `func_0x00020a9c` / `func_0x0013492c` / `func_0x00090f34` family**
@@ -211,6 +274,11 @@ for this function, so it does not clear the rubric's 85+ band.
 
 ## History
 
+- **2026-09-04.** Added the `Sound_Play` section, answering
+  `every-sfx-trigger-is-a-pulse-reading-applied.md`'s first pick (`Collision`)
+  for Pure: the same call site, the same `.COLLISIONS` cue name (confirmed
+  against the disc's own bank data), and the same `0.8`-second cooldown as
+  Pulse. `FUN_08831ddc` renamed `Sound_Play`, confidence 82.
 - **2026-09-01.** Written answering
   `pures-particle-effects-decode-and-play-and-two.md`'s "no Pure trigger has
   been read" and "does `WO_ROCKET_EXPLO_TRACK` spell differently" questions.

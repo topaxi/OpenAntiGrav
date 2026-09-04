@@ -37,3 +37,4 @@
 0x088561f0	function	Rocket_SpawnCraftExplosion	78	rocket-and-collision-fx.md
 0x0885f28c	function	Rocket_Update	80	rocket-and-collision-fx.md
 0x0888e340	function	ShipCollisionFx_Trigger	82	rocket-and-collision-fx.md
+0x08831ddc	function	Sound_Play	82	rocket-and-collision-fx.md
