@@ -131,6 +131,7 @@ around `0x006bxxxx`:
 | `0x002d5710` | `RenderManager_Construct` | 76 |
 | `0x002d6300` | `RenderManager_FlushDrawQueue` | 90 |
 | `0x002d6a78` | `RenderManager_PrepareEye_q` | 55 |
+| `0x002d4b58` | `RenderManager_CompareQueueKeys` | 82 |
 | `0x002bebb0` | `MeshImporter_Construct` | 78 |
 | `0x00650330` | `Gcm_Init` | 88 |
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
@@ -266,20 +267,42 @@ instance itself as `param_1` - confirmed by field agreement, not guessed:
 1. Zeroes the two matrix-stack depth counters at `+0x620`/`+0x624` - the same
    counters the constructor sets to zero at startup, so this is a per-frame
    stack reset, not a one-time initialisation.
-2. Walks an array at `+0x630` of `{object, extra}` 8-byte pairs, index `0` to
-   the count held at `+0x44b0`, calling `(*object->vtable[0x1c])(object,
+2. **Sorts** the array at `+0x630` - see the correction below; this step was
+   missed on first read.
+3. Walks the (now sorted) array at `+0x630` of `{object, extra}` 8-byte pairs,
+   index `0` to the count held at `+0x44b0`, calling `(*object->vtable[0x1c])(object,
    render_manager, extra)` on each - a virtual dispatch through the queued
    object's own vtable, not RenderManager's.
-3. Zeroes `+0x44b0` at the end, so the same array at `+0x630` is empty again
+4. Zeroes `+0x44b0` at the end, so the same array at `+0x630` is empty again
    for the next frame's `Prepare`/`Flush` pair. Its capacity is not
    established - nothing read here bounds the allocation, only the live
    count.
 
-**The walk is strict index order, `0` to count, with no comparison against any
-per-entry value anywhere in the loop** - no distance term, no material/layer
-read, no branch keyed on the entry's contents at all. Whatever populates
-`+0x630` decides the draw order; this function only ever plays it back in
-insertion order.
+**2026-09-04 correction: the walk is strict index order with no
+comparison, but the walk is not the whole function.** The paragraph this
+replaces read the dispatch *loop* correctly - no distance term, no
+material/layer read, no branch keyed on the entry's contents inside the
+loop itself - and wrongly generalised that to the function as a whole.
+`RenderManager_FlushDrawQueue` opens by loading a function-pointer OPD
+(`PTR_PTR_008b3d94`, resolved by direct memory read as `{0x002d4b58,
+0x008ad4d8}` - a real OPD pair, not a decompiler artefact) and calling
+`FUN_00677088(param_1 + 0x630, count@+0x44b0, 8, comparator)`, where
+`FUN_00677088` is a one-line trampoline whose body the decompiler already
+resolves to a literal `qsort(...)` call. **`0x002d4b58` is
+`RenderManager_CompareQueueKeys`**: `return *(int*)(a+4) - *(int*)(b+4);` -
+an ascending sort on the entry's `+0x04` word, four instructions, the exact
+comparator shape as Pulse's `Gfx_CompareQueueKeys`
+([`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md)) on the identical `{item,
+key}` 8-byte layout. **This happens before the dispatch loop runs**, so
+"whatever populates `+0x630` decides the draw order" is wrong: the sort
+does, same as Pulse. What still isn't established is what values the `extra`
+word holds going into the sort (layer+depth, like Pulse, or something
+else) - that question moves to the enqueue site, unchanged from before.
+The comparator's own OPD carries TOC `0x008ad4d8`, the module-A TOC Ghidra
+already assumes correctly binary-wide - `0x002d4b58` sits below this page's
+`0x0032d5e0` module-A/B boundary, so its decompile is trustworthy at face
+value with no [`ps3-toc.py`](memory.md#every-function-has-its-own-toc-and-ghidra-uses-one-for-all-of-them)
+correction needed.
 
 **90**, runtime-verified 2026-08-26 (below): a live breakpoint confirmed `r3`
 at entry is the `RenderManager` instance and that `+0x44b0`/`+0x630` hold a
@@ -328,11 +351,21 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   array. Their `extra` fields also rise monotonically, in steps of exactly
   **2** (`0x58002a90, 92, 94, 96, 98, 9a`).
 - **Both families' `extra` sequences are sorted ascending with no
-  exceptions.** That is what plain sequential iteration over a backing
-  array produces; a spatial or material sort would not reliably come out
-  monotonic entry after entry across two unrelated object families in the
-  same frame. This is the strongest evidence on this page against a sort
-  existing anywhere upstream of the dispatch loop, not just inside it.
+  exceptions.** **2026-09-04: reread after finding
+  `RenderManager_CompareQueueKeys` (above) - this reads as evidence *for* a
+  sort, not against one.** Family 1's keys (`82`-`109`) and family 2's
+  (`0x58002a90`-`0x58002a9a`) sit three orders of magnitude apart, and the
+  small-key family occupies the low indices while the large-key family
+  follows - global ascending order across two unrelated object families is
+  exactly what a completed ascending sort on this key produces, not what
+  independent per-family enqueue order would be expected to coincide into.
+  Whether the breakpoint (at `RenderManager_FlushDrawQueue`'s entry,
+  `0x002d6300`) caught the array before or after its own internal `qsort`
+  call is not established either way from this trace alone, and does not
+  need to be: the sort's existence is read straight off the decompile
+  (above), not inferred from this data. The claim these two bullets
+  supported - "no sort exists anywhere upstream of the dispatch loop" - is
+  retracted regardless of which side of the `qsort` call this trace caught.
 - Neither vtable's constructors sit in the render layer's own address range
   (`0x00864cb8`'s at `0x0016xxxx`/`0x0046xxxx`, `0x00867e58`'s at
   `0x0020xxxx`/`0x005ebxxx`) - both outside `0x00279xxx`-`0x002ecxxx`. Below
@@ -342,7 +375,18 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   ([`SortRoot`](#what-was-deliberately-not-read),
   [`DetonatorBomb`](detonator-bomb.md)) that objects queue themselves with
   the render layer from gameplay-side code rather than the render layer
-  owning them.
+  owning them. **2026-09-04**: `0x00864cb8` has an xref from `0x008ab774`,
+  the same slot `FrontendRoot_Construct` (`0x00164270`) writes into its own
+  object with `*param_1 = PTR_PTR_008ab774` - related to `FrontendRoot`'s
+  vtable through at least one indirection, not established as identity (a
+  base-subobject or secondary vtable would produce the same xref). Not read
+  past that one field-agreement check (`FrontendRoot_Construct`'s own body
+  decompiles unreliably - register-allocation junk (`in_cr0`, `unaff_cr4`)
+  that reads as a bad decompile, not evidence). Below 50, unnamed; recorded
+  as a hypothesis rather than dropped, since a `FrontendRoot` instance
+  submitting draws mid-race (this was observed on a live Talon's Junction
+  breakpoint) needs explaining either way - HUD overlay during a race is the
+  obvious guess, and is exactly that, a guess.
 - A `Z2` (write watchpoint) armed on `instance+0x630` to try to catch the
   enqueue site's own PC got back an **empty reply**, not `OK` - RPCS3's GDB
   stub does not implement write watchpoints on this build. Recorded because
@@ -2445,16 +2489,19 @@ The whole table, in file order:
   inline command-buffer writing and finding it needs a search for RSX method
   constants inside whatever implements vtable slot `0x1c` for each queued
   class, not a call graph.
-- **Where `RenderManager+0x630` gets populated.** The dispatch/flush loop
-  only ever plays the array back in insertion order, and a live read of it
-  mid-race is now good (not certain) evidence that order is plain sequential
-  submission rather than a hidden sort - [see
-  above](#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support).
-  But nothing yet reads the enqueue site itself: no literal `0x630` store
-  exists anywhere in the render layer's address range, and a `Z2` write
-  watchpoint on the live instance came back unsupported by this RPCS3 GDB
-  stub build (empty reply), so the enqueue site needs bracketing or working
-  backward from an identified queued class rather than trapping the write.
+- **Where `RenderManager+0x630` gets populated.** **2026-09-04: the "plain
+  sequential submission, not a hidden sort" reading above is retracted** -
+  `RenderManager_FlushDrawQueue` calls `qsort` on the array via
+  `RenderManager_CompareQueueKeys` before the dispatch loop runs (see
+  [above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)), so
+  a sort does exist, just not inside the loop the earlier reading traced.
+  What's still open is what the entry's `+0x04` key actually encodes on this
+  disc (layer+depth like Pulse, or something else) - that answer lives at
+  the enqueue site, still unread: no literal `0x630` store exists anywhere
+  in the render layer's address range, and a `Z2` write watchpoint on the
+  live instance came back unsupported by this RPCS3 GDB stub build (empty
+  reply), so the enqueue site needs bracketing or working backward from an
+  identified queued class rather than trapping the write.
 - **What the two live-observed queued object classes are.** One vtable at
   `0x00864cb8`, one at `0x00867e58` - see the runtime section above for the
   constructor addresses. Neither sits in the render layer's own address

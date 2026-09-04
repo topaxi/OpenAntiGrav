@@ -16,14 +16,46 @@ method constants inside the render layer's own address range
 command-buffer writes and neither an import census nor a call graph finds
 them.
 
+**2026-09-04: whether HD orders draws the same way is answered - yes, same
+mechanism as Pulse.** Chasing the fresh lead above (RSX method constants)
+wasn't needed: rereading `RenderManager_FlushDrawQueue` (`0x002d6300`)
+directly turned up a `qsort` call the earlier renderer.md pass had missed,
+right before its dispatch loop, on the same `+0x630` array the loop walks.
+The comparator - `RenderManager_CompareQueueKeys` (`0x002d4b58`, confidence
+82, now named) - is `return *(int*)(a+4) - *(int*)(b+4);`, four instructions,
+the identical shape and identical `{item, key}` 8-byte entry layout as
+Pulse's `Gfx_CompareQueueKeys`. This retracts renderer.md's own prior
+conclusion from its 2026-08-26 runtime trace ("the strongest evidence...
+against a sort existing anywhere upstream of the dispatch loop") - that
+trace never advanced past the function's own `qsort` call, so it inferred
+"no sort" from a loop the sort had already run before reaching. (The
+trace's own key values, reread, actually favour a completed sort: two
+object families three orders of magnitude apart in key size sit in
+ascending-family order across all sixteen entries - not proof by
+themselves, since the decompile settles it regardless, but worth knowing
+the data doesn't cut the other way either.) Full evidence and the
+correction trail:
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order).
+
+**What the mechanism answer does not yet cover**: whether the entry's `+0x04`
+key encodes layer+depth the way Pulse's does, or something else - that
+depends on the enqueue site, still unread. One lead surfaced along the way,
+below 50 and not acted on: one of the two live-observed queued vtables
+(`0x00864cb8`) is related, through at least one indirection, to
+`FrontendRoot_Construct`'s own vtable slot - not established as the same
+vtable - which would suggest HUD/front-end elements are drawn through this
+same queue mid-race if it holds up. See renderer.md's "What was
+deliberately not read" for the field-agreement evidence and its limits.
+
 ## Open
 
 - What writes the depth override at `display+0x1180` is unread
 - What the `0x40000000` set holds and what its distance test does is unread
-- Whether HD (PS3) orders draws the same way is unread - `oag_render::mesh::rcs` leaves every PS3 chunk on `LAYER_DEFAULT`. `SortRoot.cpp` was tried as the lead and refuted 2026-08-25 (see above); no replacement lead has been read yet, only named
+- What HD's `+0x04` queue-entry key actually encodes (layer+depth like Pulse, or something else) is unread - the mechanism (an ascending `qsort` before dispatch) is now confirmed identical to Pulse's, but nothing yet reads what values populate the key
 - Where `RenderManager+0x630` (the queued-draw array) gets populated is unread - no literal `0x630` store exists anywhere in the render layer's address range, and a PS3 write watchpoint on the live instance came back unsupported
+- Whether the `0x00864cb8` queued vtable relates to `FrontendRoot`'s own vtable by identity or only by indirection (a base subobject or secondary vtable) is unread past one xref-agreement check (below 50 confidence)
 
 ## Next Steps
 
-- Search the render layer's own address range (`0x00279xxx`-`0x002ecxxx`) for RSX method constants around a sort/compare or key-comparison pattern, to find HD's actual draw-order mechanism now that `SortRoot.cpp` is refuted as the lead
-- Alternatively, work backward from `RenderManager_FlushDrawQueue` (`0x002d6300`)'s per-object vtable call (slot `0x1c`) to identify one of the two live-observed queued object classes (vtables at `0x00864cb8`, `0x00867e58`) and read its enqueue site for a key computation
+- Find the enqueue site that writes into `RenderManager+0x630` (bracketing around the dispatch loop, or working backward from one of the two live-observed queued classes' vtable-slot-`0x1c` implementation) to read what the `+0x04` key encodes
+- If `0x00864cb8` turns out to be `FrontendRoot`'s own vtable rather than merely related to it, that would mean HD draws its HUD/front-end through the same sorted queue as world geometry - worth confirming before assuming `oag_render::mesh::rcs`'s `LAYER_DEFAULT`-for-everything is the only gap versus Pulse's per-mesh layer
