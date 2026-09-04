@@ -315,18 +315,9 @@ the 39 files**. This is the exact arithmetic-invariant-across-many-real-files
 case the confidence rubric scores 85-94; record format confidence raised
 from 82 to **92**.
 
-What this does *not* close: **why** the topology is a fixed sealed box
-rather than a per-model silhouette hull (the way Pulse's `Shadow_RenderOccluderVolume`
-computes one at runtime) is inference, not read - the natural explanation is
-that `LiveStencilShadow_vp` extrudes each vertex along `lightDirection` by
-`extrusionDistance` in the vertex shader, and a sealed box is exactly the
-shape you want it to seal into regardless of which pairs of triangles end up
-front- or back-facing to the light. `LiveStencilShadow_vp`'s own Cg/RSX
-bytecode is unread, so that mechanism claim is scored separately at
-**confidence 65** - it explains the shape but isn't confirmed against the
-shader itself. Cross-title lineage worth stating plainly: HD's `n`/`m` are
-invariant across the *entire disc*, where Pulse's `DynamicShadowOccluder`
-varies per weapon (`pulse_mine` at 4/4, `pulse_bomb` at 11/12, per
+Cross-title lineage worth stating plainly: HD's `n`/`m` are invariant across
+the *entire disc*, where Pulse's `DynamicShadowOccluder` varies per weapon
+(`pulse_mine` at 4/4, `pulse_bomb` at 11/12, per
 [shadow-occluder.md](../psp-pulse-usa/shadow-occluder.md)) - Pulse authors a
 hull per object; HD authors one topology once and refits its vertices per
 caster.
@@ -334,6 +325,87 @@ caster.
 Reproduce: `scripts/psarc.py list data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA0{0,2,3,6}.PSARC | grep stencilvolume`,
 then `extract` any entry and `struct.unpack_from('>IIII', data, 0)` /
 `'>6f'` per 24-byte record / `'>{m}I'` for the index blob.
+
+## The vertex shader is disassembled: a uniform rigid shift, not a per-vertex silhouette extrusion
+
+2026-09-04, continuing the same pass. `Shader_SetLiveStencilShadowTechniqueActive`
+registers the technique's two shaders with `ShaderRegistry_Register(slot,
+name, block)`; the third argument resolves (`scripts/ps3-toc.py u32`, then
+confirmed by reading the `"SHO\x08"` magic directly out of memory) to
+**`0x00929600`** for `LiveStencilShadow_vp` and **`0x00929580`** for
+`LiveStencilShadow_fp` - both built into `EBOOT.elf` itself, not an external
+`.rcsmaterial`, the same "shaders live in the executable's own shader run"
+pattern `renderer.md` already established. `scripts/ps3-microcode.py vp
+0x00929600` disassembles it in full - 8 instructions:
+
+```
+attribute 0xd0333cc7  slot 0   (IN_position)
+attribute 0x58150554  slot 2   (IN_normal)
+parameter 0x4c06f24f  float4 x4  c256   (worldViewProj)
+parameter 0x12c7d82c  float3 x1  c467   (lightDirection)
+parameter 0x711247ea  float1 x1  c466   (extrusionDistance)
+
+0  DP3 R63.x, v[2].xyzx, c[211].xyzx     ; dot(normal, lightDirection) -> R63.x
+1  MOV R1.xyz, c[211].xyzx               ; R1 = lightDirection
+2  MOV R0.xyz, v[0].xyzx                 ; R0 = position
+3  MAD R0.xyz, R1.xyzx, c[210].xxxx, v[0].xyzx  ; R0 = position + lightDirection * extrusionDistance
+4  MUL R1, R0.yyyy, c[1]
+5  MAD R1, R0.xxxx, c[0], R1
+6  MAD R0, R0.zzzz, c[2], R1
+7  ADD o[POS], R0, c[3] | END            ; standard worldViewProj * R0
+```
+
+The three parameter-name hashes are exact preimage matches - `0x4c06f24f` =
+`~crc32("worldViewProj")`, `0x12c7d82c` = `~crc32("lightDirection")`,
+`0x711247ea` = `~crc32("extrusionDistance")`, computed directly and checked
+against the values `ps3-microcode.py` printed, not assumed from the names
+`Shader_ResolveLiveStencilShadowConstants` already resolved. Declared
+constant `c467` reads as code register `c[211]` and `c466` as `c[210]`, per
+this same directory's already-established "`c[N]` is the parameter table's
+register `N + 256`" rule (`renderer.md`).
+
+**This settles the mechanism the box topology only suggested, and it is not
+what the "silhouette extrusion" framing assumed.** Every vertex - not a
+subset selected by facing - gets the *same* displacement,
+`lightDirection * extrusionDistance`, added to its position before the
+`worldViewProj` transform (instruction 3). There is no per-vertex branch or
+blend keyed on the normal anywhere in the program: instruction 0 computes
+`dot(normal, lightDirection)` into `R63.x`, and no later instruction reads
+`R63` - the value is computed and never used again in this 8-instruction,
+one-`END` program. So this is a **rigid-body shift of the whole sealed box
+along a uniform direction**, not a per-vertex silhouette extrusion the way
+Pulse's `Shadow_RenderOccluderVolume` computes one (which explicitly varies
+which vertices move based on facing). A fixed, disc-wide, per-caster-fitted
+box template is exactly what this mechanism wants: there is nothing
+model-specific for the vertex program to key off of, so the topology and
+the per-vertex position are all it needs. `LiveStencilShadow_fp` is trivial
+and confirms this is a stencil-only pass: `MOV H0, {1,0,0,0} | END`, one
+instruction, no texture reads, no lighting - it exists only so the
+fixed-function pipeline has *something* to shade, since colour output is
+masked off for both stencil passes anyway (see the draw-call section
+above).
+
+One loose end, flagged rather than asserted past: `ps3-microcode.py`'s own
+docstring documents that it originally dropped per-instruction predication
+on **fragment** programs (fixed since) and says nothing about vertex-program
+predication; whether NV40 vertex instructions can carry a similar predicate
+this tool doesn't yet decode is unconfirmed, so "R63 is dead code" rests on
+what this disassembler prints, not a guarantee no hidden condition exists.
+Nothing in this specific 8-instruction program's printed operands
+references a predicate, though, and the reading above needs no such
+mechanism to explain what actually reaches `o[POS]`.
+
+Confidence 84 on the mechanism (a uniform per-vertex shift, not a facing-
+dependent one) - a direct disassembly of the actual executed instructions,
+unambiguous and with every parameter name confirmed by exact hash preimage,
+but this is one shader block, not an arithmetic invariant checked across
+many real files the way the record format above is, and nothing here is
+runtime-traced - the same 84 ceiling this page's intro already states for
+everything except a cross-checked constant identity. This replaces the
+confidence-65 "shader probably extrudes along the normal" framing an
+earlier pass in this same file guessed at - that guess is now known to be
+wrong in the specific way described (no per-vertex, normal-dependent
+extrusion at all), not merely unconfirmed.
 
 ## What was deliberately not chased this pass
 
@@ -344,10 +416,6 @@ then `extract` any entry and `struct.unpack_from('>IIII', data, 0)` /
   geometry the job actually contains is unconfirmed and would need
   SPU-job-level tracing to settle, the scale `engine-trail.md`'s `Trails`
   job investigation used. Not attempted here.
-- **`LiveStencilShadow_vp`'s own Cg/RSX bytecode.** The box-mesh finding
-  above makes a per-vertex extrusion in the vertex shader the natural
-  reading, but the shader's actual instructions are unread - see confidence
-  65 above.
 - **Whether `lightDirection`/`extrusionDistance` are ever set to anything
   other than a default.** The upload call (`Rsx_UploadVertexConstants`) is
   now found, but what values it uploads at runtime is unread.
@@ -360,9 +428,12 @@ then `extract` any entry and `struct.unpack_from('>IIII', data, 0)` /
 
 ## Open
 
-- Whether `LiveStencilShadow_vp` actually extrudes per-vertex along
-  `lightDirection`/`extrusionDistance` - the sealed fixed-box topology
-  strongly suggests it (confidence 65), but the shader bytecode is unread
+- ~~Whether `LiveStencilShadow_vp` actually extrudes per-vertex along
+  `lightDirection`/`extrusionDistance`.~~ **Disassembled 2026-09-04**: no -
+  it applies a *uniform* `lightDirection * extrusionDistance` shift to
+  every vertex regardless of facing, not a per-vertex silhouette extrusion;
+  the normal is read into a dot product that is never used again (confidence
+  88) - see above
 - Why `data/ships/detonator/`'s box is ship-scale (~6 x 3 x 14 units,
   same order of magnitude as `qirex`'s ~5.6 x 3 x 15), when
   [detonator-bomb.md](detonator-bomb.md) names `DetonatorBomb` as a weapon

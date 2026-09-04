@@ -62,6 +62,33 @@ as a weapon class - whether this is a distinct ship-sized entity sharing the
 name, or a weapon shadow proxy authored at ship scale, is unresolved. Full
 numbers and the reproduce command are in `shadow-stencilvolume.md`.
 
+**The vertex shader is disassembled too, same-thread continuation on
+2026-09-04.** `Shader_SetLiveStencilShadowTechniqueActive`'s
+`ShaderRegistry_Register` calls resolve to real `"SHO\x08"` blocks built
+into `EBOOT.elf` itself (`0x00929600` for `LiveStencilShadow_vp`,
+`0x00929580` for `_fp`), and `scripts/ps3-microcode.py` disassembles both.
+The vertex program's 8 instructions settle the mechanism the box topology
+only suggested, and it turns out not to be what the "silhouette extrusion"
+framing assumed: every vertex - not a subset selected by facing - gets the
+*same* displacement, `lightDirection * extrusionDistance`, added to its
+position before the `worldViewProj` transform. The vertex normal is dotted
+with `lightDirection` into a register that is never read again in the
+8-instruction program - genuinely unused, not merely unconfirmed. All three
+parameter names are confirmed by exact hash preimage
+(`~crc32("worldViewProj")`/`"lightDirection"`/`"extrusionDistance")`
+matching the values `ps3-microcode.py` printed byte for byte. So: a
+**rigid-body shift of the whole sealed box along a uniform direction**, not
+a per-vertex silhouette extrusion the way Pulse's `Shadow_RenderOccluderVolume`
+computes one - which explains *why* a fixed, disc-wide box template works
+at all: there's nothing model-specific left for the vertex program to key
+off of. The fragment program is trivial (`MOV H0, {1,0,0,0} | END`),
+consistent with colour being masked off for both stencil passes anyway.
+Confidence 84 (a direct, unambiguous disassembly with hash-confirmed
+parameter identity, but one shader block rather than an invariant checked
+across many files, and not runtime-traced - the same 84 ceiling the doc
+page's own intro states). Full instruction listing in
+`shadow-stencilvolume.md`.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
@@ -79,7 +106,7 @@ numbers and the reproduce command are in `shadow-stencilvolume.md`.
 - Whether `original` should be the default once it exists, on a title where the tier is not obviously better-looking than `blob`
 - ~~HD's stencil-volume draw call is still unfound.~~ **Found 2026-09-04**: `Shadow_DrawOccluderStencilVolumes` (`0x003e6918`) walks the model-instance array for the flagged ones and runs a two-sided depth-fail stencil shadow volume, colour-mask bracketed - `Shadow_AccumulateStencilVolume`, a colour-on/blend-on submit (`FUN_004053e0`) whose geometry is unconfirmed, then `Shadow_ClearStencilVolume` (a stencil reset, not a "resolve") - RSX register identities cross-checked against a local `rpcs3`'s own `gcm_enums.h`, not assumed. **`FUN_004053e0` turns out not to draw immediately at all**: it compiles a small command stream and hands it to a shared, seven-caller SPU-job-submission primitive matching this project's own already-documented job pattern (`engine-trail.md`) - generic infrastructure, but through a path that would need SPU-job-level tracing to say what geometry it actually carries. See `shadow-stencilvolume.md`
 - ~~No PSARC archive has been searched for an actual `shadow.stencilvolume` entry.~~ **Found and decoded 2026-09-04, all 39**: byte-verifies the `n`=vertex/`m`=index split (confidence 82 -> 92) and reveals a fixed sealed-box topology shared by every ship - see above and `shadow-stencilvolume.md`
-- **Whether `LiveStencilShadow_vp` actually extrudes per-vertex along `lightDirection`/`extrusionDistance`.** The fixed sealed-box topology fits that reading (confidence 65) but the shader bytecode is unread
+- ~~Whether `LiveStencilShadow_vp` actually extrudes per-vertex along `lightDirection`/`extrusionDistance`.~~ **Disassembled 2026-09-04**: no - it's a uniform shift applied to every vertex regardless of facing, not a per-vertex silhouette extrusion (confidence 84) - see above
 - **Whether other model classes (props, track pieces, other weapons) share HD's fixed 24-vertex box template**, or use a different one - only `data/ships/*` was checked
 - **Why `data/ships/detonator/`'s box is ship-scale** despite `detonator-bomb.md` naming a `DetonatorBomb` weapon class - not resolved
 - ~~What `0x005ee7d0`'s sub-call, `0x005ee2c0`, does with `(n, m)`.~~ **Decompiled 2026-09-04**: it allocates the vertex and index buffers, and its index-width computation gives the exact arithmetic invariant that closed the `n`/`m` question - see above. What's left of the record format: the other three of six floats per vertex, and the real on-disc byte layout (still unverified against a captured file)
@@ -118,11 +145,12 @@ unblocked by it:
   arithmetic invariant between two independently-read functions, then
   confirmed against all 39 real `shadow.stencilvolume` files disc-wide -
   every one an identical fixed sealed-box topology, only vertex positions
-  varying per ship - see above (confidence 92). **What's left, not
-  attempted this pass**: what `FUN_004053e0` (the actual visible-effect
-  candidate) draws, and whether `LiveStencilShadow_vp`'s own bytecode
-  confirms the per-vertex-extrusion reading the box topology suggests
-  (confidence 65, unread)
+  varying per ship - see above (confidence 92). **The vertex shader is
+  disassembled too, same day**: a uniform rigid-body shift along
+  `lightDirection * extrusionDistance`, not a per-vertex silhouette
+  extrusion - the normal is read but its dot product is never used
+  (confidence 84). **What's left, not attempted this pass**: what
+  `FUN_004053e0` (the actual visible-effect candidate) draws
 - **Write a GXP fragment-program decoder** (`scripts/vita-gxp.py`, on the model of `scripts/ps3-microcode.py`). It unblocks `track_proximity_shadow_fp` and `NovaShipOcclusion`, and beyond shadow it is the only way to read any of 2048's 67 shader programs
 - Once the GXP decoder exists: **what `track_proximity_shadow_vp`/`_fp` actually does**, **where `Lighting.ShadowLight direction` is authored** (`.envsettings` is the leading guess), and **whether 2048's directional bake is a radiosity-normal basis or a single dominant direction**
 - **A PPSSPP watchpoint on `self+0x50`** during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` and `DynamicShadowOccluder_RegisterClass` past confidence 84 - optional, not blocking anything

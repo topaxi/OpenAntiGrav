@@ -319,10 +319,15 @@ Two things follow for the setting:
   byte-identical across every file (confidence 82 -> 92). This retracts an
   earlier reading of the min/max fields as a "bounding box": the offsets
   they actually reduce over are the vertex *normal*, not the position, per
-  this closed layout. The sealed-box shape is consistent with per-vertex
-  extrusion happening in `LiveStencilShadow_vp` rather than a CPU-computed
-  silhouette hull the way Pulse's runtime reader builds one, but that
-  mechanism is unconfirmed (confidence 65 - the shader bytecode is unread).
+  this closed layout. **The vertex shader is disassembled too, same day**:
+  `LiveStencilShadow_vp` applies a *uniform* `lightDirection *
+  extrusionDistance` shift to every vertex regardless of facing - the
+  normal is read into a dot product that is never used again - so this is
+  a rigid-body shift of the sealed box, not a per-vertex silhouette
+  extrusion the way Pulse's runtime reader builds one (confidence 84,
+  disassembly with hash-confirmed parameter names). This explains why a
+  fixed, disc-wide box template works: there's nothing model-specific left
+  for the vertex program to key off of.
   See [`shadow-stencilvolume.md`](../ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md)
   for the full numbers.
 
