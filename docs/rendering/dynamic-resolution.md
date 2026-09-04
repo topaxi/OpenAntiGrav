@@ -257,7 +257,7 @@ resolution is off, and the menu row says so through the existing `disabled_by`
 mechanism rather than advertising a controller driven by a signal pinned to the
 refresh.
 
-### Three properties the timer holds, and why each is load-bearing
+### Four properties the timer holds, and why each is load-bearing
 
 - **A reading names its own frame**, rather than being assumed to describe the
   last one. That is what makes the load guard possible at all: `meter.clear()`
@@ -267,6 +267,25 @@ refresh.
 - **Nothing blocks.** Waiting on the map would drain the pipeline being
   measured. A frame with no free slot is simply not measured - a gap in the
   samples, where a reused slot would be a wrong number in them.
+- **A ring is drained, never read one reading at a time.** Since ADR-0042 the
+  frame loop reads four rings and trusts only readings that name the same
+  frame, and that pairing has a failure mode a single ring never had. The map
+  callbacks for one submission fire in whichever `device.poll` runs after the
+  GPU finishes it, and the loop polls once per ring in turn - so a completion
+  landing between two of those polls reaches the later ring on this frame and
+  the earlier ring on the next. If the earlier ring then hands back one
+  reading per frame, it carries a backlog of one from that moment on: it
+  returns the older reading on every call, its reading is a frame behind the
+  other three's on every call, and nothing short of a frame with no arrival
+  at all - which a vsync-paced loop at a steady rate never has - resyncs
+  them. Every frame after that is a mismatch, `Cost::fixed` reads as
+  "not measured yet", `Controller::record` is never called, and the render
+  scale freezes wherever it was. `PassTimer::drain` takes everything that is
+  ready in one call, so a backlog cannot form and two rings can disagree by at
+  most the one frame the race itself costs, and are back in step on the next.
+  `Session::read_timing_and_feed_drs` feeds every drained scene reading in
+  order, oldest first, since a backlog of readings is a backlog of frames and
+  the controller's cooldown counts readings as frames.
 - **No capture path is timed.** A capture has to be reproducible rather than
   fast; see the trap on the thread. `OAG_RENDER_BENCH`'s figure is the CPU-side
   encode cost, which is a different number about a different thing.

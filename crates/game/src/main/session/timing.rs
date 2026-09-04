@@ -63,58 +63,112 @@ impl Session {
         frame_seconds: Option<f32>,
         drs_limits: drs::Limits,
     ) {
-        let read = |timer: &mut Option<oag_render::timing::PassTimer>, device| {
-            timer.as_mut().and_then(|timer| timer.read(device))
+        // **Drained, not read one at a time.** `PassTimer::read` hands back
+        // the oldest ready reading and leaves the rest for next frame, and
+        // that is exactly what let the controller go silent for a whole
+        // race: the four rings are polled one after another, so a GPU
+        // completion landing between two of those polls reaches the later
+        // ring this frame and the earlier ring next frame - after which the
+        // earlier ring holds a backlog of one, returns the older reading on
+        // every call, and its reading never names the same frame as the
+        // other three again until a frame arrives with nothing ready at all.
+        // Under vsync at a steady rate that is never. `drain` takes
+        // everything that is ready, so no ring can carry a backlog and two
+        // rings can disagree by at most the one frame the race itself costs.
+        // See `PassTimer::drain`.
+        let drain = |timer: &mut Option<oag_render::timing::PassTimer>, device| {
+            let mut readings = [None; oag_render::timing::PassTimer::SLOTS];
+            if let Some(timer) = timer.as_mut() {
+                timer.drain(device, &mut readings);
+            }
+            readings
         };
-        let scene_reading = read(&mut self.pass_timer, &self.gpu.device);
-        let blur_reading = read(&mut self.blur_timer, &self.gpu.device);
-        let hd_bloom_reading = read(&mut self.hd_bloom_timer, &self.gpu.device);
-        let upscale_reading = read(&mut self.upscale_timer, &self.gpu.device);
+        let scene_readings = drain(&mut self.pass_timer, &self.gpu.device);
+        let blur_readings = drain(&mut self.blur_timer, &self.gpu.device);
+        let hd_bloom_readings = drain(&mut self.hd_bloom_timer, &self.gpu.device);
+        let upscale_readings = drain(&mut self.upscale_timer, &self.gpu.device);
         // The scene's own fact, not the settings row: `render_profile` names
         // no `hd_bloom` field at all, because whether the chain exists is a
         // per-*circuit* decision baked into `race::Scene::new`, not a player
         // setting. See `race::Scene::has_hd_bloom`.
         let has_hd_bloom = matches!(&self.stage, Stage::Race(stage) if stage.scene.has_hd_bloom());
 
-        if let Some(reading) = &upscale_reading
-            && reading.frame > self.stall_frame
-            && reading.seconds > 0.0
-        {
-            self.upscale_cost.record(reading.seconds);
-            trace!(
-                "fsr3 chain: frame {} took {:.3} ms, read on frame {}",
-                reading.frame,
-                reading.seconds * 1000.0,
-                self.frame_index
+        for reading in upscale_readings.iter().flatten() {
+            if reading.frame > self.stall_frame && reading.seconds > 0.0 {
+                self.upscale_cost.record(reading.seconds);
+                trace!(
+                    "fsr3 chain: frame {} took {:.3} ms, read on frame {}",
+                    reading.frame,
+                    reading.seconds * 1000.0,
+                    self.frame_index
+                );
+            }
+        }
+        for reading in blur_readings.iter().flatten() {
+            if reading.frame > self.stall_frame && reading.seconds > 0.0 {
+                self.blur_cost.record(reading.seconds);
+                trace!(
+                    "motion blur chain: frame {} took {:.3} ms, read on frame {}",
+                    reading.frame,
+                    reading.seconds * 1000.0,
+                    self.frame_index
+                );
+            }
+        }
+        for reading in hd_bloom_readings.iter().flatten() {
+            if reading.frame > self.stall_frame && reading.seconds > 0.0 {
+                self.hd_bloom_cost.record(reading.seconds);
+                trace!(
+                    "hd bloom chain: frame {} took {:.3} ms, read on frame {}",
+                    reading.frame,
+                    reading.seconds * 1000.0,
+                    self.frame_index
+                );
+            }
+        }
+        // Oldest first, which is the order `drain` fills in: a backlog of
+        // scene readings is a backlog of frames, and the controller's
+        // cooldown and patience count readings as frames. Each is paired
+        // with this frame's wall clock, which a backlog makes two frames of
+        // skew rather than one - rare now that draining is what stops a
+        // backlog forming, and the residual only ever tightens on a reading
+        // the frame can prove, so a stale pairing costs at most one
+        // observation of the same upper bound twice.
+        for reading in scene_readings.iter().flatten() {
+            self.feed_drs(
+                reading,
+                &blur_readings,
+                &hd_bloom_readings,
+                &upscale_readings,
+                has_hd_bloom,
+                render_profile,
+                frame_seconds,
+                drs_limits,
             );
         }
-        if let Some(reading) = &blur_reading
-            && reading.frame > self.stall_frame
-            && reading.seconds > 0.0
-        {
-            self.blur_cost.record(reading.seconds);
-            trace!(
-                "motion blur chain: frame {} took {:.3} ms, read on frame {}",
-                reading.frame,
-                reading.seconds * 1000.0,
-                self.frame_index
-            );
-        }
-        if let Some(reading) = &hd_bloom_reading
-            && reading.frame > self.stall_frame
-            && reading.seconds > 0.0
-        {
-            self.hd_bloom_cost.record(reading.seconds);
-            trace!(
-                "hd bloom chain: frame {} took {:.3} ms, read on frame {}",
-                reading.frame,
-                reading.seconds * 1000.0,
-                self.frame_index
-            );
-        }
-        let Some(reading) = &scene_reading else {
-            return;
-        };
+    }
+
+    /// One scene reading into the controller, with the other rings' readings
+    /// for the same frame beside it.
+    ///
+    /// Split from [`Self::read_timing_and_feed_drs`] so the loop over a
+    /// drained backlog stays one line; the body is the per-frame half.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "three rings' readings and three frame-level facts, all of \
+                  which the caller computed once for the whole drain"
+    )]
+    fn feed_drs(
+        &mut self,
+        reading: &oag_render::timing::Reading,
+        blur_readings: &[Option<oag_render::timing::Reading>],
+        hd_bloom_readings: &[Option<oag_render::timing::Reading>],
+        upscale_readings: &[Option<oag_render::timing::Reading>],
+        has_hd_bloom: bool,
+        render_profile: &settings::RenderProfile,
+        frame_seconds: Option<f32>,
+        drs_limits: drs::Limits,
+    ) {
         if reading.frame > self.stall_frame {
             self.scene_cost.record(reading.seconds);
             // **Only the parts that name this same frame.** The four rings
@@ -122,15 +176,16 @@ impl Session {
             // the same encoder, so in a running race they come back together;
             // a mismatch means one of them skipped a slot, and a `Cost`
             // assembled across two frames is not a frame's cost.
-            let matching = |other: &Option<oag_render::timing::Reading>| {
-                other
-                    .as_ref()
-                    .filter(|other| other.frame == reading.frame)
+            let matching = |others: &[Option<oag_render::timing::Reading>]| {
+                others
+                    .iter()
+                    .flatten()
+                    .find(|other| other.frame == reading.frame)
                     .map(|other| other.seconds)
             };
-            let blur = matching(&blur_reading).unwrap_or(0.0);
-            let hd_bloom = matching(&hd_bloom_reading);
-            let fixed = matching(&upscale_reading);
+            let blur = matching(blur_readings).unwrap_or(0.0);
+            let hd_bloom = matching(hd_bloom_readings);
+            let fixed = matching(upscale_readings);
             // **Absent-because-it-did-not-run is zero; absent-because-it-was-not-measured
             // is a skipped frame**, and the two are told apart by whether
             // anything temporal is resolving at all. Treating an unmeasured

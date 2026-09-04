@@ -237,6 +237,55 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
             reading.seconds * 1000.0
         );
     }
+
+    // **Two frames submitted with nothing read between them come back in one
+    // `drain`, oldest first.** `read` would hand back one per call and leave
+    // the other waiting - which is the behaviour that lets a ring fall a frame
+    // behind its neighbours for good; see `PassTimer::drain`.
+    for frame in [13u64, 14] {
+        timer.begin(frame);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("pass timer test"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: timer.writes(),
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        timer.resolve(&mut encoder);
+        queue.submit(Some(encoder.finish()));
+    }
+    let mut drained = [None; PassTimer::SLOTS];
+    let mut frames = Vec::new();
+    for _ in 0..1_000 {
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the GPU");
+        timer.drain(&device, &mut drained);
+        frames.extend(drained.iter().flatten().map(|reading| reading.frame));
+        if frames.len() >= 2 {
+            break;
+        }
+    }
+    assert_eq!(
+        frames,
+        [13, 14],
+        "{name}: a drain hands back every ready reading, oldest first"
+    );
+    timer.drain(&device, &mut drained);
+    assert!(
+        drained.iter().all(Option::is_none),
+        "{name}: a drain on an empty ring leaves the array empty"
+    );
 }
 
 /// A device without the feature gets no timer rather than a validation error

@@ -226,6 +226,17 @@ counts in findings 4 and 5 are work removed, not a profile.
   `reset` on the sequence's first frame only, so a view change or a
   respawn hands the resolve a history of a different scene. It has not been
   seen because nothing cuts the camera mid-race yet.
+- **~~A reset did not clear the accumulation it reads.~~ Fixed 2026-09-04**,
+  found by a static diff against upstream's `resetAccumulation` path rather
+  than by playing: `Fsr3::render` forgot the previous constants and stopped
+  there, where upstream also clears the accumulation SRV. Into targets that
+  already ran a sequence - every race after the first, since `Fsr3` outlives
+  a `Scene` - the reset frame read "fully accumulated" everywhere and blended
+  a zeroed history colour in at that weight, so a restarted race opened on
+  darkened frames. The port now clears the half it reads with an empty render
+  pass on every frame-zero; `docs/rendering/fsr3.md` records it as a
+  deviation-in-mechanism and `reset_tests.rs` pins it. **The camera-cut item
+  above gets this for free** once something sets `reset` mid-race.
 - **`compute_motion_divergence` divides by zero on a perfectly static camera.**
   `saturate(reprojected_velocity / velocity_4k)` with both zero is `0/0`.
   Upstream has the same expression and relies on `saturate(NaN)` returning zero;

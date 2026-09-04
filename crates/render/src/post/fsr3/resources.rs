@@ -221,9 +221,19 @@ pub struct PingPong {
 
 impl PingPong {
     fn new(device: &wgpu::Device, label: &str, size: (u32, u32), format: TextureFormat) -> Self {
+        Self::with_usage(device, label, size, format, USAGE)
+    }
+
+    fn with_usage(
+        device: &wgpu::Device,
+        label: &str,
+        size: (u32, u32),
+        format: TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> Self {
         Self {
-            a: Target::new(device, &format!("{label} 1"), size, format, 1),
-            b: Target::new(device, &format!("{label} 2"), size, format, 1),
+            a: Target::with_usage(device, &format!("{label} 1"), size, format, 1, usage),
+            b: Target::with_usage(device, &format!("{label} 2"), size, format, 1, usage),
         }
     }
 
@@ -318,6 +328,14 @@ pub struct Targets {
     /// render-resolution dispatch position. Sized presentation-wide, only the
     /// top-left corner would ever be written and every read past it would come
     /// back zero, which reads as "this pixel has no history" everywhere.
+    ///
+    /// **[`CLEARABLE`], because a reset has to wipe the half this frame
+    /// reads.** Upstream's `resetAccumulation` clears the accumulation SRV
+    /// before the frame runs, so that every texel reads as having no history
+    /// and `accumulate` takes its initial-sample path; without that, a reset
+    /// frame reads whatever depth of history the *previous* race left in the
+    /// texture and blends its zeroed history colour in at that weight. See
+    /// `Fsr3::render`.
     pub accumulation: PingPong,
     /// `INTERNAL_UPSCALED_COLOR_1`/`_2`, at presentation resolution.
     pub internal_upscaled: PingPong,
@@ -412,7 +430,13 @@ impl Targets {
             shading_change: Target::new(device, "fsr3 shading change", half, UNORM, 1),
 
             luma_history: PingPong::new(device, "fsr3 luma history", render, COLOUR),
-            accumulation: PingPong::new(device, "fsr3 accumulation", render, UNORM),
+            accumulation: PingPong::with_usage(
+                device,
+                "fsr3 accumulation",
+                render,
+                UNORM,
+                CLEARABLE,
+            ),
 
             internal_upscaled: PingPong::new(device, "fsr3 internal upscaled", upscale, COLOUR),
             new_locks: Target::with_usage(device, "fsr3 new locks", upscale, UNORM, 1, CLEARABLE),

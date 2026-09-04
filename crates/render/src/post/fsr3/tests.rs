@@ -390,12 +390,12 @@ fn a_jittered_still_scene_converges_on_a_history_it_trusts() {
 
 /// The fixture's extent: small enough that a wrong mip count or a wrong
 /// rounding shows up, and it already has - see `resources::mip_ceiling`.
-const FIXTURE: (u32, u32) = (8, 4);
+pub(super) const FIXTURE: (u32, u32) = (8, 4);
 
 /// A depth buffer with no two texels alike, so that a 3x3 neighbourhood's
 /// nearest, its centre and its plain maximum are three different numbers
 /// everywhere they can be.
-fn depth_pattern() -> Vec<f32> {
+pub(super) fn depth_pattern() -> Vec<f32> {
     (0..FIXTURE.0 * FIXTURE.1)
         // 0.10 .. 0.72, monotonic along the scanline and stepped between rows,
         // so a neighbourhood is never flat and never symmetric.
@@ -405,7 +405,7 @@ fn depth_pattern() -> Vec<f32> {
 
 /// A colour buffer with a luma gradient across it, so that the five-tap
 /// neighbourhood the shading-change pass compares is never flat either.
-fn colour_pattern() -> Vec<[f32; 3]> {
+pub(super) fn colour_pattern() -> Vec<[f32; 3]> {
     (0..FIXTURE.0 * FIXTURE.1)
         .map(|i| {
             let t = 0.15 + 0.02 * i as f32;
