@@ -26,6 +26,8 @@
 
 **A dead end worth not repeating**: the `507` repetition of 2048's Nova technique names is a **linker artifact**, not a material count. The full technique list is emitted once per translation unit that references it, interleaved with that unit's own debug strings (`Backend/General/MPTournament_RaceManager.cpp` and friends), at variable stride. An earlier version of `shadows.md` read it as "507 shader sets" and was wrong. The check that settles it: unrelated neighbours in the same table (`Tournament` 16, `Elimination` 3) do not repeat, so it is not a whole-pool duplication either.
 
+**HD's own `LiveStencilShadow`/`shadow.stencilvolume` path is traced now too, 2026-09-04** - [`shadow-stencilvolume.md`](../docs/ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md). The shader technique is a real registered material with three named constants (`worldViewProj`, `lightDirection`, `extrusionDistance`) - `lightDirection` being named at all is new evidence HD's version may take a light as input, unlike Pulse's `Shadow_RenderOccluderVolume`, which reads none. A per-model flag bit (`self+0xe4`, bit `0x2`) builds a path by normalizing the model's own path and appending the **fixed literal** `shadow.stencilvolume` - not a per-model name - then loads it through a `Crc32`-hashed find-or-load cache into a parsed record array plus a computed bounding box. The record shape rhymes with Pulse's `.vex` occluder payload (leading counts, a geometry array, a derived bbox) but is not byte-identical (flat 24-byte/6-float records here, versus Pulse's split 32-byte face / 16-byte vertex records). **A mechanism I got wrong on the first pass and caught before writing it down**: two of the string constants used nearby in the same decompiled function (`TrailDriveLevel`, `uvOffset`, `/surfacefx.rcsmodel` and others) looked at first like they belonged to the same path-building block: they don't. They're unrelated material-parameter names hashed elsewhere in the same (very large, multi-purpose) function, and only line up with the shadow path in the decompiler's text ordering, not in the actual instruction addresses. Caught by re-checking `scripts/ps3-toc.py resolve` against the exact instruction issuing each load rather than trusting proximity in the decompiled text - the same category of mistake this file's own "correction" paragraph above already warns about.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
@@ -41,6 +43,9 @@
 - ~~Where the light direction for a Pulse shadow comes from.~~ **Answered 2026-09-03**: nowhere. `Shadow_RenderOccluderVolume` derives it from the occluder's own local axis, transformed by its own world matrix - Pulse never reads a light for this, consistent with the disc having no light rig to read one from
 - Whether the 10 world-space occluders are a track feature at all, or authored-and-inert the way `DirectionalLight` turned out to be. Their bbox extents run to 882 units, so they are not craft
 - Whether `original` should be the default once it exists, on a title where the tier is not obviously better-looking than `blob`
+- **HD's stencil-volume draw call is still unfound.** `shadow-stencilvolume.md` names the technique and its trigger but not who reads `lightDirection`/`extrusionDistance` at draw time or issues the RSX draw - the inline-command-buffer problem already blocks a call-graph search here, same as `renderer.md`'s draw path
+- **No PSARC archive has been searched for an actual `shadow.stencilvolume` entry.** Finding one is what would turn `shadow-stencilvolume.md`'s parsed-record hypothesis (confidence 60) into a closure test
+- Whether HD's `0x003ee398`/`0x005ee7d0` (the hashed resource cache and its record parser) are shared with other resource kinds via their vtable slots, or exclusive to `shadow.stencilvolume`
 
 **`Ile` and `Nova` are two generations of Studio Liverpool's baked-lighting pipeline, and 2048 replaced the first with the second.** HD's lightmaps are `ile_mesh_combine_*-lmap.gtf`; 2048's are `nova_mesh_combine_*-lmap.gxt`, **941 of 941**, the thirteen ported HD/Fury DLC circuits included - not one HD lightmap survived. HD's executable has no `nova` string and 2048's has no `Ile` string, so the two never coexist. The material flags map one to one: HD's `IleLightmap`/`IleVertex` is 2048's `DirectionalNovaTexture`/`DirectionalNovaVertex` - **which means [`rcsmaterial.md`](../docs/formats/rcsmaterial.md)'s already-documented `Ile*` tokens now have a name for what they belong to.** Every ported circuit was baked twice, forward and reversed. Confidence 90. What Nova actually *computes* is unread and unassessed.
 
@@ -59,8 +64,22 @@ not a reverse-engineering one, and lives in its own thread:
 What's left here is the RE work that thread doesn't need and isn't
 unblocked by it:
 
+- ~~HD's `LiveStencilShadow`/`shadow.stencilvolume` path needs the same kind
+  of Ghidra pass this thread just gave Pulse's `0x3c3`, done on the HD binary
+  specifically - not attempted here.~~ **Traced 2026-09-04**: the shader
+  technique (`Shader_ResolveLiveStencilShadowConstants`,
+  `Shader_SetLiveStencilShadowTechniqueActive`) and the per-model trigger (a
+  flag bit builds a fixed-named `shadow.stencilvolume` sibling path, loaded
+  through a hashed resource cache into a record array plus a computed
+  bounding box) are both found - see
+  [shadow-stencilvolume.md](../docs/ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md).
+  **What's left, not attempted this pass**: the draw call itself (who reads
+  `lightDirection`/`extrusionDistance` and issues the RSX draw - the inline
+  command-buffer problem `renderer.md` already documents applies here too),
+  and finding an actual `shadow.stencilvolume` entry in one of the seven PSARC
+  archives to turn the parsed record shape from a hypothesis into a closure
+  test the way `shadow_occluder_ground_truth.rs` does for Pulse
 - **Write a GXP fragment-program decoder** (`scripts/vita-gxp.py`, on the model of `scripts/ps3-microcode.py`). It unblocks `track_proximity_shadow_fp` and `NovaShipOcclusion`, and beyond shadow it is the only way to read any of 2048's 67 shader programs
-- **HD's `LiveStencilShadow`/`shadow.stencilvolume` path** needs the same kind of Ghidra pass this thread just gave Pulse's `0x3c3`, done on the HD binary specifically - not attempted here
 - Once the GXP decoder exists: **what `track_proximity_shadow_vp`/`_fp` actually does**, **where `Lighting.ShadowLight direction` is authored** (`.envsettings` is the leading guess), and **whether 2048's directional bake is a radiosity-normal basis or a single dominant direction**
 - **A PPSSPP watchpoint on `self+0x50`** during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` and `DynamicShadowOccluder_RegisterClass` past confidence 84 - optional, not blocking anything
 - **What actually decides the padded-bbox field's remaining exceptions** (the 3-of-17 value-groups and the 2-of-14 `min.y` nodes) - file/build-version, node name and specific value are all now ruled out (see above), so the driver is something not yet identified; likely needs the export tool's own behaviour, not more disc-side sweeping
