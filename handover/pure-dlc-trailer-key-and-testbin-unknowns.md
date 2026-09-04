@@ -42,7 +42,32 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
 - **`TEST.bin`**'s actual role is still unknown - not load-bearing for
   decryption (verified: all seven packs decrypt correctly without touching
   it), most likely something the real PSP's savedata-signature check needs
-  since `pi.wad` is packaged as savedata.
+  since `pi.wad` is packaged as savedata. **2026-09-04, one narrowing pass,
+  still unresolved**: `pure-eu/BOOT.BIN` does carry the string
+  `"msroot:%s/TEST.BIN"` at `0x08a76c9c`, sitting in a fixed 20-byte-stride
+  table with `"msroot:%s/PI.WAD"` (`0x08a76c4c`), `ICON0.PNG` (`c60`),
+  `PARAM.SFO` (`c74`) and `PIC1.PNG` (`c88`) - the standard PSP savedata
+  plugin file set, `TEST.BIN` included, so this is consistent with the
+  savedata-signature hypothesis rather than new evidence for it.
+  `scripts/resolve-psp-imports.py --modules` also resolves
+  `sceUtilitySavedataInitStart`/`Update`/`GetStatus`/`ShutdownStart` under
+  `pure-eu/BOOT.BIN`'s `sceUtility` library (4 of its 21 imports) - the
+  official savedata utility genuinely is linked in, not just plausible from
+  the packaging shape. **What did not work**: neither Ghidra's `get_xrefs_to`
+  nor an exhaustive `jal`-mnemonic instruction search across the whole
+  485,915-instruction program found a single caller of that import-stub
+  address, the `TEST.BIN`-string address, or any address in its table -
+  checked against a known-must-be-called control
+  (`sceCtrlReadBufferPositive`, same zero result), so this is a gap in how
+  this binary's import-stub calling convention shows up to `search_instructions`/
+  `get_xrefs_to` (likely an indirection Ghidra's auto-analysis hasn't
+  resolved into direct `jal`s), not evidence the game never calls savedata.
+  Finding the real call site needs someone who knows this project's PSP
+  import-stub convention well enough to work around that gap, then reading
+  the `SceUtilitySavedataParam` populated there - its `key[16]` field is
+  the PSP SDK's standard savedata-encryption key slot and a strong
+  candidate for "the region-specific key embedded in BOOT.BIN" the trailer
+  bullet above is chasing, but this pass did not reach it.
 - **Region-selectable DLC**, raised independently while this thread's evidence
   was being gathered: Pure's packs (and potentially others, per
   [ADR-0021](../docs/architecture/adr/0021-region-independent-dlc.md)'s
@@ -65,7 +90,12 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
 - Whoever chases the region-conversion or savedata-signature questions above
   needs the upstream tool's own region-converter path re-read alongside a
   disassembly of `sceNpDrm`'s savedata check in `BOOT.BIN` - out of scope
-  for a casual follow-up.
+  for a casual follow-up. **Narrower now**: the target is specifically the
+  call site that populates a `SceUtilitySavedataParam` and calls
+  `sceUtilitySavedataInitStart` in `pure-eu`/`pure-usa` `BOOT.BIN` - resolving
+  its `key[16]` field would very likely answer both the trailer-key and
+  `TEST.bin` questions at once. Reaching it needs working around the
+  import-stub xref gap noted above, not a fresh byte-pattern search.
 - If JP/US copies of any pack turn up, diff their decrypted payload against
   the EU one to settle the region-selectable-DLC question one way or the
   other before building any UI for it.
