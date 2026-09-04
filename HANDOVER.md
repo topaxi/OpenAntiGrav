@@ -161,7 +161,7 @@ file does not need to carry its own.
   - 29 of 29 pass, 76s.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,756 tests (2026-09-02)** in 4.6s,
+- **Gate status:** last measured green at **2,949 tests (2026-09-04)** in 13.8s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -

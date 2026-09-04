@@ -333,6 +333,55 @@ fn every_authored_cue_but_the_disc_s_own_five_bugs_resolves_in_its_bank() {
     println!("{resolved} of {} authored pairs resolve", emitters.len());
 }
 
+/// The ordering that licenses `Cone::wide` and `Cone::narrow` being derived.
+///
+/// `+0x04` is `40` degrees on every authored cone and `+0x00` is never below it.
+/// Without this the module's naming is a census nobody re-runs, and a title that
+/// authored the two the other way round would decode swapped in silence - the
+/// evidence page scores "which angle is which" at 75 precisely because the write
+/// site is unread, so the ordering is all there is to hold onto.
+#[test]
+#[ignore = "needs a disc image under data/images/"]
+fn every_cone_authors_forty_degrees_at_0x04_and_no_less_at_0x00() {
+    let Some(emitters) = all_emitters() else {
+        return;
+    };
+    let cones: Vec<_> = emitters
+        .iter()
+        .filter_map(|(name, e)| e.cone.map(|cone| (name, e, cone)))
+        .collect();
+    assert_eq!(cones.len(), TOTAL_CONES);
+    let mut widths = BTreeSet::new();
+    for (name, emitter, cone) in &cones {
+        assert!(
+            (cone.angle_b.to_degrees() - 40.0).abs() < 1e-3,
+            "{name}: {} authors {} degrees at +0x04",
+            emitter.cue,
+            cone.angle_b.to_degrees()
+        );
+        assert!(
+            cone.angle_a >= cone.angle_b,
+            "{name}: {} authors {} at +0x00, under the {} at +0x04",
+            emitter.cue,
+            cone.angle_a.to_degrees(),
+            cone.angle_b.to_degrees()
+        );
+        let degrees = cone.angle_a.to_degrees();
+        assert!(
+            (degrees - degrees.round()).abs() < 1e-3,
+            "{name}: {} authors {degrees} degrees at +0x00, not a whole one",
+            emitter.cue
+        );
+        widths.insert(degrees.round() as i32);
+    }
+    assert_eq!(
+        widths,
+        BTreeSet::from([40, 50, 60, 70, 75, 80, 100, 120]),
+        "the set of authored cone widths moved"
+    );
+    println!("{} cones, all 40 degrees at +0x04", cones.len());
+}
+
 /// Placement comes from the transform chain and nowhere else, so if the chain
 /// were composed wrongly every emitter would sit on top of every other one -
 /// the same failure `pads_ground_truth` guards against, and the same reason it

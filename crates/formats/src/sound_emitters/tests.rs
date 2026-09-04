@@ -63,6 +63,11 @@ fn a_plain_sound_authors_no_cone() {
 /// The flag at `+0x08`, not the angles, is what says a node is a cone: a
 /// reader keyed on "is `+0x00` negative" would agree here and disagree on a
 /// cone whose angles were ever authored as zero.
+///
+/// The two angles are asserted **by the offset they came from**, so swapping
+/// the two reads fails this. Sorting them into a wide/narrow pair at parse time,
+/// which this module did until the ordering was pinned against the disc, makes
+/// that swap invisible.
 #[test]
 fn the_cone_comes_from_the_flag_and_carries_both_angles() {
     let mut p = oh_cargo();
@@ -73,8 +78,16 @@ fn the_cone_comes_from_the_flag_and_carries_both_angles() {
         .expect("parse")
         .cone
         .expect("a cone");
-    assert!((cone.wide.to_degrees() - 120.0).abs() < 1e-3, "{cone:?}");
-    assert!((cone.narrow.to_degrees() - 40.0).abs() < 1e-3, "{cone:?}");
+    assert!((cone.angle_a.to_degrees() - 120.0).abs() < 1e-3, "{cone:?}");
+    assert!((cone.angle_b.to_degrees() - 40.0).abs() < 1e-3, "{cone:?}");
+    assert!(
+        (cone.wide() - cone.angle_a).abs() < f32::EPSILON,
+        "{cone:?}"
+    );
+    assert!(
+        (cone.narrow() - cone.angle_b).abs() < f32::EPSILON,
+        "{cone:?}"
+    );
 }
 
 /// `+0x30` and `+0x34` read `64` and `66` on disc and are offsets to the two

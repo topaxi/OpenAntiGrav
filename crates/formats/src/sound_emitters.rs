@@ -165,13 +165,9 @@ impl SoundEmitter {
         if payload.len() < MIN_PAYLOAD {
             return None;
         }
-        let cone = (payload[CONE_ENABLED] != 0).then(|| {
-            let a = order.f32(payload, CONE_A);
-            let b = order.f32(payload, CONE_B);
-            Cone {
-                wide: a.max(b),
-                narrow: a.min(b),
-            }
+        let cone = (payload[CONE_ENABLED] != 0).then(|| Cone {
+            angle_a: order.f32(payload, CONE_A),
+            angle_b: order.f32(payload, CONE_B),
         });
         Some(Self {
             bank: field_string(payload, BANK, BANK_LEN),
@@ -188,15 +184,34 @@ impl SoundEmitter {
 /// A `soundcone`'s two authored angles, in radians.
 ///
 /// **Which one reaches the emitter's `+0x40` half-angle is not read** -
-/// `soundcone`'s own init has not been found - so they are named by the only
-/// thing the disc settles: on all 134 authored cones `narrow` is `40` degrees
-/// and `wide` is one of eight whole-degree values from `40` to `120`.
+/// `soundcone`'s own init has not been found - so the two are kept as the
+/// offsets they came from rather than as an inner/outer pair. What the disc
+/// settles is only an ordering: on all 134 authored cones [`Cone::angle_b`] is
+/// `40` degrees and [`Cone::angle_a`] is one of eight whole-degree values from
+/// `40` to `120`, so [`Cone::wide`] and [`Cone::narrow`] are derived rather than
+/// stored. A title that authored them the other way round would decode
+/// unswapped here and would fail
+/// `sound_emitter_ground_truth`'s ordering check rather than passing silently.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cone {
+    /// Payload `+0x00`, radians.
+    pub angle_a: f32,
+    /// Payload `+0x04`, radians. `40` degrees on every Pulse cone.
+    pub angle_b: f32,
+}
+
+impl Cone {
     /// The larger of the two angles, radians.
-    pub wide: f32,
-    /// The smaller of the two angles, radians. `40` degrees on every Pulse cone.
-    pub narrow: f32,
+    #[must_use]
+    pub fn wide(self) -> f32 {
+        self.angle_a.max(self.angle_b)
+    }
+
+    /// The smaller of the two angles, radians.
+    #[must_use]
+    pub fn narrow(self) -> f32 {
+        self.angle_a.min(self.angle_b)
+    }
 }
 
 /// The emitter radius as a keyframed curve of `u16` times and `u16` values.

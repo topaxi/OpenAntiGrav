@@ -612,7 +612,7 @@
 0x08926058	function	VexSoundCone_RegisterClass	95	track-sound-emitters.md
 0x08926324	function	VexSpeaker_RegisterClass	95	track-sound-emitters.md
 0x089259a4	function	VexSound_Init	92	track-sound-emitters.md
-0x08925c4c	function	VexSound_Update	90	track-sound-emitters.md
+0x08925c4c	function	VexSound_Update	85	track-sound-emitters.md
 0x08925cf0	function	VexSound_SampleRadiusCurve	92	track-sound-emitters.md
 0x088613bc	function	Autopilot_Fire	88	autopilot.md
 0x08861404	function	Autopilot_Update	85	autopilot.md

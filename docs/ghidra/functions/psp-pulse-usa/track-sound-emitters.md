@@ -40,8 +40,8 @@ the delay slot of the call to `Vex_RegisterClass`.
 
 | Offset | Size | Meaning | Confidence |
 | --- | --- | --- | --- |
-| `+0x00` | `f32` | cone angle, radians; `-1.0` on a plain `sound` | 75 |
-| `+0x04` | `f32` | second cone angle, radians; `-1.0` on a plain `sound` | 75 |
+| `+0x00` | `f32` | cone angle, radians; `-1.0` on a plain `sound`; never below `+0x04` | 75 |
+| `+0x04` | `f32` | second cone angle, radians; `-1.0` on a plain `sound`; `40` degrees on all 134 cones | 75 |
 | `+0x08` | `u8` | cone enabled: `0` on every `sound`, `1` on every `soundcone` | 80 |
 | `+0x09`..`+0x0b` | 3 B | not read; see [exporter leakage](#three-words-are-exporter-leakage) | 70 |
 | `+0x0c` | `f32` | copied to the emitter's `+0x3c`, a field nothing has mapped | 92 |
@@ -91,6 +91,15 @@ t = instance[0x40] / node[0x38];          // node[0x38] is 1/60, so t is in fram
 VexSound_SampleRadiusCurve(t, instance, &out, (int)t);
 emitter[0x38] = out;                       // the radius, every frame
 ```
+
+**`VexSound_Update` is named on shape, not on its slot** - confidence **85**.
+It is in the same translation unit, it is update-shaped, and `Init`'s own
+`+0x3c` branch calls it; what has *not* been shown is that it sits in the class
+descriptor's `+0x24` update slot, because the descriptor is filled in at boot
+and reads zero in the file, and the import's unrelocated constants leave the
+function with no static xrefs at all. The `5000`/`65535` encoding below does not
+rest on this: it rests on the evaluator's own literals against 1,164 stored
+bytes.
 
 `VexSound_SampleRadiusCurve` (`0x08925cf0`) reads `u16` count at `+0x2c`, the
 two relocated array pointers at `+0x30`/`+0x34`, walks the time array for the
@@ -188,7 +197,7 @@ bank's own truncation at its 16-byte name-table width, reproduced verbatim.
 `Sound_Play` is handed and by a 98.4% hit rate against an independently parsed
 format.
 
-### Twenty-one references are dangling, and they are the disc's own bugs
+### Five references are dangling on twenty-one nodes, and they are the disc's own bugs
 
 | Reference | Nodes | What is wrong |
 | --- | --- | --- |
