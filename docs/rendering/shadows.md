@@ -327,7 +327,13 @@ Two things follow for the setting:
   extrusion the way Pulse's runtime reader builds one (confidence 84,
   disassembly with hash-confirmed parameter names). This explains why a
   fixed, disc-wide box template works: there's nothing model-specific left
-  for the vertex program to key off of.
+  for the vertex program to key off of. Checked directly against both draw
+  functions: neither re-uploads a different `extrusionDistance` between the
+  two stencil passes, so there is no separate near-cap/far-cap pair either -
+  both passes submit the same, once-shifted box. What HD actually renders is
+  closer to **"does this pixel's depth sample fall inside a fixed box
+  template, shifted toward the light and positioned at the caster"** than to
+  a true silhouette-derived shadow volume.
   See [`shadow-stencilvolume.md`](../ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md)
   for the full numbers.
 

@@ -132,9 +132,9 @@ way `material-state.md` already decoded `Rsx_SetMethod`'s header math:
 | | stencil func | `NOTEQUAL` (`0x205`), ref 0, mask `0xff` |
 | | stencil op | `(KEEP, KEEP, ZERO)` - resets the stencil on pass |
 
-That is a two-sided depth-fail stencil shadow volume, standard except that
-its resolve step both draws nothing (colour off) and self-cleans (zeroes the
-stencil where accumulated, so the next caster in the same frame needs no
+That is the standard two-sided depth-fail stencil register/op setup, except
+that its clear step both draws nothing (colour off) and self-cleans (zeroes
+the stencil where accumulated, so the next caster in the same frame needs no
 separate clear) - whatever visual effect the shadow actually has must be
 `FUN_004053e0`'s job, not the two named stencil functions'. Both
 `Shadow_*StencilVolume` passes upload the `LiveStencilShadow` technique's
@@ -148,6 +148,27 @@ draft of this page cited `5` as `TRIANGLE_STRIP` without checking the actual
 enum and that was wrong). The parsed shadow-volume geometry is drawn twice,
 once per stencil pass, not once for the volume and once as a full-screen
 quad the way a textbook write-up often shows it.
+
+**Checked directly, 2026-09-04, once the vertex shader below raised the
+question: neither pass re-uploads a different `extrusionDistance`.** Both
+`Shadow_AccumulateStencilVolume` and `Shadow_ClearStencilVolume` compute
+their constant-block offset (`iVar7`) from the exact same cached technique
+object (`PTR_DAT_008bf4c4`) the exact same way and call
+`Rsx_UploadVertexConstants` once each, with nothing in either function's
+decompile that varies `extrusionDistance` between them. So this is **not** a
+classic near-cap/far-cap shadow volume built from two differently-extruded
+copies of the same geometry - both draws submit the *same*, identically-
+shifted closed box. That is still a legitimate use of two-sided depth-fail
+stencil (any already-closed, watertight solid can be tested this way to
+determine whether a given pixel's depth sample lies inside it, without
+needing a separate near/far pair - that construction is only one way to
+build the closed volume the technique requires, and this shader uses the
+other). What the two passes actually compute, put together with the vertex
+shader finding below, is closer to **"does this pixel's depth sample fall
+inside a fixed box template, shifted rigidly toward `lightDirection` by
+`extrusionDistance` and positioned at the caster"** than to a true
+silhouette-derived shadow volume the way Pulse's `Shadow_RenderOccluderVolume`
+builds one.
 
 **This also revises the record-format reading below, now closed rather than
 hypothesized.** `self+0x128` is not walked as a raw `n`-record array by the
@@ -378,7 +399,12 @@ Pulse's `Shadow_RenderOccluderVolume` computes one (which explicitly varies
 which vertices move based on facing). A fixed, disc-wide, per-caster-fitted
 box template is exactly what this mechanism wants: there is nothing
 model-specific for the vertex program to key off of, so the topology and
-the per-vertex position are all it needs. `LiveStencilShadow_fp` is trivial
+the per-vertex position are all it needs. Checked against the two draw
+functions directly (see the draw-call section above): neither
+`Shadow_AccumulateStencilVolume` nor `Shadow_ClearStencilVolume` re-uploads
+a different `extrusionDistance` between passes, so there is no separate
+unshifted/shifted pair anywhere in this path either - both draws submit the
+same, once-shifted box. `LiveStencilShadow_fp` is trivial
 and confirms this is a stencil-only pass: `MOV H0, {1,0,0,0} | END`, one
 instruction, no texture reads, no lighting - it exists only so the
 fixed-function pipeline has *something* to shade, since colour output is

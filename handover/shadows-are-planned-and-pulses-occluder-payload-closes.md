@@ -89,6 +89,24 @@ across many files, and not runtime-traced - the same 84 ceiling the doc
 page's own intro states). Full instruction listing in
 `shadow-stencilvolume.md`.
 
+**A same-day advisor check caught an assumption the vertex-shader finding
+needed verified, not just written down: does the accumulate pass actually
+draw the buffer twice (once shifted, once not) the way a classic near-cap/
+far-cap shadow volume needs?** Decompiled both `Shadow_AccumulateStencilVolume`
+and `Shadow_ClearStencilVolume` directly to check: neither re-uploads a
+different `extrusionDistance` between draws, both pull the same cached
+technique-constant block the same way and draw `self+0x128`'s geometry once
+each. So there is no separate unshifted/shifted pair anywhere in this
+path - both passes submit the *same*, once-shifted closed box. That's still
+a legitimate use of two-sided depth-fail stencil (any already-closed
+watertight solid can be tested this way without needing a near/far pair -
+this shader builds the closed volume the other way, by shifting the whole
+thing rigidly instead of extruding it), but it means what's actually being
+tested is closer to **"does this pixel's depth sample fall inside a fixed
+box template, shifted toward the light and positioned at the caster"** than
+to a true silhouette-derived shadow volume. Confirmed by decompile, not
+assumed - see `shadow-stencilvolume.md`.
+
 ## Open
 
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
