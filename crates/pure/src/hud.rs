@@ -70,12 +70,14 @@
 //! of its ten `<Model>`s already carries its own final colour in the XML,
 //! read by `oag_game::hud::Model::colour` with no substitution step at all
 //! (this crate does not depend on `oag-game`, so that is prose, not a link).
-//! Drawing them - selecting the held weapon's model by name and
-//! painting it tinted - is not done as of 2026-09-04; the `.vex` mesh has no
-//! recovered size/UV convention the way the sight brackets' `SIGHT_SIZE` does,
-//! and building one on a guess is exactly what `CLAUDE.md`'s "never invent
-//! what the assets already author" rule forbids. See
-//! `docs/gameplay/pickups.md`'s Pure section.
+//! Drawing them - selecting the held weapon's model by name and painting it
+//! tinted - shipped the same day: [`PICKUP_ICON_MODELS`] and
+//! `ART.pickup_icon_backdrop_model` name the widgets,
+//! `oag_game::race::hud::vex_model_art` reads each `.vex` mesh's own quad
+//! size off its vertices rather than a hand-measured constant, and
+//! `oag_game::hud::draw::pickup_model_draws` draws them. See
+//! `docs/gameplay/pickups.md`'s Pure section for the evidence, including a
+//! real capture of a held Turbo.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`oag_pulse::hud`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/pulse/src/hud.rs
@@ -131,9 +133,43 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // field exists to override a single sprite's colour; Pure's icons need no
     // override, so `None` is the disc's own answer, not a placeholder for one.
     pickup_colours: None,
+    pickup_icon_models: Some(PICKUP_ICON_MODELS),
+    // `weapon_icon_grid`, authored beside the ten icons at the same
+    // placeholder position (`Data\HUD\grid.vex`, `x="240" y="250.0" z="0"` -
+    // the icons themselves sit at `z="-10"`, in front of it) and with no
+    // `colour` of its own.
+    pickup_icon_backdrop_model: Some("weapon_icon_grid"),
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
 };
+
+/// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in
+/// `Weapon::ALL`'s order - see [`ART`]'s "weapon icons are `<Model>`s" doc for
+/// the full XML, both layouts checked byte-identical on this point.
+///
+/// `Cannon`, `LeachBeam` and `Repulser` have no icon on this disc, matching
+/// [ART]'s finding that Pure's own weapon roster is not Pulse's. Neither does
+/// `Shuriken` - Pure predates it - even though `oag_gameplay::pickup::
+/// IMPLEMENTED` can hand one out on this title, same as any other; a Pure race
+/// that grants one draws no icon for it, which is the disc's own gap rather
+/// than a reading this project has not done. `Quake`'s slot is filled even
+/// though nothing hands a Quake out today - the widget is on the disc, so
+/// recording it costs nothing.
+pub const PICKUP_ICON_MODELS: [Option<&str>; 13] = [
+    Some("ROCKET_icon"),    // Rocket
+    Some("MISSILE_icon"),   // Missile
+    Some("QUAKE_icon"),     // Quake
+    None,                   // Cannon
+    Some("TURBO_icon"),     // Turbo
+    Some("SHIELD_icon"),    // Shield
+    Some("AUTOPILOT_icon"), // Autopilot
+    Some("PLASMA_icon"),    // Plasma
+    Some("BOMB_icon"),      // Bomb
+    Some("MINE_icon"),      // Mine
+    None,                   // LeachBeam
+    None,                   // Repulser
+    None,                   // Shuriken
+];
 
 /// The sprite widgets Pure draws whenever its HUD is up: **none**.
 ///

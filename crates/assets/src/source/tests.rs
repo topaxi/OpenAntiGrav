@@ -101,6 +101,8 @@ const TITLE: &Title = &Title {
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
+        pickup_icon_models: None,
+        pickup_icon_backdrop_model: None,
         zone_speed_classes: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both

@@ -105,6 +105,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Same reasoning: an outline needs no colour substituted into it, per
     // weapon or otherwise.
     pickup_colours: None,
+    // HD's icons are `<Image>` sprites (the `<Type>Icon` widgets the comment
+    // above names), the same kind as Pulse's - not `<Mode3D><Model>`s, so this
+    // field is moot on the same terms `pickup_colours` is above it.
+    pickup_icon_models: None,
+    pickup_icon_backdrop_model: None,
     // The fifteen rungs' names. Which rung a zone is on is a different
     // question and an open one - see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),

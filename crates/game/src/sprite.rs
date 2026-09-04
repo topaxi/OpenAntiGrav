@@ -192,7 +192,7 @@ impl Image {
 const GUTTER: u32 = 1;
 
 /// Where one image sits in the sheet, in pixels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Placed {
     /// Left edge in the sheet.
     pub x: u32,
@@ -202,6 +202,19 @@ pub struct Placed {
     pub width: u32,
     /// The image's own height.
     pub height: u32,
+    /// A `.vex` model's own quad, in the `<Mode3D>` overlay's own units - `None`
+    /// for anything that is not a model, and `None` for a model whose caller
+    /// did not measure one.
+    ///
+    /// Read off the model's own vertex positions rather than authored
+    /// anywhere, since a `.vex` carries no "this is N units wide" attribute,
+    /// only the vertices themselves - so a caller that wants a screen size at
+    /// draw time reads it here instead of a hand-measured constant per mesh.
+    /// The lock-on reticle predates this field and still carries its own
+    /// hand-measured `SIGHT_SIZE` rather than reading it - see that
+    /// constant's own doc for why unifying the two was left alone rather
+    /// than guessed at.
+    pub quad_extent: Option<[f32; 2]>,
 }
 
 /// Every front-end image, in one RGBA buffer.
@@ -241,6 +254,10 @@ impl Default for Sheet {
     }
 }
 
+/// One [`Sheet::build_with`] entry: name, pixel width, pixel height, RGBA8888
+/// pixels, and the quad extent that becomes [`Placed::quad_extent`].
+pub(crate) type DecodedImage = (String, u32, u32, Vec<u8>, Option<[f32; 2]>);
+
 impl Sheet {
     /// Decodes `blobs` and stacks them.
     ///
@@ -255,33 +272,37 @@ impl Sheet {
 
     /// [`Self::build`], plus images somebody else already decoded.
     ///
-    /// `extra` is `(name, width, height, RGBA8888)`, appended after the blobs in
-    /// the order given, so a sheet built the same way twice is byte-identical
-    /// and a screenshot stays comparable.
+    /// `extra` is `(name, width, height, RGBA8888, quad_extent)`, appended
+    /// after the blobs in the order given, so a sheet built the same way twice
+    /// is byte-identical and a screenshot stays comparable. `quad_extent`
+    /// carries straight through to the matching [`Placed::quad_extent`] - see
+    /// that field for what it is and why it travels separately from the pixel
+    /// dimensions beside it.
     ///
-    /// **It exists for art that is not in an image file.** The lock-on reticle's
-    /// three pieces are `.vex` *models* whose texture is embedded in the model,
-    /// so there is no `.mip` for [`Image::decode`] to read - `oag_render::mesh`
-    /// is what unpacks them, and it hands back pixels rather than a blob. See
-    /// `crate::race::sight`.
+    /// **It exists for art that is not in an image file.** The lock-on
+    /// reticle's three pieces and Pure's ten weapon-icon pieces are `.vex`
+    /// *models* whose texture is embedded in the model, so there is no `.mip`
+    /// for [`Image::decode`] to read - `oag_render::mesh` is what unpacks
+    /// them, and it hands back pixels rather than a blob. See
+    /// `crate::race::sight` and `crate::race::hud::model_art`.
     #[must_use]
     pub fn build_with(
         blobs: &[(String, Vec<u8>)],
-        extra: Vec<(String, u32, u32, Vec<u8>)>,
+        extra: Vec<DecodedImage>,
         report: &mut Vec<String>,
     ) -> Self {
-        let mut decoded: Vec<(String, Image)> = Vec::new();
+        let mut decoded: Vec<(String, Image, Option<[f32; 2]>)> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
-                Ok(image) => decoded.push((src.clone(), image)),
+                Ok(image) => decoded.push((src.clone(), image, None)),
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
 
-        for (src, width, height, rgba) in extra {
+        for (src, width, height, rgba, quad_extent) in extra {
             match Image::from_rgba(width, height, rgba) {
-                Some(image) => decoded.push((src, image)),
+                Some(image) => decoded.push((src, image, quad_extent)),
                 None => report.push(format!(
                     "image {src}: {width}x{height} does not match the pixels handed over"
                 )),
@@ -294,19 +315,19 @@ impl Sheet {
 
         let width = decoded
             .iter()
-            .map(|(_, t)| u32::from(t.width))
+            .map(|(_, t, _)| u32::from(t.width))
             .max()
             .unwrap_or(1);
         let height: u32 = decoded
             .iter()
-            .map(|(_, t)| u32::from(t.height) + GUTTER)
+            .map(|(_, t, _)| u32::from(t.height) + GUTTER)
             .sum();
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
         let mut pen = 0u32;
 
-        for (src, texture) in decoded {
+        for (src, texture, quad_extent) in decoded {
             let (w, h) = (u32::from(texture.width), u32::from(texture.height));
             let bits_per_pixel = texture.bits_per_pixel;
             let pixels = texture.into_rgba();
@@ -328,6 +349,7 @@ impl Sheet {
                     y: pen,
                     width: w,
                     height: h,
+                    quad_extent,
                 },
             ));
             pen += h + GUTTER;
