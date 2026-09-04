@@ -433,6 +433,7 @@ pub(crate) fn run_race(
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                 msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
+                shadows: render_profile.shadows,
                 camera_jitter: cli.camera_jitter,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,

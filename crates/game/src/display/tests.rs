@@ -551,3 +551,27 @@ fn modes_and_aspects_round_trip_through_their_names() {
     assert!("exclusive".parse::<WindowMode>().is_err());
     assert!("16:9".parse::<Aspect>().is_err());
 }
+
+#[test]
+fn a_shadow_tier_round_trips_and_refuses_what_it_does_not_offer() {
+    for tier in Shadows::ALL {
+        assert_eq!(tier.name().parse::<Shadows>(), Ok(tier));
+        assert_eq!(tier.to_string(), tier.name());
+    }
+    assert_eq!("BLOB".parse::<Shadows>(), Ok(Shadows::Blob));
+    // The two designed tiers nothing has built yet. Naming them here is what
+    // makes the refusal deliberate rather than incidental: whoever lands
+    // either one deletes the line beside their new variant.
+    assert!("original".parse::<Shadows>().is_err());
+    assert!("mapped".parse::<Shadows>().is_err());
+}
+
+#[test]
+fn nothing_casts_a_shadow_by_default() {
+    // `off` until `original` exists - a generated falloff cannot be the
+    // default on a title whose own hulls are sitting on the disc. See
+    // `docs/rendering/shadows.md`.
+    assert_eq!(Shadows::default(), Shadows::Off);
+    assert!(!Shadows::default().draws());
+    assert!(Shadows::Blob.draws());
+}

@@ -133,6 +133,7 @@ mod recovery;
 mod respawn;
 mod results;
 mod scene;
+mod shadow;
 pub mod sight;
 mod spawn;
 mod spline;

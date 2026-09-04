@@ -40,6 +40,7 @@ impl RaceStage {
         pvs_cull: bool,
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
+        shadows: display::Shadows,
         camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
@@ -66,6 +67,7 @@ impl RaceStage {
             pvs_cull,
             anim_seconds,
             motion_blur,
+            shadows,
             camera_jitter,
             zone_spectrum,
             timestamps,
@@ -194,6 +196,11 @@ impl RaceStage {
             // previous camera and nothing the blur pipelines add to warm -
             // they are fullscreen passes with no per-scene variants.
             display::MotionBlur::Off,
+            // **On, unlike the blur beside it**, and for the reason that
+            // decides every entry in this list: a warmup exists to pay the
+            // pipeline compiles, and the blob tier has a pipeline of its own.
+            // It costs one quad per craft on a frame that is discarded.
+            display::Shadows::Blob,
             // Off for the same reason, and one more: jitter is a matrix, not a
             // pipeline variant, so there is nothing here for it to warm. It
             // still costs this frame a phase - `Scene::frame_index` advances on

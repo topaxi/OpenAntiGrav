@@ -674,6 +674,7 @@ impl Session {
                     pvs_culling,
                     self.anim_seconds,
                     render_profile.motion_blur,
+                    render_profile.shadows,
                     // **Derived from the upscaler, not read from the flag**,
                     // and computed here because this is the one place that
                     // holds both sizes the count depends on: `size` is the

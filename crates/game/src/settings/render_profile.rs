@@ -131,6 +131,23 @@ pub struct RenderProfile {
     /// blur's prepare stage reads sample 0 of the multisampled attachments.
     #[serde(default)]
     pub motion_blur: crate::display::MotionBlur,
+    /// What casts a shadow, and what draws it: `off` or `blob`.
+    ///
+    /// **In this per-title table rather than flat in `[graphics]`** for both
+    /// of the reasons this table exists. It is render-cost-sensitive the way
+    /// [`Self::msaa`] is - a quad per craft on a grid of eight is eight extra
+    /// blended draws - and, unlike a shutter fraction, *what a value means
+    /// depends on the title*: the `original` tier still to come is 129
+    /// authored occluder hulls on Pulse, a shadow-map pipeline on HD/Fury,
+    /// a track-proximity projection on 2048, and honest absence on Pure. One
+    /// shared value could not carry that.
+    ///
+    /// Defaults to `off` on every title and stays there until `original`
+    /// exists - see [`crate::display::Shadows::Off`] for why a generated
+    /// falloff is not a default this project may take. Read fresh every
+    /// frame, so the setting applies live.
+    #[serde(default)]
+    pub shadows: crate::display::Shadows,
 }
 
 impl Default for RenderProfile {
@@ -146,6 +163,7 @@ impl Default for RenderProfile {
             upscale_sharpness: crate::display::Sharpness::default(),
             msaa: crate::display::Msaa::default(),
             motion_blur: crate::display::MotionBlur::default(),
+            shadows: crate::display::Shadows::default(),
         }
     }
 }
@@ -176,7 +194,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 7] = [
+pub(super) const PROFILE_KEYS: [&str; 8] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
@@ -184,6 +202,7 @@ pub(super) const PROFILE_KEYS: [&str; 7] = [
     "upscale_sharpness",
     "msaa",
     "motion_blur",
+    "shadows",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

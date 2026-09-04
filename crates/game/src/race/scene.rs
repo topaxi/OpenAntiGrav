@@ -164,6 +164,17 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
+    /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
+    /// the track and before the hulls.
+    ///
+    /// Built with the scene whatever `[render_profiles.<title>] shadows` says,
+    /// for the reason [`Self::motion_blur`] is: the tier is read fresh every
+    /// frame so the setting applies live, and at `off` nothing is uploaded and
+    /// the draw returns immediately. `RefCell` for the reason
+    /// [`Self::exhaust`] is one. See `oag_render::shadow` and
+    /// [`crate::race::shadow`], which split what is the disc's from what is
+    /// ours.
+    shadow: std::cell::RefCell<oag_render::shadow::Pipeline>,
     /// The four vertex lists [`Scene::render`] gathers each frame, kept so
     /// their capacity is.
     ///
@@ -353,6 +364,7 @@ impl Scene {
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_render::post::hd_bloom::Params>,
         zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
+        shadows: Vec<oag_render::shadow::Silhouette>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -830,6 +842,18 @@ impl Scene {
             sample_count,
             mesh_render::Velocity::Write,
         ));
+        // One silhouette per grid slot, in the same slot order the liveries
+        // are in - `race::shadow::silhouettes` built them, and the load report
+        // already said which slots got the disc's own image and which got the
+        // generated falloff.
+        let shadow = std::cell::RefCell::new(oag_render::shadow::Pipeline::new(
+            device,
+            queue,
+            format,
+            &shadows,
+            sample_count,
+            mesh_render::Velocity::Write,
+        ));
         // A failure here is reported and dropped rather than propagated: a race
         // without a bloom is a dimmer race, not a broken one. The HD chain
         // replaces this pass outright - its read gate consumes the same glow
@@ -891,6 +915,7 @@ impl Scene {
             zone_grade,
             exhaust,
             sparks,
+            shadow,
             scratch: std::cell::RefCell::default(),
             depth,
             msaa_color,

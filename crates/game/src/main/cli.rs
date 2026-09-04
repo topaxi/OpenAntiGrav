@@ -672,6 +672,18 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) motion_blur: Option<crate::display::MotionBlur>,
 
+    /// What casts a shadow: off or blob.
+    ///
+    /// Overrides `[render_profiles.<title>] shadows` for *every* title, for
+    /// this run only; the file on disk is not changed - see
+    /// `--reconstruction`'s own doc for why every title rather than one. Here
+    /// for the reason `--motion-blur` is, and for one more: the tier has no
+    /// menu row yet, so until it has one this flag is the only way to select
+    /// it, and two captures differing only by it are how it gets compared
+    /// against itself off.
+    #[arg(long)]
+    pub(crate) shadows: Option<crate::display::Shadows>,
+
     /// Start the craft at this world position instead of on its grid slot:
     /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
     /// there.
@@ -870,6 +882,9 @@ impl Cli {
         }
         if let Some(motion_blur) = self.motion_blur {
             profile.motion_blur = motion_blur;
+        }
+        if let Some(shadows) = self.shadows {
+            profile.shadows = shadows;
         }
     }
 }

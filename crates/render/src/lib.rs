@@ -43,6 +43,7 @@ pub mod perfprobe;
 pub mod post;
 pub mod psys;
 pub mod pvs;
+pub mod shadow;
 pub mod shield;
 pub mod sparks;
 pub mod texgen;

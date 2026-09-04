@@ -355,6 +355,21 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws, which reads the
+            // tier fresh - the pass is built with every race whatever this
+            // says, the same shape `graphics.motion_blur` above has. See
+            // `race::Scene::shadows`.
+            "graphics.shadows" => match text.parse::<display::Shadows>() {
+                Ok(tier) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.shadows = tier;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.fov" => match text.parse::<display::Fov>() {
                 // Applied by the next frame the race draws, which builds its
                 // projection from this every time. Nothing else uses it: the
