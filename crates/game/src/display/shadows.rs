@@ -70,6 +70,22 @@ pub enum Shadows {
     /// what that shares with the original's stencil volume and what it does
     /// not.
     Original,
+    /// A shadow map every surface casts into and every surface reads.
+    ///
+    /// **This project's own, and offered on every title**, because unlike the
+    /// tier above it asks the disc for nothing but geometry. It is a change of
+    /// *scope* rather than a promotion: on a title whose own mechanism is
+    /// already a map it renders **more** shadows - a craft on another craft, a
+    /// bridge on the road - and in doing so ignores what the disc's own
+    /// mechanism would have drawn. `original` stays the default for the titles
+    /// that have one.
+    ///
+    /// **One cascade, not several.** The design page asks for a cascaded map
+    /// and this is the first landing of it: a single depth map fitted around
+    /// the camera's own focus. What that costs is resolution far from the
+    /// craft, which is where a split ladder would buy the most - see
+    /// `docs/rendering/shadows.md`.
+    Mapped,
 }
 
 impl Shadows {
@@ -80,11 +96,12 @@ impl Shadows {
             Self::Off => "off",
             Self::Blob => "blob",
             Self::Original => "original",
+            Self::Mapped => "mapped",
         }
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 3] = [Self::Off, Self::Blob, Self::Original];
+    pub const ALL: [Self; 4] = [Self::Off, Self::Blob, Self::Original, Self::Mapped];
 
     /// Whether anything is drawn at all - the one question the frame asks
     /// before building a shadow pass.
@@ -105,7 +122,9 @@ impl std::str::FromStr for Shadows {
         Self::ALL
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not a shadow setting; try off, blob or original"))
+            .ok_or_else(|| {
+                format!("{text:?} is not a shadow setting; try off, blob, original or mapped")
+            })
     }
 }
 

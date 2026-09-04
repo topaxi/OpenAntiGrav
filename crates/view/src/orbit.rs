@@ -304,6 +304,11 @@ impl Session {
             mesh_render::Velocity::None,
             // The asset viewer draws a model, not a race, so no Zone stage.
             None,
+            // And no shadow map, and nothing receiving one: a viewer shows a
+            // model against nothing, which is what makes it a reference.
+            None,
+            None,
+            mesh_render::ShadowReceiver::Never,
         )?;
         let _ = placeholder_bind_group;
 

@@ -181,6 +181,12 @@ impl Scene {
         // The circuit's own light rig where it authors one - Wipeout HD does,
         // in `track.envsettings` - and `mesh.wgsl`'s stand-in where it does
         // not, which is every title whose rig has not been recovered.
+        // **Before the scene uniform is composed, not just before the scene
+        // pass.** `shadow_uniform` reports a strength only once the map has
+        // casters in it, so a pass encoded after this block would leave the
+        // first frame - which is the only frame a `--screenshot` capture
+        // draws - reading an empty map at zero strength.
+        self.render_shadow_map(queue, encoder, race, shadows);
         let scene = mesh_render::Scene {
             fog,
             light,
@@ -197,6 +203,9 @@ impl Scene {
                 .zone_grade
                 .as_ref()
                 .map_or_else(Default::default, |grade| grade.zone_uniform()),
+            // The shadow map's own projection and strength, or `off` where
+            // nothing casts - see `Scene::shadow_uniform`.
+            shadow: self.shadow_uniform(shadows),
         };
         // The visualiser's own tint - the showing stage's `EQ colour tint`,
         // or `None` where the file authors none (every 2048 table, and any

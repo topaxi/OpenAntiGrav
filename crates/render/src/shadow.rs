@@ -193,10 +193,10 @@ pub fn quad(placement: &Placement) -> [GpuVertex; 6] {
 /// original's; what a stencil shadow volume is *darkened by* is decided by the
 /// pass that fills it, and that pass has not been read. A hull rasterized at
 /// full alpha is a black hole in the road rather than a shadow - the first
-/// capture of this tier showed exactly that - so this is chosen to sit near
-/// where the `blob` tier's own coverage peaks (Wipeout HD's authored
-/// silhouette reaches `212/255`), which at least makes the two tiers
-/// comparable to a player switching between them.
+/// capture of this tier showed exactly that - so this is a number picked to
+/// read as a shadow. **It is not derived from anything**: HD's own
+/// `ambient_shadow.gtf` peaks at `212/255`, but that is a different title's
+/// asset for a different mechanism and is not evidence for this one.
 pub const HULL_DARKNESS: f32 = 0.35;
 
 /// One craft's authored hull, and where its shadow lands.
@@ -826,6 +826,8 @@ impl Pipeline {
             .sum()
     }
 }
+
+pub mod map;
 
 #[cfg(test)]
 mod tests;

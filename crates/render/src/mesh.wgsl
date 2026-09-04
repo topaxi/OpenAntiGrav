@@ -134,6 +134,26 @@ struct Scene {
     // flame path below reads it. See `mesh_render::Scene::time`.
     time: vec4<f32>,
     zone: Zone,
+    shadow: ShadowMap,
+};
+
+// The shadow map's projection and how hard it darkens. See
+// `mesh_render::ShadowMap`, which carries the microcode this is read from and
+// the line between what Wipeout HD does and what this renderer decided.
+struct ShadowMap {
+    // World to the map's own clip space.
+    matrix: mat4x4<f32>,
+    // Zero for off, which is what every title but a shadowed one binds.
+    strength: f32,
+    // 1.0 = Wipeout HD's coverage map, read by the track alone. 2.0 = the
+    // `mapped` tier's depth map, read by everything. See
+    // `mesh_render::ShadowMap`.
+    mode: f32,
+    // How far a receiver is pushed towards the light before comparing, in the
+    // depth map's own units. Ours; a depth comparison without it makes a lit
+    // surface shadow itself.
+    depth_bias: f32,
+    _pad0: f32,
 };
 
 // 1.0 when the render target holds linear light - Wipeout HD's float scene
@@ -157,6 +177,12 @@ override linear_out: f32 = 0.0;
 // by the asset viewer. The defaults are zero rather than the shipped values on
 // purpose: a model that reaches this path without its parameters must draw
 // nothing recognisable, not a flame with numbers this file invented.
+// Which shadow maps this model's surfaces may read: 0 reads none, 1 reads the
+// `mapped` tier's depth map, 2 reads that *and* Wipeout HD's coverage map.
+// Three states because the two tiers have different receivers and the sky is
+// out of both - see `mesh_render::ShadowReceiver`.
+override receives_shadow: f32 = 0.0;
+
 override flame_shading: f32 = 0.0;
 override flame_rim_power: f32 = 0.0;
 override flame_rim_scale: f32 = 0.0;
@@ -204,6 +230,15 @@ override colour_is_light: f32 = 0.0;
 // and `crates/render/src/mesh_render/zone.rs`.
 @group(2) @binding(4) var zone_vis_tex: texture_2d<f32>;
 @group(2) @binding(5) var zone_vis_sampler: sampler;
+// The shadow map, and the sampler that reads it. Bound on every pipeline, a
+// black one-texel placeholder where nothing casts - see
+// `mesh_render::shadow_map::resources`.
+@group(2) @binding(6) var shadow_tex: texture_2d<f32>;
+@group(2) @binding(7) var shadow_sampler: sampler;
+// The `mapped` tier's depth map and its **non-filtering** sampler: a filtered
+// depth is the average of two surfaces and belongs to neither.
+@group(2) @binding(8) var shadow_depth_tex: texture_depth_2d;
+@group(2) @binding(9) var shadow_depth_sampler: sampler;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -371,6 +406,95 @@ fn velocity_of(in: VertexOutput) -> vec2<f32> {
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
+// How much of this surface point the shadow map covers, `0.0` to `1.0`.
+//
+// **A projective sample of a coverage map, not a depth compare** - which is
+// what Wipeout HD's own track material does: `TXP R1.x, f[TC0] unit2`, then
+// `1 - R1.x`, with nothing compared against anything. See
+// `mesh_render::ShadowMap`.
+//
+// Outside the map's own frustum the sample is clamped to its border, which the
+// caster pass leaves at zero, so a surface the map does not cover is lit.
+fn shadow_coverage(world: vec3<f32>) -> f32 {
+    if scene.shadow.strength <= 0.0 {
+        return 0.0;
+    }
+    // **Who may read which map.** In the coverage mode the receiver is the
+    // track alone, which is what Wipeout HD's own materials say; in the depth
+    // mode every lit surface reads, which is the whole point of a tier that
+    // is not the original's.
+    let coverage_mode = scene.shadow.mode < 1.5;
+    let allowed = select(1.0, 2.0, coverage_mode);
+    if receives_shadow < allowed {
+        return 0.0;
+    }
+    let clip = scene.shadow.matrix * vec4<f32>(world, 1.0);
+    if clip.w <= 0.0 {
+        return 0.0;
+    }
+    let ndc = clip.xyz / clip.w;
+    // Behind the map's near plane or past its far one: nothing to sample.
+    if ndc.z < 0.0 || ndc.z > 1.0 {
+        return 0.0;
+    }
+    // **`ndc.y` is already down.** `oag_core::math::camera`'s projections are
+    // glam's `rh::proj::directx` pair, which flip Y - the same convention the
+    // scene camera renders with. Writing the usual `0.5 - ndc.y * 0.5` here
+    // mirrors the lookup vertically about the map's own centre, which is a bug
+    // that hides itself: a caster near the middle still lands near the middle,
+    // and only a shadow far from it goes missing.
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5);
+    // Outside the map's own rectangle the clamped sampler would smear its
+    // border across the whole circuit, so a receiver the map does not cover is
+    // lit rather than edge-coloured.
+    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 {
+        return 0.0;
+    }
+    if coverage_mode {
+        return textureSample(shadow_tex, shadow_sampler, uv).r * scene.shadow.strength;
+    }
+    // The depth mode: four taps a texel apart, each compared, and their mean.
+    // **The softening is in the comparison, not in the sample** - filtering
+    // the depth itself would average two surfaces into one that is neither.
+    // Four rather than sixteen because this runs on every lit pixel of the
+    // frame; it is a choice, and it is ours, like everything else in this
+    // tier.
+    let texel = 1.0 / f32(textureDimensions(shadow_depth_tex).x);
+    var lit = 0.0;
+    for (var i = 0; i < 4; i = i + 1) {
+        let offset = vec2<f32>(
+            f32(i % 2) * 2.0 - 1.0,
+            f32(i / 2) * 2.0 - 1.0
+        ) * texel * 0.5;
+        let nearest = textureSampleLevel(
+            shadow_depth_tex,
+            shadow_depth_sampler,
+            uv + offset,
+            // A depth texture's own `textureSampleLevel` takes an `i32` mip
+            // level, not the `f32` a colour texture's does.
+            0
+        );
+        lit = lit + select(0.0, 1.0, ndc.z - scene.shadow.depth_bias <= nearest);
+    }
+    return (1.0 - lit * 0.25) * scene.shadow.strength;
+}
+
+// The shadow term, applied to colour.
+//
+// **On colour rather than alpha, and that is a deviation.** Wipeout HD puts
+// `1 - shadow` in the fragment's *alpha* - which is what its `ShadowToAlpha`
+// material flag names - and a later compositing pass consumes it; that pass is
+// unread. This renderer's alpha is the bloom's glow mask, so writing there
+// would bloom the shadow. See `docs/rendering/shadows.md`.
+//
+// **Called from every entry point that draws a lit surface**, which is five of
+// them and not one: a race draws through the `_velocity` pair, so a version of
+// this that only reached `fs_main` shadowed the scenery a blended material drew
+// and left the road untouched. That is exactly what the first cut did.
+fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    return colour * (1.0 - shadow_coverage(world));
+}
+
 fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     let distance = length(world - scene.fog.camera);
     let span = max(scene.fog.far - scene.fog.near, 1e-6);
@@ -885,7 +1009,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
+    return vec4<f32>(
+        fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+        1.0
+    );
 }
 
 // Used only by the blended pipeline - see
@@ -896,7 +1023,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), shaded.a);
+    return vec4<f32>(
+        fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+        shaded.a
+    );
 }
 
 // The GE's real alpha-test call **is** recovered now:
@@ -967,7 +1097,10 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     if shaded.a < alpha_test_ref {
         discard;
     }
-    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
+    return vec4<f32>(
+        fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+        1.0
+    );
 }
 
 // The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
@@ -980,7 +1113,10 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     let shaded = lit_texel(in);
     return MrtOutput(
-        vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0),
+        vec4<f32>(
+            fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+            1.0
+        ),
         velocity_of(in),
     );
 }
@@ -992,7 +1128,10 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
         discard;
     }
     return MrtOutput(
-        vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0),
+        vec4<f32>(
+            fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+            1.0
+        ),
         velocity_of(in),
     );
 }
