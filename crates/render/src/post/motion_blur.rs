@@ -35,6 +35,14 @@
 //! 6. **copy** - the result back onto the scene target, which the gather
 //!    cannot read and write at once.
 //!
+//! **All six rasterise the render extent, not the allocation.** The scene
+//! target is allocated at the render-scale ceiling and dynamic resolution
+//! draws into a sub-rectangle of it, so a fullscreen triangle over the whole
+//! target pays the ceiling's price at every extent - invisibly, because the
+//! picture is identical either way. [`MotionBlur::render`] sets a viewport
+//! per pass; the load operations are the part that cannot follow, and the
+//! comment there is the one to read before changing either.
+//!
 //! [ADR-0030](../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)
 //! counts the chain as five passes and four scratch targets, which is what
 //! landed with it; the separable tile-max made it six and five. ADRs are
@@ -95,6 +103,36 @@ impl Constants {
 /// cannot degenerate the tile reduction.
 fn max_px(viewport: (f32, f32, f32, f32)) -> f32 {
     (MAX_STRETCH * viewport.3).max(8.0)
+}
+
+/// `viewport` in the space of a target whose texels each cover `by` texels of
+/// the full-size ones: the offset floors and the far edge ceils, so the
+/// rectangle covers every reduced texel the original touches and the
+/// reduction can never come up short at its own boundary.
+fn reduced(viewport: (f32, f32, f32, f32), by: (f32, f32)) -> (f32, f32, f32, f32) {
+    let x = (viewport.0 / by.0).floor();
+    let y = (viewport.1 / by.1).floor();
+    (
+        x,
+        y,
+        ((viewport.0 + viewport.2) / by.0).ceil() - x,
+        ((viewport.1 + viewport.3) / by.1).ceil() - y,
+    )
+}
+
+/// `viewport` clamped inside `target`, because `set_viewport` validates that
+/// the rectangle lies within the attachment and [`reduced`]'s ceiling can
+/// otherwise land one texel past a target whose size did not divide evenly.
+fn clamped(viewport: (f32, f32, f32, f32), target: (u32, u32)) -> (f32, f32, f32, f32) {
+    let (w, h) = (target.0.max(1) as f32, target.1.max(1) as f32);
+    let x = viewport.0.clamp(0.0, w - 1.0);
+    let y = viewport.1.clamp(0.0, h - 1.0);
+    (
+        x,
+        y,
+        viewport.2.clamp(1.0, w - x),
+        viewport.3.clamp(1.0, h - y),
+    )
 }
 
 /// One timestamp pair, split across the first and last pass of a chain.
@@ -503,11 +541,32 @@ impl MotionBlur {
             None => (None, None),
         };
 
+        // **Every pass rasterises the render extent, not the allocation.**
+        // Since [ADR-0037] the scene target is allocated at the render-scale
+        // ceiling and dynamic resolution draws into a sub-rectangle of it, so
+        // a full-screen triangle over the whole target pays the ceiling's
+        // price at every extent - six times over, and invisibly, because the
+        // picture inside the rectangle is identical either way. `drs::Cost`
+        // counts this chain as *scalable* - "what falls when the render
+        // extent does" - and that is only true once the raster falls with it.
+        //
+        // [ADR-0037]: ../../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md
+        let tiles = (
+            frame.size.0.max(1).div_ceil(tile.max(1)),
+            frame.size.1.max(1).div_ceil(tile.max(1)),
+        );
+        let t = tile.max(1) as f32;
+        let full_rect = clamped(frame.viewport, frame.size);
+        let rows_rect = clamped(reduced(frame.viewport, (t, 1.0)), (tiles.0, frame.size.1));
+        let grid_rect = clamped(reduced(frame.viewport, (t, t)), tiles);
+
         let mut pass =
             |label: &str,
              pipeline: &wgpu::RenderPipeline,
              groups: &[&wgpu::BindGroup],
              target: &wgpu::TextureView,
+             rect: (f32, f32, f32, f32),
+             load: wgpu::LoadOp<wgpu::Color>,
              timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>| {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some(label),
@@ -516,7 +575,7 @@ impl MotionBlur {
                         depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            load,
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -526,6 +585,14 @@ impl MotionBlur {
                     multiview_mask: None,
                 });
                 pass.set_pipeline(pipeline);
+                // **The scissor as well as the viewport**, which is belt and
+                // braces rather than duplication: a viewport is a transform
+                // and it is the triangle's own bounds that keep the fragments
+                // inside it, where a scissor is the clip that says so. Both
+                // rectangles are the same and integral by construction - see
+                // `reduced`, which floors and ceils.
+                pass.set_viewport(rect.0, rect.1, rect.2, rect.3, 0.0, 1.0);
+                pass.set_scissor_rect(rect.0 as u32, rect.1 as u32, rect.2 as u32, rect.3 as u32);
                 for (index, group) in groups.iter().enumerate() {
                     pass.set_bind_group(index as u32, Some(*group), &[]);
                 }
@@ -537,12 +604,25 @@ impl MotionBlur {
         } else {
             &self.prepare
         };
+        // **A load operation has no sub-rectangle**, so the four targets a
+        // later pass reads outside the rectangle are still *cleared* whole:
+        // that is what keeps the texels the raster no longer covers zero
+        // rather than stale, and a tile reduction overlapping the boundary
+        // then reduces over a velocity of nothing. The two that are not:
+        // `scratch`, which only the viewport-restricted copy reads, and
+        // `frame.scene`, which belongs to the caller - clearing that one
+        // wiped everything outside the rectangle the moment the raster
+        // stopped covering it, which is a whole frame on a stage that draws
+        // pillarboxed.
+        //
         // 1. prepare: raw velocity + depth into one single-sampled texture.
         pass(
             "motion blur prepare",
             prepare_pipeline,
             &[&groups.idle, &groups.prepare],
             &prepared.view,
+            full_rect,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             opening.take(),
         );
         // 2 and 3: the separable tile reduction, horizontal then vertical.
@@ -551,6 +631,8 @@ impl MotionBlur {
             &self.tile_max_x,
             &[&groups.rows],
             &tile_rows.view,
+            rows_rect,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             None,
         );
         pass(
@@ -558,6 +640,8 @@ impl MotionBlur {
             &self.tile_max_y,
             &[&groups.columns],
             &tile_a.view,
+            grid_rect,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             None,
         );
         // 4: neighbour-max.
@@ -566,6 +650,8 @@ impl MotionBlur {
             &self.neighbour_max,
             &[&groups.spread],
             &tile_b.view,
+            grid_rect,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             None,
         );
         // 5: the gather, into scratch.
@@ -574,6 +660,8 @@ impl MotionBlur {
             &self.reconstruct,
             &[&groups.gather],
             &scratch.view,
+            full_rect,
+            wgpu::LoadOp::Load,
             None,
         );
         // 6: home.
@@ -582,6 +670,8 @@ impl MotionBlur {
             &self.copy,
             &[&groups.home],
             frame.scene,
+            full_rect,
+            wgpu::LoadOp::Load,
             closing.take(),
         );
         true
@@ -738,15 +828,30 @@ impl MotionBlur {
         if self.size == size && self.tile == tile && self.scratch.is_some() {
             return;
         }
+        // **The two full-size targets are rebuilt on a size change alone.**
+        // The tile edge is `MAX_STRETCH` of the *extent*, so under dynamic
+        // resolution it moves every time the controller steps - and rebuilding
+        // `prepared` and `scratch` for that would drop and recreate two
+        // allocation-sized textures for a reason that has nothing to do with
+        // either of them. The three tile targets below genuinely depend on it.
+        let full = self.size != size || self.scratch.is_none();
         self.size = size;
         self.tile = tile;
         let tiles = (size.0.div_ceil(tile.max(1)), size.1.div_ceil(tile.max(1)));
-        self.prepared = Some(Target::new(
-            device,
-            "motion blur prepared",
-            PREPARED_FORMAT,
-            size,
-        ));
+        if full {
+            self.prepared = Some(Target::new(
+                device,
+                "motion blur prepared",
+                PREPARED_FORMAT,
+                size,
+            ));
+            self.scratch = Some(Target::new(
+                device,
+                "motion blur scratch",
+                self.format,
+                size,
+            ));
+        }
         // Reduced across x but not yet across y - the intermediate the
         // separable tile-max needs, and the only target here whose two
         // dimensions come from different places.
@@ -768,14 +873,10 @@ impl MotionBlur {
             TILE_FORMAT,
             tiles,
         ));
-        self.scratch = Some(Target::new(
-            device,
-            "motion blur scratch",
-            self.format,
-            size,
-        ));
     }
 }
 
+#[cfg(test)]
+mod extent_tests;
 #[cfg(test)]
 mod tests;

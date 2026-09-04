@@ -169,9 +169,11 @@ pub struct Framebuffer {
     /// How much of [`Framebuffer::allocation`] this frame is drawn into,
     /// anchored at the origin and never larger than it.
     ///
-    /// The viewport, in other words, as against the texture. Equal to the
-    /// allocation on every frame the game currently draws - nothing moves it
-    /// yet - and the value a dynamic-resolution controller will write.
+    /// The viewport, in other words, as against the texture. Written every
+    /// frame by `Session::render` from `drs::Controller::extent`, which
+    /// returns the ceiling itself while `[graphics] dynamic_resolution` is
+    /// off - so this is equal to the allocation on a fixed-scale run and
+    /// strictly inside it on a controlled one.
     extent: (u32, u32),
     format: wgpu::TextureFormat,
     /// Where the scene lands at presentation size, and where the UI composites
