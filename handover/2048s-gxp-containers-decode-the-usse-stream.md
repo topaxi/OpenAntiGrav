@@ -1,4 +1,4 @@
-# 2048's GXP containers decode; the USSE stream and the name binding do not
+# 2048's GXP containers decode; the USSE stream's opcode field is located, semantics do not
 
 `docs/rendering/shadows.md` was blocked on tooling rather than on evidence:
 this repository had a PS3 fragment-microcode decoder and no Vita equivalent,
@@ -9,8 +9,23 @@ done - [`docs/formats/gxp.md`](../docs/formats/gxp.md),
 decoding over 22,056 files**, header, code extents, tables and the parameter
 table with its names.
 
-The instruction stream is **located and not decoded**, which is where this
-stops being comparable to the PS3 side.
+The instruction stream is **located, its opcode field is now found too, and
+no opcode is named** - the last of those is where this stops being
+comparable to the PS3 side. **2026-09-04**: `scripts/vita-gxp.py opcodes`
+swept both regions' full corpus (323,937 programs, 19.3M instructions) and
+found the primary and secondary op1 field is the top 5 bits of the 64-bit
+instruction word (nine values cover 99.7%/100% of instructions, and 6-7 bits
+don't split them further), and that secondary code's last instruction sets
+bit 50 with a full corpus-wide closure by two independent tests - primary
+code has no equally clean end bit by either test, evidence its end flag
+moves with a format the 5-bit op1 selects. See
+[`docs/formats/gxp.md`](../docs/formats/gxp.md)'s "The opcode field is
+located" section for the numbers and the license reasoning: Vita3K's own
+USSE decoder (GPL-2.0-or-later) was read as an **oracle** to check these two
+findings after they were derived from the bytes, never as a source to
+transcribe from - this project's own license bar rules a GPL decoder's
+tables out of an MIT/Apache-2.0 tree, so naming an actual opcode from here
+needs an independently-derived reading, not a port.
 
 The working notes from the session that did it - the derivation route and the
 four things that were wrong on the way - are in
@@ -21,12 +36,17 @@ both together.
 
 - **The USSE instruction stream.** Both programs' extents close on their own
   declared counts and the width is fixed at 8 bytes by `+0x74` agreeing with
-  `+0x40 + 8 * +0x3c` on all 97,899 - but no opcode is named. This is the
-  direct analogue of what `scripts/ps3-microcode.py` does for the RSX, and it
-  is the piece that would turn "`track_proximity_shadow_fp` binds no shadow
-  sampler" into "here is what it computes". Nothing was attempted here: the
-  container work filled the time box, and a half-read disassembly is worse
-  than none.
+  `+0x40 + 8 * +0x3c` on all 97,899. **2026-09-04**: the op1 field's *bit
+  position* is now found (top 5 bits, both primary and secondary; secondary's
+  end bit at bit 50 closes corpus-wide by two independent tests) - see above.
+  **Still open, and this is the harder half**: no opcode is *named*. This is
+  the piece that would turn "`track_proximity_shadow_fp` binds no shadow
+  sampler" into "here is what it computes", and it needs the sixteen-plus op1
+  values this pass found to each be tied to a real operation - likely via the
+  same kind of route `ps3-microcode.py` used for NV40 (an independently
+  re-derivable structural argument, not a transcription), since Vita3K's own
+  GPL-licensed decoder can be checked against but not copied from. Naming a
+  single opcode this way, end to end, is probably a session's work by itself.
 - **Which of an executable's programs is which name.** In the **v1.04 patch**
   the 67 `_vp`/`_fp` strings and the 67 containers agree in count *and* in
   their 32 / 35 split - but the **base** build embeds **111** containers
@@ -61,12 +81,14 @@ both together.
 
 ## Next Steps
 
-1. **Decode the USSE stream**, on the model of `scripts/ps3-microcode.py`. The
-   corpus is already framed and the census already says which 97,899 blocks a
-   decoder has to survive, so the same "N of N reach a clean end at exactly
-   their declared length" argument is available. `Vita3K`'s own USSE
-   translator is the external corroboration to check a reading against, the
-   way nouveau's headers were for the RSX.
+1. ~~**Decode the USSE stream**, on the model of `scripts/ps3-microcode.py`.~~
+   **The opcode field's location is done, 2026-09-04**: top 5 bits, both
+   primary and secondary, plus secondary's end bit at bit 50 - see above.
+   **What's left is naming a single op1 value.** `scripts/vita-gxp.py
+   opcodes` gives the field and the corpus to check any candidate against
+   (17.4M primary / 2.0M secondary instructions, both regions); `Vita3K`'s
+   own USSE translator remains the external corroboration to check a reading
+   against, never to transcribe from, per the license reasoning above.
 2. **Then read `track_proximity_shadow_fp`** and settle what 2048 actually
    draws for a ship shadow. The container half already narrowed it: it binds
    no parameter whose name contains "shadow", so whatever it does it does not
