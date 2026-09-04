@@ -156,6 +156,5 @@ fn a_one_texel_falloff_does_not_divide_by_zero() {
     // `size = 1` puts the centre at 0 and would divide by it.
     let image = Silhouette::falloff(1);
     assert_eq!(image.rgba.len(), 4);
-    assert!(image.rgba.iter().all(|byte| *byte != 0 || true));
     assert_eq!(image.rgba[3], 0xff);
 }

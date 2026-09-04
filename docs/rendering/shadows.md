@@ -619,8 +619,15 @@ Each step is a landing that can be reviewed on its own.
    linearly from the ground, a craft resting at its own ride height came out
    at strength `0.030`: uploaded, drawn, and invisible - 5,262 pixels changed
    by a maximum of 2. The fade is full strength up to the craft's own hover
-   target and only falls off above it. Captured on Pulse PSP, Pulse PS2, Pure
-   and HD/Fury; 2048 does not race yet.
+   target and only falls off above it.
+
+   **Diffed `off` against `blob` on four titles**, at a matched camera pose
+   each, so the tier is measured drawing rather than assumed to: Pulse PSP
+   8,595 pixels changed at a worst delta of 43, Pulse PS2 4,637 at 75, Pure
+   16,924 at 166, HD/Fury 25,022 at 77. 2048 does not race yet. **Every
+   judgement about how it *looks* is from a headless capture** - the fade's
+   shape, the falloff's darkness and `LIFT`'s size are all ours, and none has
+   been seen in a window.
 4. ~~**Decode the occluder's two record arrays**~~ - **done 2026-09-02**: they
    are `n` planes and `m` vertices, above. ~~What is left of this step is the
    **runtime reader in Ghidra**~~ - **done 2026-09-03**:

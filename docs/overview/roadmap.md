@@ -954,8 +954,12 @@ change how this list should be read:
       polarity is measured rather than assumed*: the corner texel is 0 and the
       craft's silhouette runs to 212 of 255. Every other title has no such
       asset and gets a generated falloff, which is this project's and is why
-      `off` is the default. Captured on Pulse PSP, Pulse PS2, Pure and
-      HD/Fury; 2048 does not race yet. See
+      `off` is the default. **Diffed `off` against `blob` on four titles**, so
+      the tier is measured drawing rather than assumed to: Pulse PSP 8,595
+      pixels changed at a worst delta of 43, Pulse PS2 4,637 at 75, Pure
+      16,924 at 166, HD/Fury 25,022 at 77. Every judgement about how it
+      *looks* is from a headless capture; nobody has seen it in a window.
+      2048 does not race yet. See
       [shadows.md](../rendering/shadows.md) and `oag_render::shadow`
 - [ ] `lensflare` `0x3de`
 - [ ] Reconcile with the prelit path. `GpuVertex.lit` already selects per vertex

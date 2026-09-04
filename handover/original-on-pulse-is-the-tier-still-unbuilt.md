@@ -16,7 +16,9 @@ and this file is what is left**, which is step 5.
 - **`blob`.** `oag_render::shadow` draws it, `oag_game::race::shadow` places
   it. HD's own nine `ambient_shadow.gtf` are the silhouette where the source
   ships them, a generated falloff elsewhere, and the load report says which
-  happened per slot. Captured on Pulse PSP, Pulse PS2, Pure and HD/Fury.
+  happened per slot. **Diffed `off` against `blob` on four titles** rather
+  than eyeballed: Pulse PSP 8,595 pixels changed at a worst delta of 43,
+  Pulse PS2 4,637 at 75, Pure 16,924 at 166, HD/Fury 25,022 at 77.
 
 Two things worth carrying forward from doing it:
 
