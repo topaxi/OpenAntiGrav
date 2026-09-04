@@ -185,6 +185,15 @@ test.
    builds an edge list from the boundary between them - the standard
    "silhouette edges separate front-facing from back-facing polygons" step of
    stencil shadow-volume construction.
+
+   **The data side of this step is now read, 2026-09-04**, which is what makes
+   the walk cheap rather than a search: a face record's tail is `u16[4]` of
+   *the face across each edge* at `+0x10` and `u16[4]` of vertex indices at
+   `+0x18`. Adjacency is reciprocal on 14,328 of 14,328 edges disc-wide and a
+   triangle's declared normal agrees with the geometry of the three vertices it
+   indexes to 0.028 degrees, so the boundary this step walks is a lookup per
+   edge. See [`shadows.md`](../../../rendering/shadows.md#the-16-bytes-at-0x10-are-the-edge-graph-and-it-closes-on-itself)
+   and `oag_formats::shadow_occluder`.
 6. **Draws**, through a short run of calls whose shape matches a stencil
    pass: a state/matrix select, a draw call using the edge-list vertex/index
    buffers just built, and calls bracketing it that read as enabling and
@@ -305,6 +314,10 @@ asserted either way.
 
 ## Open
 
+- ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
+  2026-09-04**: `u16[4]` of per-edge adjacent faces at `+0x10` and `u16[4]` of
+  vertex indices at `+0x18`, closing on 14,328 of 14,328 reciprocal edges. See
+  step 5 above.
 - **The `s0+0x28` field's real meaning**, from the sub-lead above - not a
   class name pointer as far as this pass could tell, and what it actually is
   was not chased further.

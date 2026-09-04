@@ -63,6 +63,7 @@ pub mod pvs;
 pub mod rcsmaterial;
 pub mod rcsmodel;
 pub mod sblk;
+pub mod shadow_occluder;
 pub mod signature;
 pub mod texture;
 pub mod track;

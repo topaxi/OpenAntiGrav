@@ -39,11 +39,21 @@ Two things worth carrying forward from doing it:
   (`crates/formats/tests/shadow_occluder_ground_truth.rs`),
   `Shadow_RenderOccluderVolume`'s own projection math (its **own local axis**,
   never a light), and the static class link. This is now a rendering task.
-- **The `m` face-to-vertex index mapping's exact byte layout**, per
-  [`shadow-occluder.md`](../docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md)'s
-  own Open section. Resolve it *before* step 5's draw code needs it: a
-  plausible-looking but wrong winding is exactly the invented stand-in
-  `CLAUDE.md`'s rule warns against.
+- ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
+  2026-09-04**, and the parser is `oag_formats::shadow_occluder`: `u16[4]` of
+  per-edge adjacent faces at `+0x10`, `u16[4]` of vertex indices at `+0x18`,
+  the fourth repeating the first on a triangle. Reciprocal on **14,328 of
+  14,328** edges disc-wide, every index in range on 4,381 of 4,381 faces, and
+  every triangle's declared normal within **0.028 degrees** of the geometry of
+  the vertices it indexes. `Occluder::silhouette` is the edge walk step 5
+  needs.
+- **The projection direction is what now blocks the draw.** The axis
+  `Shadow_RenderOccluderVolume` derives its direction from is read at one of
+  two addresses selected by a global flag, and *neither is backed by concrete
+  bytes in this Ghidra import*, so the constant's value is unknown - see that
+  page's own Open list. Drawing a hull needs a direction, and picking one is
+  precisely the stand-in this project forbids. Settle it before writing draw
+  code.
 - **Whether the 10 unnamed/world-space occluders are a track feature at all**,
   or authored-and-inert the way `DirectionalLight` turned out to be. If step 5
   draws only the 119 named ones, say so in the implementation rather than

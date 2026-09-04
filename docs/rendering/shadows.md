@@ -112,13 +112,13 @@ The `0x50` header, as far as it is read:
 | `+0x28` | `f32` `1.0` | **129/129** |
 | `+0x30`..`+0x50` | leans shadow-relevant: `min.y` is floored toward the ground plane on most (not all) nodes above it, `max.y` patched with the true value on some (not most) nodes where the packed box is invalid | 97/129 match within `1e-6` tolerance, which hides some hard-zero substitutions as "matches" against the `~1e-38` denormal sentinel; of the rest, 12/14 positive-`min.y` nodes are floored and 16/54 denormal-`max.y` nodes are patched - neither exceptionless nor explained - [`shadow-occluder.md`](../ghidra/functions/psp-pulse-usa/shadow-occluder.md) |
 | `+0x50` | `n` records of 32 bytes, **each beginning with a unit vector** | 129/129 |
-| `+0x50 + 32n` | `m` records of 16 bytes; not unit, not points inside the box | open |
+| `+0x50 + 32n` | `m` records of 16 bytes: `(w, x, y, z)` with `w` first, `w == 1.0` on every record on both discs | 129/129 |
 
 ### Both record arrays are decoded: `n` planes and `m` vertices
 
 - A **32-byte face record** opens with a unit plane normal (3 x `f32`, on
   129/129), carries a `u32` at `+0x0c` giving that face's vertex count - 3 or
-  more, never more than the hull owns - and then indices.
+  4, never anything else - and then the two `u16[4]` arrays below.
 - A **16-byte vertex record** is `(w, x, y, z)` with **`w` first**, and
   `w == 1.0` on every record on both discs. A homogeneous point.
 - **`m` counts slots, not vertices**: 150 slots across the Pulse disc sit at
@@ -131,6 +131,60 @@ component-wise extent is *exactly* the declared bounding box. `pulse_bomb` is a
 `y = 2.1059`, plus two spare slots. Both are convex hulls of a weapon pickup,
 which is what the class name promised.
 
+### The 16 bytes at `+0x10` are the edge graph, and it closes on itself
+
+The last unread field, read 2026-09-04, and the one drawing an occluder was
+waiting on. A face record's tail is two four-slot `u16` arrays:
+
+| Offset | Content |
+| --- | --- |
+| `+0x10` | `u16[4]`, the face across each edge - `0xffff` where there is none |
+| `+0x18` | `u16[4]`, vertex indices, the fourth repeating the first on a triangle |
+
+Edge `s` runs from vertex slot `s` to slot `s + 1`, wrapping, so the loop is
+closed whatever the count and the runtime can walk four edges unconditionally.
+Measured across all 129 nodes and 4,381 faces on `pulse-psp-usa.chd`, and
+asserted by
+[`shadow_occluder_ground_truth.rs`](../../crates/formats/tests/shadow_occluder_ground_truth.rs)'s
+`the_face_records_index_the_vertex_array_and_each_other`:
+
+- **Adjacency is reciprocal on 14,328 of 14,328 edges.** The face named across
+  an edge owns that same edge. This is the closure argument: a wrong stride or
+  a wrong offset does not produce a consistent edge graph on fourteen thousand
+  edges.
+- **Every vertex index is in range**, 4,381 of 4,381 faces; every count is 3 or
+  4 (3,184 triangles, 1,197 quads) and nothing else.
+- **Every `0xffff` edge is owned by no other face**, 4,381 of 4,381. On 4,377 of
+  them the only such edge is a triangle's degenerate fourth (`v0` to `v0`); the
+  other four faces are two flat two-face hulls (`Data.wad#242`, `#244`) with
+  twelve genuine boundary edges between them. One rule, exercised twice.
+- **Every triangle is coplanar with its own declared plane**, 3,184 of 3,184,
+  and its declared normal agrees with the geometry of the three vertices it
+  indexes to within **0.028 degrees** - two quantities stored in different parts
+  of the record, agreeing.
+
+**Quads are not planar, and that is authored rather than a decode error.** 300
+of the 1,197 spread further than `1e-4` of their hull's own scale from their
+declared plane, the worst at `5.3e-2`: bilinear quads out of an exporter. A
+sliver quad's first three vertices can even describe a normal 180 degrees from
+the declared one, which is exactly why the normal check above is stated over
+triangles - three points always describe a plane, four authored ones need not.
+The runtime tests against the record's own declared normal, so none of this
+costs it anything.
+
+**Two faces of 4,381 are odd and are carried rather than rejected**:
+`Data.wad#840` `shadowShape` face 13 of 110 winds against its own normal, and
+`Data.wad#744` `shadowShape` face 9 of 18 has no area. Refusing them would
+refuse two whole hulls over two faces, and only a caller building a volume can
+decide what to do with a reversed face - `oag_formats::shadow_occluder`'s
+`Face::winding` is how it asks.
+
+The parser is [`oag_formats::shadow_occluder`](../../crates/formats/src/shadow_occluder.rs),
+whose `Occluder::silhouette` is the edge walk this layout exists for: an edge is
+on the silhouette when exactly one of the two faces meeting there faces the
+projection direction, which the `+0x10` array answers in one lookup instead of a
+search.
+
 **The box is authored rather than derived**, so the disc-wide assertion is
 containment and not equality. The counter-example is instructive:
 `BEData.wad#20` is a *flat* hull with all eight vertices at `y = -0.06195458`
@@ -138,13 +192,12 @@ that declares its `y` maximum as the denormal `0x00800000` - a value no
 extent computation would produce.
 
 Confidence: **layout 88** (exact closure, 129/129, twelve independent
-`(n, m)` pairs). **Interpretation now 85** - the plane/vertex split is no
-longer a reading: the vertex array reproduces an independently stated bounding
-box on the hulls checked by hand, the `w` column is `1.0` on every record on two
-discs, and the face records' vertex counts are all in range. What remains
-unfound is the runtime reader, so a Ghidra name still waits on
-[the rubric](../reverse-engineering/confidence-rubric.md)'s evidence rule
-rather than on the layout.
+`(n, m)` pairs). **Interpretation now 92**, up from 85 on 2026-09-04 when the
+index arrays were read: the reciprocal edge graph closes over 14,328 edges and
+a triangle's two independently stored descriptions of its own plane agree to
+0.028 degrees. Two things keep it out of the 95-100 band - no runtime trace of
+`Shadow_RenderOccluderVolume` exists, and the second title's six hulls re-prove
+the *payload* closure rather than this indexing.
 
 ### Two populations, and they are not the same feature
 
