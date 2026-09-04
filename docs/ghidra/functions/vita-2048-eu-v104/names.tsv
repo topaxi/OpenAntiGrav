@@ -39,3 +39,4 @@
 0x8104714c	function	Environment_RegisterStageSchema	80	zone-environment-fallback.md
 0x8103876e	function	Zone_SetBlendedStageColour	85	zone-environment-fallback.md
 0x816af070	data	g_zone_blended_stage_colour	85	zone-environment-fallback.md
+0x810175fc	function	Environment_RegisterLightingSchema	85	lighting-schema.md

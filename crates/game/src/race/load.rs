@@ -559,7 +559,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } = environment::staging(
         &mut archives,
         &track,
-        ps3_geometry.is_some(),
+        environment::GeometryKind::of(ps3_geometry.as_deref()),
         title.race,
         options.mode,
         options.zone_stage,

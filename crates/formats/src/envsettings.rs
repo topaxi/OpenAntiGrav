@@ -61,6 +61,42 @@
 //! music-pulse keys for the Fury front end. Nothing here reads HD's executable,
 //! so **what the original does with any value is not decoded**; the names are
 //! the file's own rather than recovered.
+//!
+//! # Wipeout 2048 authors the same shape under different key names
+//!
+//! Every base and DLC circuit ships a `track.EnvSettings` in the same
+//! `"Key.Subkey"=float [float...]` syntax this module already parses - the
+//! *format* needs no title-specific code. The *keys* do: 2048's registrar
+//! (`Environment_RegisterLightingSchema` in `vita-2048-eu-v104/eboot.elf`,
+//! confidence 85 - see
+//! [`lighting-schema.md`](../../../docs/ghidra/functions/vita-2048-eu-v104/lighting-schema.md))
+//! spells the ambient term `"Lighting.Constant ambient colour"` (British,
+//! HD's is `"Lighting.Constant ambient color"`) and splits HD's single
+//! `"Lighting.Sun color"` into `"Lighting.Sun diffuse colour"` and
+//! `"Lighting.Sun specular colour"` - genuinely different keys, not a
+//! reformatting, confirmed by reading the registrar's own string table rather
+//! than guessed from the file. [`PSP2_AMBIENT_COLOUR`] and
+//! [`PSP2_SUN_DIFFUSE_COLOUR`] are 2048's own spellings of the two terms
+//! [`AMBIENT_COLOUR`] and [`SUN_COLOUR`] answer for HD. [`SUN_DIRECTION`] is
+//! spelled identically on both titles and needs no title-specific constant.
+//!
+//! **2048's file additionally authors a literal `"Lighting.Sun color"` key,
+//! spelled exactly like HD's, and it is not this project's diffuse term.**
+//! The registrar binds it to its own field, separate from `Sun diffuse
+//! colour`/`Sun specular colour`, so it is not a parser alias - but across
+//! the 14 circuit files sampled, five (`Anulpha_Pass`, `Chenghou_Project`,
+//! `bridge`, `park`, `sol`) carry the *exact* value the registrar's own
+//! compiled-in default initialises the field to (`~1.5, 1.3, 1.0`), the kind
+//! of untouched default an artist would leave behind on a field the picture
+//! does not visibly depend on - corroborating, not proving, that it is a
+//! vestigial field the shading path does not read. A displacement-based
+//! consumer search (this binary accesses this struct's region through
+//! `Environment_RegisterLightingSchema()`'s own return pointer plus a fixed
+//! offset, not through the field's absolute address - the same trap
+//! `docs/formats/envsettings.md`'s HD notes record for a TOC-relative load)
+//! did not resolve a reader in the time this pass spent on it. **Do not wire
+//! this key as a light-rig colour on the strength of its name alone** - see
+//! `docs/formats/envsettings.md`'s 2048 section for the full account.
 
 use std::collections::BTreeMap;
 
@@ -76,6 +112,16 @@ pub const SUN_SPECULAR_SCALE: &str = "Lighting.Sun specular scale";
 
 /// `"Lighting.Constant ambient color"`. Three numbers, reaching 3.0.
 pub const AMBIENT_COLOUR: &str = "Lighting.Constant ambient color";
+
+/// Wipeout 2048's own spelling of [`AMBIENT_COLOUR`] - see the module docs'
+/// "Wipeout 2048 authors the same shape under different key names" section.
+pub const PSP2_AMBIENT_COLOUR: &str = "Lighting.Constant ambient colour";
+
+/// Wipeout 2048's own diffuse sun term - the field HD's [`SUN_COLOUR`]
+/// answers for, under a different key. **Not the same key as 2048's own
+/// literal `"Lighting.Sun color"`** - see the module docs for why that one is
+/// left unwired.
+pub const PSP2_SUN_DIFFUSE_COLOUR: &str = "Lighting.Sun diffuse colour";
 
 /// `"Lighting.Prelit ambient colour scale"`. Three numbers. The scale the
 /// circuit's own fragment microcode multiplies the powed lightmap by -
