@@ -348,22 +348,29 @@ histogram rather than a rendering observation, and it is a property of the
 *invented* uniform spread rather than of anything recovered - see the last
 Open item below.
 
-## 2026-09-04: the sky gradient's draw is read, and it is a dome
+## 2026-09-04: the sky gradient's draw is read, and it is a double cone, not a dome
 
 Picked at random by `/oag-handover`. Full evidence in
 [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md)'s new
-section. `FUN_005ebd58`, the sole consumer of the horizon/zenith colour pair,
-is renamed `Sky_DrawGradientDome` (confidence 82): it sweeps 18 latitude bands
-by sin/cos, emits them as quads and triangles through two decompiled
-vertex-emission helpers, and submits the batch through the same generic RSX
-draw-submit call `Environment_UpdateStageBlend` also uses. The two packed
-colours are per-vertex, not per-pixel - one half of the sweep blends from the
-horizon colour to the zenith colour as it climbs, the other half holds the
-horizon colour flat as a skirt. **This closes the open question the previous
-pass deliberately declined to guess at**: it is a dome, not a screen-space
-quad and not a fog term, so a horizon-to-zenith gradient really is what a port
-should draw here - drawing it was never going to be safe to guess, and now it
-does not have to be.
+section, itself corrected mid-pass the same day - the first read called the
+sweep 18 latitude bands, and the actual TOC constants (read with
+`scripts/ps3-toc.py resolve`, not inferred) say otherwise. `FUN_005ebd58`,
+the sole consumer of the horizon/zenith colour pair, is renamed
+`Sky_DrawGradientDome` (confidence 82): it builds **one** 18-segment ring
+swept through a full 360° (`18 × 20°` steps, both baked constants) and fans
+it to two fixed apexes at `±0.75×radius` - a double cone on one equator ring,
+not a multi-band hemisphere. The two packed colours are per-vertex, not
+per-pixel - the cone toward one apex blends from one colour to the other as
+it approaches its point, the cone toward the other apex holds the first
+colour flat throughout. **This closes the open question the previous pass
+deliberately declined to guess at**: it is geometry with a real gradient, not
+a screen-space quad and not a fog term - so a two-colour gradient really is
+what a port should draw here. **What is not closed**: which apex is
+zenith-ward in world space (confidence ~65, structural inference not a
+measurement) and, more concretely, what blend/depth state and draw order this
+call uses against the `ZoneSky.gtf` cubemap the same function already draws -
+neither is set anywhere near the call site, so it was set further upstream
+than this pass read. That is the real blocker on drawing it, not the shape.
 
 Not done in this pass, and worth flagging for whoever picks this up next: no
 Rust code was written. This was scoped as the RE half only, per this skill's
@@ -485,20 +492,26 @@ unblocks - see Next Steps below for what implementing it needs.
   the answer was in the loader's control flow.
 
 - ~~What `FUN_005ebd58` draws, which is the only thing between here and the
-  gradient.~~ **Done, 2026-09-04.** Renamed `Sky_DrawGradientDome`
-  (confidence 82) - it builds and submits a procedural, vertex-coloured dome
-  (18 latitude bands via sin/cos, two triangle/quad-emission helpers, a shared
-  RSX draw-submit call also used by `Environment_UpdateStageBlend`), blending
-  the caller's two packed colours from horizon to zenith on one half of the
-  sweep and holding the horizon colour solid on the other half (a skirt). See
-  [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md)'s new
-  section. **It is a dome, not a screen-space quad or a fog term** - the
+  gradient.~~ **Done, 2026-09-04, and refined the same day.** Renamed
+  `Sky_DrawGradientDome` (confidence 82) - not a multi-band dome, a **double
+  cone**: one 18-segment ring swept a full 360° (both counts read straight off
+  the TOC, not inferred), fanned to two fixed apexes at `±0.75×radius`. See
+  [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md)'s
+  gradient-dome section, including its own same-day correction of the first
+  pass's "18 latitude bands" misreading. **It is geometry with a real
+  two-colour vertex gradient, not a screen-space quad or a fog term** - the
   question this item posed is answered, not guessed at. **Still open, and now
-  the actual next step**: which sweep direction is zenith-ward versus
-  ground-ward in world space (nothing in the decompile ties `+step` to up
-  rather than down), and drawing the dome in this port - the asset side
-  (`ZoneGrade::scene_tint()`) already has the two colours; nothing consumes
-  them as geometry yet.
+  the actual next step - a blocker, not a TODO**: no blend mode or depth state
+  is set anywhere near the call site, so how this cone composites with the
+  `ZoneSky.gtf` cubemap the same function draws (draw order, blend mode) is
+  unread, and which apex is zenith-ward in world space is a structural
+  inference (~65) rather than a measurement. Drawing this without answering
+  either is exactly the guess this thread has repeatedly declined to make -
+  the asset side (`ZoneGrade::scene_tint()`) already has the two colours;
+  nothing consumes them as geometry yet, and nothing should until the
+  compositing is read (more static work, tracing state upstream of
+  `0x003ae1bc`) or captured live (the patched RPCS3 watchpoint build,
+  `just build-rpcs3-watchpoints`, on a Zone race).
 
 - **The visualiser glow is the largest remaining gap in what draws, and it is
   wanted by the racing circuits rather than being an arena extra.**

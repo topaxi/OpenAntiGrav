@@ -186,13 +186,37 @@ directory.
 settled. Confidence **82**, capped at 84 per this page's own static-reading
 rule.
 
-`Sky_DrawGradientDome(param_1, param_2, param_3, param_4)` loops 18 times over
-a starting angle `θ0` (`fRam008bf4b4`), a scale (`fRam008bf4b0`) and a fixed
-step (`fRam008bf4c0`), advancing `θ0 += step` each iteration - 19 rings swept
-from a base latitude toward the direction the step points, computed via eight
-`_FSin(angle, cursor, sin_or_cos)` calls per ring pair (sin and cos of two
-adjacent angles, i.e. the x/z of two rings at once). Two vertex-emission
-helpers consume the ring positions:
+**Correction to this section's first pass, same day.** The first read of the
+disassembly called `fRam008bf4b4`/`fRam008bf4b0`/`fRam008bf4c0` unknown
+per-call inputs and described the loop as 18 latitude bands climbing from
+horizon toward zenith. Both were wrong. Ghidra's `fRam` naming was misleading:
+these are not mystery RAM values, they are **fixed constants in this
+function's own TOC**, read directly with `scripts/ps3-toc.py resolve
+0x005ebd58 <disp>` (`0x20ec`, `0x20f0`, `0x20f4`, `0x20f8`, `0x20fc`) and
+decoded as IEEE-754 floats:
+
+| symbol | TOC slot | value | role |
+| --- | --- | ---: | --- |
+| scale | `0x008bf4b0` | `0.017453291` | exactly `π/180` - degrees to radians |
+| `θ0` | `0x008bf4b4` | `0.0` | the sweep's starting angle, degrees |
+| apex ratio (up) | `0x008bf4b8` | `0.75` | `× radius`, the upper apex height |
+| apex ratio (down) | `0x008bf4bc` | `-0.75` | `× radius`, one lower apex height |
+| step | `0x008bf4c0` | `20.0` | degrees advanced per iteration |
+
+**So this is not a multi-band dome - it is one 18-segment ring swept through a
+full 360° (`18 × 20°`), forming a double cone.** The 0.0 starting angle plus
+the constant `0.0` written into the base-ring vertices' shared field
+(`fmr f26,f23` once, before the loop, never reassigned) both point at a base
+ring sitting at a fixed height - call it `Y=0` - tessellated into 18 points
+around a full circle in the horizontal plane, not climbing latitude at all.
+The eight `_FSin(angle, cursor, sin_or_cos)` calls per iteration are the
+sin/cos of two **adjacent azimuth angles** (`θ`, `θ+20°`), i.e. the x/z of two
+consecutive base-ring points, not two different latitudes.
+
+Two vertex-emission helpers consume those ring positions plus two apex points
+that are computed once and reused across all 18 segments (`f24 = radius×0.75`,
+`f25 = radius×-0.75`, and a third, `f20 = -radius`, used once more for a
+steeper closing triangle):
 
 - **`FUN_005e9e50`** (decompiled in full) pushes **two triangles from four
   vertex+colour pairs** - `(v2,c2) (v3,c3) (v4,c4)` then `(v5,c5) (v3,c3)
@@ -200,26 +224,26 @@ helpers consume the ring positions:
   index buffer with its own restart-marker bookkeeping (`0xffffffff` sentinel,
   a `+0x10` per-strip vertex count).
 - **`FUN_005ea308`** (decompiled in full) is the same restart-marker logic
-  pushing **one triangle from three vertex+colour pairs**, i.e. a cap/closing
-  triangle rather than a quad.
+  pushing **one triangle from three vertex+colour pairs** - a fan segment
+  closing on the shared apex, rather than a quad between two rings.
 
-Each iteration builds two such primitive groups, not one: a quad+triangle
-using the ring **advancing** in the step direction, then a second quad+triangle
-using a ring **one step the other way** from the same base angle - a dome half
-plus a skirt extending the opposite way from the same latitude, sharing one
-sweep rather than two separate passes.
+Each iteration builds four primitive groups per 20° segment: a quad and a
+closing triangle toward the **upper** apex (`0.75×radius`), then a quad and a
+closing triangle toward the **lower** apex (`-0.75×radius`, with one segment's
+triangle reaching all the way to `-radius`). That is a **double cone fanned
+from one 18-gon equator ring** - an upper cone whose vertices blend toward one
+colour as they approach its apex, and a lower cone held solid in the other -
+not a hemisphere built from many latitude bands as the first pass described.
 
 **The two packed colours are the vertex colours, not a per-pixel term.** The
-advancing-ring primitives take `(param_3, param_3, param_4)` and
-`(param_4, param_4, param_4)` - blending toward the caller's second colour as
-the sweep climbs - while the opposite-direction primitives take
-`(param_3, param_3, param_3)` and `(param_3, param_3, param_3)` throughout,
-uniformly. So one colour (`param_3`, the horizon colour per this page's own
-reading of the caller) covers the skirt solid, and the blend toward the other
-(`param_4`, zenith) happens only on the climbing half, GPU-interpolated across
-each quad the way vertex colours always are - this is a genuine
-horizon-to-zenith gradient, built as geometry and colour, not sampled or
-computed per fragment.
+upper-cone primitives take `(param_3, param_3, param_4)` and `(param_4,
+param_4, param_4)` - blending toward the caller's second colour as the
+vertices approach the upper apex - while the lower-cone primitives take
+`(param_3, param_3, param_3)` throughout, uniformly. So one colour
+(`param_3`) covers the lower cone solid and the blend toward the other
+(`param_4`) happens only going up, GPU-interpolated across each quad the way
+vertex colours always are - a genuine two-colour gradient, built as geometry
+and colour, not sampled or computed per fragment.
 
 **The submit call confirms it reaches the GPU as ordinary geometry.** The loop
 ends with a call to `FUN_005e6870` (861 instructions, calls `Rsx_SetMethod` and
@@ -230,15 +254,23 @@ shared by several other renderer routines including the already-named
 "submit the accumulated batch," and every one of its many callers would need
 checking before a name could mean anything general.
 
-Renamed `Sky_DrawGradientDome`. What is still unread: which of the two
-opposite sweep directions is "up" (zenith-ward) versus "down" (ground-ward) in
-world space, and therefore whether the skirt is a ground plane, a
-below-horizon fill, or something else - nothing in the decompile ties `+step`
-to up rather than down, and the caller's own `θ0` is opaque without reading
-`Scene_PrepareFrame`'s setup of `fRam008bf4b4`/`fRam008bf4c0` further upstream.
-A port drawing this can use either channel assignment for horizon/zenith
-provisionally and correct it against a real frame, per this page's existing
-channel-order caveat below.
+Renamed `Sky_DrawGradientDome`. **Confidence 82 on the shape** (a double cone
+on one azimuth ring, upper half blending, lower half solid) - every number in
+the table above is a direct TOC decode, not an inference. **Confidence drops
+to inference-level (~65, not separately scored) for "upper = sky, lower =
+ground/underside skirt"**: nothing read ties the vertex field the apex heights
+write into to world-space up specifically, as opposed to whatever local frame
+this draw happens in - it is the conventional reading (a sky gradient's
+visible half blends toward its horizon colour going up and a hidden
+below-horizon half doesn't need to), not a measured one. **What blocks
+drawing this safely**: no blend mode or depth state is set adjacent to the
+call site (`0x003ae1bc`) or within the eight instructions either side of it -
+whatever state is active was set earlier, upstream of where this pass looked,
+and how this double cone composites with the `ZoneSky.gtf` cubemap the same
+function already draws (same colour buffer? drawn before or after? additive,
+alpha, or opaque?) is unread. Guessing a compositing mode is exactly the kind
+of stand-in this project's rules exist to prevent, so the shape is documented
+and nothing is drawn on it yet.
 
 ## What is **not** established
 
@@ -302,6 +334,13 @@ llvm-objdump -d --mcpu=pwr6 --start-address=0x5ebd58 --stop-address=0x5ec3b4 $EL
 llvm-objdump -d --mcpu=pwr6 --start-address=0x5ea308 --stop-address=0x5ea46c $ELF  # FUN_005ea308, the triangle emitter
 llvm-objdump -d --mcpu=pwr6 --start-address=0x5e9e50 --stop-address=0x5ea2cc $ELF  # FUN_005e9e50, the quad emitter
 
+python3 scripts/ps3-toc.py toc     0x005ebd58   # -> 0x008bd3c4
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20ec  # scale, 0x3c8efa34 = pi/180
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f0  # theta0, 0x00000000 = 0.0
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f4  # apex ratio up, 0x3f400000 = 0.75
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20f8  # apex ratio down, 0xbf400000 = -0.75
+python3 scripts/ps3-toc.py resolve 0x005ebd58 0x20fc  # step, 0x41a00000 = 20.0
+
 python3 scripts/psarc.py list $ISO:PS3_GAME/USRDIR/DATA02.PSARC | grep -i zonesky
 python3 scripts/psarc.py cat  $ISO:PS3_GAME/USRDIR/DATA02.PSARC \
     /data/tex/zonesky.gtf | head -c 64 | xxd
@@ -341,11 +380,11 @@ again here:
   cleared otherwise, read by the sky branch here and by `Scene_PrepareFrame`
   twice.
 - `Sky_DrawGradientDome` (`0x005ebd58`, function, 82) - builds and submits a
-  procedural, vertex-coloured dome (18 latitude bands swept by sin/cos) that
-  blends the caller's two packed colours from horizon to zenith on one half of
-  the sweep and holds the horizon colour solid on the other. Exactly one
-  caller, `Scene_PrepareFrame`, passing the two colours this page's gradient
-  section decodes.
+  procedural, vertex-coloured double cone (one 18-segment ring swept through a
+  full 360°, fanned to two fixed apexes at `±0.75×radius`) that blends the
+  caller's two packed colours toward one apex and holds one colour solid
+  toward the other. Exactly one caller, `Scene_PrepareFrame`, passing the two
+  colours this page's gradient section decodes.
 
 ## See also
 
