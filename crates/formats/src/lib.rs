@@ -65,6 +65,7 @@ pub mod rcsmodel;
 pub mod sblk;
 pub mod shadow_occluder;
 pub mod signature;
+pub mod sound_emitters;
 pub mod texture;
 pub mod track;
 pub mod trackstartup;
