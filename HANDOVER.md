@@ -1236,10 +1236,17 @@ HI16/LO16 pair or a 32-bit data word that resolves into `.bss`, `.cplinit`,
 `.ctors` or `.linkonce.d` needs the segment-1 base instead. Full arithmetic
 and the relocation-record check:
 [anim-transform.md](docs/ghidra/functions/psp-pulse-usa/anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image).
-This also bears on [the `$gp`-relative thread](handover/a-global-reached-through-gp-has-an-instruction.md)'s
-still-unfound `DAT_08b32428`, which is also `.bss`-shaped - not the same
-addressing mode, but worth checking against the segment-1 base if a HI16/LO16
-route to it ever turns up instead of `$gp`.
+**2026-09-05: that HI16/LO16 route did turn up for `DAT_08b32428`, and it settled
+two things at once.** First, [the `$gp`-relative thread](handover/a-global-reached-through-gp-has-an-instruction.md)'s
+own premise was wrong: this binary uses `$gp` as a load/store base register
+**zero** times in its entire 521,965-instruction body, so `DAT_08b32428` was
+never `$gp`-relative to begin with - the actual mechanism was this naive-value
+trap all along. Second, applying the segment-1 base (`+0x08ad9798`) here does
+**not** reproduce the independently-known address; a *different* constant
+(`+0x08ad9450`) does, cross-validated three ways in one function. That breaks
+anim-transform.md's "there is no third base to find" - see the correction added
+there, and the thread file, for the full derivation and the writer it found
+(`DAT_08b32428`'s two write sites, one per race mode).
 
 **`get_xrefs_to` can work after all - on the naive address, not the relocated
 one.** Found tracing `g_ingame`'s readers for the same thread: `get_xrefs_to`
