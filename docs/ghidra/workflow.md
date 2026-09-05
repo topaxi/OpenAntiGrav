@@ -37,54 +37,150 @@ Also a plain ELF, for the Emotion Engine. The `IOP/*.IRX` modules are separate
 ELF files for the I/O processor and can be imported alongside if the audio or
 storage paths become relevant.
 
-### Importing a binary: analyse, then rebase
-
-**Replicable procedure. Follow it in this order on every workstation** - the
-order is not cosmetic, and getting it wrong produces a database that looks
-finished and silently answers "no references" to every string query. Measured
-2026-08-09 on `pure-psp-eu`.
+### Importing a binary
 
 All PSP binaries here are relocatable (`e_type` `0xffa0`) and declare `p_vaddr`
 `0x00000000`, so each has to be placed at `0x08804000` by hand.
 
-1. **Install the Allegrex processor module first** (`just build-allegrex`), for
-   the VFPU-decoding reason above. For PS2, the Emotion Engine module.
-2. **Import at the default image base** - do not set a base in the loader
-   options. Language should auto-detect as `Allegrex:LE:32:default`.
-3. **Run full auto-analysis and let it finish.** Poll until it settles;
-   `reanalyze` timing out is normal on a binary this size and means analysis
-   started, not that it failed.
-4. **Only then set the image base to `08804000`**, via `Window > Memory Map >
-   Set Image Base`, or `set_image_base` through the bridge.
-5. **Verify before trusting it** (see below).
+**Read the next section before importing a PSP binary.** Which import order is
+correct depends on whether the Allegrex module carries this repo's relocation
+patch, and the two answers are opposites.
 
-**Why this order.** Analysis is what turns `lui`/`addiu` pairs into references.
-Rebasing first leaves the instruction stream holding pre-relocation immediates
-while the data listing sits at `0x08804000`, so the analyser resolves a string
-pointer to `0x248538` - an address below the image base where nothing lives -
-and creates no reference at all. Analysing at base `0`, where code constants and
-data addresses agree, builds the references correctly; the later rebase slides
-them with everything else.
+#### Why a PSP import silently loses every relocation
 
-Rebasing is safe to do after analysis - see
-[Allegrex and the VFPU](../psp/allegrex-vfpu.md#rebasing-is-safe-here-which-is-not-generally-true)
-for the `AllegrexRelocationFixupHandler` that makes it supported.
+Measured 2026-09-05 on `psp-pulse-usa`, headless, into a throwaway project.
+Confidence **92**.
+
+`ghidra-emotionengine-reloaded`'s `EE_ElfExtension` - installed here for the
+PS2 work - wins ELF adapter selection for PSP files.
+`Allegrex_ElfExtension.processGotPlt`, the only call site of
+`AllegrexRelocationProcessor.process`, therefore never runs, and **no PSP
+relocation is ever applied**. Four steps, each re-checkable with `javap`:
+
+1. `ElfExtensionFactory.getLoadAdapter(ElfHeader)` is a plain first-match-wins
+   loop over `ClassSearcher.getInstances(ElfExtension.class)`, testing only the
+   **one-arg** `canHandle(ElfHeader)`.
+2. `ClassSearcher` orders that list by descending
+   `@ExtensionPointProperties(priority)`. `EE_ElfExtension` declares
+   `priority = 2`; `Allegrex_ElfExtension` declares nothing, so it gets
+   `DEFAULT_PRIORITY = 1` and sorts behind it.
+3. `EE_ElfExtension` overrides only the two-arg `canHandle(ElfLoadHelper)` and
+   inherits stock `MIPS_ElfExtension`'s one-arg version, which accepts **any**
+   `EM_MIPS` ELF - PSP included.
+4. So EE is returned for `BOOT.BIN`. Nothing logs an error, because nothing
+   failed: the code was never reached.
+
+Allegrex's own two-arg `canHandle(ElfLoadHelper)`, which checks the language is
+`Allegrex`, is dead code as far as adapter selection goes - the factory never
+calls it. That is why the language check it performs never prevented any of
+this.
+
+What that looks like on every PSP database in this project:
+
+```
+relocation table entries = 0
+0x0894f6d8 word = 0x3c110028   <- byte-identical to BOOT.BIN on disk
+0x08ac326c (g_scream_opcode_table) = 0x00189e6c 0x0018bc78 ...
+```
+
+The input is fine and the module is fine: `readelf -S BOOT.BIN` shows eleven
+`LOPROC+0xa0` (`SHT_PSP_REL`) sections, `.rel.text` alone holding
+`0xb6c18 / 8` = **93,443** entries; Ghidra's own `ElfHeader.parse()` sees all
+eleven; and `javap -c` on the installed `ghidra-allegrex.jar` confirms
+`AllegrexRelocationProcessor` passes `addToRelocationTable = true` and handles
+`R_MIPS_26`. The code that consumes all of that never executes.
+
+**This corrects two things this page used to say.** It claimed Pulse's
+`lui`/`addiu` constants were "genuinely rewritten", on the evidence that
+`0x0894f6d8` held `a908113c` in the database against `2800113c` on disk. The
+database holds `2800113c`. Nothing was rewritten, in Pulse or anywhere else -
+so the four "escalating instances" this page documented (the Pure-wide
+constant wart, the `jal` targets in `Billboard_ConstructResource`,
+`Ship_SetState`'s jump-table base, `g_scream_opcode_table`) are not four warts
+of differing scope. They are **one bug, seen four times**, and
+`real = pseudo + 0x08804000` is the right correction for every one of them
+because the image base is precisely what was never added.
+
+The fix is
+[`scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch`](../../scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch),
+applied by `just build-allegrex`: it raises Allegrex's extension-point priority
+above EE's and narrows its predicate to PSP files, so the mirror-image bug
+cannot appear on PS2 imports instead. **Written and compile-checked, not
+installed** - installing it and reimporting the databases is a maintainer
+action, and until it happens every PSP database still has this.
+
+#### The import order, and why it flips with the patch
+
+**Unpatched - which is what every current database is.** Import at the default
+image base, run full auto-analysis, then set the image base to `08804000`
+(`Window > Memory Map > Set Image Base`, or `set_image_base` through the
+bridge). Measured fresh and headless on `psp-pulse-usa`, 2026-09-05:
+
+| | analyse, then rebase | loader image base, then analyse |
+| --- | ---: | ---: |
+| functions found | **10,679** | 7,933 |
+| relocation table entries | 0 | 0 |
+| `jal` targets landing in `.text` | 4/4 | 0/4 |
+| `g_scream_opcode_table` entries in `.text` | 40/40 | 0/40 |
+
+Nothing is relocated in either column. Analysing at base `0` wins only because
+the instruction constants and the data listing agree there; setting the base
+first moves the listing out from under constants that never change, so a string
+pointer resolves below the image base where nothing lives and no reference is
+created.
+
+**Patched.** Set `Image Base` in the loader's import options and analyse once -
+no rebase step. `AllegrexRelocationProcessor` computes every write against
+`program.imageBase` *at load time*, so at `0x08804000` every relocation is
+correct on the first pass. Do **not** use analyse-then-rebase on a patched
+build headlessly: re-applying relocations after a base change is the job of
+`RelocationFixupPlugin`, a `ProgramPlugin` listening for
+`ProgramEvent.IMAGE_BASE_CHANGED`, so it exists only inside a running Ghidra
+tool. A headless `setImageBase` moves the addresses and leaves the bytes.
+
+This reverses what this page recommended before, and the old page's own
+"leading hypothesis" - that setting the base in the loader options would remove
+the wart - turns out to have been **right and confounded**, not wrong. It
+measured worse only because the relocation pass was not running in either arm.
 
 #### Verifying an import
 
-Two checks, both cheap. On `pure-psp-eu`:
+```sh
+just check-ghidra-import
+```
+
+It probes the program that is currently open in Ghidra and needs Ghidra
+started with `GHIDRA_MCP_ALLOW_SCRIPTS=1` **in its own environment** - the
+script endpoint is gated on the Ghidra plugin side, not on the bridge process,
+so setting it only in `.mcp.json` is not enough. Only the *current* program is
+reachable; check the others by making each current in turn.
+
+**The decisive number is the relocation-table entry count.** A PSP program
+whose table has zero entries did not have its relocations applied, full stop -
+one query, no ambiguity. The three secondary probes (`psp-pulse-usa` only, since
+they name addresses in that binary) are the `lui` at `0x0894f6d8`, the `jal`
+calls inside `Billboard_ConstructResource` at `0x08900220`, and
+`g_scream_opcode_table` at `0x08ac326c`.
+
+**Function count is not a usable check**, and an earlier version of this page
+was wrong to offer one. It quoted "wrong order gave 6,934; right order gives
+8,969" for `pure-psp-eu` - but the live `/psp-pure-eu` reads 6,934 and
+`/psp-pure-usa` 6,927, so either those databases are the "wrong order" ones by
+the page's own metric or the 8,969 figure never meant what the page said. The
+count ranges from 6,927 to 10,679 across four near-identical binaries and is
+inflated by hand-created functions, so it cannot discriminate. Treat it as an
+anchor, never a pass/fail.
+
+A string still failing to resolve back to code is a real signal, just a weaker
+one - it survives the relocation bug, because string references are built from
+`lui`/`addiu` analysis at base 0 and then slide with the rebase:
 
 ```sh
-# 1. Function count. Wrong order gave 6,934; right order gives 8,969.
-#    A count well below the reference figure means analysis was crippled.
-# 2. A string must resolve back to code:
 curl -s 'http://127.0.0.1:8089/get_xrefs_to?address=0x08a4c538'
 #    -> "From 08898838 in FUN_08898594"   (Data\XML\HandlingStats.xml)
 #    -> "No references found"             = the import is bad, redo it
 ```
 
-Pick any string the binary obviously uses; if `get_xrefs_to` on it says "No
-references found", the import is bad no matter how complete it looks.
 Decompilations full of `bad instruction data` and `halt_baddata()` truncations
 are the same signal.
 
@@ -97,66 +193,33 @@ Ghidra GUI. Learned redoing `/psp-pure-eu` on 2026-08-10, which had sat at 0
 functions for a session; it was reimported rather than diagnosed, which was the
 cheaper call.
 
-#### Known-imperfect, and why it does not block
+#### Reading an unrelocated database, until it is reimported
 
-This procedure leaves **instruction bytes unrelocated** - `0x0898bab8` still
-reads `2800043c` (`lui a0, 0x28`), and the decompiler prints raw constants like
-`0x248538` rather than `0x08a4c538`. References are correct, so navigation and
-every string tool work; the displayed constant is what lies. Add `0x08804000`
-when reading a constant out of a decompilation.
+Until the patch above is installed and the databases reimported, every PSP
+database here holds **raw, base-0 instruction bytes**. The rule is one line:
 
-The Pulse databases do **not** have this wart on `lui`/`addiu` HI16/LO16
-constants - at `psp-pulse-usa` `0x0894f6d8` the file on disk holds `2800113c`
-while the database holds `a908113c`, so their instruction bytes were
-genuinely rewritten there. **A narrower, related wart survives on `jal` call
-targets** (2026-08-28, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
-several calls inside `Billboard_ConstructResource` (`0x08900220`) decompile
-as `func_0x00XXXXXX(...)`, a low pseudo-address `get_function_by_address`
-cannot resolve, even though the *data*-constant wart is fixed in this same
-region. `real = pseudo + 0x08804000` (this binary's own image base) held for
-every case checked - `func_0x0013ff08` resolved cleanly to a real function
-body once corrected - which reads as the `R_MIPS_26` relocation (`jal`'s
-target encoding) not being applied even where `R_MIPS_HI16`/`R_MIPS_LO16`
-(the `lui`/`addiu` pair) are. **How they got that way is not
-established**; setting `Image Base` in the loader's import options is the
-leading hypothesis and is worth testing next, since it would remove the wart
-entirely. Until then, prefer the order above - it is measured, and it is a large
-improvement on what it replaces.
+> **`real = pseudo + 0x08804000`**, for every constant, `jal` target and stored
+> pointer alike.
 
-**A further exception, found 2026-09-02 tracing `Ship_SetState`'s state-7 arm**
-(`docs/ghidra/functions/psp-pulse-usa/shield.md`): a `lui`/`lw`-offset pair used
-to build the *base of an indirect jump table* - `lui at,0x27; addu at,at,a0;
-lw at,0x7c40(at)` computing `table + index*4` - still carried the raw
-pre-relocation value even though this is exactly the HI16/LO16 shape the note
-above says is fixed on `psp-pulse-usa`. `inspect_memory_content` failed outright
-on the literal `0x00277c40` and on a second, unrelated global-byte address
-(`0x002ac7e3`) built the same way a few instructions earlier in the same
-function; both read cleanly once `+ 0x08804000` was added, and the corrected
-jump-table address (`0x08a7bc40`) landed exactly four bytes past the *end* of
-`Ship_SetState`'s own already-documented nine-entry table (`0x08a7bc18` +
-`9*4` = `0x08a7bc3c`, one null word, then `0x08a7bc40`) - strong confirmation
-the correction is right, not a coincidence. So the fix in this file's note
-above is not "every HI16/LO16 pair on `psp-pulse-usa` is corrected" - it is
-"every HI16/LO16 pair the auto-analyzer actually processed as a relocation
-target is corrected". A jump-table base the analyzer never recognized as one
-(this whole function decompiles as one indirect call - see `shield.md`) is
-exactly the kind of code the relocation pass never walked, and it carries the
-same raw offset the `jal`-target wart does, corrected the same way. Suspect
-this wherever a function's jump table was found by manual disassembly rather
-than by Ghidra's own analysis.
+The displayed constant is what lies; the references built by analysis at base 0
+are correct, so navigation and the string tools still work. Four places this
+has already cost time, all the same bug:
 
-**A fourth instance, found 2026-09-04** (`docs/ghidra/functions/psp-pulse-usa/sound.md`):
-the jump table itself can carry the wart, not just code that reads it. Reading
-`g_scream_opcode_table` (`0x08ac326c`, in `.data`) back gave forty
-`0x0018xxxx`-range values, nowhere near `.text`
-(`0x08804000`-`0x08a76a3b`) - and `decompile_function`/`disassemble_function`/
-`create_function` on any of them refused outright, which reads exactly like
-"nothing is there" rather than "the address is wrong". `real = pseudo +
-0x08804000` resolved every entry checked to real, disassemblable code, one of
-them already sitting under an existing function. The table is read by
-`Scream_StepCommandList`'s own interpreter loop - runtime indirection no
-static jump-table analysis would recognise as one - so it fits the
-generalisation above exactly: unwalked, unfixed, same correction.
+| where | what it looks like | source |
+| --- | --- | --- |
+| a `lui`/`addiu` constant | `0x0898bab8` reads `2800043c`, decompiler prints `0x248538` for `0x08a4c538` | `pure-psp-eu`, 2026-08-09 |
+| a `jal` target | calls in `Billboard_ConstructResource` (`0x08900220`) decompile as `func_0x0013ff08`, which `get_function_by_address` cannot resolve | [billboards.md](functions/psp-pulse-usa/billboards.md), 2026-08-28 |
+| a jump-table base | `lui at,0x27; addu at,at,a0; lw at,0x7c40(at)` yields `0x00277c40`; corrected, `0x08a7bc40` lands four bytes past the end of `Ship_SetState`'s own nine-entry table (`0x08a7bc18 + 9*4`, one null word, then the next table) | [shield.md](functions/psp-pulse-usa/shield.md), 2026-09-02 |
+| a jump table's contents | `g_scream_opcode_table` (`0x08ac326c`) reads forty `0x0018xxxx` values, nowhere near `.text` (`0x08804000`-`0x08a76a3b`); `decompile_function` and `create_function` refuse outright on them, which reads as "nothing is there" rather than "the address is wrong" | [sound.md](functions/psp-pulse-usa/sound.md), 2026-09-04 |
+
+The jump-table corrections landing exactly where an adjacent structure predicts
+is what confirms the rule rather than merely fitting it.
+
+These were originally written up as four warts of increasing scope, on the
+theory that the relocation pass ran but skipped whatever the auto-analyzer had
+not walked. That theory is dead: the pass never ran at all, so there was never
+a subset to explain. Anything at all that a relocation would have touched is
+raw.
 
 ### Naming programs
 
@@ -230,7 +293,7 @@ one. Two habits keep this useful:
   means analysis started) and poll `analysis_status` until `analyzing` goes
   false. Judge the import on the count *after* that.
 - **Analyse first, rebase second - the order decides whether the database is
-  usable.** See [Importing a binary](#importing-a-binary-analyse-then-rebase)
+  usable.** See [Importing a binary](#the-import-order-and-why-it-flips-with-the-patch)
   below; `/psp-pure-eu/BOOT.BIN` is what the wrong order produces.
 - **The symptom of a wrongly-imported binary is that every address-based string
   tool silently returns zero.**

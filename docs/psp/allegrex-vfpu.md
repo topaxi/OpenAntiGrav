@@ -120,9 +120,18 @@ The script finds JDK 21 itself on common paths; override with `JAVA_21_HOME`.
 On Arch: `sudo pacman -S jdk21-openjdk`, which coexists with a newer default.
 
 ```sh
-just build-allegrex --ref v21.3     # build a specific tag instead of master
+just build-allegrex --ref v21.3     # build a specific tag instead of the pinned commit
 just build-allegrex --clean         # discard the checkout and start over
+just build-allegrex --no-patch      # build upstream unmodified (see below)
 ```
+
+`--ref` defaults to the exact commit
+[`scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch`](../../scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch)
+was written against, rather than to `master`, because that patch has to apply.
+It is what makes Allegrex win ELF adapter selection over the Emotion Engine
+extension; without it a PSP import loads with **no relocations applied at
+all**, which is not an error anywhere - see
+[the Ghidra workflow](../ghidra/workflow.md#why-a-psp-import-silently-loses-every-relocation).
 
 ### Verified build
 
@@ -199,13 +208,24 @@ the data points at addresses where nothing lives. On most targets, rebasing a
 relocated binary after load quietly corrupts it.
 
 The Allegrex extension ships an `AllegrexRelocationFixupHandler`, a Ghidra
-`RelocationFixupHandler` that Ghidra invokes on an image base change and which
-**re-applies every Allegrex relocation against the new base**. Rebasing is a
-supported operation, not a workaround.
+`RelocationFixupHandler` that **re-applies every Allegrex relocation against
+the new base**, so rebasing is a supported operation in principle rather than a
+workaround.
 
 It declines to handle `ET_REL` object files, but `BOOT.BIN` is type `0xffa0`
 (PSP PRX), so it is covered. The handler stashes and restores instructions, so
 it also works after analysis, though rebasing first is cheaper.
+
+> **In practice it has never run here, and headless it never will.** Measured
+> 2026-09-05: the relocation table on every PSP database in this project holds
+> **zero** entries, so the handler has nothing to re-apply - a different Ghidra
+> extension wins ELF adapter selection for PSP files and Allegrex's relocation
+> pass never executes at all. Separately, the handler is driven by
+> `RelocationFixupPlugin`, a `ProgramPlugin` listening for
+> `ProgramEvent.IMAGE_BASE_CHANGED`, so it exists only inside a running Ghidra
+> tool: a headless `setImageBase` moves the addresses and leaves the bytes.
+> Cause, fix and the corrected import order are in
+> [the Ghidra workflow](../ghidra/workflow.md#why-a-psp-import-silently-loses-every-relocation).
 
 ### How
 
@@ -231,7 +251,7 @@ it also works after analysis, though rebasing first is cheaper.
 > found" for strings the binary demonstrably uses, with no error to warn you.
 > `/psp-pure-eu/BOOT.BIN` was built the wrong way round and cost a session to
 > diagnose; see
-> [the import procedure](../ghidra/workflow.md#importing-a-binary-analyse-then-rebase)
+> [the import procedure](../ghidra/workflow.md#the-import-order-and-why-it-flips-with-the-patch)
 > and [string-anchors.md](../ghidra/functions/psp-pure-eu/string-anchors.md).
 >
 > The `AllegrexRelocationFixupHandler` above keeps *references* correct across
