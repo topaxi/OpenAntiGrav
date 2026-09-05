@@ -94,6 +94,7 @@ fn the_rocket_reads_the_five_things_a_projectile_needs() {
             launch_speed: 7.0,
             spread: 0.25,
             speeds: [100.0, 200.0, 300.0, 400.0],
+            class_independent: false,
         }
     );
 }
@@ -149,6 +150,7 @@ fn the_missile_reads_its_blast_its_speeds_and_its_lock() {
             lock_min_dist: 28.0,
             lock_max_dist: 29.0,
             speeds: [500.0, 600.0, 700.0, 800.0],
+            class_independent: false,
         }
     );
 }
@@ -464,6 +466,7 @@ fn the_plasma_reads_the_rockets_schema_without_the_fan() {
             damage: 56.0,
             launch_speed: 58.0,
             speeds: [900.0, 1000.0, 1100.0, 1200.0],
+            class_independent: false,
         }
     );
 }
@@ -536,6 +539,7 @@ fn the_shuriken_reads_its_blast_pair_and_not_its_ricochet_pair() {
             launch_speed: 67.0,
             fuse: 68.0,
             speeds: [1300.0, 1400.0, 1500.0, 1600.0],
+            class_independent: false,
         }
     );
     // Said again as an inequality, because the assertion above only fails

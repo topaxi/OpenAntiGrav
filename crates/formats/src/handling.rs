@@ -85,6 +85,13 @@ use std::fmt;
 
 use crate::fexml::{self, Node};
 
+mod global;
+
+pub use global::{
+    ForeignGlobalClass, GLOBAL_ENTRY, Global, GravityMul, Special, SpeedupPads, WeaponPad,
+    global_from_blob, parse_global,
+};
+
 /// The four speed classes, in the order the XML lists them.
 ///
 /// A separate type from `oag_physics::SpeedClass` for the same reason the
@@ -344,221 +351,6 @@ impl Zone {
             increment: number(node, e, "increment")?,
             recharge: number(node, e, "recharge")?,
         })
-    }
-}
-
-/// The speed-pad boost, per speed class. `<SpeedupPads amount time/>`.
-///
-/// Lives under `<Handling><Global><GlobalClass name="...">`, beside
-/// `<WeaponPad>` and `<GravityMul>`. `Xml_ReadGlobalSettings` (`0x0883a970`)
-/// reads both attributes with `Xml_AttributeAsFloat` and stores them **verbatim**
-/// into the two per-class tables at `0x08b36bc0` (`amount`) and `0x08b36bd0`
-/// (`time`), indexed by `g_handling_parse_class`. Confidence **90**.
-///
-/// **Neither attribute is pre-scaled**, unlike the four in
-/// `oag_gameplay::handling::SCALED_FIELDS`: the store is the parser's return
-/// value with nothing in between. The factor of ten in the force law is the force
-/// law's own; see [`oag_physics::forces::evaluate`]'s speed-pad term.
-///
-/// [`oag_physics::forces::evaluate`]: https://docs.rs/oag-physics
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct SpeedupPads {
-    /// The force magnitude the boost settles at.
-    pub amount: f32,
-    /// How long the boost lasts, in seconds, from the last tick inside the pad.
-    pub time: f32,
-}
-
-impl SpeedupPads {
-    const ELEMENT: &'static str = "SpeedupPads";
-
-    fn from_node(node: &Node) -> Result<Self> {
-        let e = Self::ELEMENT;
-        Ok(Self {
-            amount: number(node, e, "amount")?,
-            time: number(node, e, "time")?,
-        })
-    }
-}
-
-/// The weapon-pad re-trigger cooldown, per speed class.
-/// `<WeaponPad refresh_time elimination_refresh_time/>`.
-///
-/// Sits beside [`SpeedupPads`] under `<GlobalClass>`. `Xml_ReadGlobalSettings`
-/// (`0x0883aa14`) stores `refresh_time` into the per-class table at `0x08b34328`
-/// and `elimination_refresh_time` into `0x08b34338`, both indexed by
-/// `g_handling_parse_class` and both verbatim. `WeaponPads_TestCraft`
-/// (`0x0888727c`) stamps the pad it hit with one of the two - the Eliminator
-/// table under mode `8`, otherwise the ordinary one - and
-/// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) counts it back down at `dt` a
-/// tick. Confidence **90**; see
-/// `docs/ghidra/functions/psp-pulse-usa/pads.md`.
-///
-/// # It is a debounce, not a pickup respawn
-///
-/// Worth saying because the attribute's name suggests otherwise. Both shipped
-/// PSP discs author `refresh_time="0.55"` for every class, and a craft at racing
-/// speed clears a pad about 9.6 units long in well under that - so what the
-/// timer buys is that one crossing is one pickup, not that a collected pad goes
-/// away for a while. `elimination_refresh_time` is `0.05`, an order of magnitude
-/// shorter, which fits Eliminator handing weapons out far more freely.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct WeaponPad {
-    /// Seconds before a pad can be triggered again, in the ordinary modes.
-    pub refresh_time: f32,
-    /// The same, in Eliminator.
-    ///
-    /// An [`Option`] where the rest of this module makes a missing attribute an
-    /// error, because the difference is measured rather than defensive: Pulse
-    /// authors both attributes and **Pure authors only `refresh_time`** - see
-    /// `crates/pure/tests/handling_schema_ground_truth.rs`, which pins exactly
-    /// that difference, and Pure has no Eliminator to configure. Defaulting it
-    /// to zero would be indistinguishable from a disc that authored zero.
-    pub elimination_refresh_time: Option<f32>,
-}
-
-impl WeaponPad {
-    const ELEMENT: &'static str = "WeaponPad";
-
-    fn from_node(node: &Node) -> Result<Self> {
-        Ok(Self {
-            refresh_time: number(node, Self::ELEMENT, "refresh_time")?,
-            elimination_refresh_time: match node.value("elimination_refresh_time") {
-                Some(_) => Some(number(node, Self::ELEMENT, "elimination_refresh_time")?),
-                None => None,
-            },
-        })
-    }
-}
-
-/// The per-speed-class gravity scale. `<GravityMul airborne/>`.
-///
-/// Sits beside [`SpeedupPads`] under `<GlobalClass>`, and
-/// `Xml_ReadGlobalSettings` (`0x0883a970`) stores it verbatim into
-/// `g_class_gravity_scale` (`0x08ab0dcc`), indexed by `g_handling_parse_class`.
-/// Confidence **90**.
-///
-/// # The attribute is named `airborne` and it scales the *grounded* term
-///
-/// This is the one thing about this element worth reading twice, and it was
-/// settled instruction by instruction rather than inferred. The table has exactly
-/// three references: this write, and two reads in `Ship_UpdateCraft`'s gravity
-/// term at `0x08849b40`/`0x08849b48`. That term builds four VFPU pairs and
-/// multiplies them together:
-///
-/// ```text
-/// C600 = (class+0xf8, class+0xfc) = (normal_gravity, flight_gravity)
-/// C610 = (g_class_gravity_scale[class], 1.0)      ; viim.s S611, 1
-/// C620 = (mass, mass)
-/// C630 = (craft+0x2b0, 1 - craft+0x2b0)           ; vocp.s S631, S630
-/// worldForce.y += -(C600 * C610 * C620 * C630).x + .y
-/// ```
-///
-/// Lane 0 carries `normal_gravity`, is multiplied by `grounded`, **and is the
-/// lane the scale lands on**. Lane 1 - the airborne one - is multiplied by a
-/// literal `1.0`. So despite the attribute's name, this scales how heavy a craft
-/// is **on the ground**, and the air term is unscaled.
-///
-/// The two class-block offsets are not read off this page's guess either:
-/// `HandlingXml_ParsePhysical` (`0x08838f50`) stores `normal_gravity` to `+0xf8`
-/// and `flight_gravity` to `+0xfc`, with a `0x80` stride per class that matches
-/// the `sll a0, a0, 0x7` at the gravity site.
-///
-/// Whether "airborne" describes an intent the code does not implement, or a
-/// renaming nobody propagated, is **not** answered here. What is established is
-/// which term the number reaches.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct GravityMul {
-    /// The multiplier on `<Physical normal_gravity>`, despite this name.
-    ///
-    /// See the type's docs: it rides the grounded lane of the gravity term.
-    pub airborne: f32,
-}
-
-impl GravityMul {
-    const ELEMENT: &'static str = "GravityMul";
-
-    fn from_node(node: &Node) -> Result<Self> {
-        Ok(Self {
-            airborne: number(node, Self::ELEMENT, "airborne")?,
-        })
-    }
-}
-
-/// The one attribute of `<Special>` this project reads.
-///
-/// The element carries five - `roll_cost roll_speed roll_turbotime speedpad_jump
-/// turbo_jump` - and the other four are left alone until something needs them,
-/// the way the rest of `<Global>` is. Only `speedpad_jump` has a consumer.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Special {
-    /// How far the speed-pad boost tilts toward the hull's up axis while the
-    /// pitch-up input is held. `0.1` on both shipped discs, read live.
-    ///
-    /// `Xml_ReadGlobalSettings` (`0x0883a970`) puts it in `g_speedpad_jump`
-    /// (`0x08b36bec`), and `Ship_ApplySpeedupPad` (`0x08848f9c`) adds
-    /// `craft+0x160 * g_speedpad_jump` to the pad's own push direction on the
-    /// gated branch. It is **not** a jump: the direction is not renormalised, so
-    /// `0.1` is a 5.71-degree tilt and 0.5 % more force, and the hover spring
-    /// absorbs most of that. See `oag_physics::engine::speedup_pad`.
-    ///
-    /// Stored **unscaled**, like `<SpeedupPads>` and unlike
-    /// `oag_gameplay::handling::SCALED_FIELDS`: the parse writes
-    /// `Xml_AttributeAsFloat`'s return straight into the global.
-    pub speedpad_jump: f32,
-}
-
-impl Special {
-    const ELEMENT: &'static str = "Special";
-
-    fn from_node(node: &Node) -> Result<Self> {
-        Ok(Self {
-            speedpad_jump: number(node, Self::ELEMENT, "speedpad_jump")?,
-        })
-    }
-}
-
-/// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
-///
-/// Only the parts this project has a consumer for are decoded. The three camera
-/// pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all read by the
-/// original's `Xml_ReadGlobalSettings` and are deliberately left alone here;
-/// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
-/// added when something needs them.
-///
-/// Of `<Special>`'s five attributes only `speedpad_jump` is read - see
-/// [`Special`].
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Global {
-    /// `<Zone/>`.
-    pub zone: Zone,
-    /// `<Special/>`, of which one attribute is decoded.
-    pub special: Special,
-    /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
-    pub speedup_pads: [SpeedupPads; 4],
-    /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
-    pub gravity_mul: [GravityMul; 4],
-    /// `<GlobalClass><WeaponPad/></GlobalClass>`, indexed by [`SpeedClass`].
-    pub weapon_pads: [WeaponPad; 4],
-}
-
-impl Global {
-    /// The speed-pad tunables for one class.
-    #[must_use]
-    pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
-        self.speedup_pads[class as usize]
-    }
-
-    /// The weapon-pad cooldown for one class.
-    #[must_use]
-    pub fn weapon_pads(&self, class: SpeedClass) -> WeaponPad {
-        self.weapon_pads[class as usize]
-    }
-
-    /// The gravity scale for one class.
-    #[must_use]
-    pub fn gravity_mul(&self, class: SpeedClass) -> GravityMul {
-        self.gravity_mul[class as usize]
     }
 }
 
@@ -956,6 +748,30 @@ impl Stats {
         self.classes.iter().find(|block| block.name == Some(class))
     }
 
+    /// The block for a rung named the way the document spells it, matched
+    /// case-insensitively.
+    ///
+    /// The lookup for a ladder that is not Pulse's. [`Self::class`] can only ask
+    /// for a rung [`SpeedClass`] has a variant for, and Pure authors one it does
+    /// not: `VECTOR`, below `VENOM`, in every race team's file. That block is
+    /// parsed and kept - see [`Class::raw_name`] - and this is how it is
+    /// reached.
+    ///
+    /// It answers for Pulse's four identically to [`Self::class`], because
+    /// [`Class::from_node`] writes the canonical [`SpeedClass::as_str`] spelling
+    /// into `raw_name` rather than the document's literal one. So a caller
+    /// holding nothing but a name never has to know whether the rung is one of
+    /// the four.
+    ///
+    /// `None` means **this file does not author that rung**. It is not an
+    /// invitation to fall back on a neighbouring one.
+    #[must_use]
+    pub fn class_named(&self, name: &str) -> Option<&Class> {
+        self.classes
+            .iter()
+            .find(|block| block.raw_name.eq_ignore_ascii_case(name))
+    }
+
     /// Whether this file carries exactly Pulse's four-class ladder.
     ///
     /// Every shipped Pulse `handlingstats.xml` does. Pure's do not - they carry
@@ -1005,110 +821,6 @@ pub fn parse(expanded: &str) -> Result<Stats> {
         },
         classes: classes(stats)?,
     })
-}
-
-/// The archive entry holding `<Global>`, engine-wide rather than per team.
-///
-/// A literal in the executable at `0x08a8a270`, passed to `Handling_ParseStats`
-/// by `0x0894f6a8`. Being a literal means the WAD lookup is an exact
-/// [`wad::hash_name`](crate::wad::hash_name) hit rather than a mined candidate.
-pub const GLOBAL_ENTRY: &str = r"Data\XML\HandlingStats.xml";
-
-/// Reads `<Handling><Global>` out of an **already expanded** document.
-///
-/// `Ok(None)` when the document parses but carries no `<Global>` at all - which
-/// is what all sixteen shipped per-team files do, and is not an error. Once
-/// `<Global>` *is* present every part [`Global`] names is required, for the reason
-/// the module docs give: a mode configured with three-quarters of its numbers is
-/// worse than one configured with none.
-pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
-    let root = fexml::parse(expanded);
-    let handling = descendant(&root, "Handling").ok_or(Error::MissingElement {
-        element: "Handling",
-    })?;
-    let Ok(global) = child(handling, "Global") else {
-        return Ok(None);
-    };
-    let (speedup_pads, gravity_mul, weapon_pads) = global_classes(global)?;
-    Ok(Some(Global {
-        zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
-        special: Special::from_node(child(global, Special::ELEMENT)?)?,
-        speedup_pads,
-        gravity_mul,
-        weapon_pads,
-    }))
-}
-
-/// Collects `<GlobalClass><SpeedupPads/></GlobalClass>` into an array indexed by
-/// [`SpeedClass`].
-///
-/// The same one-pass shape as [`classes`], and for the same reasons, with **one
-/// deliberate difference: an unrecognised `name` is skipped rather than an
-/// [`Error::UnknownClass`]**. That is the only place in this module where an
-/// unknown name is not an error, so it is worth saying why.
-///
-/// Both shipped discs author **five** `<GlobalClass>` blocks - `VECTOR` first,
-/// then the four speed classes - while every per-team file authors exactly four
-/// `<Class>` blocks and no `VECTOR`. Erroring here would fail on real data.
-///
-/// The original discards it too, and by accident rather than by design.
-/// `Xml_ReadGlobalSettings` (`0x0883a970`) matches `name` against a four-entry
-/// table and, on no match, leaves `g_handling_parse_class` holding whatever the
-/// last match left there - it is a global and is never reset per element. So
-/// `VECTOR`'s numbers land in some other class's slot and are then overwritten by
-/// the four blocks that follow it, because `VECTOR` is authored first. Skipping it
-/// reproduces the outcome without reproducing the accident. Confidence **88**.
-///
-/// **This holds only while `VECTOR` is first.** Authored last it would corrupt
-/// `PHANTOM` in the original and not here, which is a difference worth knowing
-/// about rather than one worth emulating.
-fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4], [WeaponPad; 4])> {
-    const ELEMENT: &str = "GlobalClass";
-    let mut found: [Option<(SpeedupPads, GravityMul, WeaponPad)>; 4] = [None; 4];
-
-    for node in global.children_named(ELEMENT) {
-        let name = node.value("name").ok_or(Error::MissingAttribute {
-            element: "GlobalClass",
-            attribute: "name",
-        })?;
-        let Some(class) = SpeedClass::from_name(name.trim()) else {
-            continue;
-        };
-
-        let slot = &mut found[class as usize];
-        if slot.is_some() {
-            return Err(Error::DuplicateGlobalClass { class });
-        }
-        *slot = Some((
-            SpeedupPads::from_node(child(node, SpeedupPads::ELEMENT)?)?,
-            GravityMul::from_node(child(node, GravityMul::ELEMENT)?)?,
-            WeaponPad::from_node(child(node, WeaponPad::ELEMENT)?)?,
-        ));
-    }
-
-    for class in SpeedClass::ALL {
-        if found[class as usize].is_none() {
-            return Err(Error::MissingGlobalClass { class });
-        }
-    }
-
-    let found = found.map(|block| block.expect("every slot filled above"));
-    Ok((
-        found.map(|(pads, _, _)| pads),
-        found.map(|(_, mul, _)| mul),
-        found.map(|(_, _, weapon)| weapon),
-    ))
-}
-
-/// [`parse_global`] over raw archive bytes, expanding them if they need it.
-///
-/// The same PSP-shortened / PS2-plaintext dispatch [`from_blob`] documents.
-pub fn global_from_blob(data: &[u8]) -> Result<Option<Global>> {
-    if fexml::is_fexml(data) {
-        parse_global(&fexml::expand(data)?)
-    } else {
-        parse_global(std::str::from_utf8(data).map_err(|_| fexml::Error::NotText)?)
-    }
 }
 
 /// Reads an archive blob, expanding it first if it needs it.

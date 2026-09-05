@@ -74,6 +74,16 @@ pub struct RocketStats {
     /// Not public, because the index *is* the meaning: read it through
     /// [`RocketStats::speed_for`], which cannot get the order wrong.
     pub(super) speeds: [f32; 4],
+    /// Whether the file authored **one** `speed` for every class rather than
+    /// four named ones.
+    ///
+    /// Recorded rather than inferred: `class_speeds` knows which of the two
+    /// dialects it read, and "all four entries happen to be equal" is a value
+    /// coincidence, not the same claim. It is what lets
+    /// [`Self::speed_for_named`] answer for a rung outside
+    /// [`crate::handling::SpeedClass`] - Pure's `VECTOR` - without borrowing
+    /// another rung's number.
+    pub(super) class_independent: bool,
 }
 
 impl RocketStats {
@@ -86,6 +96,19 @@ impl RocketStats {
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
+    }
+
+    /// The same, for a rung named the way the document spells it.
+    ///
+    /// `None` when this file cannot answer: a rung outside the four, in a file
+    /// that authored a speed *per* class. There is no honest number for that
+    /// case - see [`Self::class_independent`].
+    #[must_use]
+    pub fn speed_for_named(&self, name: &str) -> Option<f32> {
+        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
+            return Some(self.speeds[class as usize]);
+        }
+        self.class_independent.then(|| self.speeds[0])
     }
 }
 
@@ -151,6 +174,16 @@ pub struct MissileStats {
     /// Not public for the reason [`RocketStats::speeds`] is: the index *is* the
     /// meaning. Read it through [`MissileStats::speed_for`].
     pub(super) speeds: [f32; 4],
+    /// Whether the file authored **one** `speed` for every class rather than
+    /// four named ones.
+    ///
+    /// Recorded rather than inferred: `class_speeds` knows which of the two
+    /// dialects it read, and "all four entries happen to be equal" is a value
+    /// coincidence, not the same claim. It is what lets
+    /// [`Self::speed_for_named`] answer for a rung outside
+    /// [`crate::handling::SpeedClass`] - Pure's `VECTOR` - without borrowing
+    /// another rung's number.
+    pub(super) class_independent: bool,
 }
 
 impl MissileStats {
@@ -163,6 +196,19 @@ impl MissileStats {
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
+    }
+
+    /// The same, for a rung named the way the document spells it.
+    ///
+    /// `None` when this file cannot answer: a rung outside the four, in a file
+    /// that authored a speed *per* class. There is no honest number for that
+    /// case - see [`Self::class_independent`].
+    #[must_use]
+    pub fn speed_for_named(&self, name: &str) -> Option<f32> {
+        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
+            return Some(self.speeds[class as usize]);
+        }
+        self.class_independent.then(|| self.speeds[0])
     }
 }
 
@@ -238,6 +284,16 @@ pub struct PlasmaStats {
     /// Not public for the reason [`RocketStats::speeds`] is: the index *is* the
     /// meaning. Read it through [`PlasmaStats::speed_for`].
     pub(super) speeds: [f32; 4],
+    /// Whether the file authored **one** `speed` for every class rather than
+    /// four named ones.
+    ///
+    /// Recorded rather than inferred: `class_speeds` knows which of the two
+    /// dialects it read, and "all four entries happen to be equal" is a value
+    /// coincidence, not the same claim. It is what lets
+    /// [`Self::speed_for_named`] answer for a rung outside
+    /// [`crate::handling::SpeedClass`] - Pure's `VECTOR` - without borrowing
+    /// another rung's number.
+    pub(super) class_independent: bool,
 }
 
 impl PlasmaStats {
@@ -248,6 +304,19 @@ impl PlasmaStats {
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
+    }
+
+    /// The same, for a rung named the way the document spells it.
+    ///
+    /// `None` when this file cannot answer: a rung outside the four, in a file
+    /// that authored a speed *per* class. There is no honest number for that
+    /// case - see [`Self::class_independent`].
+    #[must_use]
+    pub fn speed_for_named(&self, name: &str) -> Option<f32> {
+        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
+            return Some(self.speeds[class as usize]);
+        }
+        self.class_independent.then(|| self.speeds[0])
     }
 }
 
@@ -317,6 +386,16 @@ pub struct ShurikenStats {
     /// Not public for the reason [`RocketStats::speeds`] is: the index *is* the
     /// meaning. Read it through [`ShurikenStats::speed_for`].
     pub(super) speeds: [f32; 4],
+    /// Whether the file authored **one** `speed` for every class rather than
+    /// four named ones.
+    ///
+    /// Recorded rather than inferred: `class_speeds` knows which of the two
+    /// dialects it read, and "all four entries happen to be equal" is a value
+    /// coincidence, not the same claim. It is what lets
+    /// [`Self::speed_for_named`] answer for a rung outside
+    /// [`crate::handling::SpeedClass`] - Pure's `VECTOR` - without borrowing
+    /// another rung's number.
+    pub(super) class_independent: bool,
 }
 
 impl ShurikenStats {
@@ -332,6 +411,19 @@ impl ShurikenStats {
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
+    }
+
+    /// The same, for a rung named the way the document spells it.
+    ///
+    /// `None` when this file cannot answer: a rung outside the four, in a file
+    /// that authored a speed *per* class. There is no honest number for that
+    /// case - see [`Self::class_independent`].
+    #[must_use]
+    pub fn speed_for_named(&self, name: &str) -> Option<f32> {
+        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
+            return Some(self.speeds[class as usize]);
+        }
+        self.class_independent.then(|| self.speeds[0])
     }
 }
 

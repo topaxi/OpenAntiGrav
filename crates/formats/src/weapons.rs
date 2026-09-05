@@ -492,6 +492,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         };
         absorb.push((weapon_kind, number(block, "Stats", "absorb")?));
         if weapon_kind == Weapon::Rocket {
+            let (speeds, class_independent) = class_speeds(block)?;
             rocket = Some(RocketStats {
                 absorb: number(block, "Stats", "absorb")?,
                 blastforce: number(block, "Stats", "blastforce")?,
@@ -502,11 +503,13 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 // this is the string a lookup is matched against.
                 launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                 spread: number(block, "Stats", "spread")?,
-                speeds: class_speeds(block)?,
+                speeds,
+                class_independent,
             });
             continue;
         }
         if weapon_kind == Weapon::Missile {
+            let (speeds, class_independent) = class_speeds(block)?;
             missile = Some(MissileStats {
                 absorb: number(block, "Stats", "absorb")?,
                 blastforce: number(block, "Stats", "blastforce")?,
@@ -515,7 +518,8 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                 lock_min_dist: number(block, "Stats", "lock_min_dist")?,
                 lock_max_dist: number(block, "Stats", "lock_max_dist")?,
-                speeds: class_speeds(block)?,
+                speeds,
+                class_independent,
             });
             continue;
         }
@@ -530,13 +534,15 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             // `optional` below already handle, so Pure gets a Plasma too.
             // `charge_time` is deliberately not read - see `PlasmaStats`.
             plasma = optional_block(&mut skipped, weapon_kind, || {
+                let (speeds, class_independent) = class_speeds(block)?;
                 Ok(PlasmaStats {
                     absorb: number(block, "Stats", "absorb")?,
                     blastforce: number(block, "Stats", "blastforce")?,
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
                     launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
-                    speeds: class_speeds(block)?,
+                    speeds,
+                    class_independent,
                 })
             })?;
             continue;
@@ -546,6 +552,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             // attributes are deliberately absent** - `rhicochetdamage`,
             // `rhicochetForce` and `slowdown_time` - see `ShurikenStats`.
             shuriken = optional_block(&mut skipped, weapon_kind, || {
+                let (speeds, class_independent) = class_speeds(block)?;
                 Ok(ShurikenStats {
                     absorb: number(block, "Stats", "absorb")?,
                     // The file capitalises these two where the Rocket's are
@@ -555,7 +562,8 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastdamage: number(block, "Stats", "blastdamage")?,
                     launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                     fuse: number(block, "Stats", "fuse")?,
-                    speeds: class_speeds(block)?,
+                    speeds,
+                    class_independent,
                 })
             })?;
             continue;
@@ -707,18 +715,23 @@ fn optional_block<T>(
 /// genuinely flies every class at the same weapon speed - there is nothing per
 /// class to lose - so the array is the shape this crate carries rather than a
 /// claim about the file.
-fn class_speeds(block: &Node) -> Result<[f32; 4]> {
+/// The second return is `true` for the single-`speed` dialect, which is the fact
+/// [`stats::RocketStats::speed_for_named`] needs to answer for a fifth rung.
+fn class_speeds(block: &Node) -> Result<([f32; 4], bool)> {
     if let Some(one) = optional(block, "Stats", "speed")?
         && block.value("venomspeed").is_none()
     {
-        return Ok([one; 4]);
+        return Ok(([one; 4], true));
     }
-    Ok([
-        number(block, "Stats", "venomspeed")?,
-        number(block, "Stats", "flashspeed")?,
-        number(block, "Stats", "rapierspeed")?,
-        number(block, "Stats", "phantomspeed")?,
-    ])
+    Ok((
+        [
+            number(block, "Stats", "venomspeed")?,
+            number(block, "Stats", "flashspeed")?,
+            number(block, "Stats", "rapierspeed")?,
+            number(block, "Stats", "phantomspeed")?,
+        ],
+        false,
+    ))
 }
 
 /// [`number`], but a missing attribute is `None` rather than an error.
