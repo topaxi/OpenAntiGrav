@@ -35,6 +35,13 @@
 //! 5. The glyph node's own `Anim Transform` moves it out of view at the same
 //!    6.000 s loop-closing instant Pulse's own teleport lands on, off two
 //!    independent authored tracks on two different platforms.
+//! 6. **Added when the 2048 pass found the same shape in its own inherited
+//!    copy of this file**: HD's own `polySurface7` (the chequered-flag node,
+//!    the same name Pulse's file carries) and `pasted__Final_Lap` both carry
+//!    translation keys at frame 740/741 (12.333/12.350 s), and
+//!    `pasted__Final_Lap` also keys at 560/561 (9.333/9.350 s) - the same
+//!    three-beat timeline (6.000/9.333/12.333 s) Pulse's own file authors,
+//!    checked here against HD's own disc rather than 2048's re-export of it.
 //!
 //! Nothing here places the gantry, resolves whether anything writes the
 //! offset at runtime, or resolves HD's slot-7 substitution - all three stay
@@ -358,5 +365,46 @@ fn the_glyph_teleports_at_the_six_second_loop_close() {
     assert!(
         (before[12] - after[12]).abs() < 1e-6 && (before[14] - after[14]).abs() < 1e-6,
         "the teleport is a pure Y move, matching Pulse's own +9.99-in-y teleport's axis"
+    );
+}
+
+/// **Claim 6**: HD's own `polySurface7` and `pasted__Final_Lap` nodes carry
+/// the same three-beat timeline (6.000/9.333/12.333 s) Pulse's own file
+/// authors - checked against HD's own disc directly, not against 2048's
+/// later re-export of this same file, which is where this claim was first
+/// noticed.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_three_beat_timeline_holds_on_hds_own_disc_not_only_2048s_copy_of_it() {
+    let Some(image) = image() else { return };
+    let mut archive = archive(&image);
+    let vex_data = archive.read_path(VEX).expect("the .vex reads");
+    let nodes = vex::nodes(&vex_data).expect("nodes");
+
+    let node = |name: &str| {
+        nodes
+            .iter()
+            .find(|n| n.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name} should exist in HD's own file"))
+    };
+
+    let poly7 = node("polySurface7");
+    let poly7_anim = vex::anim_transform_of(&vex_data, poly7).expect("polySurface7 decodes");
+    assert_eq!(
+        poly7_anim.translation.times,
+        vec![740, 741],
+        "HD's own chequered-flag node - the same name Pulse's file carries - \
+         should key at exactly frame 740/741"
+    );
+
+    let final_lap = node("pasted__Final_Lap");
+    let final_lap_anim =
+        vex::anim_transform_of(&vex_data, final_lap).expect("pasted__Final_Lap decodes");
+    assert_eq!(
+        final_lap_anim.translation.times,
+        vec![560, 561, 740, 741],
+        "HD's own FINAL LAP node should key at 560/561 (entrance) and \
+         740/741 (exit), the same frame numbers Pulse's own Final_Lap node \
+         carries"
     );
 }

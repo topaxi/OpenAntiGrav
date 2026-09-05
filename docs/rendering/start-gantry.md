@@ -14,8 +14,9 @@ and Wipeout 2048 (`data/extracted/vita/PCSF00007`, the decrypted EU Vita
 package).** The closing section says what looks title-wide across all four and
 what is per-title. Pure ships no track-side gantry at all; HD ships four
 files, and its own section is where the packaging question the Pulse pass
-left open gets an answer; 2048 ships those same four plus three of its own,
-and turns out to author a third countdown mechanism entirely.
+left open gets an answer; 2048 ships those same four plus four of its own
+(three real glyph files and one empty stub), and turns out to author a third
+countdown mechanism entirely - a manifest reaches only two of the eight.
 
 > **Nothing on this page places the gantry.** Where slot 8's transform comes
 > from is still unrecovered - see
@@ -263,9 +264,11 @@ byte sizes, and a code-confirmed substitution site exists at runtime - see
 [the HD section below](#wipeout-hdfury-four-files-one-mechanism-concept-two-encodings)
 and
 [`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)
-for exactly what it does and does not settle; 2048 ships those four plus two
-of its own. Pulse has one file and no chooser. The per-mode axis is real on
-the later titles and absent on this one.
+for exactly what it does and does not settle; 2048 ships those four plus four
+of its own (three real glyph files and one empty stub) - see
+[the 2048 section below](#wipeout-2048-eight-files-plus-fx350-two-reached-by-any-of-26-manifests-a-third-countdown-mechanism).
+Pulse has one file and no chooser. The per-mode axis is real on the later
+titles and absent on this one.
 
 ## Wipeout Pure: no track-side gantry at all. Confidence 85
 
@@ -548,6 +551,13 @@ at a different, earlier instant (3.35 s) - the same "something moves away
 before the loop resets" shape Pulse's `start_light_background`/`Board`/`Text`/
 `Arrow` group also carries, just at a different node boundary.
 
+**This finding grew a great deal once the 2048 pass checked it against HD's
+own disc directly rather than stopping at this one node**: `polySurface7`
+and `pasted__Final_Lap` both carry the same 9.333 s/12.333 s beats Pulse's
+own file authors, confirmed by `start_gantry_hd_ground_truth.rs`'s own sixth
+test - see the 2048 section below, "The master timeline is three beats, not
+one", for the full three-title account.
+
 ### Which model a mode selects: a substitution site exists, at slot 7 - not slot 8
 
 **Confidence capped at 84**, the whole page's own static-reading ceiling,
@@ -589,32 +599,41 @@ already records for HD's ordinary advert billboards. Nothing on this page's
 own HD section places the gantry either; the loader report has nothing to
 name yet because nothing here loads `321go_startfinish.vex` at all.
 
-## Wipeout 2048: seven files, three reached by a manifest, a third countdown mechanism
+## Wipeout 2048: eight files plus `fx350`, two reached by any of 26 manifests, a third countdown mechanism
 
 **Read on `data/extracted/vita/PCSF00007`** (the decrypted EU package: base,
 the 1.04 patch, and both DLC packages), with
-`crates/formats/tests/start_gantry_2048_ground_truth.rs` (8 tests) as the
-executable form of every claim below. No Ghidra and no emulator - the same
-`oag-wad`-equivalent reading (`scripts/psarc.py` for the archive census, then
-`oag_formats::{trackstartup, vex, rcsmodel::psp2}` directly) the first three
-passes used, plus two throwaway probes kept in the tree:
+`crates/formats/tests/start_gantry_2048_ground_truth.rs` (9 tests) and
+`crates/hd/tests/start_gantry_hd_ground_truth.rs`'s own added sixth test as
+the executable form of every claim below. No Ghidra and no emulator - the
+same `oag-wad`-equivalent reading (`scripts/psarc.py` for the archive census,
+then `oag_formats::{trackstartup, vex, rcsmodel::psp2}` directly) the first
+three passes used, plus two throwaway probes kept in the tree:
 `crates/game/examples/gantry_2048_probe.rs` (node trees and `.rcsmodel`
-submesh dumps) and `gantry_2048_anim_probe.rs` (sampled transforms).
+submesh dumps) and `gantry_2048_anim_probe.rs` (sampled transforms, generalised
+to take an archive spec and a node list so the same tool checks a claim
+against HD's own disc, not only 2048's copy of it - see below).
 
-### The archive census: seven files, not the six the handover thread guessed at
+### The archive census: eight `321Go_*`/`321Fight_*` files, plus `fx350.vex`
 
 **Confidence 95** - a real PSARC listing, the same standard the HD pass held
 its own four to before this pass, closing the "six or seven, string-search
 only" gap the handover thread opened with. `base/PSP2/data.psarc` carries all
-four of HD's own files under `Data\Billboards\HD_Adverts\321Go\` - identical
-names, `321Go_StartFinish.vex`, `321Go_Zone.vex`, `321Go_HD_Zone_Battle.vex`,
-`321Go_HD_Detonator.vex`, `fx350.vex` - plus **three** of 2048's own:
-`321Go_2048.vex`, `321Go_2048_Combat.vex` and `321Fight_2048.vex`. Every one of
-the seven has a sibling `.rcsmodel`, and every sibling opens as
-`oag_formats::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all seven)
-- **2048 re-exported HD's own four files into its own Vita container rather
-than shipping the PS3 bytes verbatim**, a measured fact about the pipeline,
-not an assumption.
+four of HD's own glyph files under `Data\Billboards\HD_Adverts\321Go\` -
+identical names, `321Go_StartFinish.vex`, `321Go_Zone.vex`,
+`321Go_HD_Zone_Battle.vex`, `321Go_HD_Detonator.vex` - HD's separate
+substitution-target `fx350.vex` alongside them, plus **four** of 2048's own:
+`321Go_2048.vex`, `321Go_2048_Combat.vex`, `321Fight_2048.vex` and
+**`321Go_HD.vex`**, a 752-byte stub scene (a camera, a `start_lights` locator
+and a `start_light_background1` locator, all static `Transform` nodes, no
+`Mesh`, no `Anim Transform`, no sibling `.rcsmodel` anywhere in the package) -
+easy to miss on a first pass precisely because it carries nothing to find.
+Every one of the seven glyph files that *does* have geometry, plus `fx350.vex`
+itself, has a sibling `.rcsmodel`, and every sibling opens as
+`oag_formats::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all eight)
+- **2048 re-exported HD's own four glyph files (and `fx350.vex`) into its own
+Vita container rather than shipping the PS3 bytes verbatim**, a measured fact
+about the pipeline, not an assumption.
 
 **The 1.04 patch carries an eighth copy, not an eighth file**:
 `patch-v104/PSP2/data2.psarc` ships its own `321go_startfinish.rcsmodel`, 160
@@ -628,32 +647,41 @@ it), so **this whole page's own reading, like the rest of this project's 2048
 support, is the base copy**, on the same terms every other unread-patch axis
 in `docs/formats/2048-status.md` already is.
 
-### Which of the seven a manifest actually names: three, not seven
+### Which of the eight a manifest actually names: two, across all twenty-six circuits
 
-**Confidence 92**, from reading every one of the fourteen circuits' own
-`TrackStartup.xml` the base package ships (ten native, four HD-ported), the
-same exhaustive standard the Pure pass held itself to for its own negative:
+**Confidence 92**, from reading every one of the **twenty-six** circuits'
+own `TrackStartup.xml` the whole package ships across all three
+archives - ten native, four HD-ported and re-shipped in the base package, four
+more HD-ported in `dlc1.psarc` alone, and eight more HD-ported in `dlc2.psarc`
+alone (including all four `Zone` circuits) - not just the base package's
+fourteen, the same exhaustive standard the Pure pass held itself to for its
+own negative:
 
 | file | reached by a manifest? |
 | --- | --- |
 | `321Go_2048.vex` | **yes** - slot 8, all ten native circuits (`altima`, `arena`, `bridge`, `cathedral`, `mall`, `park`, `sol`, `square`, `subway`, `tower`) |
-| `321Go_StartFinish.vex` | **yes** - slot 8, all four HD-ported circuits (`Anulpha_Pass`, `Chenghou_Project`, `Moa_Therma`, `Vineta_K`) |
-| `fx350.vex` | **yes** - slot 7, the same four HD-ported circuits, the identical pair HD's own manifests carry |
+| `321Go_StartFinish.vex` | **yes** - slot 8, all sixteen HD-ported circuits, across all three archives |
+| `fx350.vex` | **yes** - slot 7, the same sixteen HD-ported circuits, the identical pair HD's own manifests carry |
 | `321Go_2048_Combat.vex` | no |
 | `321Fight_2048.vex` | no |
 | `321Go_Zone.vex` | no |
 | `321Go_HD_Zone_Battle.vex` | no |
 | `321Go_HD_Detonator.vex` | no |
+| `321Go_HD.vex` | no |
 
-**None of the ten native circuits authors a slot 7 at all** - unlike every
-HD-ported one, which keeps HD's exact substitution-site pair unchanged. So
-2048's own circuits have no manifest-level equivalent of HD's slot-7
-substitution to feed, and whether the five unreached files load through some
-other, engine-side selection - the same kind of site
+**Not even the four `Zone` circuits (`zone_1`-`zone_4`) reach `321Go_Zone.vex`**
+- every one of them keeps HD's ordinary `fx350`/`321Go_StartFinish` pair, the
+same as every other ported circuit. **None of the ten native circuits authors
+a slot 7 at all** - unlike every HD-ported one, which keeps HD's exact
+substitution-site pair unchanged. So 2048's own circuits have no
+manifest-level equivalent of HD's slot-7 substitution to feed, and whether the
+six unreached files load through some other, engine-side selection - the same
+kind of site
 [`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)
 found for HD - is **unattempted for 2048**: no Ghidra time was spent on this
 pass, per the thread's own priority order, so this is a manifest-level
-negative only, not a runtime one.
+negative only, not a runtime one - but it is now an exhaustive one, checked
+against every circuit the package ships rather than only the base fourteen.
 
 ### The mechanism: four separate sliding nodes, not a UV-cell walk - a third encoding
 
@@ -682,6 +710,20 @@ static (non-animated, class `Transform`, not `Anim Transform`)
 the background halves never move at all on this title, unlike Pulse's own
 `start_light_background` node.
 
+**Position selects the state; scale is polish within it, not a second
+selector.** Every digit also carries a `scale` channel, sampled alongside
+translation with `gantry_2048_anim_probe`: each one opens at roughly its rest
+scale (`Three`, `GO` at exactly `1.0`; `Two`, `One` already at `0.988`, having
+inherited whatever `Two`/`One` last held), eases down to `0.5` partway through
+its own *visible* window (`Three`: `1.0 -> 0.5` between frames 0 and 40, while
+still parked on screen; `GO`: the same shape between frames 200 and 220), and
+holds at `0.5` afterwards, on or off screen, until the file's own end. So the
+on/off state is entirely the translation channel's doing - a digit at `x ≈ 0`
+and one shrunk to half size are both "shown," just at different points in its
+own settle - and scale is an entrance flourish (pop large, settle to half
+size) layered on top, not a fifth encoding needing its own row in the
+cross-title table.
+
 **The digit shape is geometry, not a texture lookup - checked, not assumed.**
 Positionally matching each node to its `.rcsmodel` submesh by node-declaration
 order (see the next section's own caveat on why this is positional rather
@@ -690,7 +732,13 @@ many distinct UV cells as they have vertices** - a fully unique unwrap, the
 shape a hand-modelled glyph outline takes, not a shared-atlas sample. `GO`'s
 own submesh (88 triangles) is visibly wider (`x` span ±17.4) than any single
 digit's (`Three` ±6.8, `Two` ±6.7, `One` ±2.9), the same "GO spans the whole
-board" shape Pulse's and HD's own wide cell take.
+board" shape Pulse's and HD's own wide cell take. The same positional mapping
+puts `polySurface7Shape` (the chequered-flag mesh, see below) at submesh 0,
+bound to material 0 - `2048_checkered.gxt` - whose own UVs run outside
+`[0, 1]` (e.g. `(1.500, -0.501)`), exactly the tiling an artist authors for a
+texture meant to scroll rather than sample once; a third, independent
+agreement with the node-name match below, on the same capped 75 confidence
+this whole positional mapping carries.
 
 ### Why node-to-submesh correlation is positional here, not addressed
 
@@ -714,43 +762,68 @@ a capped confidence (75) separate from the 90 above, which needs none of it.
 `FIGHT` node (its own `Anim Transform`, key times `[199..220, 360, 361]`,
 the same 6.000 s loop-close pair `GO` carries) and the tail overlay node is
 renamed `Hex_Overlay_Hex_Overlay` rather than `start_light_background3`.
-**Unreached by any of the fourteen circuits' own manifests** (previous
-section), so this is a real, measured asset with no confirmed trigger - the
-same "authored but unwired" state `HANDOVER.md` already tracks for several
-particle effects, now joined by a countdown variant. `321Go_2048_Combat.vex`
-is a smaller variant again: identical to the base file except its own tail
-overlay swaps to `Hex_Overlay` while keeping `GO` - also unreached by any
-manifest measured here.
+**Unreached by any of the twenty-six circuits' own manifests, across all
+three archives** (previous section), so this is a real, measured asset with
+no confirmed trigger - the same "authored but unwired" state `HANDOVER.md`
+already tracks for several particle effects, now joined by a countdown
+variant. `321Go_2048_Combat.vex` is a smaller variant again: identical to the
+base file except its own tail overlay swaps to `Hex_Overlay` while keeping
+`GO` - also unreached by any manifest measured here.
 
-### The 6.000 s loop close generalises to a third title, on a third axis
+### The master timeline is three beats, not one - 6.000 / 9.333 / 12.333 s, and it holds on HD's own disc too
 
-**Confidence 85.** `GO`'s own key times (`[198, 199, 200, 360, 361]`) land a
-teleport exactly on frame 360/361 - **the same frame numbers Pulse's own
-panel teleports at**, and one frame off HD's own 359/360. The delta is real
-but large (`x` moves from `5.777` to `-34.159`, about 40 units) and on a
-different axis than Pulse's and HD's own `y` moves (~10 units) - so this is
-reported as it is: **the instant matches exactly, a third independent
-platform and a third independent encoding; the axis and the magnitude do
-not**. Three `Stripe_0N` nodes teleport at the same 360/361 pair alongside
-`GO`, the same "more than one node moves together" shape Pulse's own
-`Board`/`Text`/`Arrow` group takes at its own 360/361.
+**Confidence 88, the strongest single finding of the whole four-title
+sequence.** The first pass at this section read Pulse's, HD's and 2048's
+6.000 s teleports as one isolated coincidence. They are not isolated: Pulse's
+own file (already on this page, above) authors a `start_light_background`/
+`Board`/`Text`/`Arrow` teleport at 6.000 s, a `Board`/`Honey_Board`/
+`Final_Lap` entrance at 9.333 s and a `Final_Lap`-out/`polySurface7`-in swap
+at 12.333 s - **three beats, on one authored clock**, not three separate
+findings. Checking 2048's own inherited copy of `321go_startfinish.vex`
+found the same three beats on its `pasted__Go_HD_start_light_321go` (6.000 s),
+`pasted__Final_Lap` (9.333 s entrance) and `polySurface7` (12.333 s) nodes -
+and rather than trust a title's *re-export* of another title's file,
+`gantry_2048_anim_probe` was pointed straight at
+`hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC`'s own
+`321go_startfinish.vex` to check HD's own disc directly. It carries the
+identical keys: `pasted__Final_Lap`'s translation times are exactly
+`[560, 561, 740, 741]` - entering at 9.333/9.350 s and exiting at
+12.333/12.350 s - and `polySurface7`'s are exactly `[740, 741]`, both now
+pinned by `crates/hd/tests/start_gantry_hd_ground_truth.rs`'s own sixth test,
+added this pass specifically to check HD's disc rather than lean on 2048's
+copy of it.
 
-### The whole post-countdown timeline reproduces Pulse's own frame numbers
+`321Go_2048.vex`'s own **native** gantry - not the inherited file - carries
+the same three beats again, independently authored a third time in a
+completely different node graph:
 
-**Confidence 88, the strongest single finding of this pass.** `321Go_2048.vex`
-spells `FINAL` and `LAP` **letter by letter** - `Final_F`/`Final_I`/`Final_N`/
-`Final_A`/`Final_L`, `Lap_L`/`Lap_A`/`Lap_p` - each its own node, going a step
-further than Pulse's and HD's shared single `Final_Lap` node. Every one of
-those eight nodes' own first translation key lands at frame 558-566
-(9.300-9.433 s) - **the same instant**, to within one frame in sixty,
-Pulse's own `Final_Lap` node enters at (frame 560/561, 9.333/9.350 s).
-Further out, `321Go_2048.vex` carries a node named **`polySurface7`** - the
-identical name Pulse's own chequered-flag node carries - whose own
-translation keys are exactly `[740, 741]`, **the exact frame pair** Pulse's
-`polySurface7` uses for the same chequered-flag entrance (12.333/12.350 s).
-One shared node name and one exact frame-pair match, on two different
-platforms and two different geometry encodings, is not the kind of thing a
-coincidence produces twice.
+- **6.000 s**: `GO`'s own key times (`[198, 199, 200, 360, 361]`) land a
+  teleport exactly on frame 360/361, the same frame numbers Pulse's and HD's
+  own files use (HD's is one frame earlier, at 359/360). The delta is real
+  but large (`x` moves from `5.777` to `-34.159`, about 40 units) and on a
+  different axis than Pulse's and HD's own `y` moves (~10 units) - the
+  *instant* matches exactly across all three; the axis and the magnitude do
+  not, and are reported as measured rather than smoothed into agreement.
+  Three `Stripe_0N` nodes teleport at the same 360/361 pair alongside `GO`,
+  the same "more than one node moves together" shape Pulse's own
+  `Board`/`Text`/`Arrow` group takes at its own 360/361.
+- **~9.333 s**: `321Go_2048.vex` spells `FINAL` and `LAP` **letter by
+  letter** - `Final_F`/`Final_I`/`Final_N`/`Final_A`/`Final_L`,
+  `Lap_L`/`Lap_A`/`Lap_p` - each its own node, going a step further than
+  Pulse's and HD's shared single `Final_Lap` node. Every one of those eight
+  nodes' own first translation key lands at frame 558-566 (9.300-9.433 s) -
+  the same instant, to within one frame in sixty, Pulse's and HD's own
+  `Final_Lap` node enters at (frame 560/561, 9.333/9.350 s exactly).
+- **12.333 s**: `321Go_2048.vex` carries a node named **`polySurface7`** -
+  the identical name Pulse's and HD's own chequered-flag nodes carry - whose
+  own translation keys are exactly `[740, 741]`, the exact frame pair both
+  other titles use for the same chequered-flag entrance.
+
+One shared node name and one exact frame-pair match would be a coincidence
+worth a sentence; a **three-beat clock**, independently authored on three
+platforms in at least three genuinely different geometry encodings, with one
+node name surviving byte-for-byte across all three, is the sequence's actual
+headline result.
 
 ### Placement: untried, on the same terms as the other three
 
@@ -769,33 +842,32 @@ state:
 
 | | Pulse | Pure | HD/Fury | 2048 |
 | --- | --- | --- | --- | --- |
-| Slot 8 exists | yes, on 11/12 circuits | **no**, on any of 16 | yes, on all 16 | yes, on all 14 |
-| Files behind it | one, `321Go_StartFinish.vex` | none | four, mode-specific by name | seven; a manifest reaches three |
+| Slot 8 exists | yes, on 11/12 circuits | **no**, on any of 16 | yes, on all 16 | yes, on all 26 |
+| Files behind it | one, `321Go_StartFinish.vex` | none | four, plus `fx350` | eight, plus `fx350`; a manifest reaches two, plus `fx350` |
 | Geometry lives in | the `.vex` itself | n/a | a sibling `.rcsmodel` | a sibling `.rcsmodel` |
 | State encoding | 4 UV cells + an **animated** material track | n/a (nearest asset uses a different technique) | 5 UV cells + a **static** material parameter | **4 separate sliding nodes**, no UV walk at all |
 | Palette/geometry shape | 16x32 staircase texture, `u` fixed per digit | n/a | 64x128 (4x) diagonal staircase texture, DXT4/5 | each digit its own fully-unwrapped mesh, no shared atlas |
 | Unused marker columns | yes (2, in the palette) | n/a | yes (2, wider, same idea) | n/a - no shared palette to carry one |
-| 6.000 s loop-close teleport | yes, ~+9.99 in Y | n/a | yes, ~+10.0 in Y | yes, ~-40 in **X**, same frame pair (360/361) |
-| Post-countdown timeline | authored reference (9.333 s FINAL LAP, 12.333 s chequered) | n/a | not re-measured this pass | **same frame numbers**, same node name (`polySurface7`) |
-| Per-mode chooser | none - one file | n/a - no slot to choose into | a substitution site exists, at slot 7, untraced to a result | none authored on slot 8 itself; five of seven files unreached by any manifest |
+| Master timeline (6.000/9.333/12.333 s beats) | authored reference: the panel teleports, FINAL LAP enters, chequered flag enters | n/a | **confirmed on HD's own disc**, all three beats, `polySurface7`/`pasted__Final_Lap` named identically to Pulse's | **confirmed on 2048's own native file**, all three beats, on a different axis/magnitude for the first one |
+| Per-mode chooser | none - one file | n/a - no slot to choose into | a substitution site exists, at slot 7, untraced to a result | none authored on slot 8 itself; six of eight glyph files unreached by any of 26 manifests |
 | Placed at the start line | no | n/a | no | untried |
 
 **What holds across every title that has a slot 8 at all** - Pulse, HD and
 2048: the model name family (`321Go_StartFinish`/`321go_startfinish`/
 `321Go_2048`), node names surviving verbatim or near-verbatim across three
 completely different pipelines (`polySurface7` is byte-for-byte the same
-string on Pulse's PSP export and 2048's Vita one, twelve years and two
-architectures apart; `Final_Lap`/`pasted__Final_Lap` becomes 2048's own
-`Final_*`/`Lap_*` letter set, the same word broken down further rather than
-renamed), the "one asset carries the whole race's states, including the
-chequered board and FINAL LAP" design, and - the strongest result across the
-whole sequence - **a shared master timeline**: something moves at the exact
-same 6.000 s loop-closing instant on all three, and 2048 goes further and
-reproduces Pulse's own frame numbers for the *entire* post-countdown sequence
-(9.3 s FINAL LAP, 12.333 s chequered flag), not merely the one instant HD
-also happened to share. Three platforms, three geometry formats, three
-completely different state-selection mechanisms, and the same authored clock
-underneath all of them.
+string on Pulse's PSP export, HD's own PS3 disc and 2048's Vita one, checked
+directly on all three rather than assumed from one re-export of another;
+`Final_Lap`/`pasted__Final_Lap` becomes 2048's own `Final_*`/`Lap_*` letter
+set, the same word broken down further rather than renamed), the "one asset
+carries the whole race's states, including the chequered board and FINAL LAP"
+design, and - the strongest result across the whole sequence - **a shared
+three-beat master timeline**, not a single shared instant: something moves at
+6.000 s, `FINAL`/`LAP` enters at 9.333 s and the chequered flag enters at
+12.333 s, on all three titles that ship a gantry, independently authored in
+three genuinely different geometry encodings. Three platforms, three
+geometry formats, three completely different state-selection mechanisms, and
+the same authored clock underneath all of them.
 
 **What is per-title, not shared, is everything about *how* a state is
 selected and drawn** - and this is where 2048 breaks the pattern the first
@@ -805,14 +877,17 @@ room for a texture-offset track at all, so its own five cells sit against a
 static material parameter with the runtime-write question left open; **2048
 does neither** - it authors four entirely separate mesh nodes, each a
 hand-modelled glyph, each toggled visible by sliding its own `Anim Transform`
-node on and off screen. A shared texture atlas, an offset track and a static
-parameter were the only three shapes considered across three titles; 2048 is
-a fourth shape a reader should not have assumed was exhaustive. **Also
-per-title**: how many files answer slot 8 (one, zero, four, seven); whether a
-manifest reaches every file it ships (2048 is the first title where it does
-not - five of seven `321Go_*`/`321Fight_*` files sit on the disc unreached by
-any of fourteen circuits' own manifests, `321Fight_2048.vex`'s swapped-in
-`FIGHT` node included); and whether the state-selecting mechanism is an
+node on and off screen, with a `scale` channel layered on top as an entrance
+flourish rather than a second selector. A shared texture atlas, an offset
+track and a static parameter were the only three shapes considered across
+three titles; 2048 is a fourth shape a reader should not have assumed was
+exhaustive. **Also per-title**: how many files answer slot 8 (one, zero,
+four-plus-`fx350`, eight-plus-`fx350`); whether a manifest reaches every file
+it ships (2048 is the first title where it does not - six of eight
+`321Go_*`/`321Fight_*` glyph files sit on the disc unreached by any of
+twenty-six circuits' own manifests across all three archives,
+`321Fight_2048.vex`'s swapped-in `FIGHT` node and the empty `321Go_HD.vex`
+stub both included); and whether the state-selecting mechanism is an
 **authored, played-back track** (Pulse, confidence 55 on the "played" half),
 has to be **written by the engine because the format has no room for a track
 at all** (HD, confidence 40), or needs **no offset write at all because each

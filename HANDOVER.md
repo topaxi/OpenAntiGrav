@@ -384,23 +384,26 @@ docs page with the evidence - **do not requote from this file**:
   [psp-audio.md](docs/formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
 - The start gantry's `3`, `2`, `1`, `GO` on all four titles: Pulse walks four
   per-vertex UV cells across a shared palette staircase (90); Pure ships no
-  track-side gantry at all (85); HD ships four files whose geometry moved to
-  a sibling `.rcsmodel` and whose own five UV cells sit against a *static*
-  material parameter rather than a track (88 for the packaging, 40 for
-  whether it ever changes at runtime); 2048 is a fourth mechanism again - four
-  separate mesh nodes, each slid on and off screen by its own transform track
-  (90), with no shared UV walk at all. What held across every title that has
-  a gantry: something moves at the same 6.000 s loop-closing instant on
-  Pulse, HD and 2048, and 2048 reproduces Pulse's own frame numbers for the
-  whole post-countdown timeline, node name (`polySurface7`) included.
-  **Nothing is placed on any title** - slot 8's transform is unrecovered on
-  Pulse and HD and untried on 2048.
+  track-side gantry at all (85); HD ships four glyph files (plus `fx350.vex`)
+  whose geometry moved to a sibling `.rcsmodel` and whose own five UV cells
+  sit against a *static* material parameter rather than a track (88 for the
+  packaging, 40 for whether it ever changes at runtime); 2048 is a third
+  mechanism again - four separate mesh nodes, each slid on and off screen by
+  its own transform track (90), with no shared UV walk at all, and reaches
+  only two of its own eight glyph files (plus `fx350`) across all 26 circuits
+  the whole package ships. **What held across all three titles with a gantry
+  is a shared three-beat master clock**, not one shared instant: something
+  moves at 6.000 s, `FINAL LAP` enters at 9.333 s and the chequered flag
+  enters at 12.333 s, on Pulse, HD (confirmed directly on HD's own disc) and
+  2048, with a node literally named `polySurface7` carrying the identical
+  closing frame pair on all three. **Nothing is placed on any title** - slot
+  8's transform is unrecovered on Pulse and HD and untried on 2048.
   [start-gantry.md](docs/rendering/start-gantry.md), one page for all four
   titles; `crates/formats/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
   `start_gantry_pure_ground_truth.rs` (2/2, Pure),
   `crates/game/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure),
-  `crates/hd/tests/start_gantry_hd_ground_truth.rs` (4/4, HD),
-  `start_gantry_2048_ground_truth.rs` (8/8, 2048).
+  `crates/hd/tests/start_gantry_hd_ground_truth.rs` (6/6, HD),
+  `start_gantry_2048_ground_truth.rs` (9/9, 2048).
 
 **What M5 still wants**: Zone's explosion. Positional audio and the Autopilot
 pickup both landed 2026-08-24; each has a row under Open threads carrying what

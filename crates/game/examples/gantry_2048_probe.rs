@@ -17,6 +17,7 @@ const CANDIDATES: &[&str] = &[
     "data/billboards/hd_adverts/321go/321go_hd_zone_battle.vex",
     "data/billboards/hd_adverts/321go/321go_hd_detonator.vex",
     "data/billboards/hd_adverts/321go/fx350.vex",
+    "data/billboards/hd_adverts/321go/321go_hd.vex",
 ];
 
 fn main() -> anyhow::Result<()> {

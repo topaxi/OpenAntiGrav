@@ -17,24 +17,33 @@
 //!
 //! `docs/rendering/start-gantry.md`'s 2048 section makes claims this pins:
 //!
-//! 1. 2048's own nine native circuits author slot 8 with `321Go_2048.vex` and
+//! 1. 2048's own ten native circuits author slot 8 with `321Go_2048.vex` and
 //!    no slot 7 at all - a manifest shape neither Pulse's nor HD's own is.
-//! 2. The four HD-ported DLC circuits keep HD's exact slot 7/8 pair
+//! 2. Every HD-ported circuit this package ships - sixteen of them, across
+//!    all three archives, all four `Zone` variants included, not only the
+//!    four the base package re-ships - keeps HD's exact slot 7/8 pair
 //!    (`fx350.vex`/`321Go_StartFinish.vex`) unchanged.
-//! 3. `321Go_2048.vex` authors `Three`, `Two`, `One` and `GO` as four
+//! 3. Across all twenty-six circuits the whole package ships, a manifest
+//!    never names any of the other six `321Go_*`/`321Fight_*` files this
+//!    disc carries - `321Go_Zone.vex`, `321Go_HD_Zone_Battle.vex`,
+//!    `321Go_HD_Detonator.vex`, `321Go_HD.vex` (a 752-byte stub scene with a
+//!    camera and two locators, no `Mesh`, no sibling `.rcsmodel`),
+//!    `321Go_2048_Combat.vex` and `321Fight_2048.vex`.
+//! 4. `321Go_2048.vex` authors `Three`, `Two`, `One` and `GO` as four
 //!    **separate** `Anim Transform` + `Mesh` node pairs, not Pulse's one
 //!    multi-cell node or HD's one five-cell node - a third encoding.
-//! 4. Each digit's own translation track slides it between an off-screen `x`
+//! 5. Each digit's own translation track slides it between an off-screen `x`
 //!    and an on-screen one, on its own schedule - measured, not a UV walk.
-//! 5. `GO` (and three `Stripe_*` nodes alongside it) teleport off-screen at
+//! 6. `GO` (and three `Stripe_*` nodes alongside it) teleport off-screen at
 //!    frame 360/361 - **the same 6.000 s loop-closing instant** Pulse's own
 //!    panel and HD's own glyph node teleport at, a third title now.
-//! 6. The whole authored timeline past the countdown - `FINAL`/`LAP` spelled
+//! 7. The whole authored timeline past the countdown - `FINAL`/`LAP` spelled
 //!    letter by letter entering around frame 558-566, `polySurface7` (the
 //!    chequered flag) entering at frame 740/741 - lands at the **same frame
-//!    numbers** `docs/rendering/start-gantry.md`'s Pulse section records,
-//!    node name included for `polySurface7`.
-//! 7. 2048's own copy of HD's `321go_startfinish.vex` keeps the glyph node's
+//!    numbers** Pulse's file authors and HD's own file also carries (see
+//!    `crates/hd/tests/start_gantry_hd_ground_truth.rs`'s own claim 6, added
+//!    alongside this one), node name included for `polySurface7`.
+//! 8. 2048's own copy of HD's `321go_startfinish.vex` keeps the glyph node's
 //!    exact translation key times (`[359, 360]`) HD's own pass measured -
 //!    2048 re-exported the file into its own container without touching the
 //!    authored timing.
@@ -51,15 +60,18 @@
 //! here, precisely because it is found by coincidence of value rather than by
 //! address.
 //!
-//! Nothing here places the gantry or resolves whether `321Go_Combat`/
-//! `321Fight_2048` (this title's own Combat/Fight-mode variants) are ever
-//! reached at runtime - both stay open on `docs/rendering/start-gantry.md`.
+//! Nothing here places the gantry or resolves whether any of the six
+//! manifest-unreached files (`321Go_Combat`/`321Fight_2048` included) is ever
+//! reached by an engine-side substitution at runtime - all stay open on
+//! `docs/rendering/start-gantry.md`.
 
 use std::path::{Path, PathBuf};
 
 use oag_formats::{trackstartup::TrackStartup, vex};
 
 const ARCHIVE: &str = "base/PSP2/data.psarc";
+const ARCHIVE_DLC1: &str = "dlc1/PSP2/dlc1.psarc";
+const ARCHIVE_DLC2: &str = "dlc2/PSP2/dlc2.psarc";
 
 const NATIVE_CIRCUITS: &[&str] = &[
     "altima",
@@ -72,6 +84,25 @@ const NATIVE_CIRCUITS: &[&str] = &[
     "square",
     "subway",
     "tower",
+];
+
+/// Every HD-ported circuit this package ships, across all three archives -
+/// the four the base package re-ships (also present in `dlc1.psarc`, but
+/// served from the base per `oag_2048`'s own doc comment), the four more
+/// `dlc1.psarc` carries alone, and the eight `dlc2.psarc` carries alone,
+/// including all four `Zone` variants.
+const HD_PORTED_CIRCUITS_BASE: &[&str] =
+    &["Anulpha_Pass", "Chenghou_Project", "Moa_Therma", "Vineta_K"];
+const HD_PORTED_CIRCUITS_DLC1: &[&str] = &["Metropia", "Sebenco_Climb", "Sol_2", "Ubermall"];
+const HD_PORTED_CIRCUITS_DLC2: &[&str] = &[
+    "amphiseum",
+    "modesto_heights",
+    "talons_junction",
+    "tech_de_ra",
+    "zone_1",
+    "zone_2",
+    "zone_3",
+    "zone_4",
 ];
 
 fn source() -> Option<PathBuf> {
@@ -94,6 +125,11 @@ fn archive(source: &Path) -> oag_assets::psarc::Archive {
     oag_assets::psarc::Archive::open_file(&source.join(ARCHIVE)).expect("the base archive opens")
 }
 
+fn open_archive(source: &Path, relative: &str) -> oag_assets::psarc::Archive {
+    oag_assets::psarc::Archive::open_file(&source.join(relative))
+        .unwrap_or_else(|e| panic!("{relative} opens: {e}"))
+}
+
 fn track_startup(archive: &mut oag_assets::psarc::Archive, circuit: &str) -> TrackStartup {
     let path = format!("data/art/published/environments/{circuit}/TrackStartup.xml");
     let xml = archive
@@ -102,7 +138,15 @@ fn track_startup(archive: &mut oag_assets::psarc::Archive, circuit: &str) -> Tra
     TrackStartup::parse(&String::from_utf8(xml).expect("the manifest is UTF-8"))
 }
 
-/// **Claim 1**: every one of 2048's own nine circuits authors slot 8 with its
+fn dlc_track_startup(archive: &mut oag_assets::psarc::Archive, circuit: &str) -> TrackStartup {
+    let path = format!("data/art/published/DLC1/environments/{circuit}/TrackStartup.xml");
+    let xml = archive
+        .read_path(&path)
+        .unwrap_or_else(|e| panic!("{path} reads: {e}"));
+    TrackStartup::parse(&String::from_utf8(xml).expect("the manifest is UTF-8"))
+}
+
+/// **Claim 1**: every one of 2048's own ten circuits authors slot 8 with its
 /// own `321Go_2048.vex`, and authors no slot 7 at all - unlike every HD-ported
 /// circuit.
 #[test]
@@ -127,34 +171,105 @@ fn native_circuits_author_slot_8_alone_with_2048s_own_file() {
     }
 }
 
-/// **Claim 2**: the four HD-ported DLC circuits keep HD's exact slot 7/8
-/// pair, unchanged.
+fn assert_keeps_hds_pair(circuit: &str, startup: &TrackStartup) {
+    let slot7 = startup
+        .billboard(7)
+        .unwrap_or_else(|| panic!("{circuit} should author slot 7, same as HD"));
+    assert_eq!(
+        slot7.location().map(str::to_ascii_lowercase),
+        Some("/data/billboards/hd_adverts/321go/fx350.vex".to_string()),
+        "{circuit}'s slot 7"
+    );
+    let slot8 = startup
+        .billboard(8)
+        .unwrap_or_else(|| panic!("{circuit} should author slot 8"));
+    assert_eq!(
+        slot8.location().map(str::to_ascii_lowercase),
+        Some("/data/billboards/hd_adverts/321go/321go_startfinish.vex".to_string()),
+        "{circuit} should keep HD's own gantry file, not 2048's native one"
+    );
+}
+
+/// **Claim 2**: every HD-ported circuit this package ships, across all three
+/// archives - not only the four the base package re-ships - keeps HD's exact
+/// slot 7/8 pair, unchanged. Sixteen circuits, all four `Zone` variants
+/// included.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn hd_ported_circuits_keep_hds_exact_billboard_pair() {
     let Some(source) = source() else { return };
-    let mut archive = archive(&source);
-    for circuit in ["Anulpha_Pass", "Chenghou_Project", "Moa_Therma", "Vineta_K"] {
-        let path = format!("data/art/published/DLC1/environments/{circuit}/TrackStartup.xml");
-        let xml = archive
-            .read_path(&path)
-            .unwrap_or_else(|e| panic!("{path} reads: {e}"));
-        let startup = TrackStartup::parse(&String::from_utf8(xml).expect("UTF-8"));
-        let slot7 = startup
-            .billboard(7)
-            .unwrap_or_else(|| panic!("{circuit} should author slot 7, same as HD"));
-        assert_eq!(
-            slot7.location().map(str::to_ascii_lowercase),
-            Some("/data/billboards/hd_adverts/321go/fx350.vex".to_string())
-        );
-        let slot8 = startup
-            .billboard(8)
-            .unwrap_or_else(|| panic!("{circuit} should author slot 8"));
-        assert_eq!(
-            slot8.location().map(str::to_ascii_lowercase),
-            Some("/data/billboards/hd_adverts/321go/321go_startfinish.vex".to_string()),
-            "{circuit} should keep HD's own gantry file, not 2048's native one"
-        );
+    let mut base = archive(&source);
+    for circuit in HD_PORTED_CIRCUITS_BASE {
+        assert_keeps_hds_pair(circuit, &dlc_track_startup(&mut base, circuit));
+    }
+    let mut dlc1 = open_archive(&source, ARCHIVE_DLC1);
+    for circuit in HD_PORTED_CIRCUITS_DLC1 {
+        assert_keeps_hds_pair(circuit, &dlc_track_startup(&mut dlc1, circuit));
+    }
+    let mut dlc2 = open_archive(&source, ARCHIVE_DLC2);
+    for circuit in HD_PORTED_CIRCUITS_DLC2 {
+        assert_keeps_hds_pair(circuit, &dlc_track_startup(&mut dlc2, circuit));
+    }
+}
+
+/// **Claim 3**: across all
+/// twenty-six circuits the whole package ships (ten native, sixteen
+/// HD-ported across all three archives), no manifest ever names any of the
+/// six `321Go_*`/`321Fight_*` files that are not `321Go_2048.vex` or
+/// `321Go_StartFinish.vex` - `321Go_Zone.vex`, `321Go_HD_Zone_Battle.vex`,
+/// `321Go_HD_Detonator.vex`, `321Go_HD.vex` (the empty stub), `321Go_2048_Combat.vex`
+/// and `321Fight_2048.vex`. Not even the four `Zone` circuits reach
+/// `321Go_Zone.vex` - they keep HD's ordinary pair like every other ported
+/// circuit.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn no_manifest_across_the_whole_package_names_the_six_unreached_files() {
+    let Some(source) = source() else { return };
+    let unreached = [
+        "321go_zone.vex",
+        "321go_hd_zone_battle.vex",
+        "321go_hd_detonator.vex",
+        "321go_hd.vex",
+        "321go_2048_combat.vex",
+        "321fight_2048.vex",
+    ];
+
+    let mut startups: Vec<(String, TrackStartup)> = Vec::new();
+    let mut base = archive(&source);
+    for circuit in NATIVE_CIRCUITS {
+        startups.push((circuit.to_string(), track_startup(&mut base, circuit)));
+    }
+    for circuit in HD_PORTED_CIRCUITS_BASE {
+        startups.push((circuit.to_string(), dlc_track_startup(&mut base, circuit)));
+    }
+    let mut dlc1 = open_archive(&source, ARCHIVE_DLC1);
+    for circuit in HD_PORTED_CIRCUITS_DLC1 {
+        startups.push((circuit.to_string(), dlc_track_startup(&mut dlc1, circuit)));
+    }
+    let mut dlc2 = open_archive(&source, ARCHIVE_DLC2);
+    for circuit in HD_PORTED_CIRCUITS_DLC2 {
+        startups.push((circuit.to_string(), dlc_track_startup(&mut dlc2, circuit)));
+    }
+    assert_eq!(
+        startups.len(),
+        26,
+        "the whole package should ship 26 circuits"
+    );
+
+    for (circuit, startup) in &startups {
+        for billboard in &startup.billboards {
+            let Some(location) = billboard.location() else {
+                continue;
+            };
+            let lowered = location.to_ascii_lowercase();
+            for name in unreached {
+                assert!(
+                    !lowered.contains(name),
+                    "{circuit}'s manifest names {location}, which should not be one of \
+                     the six files no circuit ever reaches"
+                );
+            }
+        }
     }
 }
 
@@ -170,7 +285,7 @@ fn gantry_nodes(archive: &mut oag_assets::psarc::Archive) -> (Vec<u8>, Vec<vex::
     (data, nodes, anim_class)
 }
 
-/// **Claim 3**: `Three`, `Two`, `One` and `GO` are four separate `Anim
+/// **Claim 4**: `Three`, `Two`, `One` and `GO` are four separate `Anim
 /// Transform` + `Mesh` node pairs - a third encoding, not Pulse's one
 /// multi-cell node or HD's one five-cell node.
 #[test]
@@ -221,7 +336,7 @@ fn translation_x_at(data: &[u8], nodes: &[vex::Node], name: &str, seconds: f32) 
     anim.sample(seconds)[12]
 }
 
-/// **Claim 4**: each digit slides between an off-screen and an on-screen `x`
+/// **Claim 5**: each digit slides between an off-screen and an on-screen `x`
 /// on its own schedule - a measured slide, not a UV walk, not a fade.
 ///
 /// Values are the exact ones a real decode produces (frame times `/60`
@@ -278,7 +393,7 @@ fn each_digit_slides_on_screen_for_its_own_window_then_off() {
     );
 }
 
-/// **Claim 5**: `GO` teleports off screen at the exact same 6.000 s
+/// **Claim 6**: `GO` teleports off screen at the exact same 6.000 s
 /// loop-closing instant Pulse's panel and HD's glyph node do - the third
 /// title this cross-title coincidence holds on, this time on a different
 /// axis (`x`, not `y`) and at a different magnitude (~40 units, not ~10).
@@ -314,7 +429,7 @@ fn go_teleports_off_screen_at_the_six_second_loop_close() {
     );
 }
 
-/// **Claim 6**: the whole authored timeline past the countdown lands on the
+/// **Claim 7**: the whole authored timeline past the countdown lands on the
 /// same frame numbers `docs/rendering/start-gantry.md`'s Pulse section
 /// records - `FINAL`/`LAP` spelled letter by letter starting around frame
 /// 558-566, and `polySurface7` (the chequered flag, the *same node name*
@@ -359,7 +474,7 @@ fn the_post_countdown_timeline_lands_on_pulses_own_frame_numbers() {
     );
 }
 
-/// **Claim 7**: 2048's own re-export of HD's `321go_startfinish.vex` keeps
+/// **Claim 8**: 2048's own re-export of HD's `321go_startfinish.vex` keeps
 /// the glyph node's exact translation key times HD's own pass measured.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
