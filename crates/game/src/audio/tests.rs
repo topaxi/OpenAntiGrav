@@ -16,6 +16,7 @@
 
 use super::*;
 
+mod no_audio;
 mod source_switch;
 mod volumes;
 
