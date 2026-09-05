@@ -203,7 +203,7 @@ file does not need to carry its own.
     neither fixed** (per this file's own standing rule: a red ground-truth
     test usually encodes a real disagreement, so "make it green" is the wrong
     instinct without understanding why first):
-    [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/shuriken-throw-returns-zero-blades-after-the-vector-class-refactor.md)
+    [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md)
     (one press throws zero blades, since `0c78c477`'s VECTOR-class refactor
     made `shuriken::launch` fallible) and
     [`stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md)
@@ -558,7 +558,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
-- [A thrown Shuriken now leaves zero blades on the disc-backed test](handover/shuriken-throw-returns-zero-blades-after-the-vector-class-refactor.md) - `shuriken_ground_truth` regressed the same day the VECTOR speed-class refactor (`0c78c477`) landed; evidenced but not yet pinned to one of four candidate early returns in `Race::spend_pickup`'s `Weapon::Shuriken` arm.
+- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. The blade's first same-tick advance sweeps into opponent ship 7's hull 11.4 units away - a normal straggler while six others are 34-131 units clear - and detonates per the documented hull rule. **It also predates the commits it was blamed on**: `d11c5fb7`, immediately before them, reproduces the identical failure, so it is not a same-day regression. Open: what moved ship 7 into the path (bisect `b4c45477`..`d11c5fb7`), and whether `hull_radius`'s lateral width - marked "ours, not recovered" - is over-wide for a 20-degree off-nose throw
 - [A healthy AI craft blips stalled for one tick off the line](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md) - `stall_rescue_ground_truth`'s zero-tolerance test reads a one-tick stall on `16_Track` at Ace; leading hypothesis is an unavoidable transition tick where the countdown-hold fix (`cc395862`) releases opponent thrust before velocity has risen off zero, not a physics or AI bug.
 
 ## Pending maintainer decision: shipped design data in tracked docs
