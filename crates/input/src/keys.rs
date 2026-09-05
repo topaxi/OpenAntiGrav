@@ -11,38 +11,87 @@
 //! habit, but WASD is the documented, primary scheme. That displaces Square and
 //! Triangle off `S`/`A`; they move to `C`/`V`, chosen for being the next-nearest
 //! keys to the WASD cluster that are not already spoken for.
+//!
+//! # The candidate set is closed
+//!
+//! [`candidates`] is not a hint, it is the whole universe: every key this
+//! build can ever offer a player, rebound or not, is one of these eighteen.
+//! [`crate::bindings::Bindings`] only ever changes which button a candidate
+//! currently produces, never adds a new one - the same shape as a menu row's
+//! `values_from` list, and for the same reason: a closed set is what keeps
+//! `Vec<&'static str>` in [`bound_keys`]'s signature true, rather than a
+//! `String` a rebind would have to allocate.
 
 use winit::keyboard::{Key, NamedKey};
 
 use oag_gameplay::input::Button;
 
+/// The name, key and default button for every candidate this build offers.
+///
+/// The one place all three are written down together - [`candidates`] and
+/// [`map_key`] are both projections of this, so neither can drift from the
+/// other the way two independently maintained tables could.
+fn default_table() -> Vec<(&'static str, Key, Button)> {
+    vec![
+        ("UP", Key::Named(NamedKey::ArrowUp), Button::Up),
+        ("DOWN", Key::Named(NamedKey::ArrowDown), Button::Down),
+        ("LEFT", Key::Named(NamedKey::ArrowLeft), Button::Left),
+        ("RIGHT", Key::Named(NamedKey::ArrowRight), Button::Right),
+        ("ENTER", Key::Named(NamedKey::Enter), Button::Cross),
+        ("BACKSPACE", Key::Named(NamedKey::Backspace), Button::Circle),
+        ("SPACE", Key::Named(NamedKey::Space), Button::Start),
+        ("TAB", Key::Named(NamedKey::Tab), Button::Select),
+        ("W", Key::Character("w".into()), Button::Up),
+        ("A", Key::Character("a".into()), Button::Left),
+        ("S", Key::Character("s".into()), Button::Down),
+        ("D", Key::Character("d".into()), Button::Right),
+        ("X", Key::Character("x".into()), Button::Cross),
+        ("Z", Key::Character("z".into()), Button::Circle),
+        ("C", Key::Character("c".into()), Button::Square),
+        ("V", Key::Character("v".into()), Button::Triangle),
+        ("Q", Key::Character("q".into()), Button::L),
+        ("E", Key::Character("e".into()), Button::R),
+    ]
+}
+
+/// Whether `key` is the key a candidate names, case-insensitively for a
+/// character and exactly for a named key.
+///
+/// The one piece of key-equality logic in the crate - [`map_key`],
+/// [`name_for`] and [`crate::bindings::Bindings::resolve`] all call this
+/// rather than comparing `Key`s directly, so "X" and "x" agreeing is one fact
+/// rather than three copies of it.
+pub(crate) fn key_matches(candidate: &Key, key: &Key) -> bool {
+    match (candidate, key) {
+        (Key::Character(a), Key::Character(b)) => a.eq_ignore_ascii_case(b.as_str()),
+        _ => candidate == key,
+    }
+}
+
 /// Maps a key to an abstract button index, or `None` if it is not bound.
+///
+/// The **default** mapping - a fresh install, or a candidate a rebind has not
+/// touched. A live keyboard reads [`crate::bindings::Bindings::resolve`]
+/// instead, which starts here and moves under a rebind.
 #[must_use]
 pub fn map_key(key: &Key) -> Option<Button> {
-    Some(match key {
-        Key::Named(NamedKey::ArrowUp) => Button::Up,
-        Key::Named(NamedKey::ArrowDown) => Button::Down,
-        Key::Named(NamedKey::ArrowLeft) => Button::Left,
-        Key::Named(NamedKey::ArrowRight) => Button::Right,
-        Key::Named(NamedKey::Enter) => Button::Cross,
-        Key::Named(NamedKey::Backspace) => Button::Circle,
-        Key::Named(NamedKey::Space) => Button::Start,
-        Key::Named(NamedKey::Tab) => Button::Select,
-        Key::Character(text) => match text.to_ascii_lowercase().as_str() {
-            "w" => Button::Up,
-            "s" => Button::Down,
-            "a" => Button::Left,
-            "d" => Button::Right,
-            "x" => Button::Cross,
-            "z" => Button::Circle,
-            "c" => Button::Square,
-            "v" => Button::Triangle,
-            "q" => Button::L,
-            "e" => Button::R,
-            _ => return None,
-        },
-        _ => return None,
-    })
+    default_table()
+        .into_iter()
+        .find(|(_, candidate, _)| key_matches(candidate, key))
+        .map(|(_, _, button)| button)
+}
+
+/// The candidate name for `key`, if it is one of [`candidates`]'s eighteen.
+///
+/// What a rebind capture turns a raw key press into: the closed set means
+/// this is a lookup rather than a spelling decision, so a key the capture
+/// does not recognise is left waiting rather than guessed at.
+#[must_use]
+pub fn name_for(key: &Key) -> Option<&'static str> {
+    default_table()
+        .into_iter()
+        .find(|(_, candidate, _)| key_matches(candidate, key))
+        .map(|(name, _, _)| name)
 }
 
 /// Every key this build offers to [`map_key`], for showing a player what is
@@ -54,33 +103,28 @@ pub fn map_key(key: &Key) -> Option<Button> {
 /// `map_key` and forgetting it here under-reports; the reverse is impossible,
 /// and [`tests::every_mapped_button_has_a_key_to_show_for_it`] catches the
 /// under-reporting case for any button that has no candidate at all.
-fn candidates() -> Vec<(&'static str, Key)> {
-    vec![
-        ("UP", Key::Named(NamedKey::ArrowUp)),
-        ("DOWN", Key::Named(NamedKey::ArrowDown)),
-        ("LEFT", Key::Named(NamedKey::ArrowLeft)),
-        ("RIGHT", Key::Named(NamedKey::ArrowRight)),
-        ("ENTER", Key::Named(NamedKey::Enter)),
-        ("BACKSPACE", Key::Named(NamedKey::Backspace)),
-        ("SPACE", Key::Named(NamedKey::Space)),
-        ("TAB", Key::Named(NamedKey::Tab)),
-        ("W", Key::Character("w".into())),
-        ("A", Key::Character("a".into())),
-        ("S", Key::Character("s".into())),
-        ("D", Key::Character("d".into())),
-        ("X", Key::Character("x".into())),
-        ("Z", Key::Character("z".into())),
-        ("C", Key::Character("c".into())),
-        ("V", Key::Character("v".into())),
-        ("Q", Key::Character("q".into())),
-        ("E", Key::Character("e".into())),
-    ]
+///
+/// `pub(crate)` rather than private: [`crate::bindings`] walks this same list
+/// to resolve a live, rebindable table, and doing so through this function
+/// rather than a second copy of [`default_table`] is what keeps the two unable
+/// to disagree about which eighteen keys exist.
+pub(crate) fn candidates() -> Vec<(&'static str, Key)> {
+    default_table()
+        .into_iter()
+        .map(|(name, key, _)| (name, key))
+        .collect()
 }
 
 /// Which keys currently produce `button`, in candidate order.
 ///
 /// Empty when nothing does, which is a real answer rather than a failure: not
 /// every abstract button the game knows has a key on this layout.
+///
+/// The **default** table's answer. [`crate::bindings::Bindings::names_for`] is
+/// the live one a rebound keyboard should show instead - this stays for the
+/// callers that only ever want the built-in layout, and so
+/// [`tests::a_button_with_two_keys_reports_both`] keeps proving the default
+/// table itself rather than whatever a test happened to rebind it to.
 #[must_use]
 pub fn bound_keys(button: Button) -> Vec<&'static str> {
     candidates()
@@ -177,5 +221,17 @@ mod tests {
     fn unmapped_keys_are_ignored() {
         assert_eq!(map_key(&Key::Character("k".into())), None);
         assert_eq!(map_key(&Key::Named(NamedKey::F1)), None);
+    }
+
+    #[test]
+    fn name_for_is_the_inverse_of_a_candidate_key() {
+        for (name, key) in candidates() {
+            assert_eq!(name_for(&key), Some(name));
+        }
+    }
+
+    #[test]
+    fn name_for_rejects_a_key_off_the_closed_set() {
+        assert_eq!(name_for(&Key::Named(NamedKey::F1)), None);
     }
 }
