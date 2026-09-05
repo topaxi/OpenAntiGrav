@@ -33,13 +33,15 @@
 //! shipped design data in the repository. Every assertion below is structural: a
 //! track has paths, a hull has positive extents, a position is finite.
 //!
-//! Textures used to be a place a PS2 race was knowingly worse; the model-to-set
-//! lookup is now recovered for both a ship and a track (directory position, not a
-//! name - see `docs/formats/ps2-texture.md`), and
-//! [`every_ps2_track_s_texture_set_is_found_by_directory_position`] asserts it stays
-//! that way for tracks specifically. A handful of slots on 5 of 32 tracks still do
-//! not decode (documented, not a regression to fix here), and the load report names
-//! any model whose slots did not all fill rather than guessing at one.
+//! Textures used to be a place a PS2 race was knowingly worse; the model-to-*set*
+//! lookup (which archive entry holds a model's textures) is found by directory
+//! position for both a ship and a track, and the *within-set* lookup (which of
+//! that set's entries a given material means) is resolved by each `Texture`
+//! node's own declared name - see `docs/formats/ps2-texture.md`. Both halves are
+//! exact now: every slot on every one of the 32 track models decodes, and
+//! [`every_ps2_track_s_texture_set_is_found_by_directory_position`] asserts it
+//! stays that way. The load report still names any model whose slots did not
+//! all fill rather than guessing at one, for whichever half regresses.
 
 use std::path::{Path, PathBuf};
 
@@ -438,25 +440,27 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
     }
 }
 
-/// The same directory-position rule, checked independently for every
-/// circuit's own `track.vex`/`track_reversed.vex`, not extrapolated from the
-/// ship result above.
-///
-/// 27 of the 32 `<n>_Track` models on the disc fill every slot; the other 5
-/// are short 1 or 2 slots each (never more), for a total of exactly 7 missing
-/// slots across all 32 - see
-/// `docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name`.
-/// Asserting the exact total rather than "no more than a handful" is
-/// deliberate: a regression that broke the lookup entirely (falling back to
-/// the white texture for every slot) would still pass a looser bound.
+/// The archive-entry lookup is the same directory-position rule the ship uses,
+/// checked independently for every circuit's own
+/// `track.vex`/`track_reversed.vex` rather than extrapolated from the ship
+/// result above - but finding the right *entry* is only half of it. 5 of the
+/// 32 `<n>_Track` models have a nested set with fewer entries than the model
+/// has `Texture` nodes, because two nodes there declare the same name and the
+/// set holds one entry per unique name; see
+/// `docs/formats/ps2-texture.md#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal`.
+/// Resolving each node by its own declared name rather than by position in
+/// that set is what makes the duplicate harmless - a repeated name simply
+/// resolves to the one entry it always named - so **every slot on every one
+/// of the 32 models decodes**, no exceptions. Asserting the exact zero rather
+/// than "no more than a handful" is deliberate: a regression that broke the
+/// by-name lookup and fell back to position (or to nothing) would still pass
+/// a looser bound.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
     let Some(image) = image(PS2_IMAGE) else {
         return;
     };
-
-    let mut total_missing = 0usize;
 
     for n in 1..=16u32 {
         for variant in ["track.vex", "track_reversed.vex"] {
@@ -477,23 +481,17 @@ fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
                  reading"
             );
             let decoded = model.textures.iter().filter(|t| t.is_some()).count();
-            let missing = model.textures.len() - decoded;
-            assert!(
-                missing <= 2,
-                "{track}: {missing} of {} texture slot(s) undecoded, more than the \
-                 documented 0-2 slack; report was:\n{}",
+            assert_eq!(
+                decoded,
+                model.textures.len(),
+                "{track}: only {decoded} of {} texture slot(s) decoded; by-name \
+                 resolution should fill every slot now, including the ones a \
+                 duplicate Texture node name used to leave unbound; report was:\n{}",
                 model.textures.len(),
                 loaded.report.join("\n")
             );
-            total_missing += missing;
         }
     }
-
-    assert_eq!(
-        total_missing, 7,
-        "expected exactly 7 undecoded texture slots total across all 32 track models \
-         (see docs/formats/ps2-texture.md), got {total_missing}"
-    );
 }
 
 /// Whatever the PS2 front end can do, its failures name the archives searched.
