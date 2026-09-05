@@ -62,5 +62,16 @@ units over two six-second intervals.
   A frame that lines up settles the convention; one that is mirrored or
   inverted says which of transpose/handedness is wrong, and that is a cheap
   thing to bisect once the two images exist.
-- Delete or re-take the poses in `data/reference/hd-capture/*/NN.json`, which
-  are all wrong. They are gitignored, so this is housekeeping, not a commit.
+- Re-derive the **`camera` field** in every `data/reference/hd-capture/*/NN.json`
+  once the finder works. **Only that field is wrong**: the `track` name, the
+  pairing with `NN.png` and the PNGs themselves are load-bearing and must stay -
+  `talons/`'s barrier walls are the independent confirmation of the flip fix,
+  and `hd-talons-glass/` is what
+  [talons-junctions-missing-floor-is-a-glass-floor.md](talons-junctions-missing-floor-is-a-glass-floor.md)
+  compares against. They are gitignored, so this is housekeeping, not a commit.
+- When the overlay is taken, **crop to the real RPCS3 window rectangle first**.
+  The shared Xvfb on `:77` never repaints, so a previous boot's window survives
+  the black trim and reads as part of the frame - see
+  [rpcs3-capture.md](../docs/reverse-engineering/rpcs3-capture.md)'s 2026-09-01
+  ghosting trap. Three boots landed on `:77` on 2026-09-05 alone. A misaligned
+  overlay is a ghost until that is ruled out, not a handedness bug.

@@ -192,8 +192,11 @@ separate boots and never advances. It ends in `20010000`, an RSX JUMP
 (`0x20000000 | io_offset`) to `0x40010000`; the four 4 KiB auxiliary contexts
 there each end in a JUMP of their own, to IO `0x74100` and `0x75100`
 alternating. The draw commands are downstream of *those*: **220-394 constant
-loads a frame over IO `0x77000..0x9f000`, and none at all below `0x77000`.**
-See [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md).
+loads a frame over IO `0x77000..0x9f000`.** Below that, what has actually been
+read is the four auxiliary segments (`0x10000..0x14000`) and `0x60000..0x77000`,
+and there are none in either; `0x14000..0x60000` has never been dumped and is
+not claimed either way. See
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md).
 
 ### A matrix in a FIFO is not sixteen consecutive floats - except when it is
 
@@ -257,6 +260,19 @@ that a degenerate matrix passes every algebraic one:
    from `+X` to `(0.80, -0.06, 0.59)`: the ship is in a bend.
 7. **It is a command operand**, not an offset that happens to parse, and it is
    re-uploaded eight or nine times a frame.
+8. **It goes to both `c[256]` and `c[260]`** - `c[0..3]` and `c[4..7]` - with
+   the same sixteen floats. If the engine's convention is `viewProj` in the
+   first and `worldViewProj` in the second, those coincide *exactly* on a draw
+   whose world matrix is the identity, and a matrix landing in both is evidence
+   that it is the camera rather than some object's transform.
+
+**What this does not settle** is which of those two it is. A *translated*
+object's `worldViewProj` decomposes to an identical basis, field of view and
+aspect, and an eye offset by a constant - the eye is the camera in that draw's
+own space and equals the world-space eye only where the world matrix is the
+identity. The two are indistinguishable in these numbers, and the way they
+differ is the one that misreads as a translation bug rather than a wrong
+matrix. Rendering from the pose and overlaying the captured frame settles it.
 
 The four earlier eliminations are explained rather than contradicted: there
 need be no CPU-side copy, because the matrix reaches the RSX as a FIFO
