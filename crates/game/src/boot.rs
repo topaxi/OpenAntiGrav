@@ -439,32 +439,6 @@ impl std::fmt::Debug for Media {
     }
 }
 
-/// The report line a boot of a [`oag_title::Provenance::Declared`] chain gets,
-/// or `None` for a chain somebody has watched.
-///
-/// **ADR-0025's whole enforcement is this function.** What replaced the old
-/// `front_end: None` refusal is a label, and a label nobody prints is worth
-/// nothing - so it is said on every such boot, near the top where the reader is
-/// still looking, before any of it is drawn. A sequence read out of the disc's
-/// XML is not a sequence anyone has watched, and a screenshot of one must not be
-/// filed as evidence of what the original does.
-///
-/// It is lifted out of [`load_shell`] rather than inlined there for a reason
-/// that arrived on 2026-09-05: **no title is `Declared` any more.** Wipeout HD
-/// was the last one and its chain has now been watched, so the disc-backed test
-/// that used to assert this line appears has nothing left to assert it against.
-/// A function is testable without a disc; an `if` inside a 200-line loader is
-/// not, and the guarantee would have quietly stopped being covered on the day it
-/// stopped being exercised.
-pub(crate) fn provenance_caveat(title: &str, provenance: oag_title::Provenance) -> Option<String> {
-    (!provenance.is_measured()).then(|| {
-        format!(
-            "{title}: this order is what its front-end XML declares, not a boot \
-             anyone has watched"
-        )
-    })
-}
-
 /// Opens the source and loads everything that is not a movie.
 /// Returns the archives alongside, still open, and the title, both for later.
 ///
@@ -500,7 +474,7 @@ pub fn load_shell(
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
-    report.extend(provenance_caveat(title.name, profile.provenance));
+    report.extend(provenance::caveat(title.name, profile.provenance));
     if !archives.packs.is_empty() {
         report.push(format!(
             "dlc: {} archive(s) mounted behind this source",
@@ -1725,6 +1699,7 @@ pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 mod fonts;
 mod movies;
+mod provenance;
 pub(crate) mod roster;
 pub(crate) mod xml;
 
