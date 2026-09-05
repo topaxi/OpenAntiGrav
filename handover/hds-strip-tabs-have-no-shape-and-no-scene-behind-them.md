@@ -47,6 +47,86 @@ Both consequences are new open items below: the geometry most likely is not what
 
 **One thing this capture also exposed, worth remembering before `<aImage>` ever gets a parser**: `DATA00`'s own `mainmenu_definition.xml` opens with the comment `<?this is the real menu ?>` and carries an `<aImage>` block named "Temporary Colour Check" - four swatches naming `HD_Blue`/`HD_Grey`/`HD_LightGrey`/`HD_White`/`HD_BG` by their live value, clearly a developer debug overlay. `<aImage>` is not a tag anything here recognises today, so it is inert by omission rather than by a considered exclusion - but the retail capture also shows no trace of it on either style, confirming the omission happens to be correct. When `<aImage>` (or any other still-unhandled tag) does get read, this specific instance needs the same treatment `frame.rs` already gives `FE_TRIAL_MODE`/`FE_PURCHASE_NOW`: excluded on purpose, not drawn because it parses.
 
+
+## 2026-09-05: the strip re-measured at a disc-calibrated ruler
+
+**Two of this thread's own numbers were wrong, and the ruler is why they are now
+right.** A 3840x2160 RPCS3 framebuffer grab was measured at a scale *solved from
+the picture* - the `FE Screen` frame's own two `line.gtf` rules are disc-authored
+and sit in the same frame, giving `capture = authored * 1.92 + (76.8, 43.2)`,
+an offset that lands on a centred 4% underscan on both axes without being fitted
+to one. Cross-checked on `Title_Arrow_HD.gtf`, a third anchor sharing no property
+with the rules: predicted `x 385.9..426.2, y 183.4..244.8`, measured `385..426`
+and `183..245`. Full derivation on
+[hd-frontend.md](../docs/formats/hd-frontend.md#the-strip-measured-against-a-disc-calibrated-capture).
+
+**Shipped:**
+
+- **The anchor's *meaning* was inverted.** `<HorizMenu>`'s `x="160" y="125"` is
+  the **tab rect's top-left corner**; `strip::draw` read it as the label's pen
+  and padded outward and *upward* from the text. Real tab corner `(160.5, 126.0)`
+  against this build's `(150.8, 117.5)` - one left-pad too far left and one
+  top-pad too high, on both axes. The pads' magnitudes were never wrong; only
+  which edge they hang off was. Now `(160.0, 125.0)`. Decoupling them also
+  removed a latent trap: the tab's top used to be a function of `TAB_TOP_PAD`,
+  so tuning where the label sat inside its tab silently moved the tab itself.
+- **`TAB_HEIGHT` `14.3` -> `15.6`** (480x272 grid), i.e. `56.8` -> `62.0`
+  authored, matching the real `62.0`. Measured on a selected *and* an unselected
+  tab, equal to four digits - checked rather than assumed, because the selected
+  tab turns out to be 24% *wider* than its neighbours, so width does vary with
+  selection and height had to be shown not to. Confidence 75 against this
+  thread's group of 55, purely on ruler quality.
+
+**Closed, and this thread was right to leave them open rather than guess:**
+
+- **`STRIP_GAP` needed no change.** Real fill-to-fill gaps are `11.46, 10.94,
+  11.46, 11.46`; ours computes `STRIP_GAP - TAB_LEFT_PAD = 12.0`. Within `0.67`.
+- **`TAB_LEFT_PAD` and both underline constants needed no change either** - real
+  `9.4..9.9` / `20.8` / `7.82` against ours `9.2` / `19.6` / `7.5`. After the
+  anchor fix the underline lands at authored `168.0` against the real `167.1`.
+- **The highlight does not pulse**, so drawing it flat is correct for HD. See
+  the doc page; nothing in the front-end authors an oscillating anything, and
+  the strip band is byte-identical between two captures of the same screen at
+  different times. **This does not touch the Pulse/PSP thread's own pulse item**,
+  which is a different title on a different engine.
+
+**Newly measured and deliberately *not* implemented - the tab width.** The four
+unselected tabs are `296.88` wide each to two decimals while their labels are
+not the same length, the selected one is `366.67`, and the strip's outer edges
+are the frame's own `160` and `1760` with the total conserved. **But the
+`<HorizMenu>` schema accepts `gap` and `ItemWidth` - `online_definition.xml` uses
+both when it wants fixed-width tabs - and the main menu sets neither, its five
+`<Entry>` elements carrying `IDString` and nothing else.** So those are runtime
+engine defaults, and hard-coding `296.88` would invent a constant the disc
+deliberately declines to state. This build still sizes a tab to its label, and
+the difference is recorded rather than papered over.
+
+## Open, added 2026-09-05
+
+- **The label sits `8.7` authored units too low inside its tab** (real cap top
+  `8.27` below the tab's top; ours `17.0`). The residual is this build's own font
+  atlas rather than the menu geometry - the pen anchors the glyph *cell*, which
+  carries `9.46` units of ascender headroom above the cap. Correcting it in
+  `TAB_TOP_PAD` alone needs `-1.19` authored units, a negative "pad" that is
+  really "the authored inset minus this build's atlas headroom" and rots the
+  moment the atlas changes. It belongs with the `Default`-only font-role item
+  already below, not ahead of it.
+- **The main menu's title authors `random="true"`** - a character-scramble
+  reveal - and this build draws it plain. Not previously written down.
+- **`transition_secs` is `0.5` where the widget authors `transition="0.4"`**
+  (and a `delay="0.2"` nothing reads). Left alone on purpose: `transition_secs`
+  drives a *page change* in `menu_stage.rs`, while the widget's `transition`
+  reads - on the evidence of its siblings, `<Text transition="2">` on the title
+  and `<Image transition="0.3">` on the frame rules - as how long the widget
+  takes to animate in when its screen appears. Swapping one confidence-70 number
+  for another without settling that is not progress. What would settle it: find
+  what consumes `<HorizMenu>`'s `transition` in `EBOOT.elf`, or time a page
+  change and a screen entry separately from a capture.
+- **No easing curve is authored anywhere on the disc.** 122 `<Key>` elements
+  carry `Time`, `X` and `Y` and nothing else, so `Tween::eased` cannot be fixed
+  from data on this title either - it is executable-side work. Recorded here
+  because it closes off a route someone would otherwise try.
+
 ## Open
 
 - **What `0xff705070` is for - narrowed 2026-09-02, not closed.** A wider sweep (all `frontend/gui/*.xml`, `DATA00`-`DATA06`) found it is not `<HorizMenu>`-specific: the same literal is the widget-own colour on eight `<HorizMenu>`/`<VertMenu>` `<Values>` blocks (`mainmenu`, `additional` x3, `manual` x4), and separately recurs fourteen times per copy of `online_definition.xml`, on five `<Menu>` widgets and six standalone `<Text>` status labels (`friendRequests`, `FriendInfo`, `SkinInfo`, `blockedInfo`, `statusInfo`, `pendingInfo`). Never reached through `FEGlobals->`, unlike every colour already confirmed live. On the menu-family widgets it is very likely inert the same way the captured strip case already is (confidence 70, generalised from one capture rather than independently checked per widget); on the standalone `<Text>` widgets it is a materially different draw in this build's own analogous code (`Frontend::draw_screen_at` reads a `Text`'s own colour directly, unlike a menu entry) and clusters entirely on info/status labels, so it reads as a real, deliberately-chosen secondary colour there rather than dead weight (confidence 55 - plausible, not verified; online screens aren't implemented in this project and no capture of them exists). Full detail on [hd-frontend.md](../docs/formats/hd-frontend.md#the-fe-style-switch-is-live-works-and-is-not-an-archive-swap---confirmed-by-capture). Does not change any of this build's code - HD's online/community screens are out of this project's scope - so this stays a documentation-only close, not an implementation one.

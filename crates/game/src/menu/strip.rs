@@ -16,6 +16,36 @@
 //! ([`super::Skin::selected`]), and [`suits`]'s rule about which pages get drawn
 //! this way.
 //!
+//! # What the anchor means: the tab's corner, not the label's pen
+//!
+//! [`oag_title::MenuStrip::x`] and [`oag_title::MenuStrip::y`] are the
+//! `<HorizMenu>`'s own `x="160" y="125"`, and they are the **top-left corner of
+//! an entry's tab**. The label is placed inside it, at
+//! [`super::Skin::tab_pad`] in from that corner.
+//!
+//! **This module read them as the label's pen position until 2026-09-05**, and
+//! derived the tab by padding outward and *upward* from the text - which put
+//! every tab one left-pad too far left and one top-pad too high. Measured
+//! against a calibrated framebuffer capture of the real menu, both halves of
+//! that were wrong by exactly the pad:
+//!
+//! | | real | this build, before |
+//! | --- | --- | --- |
+//! | tab's left edge | `160.5` | `150.8` |
+//! | tab's top edge | `126.0` | `117.5` |
+//!
+//! The authored numbers are `160` and `125`, so the real menu puts the tab's
+//! corner *on* the anchor to within a unit on both axes, and this build put the
+//! label there instead. The pads' own magnitudes were never the problem and did
+//! not change - only which edge they hang off did.
+//!
+//! The ruler is `docs/formats/hd-frontend.md`'s: the frame's own two `line.gtf`
+//! rules are in the same capture and are disc-authored, which is what makes
+//! this a measurement rather than an eyeballed nudge.
+//!
+//! Entry-to-entry spacing is unaffected. `left` and the pen differ by a
+//! constant, so advancing either by `width + gap` steps the same distance.
+//!
 //! # Every entry is drawn, and there is no carousel
 //!
 //! The widget states one position and lists its entries; nothing in it says the
@@ -95,11 +125,15 @@ pub(super) fn draw(
     let (underline_width, underline_height, underline_offset_y) = skin.underline();
 
     let mut out = Vec::new();
-    let mut x = strip.x;
+    // The **tab's own left edge**, not the label's pen position - see this
+    // module's own "what the anchor means" note. The pen is derived from it.
+    let mut left = strip.x;
     for (index, entry) in menu.page().entries.iter().enumerate() {
         let label = entry.label();
         let selected = index == menu.selected();
         let width = measure(label) * scale;
+        let pen_x = left + tab_left_pad;
+        let pen_y = strip.y + tab_top_pad;
 
         // The tab behind the label, in two pieces: the real tab's top-right
         // corner is a 45-degree cut followed by a flat landing before the
@@ -120,8 +154,8 @@ pub(super) fn draw(
             let tab_width = tab_left_pad + width;
             out.push(Draw::Fill {
                 rect: [
-                    x - tab_left_pad,
-                    strip.y - tab_top_pad + chamfer_height,
+                    left,
+                    strip.y + chamfer_height,
                     tab_width,
                     tab_height - chamfer_height,
                 ],
@@ -133,8 +167,8 @@ pub(super) fn draw(
             // shrink the band to nothing rather than inverting it.
             out.push(Draw::ChamferedFill {
                 rect: [
-                    x - tab_left_pad,
-                    strip.y - tab_top_pad,
+                    left,
+                    strip.y,
                     (tab_width - chamfer_landing).max(0.0),
                     chamfer_height,
                 ],
@@ -144,8 +178,8 @@ pub(super) fn draw(
         }
 
         out.push(Draw::Text {
-            x,
-            y: strip.y,
+            x: pen_x,
+            y: pen_y,
             scale,
             // Every entry is this same colour, selected or not - a 2026-09-01
             // capture found no text brightening at all, only the tab fill
@@ -168,8 +202,8 @@ pub(super) fn draw(
         if selected && fill.is_some() {
             out.push(Draw::Fill {
                 rect: [
-                    x,
-                    strip.y + underline_offset_y,
+                    pen_x,
+                    pen_y + underline_offset_y,
                     underline_width,
                     underline_height,
                 ],
@@ -177,7 +211,9 @@ pub(super) fn draw(
             });
         }
 
-        x += width + gap;
+        // The pen advances by the same step it always did, so the gap between
+        // two tabs is unchanged: `left` and `pen_x` differ by a constant.
+        left += width + gap;
     }
     out
 }

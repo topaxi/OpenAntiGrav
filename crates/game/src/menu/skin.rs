@@ -120,8 +120,35 @@ const STRIP_GAP: f32 = 5.3;
 const TAB_LEFT_PAD: f32 = 2.3;
 /// See [`TAB_LEFT_PAD`].
 const TAB_TOP_PAD: f32 = 1.9;
-/// See [`TAB_LEFT_PAD`].
-const TAB_HEIGHT: f32 = 14.3;
+/// How tall a strip entry's tab stands.
+///
+/// **Re-derived 2026-09-05 at a better ruler**, from `14.3`, which came from
+/// the 1278-wide capture the rest of [`TAB_LEFT_PAD`]'s group still does. The
+/// quantity is unchanged and so is the method; only the ruler improved, the
+/// same move that group's own note describes making after its `24 / 9` bug.
+///
+/// The new measurement is off a 3840x2160 framebuffer grab
+/// (`data/reference/hd-menu-tab-corner/mainmenu-3840x2160.png`, gitignored)
+/// calibrated on the FE frame's own two `line.gtf` rules, which are
+/// disc-authored and sit in the same image - so the scale is solved from the
+/// picture rather than assumed from its resolution. That gives
+/// `capture = authored * 1.92 + (76.8, 43.2)`; see
+/// `docs/formats/hd-frontend.md` for the derivation and its checks.
+///
+/// Coverage-weighted vertical edges of a tab: capture `285.13` and `404.17`,
+/// `119.04` px, `= 62.0` authored units, `= 15.6` in this build's 480x272 grid.
+///
+/// **Measured on both a selected and an unselected tab, and they are equal to
+/// four digits** (`119.04` px each). That matters because the selected tab is
+/// 24% *wider* than its neighbours - so height had to be checked rather than
+/// assumed not to vary with selection, and it does not.
+///
+/// Confidence 75, against the group's 55: the ruler is disc-authored marks in
+/// the same frame rather than an assumed downscale, and the value agrees across
+/// two tabs in two states. It stops short of higher because it is still one
+/// capture of one screen, and because nothing authors a tab height at all - see
+/// [`TAB_LEFT_PAD`] on what `<HorizMenu>` does and does not state.
+const TAB_HEIGHT: f32 = 15.6;
 /// See [`TAB_LEFT_PAD`].
 const UNDERLINE_WIDTH: f32 = 4.9;
 /// See [`TAB_LEFT_PAD`].

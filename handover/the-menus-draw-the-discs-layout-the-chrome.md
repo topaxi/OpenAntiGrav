@@ -12,6 +12,25 @@
 - The selected row's highlight pulse period and depth were never measured; it is drawn flat.
 - The easing curve is invented (confidence 30) - the capture only shows that motion accelerates.
 
+**2026-09-05, from the HD side, and it narrows both of the two items above
+without closing either.** A census of Wipeout HD's entire front-end XML (772
+entries, all seven archives) found that **no easing curve is authored anywhere**:
+its 122 `<Key>` elements carry `Time`, `X` and `Y` and nothing else, and the
+shape of a motion is authored by adding a key rather than by naming a curve, so
+interpolation is hard-coded in the executable. It also found that **no pulsing
+or oscillating highlight is authored** - no `blink`/`flash`/`cycle`/`sine`/
+`period`/`phase` attribute exists at all, `<Key>` cannot key a colour, and
+`pulse="true"` is real but never appears on a menu `<Entry>`.
+
+**Neither finding is Pulse's answer.** HD is a different title on a different
+engine, and these items were measured on a PPSSPP capture of Pulse's own menus;
+both stay open exactly as written. What HD's data does establish is that
+*looking in the front-end XML* is unlikely to be the route for either one here
+either - Pulse's own `Skin.xml`/`*_Definition.xml` would need the same census
+before assuming it, but the executable is where HD's answer lives, and that is
+worth knowing before spending a session in the wrong file. See
+[hd-frontend.md](../docs/formats/hd-frontend.md#three-questions-this-closes).
+
 ## Next Steps
 
 - Read what `<TextInfo>` and `<NavigationController>` author (Pulse's footer, HD's trial-build text) and decide which parts belong on a retail build before drawing either.
