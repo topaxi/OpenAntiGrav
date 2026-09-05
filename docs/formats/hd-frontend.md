@@ -1369,9 +1369,9 @@ frame's own two `line.gtf` rules at `x=160 y=110 w=1600 h=8` and `y=975`:
   but the screen: authored `x 161..182, y 73..105` predicts capture
   `385.9..426.2` and `183.4..244.8`, and it measures `385..426` and `183..245`.
 
-**The trap it nearly became.** `line.gtf` is an 8x8 tile whose ink is inset 3
-rows inside its own 8-unit rect, so the *visible* rule is 4 units tall at
-authored `y=113..117`, not 8 at `110..118`. Equating the ink's top edge with the
+**The trap it nearly became.** `line.gtf` is an 8x8 tile whose opaque rows are
+`3..6` of 8, so the *visible* rule is 4 units tall at authored `y=113..116`
+inclusive, not 8 at `110..117`. Equating the ink's top edge with the
 authored `y=110` yields an offset 3 units out and makes every later number
 wrong by the same amount. This build already renders that correctly - its rules
 draw at `y=113..116` and `y=978..981` - so the inset is a property of the asset,
