@@ -410,6 +410,53 @@ Confidence that it advances exactly once per emulated frame: 90, from four
 verified steps plus 20 further single-step observations. Confidence in any
 particular meaning: not offered.
 
+## Steering from a plan, not a human
+
+`--hold cross` alone cannot reach anywhere that needs a turn - it is throttle
+with no steering, and on Moa Therma that puts the craft into a wall by frame
+~520. Reaching a specific point on a track - a speed pad, a corner apex - needs
+either a human driving by hand once and a savestate, or a scripted turn
+sequence. **`oag-trace plan` already generates the second one, for our own
+simulation, and it transfers to PCSX2 verbatim**, because the plan's script
+format is the same abstract button layer this harness's own bindings speak:
+
+```sh
+cargo run -p oag-trace -- plan --source data/images/pulse-ps2-eu.chd \
+    --track 'Data\Environments\03_Track\track.vex' --team Assegai \
+    --class venom --pad 0 --look-min 18 --look-speed 0.35 \
+    --out /tmp/pad0.inputs
+```
+
+writes a run-length script - `<ticks> <buttons...>` per line, `none` for
+nothing held - that drives *our* physics through pad 0's trigger box. Measured
+on Moa Therma's first speed pad: the default lookahead misses the pad's own
+half-width (11.45 units off against a 4.8 half-width), but `--look-min 18
+--look-speed 0.35` lands inside the trigger box from tick 475 of 538 and
+crosses the gate 2.31 units off centre. The parameters are a plan-quality knob,
+not a physics one - sweep them per target rather than assume the defaults work.
+
+The script's tokens map straight onto `pcsx2-drive.py`'s abstract buttons:
+`cross`->`cross`, `left`/`right` unchanged, and `l`/`r` (the airbrakes,
+`oag_gameplay::Button::L`/`R`) to `l1`/`r1`. Replaying it is then the same
+verified `advance_frames` machinery `cmd_frames` already uses, just called once
+per row instead of once per whole command: pause, `loadstate` the grid save,
+re-pause, then for each row `Keyboard.down`/`up` the buttons that changed and
+`advance_frames(pine, keyboard, ticks)` for that row's count before moving to
+the next. Because every frame is verified rather than timed, the whole
+sequence reproduces exactly: replaying `pad0.inputs` this way stepped exactly
+538 frames with no drops or overshoots, landing within the pad's own trigger
+box on the first attempt - a maneuver a hand-driven session had already failed
+at once. At the harness's own frame rate for a *verified* step (about three a
+second, see the `FrameAdvance` measurement above), a few hundred ticks costs a
+few minutes, which is why this is worth doing for "reach point X on the track"
+in general rather than only for this one pad.
+
+This does not replace a human-driven savestate for a race actually *played*
+start to finish - the plan's steering is a pursuit controller tuned to arrive
+somewhere, not a lap the original game would call clean - but for "get a real
+console frame at this specific point on the track," it turns a manual driving
+session into an unattended one.
+
 ## The walk into a race
 
 Measured 2026-08-23 from a cold boot with an **unformatted** memory card, which
