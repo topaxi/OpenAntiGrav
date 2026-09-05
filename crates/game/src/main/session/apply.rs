@@ -2,8 +2,9 @@
 
 use log::{error, warn};
 use oag_game::settings::TriggerSensitivity;
-use oag_game::{audio, display, drs, menu, perf, settings};
+use oag_game::{audio, display, drs, input, menu, perf, settings};
 use oag_gameplay::ControlScheme;
+use oag_input::Controls;
 use oag_input::pad::TriggerMode;
 use oag_render::mesh_render::Anisotropy;
 
@@ -567,5 +568,68 @@ impl Session {
         if let Err(e) = settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
+    }
+
+    /// Starts capturing a new key for the CONTROLS page's selected row, if it
+    /// is a binding row and the player just confirmed it.
+    ///
+    /// Consumes Cross or Start directly off the shared `Input` rather than
+    /// going through `Menu::update` - the same pattern `Keyboard::buttons_mut`'s
+    /// own doc comment describes for the front end's skip-intro press - so
+    /// `Entry::Binding` can stay the harmless `Menu::activate` no-op it always
+    /// was. Does nothing while a capture is already in flight, so holding
+    /// Cross down through the capture cannot immediately restart it.
+    ///
+    /// **Releases every key the moment a capture opens.** `app.rs` diverts
+    /// every keyboard event away from `Controls::set_key` while a capture is
+    /// live, so the eventual release of whatever key confirmed this row - and
+    /// of anything else a player happened to be holding - would otherwise
+    /// never reach `Keyboard`, exactly the stuck-held-forever failure
+    /// `Keyboard::release_all`'s own doc comment describes for a focus loss.
+    /// Releasing here means that swallowed key-up lands on an already-clear
+    /// bit instead.
+    ///
+    /// Takes `awaiting_binding` and `controls` apart from `self` rather than
+    /// as a `&mut self` method: `Session::frame` calls this from inside a
+    /// `match &mut self.stage` arm, and a `&mut self` receiver there would
+    /// borrow a field the match already holds.
+    pub(crate) fn maybe_begin_binding(
+        awaiting_binding: &mut Option<input::Button>,
+        controls: &mut Controls,
+        menu: &menu::Menu,
+    ) {
+        if awaiting_binding.is_some() {
+            return;
+        }
+        let Some(menu::Entry::Binding { button, .. }) = menu.page().entries.get(menu.selected())
+        else {
+            return;
+        };
+        let button = *button;
+        let taken = controls.buttons_mut();
+        if taken.take(input::Button::Cross) || taken.take(input::Button::Start) {
+            *awaiting_binding = Some(button);
+            controls.release_all();
+        }
+    }
+
+    /// Applies a captured rebind and persists it.
+    ///
+    /// Written on the keypress that made it, not on the way out - the same
+    /// rule every other setting in this file follows and the same reason:
+    /// there is no way out guaranteed to run.
+    pub(crate) fn rebind(&mut self, button: input::Button, name: &'static str) {
+        self.controls.bindings_mut().rebind(button, name);
+        self.settings.controls.bindings = self.controls.bindings().to_pairs();
+        self.awaiting_binding = None;
+        if let Err(e) = settings::save(&self.settings) {
+            error!("could not save settings: {e:#}");
+        }
+    }
+
+    /// Stops capturing without changing anything - escape's own job while a
+    /// binding is being captured, in place of backing out of the menu.
+    pub(crate) fn cancel_binding(&mut self) {
+        self.awaiting_binding = None;
     }
 }

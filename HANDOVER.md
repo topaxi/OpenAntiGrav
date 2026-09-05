@@ -490,7 +490,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The barrel roll is identified and unimplemented](handover/the-barrel-roll-is-identified-and-unimplemented.md)
 - [Sideshift has no runtime leg](handover/sideshift-has-no-runtime-leg.md)
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
-- [Menus: rebinding is the one thing that does not work](handover/menus-rebinding-is-the-one-thing-that-does.md)
+- [Menus: no pause overlay while a race is suspended](handover/menus-no-pause-overlay-while-suspended.md)
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)

@@ -415,6 +415,20 @@ pub(crate) struct Session {
     /// all - see [`Self::open_menus`], which is the only place that fills it,
     /// and only when the outgoing race had not finished.
     pub(crate) suspended_race: Option<Box<RaceStage>>,
+    /// A CONTROLS binding row a player just confirmed, waiting for the key
+    /// that will replace it.
+    ///
+    /// Set by [`Session::maybe_begin_binding`] off a raw `Input::take` on the
+    /// selected row - `Entry::Binding` stays a `Menu::activate` no-op, so this
+    /// is what makes confirming one mean something - and read by `app.rs`'s
+    /// `KeyboardInput` handler, which is where the *raw* key a rebind needs
+    /// actually lives: by the time a key reaches `Input`, it has already gone
+    /// through `Controls::set_key`'s abstract-button mapping, and an unbound
+    /// key never reaches it at all. `Some` freezes `Stage::Menu`'s own
+    /// navigation for the tick - see [`Session::frame`] - and diverts every
+    /// keyboard event away from `Controls::set_key` until [`crate::rebind::decide`]
+    /// resolves it one way or the other.
+    pub(crate) awaiting_binding: Option<oag_gameplay::input::Button>,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.

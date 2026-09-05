@@ -275,15 +275,76 @@ which disc the skin should come from. It is its own small module,
 Nothing else should follow it out of `menu.rs`. The test is whether a screen
 can have a title behind it, and every screen but this one can.
 
+## Rebinding
+
+`oag_input::keys::map_key` used to be the hardcoded `match` a `binding` row
+could only display, never change. `oag_input::bindings::Bindings` is the table
+now: a permutation over `keys::candidates`'s eighteen fixed keys, resolved by
+`Keyboard`/`Controls` in place of the free `map_key` function, and persisted
+complete in `[controls] bindings` - see `settings::Controls::bindings`'s own
+doc comment for the format and its fallback rules.
+
+Confirming a `binding` row (Cross or Start) does not go through
+`Menu::activate`, which still treats it as a no-op: a rebind needs the literal
+key just pressed, and that key is gone by the time an event reaches this
+crate's abstract buttons, having already been resolved - or, for a key nothing
+is bound to yet, dropped - by `Controls::set_key`. `Session::maybe_begin_binding`
+catches the confirm press upstream of `Menu::update`, off the same shared
+`Input` the front end's own skip-intro press reads directly; the next raw
+keyboard event then goes to `crate::rebind::decide` instead of
+`Controls::set_key`, which either binds the key, cancels the capture (Escape,
+not the menus' own back key) or leaves the capture open for anything else,
+including a key off the closed candidate set.
+
+**Nothing on screen says a capture is open.** Confirming a row changes
+nothing drawn, and every other row is frozen for as long as
+`Session::awaiting_binding` is `Some` - so for however long it takes to press
+the next key, the CONTROLS page looks like it has stopped responding rather
+than like it is waiting for one. It always resolves itself (any candidate key
+binds it, Escape cancels), so this is a rough edge rather than a stuck state,
+but it is a real gap: a "press a key..." prompt would need either a `menu.rs`
+change - the file sits at its 1,000-line size-gate ceiling with no headroom,
+see `scripts/check-file-size.py`'s `BASELINE` - or a new `Draw` the
+composition root overlays itself, and neither was in scope for what this
+thread asked for (a table, persistence, conflict handling).
+
+Three choices worth stating outright, since none of them are the only
+defensible one:
+
+- **The table lives in `oag-input`, not in `oag-gameplay`.** `oag-input` is
+  what already owns the abstract button layer, per the crate table in
+  `CLAUDE.md`, and rule 1 of `docs/architecture/workspace-layout.md` forbids
+  the simulation depending on it at all - a rebindable table is exactly the
+  kind of input-system state that rule exists to keep out of `InputSnapshot`'s
+  producer rather than its consumer.
+- **A conflict is a steal, not a refusal.** `Bindings::resolve` returns one
+  `Option<Button>`, so a key cannot mean two things; refusing a rebind that
+  would collide would dead-end a player against eighteen keys and twelve
+  buttons with no way to free one up except finding the other row first.
+  `Bindings::rebind` also **replaces** the target button's whole key list
+  rather than adding to it - there is no menu affordance to remove one key at
+  a time, so appending would only ever grow a row's display. A button a rebind
+  leaves with nothing is a real state and not a failure: `keys::bound_keys`'s
+  own doc comment already said so before rebinding existed, empty being what a
+  fresh WASD layout draws for `Button::Any`.
+- **An entry `Bindings::from_pairs` cannot parse - an unknown key name, or a
+  value that is neither a button name nor the `"none"` sentinel - falls back
+  to that key's default and is reported, never a load failure.** The same
+  tolerance `main::args`'s `resolve_scheme`/`resolve_triggers` already give
+  every other control token, for the same reason: a settings file travels
+  between builds, and a row a newer build added should not stop an older one
+  from booting.
+
+**What this does not touch**: the original's own `Control_Type = "custom"`
+path (`ControlMapping2`, see
+`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`) rebinds *which
+abstract button each of its eight actions fires* - a PSP gamepad's buttons
+onto the eight actions, not a keyboard's keys onto twelve abstract buttons.
+That is a different axis with no menu row here, and building one is not
+implied by anything above.
+
 ## What is not built
 
-- **Rebinding.** `oag_input::keys::map_key` is a hardcoded `match`; a `binding`
-  row displays what it returns and cannot change it. Rebinding needs a table,
-  persistence and conflict handling of its own. The row exists so the format is
-  settled before that lands and so the gap is visible in the game rather than
-  only here. `keys::bound_keys` asks `map_key` itself about a candidate set
-  rather than keeping a second table, so what the page shows cannot drift from
-  what the game does.
 - **Localised labels.** Row labels are literal text, and `string_id` **is**
   now read: `menu::definition::resolve` looks it up in whatever `StringTable`
   its caller passes and shows the answer in place of `label`. What is missing

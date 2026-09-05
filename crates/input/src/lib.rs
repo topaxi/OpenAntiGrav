@@ -11,6 +11,7 @@
 //! snapshot, which is the point of the abstract button layer sitting between
 //! any device and the game.
 
+pub mod bindings;
 pub mod keys;
 pub mod pad;
 
@@ -18,6 +19,7 @@ use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::{Button, Input};
 use winit::keyboard::Key;
 
+pub use bindings::Bindings;
 pub use pad::Pad;
 
 /// Accumulates key state between ticks and hands out one snapshot per tick.
@@ -40,6 +42,9 @@ pub struct Keyboard {
     /// one, which is finding U9 of the 2026-08-18 review - recorded here rather
     /// than removed, because the standalone path is real and tested.
     buttons: Input,
+    /// The live key-to-button table. [`bindings::Bindings::default`] until a
+    /// player rebinds something - see [`Self::set_bindings`].
+    bindings: Bindings,
 }
 
 impl Keyboard {
@@ -54,7 +59,7 @@ impl Keyboard {
     /// Unbound keys are ignored rather than being an error: a player pressing
     /// F5 is not a fault condition.
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
-        let Some(button) = keys::map_key(key) else {
+        let Some(button) = self.bindings.resolve(key) else {
             return;
         };
         let bit = button.bit();
@@ -141,6 +146,40 @@ impl Keyboard {
     pub fn held_mask(&self) -> u32 {
         self.held
     }
+
+    /// Replaces the live key-to-button table, for a settings file that has
+    /// rebound something.
+    ///
+    /// Read at boot from `oag_game::settings::Controls::bindings` -
+    /// `main::args::resolve_bindings` - and again after every interactive
+    /// rebind, so [`Self::set_key`] never resolves through a stale table.
+    pub fn set_bindings(&mut self, bindings: Bindings) {
+        self.bindings = bindings;
+    }
+
+    /// The live table, for a rebind to mutate through
+    /// [`bindings::Bindings::rebind`] or a Controls page to read through
+    /// [`bindings::Bindings::names_for`].
+    #[must_use]
+    pub fn bindings(&self) -> &Bindings {
+        &self.bindings
+    }
+
+    /// Mutable access to the live table, for [`Self::set_bindings`]'s
+    /// interactive counterpart: a rebind captured off a raw key event.
+    pub fn bindings_mut(&mut self) -> &mut Bindings {
+        &mut self.bindings
+    }
+
+    /// Which keys currently produce `button`, off the **live** table.
+    ///
+    /// [`keys::bound_keys`]'s counterpart for a keyboard that may have been
+    /// rebound - what a Controls page's binding row should draw from, so it
+    /// cannot show the default while the game obeys something else.
+    #[must_use]
+    pub fn bound_keys(&self, button: Button) -> Vec<&'static str> {
+        self.bindings.names_for(button)
+    }
 }
 
 /// Every device on the window, as the one thing a tick reads.
@@ -207,6 +246,31 @@ impl Controls {
     /// Sets the pad's trigger response curve. See [`Pad::set_trigger_curve`].
     pub fn set_trigger_curve(&mut self, curve: f32) {
         self.pad.set_trigger_curve(curve);
+    }
+
+    /// Replaces the keyboard's live key-to-button table. See
+    /// [`Keyboard::set_bindings`].
+    pub fn set_bindings(&mut self, bindings: Bindings) {
+        self.keyboard.set_bindings(bindings);
+    }
+
+    /// The keyboard's live table. See [`Keyboard::bindings`].
+    #[must_use]
+    pub fn bindings(&self) -> &Bindings {
+        self.keyboard.bindings()
+    }
+
+    /// Mutable access to the keyboard's live table. See
+    /// [`Keyboard::bindings_mut`].
+    pub fn bindings_mut(&mut self) -> &mut Bindings {
+        self.keyboard.bindings_mut()
+    }
+
+    /// Which keys currently produce `button`, off the live table. See
+    /// [`Keyboard::bound_keys`].
+    #[must_use]
+    pub fn bound_keys(&self, button: Button) -> Vec<&'static str> {
+        self.keyboard.bound_keys(button)
     }
 
     /// Ends the tick: merges the devices, computes the edges, derives the axes.

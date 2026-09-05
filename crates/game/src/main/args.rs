@@ -10,6 +10,7 @@ use log::warn;
 use oag_game::input;
 use oag_game::{loading, movie, prefetch, settings};
 use oag_gameplay::ControlScheme;
+use oag_input::bindings::Bindings;
 use oag_input::pad::TriggerMode;
 
 use crate::cli::Cli;
@@ -67,6 +68,23 @@ pub(crate) fn resolve_triggers(settings: &settings::Settings) -> TriggerMode {
         warn!("ignoring [controls] triggers = {token:?}; using {fallback}");
         fallback
     })
+}
+
+/// The live key-to-button table: `[controls] bindings`, falling back to the
+/// default for any entry that does not parse.
+///
+/// Every fallback is **reported**, unlike [`settings::Controls::live_bindings`]:
+/// this is the table a real keyboard resolves through, so a settings file a
+/// newer build wrote - or a hand edit with a typo - should say what it lost
+/// rather than silently drive the ship with a default the player never chose.
+/// No flag overrides it: rebinding happens on the CONTROLS page, the same way
+/// [`resolve_triggers`] has none.
+pub(crate) fn resolve_bindings(settings: &settings::Settings) -> Bindings {
+    let (bindings, ignored) = Bindings::from_pairs(&settings.controls.bindings);
+    for name in ignored {
+        warn!("ignoring [controls.bindings] {name:?}; using its default key");
+    }
+    bindings
 }
 
 /// Parses `--loading-step`'s value into the phase the capture draws.

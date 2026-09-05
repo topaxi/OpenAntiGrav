@@ -195,3 +195,111 @@ fn a_missing_tick_is_an_error_that_names_the_range() {
 fn the_icon_flags_do_not_make_themselves_required() {
     Cli::try_parse_from(["oag-game"]).expect("no flags at all must still parse");
 }
+
+/// A one-page, one-row definition whose row is a binding for `button` -
+/// [`menu::tests::an_unbound_button_draws_the_word_rather_than_nothing`]'s
+/// fixture shape, reused here for `Session::maybe_begin_binding` rather than
+/// for drawing.
+fn binding_menu(button: &str) -> menu::Menu {
+    let definition = menu::Definition::parse(
+        &format!(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "binding"
+            label = "ROW"
+            button = "{button}"
+            "#
+        ),
+        &language::StringTable::default(),
+    )
+    .expect("a one-row binding definition parses");
+    menu::Menu::new(definition)
+}
+
+#[test]
+fn confirming_a_binding_row_starts_a_capture_for_its_button() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Cross));
+}
+
+#[test]
+fn confirming_with_start_works_the_same_as_cross() {
+    let menu = binding_menu("up");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Start.bit());
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Up));
+}
+
+#[test]
+fn nothing_pressed_leaves_the_capture_closed() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, None);
+}
+
+/// A capture already open must not be disturbed by a second confirm - holding
+/// Cross down through the capture must not restart it against whatever row
+/// the cursor has since moved to.
+#[test]
+fn a_capture_already_open_is_left_alone() {
+    let menu = binding_menu("up");
+    let mut controls = Controls::without_pad();
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let mut awaiting = Some(oag_gameplay::input::Button::Circle);
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Circle));
+}
+
+/// `app.rs` diverts every keyboard event away from `Controls::set_key` for as
+/// long as a capture is open, so the key that confirmed this row never gets
+/// to report its own release - the same failure `Keyboard::release_all`'s own
+/// doc comment describes for a window losing focus while a key is held.
+/// Without the release in `maybe_begin_binding`, Cross would still read held
+/// on the very next tick's snapshot, with nobody touching a keyboard.
+#[test]
+fn opening_a_capture_releases_whatever_confirmed_it() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    controls.set_key(&winit::keyboard::Key::Character("x".into()), true);
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let mut awaiting = None;
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Cross));
+
+    let next_tick = controls.snapshot();
+    assert!(
+        !next_tick
+            .buttons
+            .is_held(oag_gameplay::input::Button::Cross),
+        "the swallowed key-up must not leave Cross stuck held"
+    );
+}
