@@ -196,6 +196,14 @@ page's launch clamps a stored class the row does not offer to the row's own
 first entry, the same fallback CIRCUIT and TEAM already use for a stored value
 their own source does not have.
 
+**The clamp deliberately never writes back to `settings.race.class`.** It
+changes only the `race::Options` this one launch builds, so a `"vector"`
+settled on RACE REMIX survives in storage and a visit to the ordinary RACE
+page warns and clamps again on every launch from that state rather than
+silently adopting `"venom"` as the player's new saved choice. Writing back
+would clobber the remix pick the moment the player so much as glanced at the
+ordinary page - the clamp is a per-launch correction, not a migration.
+
 ## The format
 
 A **flat list of pages keyed by id**, not a nested tree. Three consequences, all
