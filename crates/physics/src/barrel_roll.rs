@@ -157,5 +157,33 @@ pub fn release(state: &mut ShipState) -> bool {
     completed
 }
 
+/// The hover spring's rebound coefficient while the landing payout runs,
+/// forced to a literal `1.0` in place of `ordinary`.
+///
+/// One of the three consumers of the original's `craft+0x1c0 & 0x400`,
+/// alongside [`crate::airbrake::ROLL_GRIP_MULTIPLIER`] and the turbo add in
+/// `crate::engine::engine`.
+///
+/// **This crate's own reconnection of two facts read independently, not a
+/// third traced instance.** `docs/ghidra/functions/psp-pulse-usa/
+/// input-bindings.md` reads the override only as "a hover scalar is forced
+/// from `stats+0x4` to a literal `1.0`", without naming the field;
+/// `engine.md`'s account of the undecoded `craft+0x2a4` enum separately
+/// records that its `0` state "disables the `rebound` parameter" in this same
+/// function. `stats+0x4` sitting one field after `ride_height` (`stats+0x0`,
+/// by the offsets `HandlingXml_ParseAntigrav` stores - `ride_height 0x94`,
+/// `rebound 0x98`) lines up with `rebound` exactly, so both overrides read as
+/// the same mechanism applied on two different gates. Confidence 75 on the
+/// identification; the override's *existence* and its `1.0` value are
+/// confidence 90, off the read above.
+#[must_use]
+pub fn rebound_override(state: &ShipState, ordinary: f32) -> f32 {
+    if state.roll_payout_timer > 0.0 {
+        1.0
+    } else {
+        ordinary
+    }
+}
+
 #[cfg(test)]
 mod tests;

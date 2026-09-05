@@ -256,24 +256,44 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   entry above: with the six new `hash_state` writes alone removed, the
 ///   three constants from 2026-08-19 (the `pending_impulse` entry) reproduce
 ///   bit for bit.
+/// - **Regenerated 2026-09-05, later the same day, and behaviour did not
+///   change either.** `ShipState` gained a fifth barrel-roll field,
+///   `roll_payout_timer`, ours for the original's `craft+0x1c0 & 0x400` -
+///   step 5 of `handover/the-barrel-roll-is-read-and-unimplemented.md`. Three
+///   branches were wired into terms this gate exercises every tick -
+///   `crate::airbrake::lateral_grip`'s `ROLL_GRIP_MULTIPLIER`,
+///   `crate::hover::probe_from_hit`'s `barrel_roll::rebound_override`, and
+///   `crate::engine::engine`'s turbo add - and `crate::forces::evaluate`
+///   now resolves [`crate::barrel_roll::release`] on the airborne-to-grounded
+///   transition and counts the new timer down.
+///
+///   All three branches are provably inert here, the same way the four
+///   fields above are: nothing calls `barrel_roll::record_tap` or `arm`, so
+///   `roll_payout_timer` can never leave `0.0` and every new branch's `else`
+///   arm is byte-for-byte what ran before it existed. Checked the same way as
+///   every entry above: with the one new `hash_state` write alone removed and
+///   every other change - the three consumer branches, the phase ramp calls,
+///   the payout countdown, and the landing-transition arm in
+///   `crate::forces::evaluate` - left in place, the three constants from
+///   earlier the same day (the four-field entry above) reproduce bit for bit.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x00bb_29d1_33a7_fa73,
-        0x57b7_1848_c778_3404,
+        0xed82_f552_02bb_8fc7,
+        0xbe94_acee_140a_bd4c,
     ),
     (
         3_600,
         Script::Corridor,
-        0x4388_7f6a_6b92_15f9,
-        0xf5f0_0fe4_f6da_f486,
+        0xe41e_11c5_4cb4_9c56,
+        0x5c51_d236_218a_bc68,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x45ed_ac24_83e1_b170,
-        0xd548_dcfd_34ef_e4e6,
+        0xbaa2_3831_9d13_185f,
+        0xb91b_fab9_2c59_3d70,
     ),
 ];
 

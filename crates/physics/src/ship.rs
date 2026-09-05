@@ -414,6 +414,14 @@ pub struct ShipState {
     /// `[2, 1, 2]` arm, `-1.0` after `[1, 2, 1]`, or `0.0` once the roll has
     /// released short of completion. See [`crate::barrel_roll::release`].
     pub roll_target: f32,
+    /// Seconds left on the barrel roll's landing payout, ours - the original's
+    /// `craft+0x1c0 & 0x400`, held for `<Special roll_turbotime>` after a
+    /// completed roll touches down. While it runs, [`crate::airbrake::lateral_grip`]
+    /// is scaled 1.5x, the hover spring's rebound coefficient is forced to
+    /// `1.0`, and the engine grants the same uncapped turbo add
+    /// [`Self::turbo_timer`] grants for a Turbo pickup. See
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    pub roll_payout_timer: f32,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -521,13 +529,17 @@ pub struct ShipState {
     /// `((flags & 0x200) || (flags & 0x400)) && craft+0x2a4 == 1`, read from the
     /// decompiler 2026-08-11. **Two bits, either of which turns the same term
     /// on**, which is the shape of one effect with two sources - and the second
-    /// source is known: `0x400` is held while the barrel roll's timer runs
-    /// (`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, confidence 80),
-    /// and `<Special>` authors `roll_turbotime` beside it, so a roll grants a
-    /// *turbo*. That leaves `0x200` as the other way to be turboing, which is
-    /// what a Turbo pickup is for. **The writer of `0x200` has not been found**,
-    /// so this is an inference from the pair rather than a traced path -
-    /// confidence 75.
+    /// source is now identified rather than inferred: `0x400` is held for
+    /// `<Special roll_turbotime>` seconds after a completed barrel roll lands,
+    /// confidence 90. See [`Self::roll_payout_timer`], which is this crate's
+    /// own timer for that source - kept separate from this field rather than
+    /// merged into it, because `0x400` also drives two effects `0x200` does
+    /// not (a lateral-grip multiplier and a hover override), and merging the
+    /// two timers would apply those to an ordinary Turbo pickup too. That
+    /// leaves `0x200` as the other way to be turboing, which is what a Turbo
+    /// pickup is for. **The writer of `0x200` has not been found**, so this
+    /// half is still an inference from the pair rather than a traced path -
+    /// confidence 75. See `docs/ghidra/functions/psp-pulse-usa/
     /// input-bindings.md`.
     ///
     /// **The timer itself is ours.** The original holds a bit and this holds
@@ -625,6 +637,7 @@ impl Default for ShipState {
             roll_tap_timer: crate::barrel_roll::INTER_TAP_TIMEOUT,
             roll_phase: 0.0,
             roll_target: 0.0,
+            roll_payout_timer: 0.0,
             // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
             // recovered, replacing an invented `1.0` that was chosen for the
             // same reason the original's value serves: a freshly spawned ship

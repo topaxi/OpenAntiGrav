@@ -172,9 +172,11 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 /// which is a decision worth being explicit about - a defaulted zero here would
 /// be a game whose speed pads silently do nothing.
 ///
-/// `special` carries one field, `speedpad_jump`, and unlike `speedup_pads` it is
-/// **not per speed class**: `g_speedpad_jump` (`0x08b36bec`) is a single float,
-/// not a four-entry table.
+/// `special` carries four fields this crate reads - `speedpad_jump` and the
+/// barrel roll's `roll_cost`/`roll_speed`/`roll_turbotime` - and unlike
+/// `speedup_pads` none of them is **per speed class**: each is a single
+/// `.bss` float in the original (`g_speedpad_jump` at `0x08b36bec` and its
+/// three neighbours), not a four-entry table.
 ///
 /// The four pre-scaled fields are converted here; every other field is moved
 /// unchanged, both of these included. See the module docs.
@@ -259,6 +261,9 @@ pub fn handling_for(
             time: speedup_pads.time,
         },
         speedpad_jump: special.speedpad_jump,
+        roll_cost: special.roll_cost,
+        roll_speed: special.roll_speed,
+        roll_turbotime: special.roll_turbotime,
         engine: Engine {
             accelcap: block.engine.accelcap,
             amount: block.engine.amount * ENGINE_AMOUNT_SCALE,

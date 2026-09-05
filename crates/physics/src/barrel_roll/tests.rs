@@ -176,3 +176,62 @@ fn a_ship_that_never_armed_reports_no_completion() {
     assert!(!release(&mut state));
     assert_eq!(state.roll_target, 0.0);
 }
+
+/// Closes the gap the unit tests above leave: every one of them drives
+/// [`ShipState`] fields directly and none exercises the three *consumers* of
+/// [`ShipState::roll_payout_timer`] at all. Wired through a completed gesture
+/// end to end - `arm`, then `advance_phase` to completion, then `release` on a
+/// simulated landing - and then checks the two consumers this module can see
+/// without reaching into `crate::engine` (whose gate is `crate::forces`'
+/// business, not tested here).
+///
+/// **Does not touch the input layer.** Nothing here claims a real race can
+/// reach this path - see [`arm`]'s caller in `crate::forces::evaluate`, which
+/// has no producer of a tap event yet.
+#[test]
+fn a_completed_roll_arms_the_payout_and_the_payout_drives_both_consumers() {
+    let dimensions = Dimensions {
+        shield: 100.0,
+        ..Dimensions::default()
+    };
+    let mut state = ShipState {
+        shield: 100.0,
+        ..ShipState::default()
+    };
+
+    assert!(arm(&mut state, &dimensions, 8.0, 1.0));
+    // A full second at `roll_speed = 1.5` overshoots `1.0`; `advance_phase`
+    // clamps there, which is what makes the roll "complete" below.
+    advance_phase(&mut state, 1.5, 1.0);
+    assert_eq!(state.roll_phase, 1.0);
+
+    // The simulated airborne-to-grounded transition.
+    assert!(release(&mut state));
+    state.roll_payout_timer = 0.5;
+
+    assert!(state.roll_payout_timer > 0.0);
+    assert_eq!(
+        rebound_override(&state, 0.4 /* an arbitrary ordinary value */),
+        1.0
+    );
+
+    // A moving ship, so lateral grip has something to scale.
+    state.body.linear_velocity = state.body.right() * 10.0;
+    let handling = crate::params::Handling {
+        antigrav: crate::params::Antigrav {
+            grip_ground: 10.0,
+            grip_air: 10.0,
+            ..crate::params::Antigrav::default()
+        },
+        ..crate::params::Handling::ZERO
+    };
+    let boosted = crate::airbrake::lateral_grip(&state, &handling, 1.0);
+
+    state.roll_payout_timer = 0.0;
+    let ordinary = crate::airbrake::lateral_grip(&state, &handling, 1.0);
+
+    assert_eq!(
+        boosted.x,
+        ordinary.x * crate::airbrake::ROLL_GRIP_MULTIPLIER
+    );
+}

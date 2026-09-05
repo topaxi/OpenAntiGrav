@@ -281,17 +281,38 @@ pub fn evaluate(
 /// - It runs **after** hover, so `grounded` here is **this** frame's contact
 ///   fraction, unlike the engine, the brakes, drag, gravity and pitch. The caller also
 ///   gates it on the leap timer having expired.
+///
+/// While [`ShipState::roll_payout_timer`] is running, both `grip_ground` and
+/// `grip_air` are scaled by [`ROLL_GRIP_MULTIPLIER`] - one of the three
+/// consumers of the original's `craft+0x1c0 & 0x400`, alongside the hover
+/// spring's rebound override in `crate::hover` and the turbo add in
+/// `crate::engine`. Confidence 88; see
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #[must_use]
 pub fn lateral_grip(state: &ShipState, handling: &Handling, grounded: f32) -> Vec3 {
     let right = state.body.right();
     let lateral_velocity = state.body.linear_velocity.dot(right);
     let k = lateral_grip_coefficient(handling, state.airbrake_left, state.airbrake_right);
+    let roll_boost = if state.roll_payout_timer > 0.0 {
+        ROLL_GRIP_MULTIPLIER
+    } else {
+        1.0
+    };
 
     let mut lateral = handling.antigrav.grip_ground * lateral_velocity * k * grounded;
     lateral += handling.antigrav.grip_air * lateral_velocity * k * (1.0 - grounded);
 
-    Vec3::new(lateral, 0.0, 0.0)
+    Vec3::new(lateral * roll_boost, 0.0, 0.0)
 }
+
+/// The lateral-grip multiplier while the barrel roll's landing payout runs.
+///
+/// `Ship_ApplyLateralGrip` (`0x08848b78`) multiplies both `stats+0x10`
+/// (`grip_ground`) and `stats+0x14` (`grip_air`) by this literal on the
+/// `craft+0x1c0 & 0x400` branch - a complete instruction-level scan of
+/// `.text`'s only three consumers of that bit, confidence 88. See
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+pub const ROLL_GRIP_MULTIPLIER: f32 = 1.5;
 
 /// How long one sideshift pushes for, in seconds.
 ///

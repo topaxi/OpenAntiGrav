@@ -49,12 +49,10 @@ fn flat_floor(surface: Surface) -> CollisionWorld {
 }
 
 /// Arbitrary round numbers, in the **already-scaled in-memory form** that
-/// `oag_physics::Handling` holds: `airbrake.amount` and `airbrake.slidegrip` are what
-/// the loader's `1e-4` would have stored, `engine.amount` what its `1e-3` would have,
-/// and `brakes.amount` is negative because the loader's factor is `-0.01`. See
-/// `oag_physics::params`.
-///
-/// **Not values from any ship.**
+/// `oag_physics::Handling` holds: `airbrake.amount`/`slidegrip` are what the
+/// loader's `1e-4` would have stored, `engine.amount` what its `1e-3` would
+/// have, and `brakes.amount` is negative because the loader's factor is
+/// `-0.01`. See `oag_physics::params`. **Not values from any ship.**
 fn fixture() -> Handling {
     Handling {
         airbrake: Airbrake {
@@ -116,10 +114,12 @@ fn fixture() -> Handling {
         },
         // Zero on purpose: nothing in this file hands `evaluate` a pad hit, and a
         // non-zero magnitude here could only mask a boost that fired when it
-        // should not have.
+        // should not have. Same reasoning for the three roll fields below.
         speedup_pads: SpeedupPads::default(),
-        // No test in this file crosses a pad, so the tilt has nothing to modify.
         speedpad_jump: 0.0,
+        roll_cost: 0.0,
+        roll_speed: 0.0,
+        roll_turbotime: 0.0,
     }
 }
 
