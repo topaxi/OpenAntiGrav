@@ -636,6 +636,31 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A `--screenshot --until` run over a movie leg on a machine with a real audio
+device fails with `never reached "X" in 3600 ticks`, or worse, silently
+captures an early frame instead of the one asked for - cost two wrong
+readings (a near-white reel frame and a black intro frame) before this was
+understood.** 2026-09-05, closing
+`handover/until-cannot-reach-a-late-movie-frame-on.md`. A movie with sound is
+audio-clocked per ADR-0019: `Audio::movie_playhead` returns
+`Some(seconds)` from the real device's own position whenever one is
+attached and streaming. A headless capture has no per-tick pacing, so it
+finishes in well under a second of real time while the movie itself can be
+tens of seconds long - the device-driven playhead barely moves and `--until`
+burns its whole tick ceiling on a picture that is still on its first
+frame. This is invisible on CI or any machine with **no** device: there,
+`movie_playhead` already falls back to `None` (tick-clocked), which is why
+the bug never showed up there. **Fix: pass `--no-audio`.** It forces the
+same null audio backend `--dump-audio` already forces (so `movie_playhead`
+takes the same tick-clocked fallback a no-device machine gets for free),
+without needing `--dump-audio`'s `--screenshot` pairing or its growing WAV
+buffer. Verified against both Pulse's `LogoFMV` reel and Pure's
+`Developer Publisher Screen` reel (which has two 2-second frame holds -
+the one place tick-clock and audio-clock provably diverge, and it still
+lands on the correct next state). See `crates/game/src/audio.rs`'s
+`Audio::open`/`Audio::movie_playhead` and `crates/game/src/main/cli.rs`'s
+`--no-audio`.
+
 **The `ghidra-mcp` bridge is one shared instance across every concurrent session, and `switch_program` sets a global "current program" pointer any of them can move out from under you.** 2026-09-03, reading `ps3-hdfury-eu`'s `TrackSelection_Screen` while a second, independent thread (`2048-and-hd-ship-an-unread-effectsettings-table.md`) was doing overlapping Ghidra work the same week. Three `rename_function_by_address` calls with no explicit `program` argument reported success; a follow-up `get_current_program_info` showed the active program had silently become a different title's binary mid-session, and the three renames had landed there instead - `get_function_by_address` back on `ps3-hdfury-eu` still showed plain `.opd.FUN_xxxxxxxx`. Fixed by redoing all three with an explicit `program: "/ps3-hdfury-eu/EBOOT.elf"` and re-verifying the same way. **Pass `program` explicitly on every mutating call** (`rename_*`, `set_*`, `create_*`, not just `switch_program`), and re-verify with an explicit-`program` read immediately after any rename that matters - a `switch_program` done once at the start of a session is not durable if another agent is driving the same instance. Full write-up: `handover-scratch/hd-zone-tracklist-re-notes.md` from that session (untracked, may not survive - this paragraph is the durable copy).
 
 **A live Ghidra instance's own function boundaries can drift from what a `docs/` page records, even without a fresh import.** 2026-09-05, re-reading `Mine_Init`/`Mine_Construct` on `psp-pulse-usa` before wiring their models. `mine.md` records both at specific entry addresses (`0x08859ac8`, `0x08859930`, confidence 90/92); this session's live instance decompiles those exact addresses to two *different* functions - one an unrelated teardown routine, one landing mid-instruction inside its neighbour, confirmed with `disassemble_bytes` rather than trusted from the decompiler alone. The actual matrix-copy/velocity/fuse/drift logic `mine.md` describes is reachable, just at a different entry (`0x08859954`) in this instance. Most likely cause: `just apply-names` had not been replayed into this project (CLAUDE.md already notes a fresh import starts at `FUN_08940d0c` again; this suggests boundary drift can happen independently of a full reimport too). **Byte-for-byte content at a documented address can still confirm a reading even when the address itself no longer resolves to that function's entry** - don't treat a decompile-at-address mismatch as proof the earlier finding was wrong; disassemble around the documented address first to see whether it is genuinely a different function or just mid-body of a shifted one. See `mine.md`'s 2026-09-05 section for the full worked example.
