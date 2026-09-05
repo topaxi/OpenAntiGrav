@@ -5,10 +5,15 @@ transfer shapes.** Located, decoded, implemented in
 [`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs); every
 ship on the roster now draws in its own livery in `just play pulse-ps2`
 itself, not only through `oag-view --mesh ... --textures ...` naming an entry
-by hand, and so does every circuit's own `track.vex` (27 of 32 fully, the
-other 5 short 1-2 slots). See [how a model finds its texture
-set](#how-a-model-finds-its-texture-set-directory-position-not-a-name) below,
-which now covers both.
+by hand, and so does every circuit's own `track.vex` - all 32, since
+`oag-render` moved from a flat ordinal index to resolving each `Texture`
+node by its own declared name (2026-09-05, see [the original never suffers
+this
+collapse](#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal)
+below). See [how a model finds its texture
+set](#how-a-model-finds-its-texture-set-directory-position-not-a-name) below
+for the other half: which *entry* is a model's set, as opposed to which of
+that set's textures a given node means.
 
 Found as standalone entries in the PS2 [WAD](wad.md) archives. Not the same
 format as the [PSP `.mip`](psp-texture.md) at all, and not embedded in the model
@@ -386,13 +391,20 @@ empty. **Confidence 88**: the same kind of exact-count data agreement the
 ship finding scored 90 on, one point short because 5 of 32 are near misses
 rather than exact and the reason for the shortfall (a handful of `Texture`
 nodes per track that reference no unique pixel data, a merge during
-packing, something else) is not identified. **`12_Track`'s shortfall is
-visible, not just an untested edge case**: its `Skycube` names the missing
-ordinal, so one whole face of its sky draws the untextured white 1x1 in the
-running renderer - see [`skycube.md`](skycube.md#what-this-engine-does-with-it).
-The other four near-miss circuits' missing ordinals happen to fall outside
-what their sky and pads actually reference, so they draw fully textured
-despite the same short set.
+packing, something else) is not identified. **`12_Track`'s shortfall used to
+be visible, not just an untested edge case**: under the old ordinal scheme,
+its `Skycube` named the ordinal that fell off the short set's end, so one
+whole face of its sky drew the untextured white 1x1 - see
+[`skycube.md`](skycube.md#what-this-engine-does-with-it). The other four
+near-miss circuits' missing ordinals happened to fall outside what their sky
+and pads actually referenced, so they drew fully textured even under the old
+scheme, despite the same short set. All five draw fully textured now
+regardless: the shortfall is still real (the nested set genuinely holds one
+entry fewer than the model has `Texture` nodes), but a by-name resolver never
+consults the set's length at all, so a duplicate name simply resolves twice
+to the one entry it always named - see [the original never suffers this
+collapse](#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal)
+below.
 
 Track and environment models made of many small shared-atlas pieces (crates,
 decorations, ship-part-sized props) are the ones the wider, ungrouped 535/975
@@ -563,19 +575,28 @@ and no Ghidra project).
 
 **Combined confidence: 88.** The blend is bounded by the untraced link (the
 specific call site inside a track's own Mesh-class constructor) rather than
-by either half above; both of those individually clear 90. **This means
-`oag-render`'s current flat ordinal scheme in `mesh::build_with_textures`
-(and `mesh::ps2_texture_set`, which already parses each entry's `name_hash`
-and discards it on a debug label - see that function's own doc comment) is
-not a faithful reproduction of an original bug. It is simply the wrong
-resolution mechanism**, and fixing it does not risk trading a known-white
-face for an unverified "corrected" one: the original never had an ordinal to
-get right or wrong in the first place. The renderer was not changed in this
-pass - the fix touches `TextureSlots`'s public shape across `oag-render` and
-several `oag-game` call sites (`race/assets.rs`, `livery.rs`,
-`zone_grade.rs`, `mesh/rcs/skin.rs`), which is implementation work, not
-verification, and is tracked as its own thread rather than folded into this
-one - see `HANDOVER.md`'s open-thread index.
+by either half above; both of those individually clear 90. **This meant
+`oag-render`'s old flat ordinal scheme in `mesh::build_with_textures` (and
+`mesh::ps2_texture_set`, which already parsed each entry's `name_hash` and
+discarded it on a debug label) was not a faithful reproduction of an original
+bug. It was simply the wrong resolution mechanism**, and fixing it carried no
+risk of trading a known-white face for an unverified "corrected" one: the
+original never had an ordinal to get right or wrong in the first place.
+
+**Fixed 2026-09-05.** `mesh::ps2_texture_set` is now `Ps2TextureSet`, keyed by
+each entry's own `name_hash` rather than by directory position, and
+`mesh::build_class` resolves each `Texture`-class node against it by the
+node's own declared name (`mesh::resolve_texture_slots`). `TextureSlots`
+itself is unaffected - still one `Vec<Option<Arc<ModelTexture>>>` entry per
+node in node order - only how a slot gets filled changed, which is why the
+ripple into `oag-game`'s call sites (`race/assets.rs`, `race/load.rs`,
+`livery.rs`) was mechanical rather than a second design decision.
+`zone_grade.rs`'s and `mesh/rcs/skin.rs`'s own `TextureSlots` usage is
+unrelated to `Texture` nodes at all and was not touched. See
+`crates/render/tests/ps2_texture_binding_ground_truth.rs`, which asserts the
+27 exact-match circuits reproduce the old positional answer exactly and
+`12_Track` specifically both fills its previously-white sky slot and rebinds
+at least one of its 87 previously mis-bound ordinals.
 
 **A third model type, and the first checked exhaustively: the boost plume**
 (2026-08-23, confidence 90). Every one of the PS2 disc's 24 plume files -
