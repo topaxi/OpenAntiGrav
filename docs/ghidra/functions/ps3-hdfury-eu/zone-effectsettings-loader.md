@@ -4534,9 +4534,23 @@ append computes it as `n*8 - n*2` (`rlwinm r9,r11,3` / `rlwinm r0,r11,1` /
 `subf r9,r0,r9`, `0x003ff544`-`0x003ff54c`). The append then copies the record
 straight across - `entry[1] = src[2]`, `entry[2] = src[4]` at
 `0x003ff560`-`0x003ff56c` - so the flag halfword reaching `FUN_003ff860` is
-the producer's, unmodified. The three flag-bit tests are independent `if`s,
-not a switch: one record can be appended to several buckets in one pass, and
-B1's and B3's conditions are complementary tests of the same bit.
+the producer's, unmodified.
+
+**How many buckets one record reaches, stated exactly, because this is what a
+port would get wrong.** The tests are independent `if`s rather than a switch,
+so a record does reach more than one bucket - but not freely:
+
+- **B1 and B3 are mutually exclusive.** Both read the *same* condition
+  register, set once at `0x003ff070` (`rlwinm r0,r8,0,0x1b,0x1b`) and reused
+  unmodified at `0x003ff0f4`. B1 takes the bit-clear arm, B3 the bit-set arm.
+  Every record lands in exactly one of the two.
+- **B4 and B5 are mutually exclusive** for the same structural reason - one
+  `if`/`else` on the material test - and both are additionally gated behind
+  bits 0 and 3 being clear, so a record can reach *neither*.
+- **B2 is independent of all of them**, on its own bit.
+
+So a record reaches one of {B1, B3}, optionally also B2, and optionally also
+one of {B4, B5}. It never reaches both halves of either pair.
 
 ### The B4/B5 discriminator: the material's transparency mode
 
@@ -4631,15 +4645,33 @@ list. Its five values line up one-for-one with the five input lists:
 | 1 | bit 7 set | unidentified; tested first and short-circuits |
 | 2 | bit 7 clear, bit 1 set | transparency mode 2 |
 | 0 | bits 7, 1, 0 all clear | opaque, mode 0 |
-| 3 | bit 0 set and `*(u32 *)(mat+0x14) == 0x00010001` | mode 1 whose blend pair is **`ONE`/`ONE`** - additive |
-| 4 | bit 0 set, any other blend pair | mode 1, non-additive |
+| 3 | bit 0 set and `*(u32 *)(mat+0x14) == 0x00010001` | mode 1, both blend factors `1` |
+| 4 | bit 0 set, any other blend pair | mode 1, every other pair |
 
-The `^ 0x10001` and sign-of-difference idiom at `0x003faf00` is a plain
-"is this `u32` zero" test, and `material+0x14`/`+0x16` are the source and
-destination blend factors `rcsmodel.md` already names. Confidence **80**.
-This is a third, independent corroboration of that page's transparency
-reading: the engine not only separates mode 1 from mode 0 and 2, it splits
-mode 1 again on whether the authored equation is additive.
+`material+0x14`/`+0x16` are the source and destination blend factors
+`rcsmodel.md` already names, so the `u32` at `+0x14` is `(src << 16) | dst`
+and `^ 0x10001` is zero exactly when both are `1`.
+
+**The polarity of the last two rows is derived, not counted**, so here is the
+derivation rather than the assertion. With `x = *(u32 *)(mat+0x14) ^ 0x10001`
+zero-extended into a `ulonglong`, the code computes
+`3 - (char)((s - (s ^ x)) >> 0x18) >> 7` where `s = (ulonglong)((int)x >> 31)`:
+
+- `x == 0`: `s = 0`, `(0 - 0) >> 24 = 0`, `(char)0 >> 7 = 0` -> class **3**.
+- `x != 0`, bit 31 clear: `s = 0`, `0 - x` wraps to a value whose byte at bit
+  24 is `0xff` -> `-1` -> class **4**.
+- `x != 0`, bit 31 set: `s` is all ones and `s - (s ^ x)` reduces to `x`
+  itself, whose byte at bit 24 is `>= 0x80` -> `-1` -> class **4**.
+
+All three arms agree, so class 3 is the both-factors-`1` case. Confidence
+**80** on the table as a whole. What is *not* established here is what the
+factor encoding's `1` denotes - reading it as `ONE`, and so class 3 as the
+additive equation, is the usual convention and not something this pass
+checked; the class split itself does not depend on it. The rows above class 3
+are the part that corroborates `rcsmodel.md`'s transparency reading from a
+new direction: the engine separates mode 1 from modes 0 and 2 exactly where
+that page's measurement says the boundary is, and then splits mode 1 again on
+its authored equation.
 
 ### It also settles the three fog buffers
 
