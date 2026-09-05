@@ -145,6 +145,7 @@
 
 0x0014f208	function	Camera_UpdatePlayerView	88	camera.md
 0x002db350	data	g_settings	78	camera.md
+0x0013e280	function	Camera_SubmitScene	80	camera.md
 
 0x0010ee78	function	strlen	92	libc.md
 0x0011568c	function	strcmp	90	libc.md
