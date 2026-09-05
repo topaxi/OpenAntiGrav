@@ -4,10 +4,11 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 
 use oag_game::frontend::{self};
+use oag_game::strings;
 use oag_game::{boot, display, drs, font, menu, movie, perf, race, report, settings, upscale};
 use oag_gameplay::input::Button;
 
-use crate::hints::SHELL_KEYS;
+use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
@@ -103,10 +104,11 @@ impl Session {
                     warn!("could not save the chosen language: {e:#}");
                 }
             }
+            let hint_strings = strings::project_table(self.settings.language.as_deref());
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
-                println!("\n{SHELL_KEYS}");
+                println!("\n{}", hints::shell_keys(&hint_strings));
             }
         }
 

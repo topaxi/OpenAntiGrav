@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{adapter, display, perf, settings};
+use oag_game::{adapter, display, perf, settings, strings};
 
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
-use crate::hints::TITLE;
+use crate::hints;
 use crate::window::{APP_ID, centred_on, choose_monitor, fullscreen, present_modes, window_icon};
 
 /// The window and the GPU objects, which both stages draw through.
@@ -156,6 +156,13 @@ impl Gpu {
         event_loop: &ActiveEventLoop,
         settings: &settings::Display,
         renderer: &display::Renderer,
+        // The player's chosen language, so the window's own title can be
+        // overridden the same way the loading screen's prose is - see
+        // `crate::hints`. Its own parameter rather than folded into
+        // `settings` above: that is `settings::Display`, one field of the
+        // whole `Settings`, and `language` is a sibling field of it, not a
+        // display preference.
+        language: Option<&str>,
     ) -> Result<Self> {
         // **A windowed window is fixed size, and that is a measurement.** Setting
         // the minimum and maximum to the same thing is the signal a tiling
@@ -170,8 +177,9 @@ impl Gpu {
         let size = settings.window_size;
         let borderless = settings.window_mode == display::WindowMode::Borderless;
         let monitor = choose_monitor(event_loop.available_monitors().collect(), &settings.monitor);
+        let title_strings = strings::project_table(language);
         let mut attributes = Window::default_attributes()
-            .with_title(TITLE)
+            .with_title(hints::title(&title_strings))
             .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
             .with_resizable(borderless)
             .with_window_icon(Some(window_icon()))

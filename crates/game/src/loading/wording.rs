@@ -8,13 +8,35 @@
 //! atlas, and `Screen::draw_list` is the only caller. The layout - where those
 //! strings go and what colour they are - stays in the parent.
 
+use crate::language::StringTable;
+
 use super::{Phase, Progress};
+
+/// Looks `id` up in `table`, substituting any `{name}` placeholders in
+/// `subs` into whichever string was found - the table's own translation if
+/// it has one, `literal` otherwise.
+///
+/// The fallback is exactly `resolve()`'s in `crate::menu::definition`: a row
+/// with no override keeps the text this project invented, untouched. The
+/// placeholder substitution is the one thing every string here needed that
+/// a menu row never did - every string composed on this screen carries at
+/// least one dynamic number - so it is `String::replace` after the lookup
+/// rather than `format!`, which cannot take a runtime template. A
+/// translation is free to move `{done}`/`{total}`/`{verb}` anywhere in its
+/// own text; only the literal names have to match.
+fn resolved(table: &StringTable, id: &str, literal: &str, subs: &[(&str, &str)]) -> String {
+    let mut out = table.get(id).unwrap_or(literal).to_string();
+    for (name, value) in subs {
+        out = out.replace(&format!("{{{name}}}"), value);
+    }
+    out
+}
 
 /// What the current load is doing, under the entry name it is doing it to.
 ///
 /// `None` draws nothing: a phase with no step to report has no line, rather than
 /// a line saying it has nothing to report.
-pub(super) fn step_line(phase: Phase) -> Option<String> {
+pub(super) fn step_line(phase: Phase, strings: &StringTable) -> Option<String> {
     let Phase::Media(step) = phase else {
         return None;
     };
@@ -22,52 +44,80 @@ pub(super) fn step_line(phase: Phase) -> Option<String> {
         // Named rather than silent. A cache hit is over in milliseconds, so this
         // is rarely *read* - but it is what makes the transcoding line below
         // mean something specific when it does appear.
-        crate::movie::Step::Cached => "already converted, reading the cache".to_string(),
-        crate::movie::Step::Decoding => "decoding".to_string(),
+        crate::movie::Step::Cached => resolved(
+            strings,
+            "OAG_LOADING_STEP_CACHED",
+            "already converted, reading the cache",
+            &[],
+        ),
+        crate::movie::Step::Decoding => {
+            resolved(strings, "OAG_LOADING_STEP_DECODING", "decoding", &[])
+        }
         // The counter is the anti-hang signal and the reason any of this is
         // plumbed: a number that moves once a second is the difference between
         // eighty seconds of progress and eighty seconds of nothing.
         crate::movie::Step::Transcoding {
             done,
             total: Some(total),
-        } => format!("transcoding - frame {done} of {total}"),
-        crate::movie::Step::Transcoding { done, total: None } => {
-            format!("transcoding - frame {done}")
-        }
+        } => resolved(
+            strings,
+            "OAG_LOADING_STEP_TRANSCODING_TOTAL",
+            "transcoding - frame {done} of {total}",
+            &[("done", &done.to_string()), ("total", &total.to_string())],
+        ),
+        crate::movie::Step::Transcoding { done, total: None } => resolved(
+            strings,
+            "OAG_LOADING_STEP_TRANSCODING",
+            "transcoding - frame {done}",
+            &[("done", &done.to_string())],
+        ),
     })
 }
 
 /// What the screen calls what it is doing.
-pub(super) fn heading(phase: Phase, progress: &Progress) -> String {
+pub(super) fn heading(phase: Phase, progress: &Progress, strings: &StringTable) -> String {
     if progress.planning {
-        return "READING THE ARCHIVES".to_string();
+        return resolved(
+            strings,
+            "OAG_LOADING_READING_ARCHIVES",
+            "READING THE ARCHIVES",
+            &[],
+        );
     }
     if !counted(progress) {
         // Nothing to count: a boot whose title names no movie at all, which is
         // the one case the media phase has no work in. See [`counted`].
-        return "LOADING".to_string();
+        return resolved(strings, "OAG_LOADING_GENERIC", "LOADING", &[]);
     }
     if progress.finished {
-        return "READY".to_string();
+        return resolved(strings, "OAG_LOADING_READY", "READY", &[]);
     }
     match phase {
         // The one wait worth its own word. A transcode of the intro is about
         // eighty seconds and a cache hit is milliseconds, and heading both
         // "loading" is how a player learns to read the word as "a moment" and
         // then sits through a minute and a half of it.
-        Phase::Media(Some(crate::movie::Step::Transcoding { .. })) => {
-            "TRANSCODING MOVIES".to_string()
-        }
+        Phase::Media(Some(crate::movie::Step::Transcoding { .. })) => resolved(
+            strings,
+            "OAG_LOADING_TRANSCODING_MOVIES",
+            "TRANSCODING MOVIES",
+            &[],
+        ),
         // Deliberately not "converting" for the rest: a warm cache reads the
         // cached file and a `native-video` build decodes it, and neither is a
         // conversion. "Loading" is true of both.
-        Phase::Media(_) => "LOADING MOVIES".to_string(),
-        Phase::Prefetch => "CONVERTING ASSETS".to_string(),
+        Phase::Media(_) => resolved(strings, "OAG_LOADING_LOADING_MOVIES", "LOADING MOVIES", &[]),
+        Phase::Prefetch => resolved(
+            strings,
+            "OAG_LOADING_CONVERTING_ASSETS",
+            "CONVERTING ASSETS",
+            &[],
+        ),
         // Unreachable in practice - a race load reports no total, so `counted`
         // has already returned "LOADING" above - and answered rather than
         // panicked, because a caller that did hand this a counted race would
         // get a true heading instead of a crash.
-        Phase::Race => "LOADING".to_string(),
+        Phase::Race => resolved(strings, "OAG_LOADING_GENERIC", "LOADING", &[]),
     }
 }
 
@@ -169,27 +219,49 @@ pub(super) fn fraction(phase: Phase, progress: &Progress) -> f32 {
 /// broken without it. `failed` is worth showing for the opposite reason: it is
 /// normally zero, and a run where it is not should say so while it is still on
 /// screen rather than only in the summary line at the end.
-pub(super) fn counts(phase: Phase, progress: &Progress) -> String {
+pub(super) fn counts(phase: Phase, progress: &Progress, strings: &StringTable) -> String {
     if progress.planning {
-        return "counting what needs converting".to_string();
+        return resolved(
+            strings,
+            "OAG_LOADING_COUNTING",
+            "counting what needs converting",
+            &[],
+        );
     }
     // `cached` and `failed` below are always zero in the media phase - nothing
     // there is skipped for being cached, and a reel that will not load is a
     // report line rather than a failure the screen counts - so the two branches
-    // differ only in the verb.
-    let verb = match phase {
-        Phase::Media(_) => "loaded",
-        Phase::Prefetch => "converted",
+    // differ only in the verb. The verb is baked into its own template rather
+    // than substituted into a shared one: a translation may need a different
+    // word order for "loaded" than for "converted", not just a different word.
+    let (id, literal) = match phase {
+        Phase::Media(_) => ("OAG_LOADING_COUNTS_LOADED", "{done} / {total} loaded"),
+        Phase::Prefetch => ("OAG_LOADING_COUNTS_CONVERTED", "{done} / {total} converted"),
         // See the heading above: a race load counts nothing, so this is the
         // honest verb for a caller that counted one anyway.
-        Phase::Race => "loaded",
+        Phase::Race => ("OAG_LOADING_COUNTS_LOADED", "{done} / {total} loaded"),
     };
-    let mut out = format!("{} / {} {verb}", progress.done, progress.total);
+    let subs = [
+        ("done", progress.done.to_string()),
+        ("total", progress.total.to_string()),
+    ];
+    let subs: Vec<(&str, &str)> = subs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let mut out = resolved(strings, id, literal, &subs);
     if progress.cached > 0 {
-        out.push_str(&format!(", {} already cached", progress.cached));
+        out.push_str(&resolved(
+            strings,
+            "OAG_LOADING_COUNTS_CACHED_SUFFIX",
+            ", {cached} already cached",
+            &[("cached", &progress.cached.to_string())],
+        ));
     }
     if progress.failed > 0 {
-        out.push_str(&format!(", {} failed", progress.failed));
+        out.push_str(&resolved(
+            strings,
+            "OAG_LOADING_COUNTS_FAILED_SUFFIX",
+            ", {failed} failed",
+            &[("failed", &progress.failed.to_string())],
+        ));
     }
     out
 }
@@ -209,4 +281,132 @@ pub(super) fn percentage(phase: Phase, progress: &Progress) -> String {
         return String::new();
     }
     format!("{}%", (fraction(phase, progress) * 100.0).round())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    fn counted_progress() -> Progress {
+        Progress {
+            total: 1,
+            finished: true,
+            ..Progress::default()
+        }
+    }
+
+    #[test]
+    fn an_id_with_an_override_resolves_to_it() {
+        let mut table = StringTable::default();
+        table.merge(HashMap::from([(
+            "OAG_LOADING_READY".to_string(),
+            "PRET".to_string(),
+        )]));
+        assert_eq!(
+            heading(Phase::default(), &counted_progress(), &table),
+            "PRET"
+        );
+    }
+
+    #[test]
+    fn an_id_with_no_override_falls_back_to_the_current_literal() {
+        let table = StringTable::default();
+        assert_eq!(
+            heading(Phase::default(), &counted_progress(), &table),
+            "READY"
+        );
+    }
+
+    /// A translation is free to move `{done}`/`{total}` anywhere in its own
+    /// text - proved by putting them in the opposite order from the English
+    /// literal.
+    #[test]
+    fn a_translation_may_reorder_a_templates_placeholders() {
+        let mut table = StringTable::default();
+        table.merge(HashMap::from([(
+            "OAG_LOADING_STEP_TRANSCODING_TOTAL".to_string(),
+            "{total} sur {done}".to_string(),
+        )]));
+        let step = step_line(
+            Phase::Media(Some(crate::movie::Step::Transcoding {
+                done: 3,
+                total: Some(10),
+            })),
+            &table,
+        );
+        assert_eq!(step.as_deref(), Some("10 sur 3"));
+    }
+
+    #[test]
+    fn a_templated_line_falls_back_to_the_literal_template_with_its_numbers_filled_in() {
+        let table = StringTable::default();
+        let step = step_line(
+            Phase::Media(Some(crate::movie::Step::Transcoding {
+                done: 3,
+                total: Some(10),
+            })),
+            &table,
+        );
+        assert_eq!(step.as_deref(), Some("transcoding - frame 3 of 10"));
+    }
+
+    /// The cached/failed suffixes override independently of the main
+    /// `done / total <verb>` template and of each other.
+    #[test]
+    fn counts_suffixes_override_independently_of_the_main_line() {
+        let mut table = StringTable::default();
+        table.merge(HashMap::from([(
+            "OAG_LOADING_COUNTS_CACHED_SUFFIX".to_string(),
+            ", {cached} deja en cache".to_string(),
+        )]));
+        let progress = Progress {
+            done: 4,
+            total: 10,
+            cached: 2,
+            ..Progress::default()
+        };
+        assert_eq!(
+            counts(Phase::Prefetch, &progress, &table),
+            "4 / 10 converted, 2 deja en cache"
+        );
+    }
+
+    #[test]
+    fn counts_falls_back_to_the_literal_when_nothing_overrides_it() {
+        let table = StringTable::default();
+        let progress = Progress {
+            done: 4,
+            total: 10,
+            failed: 1,
+            ..Progress::default()
+        };
+        assert_eq!(
+            counts(Phase::Media(None), &progress, &table),
+            "4 / 10 loaded, 1 failed"
+        );
+    }
+
+    /// One [`StringTable`] answers every call it is handed, rather than being
+    /// rebuilt per line - the same table a caller like `Screen::new` builds
+    /// once and holds. A stray "build a fresh table per call" regression
+    /// would still pass the tests above, since a fresh empty table falls back
+    /// to the same literals; what this pins is that a *populated* table's
+    /// answer is stable across repeated calls against the one instance, which
+    /// is the only thing "shared" is observable proof of here.
+    #[test]
+    fn one_table_answers_every_call_it_is_passed_to() {
+        let mut table = StringTable::default();
+        table.merge(HashMap::from([(
+            "OAG_LOADING_READY".to_string(),
+            "PRET".to_string(),
+        )]));
+        for _ in 0..3 {
+            assert_eq!(
+                heading(Phase::default(), &counted_progress(), &table),
+                "PRET"
+            );
+        }
+    }
 }

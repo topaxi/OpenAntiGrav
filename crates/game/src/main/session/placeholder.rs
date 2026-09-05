@@ -32,9 +32,9 @@
 use anyhow::{Context, Result};
 use log::info;
 
-use oag_game::{catalogue, font, frontend, language, loading, menu, placeholder, sprite};
+use oag_game::{catalogue, font, frontend, language, loading, menu, placeholder, sprite, strings};
 
-use crate::hints::MENU_KEYS;
+use crate::hints;
 use crate::session::Shell;
 
 use super::Session;
@@ -187,7 +187,10 @@ impl Session {
         self.gpu
             .window
             .set_title(&format!("OpenAntiGrav - {} (placeholder menu)", title.name));
-        println!("\n{MENU_KEYS}");
+        println!(
+            "\n{}",
+            hints::menu_keys(&strings::project_table(self.settings.language.as_deref()))
+        );
         Ok(())
     }
 }

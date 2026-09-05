@@ -729,8 +729,11 @@ pub fn loading(
     options: &LoadingOptions,
 ) -> Result<()> {
     // Seed 0: a capture has to be reproducible, and which feature it draws is
-    // part of the picture. See `loading::Screen::new`.
-    let mut screen = crate::loading::Screen::new(assets, font.line_height, 0);
+    // part of the picture. See `loading::Screen::new`. Language `None`: this
+    // CLI capture has no `Settings` to read one from, so it takes the same
+    // English fallback `crate::strings::project_table` gives any other
+    // caller with nothing to name.
+    let mut screen = crate::loading::Screen::new(assets, font.line_height, 0, None);
     // Stepped rather than jumped to: the tip rotation counts frames, and the
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.

@@ -4,11 +4,11 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, settings};
+use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, settings, strings};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;
-use crate::hints::{ESC_TO_MENU, RACE_KEYS, RACE_TITLE, SHELL_KEYS, SHELL_TITLE};
+use crate::hints;
 use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
@@ -395,7 +395,11 @@ impl Session {
         {
             self.suspended_race = Some(stage);
         }
-        self.gpu.window.set_title(SHELL_TITLE);
+        self.gpu
+            .window
+            .set_title(&hints::shell_title(&strings::project_table(
+                self.settings.language.as_deref(),
+            )));
         Ok(())
     }
 
@@ -587,7 +591,14 @@ impl Session {
                 // Back before the load, which reads it.
                 self.race_options = Some(race_options);
                 match self.launch_race() {
-                    Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
+                    Ok(()) => {
+                        let strings = strings::project_table(self.settings.language.as_deref());
+                        println!(
+                            "\n{}{}",
+                            hints::race_keys(&strings),
+                            hints::esc_to_menu(&strings)
+                        );
+                    }
                     // Reported rather than fatal: leaving the menus on screen
                     // lets the player pick something else, where a vanished
                     // window would just look like a crash.
@@ -660,8 +671,13 @@ impl Session {
             self.settings.audio.music_source,
             &boot::default_audio_cache_dir(),
         );
-        self.gpu.window.set_title(RACE_TITLE);
-        println!("\n{RACE_KEYS}{ESC_TO_MENU}");
+        let strings = strings::project_table(self.settings.language.as_deref());
+        self.gpu.window.set_title(&hints::race_title(&strings));
+        println!(
+            "\n{}{}",
+            hints::race_keys(&strings),
+            hints::esc_to_menu(&strings)
+        );
     }
 
     /// What escape does, which is **back one level** and not quit.
@@ -706,7 +722,10 @@ impl Session {
             // has to release it. Without this the menus hum.
             self.audio.stop_race_sfx();
             match self.open_menus() {
-                Ok(()) => println!("\n{SHELL_KEYS}"),
+                Ok(()) => println!(
+                    "\n{}",
+                    hints::shell_keys(&strings::project_table(self.settings.language.as_deref()))
+                ),
                 // Reported rather than fatal, and then it quits: a race whose
                 // menus cannot be rebuilt has nothing left to offer, but a
                 // window that vanished with no message would read as a crash.

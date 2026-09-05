@@ -6,9 +6,9 @@ use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
-use oag_game::{audio, boot, loading, movie, prefetch, race};
+use oag_game::{audio, boot, loading, movie, prefetch, race, strings};
 
-use crate::hints::RACE_TITLE;
+use crate::hints;
 use crate::loading_stage::RaceBuildError;
 use crate::stage::Stage;
 
@@ -74,6 +74,7 @@ impl Session {
             Some(prepared.media),
             &assets,
             self.trace,
+            self.settings.language.as_deref(),
         )?;
         // Kept rather than dropped with the stage: the same screen goes up
         // again for every race this run launches. See `Session::loading_assets`.
@@ -421,6 +422,7 @@ impl Session {
             &self.loading_assets,
             self.races_launched,
             self.trace,
+            self.settings.language.as_deref(),
         )?;
         Ok(())
     }
@@ -624,7 +626,11 @@ impl Session {
             ),
         }
         info!("race music started in {:?}", music_start.elapsed());
-        self.gpu.window.set_title(RACE_TITLE);
+        self.gpu
+            .window
+            .set_title(&hints::race_title(&strings::project_table(
+                self.settings.language.as_deref(),
+            )));
         Ok(())
     }
 }

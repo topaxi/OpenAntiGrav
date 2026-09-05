@@ -36,6 +36,7 @@ use oag_render::loading::{Quad, Wave};
 
 use crate::font::{self, Atlas};
 use crate::frontend::{Align, Draw, SCREEN};
+use crate::language::StringTable;
 use crate::prefetch::Progress;
 
 /// Pulse's own two entries, re-exported for the tests and reports that name
@@ -193,6 +194,14 @@ pub struct Screen {
     frames: u32,
     /// Frames since the work finished, counting to [`FADE_FRAMES`].
     fade: u32,
+    /// This project's own strings, layered over nothing: this screen runs
+    /// before any disc's language plugin is read - `heading`'s "READING THE
+    /// ARCHIVES" case fires while that read is still in flight - so there is
+    /// no disc-merged table to build this from, only [`crate::strings::project_table`].
+    /// Built once, here, rather than per line: the same reason
+    /// `prepare::definition` builds its own copy once rather than at every
+    /// `resolve()` call. See `handover/invented-ui-text-has-no-translation-and-the.md`.
+    strings: StringTable,
 }
 
 impl Screen {
@@ -203,8 +212,14 @@ impl Screen {
     /// axis landed: a backdrop, a caption and whether there is a wave at all
     /// are all per-title now, and threading four arguments through every caller
     /// would put the same four together at each of them.
+    ///
+    /// `language` names which of this project's own string files to overlay -
+    /// see the `strings` field's own doc - and is `Option<&str>` rather than a
+    /// [`StringTable`] so a caller with no disc open yet (every caller of this
+    /// constructor) does not have to build one itself; `None` falls back to
+    /// English, [`crate::strings::project_table`]'s own fallback.
     #[must_use]
-    pub fn new(assets: &Assets, line_height: f32, draw: u64) -> Self {
+    pub fn new(assets: &Assets, line_height: f32, draw: u64, language: Option<&str>) -> Self {
         // **One feature, drawn.** The original picks a feature every time this
         // screen goes up - `LoadingScreen_Construct` reduces a counter modulo a
         // range its race mode selects, five for Eliminator and three or four
@@ -255,6 +270,7 @@ impl Screen {
             },
             frames: 0,
             fade: 0,
+            strings: crate::strings::project_table(language),
         }
     }
 
@@ -356,7 +372,7 @@ impl Screen {
     /// The line at the top of the screen.
     fn heading_text(&self, phase: Phase, progress: &Progress) -> String {
         if !self.caption_leads(progress) {
-            return heading(phase, progress);
+            return heading(phase, progress, &self.strings);
         }
         let caption = self.caption.clone().unwrap_or_default();
         match &progress.current {
@@ -662,7 +678,7 @@ impl Screen {
                 color: ink(COUNTS),
                 border,
                 align: Align::Left,
-                text: counts(phase, progress),
+                text: counts(phase, progress, &self.strings),
                 wrap_width: None,
             });
             out.push(Draw::Text {
@@ -698,7 +714,7 @@ impl Screen {
         // `elide` keeps a string's *tail*: appended, the state would survive and
         // the entry name would be eaten from the left, which is the wrong half
         // to lose. Two short lines are both legible at any name length.
-        if let Some(step) = step_line(phase) {
+        if let Some(step) = step_line(phase, &self.strings) {
             out.push(Draw::Text {
                 x: rows_x,
                 y: counts_y + row_pitch * 2.0,

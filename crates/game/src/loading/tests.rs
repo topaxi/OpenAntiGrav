@@ -23,6 +23,7 @@ fn screen_with(tips: Vec<String>) -> Screen {
         },
         AUTHORED_LINE_HEIGHT,
         0,
+        None,
     )
 }
 
@@ -615,6 +616,7 @@ fn a_race_load_draws_the_discs_caption_and_no_counts() {
         },
         AUTHORED_LINE_HEIGHT,
         0,
+        None,
     );
     let state = Progress {
         current: Some("Talon's Junction".to_string()),
@@ -667,6 +669,7 @@ fn a_caption_does_not_replace_a_counted_heading() {
         },
         AUTHORED_LINE_HEIGHT,
         0,
+        None,
     );
     let state = progress(3, 9);
     let drawn = text_of(&screen.draw_list(Phase::Prefetch, &state, &atlas));
@@ -690,6 +693,7 @@ fn a_title_with_no_wave_draws_no_quads() {
         },
         AUTHORED_LINE_HEIGHT,
         0,
+        None,
     );
     for _ in 0..10 {
         assert!(screen.quads().is_empty());
@@ -727,6 +731,7 @@ fn feature_screen() -> Screen {
         },
         AUTHORED_LINE_HEIGHT,
         0,
+        None,
     )
 }
 

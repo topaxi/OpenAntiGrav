@@ -9,10 +9,10 @@
 
 use log::{error, info, warn};
 
-use oag_game::{catalogue, menu, remix};
+use oag_game::{catalogue, menu, remix, strings};
 use oag_physics::SpeedClass;
 
-use crate::hints::{ESC_TO_MENU, RACE_KEYS};
+use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
@@ -404,7 +404,14 @@ impl Session {
         );
         self.race_options = Some(race_options);
         match self.launch_race() {
-            Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
+            Ok(()) => {
+                let strings = strings::project_table(self.settings.language.as_deref());
+                println!(
+                    "\n{}{}",
+                    hints::race_keys(&strings),
+                    hints::esc_to_menu(&strings)
+                );
+            }
             Err(e) => error!("cannot start a remix race: {e:#}"),
         }
     }
