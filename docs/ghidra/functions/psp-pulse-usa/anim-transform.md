@@ -363,6 +363,41 @@ segment-index check used above is still valid evidence for the *specific*
 relocation entries it was run against; it just does not license generalising
 to "this segment" the way it looks like it should.
 
+**Retracted 2026-09-05, later the same day: there is no third base, and the
+per-segment rule was right after all.** The correction above rests on three
+naive values, `0x00057b40`, `0x00058fd0` and `0x00058fd8`. **None of the three
+exists in this binary.** Replaying the PRX relocation sections directly
+(`scripts/psp-relocate.py`, which walks `SHT_PRXRELOC` rather than decoding
+instruction immediates by hand) gives the record count for each naive value:
+
+| Naive value | Relocation records | Resolves to |
+| --- | ---: | --- |
+| `0x000577f8` | 931 | `0x08b30f90` |
+| `0x00057b40` | **0** | - |
+| `0x00058018` | 120 | `0x08b317b0` |
+| `0x00058c88` | 147 | `0x08b32420` |
+| `0x00058fd0` | **0** | - |
+| `0x00058fd8` | **0** | - |
+
+Every real value resolves under the **segment-1 base `+0x08ad9798`** with no
+exception, reproducing `DAT_08b30f90`, this page's own `0x08b317b0`, and
+`DAT_08b32420` together. And each of the three phantom values is exactly
+`+0x348` from a real one - `0x57b40 - 0x577f8`, `0x58fd0 - 0x58c88` and
+`0x58fd8 - 0x58c90` are all `0x348`. So a single constant slip of `+0x348` was
+made while decoding the immediates by hand, and then cancelled by inventing a
+base `0x348` lower (`0x08ad9798 - 0x348 = 0x08ad9450`). Two errors that
+multiply out to the right answers, which is why the three cross-checks all
+appeared to confirm it.
+
+The practical rule this section proposed - "solve for the addend from one
+documented instruction, then apply it only within the same function" - should
+**not** be followed. It generalises a hand-arithmetic slip into a theory about
+linker `.sbss` numbering, and it would keep producing a bespoke constant per
+function forever. Read the relocation records instead; they say which of the
+two segment bases each entry uses, and there are only ever two. The whole model
+is validated against five independently-recorded addresses at once in
+[workflow.md](../../workflow.md).
+
 ## The node attributes, and what `+0x0e` is
 
 `AnimTransform_Bind` looks up three named attributes on the **node header**,

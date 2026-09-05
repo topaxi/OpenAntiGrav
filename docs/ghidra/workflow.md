@@ -221,6 +221,53 @@ not walked. That theory is dead: the pass never ran at all, so there was never
 a subset to explain. Anything at all that a relocation would have touched is
 raw.
 
+#### Stop doing it by hand: `scripts/psp-relocate.py`
+
+`real = pseudo + 0x08804000` is right for `.text`, and **wrong** for the second
+`PT_LOAD` segment - `.cplinit`, `.linkonce.d`, `.ctors` and `.bss` all need
+`+0x08ad9798` instead. Worse, the hand arithmetic itself is where this keeps
+going wrong: a `lui`/`lo16` pair's low half is *signed*, so a negative `lo16`
+borrows from the high half, and one constant slip of `0x348` produced a whole
+retracted theory about a third relocation base (see
+[anim-transform.md](functions/psp-pulse-usa/anim-transform.md)).
+
+The script replays the PRX relocation sections instead - `SHT_PRXRELOC`
+(`0x700000A0`), 93,443 records in `.rel.text` alone - and reports the loaded
+address each record names. `r_info`'s bits 16-23 give the segment whose base
+that record adds, so nothing is guessed:
+
+```sh
+B=data/extracted/psp/pulse-usa/PSP_GAME/SYSDIR/BOOT.BIN
+python3 scripts/psp-relocate.py --binary $B segments
+python3 scripts/psp-relocate.py --binary $B resolve 0x08840774   # -> 0x08b30f90
+python3 scripts/psp-relocate.py --binary $B xrefs 0x08b317b0     # 120 references
+python3 scripts/psp-relocate.py --binary $B callers 0x0883e6f4
+python3 scripts/psp-relocate.py --binary $B masked 0x1c0 0x400
+python3 scripts/psp-relocate.py --binary $B member 0x08b30f90 0xb4
+```
+
+It reproduces five independently-recorded addresses with no special-casing -
+`0x08ab0838` and `0x08ab0818` in segment 0, `0x08b317b0`, `0x08b32420` and
+`g_speedpad_jump` (`0x08b36bec`) in segment 1 - and 97.85% of its 108,813
+resolved targets land inside a loaded segment, the rest being import stubs
+below the load base. There are exactly **two** `PT_LOAD` segments (`phnum=2`),
+so there are exactly two bases.
+
+Two subcommands exist for searches Ghidra structurally cannot serve here:
+
+- **`xrefs` succeeds where `get_xrefs_to` fails**, because it matches on the
+  relocated value rather than on Ghidra's index of the raw one.
+- **`member` finds a global reached as base-plus-offset**, which has no
+  relocation record of its own and so is invisible to any xref, relocated or
+  not. `DAT_08b32428` is `DAT_08b32420 + 8`; it returns zero references from
+  every tool including this script's own `xrefs`, and that zero is what
+  prompted a since-refuted `$gp`-addressing hypothesis. This binary uses `$gp`
+  as a load/store base **zero** times; base-plus-offset is the real mechanism,
+  and `easyshield` at `stats+0x84` is the same shape.
+
+An empty result from any of these is still worth calibrating against a known
+case before believing it, for the reasons the `.rodata` string note gives.
+
 ### Naming programs
 
 Name each program for its origin, so a documentation page's "Binary" field is
