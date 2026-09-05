@@ -479,7 +479,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's Zone ladder draws and its speed-class sound now plays; the class-change blend stays unwired on three unrecovered inputs](handover/hds-zone-ladder-draws-and-the-zone-to.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the caption pair and opponent place are the open half](handover/the-hud-shows-a-place-measured-against-the.md) - the shield-bar-colour half resolved 2026-09-05 (threshold plus a one-shot post-hit flash, not a gradient - `Hud_UpdateEnergyBar`, confidence 82); wiring it into `oag_game::hud` is its own thread now
-- [The shield bar's tint rule is recovered; wiring it into the renderer is the open half](handover/the-shield-bar-tint-is-recovered-wiring-it.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)
 - [Nothing airborne has ever been captured](handover/nothing-airborne-has-ever-been-captured.md)
 - [The hover probe takes only the deepest hit](handover/the-hover-probe-takes-only-the-deepest-hit.md)
