@@ -8,9 +8,11 @@ checked), and this page covers the physical gantry, which arrives through
 `TrackStartup.xml`'s **billboard slot 8** ([`formats/README.md`](../formats/README.md)'s
 Track startup row).
 
-**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`) only.** Pure, HD/Fury
-and 2048 ship the same family of assets and are unmeasured here; the closing
-section says what looks title-wide and what does not.
+**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`) and Wipeout Pure
+(`pure-psp-usa.chd`, `UCUS-98612`).** HD/Fury and 2048 ship the same family of
+assets and are unmeasured here; the closing section says what looks title-wide
+and what does not. Pure's own section, below, is the one surprise so far: it
+does not have a track-side gantry at all.
 
 > **Nothing on this page places the gantry.** Where slot 8's transform comes
 > from is still unrecovered - see
@@ -259,16 +261,118 @@ byte sizes and a runtime mode-descriptor pointer choosing between them
 2048 ships those four plus two of its own. Pulse has one file and no chooser.
 The per-mode axis is real on the later titles and absent on this one.
 
+## Wipeout Pure: no track-side gantry at all. Confidence 85
+
+**Read on `pure-psp-usa.chd` (`UCUS-98612`).** Pure's `TrackStartup.xml` was
+never read for content before this pass - `docs/formats/pure-status.md`
+reached the plugin id and stopped - and the race-start handover thread
+recorded `psp-pure-usa` as unreachable through `ghidra-mcp` in an earlier
+session. Neither mattered: everything below came off the disc with
+`oag-wad cat` and `oag-view`, the same two tools the Pulse pass used, no
+Ghidra and no emulator.
+
+**Every one of Pure's 16 circuits' own `<TrackStartup>` was read, exhaustively,
+and none of them authors a slot 8.** `Data\Plugins\PI001\Definition.xml` names
+eight race circuits, four Classics and four Zone circuits; each race circuit's
+`TrackStartup.xml` carries `<Billboard>` entries and each Classics/Zone one
+carries none at all. Across the eight that do, slot numbers run 1 to 7 -
+`12_Sol_2`'s manifest is the one that reaches 7 - and never 8, model or
+colour. This is the exact schema Pulse's own `14_Track` debris pointed at, and
+`crates/formats/tests/start_gantry_pure_ground_truth.rs` reproduces the count:
+42 billboards over 16 circuits, 0 naming a `location`.
+
+**Pure's `<Billboard>` schema is not Pulse's schema, either.** Every one of
+those 42 slots carries `type` and `color` and no `location` attribute at all -
+`<Billboard num="1" type="landscape" color="red"/>`. Pulse's own
+`trackstartup.rs` module already knows this shape exists (`Fill::Colour`,
+14 of Pulse's own 118 slots) as a live but unresolved lead of its own -
+`Data\Plugins\PI004\Definition.xml`'s colour-tagged sponsor-logo catalogue -
+and that catalogue is confirmed, on Pure too, to be about advertising
+hoardings (`Data\Billboards\3DVexWindow\*\logo.vex`) and nothing gantry-shaped.
+So even under the most generous reading - that a colour slot resolves through
+a pool the way Pulse's might - **there is still no slot 8 for it to resolve
+from** on any Pure circuit.
+
+**Nothing else on the disc names a gantry either.** A guessed-path sweep
+(`Data\Environments\321_Go\321Go_StartFinish.vex` and half a dozen spelling
+variants) and a `strings` pass over `PSP_GAME/SYSDIR/BOOT.BIN` both come back
+empty - no `321`, no `StartFinish`, no `Countdown`, no `Gantry`. The one hit
+either search turns up is `ReadyGo`, which is the on-screen HUD widget
+`ui/hud.md` already names (`Data\HUD\Ready_GO.vex`), not a track-side object.
+
+**The static "starting line" architecture baked into each circuit's own
+`track.vex` is not it either.** `01_Vineta_K\track.vex` authors over thirty
+`starting_line_Shape*` mesh nodes as part of the environment, some of them
+carrying their own `TEXOFFSET` tracks - but every one measured is a short,
+2-key linear scroll (0.8-8 s loops, `u` or `v` sliding once with no
+intermediate keys), the shape of a chasing light strip or a scrolling banner
+accent, not a multi-state countdown. None comes close to the gantry's own
+5-key, ~6-second track. So the physical start-line structure is there, static
+lighting flourishes and all, but nothing on it walks through `3`, `2`, `1`,
+`GO`.
+
+**Conclusion: Wipeout Pure ships no track-side start-line gantry object, on
+any circuit, reachable by any lead tried.** This is a negative claim over an
+open-ended search rather than a confirmed positive, which is why it sits at
+85 rather than the 90 the Pulse mechanism carries - but the one part of it
+that *is* exhaustive (every circuit's own manifest schema) is tested, not just
+observed, in `start_gantry_pure_ground_truth.rs`.
+
+**The nearest analogous asset is the on-screen HUD widget, and it uses a
+different mechanism from Pulse's track-side one.** `ui/hud.md` already names
+`Data\HUD\Ready_GO.vex` as Pure's shared `Arcade_HUD.xml`/`Zone_HUD.xml`
+`<Mode3D>` overlay, with no separate cockpit variant; measuring it here for
+the first time, since it is the only `3`-`2`-`1`-`GO`-adjacent asset Pure
+ships:
+
+- **3 static mesh nodes** (`loftedSurfaceShape1/2/3`, 54 triangles each), not
+  Pulse's one node carrying every glyph.
+- **One embedded 32x64 8bpp texture**, 256 palette entries, **every one of
+  them pure white** (`255, 255, 255`) with only the alpha channel varying -
+  not Pulse's multi-colour staircase.
+- Each mesh node carries **its own** `TEXOFFSET` track (per-node, not
+  per-vertex-cell), and all three are **identical**: 2 keys, `v` sliding
+  0 -> 251/256 over a 0.983 s loop, interpolated rather than stepped. Nothing
+  like Pulse's 5-key, ~6 s, multi-phase track.
+- Per-vertex UVs are **continuous strip coordinates** - `u` pinned to 0.0 or
+  1.0 (a tube's two edges) with `v` running the full 0..1 range and beyond -
+  not Pulse's four discrete per-glyph cells. Rendered, the three nodes are
+  nested ring/loop shapes, not digit outlines.
+
+**What this does and does not settle.** It settles that the UV-cell-against-a-
+palette mechanism does **not** generalise to whatever Pure's on-screen widget
+is doing - a scrolling alpha gradient along ribbon geometry is a different
+technique entirely. It does **not** settle what actually draws Pure's `3`,
+`2`, `1` and `GO` glyphs, since none of the three ring shapes reads as a digit
+outline; that is unresolved and left for whoever picks this up next, along
+with everything else this page already keeps separate: which of the two is
+even the physical countdown Pure's players see is itself unmeasured, since
+`Ready_GO.vex` is `ui/hud.md`'s subject, not this page's, and the two must not
+be conflated the way this project's own notes once did for one session before
+catching it (see `ui/hud.md`'s own warning).
+
 ## What a later title should expect to reuse
 
-The **mechanism** is the part that should generalise: a palette texture, one UV
-cell per state, and the material's own `TEXOFFSET` track walking between them.
-Both halves are already implemented and title-agnostic -
-`vex::mesh_tex_transforms` parses the block big-endian for HD as readily as
-little-endian for Pulse, and the renderer replays it per frame.
+**Neither half generalised the way the Pulse-only version of this page
+guessed.** Pure was the test, and it came back negative on both counts:
 
-The **packaging** is what looks Pulse-specific: one model holding the whole
-race's gantry states on one timeline, where HD splits them across four files.
-Pulse's own commented-out lines show it used to split them too, so the
-difference is a late authoring decision rather than an engine one - a reader on
-Pure or 2048 should check the packaging before assuming either shape.
+The **mechanism** looked like it should generalise - a palette texture, one UV
+cell per state, and the material's own `TEXOFFSET` track walking between them,
+with both halves already implemented title-agnostically
+(`vex::mesh_tex_transforms` parses the block big-endian for HD as readily as
+little-endian for Pulse, and the renderer replays it per frame). **Pure does
+not use it.** Its nearest asset drives a scrolling alpha gradient over
+continuous ribbon UVs instead, and the mechanism the parser already supports
+sits unused on this title's own equivalent.
+
+The **packaging** looked Pulse-specific: one model holding the whole race's
+gantry states on one timeline, where HD splits them across four files, and
+Pulse's own commented-out `14_Track` lines showed it used to split them too.
+**Pure has no packaging to compare, because it authors no track-side gantry
+slot at all** - the billboard mechanism itself, not just what fills it, is
+absent.
+
+A reader on HD or 2048 should not inherit either Pulse's or Pure's answer:
+measure the manifest schema first (does slot 8 exist, and what does it
+carry), then the mechanism (UV cells and a `TEXOFFSET` track, or something
+else), the way both passes here did.
