@@ -59,6 +59,7 @@ import json
 import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -837,6 +838,98 @@ def describe(blobs, track, shot):
     }
 
 
+def screen_slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "unnamed"
+
+
+def cmd_bootchain(args):
+    """Watch the boot chain screen by screen and photograph each step.
+
+    This is what upgraded `oag_hd::frontend::BOOT` from
+    `oag_title::Provenance::Declared` to `Measured` on 2026-09-05, and it is
+    here rather than in a scratch file so the measurement is repeatable from
+    the repository. See docs/formats/hd-frontend.md.
+
+    **Move the savedata aside first or the chain you watch is the wrong one.**
+    With `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/BCES00664-AUTO-`
+    present, HD skips `FirstPlay` entirely and goes `EpilepsyWarning ->
+    Save Warning` - a *shorter* chain than the XML declares, and one that looks
+    like a complete boot unless you know the eighth step is missing. Put it back
+    afterwards.
+
+    No GDB connection: everything here is `TTY.log` and the X root window, and
+    connecting would pause the emulation this exists to watch.
+
+    `--film` is not redundant with the per-screen shots. RPCS3 flushes
+    `TTY.log` in **bursts**, so five transitions can arrive bearing one
+    timestamp, and a shot keyed on a name change cannot catch a screen that
+    auto-redirected inside a burst. A fixed-interval grab can.
+    """
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    log, presses = [], []
+    current = "?"
+    with Session(args.image, out / "emu") as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        t0 = time.time()
+        seen = 0
+        last_change = time.time()
+        shot_index = 0
+        film_dir = out / "film"
+        film_index = 0
+        next_film = time.time()
+        if args.film:
+            film_dir.mkdir(exist_ok=True)
+        while time.time() - t0 < args.timeout:
+            if args.film and time.time() >= next_film:
+                screenshot(film_dir / ("f%03d-%06.2f.png"
+                                       % (film_index, time.time() - t0)),
+                           trim=True)
+                film_index += 1
+                next_film = time.time() + args.film
+            if session.proc.poll() is not None:
+                print("RPCS3 exited early", file=sys.stderr)
+                break
+            hits = SCREEN_LINE.findall(tty_text())
+            if len(hits) > seen:
+                for frm, to in hits[seen:]:
+                    stamp = round(time.time() - t0, 2)
+                    log.append({"t": stamp, "from": frm, "to": to})
+                    print("  %7.2f  %-24s -> %-24s" % (stamp, frm or '""', to),
+                          flush=True)
+                seen = len(hits)
+                current = hits[-1][1]
+                last_change = time.time()
+                time.sleep(args.settle)
+                # Re-read: the settle may have carried us onward already, and a
+                # shot taken then would be labelled with the screen before it.
+                if len(SCREEN_LINE.findall(tty_text())) == seen:
+                    name = "%02d-%s.png" % (shot_index, screen_slug(current))
+                    screenshot(out / name, trim=True)
+                    log[-1]["shot"] = name
+                    shot_index += 1
+                continue
+            if current == args.stop:
+                break
+            if time.time() - last_change > args.press_after:
+                was, now = session.tap("cross", settle=2.0)
+                presses.append({"t": round(time.time() - t0, 2),
+                                "at": was, "after": now})
+                print("  %7.2f  press cross at %s"
+                      % (time.time() - t0, was), flush=True)
+                last_change = time.time() - args.press_after + 4.0
+            time.sleep(0.5)
+        print("arrived: %s, holding %g s" % (current, args.hold), flush=True)
+        time.sleep(args.hold)
+        screenshot(out / ("%02d-%s-held.png"
+                          % (shot_index, screen_slug(current))), trim=True)
+        shutil.copy(TTY, out / "TTY.log")
+    (out / "chain.json").write_text(json.dumps(
+        {"transitions": log, "presses": presses, "arrived": current}, indent=2))
+    print("wrote %s" % (out / "chain.json"))
+    return 0 if current == args.stop else 1
+
+
 def cmd_record(args):
     before = set(recordings())
     with Session(args.image, args.log_dir) as session:
@@ -981,6 +1074,27 @@ def main(argv=None):
                              "screenshot each, after the unpressed 00.png")
     browse.add_argument("--out", default="data/reference/hd-browse",
                         help="where the screenshots are written")
+
+    chain = sub.add_parser("bootchain",
+                           help="watch the boot chain screen by screen and "
+                                "photograph each step")
+    chain.set_defaults(run=cmd_bootchain)
+    chain.add_argument("--out", default="data/reference/hd-boot-chain/run",
+                       help="where the shots, TTY.log and chain.json go")
+    chain.add_argument("--stop", default="Main Menu",
+                       help="the screen the chain ends at")
+    chain.add_argument("--timeout", type=float, default=420.0)
+    chain.add_argument("--settle", type=float, default=3.0,
+                       help="pause after a screen change before its shot")
+    chain.add_argument("--press-after", type=float, default=8.0,
+                       help="seconds a screen may sit still before cross is "
+                            "sent; an auto-redirect is never hurried and a "
+                            "dialog is never left waiting")
+    chain.add_argument("--hold", type=float, default=15.0,
+                       help="how long to sit on --stop before quitting")
+    chain.add_argument("--film", type=float, default=1.5,
+                       help="also grab a frame every N seconds regardless of "
+                            "TTY.log; 0 disables")
 
     rec = sub.add_parser("record")
     rec.add_argument("--timeout", type=float, default=180.0)
