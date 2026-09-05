@@ -102,6 +102,27 @@ fn pulse_states_what_its_disc_and_its_capture_gave() {
     assert!(pulse().selected.is_some(), "measured off a capture");
 }
 
+/// Only Pulse's highlight pulse is measured - a 2026-09-05 frame-accurate
+/// PPSSPP capture, 33 presented frames trough to trough across four cycles.
+/// HD authors no oscillation anywhere (a whole-front-end census) and Pure's
+/// own selected row is simply unmeasured for one, so both must stay `None`
+/// rather than borrow Pulse's period the way `pure_leaves_unread_fields_empty`
+/// already guards other fields against.
+#[test]
+fn only_pulse_states_a_measured_highlight_pulse() {
+    assert_eq!(pulse().selected_pulse_period_secs, Some(1.1));
+    assert_eq!(
+        pure().selected_pulse_period_secs,
+        None,
+        "unmeasured on Pure"
+    );
+    assert_eq!(
+        oag_hd::frontend::MENU_SKIN.selected_pulse_period_secs,
+        None,
+        "HD's front end authors no oscillation anywhere"
+    );
+}
+
 /// One title draws a strip and two draw columns, and each says so itself.
 ///
 /// The third title is here because this axis is the one where HD is not simply

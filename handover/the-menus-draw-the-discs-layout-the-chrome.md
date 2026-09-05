@@ -9,8 +9,7 @@
 ## Open
 
 - The footer's own ticker text (`<TextInfo>`) and button-prompt line (`<NavigationController>`) are not built - `oag_game::screen` recognises neither element yet.
-- The selected row's highlight pulse period and depth were never measured; it is drawn flat.
-- The easing curve is invented (confidence 30) - the capture only shows that motion accelerates.
+- The easing curve is invented (confidence 30) - the capture only shows that motion accelerates. ~~The selected row's highlight pulse period and depth were never measured~~ - measured 2026-09-05, see below.
 
 **2026-09-05, from the HD side, and it narrows both of the two items above
 without closing either.** A census of Wipeout HD's entire front-end XML (772
@@ -31,8 +30,41 @@ before assuming it, but the executable is where HD's answer lives, and that is
 worth knowing before spending a session in the wrong file. See
 [hd-frontend.md](../docs/formats/hd-frontend.md#three-questions-this-closes).
 
+**2026-09-05: the highlight pulse's period and depth are measured, and closes
+this thread's second item - Pulse's own XML census, and the executable read,
+both done.** A whole-GUI census confirmed the same shape HD's own audit found:
+`pulse="true"` exists (on `BOOT_PRESS_START` and equivalent blinking prompts,
+never on `MainMenu_Definition.xml`'s own rows) but is a bare boolean with no
+numeric period anywhere, and `delay` turned out to be a reveal-offset timer
+shared with `<Animation>`/`<TextInfo>`, not a pulse period either - see
+[fe-menu-definitions.md](../docs/formats/fe-menu-definitions.md). So the
+period had to come off the running original, the same way the page-transition
+curve did: a frame-accurate PPSSPP capture (breaking on `Gfx_PresentFrame`,
+150 consecutive presented frames of an uncontaminated still `Main Menu`) found
+an exact, repeating 33-presented-frame period across four cycles (1.1 s at
+30 Hz) and a peak of exactly `0xFFFFFFFF` on three of them, with a flat
+control column (an unselected row) proving it is the row's own animation.
+Built in `oag_game::menu::Skin::selected`, keyed off a new
+`oag_title::MenuSkin::selected_pulse_period_secs` field, `Some(1.1)` on Pulse
+only. Full method and numbers in
+[menus-original.md](../docs/ui/menus-original.md#the-highlights-pulse---period-and-depth-measured-2026-09-05).
+**The curve's shape between the two endpoints is still invented** (a raised
+cosine, marked the same way `Tween::eased` marks its own) - the capture found
+eleven unevenly-spaced discrete levels, enough to rule out a linear ramp, not
+enough to name the real curve.
+
+**The easing curve itself (this thread's third item) was not attempted this
+session, and here is why, for whoever picks it up next.** `names.tsv` has
+zero front-end/menu functions on `psp-pulse-usa` - the closest anchor is
+`Xml_AttributeAsFloat` (`0x0895379c`), and its callers are unnamed `FUN_*`
+territory with nothing to recognise a tween by. Direct `jal` calls do survive
+the missing-relocations problem (unlike data loads), so a call-graph walk from
+there is still the right *route* - it just did not fit in the same session as
+the period/depth measurement above, and starting it without a plan for how to
+recognise the right function once found would have been an open-ended Ghidra
+session on a guess. `Tween::eased` is untouched.
+
 ## Next Steps
 
 - Read what `<TextInfo>` and `<NavigationController>` author (Pulse's footer, HD's trial-build text) and decide which parts belong on a retail build before drawing either.
-- Measure the highlight pulse's period and depth from the original - not off our own build.
-- Read the real easing curve out of the executable and update `Tween::eased`.
+- Read the real easing curve out of the executable and update `Tween::eased`. Start from `Xml_AttributeAsFloat` (`0x0895379c`)'s callers by call structure, not by name search - nothing menu-shaped is named yet.
