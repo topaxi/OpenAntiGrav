@@ -439,7 +439,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Wipeout Pure races, on Pulse's physics, and what is still absent is a list of unrecovered entry names](handover/wipeout-pure-races-on-pulses-physics-and-what.md)
 - [Pure's particle effects decode and play, and two of five names do not resolve](handover/pures-particle-effects-decode-and-play-and-two.md)
 - [Per-team hulls are drawn; which team flies which slot is not recovered](handover/per-team-hulls-are-drawn-which-team-flies.md)
-- [Team model and skin variants are declared and documented; the `.dat` payload and the drawing are both still open](handover/team-model-and-skin-variants-are-declared-and.md)
+- [The skin `.dat` is decoded; nothing parses it and nothing selects a livery](handover/the-skin-dat-is-decoded-nothing-parses-it.md)
 - [The particle effects are played from the disc, and most of them have no recovered trigger](handover/the-particle-effects-are-played-from-the-disc.md)
 - [The PS2's engine flare plays and reads as nothing on screen](handover/the-ps2s-engine-flare-plays-and-reads-as.md)
 - [The race camera's FOV is fitted to the PSP's own aspect on every title, and the PS2's own in-game widening option has no counterpart](handover/the-race-cameras-fov-is-fitted-to-the-psps.md)
@@ -1252,6 +1252,31 @@ and finding its one caller needed `search_instructions` on the zero-padded
 relative operand as before. Two data points, not a generalised rule: try the
 naive-address xref first for a data reference, but don't expect it to rescue
 a call-target search.
+
+**And it does not rescue a `.rodata` string reference either - that is a
+third case, and nothing in Ghidra finds it.** Found 2026-09-05 tracing
+`%s\ship_eliminator.dat` (`0x08a7ff7c`, `psp-pulse-usa`) for
+[`ship-skin.md`](docs/ghidra/functions/psp-pulse-usa/ship-skin.md).
+`get_xrefs_to` returns nothing on the relocated address **and** nothing on the
+naive `0x0027bf7c`; `search_instructions` returns nothing for `addiu` with
+`-0x4084`, nothing for `lui` with `0x8a8`, and `search_byte_patterns` finds no
+stored pointer either - yet the reference exists and is an ordinary
+`lui`/`addiu` pair. Calibrate before believing an empty result: `%s\Ship.vex`
+and `Data\Psys\%s.POB`, whose consumers are known, come back just as empty, so
+**no path template in this binary has a working xref** and an empty result
+proves nothing about whether a string is used.
+
+**What worked was scanning the ELF outside Ghidra, and it is quick.**
+`BOOT.BIN` is a PRX (`e_type` `0xff80`) whose `.text` is at file offset `0x80`,
+virtual `0x0`, length `0x272a3c` - read the section headers rather than
+assuming, they are plain. Walk it four bytes at a time keeping each `lui`'s
+immediate per register; when an `addiu`/`ori` completes a pair, compare the
+combined value against `<target> - 0x08804000`. The same walk finds callers:
+a `jal`'s target is `(word & 0x03ffffff) << 2`, already in naive form, so
+comparing against `<function> - 0x08804000` gives the caller list
+`get_function_callers` will not. Both took one short script and seconds to
+run, against a long unsuccessful search inside Ghidra - reach for it as soon
+as one `get_xrefs_to` comes back empty, not as a last resort.
 
 **`psp-pulse-eu` has the same `jal` wart, not just `psp-pulse-usa`.** Found
 2026-08-31 tracing `World_LoadTrack_q` (`0x088835f0`, EU) for
