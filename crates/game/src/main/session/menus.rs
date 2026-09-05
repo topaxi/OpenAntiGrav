@@ -58,6 +58,61 @@ pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
         .collect()
 }
 
+/// What the ordinary RACE page should actually launch on, given the stored
+/// `race.class` and the title it booted - `None` meaning "leave the previous
+/// class in place", the same as an empty stored value always has.
+///
+/// **This exists because `race.class` is one setting shared with RACE
+/// REMIX.** `Session::launch_remix` reads the exact same key, and its own row
+/// offers every rung [`oag_title::SpeedClasses::is_selectable`] allows -
+/// `VECTOR` included, when a Pure source is mounted. So a player who settles
+/// `race.class` to `"vector"` on RACE REMIX and then opens the ordinary RACE
+/// page has a stored value this page's own row no longer lists (see
+/// [`speed_class_choices`]'s confinement to
+/// [`oag_title::SpeedClasses::is_offered_outside_remix`]). `Menu::supply`
+/// only ever changes the widget's own display index, never the stored
+/// setting, so without this check the row would *display* the fallback
+/// (`"venom"`) while [`Session::handle_menu`]'s `LaunchRace` arm launched
+/// whatever was still in storage (`"vector"`) underneath it - a menu saying
+/// one thing and a race doing another, which is exactly the silent mismatch
+/// [`oag_title::SpeedClasses::is_selectable`]'s own doc comment forbids.
+///
+/// Mirrors the CIRCUIT and TEAM fallbacks in the same handler: a stored value
+/// this page does not offer races the first one the row does, with a warning,
+/// rather than silently keeping the mismatch.
+///
+/// `title` is `None` only when [`Session::shell`] itself is - unreachable in
+/// practice, since there are no menus before a disc has been chosen - and in
+/// that case `stored` is carried through unclamped, the same as before this
+/// check existed, because there is no row to check it against.
+fn resolve_race_page_class(
+    title: Option<&'static oag_title::Title>,
+    stored: &str,
+) -> Option<String> {
+    if stored.is_empty() {
+        return None;
+    }
+    let Some(title) = title else {
+        return Some(stored.to_string());
+    };
+    let choices = speed_class_choices(title);
+    let resolved = choices
+        .iter()
+        .find(|choice| choice.value.eq_ignore_ascii_case(stored))
+        .or_else(|| {
+            warn!(
+                "this page does not offer speed class {stored:?}; racing {} instead, \
+                 which is what the menu shows",
+                choices
+                    .first()
+                    .map(|choice| choice.value.as_str())
+                    .unwrap_or("this source's own default"),
+            );
+            choices.first()
+        });
+    resolved.map(|choice| choice.value.clone())
+}
+
 /// Which picture [`Session::open_menus`] should seed the new renderer's
 /// planes with.
 ///
@@ -641,15 +696,17 @@ impl Session {
                             .unwrap_or("this source's own default"),
                     ),
                 }
-                // Carried as a **name**. The row this came from was built out
-                // of the booted title's own ladder (or, in RACE REMIX, the
-                // union of the mounted titles'), so a rung outside
-                // `oag_physics::SpeedClass`'s four - Pure's `VECTOR` - survives
-                // to the race instead of being dropped here. An empty setting
-                // leaves the previous class in place, as it always did.
-                let class = self.settings.race.class.trim();
-                if !class.is_empty() {
-                    race_options.class = class.to_string();
+                // Carried as a **name**, and checked against this page's own
+                // row - see [`resolve_race_page_class`] for why: `race.class`
+                // is one setting shared with RACE REMIX, so a class settled
+                // there (`VECTOR`, offered only in remix) can sit in storage
+                // while this page's row was never on it. An empty setting
+                // still leaves the previous class in place, as it always did.
+                if let Some(class) = resolve_race_page_class(
+                    self.shell.as_ref().map(|shell| shell.title),
+                    self.settings.race.class.trim(),
+                ) {
+                    race_options.class = class;
                 }
                 // The mode itself was already resolved above, before the
                 // circuit - see the comment there.
@@ -858,5 +915,59 @@ mod tests {
     #[test]
     fn a_pulse_boots_race_page_still_offers_four() {
         assert_eq!(offered(oag_pulse::TITLE).len(), 4);
+    }
+
+    /// **The hazard `resolve_race_page_class` exists for.** `race.class` is
+    /// shared with RACE REMIX, whose own row can settle it to `"vector"` -
+    /// this page's row cannot, since the confinement above took it out. A
+    /// stored `"vector"` reaching this page's own launch must not survive
+    /// unclamped: it must fall back to the same first entry the row itself
+    /// would show, not launch a class the row never displayed.
+    #[test]
+    fn a_stored_vector_on_a_pure_boot_clamps_to_the_race_pages_own_first_entry() {
+        let resolved = resolve_race_page_class(Some(oag_pure::TITLE), "vector")
+            .expect("a non-empty stored class always resolves to something");
+
+        assert_eq!(resolved, "venom", "the row's own first entry, not vector");
+        assert!(
+            offered(oag_pure::TITLE)
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&resolved)),
+            "whatever this launches must be a name the row actually shows"
+        );
+    }
+
+    /// A stored class this page *does* offer resolves to itself, unchanged -
+    /// the ordinary case, so the clamp above never fires when nothing is
+    /// actually wrong.
+    #[test]
+    fn a_stored_class_the_page_already_offers_resolves_unchanged() {
+        assert_eq!(
+            resolve_race_page_class(Some(oag_pure::TITLE), "phantom").as_deref(),
+            Some("phantom")
+        );
+        // Case-insensitively, the same as every other rung lookup here.
+        assert_eq!(
+            resolve_race_page_class(Some(oag_pure::TITLE), "PHANTOM").as_deref(),
+            Some("phantom")
+        );
+    }
+
+    /// An empty stored value means "leave the previous class in place" and
+    /// must stay `None` - the pre-existing rule this check does not change.
+    #[test]
+    fn an_empty_stored_class_resolves_to_nothing() {
+        assert_eq!(resolve_race_page_class(Some(oag_pure::TITLE), ""), None);
+    }
+
+    /// With no shell at all (unreachable in practice - there are no menus
+    /// before a disc has been chosen) the stored value is carried through
+    /// unclamped, since there is no row to check it against.
+    #[test]
+    fn with_no_title_the_stored_class_passes_through_unclamped() {
+        assert_eq!(
+            resolve_race_page_class(None, "vector").as_deref(),
+            Some("vector")
+        );
     }
 }

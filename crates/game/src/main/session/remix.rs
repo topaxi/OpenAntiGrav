@@ -207,16 +207,23 @@ impl Session {
     /// offers the titles this machine can open rather than the four this
     /// project knows about.
     ///
-    /// # Vector is authored and still not offered
+    /// # Vector is authored, raceable, and offered here
     ///
     /// Wipeout Pure authors a fifth rung, `VECTOR`, in every one of its race
-    /// teams' `handlingstats.xml` files - so with a Pure image present the
-    /// *union* genuinely contains five names. It is filtered back out by
-    /// `oag_title::SpeedClasses::is_selectable`, because
-    /// `oag_physics::SpeedClass` has no variant that can name it and an option
-    /// that raced on some other class's tuning would be exactly the invented
-    /// stand-in this project forbids. See that constant for what closing the
-    /// gap needs.
+    /// teams' `handlingstats.xml` files, and this build can put a ship on it -
+    /// a race carries the rung as the name the disc spells and resolves it
+    /// against the file that authored it, so `oag_physics::SpeedClass` never
+    /// had to grow a fifth variant. `is_selectable` says `true` for it and
+    /// filters nothing here: with a Pure image present the *union* genuinely
+    /// contains five names and this row offers all five.
+    ///
+    /// **This row is not where `VECTOR` is confined to remix - it is the
+    /// remix row.** `oag_title::SpeedClasses::is_offered_outside_remix` is a
+    /// *different*, narrower filter the ordinary RACE page's own row applies
+    /// instead (`super::menus::speed_class_choices`), so a Pure-only boot's
+    /// RACE page still offers four while this one offers five. See
+    /// `docs/architecture/menus.md`'s "SPEED CLASS: `VECTOR` is confined to
+    /// RACE REMIX" section for why the two pages disagree.
     pub(super) fn remix_speed_classes(&self) -> Vec<menu::Choice> {
         let ladders = self
             .titles

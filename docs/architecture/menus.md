@@ -156,7 +156,8 @@ post-race reward reveal rather than a gate. Confidence 94.
 **This is also a divergence from what the disc does, and it is a decision
 rather than a gap.** Wipeout Pure's own front end authors **five**
 `<Menu name="Class">` entries - `VECTOR`, `VENOM`, `FLASH`, `RAPIER`,
-`PHANTOM` - and this build's engine can name and race every one of them: see
+`PHANTOM` - confidence 94, and this build's engine can name and race every one
+of them: see
 [handling-stats.md](../formats/handling-stats.md#pures-fifth-rung-is-raceable-and-speedclass-still-has-four-variants)
 for how `Stats::class_named`, `Global::class_named` and
 `oag_gameplay::pickup::table_for` resolve a rung by the name the disc spells,
@@ -179,6 +180,21 @@ reasoning - the same kind of call as the unlocks section above, made by the
 person who gets to make it, and it is recorded here for the same reason: so
 the four-rung RACE page reads as this decision to the next contributor and
 not as an unimplemented feature or a bug to "fix" back to five.
+
+**The row shrinking is not enough by itself, because `race.class` is one
+setting shared with RACE REMIX.** `Session::launch_remix` reads the exact same
+`race.class` string RACE's own `LaunchRace` handler does, and RACE REMIX's own
+row still offers `VECTOR` when Pure is mounted - so settling it to `"vector"`
+there and then opening the ordinary RACE page leaves a stored value the RACE
+page's own row no longer lists. `Menu::supply` only ever moves the widget's
+*display* index, never the stored setting, so without a further check the row
+would show `"venom"` while the race launched on `"vector"` underneath it - a
+menu saying one thing and a race doing another, which is exactly the silent
+mismatch this project's menus forbid. `resolve_race_page_class`
+(`crates/game/src/main/session/menus.rs`) closes that: the ordinary RACE
+page's launch clamps a stored class the row does not offer to the row's own
+first entry, the same fallback CIRCUIT and TEAM already use for a stored value
+their own source does not have.
 
 ## The format
 
