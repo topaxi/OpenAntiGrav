@@ -27,6 +27,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Audio levels](audio-levels.md) | The group/master volume chain to the DAC, and the finding that the original reserves no headroom |
 | [Billboards](billboards.md) | `TrackStartup.xml`'s element walker and the two billboard constructors, live-traced through a PPSSPP watchpoint - the transform they write is a hardcoded identity matrix, not a computed placement |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
+| [The `00000030` halt](bad-memory-access-halt.md) | Why setting the LeachBeam fire bit by hand kills PPSSPP, localized to one `lv.q` and one null pointer |
 
 ## Renames
 

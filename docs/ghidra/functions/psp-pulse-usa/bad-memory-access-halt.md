@@ -1,19 +1,20 @@
-# The reproducible in-race PPSSPP halt is a game-side null world matrix
+# The reproducible in-race PPSSPP halt is the LeachBeam fire bit
 
-`E[MEMMAP] Bad memory access detected! 00000030 (0x7f8300000030) Stopping
-emulation.` has killed at least three PPSSPP sessions on `pulse-psp-usa`,
-always a few minutes into a race, always at the identical JIT block
-`08872f98_z_un_08872f54` on the identical host instruction
-`movaps xmm6,[rbx+rbp]`. Two separate pages recorded it as an unexplained
-hazard - [`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)
-blamed a stale watchpoint, and
-[`psp-pulse-eu/lighting.md`](../psp-pulse-eu/lighting.md)'s ninth pass left it
-"not established" and suspected the Missile/LeachBeam bit write that preceded
-it.
+`E[MEMMAP] Bad memory access detected! 00000030 Stopping emulation.` has killed
+at least four PPSSPP sessions on `pulse-psp-usa`, always in a race, always at
+the identical JIT block `08872f98_z_un_08872f54` on a `movaps` load. Two pages
+recorded it as an unexplained hazard -
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md) blamed a
+stale watchpoint, and [`psp-pulse-eu/lighting.md`](../psp-pulse-eu/lighting.md)'s
+ninth pass left it "not established", suspecting the Missile *or* LeachBeam bit
+write that preceded it.
 
-**It is neither.** It is the emulated game dereferencing a null pointer, inside
-one 52-instruction function, and the faulting instruction is one of exactly two
-candidates.
+**It is neither a watchpoint nor the Missile.** Setting the **LeachBeam** fire
+bit (`0x8000`) by hand puts a weapon instance in a pool with its matrix pointer
+`+0xa0` still null, and the next update tick loads a quad from `null + 0x30`.
+Reproduced deliberately, with the null pointer read at a breakpoint one
+instruction before the fault, alongside a Missile run and a rocket run in the
+same session that both fired cleanly and did not halt.
 
 ## The function: a floored distance between two world positions
 
@@ -100,11 +101,13 @@ inside `0x08872f98`-`0x0887301c`.
 guest address, the access width, the access direction, and the block range all
 agree, and no other instruction in the block can produce a load at `0x30`.
 
-**Which of the two is not determined statically.** They differ only in the
-VFPU register they target (`C400` versus `C300`), and PPSSPP's own register
-allocation decides which host XMM each becomes; `xmm6` alone does not pick one.
-Program order puts candidate A first, which is a weak argument for it, not a
-proof.
+**Statically the two cannot be told apart.** They differ only in the VFPU
+register they target (`C400` versus `C300`), and PPSSPP's own register
+allocation decides which host XMM each becomes; `xmm6` alone does not pick one -
+and the host operand differs run to run (`[rbx+rbp]` in the earlier sessions,
+`[rbx+r8]` in this one), so it is not a stable discriminator either. Program
+order puts candidate A first, which is a weak argument for it, not a proof.
+**Live measurement settles it as candidate A** - see below.
 
 - **Candidate A** (`param_1->0xa0 == 0`): a second matrix pointer the caller
   supplies, never resolved through `func_0x00140544` at all.
@@ -179,6 +182,84 @@ Trial is not a valid negative control for "does the game crash on its own", only
 for "does the emulator crash on its own". Any attempt to reproduce or rule out
 the halt has to put a weapon instance in the pool first.
 
+## Settled live: it is the LeachBeam fire bit, and the null is `instance->0xa0`
+
+**Measured 2026-09-05, PPSSPP v1.20.4, `pulse-psp-usa.chd`, Time Trial on
+Talon's Junction, one debugger connection throughout.**
+
+The instrument is a single execution breakpoint at `0x08872f98` - the `beql`
+join point, reached on both paths, where `addiu a0,a0,0x30` has *not* executed
+yet so `a0` is still the raw `node->0x30`. Because only the most recently added
+execution breakpoint fires on v1.20.4, the fire bit is written at a
+`Weapons_DispatchFire` breakpoint which is then **removed** before the join
+point is armed - sequenced, never interleaved.
+
+| Bit written on craft 0 | Bit consumed | Hits at `0x08872f98` | Halt |
+| --- | --- | ---: | --- |
+| `0x0080` rocket (positive control) | yes | **0** | no |
+| `0x0040` **Missile** | yes | **0** | **no** |
+| `0x8000` **LeachBeam** | yes | **1** | **yes, immediately** |
+
+The single LeachBeam hit, one instruction before the fault:
+
+```text
+hit 0  ra=0x08866c88  s0=0x09b74750  s1=0x09a031b0
+       a0 (node->0x30) = 0x09835820     <- valid
+       s0->0xa0        = 0x00000000     <- NULL
+       s1->0x2c        = 0x0105e006     <- dirty bit 0x1000 clear
+```
+
+and the emulator log, immediately after:
+
+```text
+E[MEMMAP]: Core/MemFault.cpp:330 Bad memory access detected! 00000030
+(0x7f3d00000030) Stopping emulation. Info:
+08872f98_z_un_08872f54
+movaps xmm6, [rbx+r8]
+```
+
+That settles every open question this page opened with:
+
+- **Candidate A, not B.** `node->0x30` was a perfectly valid `0x09835820`; the
+  null is `instance->0xa0`, the weapon instance's own matrix pointer. The
+  faulting instruction is therefore `0x08872fa4`, `lv.q C400,0x0(a1)`.
+  **Confidence 95** - the pointer was read null at a breakpoint one instruction
+  ahead of a fault whose reported guest address, width and direction all match
+  that load, and the alternative was measured non-null in the same hit.
+- **`s1->0x2c & 0x1000` is clear and `node->0x30` is valid**, so
+  `func_0x00140544` was correctly skipped. The transform-resolver path is not
+  implicated at all.
+- **`ra = 0x08866c88`** is the instruction after the delay slot of the `jal` at
+  `0x08866c80`, confirming live what the byte scan found statically: the caller
+  is `FUN_08866b08` and there is no other.
+- **The halt is caused by the LeachBeam fire bit specifically.** Reproduced
+  deliberately on the first attempt, against a freshly booted emulator, with a
+  rocket positive control in the same session that fired cleanly and produced no
+  hits at all.
+- **The Missile is not implicated.** Bit `0x40` was written, consumed, and
+  produced **zero** hits at the join point and no halt. Pairing Missile with
+  LeachBeam under one crash - which is how
+  [`psp-pulse-eu/lighting.md`](../psp-pulse-eu/lighting.md)'s ninth pass and
+  `scripts/psp-fire-weapon.py`'s docstring both recorded it - is **wrong**.
+- **"The bit was never observed consumed" does not reproduce.** All three bits,
+  Missile included, read back set at the dispatcher breakpoint and read back
+  clear afterwards.
+
+### Why the raw bit write produces a null
+
+`instance->0xa0` is the matrix the beam measures *from*. Setting `craft+0x1b8`
+by hand is equivalent to the player pressing fire, but **only for the dispatch**
+- it does not run whatever the pickup-grant path does. The LeachBeam's instance
+lands in `FUN_08866b08`'s pool with `+0xa0` never filled in, and the very next
+update tick measures from it.
+
+**This is a defect of the test technique, not of the game**, and it is the one
+weapon of the four tried where the technique is not sound. Firing a LeachBeam
+this way will halt the emulator, every time, within a frame. **Confidence 85**
+on the mechanism (one live observation plus three prior sessions' identical
+signature); **confidence 60** on "the grant path is what fills `+0xa0`" - that
+path is still unread, per [`../../../gameplay/pickups.md`](../../../gameplay/pickups.md).
+
 ## What this corrects
 
 - **`ppsspp-debugger.md`'s "a stale or invalid watchpoint address ... can stop
@@ -217,12 +298,13 @@ class. Below the 50 floor, no rename, per
 
 ## Open
 
-- **Which of the two `lv.q`s faults**, and therefore which pointer is null. One
-  execution breakpoint at `0x08872f98` reading `a0` (already the raw
-  `s1->0x30`) and `s0->0xa0` settles it in one hit.
 - **Which class owns `FUN_08866b08`.** Its `Vex_RegisterClass` id is not
   recovered, so whether the pool is the LeachBeam's, the Missile's lock, or a
   shared weapon-instance pool is open. That id is what would take these names
   above the rename floor.
-- **Whether the halt reproduces with no debugger instrumentation at all.** If
-  it does, every "my test crashed the emulator" reading of it is wrong.
+- **What fills `instance->0xa0` on a legitimately granted LeachBeam.** That is
+  the pickup-grant path, still unread. Knowing it would turn
+  `scripts/psp-fire-weapon.py`'s raw-bit technique into a sound one for this
+  weapon instead of an emulator-killer.
+- **Whether a legitimately fired LeachBeam ever hits this path with a null.** If
+  it cannot, the game has no bug here and only the test does.
