@@ -8,7 +8,7 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{audio, boot, capture, loading, prefetch, race, settings};
+use oag_game::{audio, boot, capture, loading, prefetch, race, settings, strings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
 
@@ -19,7 +19,7 @@ use crate::args::{
     button_mask, give_weapon, parse_progress, parse_size, parse_step, resolve_scheme,
 };
 use crate::cli::Cli;
-use crate::hints::{ESC_QUITS, RACE_KEYS};
+use crate::hints;
 
 /// Every leg that never opens a window: `--dry-run` and the three captures.
 ///
@@ -454,7 +454,12 @@ pub(crate) fn run_race(
         return audio.finish();
     }
 
-    println!("\n{RACE_KEYS}{ESC_QUITS}");
+    let hint_strings = strings::project_table(settings.language.as_deref());
+    println!(
+        "\n{}{}",
+        hints::race_keys(&hint_strings),
+        hints::esc_quits(&hint_strings)
+    );
 
     let give = give_weapon(cli.give.as_deref())?;
 

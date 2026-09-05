@@ -9,7 +9,8 @@ use oag_core::{TickClock, TickRate};
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, boot, display, launcher, loading, perf, prefetch, race, settings, source, upscale,
+    audio, boot, display, launcher, loading, perf, prefetch, race, settings, source, strings,
+    upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -22,7 +23,7 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::WindowId;
 
 use crate::gpu::Gpu;
-use crate::hints::RACE_TITLE;
+use crate::hints;
 use crate::prepare;
 use crate::session::{Session, Shell};
 use crate::stage::Stage;
@@ -135,6 +136,7 @@ impl App {
             event_loop,
             &self.settings.display,
             &self.settings.graphics.renderer,
+            self.settings.language.as_deref(),
         )?;
 
         // Built before the stage, because a race's depth attachment has to match
@@ -191,7 +193,10 @@ impl App {
             // `Stage::launcher` - since there is no disc to take a font from.
             Stage::launcher(&gpu, launcher)?
         } else if let Some(loaded) = self.race.take() {
-            gpu.window.set_title(RACE_TITLE);
+            gpu.window
+                .set_title(&hints::race_title(&strings::project_table(
+                    self.settings.language.as_deref(),
+                )));
             // Straight away on this leg only: `--race` has no boot sequence, so
             // there is no intro for the music to wait behind. The front end's
             // legs below start it from the tick loop instead, the moment the

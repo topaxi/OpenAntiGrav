@@ -25,7 +25,7 @@ use oag_physics::SpeedClass;
 
 use crate::args::{resolve_difficulty, resolve_scheme};
 use crate::cli::Cli;
-use crate::hints::MENU_KEYS;
+use crate::hints;
 use crate::session::Shell;
 
 /// What the command line settled that does not depend on a disc.
@@ -271,7 +271,7 @@ impl Pending {
             frame: boot_shell.frame.clone(),
         };
 
-        println!("\n{MENU_KEYS}");
+        println!("\n{}", hints::menu_keys(&boot_shell.strings));
 
         // Unconditional, where it used to be `--prefetch` only. Its two extra
         // archive reads used to buy nothing on a boot that went straight to the

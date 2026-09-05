@@ -6,9 +6,9 @@ use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
-use oag_game::{audio, boot, loading, movie, prefetch, race};
+use oag_game::{audio, boot, loading, movie, prefetch, race, strings};
 
-use crate::hints::RACE_TITLE;
+use crate::hints;
 use crate::loading_stage::RaceBuildError;
 use crate::stage::Stage;
 
@@ -626,7 +626,11 @@ impl Session {
             ),
         }
         info!("race music started in {:?}", music_start.elapsed());
-        self.gpu.window.set_title(RACE_TITLE);
+        self.gpu
+            .window
+            .set_title(&hints::race_title(&strings::project_table(
+                self.settings.language.as_deref(),
+            )));
         Ok(())
     }
 }
