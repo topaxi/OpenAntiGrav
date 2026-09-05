@@ -492,17 +492,61 @@ ten of eleven ship directories, the eleventh being `Zone_01`, which authors no
 class**; it says the two titles differ, which is what makes the per-team file
 the thing to check rather than the global one.
 
+### Pure's fifth rung is raceable, and `SpeedClass` still has four variants
+
+Confirmed 2026-09-05 on both Pure pressings: `VECTOR` is authored in every
+place a race reads a rung from, so nothing about it is a stand-in.
+
+| Input | File | Pure | Pulse |
+| --- | --- | --- | --- |
+| `<Class>` tunables | `Data\Ships\<Team>\handlingstats.xml` | yes | **no** |
+| `<GlobalClass>` | `Data\XML\HandlingStats.xml` | yes | yes |
+| `<Pickupodds>` | `Data\XML\weaponstats.xml` | `class="Vector"` | **no** |
+
+**The enum was deliberately not widened.** `oag_physics::SpeedClass`'s
+discriminants index fixed four-wide tables - per-class weapon speeds and the
+global speed-pad/gravity/weapon-pad arrays - so a fifth variant would have
+forced a five-wide table on Pulse and HD, which author four, and given them a
+fabricated fifth entry. That is the invented stand-in `CLAUDE.md` forbids, and
+it would also have inverted `Stats::has_pulse_class_ladder`, whose whole meaning
+is `classes.len() == SpeedClass::ALL.len()`.
+
+Instead a race carries the rung as **the name the disc spells** and resolves it
+against the file that authored it: `Stats::class_named`, `Global::class_named`
+and `oag_gameplay::pickup::table_for`. A title asked for four gets four and
+grows nothing. Per-class *weapon speeds* need no fifth entry either - Pure
+authors a single class-independent `speed` per weapon, which `class_speeds`
+records as `class_independent` rather than inferring from four equal values.
+
+Pinned by `crates/game/tests/pure_race_ground_truth.rs`:
+`vector_loads_pures_own_tuning_and_not_venoms` asserts the resolved `Handling`
+**differs** from `VENOM`'s, which can only hold if the `VECTOR` block was
+reached; `a_pulse_source_has_no_fifth_rung_and_says_so` asserts a Pulse source
+asked for it fails, naming the ladder the file does carry.
+
 **The original does not recognise it either.** `Xml_ReadGlobalSettings` matches
 `name` against a four-entry table and, on no match, simply leaves
 `g_handling_parse_class` holding whatever the previous match left there - it is a
 global and nothing resets it per element. So `VECTOR`'s numbers are written into
 some other class's slot and then overwritten by the four blocks that follow,
-because `VECTOR` comes first. `oag_formats::handling::global_classes` skips
-unrecognised names, which reproduces the outcome without reproducing the
-accident. Confidence **88**.
+because `VECTOR` comes first. Confidence **88**.
 
 **This holds only while `VECTOR` is authored first.** Authored last it would
 corrupt `PHANTOM` in the original and not here.
+
+`oag_formats::handling::global_classes` used to *skip* unrecognised names, which
+reproduced that outcome without reproducing the accident. **Since 2026-09-05 it
+keeps them**, in `Global::extra`, and the four arrays are unchanged - so Pulse's
+four rungs still read exactly what they always did. The block is kept because
+Pure's engine offers the rung and needs its numbers: a `VECTOR` race with the
+block discarded would have no authored speed pads, gravity scale or weapon-pad
+cooldown, and the only remaining option would be to borrow another rung's.
+
+The decision the skip used to encode - *which rungs a title offers* - now lives
+one layer up, in `oag_title::SpeedClasses`, where it is measured per title off
+the **per-team** files. Pulse's global `VECTOR` block is therefore parsed and
+never read, which is a title fact with evidence behind it rather than a parser
+accident preserved by hand.
 
 **Two more independent subsystems carry the same shape, and neither is
 authored either.** [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-class-index-and-the-dead-vector-branch)

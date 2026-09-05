@@ -26,7 +26,7 @@ hardcodes.
 
 ## Open
 
-### 1. SPEED CLASS is hardcoded and is wrong for Pure
+### 1. SPEED CLASS is hardcoded and is wrong for Pure - **DONE**
 
 Both `assets/ui/menu.toml` pages carry a literal
 `values = ["venom", "flash", "rapier", "phantom"]`. **Pure authors five
@@ -50,17 +50,40 @@ rungs with `VECTOR` first, and only Pure backs one with per-team tuning.
 Pulse 4, HD 4, Pure 5, 2048 `None` (unread, not empty). Both `menu.toml` rows
 are now `values_from`.
 
-**And the fifth rung is authored, measured, and still not offered.** Pure's
-`VECTOR` has real tuning in every one of its race teams' files - so the union
-genuinely carries five names when a Pure image is present - but nothing
-downstream can *name* it: `oag_physics::SpeedClass` has four variants, whose
-discriminants index fixed four-wide arrays for per-class weapon speeds and the
-global speed-pad/gravity/weapon-pad tables, and whose `ALL` means "the rungs
-every title has". `SpeedClasses::is_selectable` filters it out rather than let
-a menu offer a class that would silently race on another class's tuning.
-Making it selectable is a real change to two determinism-bound crates and is
-its own piece of work - **not** the same question as
-`handover/is-there-a-fifth-handling-class.md`, which is about *Pulse*.
+**And the fifth rung is now offered too - DONE, 2026-09-05.** The paragraph
+that stood here said `VECTOR` was authored, measured and unofferable because
+`oag_physics::SpeedClass` has four variants whose discriminants index fixed
+four-wide arrays. That was the right diagnosis and the wrong fix to reach for:
+widening the enum would have forced a five-wide table on Pulse and HD, which
+author four, and handed them a fabricated fifth entry.
+
+So the enum was **not** widened - it still has exactly four variants, and a
+test asserts it. A race carries the rung as the name the disc spells and
+resolves it against the file that authored it (`Stats::class_named`,
+`Global::class_named`, `pickup::table_for`). A title asked for four gets four
+and grows nothing. `SpeedClasses::is_selectable` no longer filters anything,
+which is the whole of "offer it only if Pure's data is available": the union is
+built from the ladders of the titles actually mounted, and only Pure's names
+the rung.
+
+Pinned on real discs by `crates/game/tests/pure_race_ground_truth.rs` - the
+Pure arm asserts `VECTOR`'s resolved `Handling` *differs* from `VENOM`'s, since
+"five rows are offered" would not have caught a row quietly loading Venom's
+numbers.
+
+**One consequence wider than the original ask, stated rather than left to be
+found:** a Pure-only boot now also offers five on the ordinary RACE page, not
+only in remix. That is correct - Pure's own front end authors five
+`<Menu name="Class">` entries - but it was not what was asked for.
+
+Still **not** the same question as
+`handover/is-there-a-fifth-handling-class.md`, which is about *Pulse*. Pure
+authoring five says nothing about Pulse, and that thread's own next step - the
+`Stats`/`AIStats` debug-menu sweep - is untouched. One data point for it: every
+measured disc, Pulse's two pressings included, authors a
+`<GlobalClass name="VECTOR">`, and `oag_formats` now *keeps* it rather than
+discarding it. Pulse's is parsed and read by nothing, because no Pulse team
+authors the matching `<Class>`.
 
 ### 2. AI DIFFICULTY differs in cardinality and in existence
 
@@ -143,19 +166,17 @@ the ordinary `race` page, which are the hardcoded ones.
 
 ## Next Steps
 
-1. Decide the one open question of principle first, because everything else
-   follows from it: **does our race box gate on unlocks at all?** There is no
-   profile in this build, so the honest default is "no, offer everything", and
-   writing that down in `docs/architecture/menus.md` as a deliberate divergence
-   costs ten minutes and unblocks the rest.
-2. Move SPEED CLASS off its literal list onto a title axis, following
-   `oag_title::MenuStrip`'s shape (`crates/title/src/menu.rs`) - a field on the
-   title package, filled from each title's own measured data, with the
-   authored/measured distinction its doc comment already makes. Pure's fifth
-   class is the second corpus that licenses the axis.
-3. Same for AI difficulty's *count*, keeping our four names.
+1. ~~Decide whether our race box gates on unlocks at all.~~ **DONE,
+   2026-09-05.** It does not, and `docs/architecture/menus.md`'s `## Unlocks`
+   section says so as a deliberate divergence. See item 5 above.
+2. ~~Move SPEED CLASS off its literal list onto a title axis.~~ **DONE,
+   2026-09-05.** `oag_title::SpeedClasses` is the axis and both `menu.toml`
+   rows are `values_from`. Pure's fifth rung is also selectable and races on
+   its own authored tuning - see item 1 above, which carries the reasoning for
+   why `oag_physics::SpeedClass` stayed at four variants.
+3. Same for AI difficulty's *count*, keeping our four names. **Still open.**
 4. Add the WEAPONS row - three titles author it, it is one `toggle` entry, and
-   `oag_race` would need to carry it.
+   `oag_race` would need to carry it. **Still open.**
 5. Leave previews to
    `handover/the-race-setup-previews-are-meshes-and-nothing.md`; they are
    independent of all of the above.

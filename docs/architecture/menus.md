@@ -73,7 +73,7 @@ the release rather than of this project:
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
-| SPEED CLASS | `values_from = "speed_classes"` - the ladder the booted title's own per-team `handlingstats.xml` authors, off `oag_title::SpeedClasses`. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for |
+| SPEED CLASS | `values_from = "speed_classes"` - the ladder the booted title's own per-team `handlingstats.xml` authors, off `oag_title::SpeedClasses`. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |

@@ -29,6 +29,19 @@ message keys) are untouched, and no live runtime check has been attempted on
 any title. Recorded here so the next person does not re-derive it, and so that
 "Pure has five" is not mistaken for an answer about Pulse.
 
+**One decoder change worth knowing about, also not an answer (2026-09-05).**
+Making Pure's rung raceable meant `oag_formats::handling::global_classes` had
+to stop *discarding* an unrecognised `<GlobalClass>`; it now keeps it in
+`Global::extra`. So **Pulse's own `VECTOR` global block is parsed and retained
+in this build** where it used to be dropped on the floor. That is a change to
+our decoder and says nothing about the original: `Xml_ReadGlobalSettings`
+still matches four names and still discards the fifth by the accident
+documented in `docs/formats/handling-stats.md`, and nothing reads Pulse's
+retained block, because no Pulse team authors the matching `<Class>`. Noted
+only so that a reader who goes looking for the old skip - it was cited here as
+evidence - finds where it went rather than concluding the finding was
+withdrawn.
+
 ## Open
 
 - Whether a fifth handling class is ever *live* at runtime is still unanswered by any of this - every finding so far is "the shipped data doesn't contain one" and "the code that would recognise one discards the match", never a traced execution that reaches the discard path or a screen that shows a fifth option.
