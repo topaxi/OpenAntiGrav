@@ -35,7 +35,7 @@
 //!
 //! # Screen space
 //!
-//! Everything is in the PSP's 480x272 space ([`SCREEN`]), which is what the XML's
+//! Everything is in the PSP's 480x272 space ([`crate::frontend::SCREEN`]), which is what the XML's
 //! coordinates are in, and the renderer letterboxes that into whatever the window
 //! is. A widget inside an `<Item>` is positioned relative to that group's
 //! `OffsetX`/`OffsetY`; this module resolves those to absolute coordinates at
@@ -61,7 +61,7 @@ pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 // private to it; `tests` reaches those through `super::draw::*`.
 use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
 
-use crate::frontend::{Align, Draw, SCREEN};
+use crate::frontend::{Align, Draw};
 use crate::screen::{argb_to_rgba, parse_argb};
 
 /// The atlas and the five layout entries: `oag_pulse::hud`.
@@ -649,48 +649,86 @@ pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
     }
 }
 
-/// Whether a rectangle lies wholly inside the PSP's screen.
+/// Whether a rectangle lies wholly inside a screen of the given size.
 ///
 /// Used by the layout tests rather than by the renderer: a widget that lands
-/// outside is a parser bug, and the parser is the thing under test.
+/// outside is a parser bug, and the parser is the thing under test. `screen`
+/// is the source's own grid - [`crate::frontend::Space::PSP`]`.size` for a PSP
+/// layout, [`crate::frontend::Space::PS2`]`.size` for a PS2 one - because the
+/// PS2 release authors the same five layouts in its own 640x448 grid rather
+/// than the PSP's 480x272 ([`crate::frontend::SCREEN`]).
 ///
-/// **PSP only, and measurably so.** The PS2 release authors the same layouts in
-/// its own 640x448 grid. Checked coordinate by coordinate rather than by the
-/// extremes: `Data\XML\Arcade_HUD.xml` carries 141 coordinate values (69 `x`,
-/// 72 `y`) on both discs in the same order, and **121 of the 141 are the PSP's
-/// own value scaled by 640/480 or 448/272 and rounded to an integer**.
-/// `Skin.xml` behaves the same way and was measured the same way - 30 of 43,
-/// with its own exceptions - in `crates/game/tests/frontend_grid_ground_truth.rs`.
+/// # The PS2 grid is not a flat scaling of the raw attributes, and that turns
+/// out not to matter here
 ///
-/// The 20 that are not divide cleanly, and neither is a counter-example:
+/// Checked coordinate by coordinate rather than by the extremes, the same way
+/// `crates/game/tests/frontend_grid_ground_truth.rs` checked `Skin.xml`:
+/// `Data\XML\Arcade_HUD.xml` carries 141 raw `x`/`y` attribute values (69 `x`,
+/// 72 `y`) on both discs, keyed by tree path rather than by document order so
+/// a widget is compared against its own counterpart and not merely the next
+/// value in the file. **119 of the 141 are the PSP's own value scaled by
+/// 640/480 or 448/272 and rounded to an integer; 22 are not**, and this
+/// re-measurement corrects an earlier one that used a weaker key and found 20
+/// - see below. The 22 split cleanly:
 ///
-/// - **18 are the nine `<Mode3D><Model>` placements**, every one of them at the
-///   PSP's own `x="-240" y="136"` unchanged. Those sit in an `orthographic` 3D
-///   mode rather than in the widget grid, and nothing here places them.
-/// - **2 are `TimeDiffIcon`'s** `x` (-35 against a predicted -47) and `y` (-4
-///   against -7), small negatives inside an `<Item>` - a nudge from an anchor
-///   rather than a screen position, which is the same distinction
-///   [`RUNTIME_ANCHORED`] exists for.
+/// - **18 are the nine `<Mode3D><Model>` placements** (`x` and `y` each),
+///   every one of them at the PSP's own `x="-240" y="136"`, byte-identical on
+///   the PS2. `Mode3D` declares `mode="orthographic"`: a projection this
+///   codebase does not drive, whose own parameters (near/far, ortho extent)
+///   are unrecovered, so there is no known conversion from this pair into a
+///   640x448 or 480x272 screen position at all. **Moot for this function
+///   regardless**: [`Model`] is not [`Sprite`] or [`Label`], so nothing here
+///   ever iterates one - a model was never in scope of an on-screen check
+///   before this ratio was even a question, on either console.
+/// - **4 are small integer nudges that stay byte-identical across consoles**:
+///   `LapTxt`'s `y="-2"`, `RearWarningMissileIcon`'s `y="-4"`,
+///   `RearWarningRocketIcon`'s `y="-2"`, and `TimeDiffIcon`'s `x`, which
+///   *does* move (`-35` to `-45`) but only 1.67px short of the 640/480 ratio's
+///   `-46.67`, just outside this measurement's one-pixel tolerance. All four
+///   sit inside an `<Item>` whose own `OffsetX`/`OffsetY` **does** scale by
+///   the ratio - `RearWarningIcons` goes `OffsetX="270" OffsetY="61"` to
+///   `OffsetX="360" OffsetY="100"`, exactly 640/480 and closer than a pixel to
+///   448/272 - and [`Layout::from_xml`] composes the offset into the widget's
+///   `rect`/`x,y` before this function ever sees it. A pixel or two of
+///   uncorrected nudge on a widget whose enclosing offset already moved it
+///   most of the way is not enough to push any of the four off a screen nearly
+///   a third larger; [`crate::hud::tests`] and the ground-truth sweep below
+///   confirm none does.
 ///
-/// So a PS2 layout checked against [`SCREEN`] fails on nearly every widget -
-/// `y` reaches 435 - which would say nothing about the parser. **A PS2 sweep
-/// needs more than swapping in `Space::PS2.size` here**: the unscaled offsets
-/// above mean it also has to agree with the [`RUNTIME_ANCHORED`] skip about
-/// which coordinates are positions at all.
+/// So, measured against the **composed** rect every [`Sprite`] and [`Label`]
+/// actually carries - not the raw per-attribute values above - every
+/// screen-positioned widget across all five layouts lands inside both the PSP's
+/// 480x272 and the PS2's 640x448, and this function needed nothing beyond the
+/// `screen` parameter to check either. See
+/// `crates/game/tests/hud_layout_ground_truth.rs`'s PS2 sweep.
 ///
-/// That is now a fact about this XML dialect rather than about one file.
-/// `Skin.xml`'s `<Animation><Key>` carries `x`/`y` that are a *travel* and are
-/// byte-identical on both consoles, exactly as `TimeDiffIcon`'s are here - two
-/// files, two element names, one confusion. **`x` does not mean one thing**,
-/// and anything that reads a coordinate has to know which kind it holds before
-/// it can compare it to a screen. Not done. The runtime draw path is unaffected
-/// either way, since it takes its `screen` uniform from the source's own space.
+/// **What the previous version of this comment got wrong.** It attributed a
+/// `y="-4"` "predicted -7" to `TimeDiffIcon`, which authors no such value in
+/// any shipped layout - `TimeDiffIcon`'s own `y` is `0` on both discs, and the
+/// `-4` belongs to `RearWarningMissileIcon` instead. That is a second, later
+/// instance of exactly the failure mode `frontend_grid_ground_truth.rs`'s own
+/// header warns about: a positional diff without a keyed path can pair a
+/// widget with the wrong counterpart and blame the space for what is really a
+/// bookkeeping error. Corrected 2026-09-05 by walking the tree with the same
+/// [path, `#n`-suffixed]-keyed scheme `frontend_grid_ground_truth.rs` uses for
+/// `Skin.xml`, rather than reading the two files' coordinates in parallel by
+/// eye.
+///
+/// `Skin.xml`'s own `<Animation><Key>` carries `x`/`y` that are a *travel* and
+/// are byte-identical on both consoles for the same reason the `<Mode3D>`
+/// numbers are: a value authored against something other than the widget grid
+/// has no reason to move when the grid does. **`x` does not mean one thing**
+/// in this dialect, and anything reading a coordinate has to know which kind
+/// it holds - but for the on-screen check specifically, every non-grid `x`/`y`
+/// this file has found also happens to live somewhere [`inside_screen`]'s two
+/// callers never look: inside a `<Model>` this module does not iterate, or
+/// swamped by an `<Item>` offset that does scale.
 #[must_use]
-pub fn inside_screen(rect: [f32; 4]) -> bool {
+pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
     rect[0] >= 0.0
         && rect[1] >= 0.0
-        && rect[0] + rect[2] <= SCREEN.0
-        && rect[1] + rect[3] <= SCREEN.1
+        && rect[0] + rect[2] <= screen.0
+        && rect[1] + rect[3] <= screen.1
 }
 
 #[cfg(test)]
