@@ -31,18 +31,30 @@
 //!   of the eye, which is what an earlier pass of the thread this module
 //!   implements had assumed while the apply side was still unread.
 //!
-//! # What is not confirmed, and is this module's own choice
+//! # What is confirmed and not yet reproduced: the rotation axis
 //!
-//! **Which axis the rotation happens around.** Ghidra drops the carrying
-//! argument from the decompiled C signature at every call level the original's
-//! rotation-matrix builder is reached through (`FUN_0013e280` ->
-//! `FUN_0025cbb0` -> `FUN_0025ca48`), so nothing in either binary's decompile
-//! names it. [`AXIS`] rotates about the camera's own local right - the
-//! common "impact nod" choice - and is flagged as this module's own stand-in
-//! rather than presented as a reading, per this project's own rule against
-//! inventing what the disc's data does not say. Everything else here - the
-//! envelope, the oscillator term, the per-mode combination, the magnitude and
-//! the duration - is the original's own numbers.
+//! **Settled 2026-09-05, and this module does not yet implement what was
+//! found.** The original does not rotate about a fixed axis at all: each
+//! `shake_mode` reads two of the camera's own *live* basis rows (`+0x50`
+//! then `+0x60` for `Ahead`/`Elsewhere`, `+0x50` then `+0x40` for the third,
+//! unimplemented mode) and applies two sequential rotations, one per row,
+//! composing on top of each other - confirmed independently on both
+//! binaries by disassembly/decompile alone (no p-code needed once the
+//! register origin was traced), see
+//! `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`'s "Settled
+//! 2026-09-05" section. A single fixed [`Vec3`] constant cannot reproduce
+//! this: the axes are the camera's current orientation state, not values
+//! known ahead of time, so a faithful port needs the camera's basis passed
+//! into whatever plays the shake rather than a module-level constant.
+//!
+//! [`AXIS`] and the single-rotation-about-one-axis shape of
+//! [`Shake::rotation`] below are **known simplifications, not a stand-in for
+//! an unconfirmed reading** - the axis question itself is answered; what is
+//! open is only the larger, out-of-scope change (an axis input threaded
+//! through this type's API) needed to reproduce it. Revisit both together
+//! if that change is ever made. Everything else here - the envelope, the
+//! oscillator term, the per-mode combination, the magnitude and the
+//! duration - is the original's own numbers.
 //!
 //! Also unconfirmed: whether the oscillator's phase
 //! (`progress * `[`BASE_FREQUENCY`]`)` is plain radians or goes through the
@@ -88,8 +100,10 @@ const OSCILLATOR_SCALE: f32 = 0.1;
 /// Range the phase offset is drawn from once per arm - `Rng_RangeF(0.2, 0.8)`.
 pub const PHASE_RANGE: (f32, f32) = (0.2, 0.8);
 
-/// The rotation axis - **this module's own choice, not a reading**. See the
-/// module documentation's "not confirmed" section.
+/// The rotation axis - **a known simplification, not what the original
+/// does**. The original rotates about two different *live* camera basis
+/// rows per frame, not one fixed axis; see the module documentation's
+/// "rotation axis" section.
 pub const AXIS: Vec3 = Vec3::X;
 
 /// Which side of the craft a collision arming a shake landed on -
@@ -183,14 +197,17 @@ impl Shake {
     /// This tick's rotation of the camera basis, [`Quat::IDENTITY`] once the
     /// shake has decayed away or was never armed.
     ///
-    /// Reproduces `FUN_0013e280`'s two-call combination for `shake_mode`
-    /// `1`/`3` exactly: both sides add the envelope and one oscillator term,
-    /// but [`Side::Ahead`] negates the envelope+oscillator sum before adding
-    /// the oscillator term back unsigned, so its two calls' oscillations
-    /// cancel and only the (negated) envelope survives - a sharp, mostly
-    /// non-oscillating kick for a head-on hit against a wobblier one
-    /// everywhere else. That asymmetry falls straight out of the original's
-    /// own arithmetic; it is not tuned here.
+    /// Combines `FUN_0013e280`'s two-call angle arithmetic for `shake_mode`
+    /// `1`/`3` into one angle about one [`AXIS`] - **an approximation, now
+    /// known to be one**, not the reading it once looked like. The original
+    /// calls its rotation builder twice per mode, each time about a
+    /// different live camera basis row (see the module documentation's
+    /// "rotation axis" section), so its two terms compose two rotations
+    /// about two different vectors rather than adding two angles about one.
+    /// [`Side::Ahead`]'s angle arithmetic below - negate the envelope+
+    /// oscillator sum, then add the oscillator term back unsigned - is still
+    /// the original's own numbers; only the "collapses to one axis" step is
+    /// this module's own simplification.
     #[must_use]
     pub fn rotation(&self) -> Quat {
         if self.timer <= 0.0 || self.duration <= 0.0 {
