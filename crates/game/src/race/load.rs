@@ -663,6 +663,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
                         None => String::new(),
                     },
                 ));
+                // **Slot 8 gets its own line because it is not a hoarding.**
+                // It is the start gantry - the object that shows the
+                // countdown, the final-lap board and the chequered board -
+                // and what it *does* is recovered even though where it stands
+                // is not (`docs/rendering/start-gantry.md`). Reporting it by
+                // name is the honest shape of that: an absence a reader can
+                // see and act on, rather than a plausible placement at the
+                // start line, which the model's own name makes tempting and
+                // which nothing has measured.
+                if let Some(gantry) = manifest.billboard(8).and_then(|b| b.location()) {
+                    report.push(format!(
+                        "slot 8 is the start gantry, {gantry}: its 3-2-1-GO, final-lap and \
+                         chequered states are decoded and it is not loaded, because slot 8's \
+                         transform is unrecovered like every other slot's"
+                    ));
+                }
             }
         }
     }

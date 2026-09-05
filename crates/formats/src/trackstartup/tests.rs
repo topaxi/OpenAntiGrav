@@ -117,6 +117,47 @@ fn pulse_ships_the_same_file_fexml_shortened() {
     );
 }
 
+/// `14_Track`'s own tail, verbatim: two `#`-prefixed slot-8 lines after the
+/// root's close tag.
+///
+/// Reading them made that circuit look like the one Pulse manifest whose `num`
+/// is not unique, and made [`TrackStartup::billboard`] answer a model that is
+/// not on the disc. Content outside the root is not part of the document.
+#[test]
+fn a_billboard_after_the_root_close_is_not_part_of_the_document() {
+    let shortened = concat!(
+        "<code as=\"Billboard\" bs=\"type\" cs=\"num\" ds=\"location\" ",
+        "fs=\"TrackStartup\"></code>\r\n",
+        "<f>\r\n",
+        "<a c=\"8\" b=\"landscape\" d=\"Data\\Environments\\321_Go\\321Go_StartFinish.vex\"></a>\r\n",
+        "</f>\r\n",
+        "#<a c=\"8\" b=\"landscape\" d=\"Data\\Environments\\321_Go\\Checkered_StartFinish.vex\"></a>\r\n",
+        "#<a c=\"8\" b=\"landscape\" d=\"Data\\Environments\\321_Go\\Final_Lap_StartFinish.vex\"></a>\r\n",
+    );
+    let m = TrackStartup::parse(shortened);
+    assert_eq!(m.billboards.len(), 1, "one slot 8, not three");
+    assert_eq!(
+        m.billboard(8).and_then(Billboard::location),
+        Some("/Data/Environments/321_Go/321Go_StartFinish.vex")
+    );
+}
+
+/// The same rule on HD's plain spelling, so the fix is not `fexml`-shaped.
+#[test]
+fn plain_xml_after_the_root_close_is_ignored_too() {
+    let m = TrackStartup::parse(
+        r#"<TrackStartup>
+             <Billboard num="8" type="landscape" location="real.vex"/>
+           </TrackStartup>
+           <Billboard num="8" type="landscape" location="debris.vex"/>"#,
+    );
+    assert_eq!(m.billboards.len(), 1);
+    assert_eq!(
+        m.billboard(8).and_then(Billboard::location),
+        Some("/real.vex")
+    );
+}
+
 /// A slot with no model names a colour instead, and dropping it would lose one
 /// entry in eight across the disc.
 #[test]

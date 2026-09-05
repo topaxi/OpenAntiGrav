@@ -87,13 +87,22 @@
 //! variant of `25_Track` and carries no `TrackStartup.xml` of its own, the
 //! same way a `Zone` circuit skips the other per-circuit files this module's
 //! sibling docs describe). **Slot 8 is `321Go_StartFinish.vex` on every one
-//! that authors only one billboard 8** - the same finding as HD's, and the
-//! same model name. `14_Track` authors *three* entries under `num="8"`
-//! (`Checkered_StartFinish.vex`, `Final_Lap_StartFinish.vex`, then
-//! `321Go_StartFinish.vex`) - [`TrackStartup::billboard`] returns the first,
-//! so which one the original actually shows for a checkered flag or a final
-//! lap, and whether `num` is really unique per Pulse file the way its HD
-//! comment insists, is unread.
+//! that authors one** - the same finding as HD's, and the same model name.
+//! **`num` is unique per Pulse manifest too**, on all eleven.
+//!
+//! `14_Track` looked like the exception until 2026-09-05: it was read as
+//! authoring *three* entries under `num="8"`. It authors one. The other two
+//! lines are `#`-prefixed and sit **after the `</TrackStartup>` close tag**,
+//! outside the document entirely - authoring debris this module used to walk
+//! into because it descended from `#document` rather than from the schema's
+//! own root. [`schema_root`] is that fix. Two independent checks agree they
+//! are dead: neither `Checkered_StartFinish.vex` nor
+//! `Final_Lap_StartFinish.vex` resolves in any of Pulse's three WADs, and a
+//! `strings` sweep of `Data.wad` finds no such name. They are the fossil of an
+//! earlier three-file design, folded into `321Go_StartFinish.vex`'s own
+//! timeline - which carries the countdown, the FINAL LAP board and the
+//! chequered board as three non-overlapping windows. See
+//! `docs/rendering/start-gantry.md`.
 //!
 //! **Slot 7 is not HD's `fx350.vex`.** It varies circuit to circuit - a
 //! model (nine different adverts across the eleven circuits, `16_Track`
@@ -288,12 +297,17 @@ impl TrackStartup {
     /// "still races" reasoning one level up, since a body of single-letter
     /// tags this module's schema does not recognise costs nothing beyond the
     /// billboards it cannot name.
+    ///
+    /// **Scoped to the `<TrackStartup>` element, not to the whole document**,
+    /// which is what stops `14_Track`'s two commented-out slot-8 lines from
+    /// being read - see [`schema_root`] and this module's `14_Track` section.
     #[must_use]
     pub fn parse(xml: &str) -> Self {
         let expanded = fexml::text(xml.as_bytes());
-        let root = fexml::parse(expanded.as_deref().unwrap_or(xml));
+        let document = fexml::parse(expanded.as_deref().unwrap_or(xml));
+        let root = schema_root(&document);
         let mut out = Self::default();
-        for element in descendants(&root) {
+        for element in descendants(root) {
             match element.name.to_ascii_lowercase().as_str() {
                 "loadsoundbank" => {
                     out.sound_bank = element.attr("filename").map(str::to_string);
@@ -330,6 +344,30 @@ impl TrackStartup {
     pub fn billboard(&self, num: u32) -> Option<&Billboard> {
         self.billboards.iter().find(|b| b.num == num)
     }
+}
+
+/// The `<TrackStartup>` element itself, or the whole document where the file
+/// does not name one.
+///
+/// **A manifest is not the only thing in its own file.** A Pulse manifest is
+/// two top-level elements, the `fexml` `<code>` dictionary and then the root,
+/// so a document here legitimately has more than one child - and `14_Track`
+/// has a third kind: two `#`-prefixed `<Billboard>` lines *after* the root's
+/// close tag, naming `Checkered_StartFinish.vex` and `Final_Lap_StartFinish.vex`,
+/// neither of which is anywhere on the disc. Reading them made that circuit
+/// look like it authored three slot 8s. Content outside the root is not part of
+/// the document, and the original's own walker never sees it either: it
+/// branches on the root's children (`LevelFx`, `LoadSoundBank`, `Billboard`)
+/// from inside the element it opened.
+///
+/// The fallback keeps the module's forgiving contract: a file whose dictionary
+/// somehow failed to expand has no element by this name, and reading it whole
+/// is still better than reading nothing.
+fn schema_root(document: &fexml::Node) -> &fexml::Node {
+    descendants(document)
+        .into_iter()
+        .find(|node| node.name.eq_ignore_ascii_case("TrackStartup"))
+        .unwrap_or(document)
 }
 
 /// Every element under `node`, itself included, depth-first.

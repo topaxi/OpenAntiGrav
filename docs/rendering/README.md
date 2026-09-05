@@ -32,7 +32,12 @@
   `animationTrigger` `0x3dc` is authored zero times across the 44 `.vex` files
   checked. Counts and evidence in
   [`scenery-animation.md`](scenery-animation.md); the texture mechanism is in
-  [`vex.md`](../formats/vex.md), "The texture-transform keyframe block"
+  [`vex.md`](../formats/vex.md), "The texture-transform keyframe block". The
+  clearest thing either mechanism is used for is
+  [the start gantry](start-gantry.md): its `3`, `2`, `1` and `GO` are four UV
+  cells of one mesh, and the material's own offset track walks a palette
+  staircase to light one at a time. Recovered off the disc, **not drawn** - slot
+  8's transform is still unrecovered, so the model stays unplaced
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.

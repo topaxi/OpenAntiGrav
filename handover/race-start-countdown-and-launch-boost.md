@@ -9,7 +9,7 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 | Countdown state machine + timing | open | **Zone's read statically; a Time Trial's own duration measured live** (below) | open | open |
 | Launch reaction speedboost       | open | **no false-start penalty exists, measured live** (below) | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
 | Zone display: HUD overlay        | **confirmed identical** (below) | **confirmed identical** (below) | **confirmed identical** (below) | untried |
-| Zone display: track-side gantry  | untried | see billboard thread (open)    | **matches the user's own description, rendered and confirmed** (below) | asset family exists, untried past a string search |
+| Zone display: track-side gantry  | untried | **no per-mode model exists** - Pulse ships one gantry and Zone's circuit authors no manifest (below) | **matches the user's own description, rendered and confirmed** (below) | asset family exists, untried past a string search |
 
 *(Focus as of 2026-09-02: display/logic only for now, per direction from the user -
 the launch-boost rows below are last session's record, not being chased further at
@@ -257,6 +257,24 @@ on the same transform-writer problem [a-circuits-billboard-slots-are-a-9-entry.m
 already named, unrelated to anything measured this pass - is still open and
 was deliberately not implemented from a guess. Single Race, Zone's own duration
 against this number, and every other title remain unmeasured; see the grid.
+
+2026-09-05, the Pulse gantry cell is answered, and with a negative: **Pulse has no per-mode
+countdown gantry at all.** A `strings` sweep of all three Pulse WADs and of `BOOT.BIN` turns
+up one gantry name, `321Go_StartFinish.vex` - no `321Go_Zone`, no variant of any spelling -
+and `BOOT.BIN` names no gantry model at all, so the model reaches the engine only through
+slot 8 of a circuit's manifest. Zone on Pulse runs `26_Track`, which authors no
+`TrackStartup.xml` of its own, so it has no slot 8 either. **HD's four-model shape does not
+generalise backwards**; the mode axis is real on the later titles and absent on this one.
+Confidence 85.
+
+The same pass recovered what that one model *does*, which is this thread's other half:
+its `3`, `2`, `1` and `GO` are four per-vertex UV cells of one mesh node, walked across a
+16x32 palette staircase by the material's own `TEXOFFSET` track. Full account, with the
+phase table and the 90/55 split between what the asset authors and what the engine does
+with it, in [start-gantry.md](../docs/rendering/start-gantry.md); the cross-title plan is
+[the-start-gantry-is-recovered-on-pulse-three.md](the-start-gantry-is-recovered-on-pulse-three.md).
+**The asset's `GO` lands ~1.5 s / 90 ticks before the 272-tick gate this thread measured**,
+and nothing measures the gap - so nothing was wired to `COUNTDOWN_TICKS`.
 
 ## Open
 

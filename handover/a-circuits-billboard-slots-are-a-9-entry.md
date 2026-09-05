@@ -28,6 +28,39 @@ A second, unrelated trap surfaced walking the call chain: several call targets i
 
 **A third, later on the same day: the project owner confirmed from actually playing Zone, matching the asset content exactly.** "It's the text on the gantry/billboard, or lack thereof, in a zone race, it draws a small rectangular track, instead of the 3 2 1 GO." `oag-view` rendering `321go_zone.vex` straight off the disc (`data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC`, `--mesh /data/billboards/hd_adverts/321go/321go_zone.vex`) shows exactly that: a small flat rectangular panel, one content node (`pasted__Go_HD_start_light_321go`), carrying a 2048x1024 texture (`321_go_zone.gtf`) that renders as a stylised red/green/blue track-loop icon - 3 nodes and 222 triangles against `321go_startfinish.vex`'s 19 nodes and 1,530. Full account and both renders in [billboards.md](../docs/ghidra/functions/ps3-hdfury-eu/billboards.md#the-four-321go_vex-shapes-are-confirmed-as-genuinely-different-content-by-rendering-them). **This raises the stakes on the mode-descriptor pointer above without touching it**: the asset-content question this thread's "a lead, not a finding" always hedged on is now about as settled as a render can settle it: whatever the runtime mechanism turns out to be, it is picking between four meaningfully different, now-confirmed pieces of content, not placeholder debris.
 
+2026-09-05: **two corrections and one recovery, all on slot 8.** First, the
+`14_Track` "three `num="8"` entries" above is wrong and is retracted - it authors
+one. The other two lines are `#`-prefixed and sit after the `</TrackStartup>` close
+tag; `TrackStartup::parse` was descending from `#document` and walking into content
+outside the root, and now takes the schema's own root. Both assets they name are
+absent from all three Pulse WADs, checked two ways. So `num` is unique per Pulse
+manifest on all eleven, the same as HD's own comment insists.
+
+Second, and this is the recovery: **what slot 8's model *does* is now read off the
+disc, at confidence 90** - which leaves this thread's transform question as the
+whole remaining gap rather than one of two. `321Go_StartFinish.vex` holds `3`, `2`,
+`1` and `GO` as four distinct per-vertex UV cells of one mesh node, and its 16x32
+texture is a palette **staircase** whose opaque-white pairs sit at three different
+row bands; the material's own `TEXOFFSET` track slides one shared offset upward so
+each glyph's column crosses its own pair at its own moment. All lettering on the
+gantry is geometry and every texture on it is a palette. The same asset carries the
+FINAL LAP and chequered boards as later windows on the same 60 Hz timeline, which is
+what the two retracted lines used to be separate files for. Full account, phase
+table included: [start-gantry.md](../docs/rendering/start-gantry.md); the
+cross-title plan is
+[the-start-gantry-is-recovered-on-pulse-three.md](the-start-gantry-is-recovered-on-pulse-three.md).
+
+**Scored apart at 55, on purpose**: whether the engine plays that authored track or
+writes the offset itself per countdown state. The four `+0x88`/`+0x90`/`+0x98`/`+0xa0`
+wrapper sub-objects this thread already found are a live competing candidate - four
+state groups for four states - and merging the two claims is the mistake this thread
+made once before and was corrected on.
+
+Also settled, as a negative: **Pulse has one gantry model and no per-mode chooser.**
+A `strings` sweep of all three WADs and of `BOOT.BIN` finds no `321Go_Zone` or any
+variant, `BOOT.BIN` names no gantry model at all, and `26_Track` (Zone) authors no
+manifest. HD's four-model shape does not generalise backwards. Confidence 85.
+
 ## Open
 
 - The mode-descriptor pointer replacing `Num==7`'s mesh was not traced all the way to one of the four `321Go_*.vex` race-gate shapes.
@@ -36,8 +69,8 @@ A second, unrelated trap surfaced walking the call chain: several call targets i
 - `type` is authored by every one of 118 slots but is read nowhere in this function or elsewhere.
 - **Pulse's colour-path pool** (`_DAT_002ae2b4+0x3c`, walked by `Billboard_CreateFromColour_q`) has not had its entries' own layout read - may be a second instance of the same registry-and-resolve pattern the location path now has confirmed, for colour slots specifically.
 - `Data\Plugins\PI004\Definition.xml`'s colour-pool reading is a lead, not a finding: no function has been traced choosing an entry from it, and the registry-resolve pattern below is a more promising target than this catalogue.
-- `14_Track`'s three `num="8"` billboards: which one the original actually shows, and whether `num` is really unique per Pulse manifest the way the HD comment insists, is unread.
-- **No transform writer has been found** that would move the instantiated `321Go_StartFinish` object off the world origin to a given circuit's own gantry - the identity write and the asset being shared across all 16 circuits are in direct tension with "drawn at the gantry" until something resolves it. Now the single highest-priority open item on this whole thread.
+- ~~`14_Track`'s three `num="8"` billboards~~ **Closed 2026-09-05 with a negative: it authors one.** The other two lines are `#`-prefixed and sit *after* the `</TrackStartup>` close tag, outside the document; `TrackStartup::parse` was descending from `#document` and walking into them, and now takes the schema's own root. Two independent checks agree they are dead - neither `Checkered_StartFinish.vex` nor `Final_Lap_StartFinish.vex` resolves in any of Pulse's three WADs, and a `strings` sweep of `Data.wad` finds no such name. So `num` **is** unique per Pulse manifest, on all eleven. They are the fossil of a three-file design folded into `321Go_StartFinish.vex`'s own timeline, which carries the countdown, the FINAL LAP board and the chequered board as three non-overlapping windows - see [start-gantry.md](../docs/rendering/start-gantry.md).
+- **No transform writer has been found** - still the top item, and now the *only* thing between this asset and drawing: what the model does once drawn is recovered (its `3`/`2`/`1`/`GO` are four UV cells walked across a palette staircase by the material's own offset track, [start-gantry.md](../docs/rendering/start-gantry.md), confidence 90), so placement is the whole remaining gap. The same page scores **55**, separately, on whether the engine plays that authored track or writes the offset itself per state - the four `+0x88..+0xa0` wrapper sub-objects below are the competing candidate, and four state groups for four states is why. That the model would move the instantiated `321Go_StartFinish` object off the world origin to a given circuit's own gantry - the identity write and the asset being shared across all 16 circuits are in direct tension with "drawn at the gantry" until something resolves it. Now the single highest-priority open item on this whole thread.
 - **The final texture bind is untraced.** No `Gfx_BindTexture` call for the gantry's screen position has been caught reading from the instantiated object - a halting attempt on the function itself voided its own capture window (see the trap above), so this remains strong circumstantial evidence, not proof.
 - **The material object's live fields during an actual countdown are unread** - a light-intensity/phase value tied to `start_lights` is the best guess. The four `+0x88/+0x90/+0x98/+0xa0` wrapper sub-objects' *live* content (as opposed to the stale mid-race credits-text sample) is likewise unread.
 - `0x0890cf34` (the live animation-time accumulator) has no function boundary in Ghidra at all - needs `create_function` before it can even be named; `FUN_088fe208`/`FUN_0894402c` (the transform composer and the generic vtable-dispatching component updater reading the mesh/layer object) are likewise unnamed, too generic to commit to a name yet.
