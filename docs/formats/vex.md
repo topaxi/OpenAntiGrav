@@ -162,6 +162,12 @@ print a node the parser does not decode. The `--payload` half is what settled
 `Skycube`: a size tells a locator from a parameter block, and only the bytes tell
 a parameter block from a mesh.
 
+The three **Audio** classes share one 80-byte payload and are decoded in
+[track-sound-emitters.md](../ghidra/functions/psp-pulse-usa/track-sound-emitters.md):
+a bank label, a cue name, a radius stored twice (as an `f32` and as a one-key
+animation curve), and - on a `soundcone` - two cone angles. `speaker` `0x3cc` has
+a registered class and no instance on the Pulse disc at all.
+
 `Skycube` `0x3c6` and `fogCube` `0x3d3` are decoded in
 [`skycube.md`](skycube.md). The finding that matters for reading this table: a
 `Skycube` payload **is a `Mesh` payload**, so a class having its own id does not

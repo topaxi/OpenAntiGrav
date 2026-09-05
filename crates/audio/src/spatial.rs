@@ -52,10 +52,19 @@
 //! The emitter record carries a cone: a half-angle at `+0x40` defaulting to
 //! `pi/2`, the angle to the listener at `+0x48`, an enable byte at `+0x4c`, and
 //! the attenuation multiplies by `1 - angle / half_angle` when it is set.
-//! **Nothing found so far turns it on** - the `.vex` classes `soundcone`
-//! `0x3e9` and `speaker` `0x3cc` are the suspects and neither has been read. An
-//! effect whose trigger is not recovered stays unwired, so it is written down
-//! here and not implemented.
+//!
+//! **`soundcone` `0x3e9` is the class that carries the flag, and it is read
+//! now** - 134 nodes
+//! across eight circuits, each carrying two angles that are whole degrees and a
+//! `u8` at `+0x08` that is `1` on every cone and `0` on all 1,164 plain
+//! `sound` nodes. `speaker` `0x3cc` has a registered class and **no instance
+//! anywhere on the Pulse disc**, so it is not a suspect for anything.
+//! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md` has the
+//! layout. What is still missing is which authored angle feeds the emitter's
+//! `+0x40`, and nothing has been shown to write `+0x4c` either: `VexSound_Init`
+//! writes the emitter's `+0x38`, `+0x3c` and `+0x50` and not its enable byte,
+//! and `soundcone`'s own init has not been found. So the cone stays unwired
+//! here rather than being turned on against a guess.
 
 /// Where the ears are.
 ///

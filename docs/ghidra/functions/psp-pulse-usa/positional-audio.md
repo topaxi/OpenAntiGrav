@@ -108,7 +108,8 @@ register it.
 | `ExhaustFlare_Init` `0x0890570c` | the `~ENGINE` note, one per craft |
 | `Missile_Init` `0x0885a898`, `Rocket_Init` `0x0885d118` | projectiles |
 | `Mine_Init` `0x08859c68` | already named, not previously cross-referenced here |
-| nine more, all unnamed | `0x08858410` and `0x088584b8` (same function, two sites), `0x0885bdc8`, `0x08863298`, `0x08873e70`, `0x08875390`, `0x08877560`, `0x0891d924`, `0x08925a84` - none has a static caller (all 8 owning functions show zero xrefs, consistent with a class/table dispatch this codebase uses elsewhere). One lead, not yet confidence 50: the owner of `0x08858410`/`0x088584b8` frees its own emitter immediately after one `Sound_Play` call each, at `+0x38` radius `300.0`, and the sound-descriptor pointer for the first branch resolves to the string `CANNONEXPLWALL` - suggestive of a shared weapon-impact-effects pool rather than per-projectile construction, but the second branch's descriptor did not resolve as cleanly and this was not chased further. |
+| `VexSound_Init` `0x08925a84` | **every emitter a circuit authors** - the `.vex` `sound` and `soundcone` classes, 1,298 nodes across the twelve circuits. Named 2026-09-04; see [track-sound-emitters.md](track-sound-emitters.md). |
+| eight more, all unnamed | `0x08858410` and `0x088584b8` (same function, two sites), `0x0885bdc8`, `0x08863298`, `0x08873e70`, `0x08875390`, `0x08877560`, `0x0891d924` - none has a static caller (all 7 owning functions show zero xrefs, consistent with a class/table dispatch this codebase uses elsewhere). One lead, not yet confidence 50: the owner of `0x08858410`/`0x088584b8` frees its own emitter immediately after one `Sound_Play` call each, at `+0x38` radius `300.0`, and the sound-descriptor pointer for the first branch resolves to the string `CANNONEXPLWALL` - suggestive of a shared weapon-impact-effects pool rather than per-projectile construction, but the second branch's descriptor did not resolve as cleanly and this was not chased further. |
 
 `Craft_Construct_q` is the one that matters most here, and it is four
 instructions:
@@ -537,12 +538,15 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
   are identified; the remaining nine have no static caller each (indirect/
   table dispatch), and one - see the site table above - has a weapon-impact
   lead (`CANNONEXPLWALL`) that was not chased to a confident name.
-- **Which class sets `+0x4c`.** The cone is implemented and defaulted off;
-  2026-09-01's live capture read it `False` on all 1,610 samples (real
-  negative evidence, not just "not looked at" - see
-  ["Runtime verification"](#runtime-verification-2026-09-01)), but never
-  exercised a `.vex` `soundcone` `0x3e9` in the field, so which class turns it
-  on is still open - see the [class table](../../../formats/vex.md).
+- **Which class sets `+0x4c`.** `soundcone` `0x3e9` is the answer, and it is
+  read now: 134 authored nodes, each with a `u8` at payload `+0x08` that is `1`
+  on every cone and `0` on all 1,164 plain `sound` nodes, plus two angles in
+  radians that are whole degrees. What is *not* read is the write site - which
+  authored angle reaches `+0x40`, and which function does it - so this stays
+  open at the level below the one it used to be open at. See
+  [track-sound-emitters.md](track-sound-emitters.md). 2026-09-01's live capture
+  reading `False` on all 1,610 samples remains real negative evidence: it
+  followed craft emitters, and no craft owns a cone.
 - **`inst[0x0c]`, the per-instance doppler scale, read `0.0005` live on every
   sample** (2026-09-01) - but only against the engine note, the only
   continuously-queued cue in that capture, and no construction site was

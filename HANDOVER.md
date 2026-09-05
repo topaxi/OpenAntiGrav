@@ -161,7 +161,7 @@ file does not need to carry its own.
   - 29 of 29 pass, 76s.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,756 tests (2026-09-02)** in 4.6s,
+- **Gate status:** last measured green at **2,949 tests (2026-09-04)** in 13.8s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
@@ -410,6 +410,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The race mix saturates; the per-voice SAS volume would settle whether it should](handover/the-race-mix-saturates-the-per-voice-sas.md)
 - [The Autopilot pickup is built off its own two handlers; three of its parts are still ours](handover/the-autopilot-pickup-is-built-off-its-own.md)
 - [Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`](handover/positional-audio-is-recovered-whole-and-the-pan.md)
+- [A circuit's sound emitters parse, and nothing plays them](handover/a-circuits-sound-emitters-parse-and-nothing.md) - the three `.vex` audio classes are decoded whole ([track-sound-emitters.md](docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md)) and `oag_formats::sound_emitters` reads all 1,298 of them off `pulse-psp-usa` with five disc-backed tests behind it - bank label, cue name, a radius that is a one-key animation curve rather than the `f32` beside it, and a cone flag. **Nothing plays any of them**, so every circuit is still silent. The open half is a voice budget nobody has counted (`01_Track` authors 86 emitters, `14_Track` 106), what to do with the five references the disc itself gets wrong, and the cone, which stays unwired because `soundcone`'s own init has not been found.
 - [HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks](handover/hds-exhaust-is-measured-from-the-running-game.md)
 - [HD's engine trail is one of four ribbons, and a craft flying through one sparks](handover/hds-engine-trail-is-one-of-four-ribbons.md)
 - [The PS2 boost plume draws, and the PS2 file is not the PSP file wearing the same name](handover/the-ps2-boost-plume-draws-and-the-ps2.md)
