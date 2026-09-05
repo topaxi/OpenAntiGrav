@@ -336,6 +336,33 @@ The class descriptors mentioned by an earlier draft of this caveat as sharing
 "the same problem" were not re-checked in this pass; if one is later found in
 `.bss` or `.cplinit`, this is the fix to apply.
 
+**Corrected 2026-09-05: `+0x08ad9798` is not the whole rule either - the correct
+addend is per-relocation-entry, not per-segment, and "there is no third base to
+find" does not hold.** Found chasing `DAT_08b32428` (the WeaponStats file
+selector - see [missile.md](missile.md)'s write-site citation, which turned out not
+to be `$gp`-relative after all despite the addressing-mode name it was chased
+under): three naive values in one weapon-code function -
+`0x00057b40`, `0x00058fd0`, `0x00058fd8` - all land in `.bss`, but need
+`+0x08ad9450` (not `+0x08ad9798`) to reproduce three independently-known
+addresses (`DAT_08b30f90` from [pads.md](pads.md), and `DAT_08b32420`/
+`DAT_08b32428` from [missile.md](missile.md)), each confirmed by an
+instruction-level read matching that page's own description, not by arithmetic
+alone. `0x00058018` (this page's own confirmed case, needing `+0x08ad9798`) sits
+*inside* that same naive range (`0x00057b40`-`0x00058fd8`) yet needs a different
+addend - so the two cannot both be explained by "which of the two `PT_LOAD`
+segments". The addend most likely tracks which object file's local, zero-based
+`.sbss`/`.bss`/`.scommon` numbering the linker merged into the final section,
+which the segment's `VirtAddr` alone cannot recover. **Practical rule, replacing
+the segment lookup:** never compute a naive-value correction from a segment
+header. Instead, find one instruction near the naive value whose target is
+already independently documented (a load/store at a known field offset, a
+string reference, a value some other page measured live), solve for the addend
+from that single instruction, and only then apply it to nearby naive values in
+the *same function* - not the same segment. The `.rel.text` `r_info`
+segment-index check used above is still valid evidence for the *specific*
+relocation entries it was run against; it just does not license generalising
+to "this segment" the way it looks like it should.
+
 ## The node attributes, and what `+0x0e` is
 
 `AnimTransform_Bind` looks up three named attributes on the **node header**,
