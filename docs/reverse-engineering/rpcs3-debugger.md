@@ -111,6 +111,35 @@ plenty (`Loading track model Data\Environments\Talons_Junction\track.rcsmodel`,
 Running`), and then nothing per-frame. A driven lap is observable by screenshot,
 not by `TTY.log`.
 
+### It flushes in bursts, so a timestamp on a `Switching Screen` line is not the transition's
+
+**Measured 2026-09-05, and it decides what a screen-keyed screenshot can and
+cannot catch.** `TTY.log` arrives in chunks: on both boot-chain captures, five
+transitions - `Language Selection`, `Blank`, `PreFMVConnect`, `Studio Logo` and
+the picker's own departure - appeared with **one** poll, having been written
+over several real seconds. Two consequences:
+
+- **A shot taken when a screen's name appears cannot catch a screen that
+  auto-redirected inside a burst.** The first pass of `bootchain` photographed
+  five of eight steps for this reason; the three it missed are the three that
+  advance without a press.
+- **Elapsed times read off the log are upper bounds**, not the moment the screen
+  came up. Fine for ordering, wrong for anything measuring how long a screen was
+  displayed.
+
+The workaround is a fixed-interval grab alongside the screen-keyed one -
+`rpcs3-drive.py bootchain --film N`. It is not a full fix: a root-window grab
+itself costs 1.5-3 s, so a screen up for less than that can still fall between
+two frames, which is exactly what happened to `Language Selection`. Concluding
+"the screen never displays" from a film that missed it would be reading absence
+of evidence as evidence, and
+[hd-frontend.md](../formats/hd-frontend.md#what-the-capture-did-not-settle)
+records it as unanswered rather than answered.
+
+**Ordering, by contrast, is trustworthy.** Bursts preserve write order, so the
+*sequence* of `Switching Screen` lines is sound even when their timings are not
+- which is why a boot chain can be measured off this log at all.
+
 ### The walk into a race is six taps of cross
 
 Measured 2026-08-19, from a cold boot, with no d-pad at all - every step is the
