@@ -22,25 +22,28 @@ The disc is `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`, layer-1 decrypted per
 [ps3-disc](ps3-disc.md); everything is read through the
 [`.psarc` reader](psarc.md).
 
-## This front end is wired now, and it is still a declaration
+## This front end is wired, and its chain has now been watched
 
-**Added 2026-08-17.** When this page was written, everything on it was recovered
-data that nothing consumed: `oag_hd::TITLE.front_end` was `None`, because
-`oag_title::BootProfile::chain` was defined as a *measurement* and the chain
-below is a *declaration*, so there was no honest way to ship it.
+**Added 2026-08-17, upgraded 2026-09-05.** When this page was written,
+everything on it was recovered data that nothing consumed:
+`oag_hd::TITLE.front_end` was `None`, because `oag_title::BootProfile::chain`
+was defined as a *measurement* and the chain below was a *declaration*, so there
+was no honest way to ship it.
 
 [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
-changed the type rather than the evidence: a chain now carries a `Provenance`,
-HD's is `Declared`, and every boot of it prints
+changed the type rather than the evidence: a chain carries a `Provenance`, HD's
+was `Declared`, and every boot of it printed a line saying so before anything was
+drawn. **Nothing on this page became more certain that day** - and the ADR named
+what would end the state: "an emulator capture now *upgrades* a title rather
+than unlocking it."
 
-```text
-Wipeout HD: this order is what its front-end XML declares, not a boot anyone has watched
-```
-
-before anything is drawn. **Nothing on this page became more certain.** The
-order, whether the picker runs at all on a machine that takes its language from
-the XMB, and which of the six skins is live are all exactly as open as they
-were, and each is still an emulator capture away.
+**That capture happened on 2026-09-05 and `oag_hd::frontend::BOOT` is
+`Provenance::Measured`.** Three cold boots on RPCS3 walked all eight steps in the
+declared order; the same boots settled that `DATA00`'s is the live `skin.xml`,
+and turned the other five copies from "unexercised" into "unreachable". What is
+*still* open, deliberately and separately, is whether the language picker is ever
+**shown** as opposed to entered - see ["what the capture did not
+settle"](#what-the-capture-did-not-settle).
 
 What the wiring bought is that HD's own screens draw in its own 1920x1080 grid,
 its sixteen language plugins and 1,602 strings resolve, and `Studio Logo` plays
@@ -99,14 +102,15 @@ Two findings, and the first is the disc's own bug rather than a reading error:
 | --- | --- | --- |
 | Where is the skin? | `/data/plugins/frontend/gui/skin.xml`, in **six** of the seven archives | 94 |
 | Do the six copies agree on layout? | **Yes, on every layout global, exactly** | 92 |
-| Which copy does the runtime load? | **Still unknown.** An ordered array of all seven is at `0x00860c80`; what consumes it is unread | 88 / - |
+| Which copy does the runtime load? | **`DATA00`'s.** `data00.psarc` loads last, and the runtime stats a `.bik` only that copy names | 92 |
 | Coordinate space | **1920x1080**, not Pulse's 480x272 | 90 |
 | Is the main menu a row list? | **No.** It is a `<HorizMenu>` - horizontal | 90 |
 | Is there a `menu` font role? | **No.** HD's language plugins declare no such slot | 90 |
 | Is there a looping movie backdrop? | **No.** The FE background is a real-time `.vex` scene | 88 |
 | Are any `FEGlobals` referenced but undeclared? | **None, in any of the six** | 90 |
-| Declared boot chain | Nine screens, quoted below | 80 |
-| Runtime boot order | **Unverified.** Needs an emulator | - |
+| Declared boot chain | Eight screens then `Main Menu`, quoted below | 80 |
+| Runtime boot order | **The same order.** Three cold boots on RPCS3, 2026-09-05 | 85 |
+| Is the language picker ever *shown*? | **Unanswered.** It is entered every boot; no frame of it has been caught | - |
 | Does the executable agree on the first screen? | **Yes.** `0x000186f0` returns `"Language Selection"` by default | 70 |
 
 ## Reading it yourself
@@ -268,7 +272,7 @@ anywhere in the real front end is still unmeasured. Screenshots stayed under
 transcribed above are the reproducible part.
 
 The front end ahead of Main Menu also settled two things
-[the declared boot chain](#the-declared-boot-chain) had flagged as
+[the declared boot chain](#the-boot-chain-declared-and-then-watched) had flagged as
 unmeasured, on the same boots: `Language Selection` does run on a PS3 boot
 (`TTY.log`'s `Switching Screen` sequence reads `"" -> Top -> Language
 Selection -> PreFMVConnect -> Studio Logo -> ...`), and `EpilepsyWarning`'s
@@ -474,10 +478,14 @@ A related tell, from `/data/plugins/languages/english/definition.xml`:
 
 HD's own language plugin still identifies the game as Wipeout Pulse.
 
-## The declared boot chain
+## The boot chain, declared and then watched
 
-Read redirect for redirect out of `DATA00`/`DATA05`/`DATA06`'s `skin.xml`, which
-agree with each other:
+**Measured 2026-09-05, confidence 85.** Read redirect for redirect out of
+`DATA00`/`DATA05`/`DATA06`'s `skin.xml`, which agree with each other - and since
+2026-09-05, watched twice on RPCS3 going exactly this way. The `Leaves by`
+column is still the XML's; the *order* is no longer only the XML's. Reproduce
+with `just rpcs3-bootchain`; both captures are under
+`data/reference/hd-boot-chain/`.
 
 | # | Screen | `type=` | Leaves by | To |
 | --- | --- | --- | --- | --- |
@@ -530,20 +538,101 @@ The quoted evidence for the two that carry the boot's only movie:
 `PreFMVConnect` reaches `Studio Logo` on both branches, so it is a screen the
 chain passes through unconditionally within 1.5 s, not a fork.
 
-**Confidence 80 for the chain as *declared*. Confidence 0 for it as the runtime
-order, because that was not measured.** [ADR-0023] exists precisely because a
-front-end XML's declared entry point is not the runtime's: Pulse's XML declares
-the language picker first and its runtime opens on `LogoFMV` instead. HD may
-well do the same. **Anyone filling in `BootProfile` from this table is filling
-in a declaration, and the type must say so** - which it does now:
-`oag_hd::frontend::BOOT` carries `Provenance::Declared`, and the sentence this
-paragraph used to end with ("the doc comment must say so") is what
-[ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
-rejected as insufficient. A caveat in a doc comment is not carried by the value,
-so nothing downstream can print it, test it, or refuse to trust it.
+### The capture that made this an order rather than a reading
 
-Two specific ambiguities inside the declaration, one resolved on RPCS3, one
-still open:
+This paragraph used to read "**confidence 80 for the chain as *declared*.
+Confidence 0 for it as the runtime order, because that was not measured**", and
+the worry behind it was concrete: [ADR-0023] exists because Pulse's XML declares
+the language picker first and its runtime opens on `LogoFMV` instead, so HD
+might have done the same. **It does not.** `oag_hd::frontend::BOOT` carries
+`Provenance::Measured`.
+
+Three cold boots, RPCS3 `v0.0.42-19777`, `BCES-00664`, the layer-1 decrypted
+image, savedata moved aside (see below), no GDB connection at any point. Screen
+names read off `TTY.log`'s own `Switching Screen` lines, `cross` sent only when
+a screen had sat still for eight seconds so no auto-redirect was hurried:
+
+| # | Screen | cold-01 | cold-02 | left by |
+| --- | --- | ---: | ---: | --- |
+| 1 | `Language Selection` | 17.16 s | 15.77 s | auto |
+| 2 | `PreFMVConnect` | 17.16 s | 15.77 s | auto |
+| 3 | `Studio Logo` | 17.16 s | 15.77 s | `cross` |
+| 4 | `EpilepsyWarning` | 28.30 s | 30.36 s | `cross` |
+| 5 | `FirstPlay` | 39.19 s | 41.70 s | `cross` |
+| 6 | `Save Warning` | 50.07 s | 52.70 s | auto |
+| 7 | `EULA` | 53.85 s | 55.92 s | auto |
+| 8 | `Update Announcement` | 53.85 s | 55.92 s | auto |
+| - | `Main Menu` | 53.85 s | 55.92 s | - |
+
+Identical ordering both runs, nothing extra between any two steps, and it is the
+table above exactly.
+
+**Confidence 85, and the arithmetic is worth spelling out** because it is a
+judgement inside a band rather than a cap. This is a *runtime trace*, which the
+[confidence rubric](../reverse-engineering/confidence-rubric.md) ceilings at 94
+"until a second binary agrees" - and the project already treats an emulator
+trace as a runtime trace, PPSSPP breakpoint traces being where several 88s on
+the PSP side come from. So the rubric permits up to 94 here and nothing caps
+this at 85. It is scored at the **bottom** of the 85-94 band for two reasons
+this page states rather than defers: RPCS3 is not a PS3 and its front-end timing
+and connection checks are its own, and there is no second pressing or second
+platform to corroborate against the way Pure's cold boot has. A capture on real
+hardware, or on HD's PSN release, is what would move it up.
+
+**Step 4's live path is the dialog, now on three observations.**
+`EpilepsyWarning` plus `cross` goes to `FirstPlay` both times, which is the
+`<Dialog>`'s `Option1Destination` and *not* `EpilepsyWarningRedirect`'s
+`Default goto="Save Warning"`.
+
+#### `FirstPlay` is save-state conditional, and it is the trap in this measurement
+
+**With `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/BCES00664-AUTO-`
+present, HD skips `FirstPlay` entirely** and goes `EpilepsyWarning` straight to
+`Save Warning`. `TTY.log` says why in the same breath - `Data BCES00664-AUTO-
+has been found`, `get->isNewData: 0`. A run on a used profile therefore watches
+**seven** steps and looks exactly like a complete boot.
+
+That is worth stating as loudly as the result, because upgrading `Provenance` on
+such a run would have put a step no capture ever showed inside a chain labelled
+watched - [ADR-0025]'s own error mode, one level down. Move the save aside
+before capturing, and put it back after; `just rpcs3-bootchain`'s recipe comment
+says so too.
+
+`data/reference/hd-boot-chain/cold-01/02-firstplay.png` is the screen: *"ARE YOU
+NEW TO WIPEOUT? ... Choosing YES below will enable the Pilot Assist option."*
+
+#### What the capture did **not** settle
+
+**No frame of `Language Selection` was ever caught.** cold-02's 1.5-second film
+runs `Sony Computer Entertainment presents` (11.77 s) -> black (14.97 s) -> the
+Studio Liverpool reel already playing (20.01 s). `TTY.log` names the picker
+being entered on every boot, so the *state* runs - but whether it ever
+**presents a frame to a player** is open, and the picker's own
+`LanguageAutoRedirect` is a sufficient explanation for it not doing so on a
+console whose XMB has already answered. `RPCS3.log` shows the English language
+plugin loaded before the picker is entered, which is consistent with that.
+
+So: "does the picker run" is answered at the state-machine level and **not** at
+the level of what a player sees. `Provenance` is two-valued by design and grades
+neither this nor the emulator caveat; [ADR-0025] rejected a confidence number in
+the type and put the rubric score here, where it can carry its evidence.
+
+#### Two `TTY.log` screen names that are not boot steps
+
+- **`Top`** fires once per plugin created - `languages/English`, `frontend`,
+  `billboards`, `grids`. It is the `<Screen name="Top">` root of each plugin's
+  own `definition.xml`, above `skin.xml` entirely.
+- **`Blank`** is `<Screen name="Blank" type="CommunityScreen">` in
+  `DATA06`'s `Data\XML\Community\Community.xml`, loaded right after the picker.
+  Another plugin's root.
+
+Neither is a `<Screen>` in any of the six `skin.xml` copies - all six checked.
+A reader diffing `TTY.log` against the table above will meet both and should not
+read either as a missing chain step.
+
+Two specific ambiguities that were once inside the declaration, both since
+resolved on RPCS3 - kept here because the *XML* is still two-valued and a reader
+coming to `skin.xml` fresh will meet the fork before they meet the measurement:
 
 - **Step 4 is genuinely two-valued in the XML, and measured 2026-08-30: the
   dialog is the live path.** `EpilepsyWarning` carries *both* a `<Dialog>`
@@ -571,9 +660,9 @@ still open:
   `StartEnabled="false"` and neither fires unprompted. Pressing `cross` moves
   it to `FirstPlay` every time (`scripts/rpcs3-drive.py`'s
   `wait_for_screen_pressing`), matching the dialog's own
-  `Option1Destination`. Not raised past 80 because this is RPCS3, not the
-  EBOOT or real hardware, and only the `DATA00`/`DATA05`/`DATA06` family
-  (this ISO's own `skin.xml`) was exercised.
+  `Option1Destination`. **Confidence 85 since 2026-09-05**, the cold boots
+  above having taken the same branch twice more; not raised past that because
+  this is RPCS3, not the EBOOT or real hardware.
 
 - **`Language Selection` does run, measured the same way.** The PS3 takes its
   system language from the XMB, and the screen's own `<DisplayLanguages>`
@@ -581,9 +670,13 @@ still open:
   `PreFMVConnect` instead of showing it. It does not skip: `TTY.log`'s
   `Switching Screen` sequence on a fresh boot reads `"" -> Top -> Language
   Selection -> PreFMVConnect -> Studio Logo -> EpilepsyWarning -> ...`,
-  confidence 80 for the same reason as above.
+  confidence 85, three boots.
 
-### Two chain families
+  **The screen being entered is not the screen being shown**, and only the
+  first of those is measured - see "what the capture did not settle" above. No
+  frame of the picker has ever been caught.
+
+### Two chain families - and only one of them is reachable
 
 The six copies split, which is worth recording because it is how the dead screen
 was identified. `DATA04` sits between the two families rather than in either:
@@ -605,8 +698,58 @@ declaration rather than an order: something outside the XML picks between them.
 `DATA00` is the only copy naming `Data/FE/Images/StudioLiverpool_fury.bik`, and
 that file exists only in `DATA00` (21,151,804 bytes); `studioliverpool.bik`
 exists only in `DATA02` (15,139,496 bytes). `DATA00` is also the archive holding
-the Fury-only circuits. **That makes `DATA00` look like the newest layer, and
-looking like it is not evidence.** Nothing here establishes load order.
+the Fury-only circuits. That made `DATA00` *look* like the newest layer, and
+this paragraph used to end "looking like it is not evidence. Nothing here
+establishes load order."
+
+#### `DATA00`'s copy is the live one. Confidence 92, and load order is now known
+
+Two independent lines, both off the 2026-09-05 boots and both free - the game's
+own `printf` and RPCS3's syscall log, no debugger connection needed.
+
+**1. The game announces its own archive order.** `TTY.log`, verbatim, on every
+boot:
+
+```
+PSARC file found data00.psarc          <- discovery, numeric
+PSARC file found data01.psarc
+... through data06 ...
+PSARC file Loading data01.psarc        <- loading, and it is NOT numeric
+PSARC file Loading data02.psarc
+PSARC file Loading data03.psarc
+PSARC file Loading data04.psarc
+PSARC file Loading data05.psarc
+PSARC file Loading data06.psarc
+PSARC file Loading data00.psarc        <- last
+```
+
+`data00` is found first and **loaded last**. Identical across three separate
+boots. That is the load order this page said nothing established, and it is
+consistent with `DATA00` being the Fury layer laid over the base game.
+
+**2. The runtime asks for a filename only `DATA00`'s copy names.** During
+`Studio Logo`, `RPCS3.log` records the FIOS loose-file probe that precedes every
+archive read:
+
+```
+sys_fs_stat(path=".../USRDIR/data/fe/images/studioliverpool_fury.bik") -> CELL_ENOENT
+```
+
+Extract every `.xml` from all six archives - 771 files - and grep: the string
+`StudioLiverpool_fury` appears in **exactly one file on the whole disc**,
+`DATA00`'s `skin.xml`. Every other copy names `StudioLiverpool.bik`. So the
+`Skin.xml` the ScreenManager loaded (`ScreenManager Load
+"Data\Plugins\frontend\GUI\Skin.xml"`) is `DATA00`'s.
+
+**This retires the framing, not just the question.** `DATA02`/`DATA03` and
+`DATA04` are not alternative boot paths a run might take instead - they are
+superseded copies of one file that the front end never loads. The chains in the
+table above are **unreachable**, not merely unexercised, and there is nothing
+about them left for a capture to exercise.
+
+It does not follow that every `DATA00` entry wins every lookup - that is a claim
+about the archive layer's own resolution rule, and only `Skin.xml` was traced.
+What is established is the load order and this one file.
 
 ## The declared menu tree
 
@@ -1538,11 +1681,17 @@ The call site is virtual and was not resolved, so "a game-root accessor that
 yields a start-screen name" is read and "the boot begins here" is inference.
 
 What it does support, at 70: **HD's runtime default agrees with its XML.** The
-declared chain opens on `Language Selection` and the only alternative the
-executable offers is `Launch Game`, which is the straight-into-a-race path a
-demo or trial boot would take, not a different front-end order. That is Pure's
-situation rather than Pulse's - but it is *not* the cold-boot confirmation Pure
-has, and this page still does not assert a runtime order.
+chain opens on `Language Selection` and the only alternative the executable
+offers is `Launch Game`, which is the straight-into-a-race path a demo or trial
+boot would take, not a different front-end order.
+
+**This paragraph used to end "it is *not* the cold-boot confirmation Pure has,
+and this page still does not assert a runtime order."** It has that confirmation
+now - three cold boots on RPCS3, 2026-09-05, every one opening on `Language Selection`
+- so the static read and the watched boot concur. **Neither number moves.** 88
+and 70 score what can be read out of four instructions and an unresolved virtual
+call site, and watching a boot does not make the call site resolved; it is a
+second, independent line of evidence, not a promotion of the first.
 
 The trial reading of that branch is corroborated all over the binary and the
 data: `UpgradeToFullVersionCheckout_Screen.cpp` is one of the 47 classes;
@@ -1585,10 +1734,19 @@ unresolved. The TOC-relative loads that would reach the array still leave no
 instruction operand to search for, so this is a dead end confirmed rather
 than a new one opened.
 
-**So the archive-layering question stays exactly where it was** before the
+**So the archive-layering question stayed exactly where it was** before the
 executable was opened - and until the consumer is found, the *order* in the
 array carries no priority meaning either. A first-wins array and a last-wins
 array are byte-identical.
+
+**The runtime answered it anyway, 2026-09-05, without the consumer being
+found.** HD prints `PSARC file found data00..data06` and then `PSARC file
+Loading` in the order `data01, data02, ... data06, data00`, so the loading order
+is **not** this array's order and `DATA00` goes last. That is a stronger result
+than the array could have given: whatever this array is for, it is not the thing
+that decides load order, and the discovery-order-versus-load-order split is
+visible in the game's own log. See ["`DATA00`'s copy is the live
+one"](#data00s-copy-is-the-live-one-confidence-92-and-load-order-is-now-known).
 
 One weaker corroboration did fall out. A second site names **only
 `data00.psarc` and `data06.psarc`** - `0x007a4bf8` and `0x007a4c20` - among a
@@ -1700,9 +1858,12 @@ Named explicitly, with what each would take.
 1. **What consumes the seven-archive array at `0x00860c80`, and with what
    polarity.** Until the consumer is found it is not even established that the
    array is a mount list, and a first-wins and a last-wins list look identical.
-   This is the *single* blocker on "which `skin.xml` is live", and therefore on
-   which boot-chain family and which logo `.bik` are HD's. It does not affect
-   `MenuSkin`; all six copies agree there.
+   **It is no longer the blocker on "which `skin.xml` is live"** - it was called
+   the single one here, and the runtime answered the question around it on
+   2026-09-05: `DATA00`'s copy, on the load order HD prints and on a filename
+   only that copy names. What is left is the array's *own* purpose, which is now
+   a smaller question than the one it was standing in front of. It does not
+   affect `MenuSkin`; all six copies agree there.
 2. **The call site of `0x000186f0`**, to lift the boot entry point from
    inference (70) to a reading.
 3. **Whether an unresolved `font=` falls back to `Default` or to a compiled-in
@@ -1717,17 +1878,22 @@ HD names every screen it enters on `TTY.log`
 below is therefore a reading waiting to be taken rather than a blocked one -
 none has been taken yet:**
 
-5. **The runtime boot order.** Everything in the chain table is *declared*.
-   `0x000186f0` now gives a 70-confidence reason to think the runtime's default
-   first screen is the picker, which is a partial answer to the *first* step
-   only; the remaining eight are unmeasured, and Pulse's declared and actual
-   orders differ, so this is a real risk and not a formality.
-6. **Whether `Language Selection` is ever shown** on a machine that takes its
-   language from the XMB. `0x000186f0` returns its name by default, which is
-   evidence the engine *intends* to open there, not evidence a player sees it.
-7. **Step 4's real path** - `EpilepsyWarning` -> `FirstPlay` -> `Save Warning`
-   as the dialog declares, or `EpilepsyWarning` -> `Save Warning` as the
-   redirect declares.
+5. ~~**The runtime boot order.**~~ **Done, 2026-09-05**, three cold boots, all
+   eight steps in the declared order - `oag_hd::frontend::BOOT` is
+   `Provenance::Measured`. The risk this item named was real and did not
+   materialise: HD's runtime agrees with its XML where Pulse's does not.
+6. **Whether `Language Selection` is ever *shown*** on a machine that takes its
+   language from the XMB. **Still open, and now sharper.** The capture proves the
+   screen is *entered* on every boot, so `0x000186f0` returning its name is
+   corroborated - but no frame of it was ever caught between the SCE licence
+   screen and the Studio Liverpool reel, so whether a player sees it is
+   unanswered. `LanguageAutoRedirect` is a sufficient explanation for a boot that
+   passes straight through, and this is the one question a capture at a finer
+   sampling rate than 1.5 s could still settle.
+7. ~~**Step 4's real path.**~~ **Done**: the dialog's,
+   `EpilepsyWarning` -> `FirstPlay` -> `Save Warning`, on three boots - and
+   `FirstPlay` only appears at all when the savedata is absent, which is its own
+   finding.
 8. **`MenuSkin::selected`.** No XML on this disc states a selected-row colour,
    exactly as on Pulse and Pure. It is a pixel measurement or nothing.
 9. **`MenuSkin::row_extra_leading`.** The `gap` attribute is documented as *not*

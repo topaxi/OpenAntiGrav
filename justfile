@@ -462,6 +462,19 @@ rpcs3-stop:
 rpcs3-boot image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
     uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} boot {{ARGS}}
 
+# Watch the boot chain screen by screen and photograph each step - the capture
+# that made `oag_hd::frontend::BOOT` a measurement rather than a declaration.
+#
+#     mv ~/.config/rpcs3/dev_hdd0/home/00000001/savedata/BCES00664-AUTO- /somewhere
+#     just rpcs3-bootchain
+#     mv /somewhere/BCES00664-AUTO- ~/.config/rpcs3/dev_hdd0/home/00000001/savedata/
+#
+# **The move is not optional.** With a save present HD skips `FirstPlay`, so the
+# chain you watch is seven steps rather than eight and looks complete.
+# See docs/formats/hd-frontend.md.
+rpcs3-bootchain image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} bootchain {{ARGS}}
+
 # The whole thing: boot, walk the front end into a race (six taps of cross),
 # hold thrust, and screenshot it. Run from the MAIN checkout - `data/` is
 # gitignored and absent from a worktree.

@@ -474,17 +474,7 @@ pub fn load_shell(
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
-    // Said on every boot of such a title, and near the top where the reader is
-    // still looking: a sequence read out of the disc's XML is not a sequence
-    // anyone has watched, and a screenshot of it must not be filed as evidence
-    // of what the original does.
-    if !profile.provenance.is_measured() {
-        report.push(format!(
-            "{}: this order is what its front-end XML declares, not a boot \
-             anyone has watched",
-            title.name
-        ));
-    }
+    report.extend(provenance::caveat(title.name, profile.provenance));
     if !archives.packs.is_empty() {
         report.push(format!(
             "dlc: {} archive(s) mounted behind this source",
@@ -1709,6 +1699,7 @@ pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 mod fonts;
 mod movies;
+mod provenance;
 pub(crate) mod roster;
 pub(crate) mod xml;
 

@@ -76,11 +76,16 @@ impl BootStep {
 /// module's own docs open by recording that a front-end XML's declared entry
 /// point is not the runtime's, and [`BootProfile::chain`] was therefore defined
 /// as a measurement - so a title whose order is only declared could not be
-/// expressed at all. Wipeout HD is that title: its `skin.xml` declares nine
-/// screens in order and no capture of a PS3 running exists, so filling `chain`
+/// expressed at all. Wipeout HD was that title: its `skin.xml` declared the
+/// screens in order and no capture of a PS3 running existed, so filling `chain`
 /// in silently would have put a hypothesis in the one field whose contract was
 /// that it never held one, and leaving it empty refused a front end whose layout
 /// is fully recovered.
+///
+/// **HD's chain has since been watched** (2026-09-05, three cold boots on
+/// RPCS3), so no title is `Declared` today - which does not retire this field.
+/// It was never about HD; it is about the *next* title, whose declaration will
+/// arrive before its capture does.
 ///
 /// Widening the type is the third answer, and it is the honest one: the chain
 /// still says what the order is, and this says how much that is worth. Every
@@ -93,10 +98,16 @@ pub enum Provenance {
     /// A cold boot of the original was watched, and this is the order it went
     /// in.
     ///
-    /// Both PSP titles. Pulse's is the reason the distinction is needed at all:
-    /// its XML declares the picker first and its runtime opens on `LogoFMV`
-    /// instead, so a build that had trusted the declaration would have shipped
-    /// the wrong sequence and had no way to know.
+    /// Both PSP titles, and Wipeout HD since 2026-09-05. Pulse's is the reason
+    /// the distinction is needed at all: its XML declares the picker first and
+    /// its runtime opens on `LogoFMV` instead, so a build that had trusted the
+    /// declaration would have shipped the wrong sequence and had no way to know.
+    ///
+    /// **"Watched" is not "watched on the console."** HD's is three boots on
+    /// RPCS3, which is why its docs page scores the chain 85 rather than higher.
+    /// This enum is deliberately two-valued and grades nothing - ADR-0025
+    /// rejected a confidence number in the type, and the rubric score lives on
+    /// the docs page where it can carry its evidence.
     Measured,
     /// The title's own front-end XML declares this order, and nothing has
     /// watched it run.
@@ -105,6 +116,13 @@ pub enum Provenance {
     /// screen - and **not** evidence about the runtime. Anything user-facing
     /// that walks such a chain says so rather than presenting it as the disc's
     /// behaviour.
+    ///
+    /// **No title is in this state today**, HD having been the last and its
+    /// chain having been watched. The variant stays because the next title's
+    /// declaration will arrive before its capture does, and because the whole
+    /// point of the field is that arriving as a measurement by omission must not
+    /// be possible. `oag_game::boot::provenance::caveat` is where it is enforced,
+    /// and it is unit-tested rather than disc-tested for exactly this reason.
     Declared,
 }
 

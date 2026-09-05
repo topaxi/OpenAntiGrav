@@ -88,39 +88,65 @@ fn the_ids_differ_from_the_psp_titles_in_exactly_the_two_measured_ways() {
     assert_eq!(oag_pure::race::DEFAULT_TEAM, oag_pulse::race::DEFAULT_TEAM);
 }
 
-/// The front end is wired, and its boot chain still says it is only declared.
+/// The front end is wired, and its boot chain has now been watched.
 ///
-/// **This test used to assert the opposite** - that `front_end` was `None` - and
-/// it was there to stop an unmeasured chain being shipped as a measured one.
-/// That intent is unchanged; only the seam it is enforced at has moved.
-/// `oag_title::Provenance` lets the order be expressed and labelled at once, so
-/// the thing to guard is no longer whether HD has a front end but whether
-/// anyone has quietly upgraded its provenance.
+/// **This test has asserted three different things and kept one intent.** It
+/// began as `front_end == None` - a refusal, back when the only way to withhold
+/// an unmeasured chain was to withhold the whole front end. ADR-0025 moved the
+/// seam to `oag_title::Provenance` and it became "nobody has quietly upgraded
+/// this to `Measured`". On 2026-09-05 somebody upgraded it *loudly*, so it is
+/// now the other guard: **nobody may quietly downgrade it either**, and the
+/// evidence lives beside the assertion rather than in a commit message.
 ///
-/// **Whoever changes this to `Measured` should have watched a PS3 boot**, and
-/// this test is where they will be told so. Reading the XML harder is not it -
-/// the XML is where `DECLARED_CHAIN` already came from, and Pulse is the proof
-/// that a disc's declaration and its runtime can simply disagree.
+/// The capture: `just rpcs3-bootchain`, three times, savedata moved aside so
+/// `FirstPlay` is not skipped, every run walking all eight steps of
+/// `frontend::BOOT_CHAIN` in order with nothing between them. Kept under
+/// `data/reference/hd-boot-chain/`; transcript on `docs/formats/hd-frontend.md`.
+///
+/// **What is still not claimed**, and what a future reader should not read out
+/// of `Measured`: RPCS3 is not a PS3, and no frame of the language picker was
+/// ever caught - it is entered on every boot and may auto-redirect without ever
+/// presenting. `Provenance` is two-valued by design and grades neither.
 #[test]
-fn the_front_end_is_wired_and_its_chain_is_still_only_declared() {
+fn the_front_end_is_wired_and_its_chain_has_been_watched() {
     let front_end = TITLE
         .front_end
         .expect("HD's front end is wired; see frontend::FRONT_END");
     assert_eq!(
         front_end.boot.provenance,
-        oag_title::Provenance::Declared,
-        "no capture of a PS3 running this title exists in this project"
+        oag_title::Provenance::Measured,
+        "three cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
     );
-    assert!(!front_end.boot.provenance.is_measured());
+    assert!(front_end.boot.provenance.is_measured());
     assert_eq!(frontend::MENU_SKIN.menu_x, 800.0, "1920-wide, not 480-wide");
-    assert_eq!(frontend::BOOT.chain, frontend::DECLARED_CHAIN);
-    assert_eq!(frontend::DECLARED_CHAIN.len(), 8);
+    assert_eq!(frontend::BOOT.chain, frontend::BOOT_CHAIN);
+    assert_eq!(frontend::BOOT_CHAIN.len(), 8);
     assert_eq!(
-        frontend::DECLARED_CHAIN
+        frontend::BOOT_CHAIN
             .iter()
             .filter(|step| step.movie.is_some())
             .count(),
         1,
         "only Studio Logo plays anything"
+    );
+    // The order three boots actually went in, spelled out here rather than only in
+    // prose: a step silently reordered or dropped is exactly the regression a
+    // `Measured` label makes expensive, and `len() == 8` does not catch it.
+    assert_eq!(
+        frontend::BOOT_CHAIN
+            .iter()
+            .map(|step| step.state)
+            .collect::<Vec<_>>(),
+        vec![
+            "Language Selection",
+            "PreFMVConnect",
+            "Studio Logo",
+            "EpilepsyWarning",
+            "FirstPlay",
+            "Save Warning",
+            "EULA",
+            "Update Announcement",
+        ],
+        "data/reference/hd-boot-chain/cold-01, cold-02 and cold-03, then Main Menu"
     );
 }
