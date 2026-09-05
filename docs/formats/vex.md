@@ -1391,12 +1391,21 @@ templates are the naming scheme:
 | `0x08a8104c` | `%s\handlingstats.xml` |
 | `0x08a7d598` | `%s\stringtable.xml` |
 | `0x08a80eb8` | `%s\screen.xml` |
+| `0x08a7ff6c` | `%s\%s_FE.vex` |
 | `0x08a7ff7c` | `%s\ship_eliminator.dat` |
+| `0x08a7ffa4` | `%s\%s.dat` |
 | `0x08a884dc` | `Data\Psys\%s.POB` |
 | `0x08a88e94` | `Data\Music\FEMusic\frontend%d.at3` |
 
 The leading `%s` is a directory read from a scene-graph node field at `+0x94`,
-sourced from XML rather than from the binary. Track directory names are
+sourced from XML rather than from the binary.
+
+The last three of those are one site, and it is traced:
+[`ship-skin.md`](../ghidra/functions/psp-pulse-usa/ship-skin.md) reads the
+function that formats all three, and decodes the `.dat` they name as four
+paletted textures that replace the hull model's own. Note that **none of these
+strings has a Ghidra xref**, under either the relocated or the naive address -
+that page records how the reference was found instead. Track directory names are
 therefore **not** in the executable; team names are, at `0x08a78200`:
 `AG_Systems`, `Assegai`, `Goteki`, `Feisar`, `Piranha`, `Qirex`, `Triakis`.
 

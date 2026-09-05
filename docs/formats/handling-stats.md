@@ -520,8 +520,8 @@ Located alongside, same naming pattern, not yet decoded:
 | `Data\Ships\<Team>\Ship.vex` | The [model](vex.md) |
 | `Data\Ships\<Team>\ship_FE.vex` | Front-end preview model |
 | `Data\Ships\<Team>\<Team>shield.vex` | Shield effect |
-| `Data\Ships\<Team>\ship_alt.dat` | Not a mesh - **confidence ~65**, shape read 2026-09-02 off `Assegai\ship_alt.dat`: a team-name string, a two-byte `"ms"` tag, sixteen `RGBA8` entries at `0x20` (a palette), then a payload whose bytes are all in `0..15` - paletted image data, no loader traced, dimensions unresolved. `PI_TeamModel`'s `PI_ModelSkin name="Alternative"` names it; see [`dlc-pack.md`](dlc-pack.md#entry-0-is-a-manifest) for the declaring schema |
-| `Data\Ships\<Team>\ship_eliminator.dat` | Same reading as `ship_alt.dat` above - identical header shape, named by `PI_ModelSkin name="Eliminator"`. **A lead for whoever traces the loader next**: `docs/formats/vex.md:1388` records the literal format string `%s\ship_eliminator.dat` at `0x08a7ff7c`; xref-ing that string is the fastest way into whichever function loads both `.dat` files |
+| `Data\Ships\<Team>\ship_alt.dat` | **Decoded** - not a mesh but a livery: a `0x20` header (team name, `"ms"` tag) followed by four palette-plus-pixels blocks, three 128x128 and one 64x64, all 4 bits per pixel with a sixteen-entry `RGBA8` palette each. Exactly 26912 bytes. The blocks replace the hull model's `texture1.tga`..`texture4.tga` in place, so a skin is a texture swap on the same geometry. `PI_TeamModel`'s `PI_ModelSkin name="Alternative"` names it; see [`ship-skin.md`](../ghidra/functions/psp-pulse-usa/ship-skin.md) for the loader and the byte table, and [`dlc-pack.md`](dlc-pack.md#entry-0-is-a-manifest) for the declaring schema |
+| `Data\Ships\<Team>\ship_eliminator.dat` | Byte-for-byte the same format as `ship_alt.dat` above, named by `PI_ModelSkin name="Eliminator"`. The two differ only in their pixels. Which of the two a hull gets is decided by a `== 0x12` comparison on a global rather than by an unlock - see [`ship-skin.md`](../ghidra/functions/psp-pulse-usa/ship-skin.md) |
 | `Data\Ships\<Team>\Definition.xml` | Unknown |
 
 ## Open questions
