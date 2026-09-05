@@ -145,6 +145,75 @@ pub(super) fn velocity_texture(
     })
 }
 
+/// Detects a camera cut mid-race: a view change or the player's own respawn,
+/// either of which hands the next frame's resolve a history of a different
+/// shot than the one it is about to draw - see
+/// [docs/rendering/fsr3.md](../../../../../docs/rendering/fsr3.md#the-game-decides-when-a-reset-happens-not-the-port).
+///
+/// `None` before the first observation, so the sequence's opening frame reads
+/// as a cut for free rather than needing a second initial-state rule kept in
+/// sync with [`Scene::record_frame`]'s own `phase == 0`.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(super) struct CutWatch {
+    last: Option<(crate::display::CameraView, u32)>,
+}
+
+impl CutWatch {
+    /// Whether `view`/`respawns` describe a different shot than the last
+    /// observation, and records this one as the new baseline either way -
+    /// so a caller that never checks the result still keeps the watch
+    /// current for the frame after.
+    ///
+    /// **The player's own respawn count, not the field's** - [`Race::respawns`]
+    /// rather than `respawns_of` - because the camera being watched is the
+    /// player's, and only the player's respawn moves it: an opponent
+    /// recovering elsewhere on the circuit is not a cut in *this* shot, the
+    /// same distinction `race/tests/respawn.rs`'s
+    /// `a_respawn_in_flight_makes_everything_visible` draws for the PVS.
+    ///
+    /// [`Race::respawns`]: crate::race::Race::respawns
+    pub(super) fn observe(&mut self, view: crate::display::CameraView, respawns: u32) -> bool {
+        let cut = self.last != Some((view, respawns));
+        self.last = Some((view, respawns));
+        cut
+    }
+}
+
+#[cfg(test)]
+mod cut_watch_tests {
+    use super::CutWatch;
+    use crate::display::CameraView;
+
+    #[test]
+    fn the_first_observation_is_always_a_cut() {
+        assert!(CutWatch::default().observe(CameraView::Far, 0));
+    }
+
+    #[test]
+    fn the_same_view_and_respawn_count_twice_is_not_a_cut() {
+        let mut watch = CutWatch::default();
+        assert!(watch.observe(CameraView::Far, 0));
+        assert!(!watch.observe(CameraView::Far, 0));
+        assert!(!watch.observe(CameraView::Far, 0));
+    }
+
+    #[test]
+    fn a_view_change_is_a_cut() {
+        let mut watch = CutWatch::default();
+        assert!(watch.observe(CameraView::Far, 0));
+        assert!(watch.observe(CameraView::Close, 0));
+        assert!(!watch.observe(CameraView::Close, 0));
+    }
+
+    #[test]
+    fn a_player_respawn_is_a_cut() {
+        let mut watch = CutWatch::default();
+        assert!(watch.observe(CameraView::Internal, 3));
+        assert!(watch.observe(CameraView::Internal, 4));
+        assert!(!watch.observe(CameraView::Internal, 4));
+    }
+}
+
 impl super::Scene {
     /// Records what this frame is being drawn with, for the upscaler that
     /// resolves it afterwards and can derive none of it.
@@ -159,16 +228,32 @@ impl super::Scene {
     /// speed-widened field of view, and computing that twice would be a second
     /// answer to the same question. Its one lossy term, `far`, is not one the
     /// depth transform is sensitive to; see its own documentation.
-    pub(super) fn record_frame(&self, phases: Option<u32>, projection: Mat4) {
+    ///
+    /// `view` and `respawns` are the race's own [`crate::display::CameraView`]
+    /// and [`crate::race::Race::respawns`] this frame - passed rather than
+    /// read off a `&Race` here, because [`CutWatch`] is the only thing that
+    /// needs them and a parameter is cheaper to keep honest than a second
+    /// borrow this function would otherwise take just to read two getters.
+    pub(super) fn record_frame(
+        &self,
+        phases: Option<u32>,
+        projection: Mat4,
+        view: crate::display::CameraView,
+        respawns: u32,
+    ) {
         let phase = self.frame_index.get();
+        let mut watch = self.cut_watch.get();
+        let cut = watch.observe(view, respawns);
+        self.cut_watch.set(watch);
         self.last_frame.set(phases.map(|phase_count| TemporalFrame {
             camera: oag_render::post::fsr3::camera_from_projection(projection),
             jitter: oag_render::jitter::offset_pixels(phase, phase_count),
             phase_count,
-            // The sequence's first frame has nothing behind it. A camera *cut*
-            // mid-race is not detected here and would want the same treatment -
-            // see the handover thread.
-            reset: phase == 0,
+            // The sequence's first frame has nothing behind it, and a camera
+            // cut mid-race - a view change or the player's own respawn - hands
+            // the resolve a history of a different shot, so both throw it away
+            // the same way. See `CutWatch`.
+            reset: phase == 0 || cut,
         }));
     }
 

@@ -222,10 +222,36 @@ counts in findings 4 and 5 are work removed, not a profile.
   light to hand FSR 3.1 - see `docs/rendering/fsr3.md`. It is the *consistent*
   choice rather than the accurate one, and its visible cost is unmeasured. A
   ghost trail behind a dark object is where it would show.
-- **A camera cut does not reset the history.** `Scene::record_frame` sets
-  `reset` on the sequence's first frame only, so a view change or a
-  respawn hands the resolve a history of a different scene. It has not been
-  seen because nothing cuts the camera mid-race yet.
+- ~~**A camera cut does not reset the history.**~~ Fixed 2026-09-05:
+  `scene::motion::CutWatch` observes `Race::camera_view()` and the player's
+  own `Race::respawns()` once a frame and reports a cut whenever either has
+  moved since the last observation - a `SELECT`-cycled view change or the
+  player's craft being put back after a `Reset` contact - and
+  `record_frame` now reads `reset: phase == 0 || cut`. Pinned by four unit
+  tests beside `CutWatch` in `motion.rs`, which need no adapter: this is a
+  book-keeping question, not a pixel one, and the accumulation-clear a
+  `reset` triggers is already covered by `reset_tests.rs`. **Deliberately
+  the player's respawn count and not the field's** - the camera being
+  watched is the player's, and an opponent recovering elsewhere on the
+  circuit is not a cut in this shot, the same distinction
+  `a_respawn_in_flight_makes_everything_visible` draws for the PVS.
+  Documented in `docs/rendering/fsr3.md`.
+
+  **What this does not settle, and could not from a unit test**: what a
+  mid-race view switch or a respawn actually looks like through FSR 3.1 -
+  whether the reset reads as a brief soft frame or a visible pop - is
+  unread. That needs playing it, and belongs with the two open play items
+  above rather than being guessed at here.
+
+  **A discrepancy noticed in passing, not fixed**: `race/respawn.rs`'s own
+  comment on the respawn path says "The camera is snapped ... and only for
+  the player," but no snap call exists there - `Chase::snapped` is called
+  from `Race::set_camera_view` and from `Race::start`, never from
+  `Race::respawn`. The test `a_respawn_in_flight_makes_everything_visible`
+  agrees with the code rather than the comment: "leaves the camera spring
+  catching up." Whether the comment is stale or the snap is a real gap is a
+  feel question for whoever owns respawn camera behaviour, not something
+  this thread's scope covers.
 - **~~A reset did not clear the accumulation it reads.~~ Fixed 2026-09-04**,
   found by a static diff against upstream's `resetAccumulation` path rather
   than by playing: `Fsr3::render` forgot the previous constants and stopped
@@ -339,4 +365,5 @@ counts in findings 4 and 5 are work removed, not a profile.
    inert until a player lowers the render scale - except that unlike `fsr1` it
    is *not* inert at 100 %, because a temporal resolve still has more samples
    than one frame carries.
-5. Reset the history on a camera cut, which nothing does yet - see above.
+5. ~~Reset the history on a camera cut, which nothing does yet.~~ Done,
+   2026-09-05 - see above.
