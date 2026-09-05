@@ -1342,6 +1342,138 @@ would) is not traced from the executable side. Neither this build nor
 `oag-render` draws any of it - still open implementation work, now with a
 narrower and more specific blocker than "the decoder doesn't exist yet".
 
+### The strip, measured against a disc-calibrated capture
+
+**2026-09-05.** The strip's geometry was re-measured off a 3840x2160 RPCS3
+framebuffer grab of the real main menu, at a ruler solved from the picture
+rather than assumed from its resolution. That corrected one structural error and
+one constant, and settled three questions that had been open for want of a
+capture.
+
+#### The ruler
+
+`data/reference/hd-menu-tab-corner/mainmenu-3840x2160.png` (gitignored) shows
+the **HD** style - white page, rules `#646464`, selected tab `#8ac0ca`. The
+scale is solved from two *disc-authored* marks in the same frame, the `FE Screen`
+frame's own two `line.gtf` rules at `x=160 y=110 w=1600 h=8` and `y=975`:
+
+**`capture = authored * 1.92 + (76.8, 43.2)`**
+
+- The rules' ink runs capture `x=384..3455` with no antialiasing on either edge:
+  width `3072.0` = `1600 * 1.92` exactly, giving `ox = 76.8` exactly.
+- Coverage-weighted top edges are capture `260.17` and `1920.96`, `1660.79`
+  apart against an authored `865`: `1.9200`.
+- `76.8 = 3840 * 0.02` and `43.2 = 2160 * 0.02` - a centred 4% underscan, the
+  two axes agreeing without being fitted to one another.
+- Cross-checked on `Title_Arrow_HD.gtf`, which shares no property with `line.gtf`
+  but the screen: authored `x 161..182, y 73..105` predicts capture
+  `385.9..426.2` and `183.4..244.8`, and it measures `385..426` and `183..245`.
+
+**The trap it nearly became.** `line.gtf` is an 8x8 tile whose ink is inset 3
+rows inside its own 8-unit rect, so the *visible* rule is 4 units tall at
+authored `y=113..117`, not 8 at `110..118`. Equating the ink's top edge with the
+authored `y=110` yields an offset 3 units out and makes every later number
+wrong by the same amount. This build already renders that correctly - its rules
+draw at `y=113..116` and `y=978..981` - so the inset is a property of the asset,
+not a gap.
+
+#### What it measured
+
+All in authored `1920x1080` units.
+
+| quantity | real | this build, before | after |
+| --- | --- | --- | --- |
+| tab's left edge | `160.5` | `150.8` | `160.0` |
+| tab's top edge | `126.0` | `117.5` | `125.0` |
+| tab height | `62.0` | `56.8` | `62.0` |
+| tab left pad | `9.4 .. 9.9` | `9.2` | unchanged |
+| label cap top, below the tab top | `8.27` | `17.0` | unchanged - see below |
+| gap between tab fills | `11.46, 10.94, 11.46, 11.46` | `12.0` | unchanged |
+| underline width / height | `20.8` / `7.82` | `19.6` / `7.5` | unchanged |
+| underline top | `167.1` | - | `168.0` |
+
+**The structural error: the anchor is the tab's corner, not the label's pen.**
+`<HorizMenu>` authors `x="160" y="125"`, and the real menu puts the *tab's*
+top-left corner there to within a unit on both axes. This build read it as the
+label's pen and derived the tab by padding outward and upward, putting every tab
+one left-pad too far left and one top-pad too high. The pads' magnitudes were
+right; only which edge they hang off was wrong. Fixed 2026-09-05; confidence 85
+(three independent anchors in one capture, both axes agreeing).
+
+**`TAB_HEIGHT` re-derived** from `14.3` to `15.6` in this build's 480x272 grid -
+`62.0` authored, from coverage-weighted tab edges at capture `285.13` and
+`404.17`. Measured on a selected *and* an unselected tab and equal to four
+digits, which mattered because the selected tab is 24% *wider* than its
+neighbours, so height had to be shown not to vary with selection. Confidence 75,
+against the surrounding group's 55: the ruler is disc-authored marks in the same
+frame rather than an assumed downscale.
+
+#### Tab width is an engine default, and the disc says so by declining to author it
+
+The four unselected tabs are `296.88` wide **each, to two decimals**, while their
+labels are not the same length; the selected one is `366.67`; the gaps are
+`~11.3`; and the strip's outer edges are the frame rules' own `160` and `1760`.
+The total is conserved - `366.67 + 4*296.88 + 4*11.3 = 1599.8` - with the
+selected tab taking its extra width from the other four rather than from the
+strip.
+
+**None of that is authored.** Every `<HorizMenu>` `<Values>` line on the disc:
+
+```
+ 21  <Values align="left" x="160" y="140" color="0xff705070">
+  9  <Values align="left" x="160" y="125" scale="1" color="0xff705070">
+  6  <Values GSDisableEntriesBitField="0x0D" align="left" gap="15" x="160" y="125" color="0xffffffff">
+  5  <Values align="left" x="160" y="125" color="0xff705070">            <? the main menu ?>
+  2  <Values align="left" gap="15" x="160" y="125" color="0xffffffff">
+  1  <Values align="left" gap="15" x="160" y="125" ItemWidth="375" color="0xffffffff">
+```
+
+The widget accepts `gap` and `ItemWidth`, and `online_definition.xml` uses both
+when it wants fixed-width tabs at a fixed pitch. **The main menu sets neither,
+and its five `<Entry>` elements carry `IDString` and nothing else.** So `296.88`
+and `11.46` are runtime engine defaults, and the screen that *does* hard-code a
+tab width is the evidence for that rather than a counter-example.
+
+Hence this build still sizes a tab to its label, and hard-coding `296.88` would
+be inventing a constant the disc deliberately declines to state - `CLAUDE.md`'s
+hand-transcribed-table rule applied to layout. Recorded as measured-and-unauthored.
+
+#### Three questions this closes
+
+- **The highlight does not pulse.** No `blink`, `flash`, `cycle`, `oscill`,
+  `sine`, `frequency`, `amplitude`, `period` or `phase` exists anywhere in the
+  front-end attribute census; `<Key>` carries only `Time`, `X` and `Y`, so a
+  colour cannot be keyframed at all; `Loop` is `false` on every `<Animation>` in
+  `DATA00` and `DATA06`. `pulse="true"` is a real feature used on four
+  boot/placeholder strings and **never on a menu `<Entry>`**. The pixels agree:
+  the strip band is unchanged between two captures of the same screen at
+  different times. Drawing the highlight flat is correct for HD. Confidence 88.
+- **No easing curve is authored.** 122 `<Key>` elements carry `Time`, `X`, `Y`
+  and nothing else; the shape of a motion is authored by adding a key, not by
+  naming a curve. Interpolation is hard-coded in the executable, so recovering a
+  real curve is executable-side work and the data route is closed. Confidence 90.
+- **There is no menu background video.** Six `<Movie>` elements exist across all
+  seven archives, naming the `Studio Logo` reel, the track-selection `FlyByMovie`
+  (whose `src` is a placeholder - the per-track preview is chosen at runtime),
+  and a PSP-era intro backdrop absent from both shipped skins. **No menu screen
+  references a movie as a background and the main menu references none at all**;
+  its backdrop is `<BackgroundAnim>`, a real-time scene. Confidence 88.
+
+#### Still open on the strip
+
+- **The label sits `8.7` units too low inside its tab.** The real cap top is
+  `8.27` below the tab's top; this build's is `17.0`. The residual is this
+  build's own font atlas - the text pen anchors the glyph *cell*, which carries
+  `9.46` units of ascender headroom above the cap at this scale - not the menu
+  geometry. Correcting it in `TAB_TOP_PAD` alone would need `-1.19` authored
+  units, a negative "pad" whose real content is "the authored inset minus this
+  build's atlas headroom", which rots silently the moment the atlas changes. The
+  honest fix is per-role `.fnt` loading with metrics read back, which
+  `crate::frontend::font_line_height`'s own doc already names; after it,
+  `TAB_TOP_PAD` becomes the measured `8.27` authored with no atlas term in it.
+- The title authors `random="true"` - a character-scramble reveal - and this
+  build draws it plain.
+
 ### `menu_font` is `None`, and that is a measurement
 
 Pulse's rows say `font="menu"`, which its language plugins resolve to a face
