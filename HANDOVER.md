@@ -169,13 +169,18 @@ file does not need to carry its own.
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
   `git stash && just test` is how the drift was caught last time.
-- **The whole disc-backed sweep is 3,652 of 3,665, 13 failed, 0 skipped -
-  measured 2026-09-05, and reproduced twice, at load 22-29 (10:51) and on a
-  quiet machine (6:49).** `OAG_REQUIRE_GAME_DATA=1 cargo nextest run
-  --workspace --run-ignored all --no-fail-fast` against local `main`. Both
-  runs named the **exact same 13 tests**, with byte-identical assertion values
-  on the two that assert a value - contention cost wall time on this measurement,
-  not correctness. Re-measure the same way rather than trusting this list past
+- **Plain `just test-data` is 2 failed / 0 skipped; `OAG_REQUIRE_GAME_DATA=1`
+  is 13 failed / 0 skipped - both measured 2026-09-05 against local `main`.**
+  Say which one a number means, always: this file has been burned by exactly
+  this ambiguity before (see the 6-vs-17 entry below, 2026-09-02). Plain
+  `just test-data` (486s) is the command CLAUDE.md documents and the one the
+  next agent will actually run; it shows only the 2 deterministic reds below,
+  because the other 11 are absent-derived-data tests that silently pass
+  without the flag. The 13-under-the-flag number was **reproduced twice**, at
+  load 22-29 (10:51) and on a quiet machine (6:49) - both runs named the
+  **exact same 13 tests**, with byte-identical assertion values on the two
+  that assert a value, so contention cost wall time on this measurement, not
+  correctness. Re-measure the same way rather than trusting either list past
   the next batch of merges; it is exactly the kind of number three sessions
   disagreed on this same day before this was pinned down.
   - **11 of 13 are environment-dependent, not code bugs**: absent derived
@@ -188,7 +193,12 @@ file does not need to carry its own.
     five files confirmed absent, see the trace-absence bullet above - and
     `pure_dlc_ground_truth` (2, needs `data/keys/pure-dlc-keys.txt`, a
     maintainer-only decryption key table; the DLC zips themselves *are*
-    present under `data/dlc/`).
+    present under `data/dlc/`). Neither cause got its own `handover/` thread:
+    the trace-capture gap is the already-documented, already-actionable
+    situation two bullets up (`verification/scenarios/*.inputs` regenerates
+    them; the recorded absence there is now the whole account) and the DLC
+    key table is a maintainer-supplied credential this repo cannot regenerate
+    at all, not an investigation with a next step.
   - **2 of 13 are deterministically red, both traced to a same-day commit,
     neither fixed** (per this file's own standing rule: a red ground-truth
     test usually encodes a real disagreement, so "make it green" is the wrong
@@ -202,14 +212,15 @@ file does not need to carry its own.
     tick before velocity rises off zero). Both have handover threads with the
     evidence trail and a concrete, cheap next step.
   - `ps2_source_ground_truth`'s transcode test - historically flaky under load
-    per the entries below - **passed cleanly in both runs today** (298s
-    contended, 252s quiet), neither confirming nor refuting the older flake
-    reports; two more data points that it needs sustained heavy contention to
-    trigger, not the ordinary load this suite runs under.
-  - This supersedes the 2,488-of-2,494 count below, which is nine months
-    stale (the workspace has nearly tripled in test count since); the
-    mechanism notes below it (the ffmpeg flake's shape, the build-profile fix)
-    are still accurate and worth reading.
+    per the entries below - **passed cleanly in both runs today**, including
+    at load 22-29 (298s), the same contention level the older flake reports
+    were attributed to. That weakens rather than confirms "ordinary contention
+    triggers it"; whatever the older failures needed, this session's load
+    wasn't it.
+  - This supersedes the 2,488-of-2,494 count below, which is over two weeks
+    stale (2026-08-18) and against a workspace that has nearly tripled in
+    test count since; the mechanism notes below it (the ffmpeg flake's shape,
+    the build-profile fix) are still accurate and worth reading.
 - **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
   you are on a tree from before the build-profile fix: `[profile.dev.package."*"]`
   never matched a workspace member, so our own decoders and the sim compiled at
