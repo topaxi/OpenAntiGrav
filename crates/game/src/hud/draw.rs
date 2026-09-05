@@ -679,7 +679,21 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // degenerate triangle pair, and asking the rasteriser to do nothing
             // is worse than not asking.
             Some(fraction) if fraction <= 0.0 => None,
-            Some(fraction) => sprite_draw(&crop_horizontally(sprite, fraction), cx.sheet),
+            Some(fraction) => {
+                let mut cropped = crop_horizontally(sprite, fraction);
+                // `ShieldBar` alone: `Hud_UpdateEnergyBar` tints only the
+                // shield fill, never the speed bar that shares this same
+                // crop-and-draw path - confirmed against the digits this
+                // function formats, `"%"` and not `"kmh"`. RGB only, the
+                // alpha byte stays the widget's own: the original modulates
+                // it for a separate low-shield icon blink
+                // (`hud+0x1dc`, scaled by `8.0`) that is not implemented
+                // here. See [`Readout::shield_forced_red`].
+                if sprite.name == "ShieldBar" && readout.shield_forced_red() {
+                    cropped.color = [1.0, 0.0, 0.0, cropped.color[3]];
+                }
+                sprite_draw(&cropped, cx.sheet)
+            }
             None => sprite_draw(sprite, cx.sheet),
         };
         frame.sprites.extend(drawn);
