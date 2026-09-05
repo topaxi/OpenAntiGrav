@@ -285,13 +285,31 @@ see [`ps2-texture.md`](ps2-texture.md#the-near-miss-shortfall-is-a-duplicated-te
 for the full evidence. `sky12_4.tga`'s pixel data is **not absent from the
 disc** - it is present both as a standalone top-level `WADS2.WAD` entry and
 as the nested set's own last entry (index 150), byte-identical either way.
-The white face is this project's own renderer reading a flat, un-shifted
-mapping (`mesh::build_with_textures`, confirmed in source) rather than an
-honestly-missing asset, and per this project's own rule against inventing
-what the disc already supplies, the fix is a dedup-aware ordinal-to-index
-mapping rather than a texture substitution - not yet implemented, and not
-yet corroborated against what the original PS2 build's own loader does with
-the same shift. Per the per-node sweep, this is not cosmetic on this one
-face alone: ordinals 64-150 (87 of `12_Track`'s 152) each currently bind
-their neighbour's decoded texture one slot early, and only ordinal 151 falls
-outside the set entirely and turns white.
+
+**Corroborated the same day (confidence 88): the original never shifts, because
+it never indexes this set by ordinal at all.** `Texture_FindOrLoad`, the only
+texture-resolution primitive in `SCES_547.48`, resolves every reference by
+hashing the texture's own declared name - never by position - and the nested
+set's own entries are independently confirmed to carry that same name hash:
+every one of `12_Track`'s 152 `Texture` node names, rewritten and hashed,
+matches an entry already in its 151-entry nested set, with the duplicate pair
+correctly sharing one physical entry rather than colliding or shifting. See
+[`ps2-texture.md`](ps2-texture.md#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal)
+for the full evidence and the one link (the exact call site inside a track's
+own Mesh-class constructor) that keeps this at 88 rather than higher.
+
+So the white face is this project's own renderer reading a flat, un-shifted
+positional mapping (`mesh::build_with_textures`, confirmed in source) rather
+than either an honestly-missing asset or a faithfully-reproduced original
+bug: **the original had no ordinal to get right or wrong here in the first
+place.** Per the per-node sweep, this is not cosmetic on this one face alone:
+ordinals 64-150 (87 of `12_Track`'s 152) each currently bind their
+neighbour's decoded texture one slot early, and only ordinal 151 falls
+outside the set entirely and turns white. The fix is a name-based lookup, not
+a dedup-aware ordinal remap - it needs no assumption about the nested set's
+physical ordering, only the name-hash machinery this project already
+trusts elsewhere at confidence 95. Implementing it means changing
+`TextureSlots`'s public shape across `oag-render` and several `oag-game`
+call sites, so it is tracked as a follow-on implementation thread rather than
+done in the same pass as this corroboration - see `HANDOVER.md`'s
+open-thread index.

@@ -478,12 +478,104 @@ this is data agreement (152 independently-resolved node-to-content matches
 with zero exceptions, corroborated by an unrelated second duplicate pair
 inside the same file), the same tier the directory-position finding itself
 carries, and is capped below 94 for the same reason - it is not a runtime
-trace. **What is not established**, and needs its own check before any fix
-ships: whether the original PS2 build's own loader is dedup-aware (matching
-what the name-hash route finds) or whether it *also* reads this flat and
-mis-textures the same 86 surfaces on real hardware, unnoticed because nobody
-happened to look at the wrong one - see `HANDOVER.md`'s open-thread index for
-the follow-up work this opens.
+trace.
+
+### The original never suffers this collapse: it resolves every texture by name, not by ordinal
+
+**Confidence 88, measured 2026-09-05.** The question the section above left
+open - whether the original PS2 loader is dedup-aware or shares this
+project's own flat ordinal bug - resolves to **dedup-aware, and for a
+stronger reason than "aware": the original never indexes a texture set by
+ordinal position at all.**
+
+`Texture_FindOrLoad` (`0x0010c1e0`, [`texture-names.md`](../ghidra/functions/ps2-pulse-eu/texture-names.md))
+is the **only** texture-resolution primitive anywhere in `SCES_547.48` - a
+`search_functions` sweep for `Texture_` and `Wad_` turns up nothing else that
+returns a texture handle - and its signature leaves no room for an ordinal: it
+`strcpy`s its argument as a C string, rewrites `.TGA`/`.MIP` to `.PCT`, hashes
+the result with `Wad_HashNameString`, and walks a hash-keyed cache/BST
+(`g_texture_cache`, confidence 75 for the container). There is no code path in
+this function, or in any of its ten static call sites, that takes a bare
+integer and returns a texture.
+
+**A model's own per-node material resolution was traced one level deeper to
+close the gap between "the primitive is name-based" and "the model loader
+actually uses it that way".** `FUN_001c73d0` (a by-name resource loader used
+for particle effects and referenced from ship/HUD code) calls `Resource_Load`
+by name, then `FUN_001c7550` on the freshly-loaded resource: a **recursive
+walk of the model's own node tree** that calls `Texture_FindOrLoad` on a field
+each node carries at a fixed offset, for both the node's own material and a
+linked list of sub-items hanging off it. That field is populated by
+`FUN_001cc1d0`, a generic file-offset-to-runtime-pointer fixup pass run once
+after load (turns every stored offset in a table into `base + offset`,
+skipping a `-1` sentinel) - exactly the mechanism that would turn a `Texture`
+node's own inline declared-name string into a live pointer, which is what
+`Texture_FindOrLoad`'s `strcpy` then requires. This confirms name-based
+resolution end to end for **one** model-loading pipeline.
+
+**The track loader is a separate pipeline, and was not traced to the same
+depth.** `%s\%strack%s.vex` (the track path format string) is built and
+loaded by `FUN_00145900` through `FUN_001debe8`, which calls the generic
+`Resource_Load` and then dispatches into a per-class node constructor through
+a virtual table (`(**(code**)(class_vtable+0x74))(...)`) rather than through
+`FUN_001c73d0`'s linear walk - the same per-class dispatch shape this
+project's PSP corpus already documents for `.vex` node classes. The specific
+constructor that resolves a **track mesh's** own materials was not located:
+`FUN_001c7550` has no caller besides `FUN_001c73d0`, so it is not literally
+what runs for a track. What carries the finding across to tracks anyway is an
+absence-of-evidence argument, stated as one rather than dressed up as a
+trace: `Texture_FindOrLoad` is the *only* texture-loading function in the
+binary, full stop, so whatever a track's per-class Mesh/Skycube constructor
+does to resolve a material, it has nothing else to call.
+
+**Independent, disc-data-only corroboration, needing no code reading at
+all.** If the nested per-model texture-set WAD's own entries are keyed by the
+same name hash the outer archive uses (which the format - "the same 8-byte
+header and 16-byte entries" - implies but the earlier dedup finding never
+checked), then a name-based resolver never even needs to leave the nested
+set to get the collapse right, regardless of which function does it. Checked
+directly: for every one of the exact-match control (`01_Track`, 133 nodes,
+133 entries) and all five near-miss circuits, each `Texture` node's own
+declared name, stripped of its `Wipeout PSP\PS2\` build prefix (the same
+strip `Texture_FindOrLoad` performs) and rewritten `.tga`->`.pct`, hashes via
+`wad::hash_name` to an entry **already present** in that model's own nested
+set, keyed by that entry's own `name_hash` field:
+
+| Circuit | `Texture` nodes | Nested set entries | Resolved by own name-hash |
+| --- | ---: | ---: | ---: |
+| `01_Track` (control) | 133 | 133 | 133 / 133 |
+| `02_Track` | 148 | 146 | 148 / 148 |
+| `02_Track_reversed` | 148 | 147 | 148 / 148 |
+| `06_Track_reversed` | 166 | 164 | 166 / 166 |
+| `12_Track` | 152 | 151 | 152 / 152 |
+| `12_Track_reversed` | 153 | 152 | 153 / 153 |
+
+856 node-to-entry hash matches, **zero exceptions**, and the duplicate-name
+nodes on the five near-miss circuits resolve to the *same* physical entry as
+their first occurrence rather than failing to resolve - which is correct,
+since they declare the same name. This needs no assumption about which
+function does the resolving: it says the nested WAD's own directory already
+carries everything a by-name lookup needs, so *any* by-name consumer - the
+one this project traced, or one that was missed - gets every node right
+without an ordinal ever entering the picture. Confidence **94** for this half
+alone (pure data agreement, exact, reproducible offline with the disc image
+and no Ghidra project).
+
+**Combined confidence: 88.** The blend is bounded by the untraced link (the
+specific call site inside a track's own Mesh-class constructor) rather than
+by either half above; both of those individually clear 90. **This means
+`oag-render`'s current flat ordinal scheme in `mesh::build_with_textures`
+(and `mesh::ps2_texture_set`, which already parses each entry's `name_hash`
+and discards it on a debug label - see that function's own doc comment) is
+not a faithful reproduction of an original bug. It is simply the wrong
+resolution mechanism**, and fixing it does not risk trading a known-white
+face for an unverified "corrected" one: the original never had an ordinal to
+get right or wrong in the first place. The renderer was not changed in this
+pass - the fix touches `TextureSlots`'s public shape across `oag-render` and
+several `oag-game` call sites (`race/assets.rs`, `livery.rs`,
+`zone_grade.rs`, `mesh/rcs/skin.rs`), which is implementation work, not
+verification, and is tracked as its own thread rather than folded into this
+one - see `HANDOVER.md`'s open-thread index.
 
 **A third model type, and the first checked exhaustively: the boost plume**
 (2026-08-23, confidence 90). Every one of the PS2 disc's 24 plume files -
