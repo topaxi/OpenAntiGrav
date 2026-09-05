@@ -15,7 +15,7 @@
 //!   pads, visibility, handling. This is the page every path constant below
 //!   comes off.
 //! - [`hd-frontend.md`] - the front end: `skin.xml`'s layout globals and the
-//!   boot chain its own XML declares. See [`frontend`] for what that does and
+//!   boot chain it was watched taking. See [`frontend`] for what that does and
 //!   does not license.
 //!
 //! # Deliberately absent
@@ -68,9 +68,10 @@ pub const TITLE: &Title = &Title {
         extra: EXTRA_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
-    // **A declared order, and it says so.** See `frontend::BOOT`'s provenance
-    // and ADR-0025; this field held `None` until the type could carry that
-    // difference.
+    // **A watched order since 2026-09-05.** See `frontend::BOOT`'s provenance
+    // and ADR-0025. This field held `None` until the type could carry the
+    // difference between a declared order and a measured one, then held a
+    // declared one; three cold boots on RPCS3 closed that out.
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,

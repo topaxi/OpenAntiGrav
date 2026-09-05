@@ -98,14 +98,14 @@ fn the_ids_differ_from_the_psp_titles_in_exactly_the_two_measured_ways() {
 /// now the other guard: **nobody may quietly downgrade it either**, and the
 /// evidence lives beside the assertion rather than in a commit message.
 ///
-/// The capture: `just rpcs3-bootchain`, twice, savedata moved aside so
-/// `FirstPlay` is not skipped, both runs walking all eight steps of
+/// The capture: `just rpcs3-bootchain`, three times, savedata moved aside so
+/// `FirstPlay` is not skipped, every run walking all eight steps of
 /// `frontend::BOOT_CHAIN` in order with nothing between them. Kept under
 /// `data/reference/hd-boot-chain/`; transcript on `docs/formats/hd-frontend.md`.
 ///
 /// **What is still not claimed**, and what a future reader should not read out
 /// of `Measured`: RPCS3 is not a PS3, and no frame of the language picker was
-/// ever caught - it is entered on both boots and may auto-redirect without ever
+/// ever caught - it is entered on every boot and may auto-redirect without ever
 /// presenting. `Provenance` is two-valued by design and grades neither.
 #[test]
 fn the_front_end_is_wired_and_its_chain_has_been_watched() {
@@ -115,7 +115,7 @@ fn the_front_end_is_wired_and_its_chain_has_been_watched() {
     assert_eq!(
         front_end.boot.provenance,
         oag_title::Provenance::Measured,
-        "two cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
+        "three cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
     );
     assert!(front_end.boot.provenance.is_measured());
     assert_eq!(frontend::MENU_SKIN.menu_x, 800.0, "1920-wide, not 480-wide");
@@ -129,7 +129,7 @@ fn the_front_end_is_wired_and_its_chain_has_been_watched() {
         1,
         "only Studio Logo plays anything"
     );
-    // The order two boots actually went in, spelled out here rather than only in
+    // The order three boots actually went in, spelled out here rather than only in
     // prose: a step silently reordered or dropped is exactly the regression a
     // `Measured` label makes expensive, and `len() == 8` does not catch it.
     assert_eq!(
@@ -147,6 +147,6 @@ fn the_front_end_is_wired_and_its_chain_has_been_watched() {
             "EULA",
             "Update Announcement",
         ],
-        "data/reference/hd-boot-chain/cold-01 and cold-02 both, then Main Menu"
+        "data/reference/hd-boot-chain/cold-01, cold-02 and cold-03, then Main Menu"
     );
 }

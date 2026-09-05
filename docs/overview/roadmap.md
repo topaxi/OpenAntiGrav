@@ -1405,6 +1405,14 @@ entry point (`FUN_000186f0`) returns `Language Selection`, which agrees with the
 XML at confidence 70; the eight-step order behind it, and which of the six
 `skin.xml` copies is live, both need an emulator.
 
+**Both were settled since, and the paragraph above is left as it read on the
+day.** [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
+wired the front end that same afternoon by giving the chain a `Provenance`, so
+`front_end` stopped being `None`; and on 2026-09-05 three cold boots on RPCS3
+walked all eight steps in the declared order and identified `DATA00`'s copy as
+the live skin - `oag_hd::frontend::BOOT` is `Provenance::Measured`. See
+[hd-frontend.md](../formats/hd-frontend.md#the-boot-chain-declared-and-then-watched).
+
 #### The level and the craft draw, later still on 2026-08-17
 
 ```sh

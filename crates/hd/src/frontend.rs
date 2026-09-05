@@ -15,14 +15,14 @@
 //! title rather than unlocking it."
 //!
 //! **That capture happened on 2026-09-05 and [`BOOT`] is
-//! [`oag_title::Provenance::Measured`].** Two cold boots on RPCS3, savedata
+//! [`oag_title::Provenance::Measured`].** Three cold boots on RPCS3, savedata
 //! moved aside so the boot is genuinely a first play, walked all eight steps of
 //! [`BOOT_CHAIN`] in this order and no other, with nothing extra between them -
 //! `just rpcs3-bootchain`, kept under `data/reference/hd-boot-chain/`. See
 //! [`hd-frontend.md`].
 //!
 //! **Two things that capture did not settle, and they are not this field's.**
-//! [`states::LANGUAGE_SELECTION`] is *entered* on both boots, but no frame of it
+//! [`states::LANGUAGE_SELECTION`] is *entered* on every boot, but no frame of it
 //! was ever caught - `LanguageAutoRedirect` is a sufficient explanation on a
 //! console whose XMB already answers the question, so whether the picker is ever
 //! shown to a player is open. And RPCS3 is an emulator, not a PS3, which is why
@@ -32,16 +32,18 @@
 //!
 //! [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 //!
-//! **The entry point specifically is in better shape than the rest of the
-//! chain**, and it is the one part the PS3 executable has been read for.
-//! `FUN_000186f0` is four instructions returning `"Launch Game"` when a flag on
-//! the game-root object is set and `"Language Selection"` otherwise - both real
-//! HD screen names. Confidence **88** that it returns one of those two on that
-//! flag, **70** that it is the boot entry point, the call site being virtual and
-//! unresolved. So HD's runtime default looks like its XML's, and the only
-//! alternative is a straight-into-a-race trial path rather than a different
-//! front-end order. That is Pure's situation and not Pulse's - but 70 on the one
-//! step nearest the start is not a measured chain of eight.
+//! **The entry point is the one part the PS3 executable has been read for, and
+//! the capture corroborated it.** `FUN_000186f0` is four instructions returning
+//! `"Launch Game"` when a flag on the game-root object is set and
+//! `"Language Selection"` otherwise - both real HD screen names. Confidence
+//! **88** that it returns one of those two on that flag, **70** that it is the
+//! boot entry point, the call site being virtual and unresolved. That 70 used to
+//! be the whole of what was known about the runtime, and this paragraph used to
+//! end by saying so ("70 on the one step nearest the start is not a measured
+//! chain of eight"). It is now a *second, static* line of evidence agreeing with
+//! a boot that was watched: every cold boot does open on `Language Selection`.
+//! Neither number moves - a static read is not confirmed by a dynamic one, they
+//! simply concur.
 //!
 //! **Which of the six `skin.xml` copies is live is `DATA00`'s**, settled by the
 //! same 2026-09-05 boots and by two independent lines. The game's own `printf`
@@ -187,7 +189,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 
 /// The boot order HD takes, read out of `skin.xml` and then **watched**.
 ///
-/// `DATA00`'s `skin.xml` declares these eight redirects and two cold boots on
+/// `DATA00`'s `skin.xml` declares these eight redirects and three cold boots on
 /// RPCS3 went through all eight in this order, twice, with nothing extra between
 /// them. Confidence **85** - capped only because an emulator is not a PS3. See
 /// [`hd-frontend.md`] for the transcript and `just rpcs3-bootchain` to repeat it.
@@ -233,7 +235,7 @@ pub const BOOT_CHAIN: &[oag_title::BootStep] = &[
 ///   in `skin.xml` itself - `hd-frontend.md` checked, and found none referenced
 ///   but undeclared in any of the six copies.
 pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
-    // Read **and** watched, 2026-09-05: two cold boots on RPCS3 walked all eight
+    // Read **and** watched, 2026-09-05: three cold boots on RPCS3 walked all eight
     // steps of `BOOT_CHAIN` in this order and no other, savedata moved aside so
     // `FIRST_PLAY` was not skipped. `just rpcs3-bootchain`, kept under
     // `data/reference/hd-boot-chain/`. Confidence 85 - an emulator is not a PS3.

@@ -10,14 +10,21 @@
 //!
 //! # What this is for
 //!
-//! HD's front end is the first one wired from a **declared** boot chain rather
+//! HD's front end was the first one wired from a **declared** boot chain rather
 //! than a measured one - see
 //! [ADR-0025](../../../docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
-//! Everything here is therefore a check that the *mechanism* reaches HD's own
-//! data, and nothing here is evidence about what a PS3 does. The two are easy
-//! to confuse, which is why the boot itself prints a line saying which it is and
-//! why [`the_boot_report_says_the_order_is_only_declared`] asserts that line
-//! exists.
+//! **That ended on 2026-09-05**: three cold boots on RPCS3 walked the chain and
+//! `oag_hd::frontend::BOOT` is `Provenance::Measured`.
+//!
+//! **The distinction this file was built around still holds, and it is the
+//! thing to keep straight.** Everything here is a check that the *mechanism*
+//! reaches HD's own data - that the skin parses, that the roster is the disc's,
+//! that the paths resolve. **None of it is evidence about what a PS3 does**, and
+//! the capture that upgraded the provenance did not happen in this file or in
+//! any test; it happened in an emulator, and its artefacts are under
+//! `data/reference/hd-boot-chain/`. A green run here would look identical if the
+//! chain were still only declared, which is exactly why the label lives on the
+//! value rather than being inferred from a passing test.
 //!
 //! The three axes that moved into the title package for this title are each
 //! pinned against the disc, because each was a constant in `oag-pulse` that
@@ -75,7 +82,7 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
 /// The whole of what changed is in the first line of this test: `load_shell`
 /// used to refuse this source by name.
 ///
-/// **The provenance assertion has flipped since**, on 2026-09-05: two cold boots
+/// **The provenance assertion has flipped since**, on 2026-09-05: three cold boots
 /// on RPCS3 walked all eight steps of `oag_hd::frontend::BOOT_CHAIN` in order,
 /// savedata moved aside so `FirstPlay` was not skipped. It is asserted here as
 /// well as in `oag-hd`'s own test because this is the value that reaches a
@@ -89,7 +96,7 @@ fn the_front_end_opens_on_a_measured_chain() {
     assert_eq!(
         shell.profile.provenance,
         oag_title::Provenance::Measured,
-        "two cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
+        "three cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
     );
     assert!(
         !shell.screens.screens.is_empty(),

@@ -38,7 +38,7 @@ what would end the state: "an emulator capture now *upgrades* a title rather
 than unlocking it."
 
 **That capture happened on 2026-09-05 and `oag_hd::frontend::BOOT` is
-`Provenance::Measured`.** Two cold boots on RPCS3 walked all eight steps in the
+`Provenance::Measured`.** Three cold boots on RPCS3 walked all eight steps in the
 declared order; the same boots settled that `DATA00`'s is the live `skin.xml`,
 and turned the other five copies from "unexercised" into "unreachable". What is
 *still* open, deliberately and separately, is whether the language picker is ever
@@ -109,7 +109,7 @@ Two findings, and the first is the disc's own bug rather than a reading error:
 | Is there a looping movie backdrop? | **No.** The FE background is a real-time `.vex` scene | 88 |
 | Are any `FEGlobals` referenced but undeclared? | **None, in any of the six** | 90 |
 | Declared boot chain | Eight screens then `Main Menu`, quoted below | 80 |
-| Runtime boot order | **The same order.** Two cold boots on RPCS3, 2026-09-05 | 85 |
+| Runtime boot order | **The same order.** Three cold boots on RPCS3, 2026-09-05 | 85 |
 | Is the language picker ever *shown*? | **Unanswered.** It is entered every boot; no frame of it has been caught | - |
 | Does the executable agree on the first screen? | **Yes.** `0x000186f0` returns `"Language Selection"` by default | 70 |
 
@@ -547,7 +547,7 @@ the language picker first and its runtime opens on `LogoFMV` instead, so HD
 might have done the same. **It does not.** `oag_hd::frontend::BOOT` carries
 `Provenance::Measured`.
 
-Two cold boots, RPCS3 `v0.0.42-19777`, `BCES-00664`, the layer-1 decrypted
+Three cold boots, RPCS3 `v0.0.42-19777`, `BCES-00664`, the layer-1 decrypted
 image, savedata moved aside (see below), no GDB connection at any point. Screen
 names read off `TTY.log`'s own `Switching Screen` lines, `cross` sent only when
 a screen had sat still for eight seconds so no auto-redirect was hurried:
@@ -565,8 +565,19 @@ a screen had sat still for eight seconds so no auto-redirect was hurried:
 | - | `Main Menu` | 53.85 s | 55.92 s | - |
 
 Identical ordering both runs, nothing extra between any two steps, and it is the
-table above exactly. **Confidence 85** rather than higher: RPCS3 is an emulator,
-not a PS3, and the rubric caps an emulator observation there.
+table above exactly.
+
+**Confidence 85, and the arithmetic is worth spelling out** because it is a
+judgement inside a band rather than a cap. This is a *runtime trace*, which the
+[confidence rubric](../reverse-engineering/confidence-rubric.md) ceilings at 94
+"until a second binary agrees" - and the project already treats an emulator
+trace as a runtime trace, PPSSPP breakpoint traces being where several 88s on
+the PSP side come from. So the rubric permits up to 94 here and nothing caps
+this at 85. It is scored at the **bottom** of the 85-94 band for two reasons
+this page states rather than defers: RPCS3 is not a PS3 and its front-end timing
+and connection checks are its own, and there is no second pressing or second
+platform to corroborate against the way Pure's cold boot has. A capture on real
+hardware, or on HD's PSN release, is what would move it up.
 
 **Step 4's live path is the dialog, now on three observations.**
 `EpilepsyWarning` plus `cross` goes to `FirstPlay` both times, which is the
@@ -595,7 +606,7 @@ NEW TO WIPEOUT? ... Choosing YES below will enable the Pilot Assist option."*
 **No frame of `Language Selection` was ever caught.** cold-02's 1.5-second film
 runs `Sony Computer Entertainment presents` (11.77 s) -> black (14.97 s) -> the
 Studio Liverpool reel already playing (20.01 s). `TTY.log` names the picker
-being entered on both boots, so the *state* runs - but whether it ever
+being entered on every boot, so the *state* runs - but whether it ever
 **presents a frame to a player** is open, and the picker's own
 `LanguageAutoRedirect` is a sufficient explanation for it not doing so on a
 console whose XMB has already answered. `RPCS3.log` shows the English language
@@ -649,7 +660,7 @@ coming to `skin.xml` fresh will meet the fork before they meet the measurement:
   `StartEnabled="false"` and neither fires unprompted. Pressing `cross` moves
   it to `FirstPlay` every time (`scripts/rpcs3-drive.py`'s
   `wait_for_screen_pressing`), matching the dialog's own
-  `Option1Destination`. **Confidence 85 since 2026-09-05**, the two cold boots
+  `Option1Destination`. **Confidence 85 since 2026-09-05**, the cold boots
   above having taken the same branch twice more; not raised past that because
   this is RPCS3, not the EBOOT or real hardware.
 
@@ -1670,11 +1681,17 @@ The call site is virtual and was not resolved, so "a game-root accessor that
 yields a start-screen name" is read and "the boot begins here" is inference.
 
 What it does support, at 70: **HD's runtime default agrees with its XML.** The
-declared chain opens on `Language Selection` and the only alternative the
-executable offers is `Launch Game`, which is the straight-into-a-race path a
-demo or trial boot would take, not a different front-end order. That is Pure's
-situation rather than Pulse's - but it is *not* the cold-boot confirmation Pure
-has, and this page still does not assert a runtime order.
+chain opens on `Language Selection` and the only alternative the executable
+offers is `Launch Game`, which is the straight-into-a-race path a demo or trial
+boot would take, not a different front-end order.
+
+**This paragraph used to end "it is *not* the cold-boot confirmation Pure has,
+and this page still does not assert a runtime order."** It has that confirmation
+now - three cold boots on RPCS3, 2026-09-05, every one opening on `Language Selection`
+- so the static read and the watched boot concur. **Neither number moves.** 88
+and 70 score what can be read out of four instructions and an unresolved virtual
+call site, and watching a boot does not make the call site resolved; it is a
+second, independent line of evidence, not a promotion of the first.
 
 The trial reading of that branch is corroborated all over the binary and the
 data: `UpgradeToFullVersionCheckout_Screen.cpp` is one of the 47 classes;
@@ -1861,7 +1878,7 @@ HD names every screen it enters on `TTY.log`
 below is therefore a reading waiting to be taken rather than a blocked one -
 none has been taken yet:**
 
-5. ~~**The runtime boot order.**~~ **Done, 2026-09-05**, two cold boots, all
+5. ~~**The runtime boot order.**~~ **Done, 2026-09-05**, three cold boots, all
    eight steps in the declared order - `oag_hd::frontend::BOOT` is
    `Provenance::Measured`. The risk this item named was real and did not
    materialise: HD's runtime agrees with its XML where Pulse's does not.
