@@ -125,7 +125,7 @@ been read for the loader.
 The two logo reels are `/data/fe/images/studioliverpool.bik` (`DATA02`, 531
 frames, 8.8588 s) and `studioliverpool_fury.bik` (`DATA00`, 558 frames, 9.30 s),
 which are the two files
-[hd-frontend](hd-frontend.md#the-declared-boot-chain)'s `Studio Logo` screen
+[hd-frontend](hd-frontend.md#the-boot-chain-declared-and-then-watched)'s `Studio Logo` screen
 names in its two skin families. **Which one a PS3 plays is still unknown**, for
 the reason that page records: it depends on which of the six `skin.xml` copies
 the runtime loads.
