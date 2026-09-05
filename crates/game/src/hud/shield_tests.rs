@@ -7,10 +7,10 @@
 //! 1,000-line ceiling `scripts/check-file-size.py` enforces - the same reason
 //! [`super::zone_tests`] and [`super::reticle_tests`] are.
 //!
-//! [`super::race::telemetry::shield_flash_tests`] covers the flash timer's own
-//! arming and expiry; this covers only what colour a given [`Readout`]
-//! produces, which is the half of the rule this handover thread was scoped to
-//! wire in.
+//! `crate::race::telemetry`'s own `shield_flash_tests` covers the flash
+//! timer's own arming and expiry; this covers only what colour a given
+//! [`Readout`] produces, which is the half of the rule this handover thread
+//! was scoped to wire in.
 
 use super::*;
 
