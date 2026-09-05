@@ -147,24 +147,55 @@ impl SpeedClasses {
     /// [`Self::VECTOR`] for what that took.
     ///
     /// Kept as a function rather than deleted for two reasons. It is the one
-    /// place every caller - the ordinary RACE page, RACE REMIX's union, and
-    /// any test - asks the question, so the next rung that turns out to be
-    /// authored-but-unraceable has somewhere to go. And it states the
-    /// invariant: **a class this rejects is drawn nowhere.** Not greyed, not
-    /// shown as a locked row - an option that appears and then races on some
-    /// other class's tuning is the invented stand-in this project forbids, and
-    /// an honest absence is the alternative.
+    /// place every caller - RACE REMIX's union, the ordinary RACE page
+    /// underneath [`Self::is_offered_outside_remix`], and any test - asks the
+    /// question, so the next rung that turns out to be authored-but-unraceable
+    /// has somewhere to go. And it states the invariant: **a class this
+    /// rejects is drawn nowhere, on either page.** Not greyed, not shown as a
+    /// locked row - an option that appears and then races on some other
+    /// class's tuning is the invented stand-in this project forbids, and an
+    /// honest absence is the alternative.
     #[must_use]
     pub fn is_selectable(_name: &str) -> bool {
         true
     }
 
     /// The subset of [`Self::names`] this build can actually put a ship on.
+    ///
+    /// **This is engine capability, not a menu-page rule** - it is what
+    /// [`Self::is_selectable`] answers, and RACE REMIX's row is built from it
+    /// directly (see `Session::remix_speed_classes`). The ordinary RACE page
+    /// narrows this further, through [`Self::is_offered_outside_remix`],
+    /// because it wants a stricter question: not "can this build race it" but
+    /// "does this page offer it".
     pub fn selectable(&self) -> impl Iterator<Item = &'static str> + use<> {
         self.names
             .iter()
             .copied()
             .filter(|name| Self::is_selectable(name))
+    }
+
+    /// Whether `name` belongs on the ordinary per-title RACE page, as opposed
+    /// to only RACE REMIX.
+    ///
+    /// **`VECTOR` is confined to RACE REMIX, by a 2026-09-05 maintainer
+    /// decision.** Making the rung selectable at all made a Pure boot's
+    /// ordinary RACE page offer five classes too, which is wider than what
+    /// was asked for - see `docs/architecture/menus.md`'s "Wipeout Pure
+    /// authors five, this build offers four outside remix" section for the
+    /// reasoning and for why this is written down as a deliberate divergence
+    /// rather than left to be found.
+    ///
+    /// This is a **menu-page** rule layered on top of [`Self::is_selectable`],
+    /// not a narrower version of it. Everything below stays exactly as it
+    /// was: `is_selectable` still answers "can this build put a ship on
+    /// `name`" for `true` on every measured rung, RACE REMIX's union still
+    /// unions and still offers `VECTOR` when Pure's data is available, and
+    /// `oag-trace`'s `--class` still spell-checks and resolves it. Only the
+    /// ordinary RACE page's own row stops listing it.
+    #[must_use]
+    pub fn is_offered_outside_remix(name: &str) -> bool {
+        Self::is_selectable(name) && !name.eq_ignore_ascii_case(Self::VECTOR)
     }
 
     /// Every class any of `ladders` authors, as one ladder, slowest first.

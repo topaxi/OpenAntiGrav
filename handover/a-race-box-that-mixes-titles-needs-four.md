@@ -71,10 +71,31 @@ Pure arm asserts `VECTOR`'s resolved `Handling` *differs* from `VENOM`'s, since
 "five rows are offered" would not have caught a row quietly loading Venom's
 numbers.
 
-**One consequence wider than the original ask, stated rather than left to be
-found:** a Pure-only boot now also offers five on the ordinary RACE page, not
-only in remix. That is correct - Pure's own front end authors five
-`<Menu name="Class">` entries - but it was not what was asked for.
+**One consequence wider than the original ask, surfaced and then settled.** A
+Pure-only boot briefly offered five on the ordinary RACE page too, not only in
+remix - correct in that Pure's own front end authors five `<Menu name="Class">`
+entries, but not what was asked for. Asked about it, the maintainer's answer
+was **"Confined to remix."**
+
+**DONE, 2026-09-05.** `oag_title::SpeedClasses::is_offered_outside_remix`
+narrows the ordinary RACE page's row to four, on every title including Pure;
+RACE REMIX's union is untouched and still offers five with a Pure source
+mounted. Recorded as a deliberate divergence, the same way the unlocks
+decision above is, in `docs/architecture/menus.md`'s "SPEED CLASS: `VECTOR` is
+confined to RACE REMIX" section.
+
+**The row alone was not the whole fix.** `race.class` is one setting shared
+with RACE REMIX, whose row can still settle it to `"vector"` - so a player
+who does that and then opens the ordinary RACE page had a stored value the
+row no longer lists, and `Menu::supply` only moves a widget's display index,
+never the stored setting. The RACE page's own `LaunchRace` handler would have
+launched the stale `"vector"` while its row displayed `"venom"` - a menu
+saying one thing and a race doing another. `resolve_race_page_class`
+(`crates/game/src/main/session/menus.rs`) closes it: the launch clamps a
+stored class the page's row does not offer to the row's own first entry, the
+same fallback CIRCUIT and TEAM already use. Pinned by
+`a_stored_vector_on_a_pure_boot_clamps_to_the_race_pages_own_first_entry` and
+its siblings in that file's own `#[cfg(test)] mod tests`.
 
 Still **not** the same question as
 `handover/is-there-a-fifth-handling-class.md`, which is about *Pulse*. Pure

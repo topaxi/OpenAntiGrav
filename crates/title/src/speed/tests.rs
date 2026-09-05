@@ -120,6 +120,41 @@ fn selectable_agrees_with_the_predicate() {
     assert!(FIVE.selectable().all(SpeedClasses::is_selectable));
 }
 
+/// `is_offered_outside_remix` confines `VECTOR` to RACE REMIX without
+/// touching `is_selectable` - the ordinary RACE page's narrower question,
+/// layered on top of the engine's own answer rather than replacing it.
+#[test]
+fn is_offered_outside_remix_confines_vector_and_nothing_else() {
+    assert!(!SpeedClasses::is_offered_outside_remix(
+        SpeedClasses::VECTOR
+    ));
+    assert!(!SpeedClasses::is_offered_outside_remix("vector"));
+
+    for name in SpeedClasses::PULSE_LADDER {
+        assert!(
+            SpeedClasses::is_offered_outside_remix(name),
+            "{name} is not the confined rung and must still be offered"
+        );
+    }
+
+    // Every measured rung stays selectable - the confinement is a menu-page
+    // rule on top of engine capability, not a narrower version of it.
+    assert!(SpeedClasses::is_selectable(SpeedClasses::VECTOR));
+}
+
+/// The subset of [`SpeedClasses::selectable`] the ordinary RACE page actually
+/// draws - four even for Pure's own five-rung ladder.
+#[test]
+fn a_pure_shaped_ladders_race_page_row_is_four() {
+    let race_page: Vec<&'static str> = FIVE
+        .selectable()
+        .filter(|name| SpeedClasses::is_offered_outside_remix(name))
+        .collect();
+
+    assert_eq!(race_page, SpeedClasses::PULSE_LADDER);
+    assert!(!race_page.contains(&SpeedClasses::VECTOR));
+}
+
 /// [`SpeedClasses::MEASURED`] is a spell-checking vocabulary and must stay the
 /// union of the ladders actually read, or `--class` would accept a rung nothing
 /// authors - or reject one something does.
