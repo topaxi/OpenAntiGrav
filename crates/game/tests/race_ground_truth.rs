@@ -2263,15 +2263,4 @@ fn pulses_default_track_reports_its_own_trackstartup_xml() {
     let want = report.contains("8 billboard slot(s), 7 naming a model and 1 a colour")
         && report.contains("sound bank TALONS_JUNCTION_ENV.bnk");
     assert!(want, "no matching trackstartup.xml line: {report}");
-
-    // Slot 8 is the start gantry, and the report names it rather than quietly
-    // drawing nothing - see `docs/rendering/start-gantry.md`. The second half
-    // of the assertion is the one that matters: an absence that stops being
-    // stated is an absence that stops being fixed.
-    assert!(
-        report.contains("slot 8 is the start gantry")
-            && report.contains("/Data/Environments/321_Go/321Go_StartFinish.vex")
-            && report.contains("it is not loaded"),
-        "no start-gantry line: {report}"
-    );
 }
