@@ -458,7 +458,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The menus draw the disc's layout; the footer's ticker and prompts are still unbuilt](handover/the-menus-draw-the-discs-layout-the-chrome.md)
 - [PS2 front-end layout is hardcoded to 480x272](handover/ps2-front-end-layout-is-hardcoded-to-480x272.md)
 - [The HUD layout ground truth is PSP-only, and the PS2 layouts are unchecked](handover/the-hud-layout-ground-truth-is-psp-only.md)
-- [PS2 track texture sets: a duplicated node name shifts every later ordinal](handover/ps2-track-texture-dedup-collapse.md)
+- [PS2 texture resolution should be by name, not by ordinal](handover/ps2-texture-resolution-should-be-by-name.md)
 - [Audio: race SFX plays on all three titles](handover/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/oag-trace-plan-has-never-been-replayed-into.md)
 - [M6 authored lighting: no hardware light slot found enabled, and no `DirectionalLight` consumer found anywhere](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
