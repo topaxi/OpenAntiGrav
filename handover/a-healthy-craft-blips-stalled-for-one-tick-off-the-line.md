@@ -74,9 +74,16 @@ the test's zero-tolerance margin is stale.
   `linear_velocity.length()` logged for ticks `COUNTDOWN_TICKS - 2` through
   `COUNTDOWN_TICKS + 5` on `16_Track` at `ace` to confirm the stall reading
   lands exactly at the release tick.
-- Why only `16_Track` and not `03_Track`/`06_Track` in the same sweep - is it
-  genuinely the slowest-accelerating circuit off the line at Ace, or something
-  circuit-specific (grid slot 1's start position/orientation)?
+- **`16_Track` is not evidence of anything circuit-specific - re-check this
+  before reading anything into it.** The `assert_eq!` sits *inside* the
+  `for track in ["16_Track", "03_Track", "06_Track"]` loop, so the panic on
+  `16_Track` (first in the array) stops the test before `03_Track` or
+  `06_Track` ever run - the log shows exactly one `println!` line before the
+  failure. There is no evidence yet that the other two tracks don't have the
+  same one-tick blip, or a different one. If the transition-tick hypothesis is
+  right, it should reproduce on all three, since nothing about it is
+  circuit-specific; reorder the array or (better) run each track as its own
+  assertion so one failure doesn't hide the other two's results.
 - Whether the *player's* thrust gate (`Race::tick`, gated identically since
   before `cc395862`) has the same one-tick edge and simply isn't exercised by
   any test that would notice it.
