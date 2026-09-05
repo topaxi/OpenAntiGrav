@@ -645,3 +645,9 @@
 0x08b62540	data	g_shadow_direction	88	shadow-occluder.md
 0x08b62530	data	g_shadow_direction_override	80	shadow-occluder.md
 0x08abffd0	data	g_shadow_node_count	82	shadow-occluder.md
+0x08912988	function	Skin_ApplyToModel	88	ship-skin.md
+0x08911a00	function	Texture_UploadPaletted	86	ship-skin.md
+0x08911b8c	function	Skin_ComposeQuarterAtlas	80	ship-skin.md
+0x08911888	function	Texture_Downsample4bpp	84	ship-skin.md
+0x088b34bc	function	MPLobby_UpdateShipPreview	62	ship-skin.md
+0x08a88440	data	g_skin_texture_slot_names	88	ship-skin.md

@@ -104,13 +104,18 @@ data, the same rule `docs/formats/handling-stats.md` already applies to the
 handling globals. The *relationship* above (two tiers, own team below `any`)
 is a format fact and is what's recorded.
 
-**`ship_alt.dat`/`ship_eliminator.dat` are not meshes.** Read directly off
-`Data\Ships\Assegai\ship_alt.dat`: a team-name string, a two-byte `"ms"` tag,
-sixteen `RGBA8` palette entries at offset `0x20`, and a payload whose bytes are
-all in `0..15` - paletted image data, most likely a decal/livery texture
-layered onto the same `Normal` hull rather than a second model. No loader
-traced, so this is a shape reading (confidence ~65), not a decoded format; see
-`docs/formats/handling-stats.md`'s own entry for the lead to the loader.
+**`ship_alt.dat`/`ship_eliminator.dat` are not meshes - they are liveries, and
+the format is decoded.** Each is a `0x20` header (the team's display name,
+NUL-terminated - **there is no `"ms"` tag**, that reading came from one team
+whose name is exactly eight bytes long, and the bytes after the terminator are
+exporter residue) followed by four palette-plus-pixels blocks: three 128x128 and one
+64x64, every one of them 4 bits per pixel behind its own sixteen-entry `RGBA8`
+palette. All sixteen shipped files are exactly 26912 bytes. The loader matches
+each block against the hull model's own texture names and uploads it in place
+of `texture1.tga`..`texture4.tga`, so a skin is a **texture swap on the same
+geometry** and never a second model. Confidence 90; the byte table, the loader
+and the two details that must be reproduced rather than corrected are in
+[`ship-skin.md`](../ghidra/functions/psp-pulse-usa/ship-skin.md).
 
 The main archive's manifest is populated and plain (`<?xml`, unshortened); the
 three UI archives carry an empty `<Screen name="Top">` stub as
@@ -290,13 +295,13 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
 - **`downloadNN.xml`**, entry 1 of each main archive: the pack's `PI_Grid`
   championship ladder. Parsed by nothing; progression is a later milestone.
 - **`PI_TeamModel` / `PI_ModelSkin`**, the concept, zone and unlockable
-  liveries. **The XML schema is read and documented above** (2026-09-02) - what
-  is left is the `.dat` payload format (`ship_alt.dat`/`ship_eliminator.dat`,
-  shape-read as paletted image data but no loader traced) and drawing a second
-  hull at all. `catalogue::Team` deliberately still does not collect these
-  fields, for the same reason it never did: nothing consumes them yet, and a
-  public field no caller reads is worse than one that appears when it is
-  needed. See `HANDOVER.md`'s open threads for the in-flight work.
+  liveries. **The XML schema is read and documented above** (2026-09-02), and
+  the `.dat` payload format is decoded too (2026-09-05, see above) - what is
+  left is a parser for it and a drawing path that selects a livery.
+  `catalogue::Team` deliberately still does not collect these fields, for the
+  same reason it never did: nothing consumes them yet, and a public field no
+  caller reads is worse than one that appears when it is needed. See
+  `HANDOVER.md`'s open threads for the in-flight work.
 - **`PARAM.pbp`**, and the `.edat` files' relationship to the PSN download that
   produced them.
 
