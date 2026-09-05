@@ -518,6 +518,21 @@ pub struct Readout {
     /// what makes the four brackets one model drawn four ways. See
     /// [`crate::race::sight`].
     pub sight: Option<crate::race::sight::Sight>,
+    /// Whether the shield bar is inside its ~1 s post-hit flash window this
+    /// frame.
+    ///
+    /// `Hud_UpdateEnergyBar`'s own `hud+0x11c` timer - a one-shot accumulator
+    /// armed the instant the pool *drops* and running for about a second,
+    /// re-read every frame rather than derived from [`Self::shield_fraction`]
+    /// alone, because "just dropped" is not a pure function of the current
+    /// value. The memory lives on [`crate::race::Race`], not here: a
+    /// `Readout` is a fresh snapshot built every tick and has nowhere of its
+    /// own to keep it. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient`.
+    ///
+    /// `false` on [`Self::blank`], the same as every other "nothing has run
+    /// yet" field.
+    pub shield_flashing: bool,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.
@@ -553,6 +568,31 @@ impl Readout {
     #[must_use]
     pub fn shield_fraction(&self) -> f32 {
         fraction(self.shield, self.shield_max)
+    }
+
+    /// Whether the shield bar draws forced solid red this frame rather than
+    /// its own authored colour.
+    ///
+    /// `Hud_UpdateEnergyBar`'s threshold-plus-flash rule, confidence 82: red
+    /// at or under [`oag_physics::damage::CRITICAL_PERCENT`] of the pool, or
+    /// during [`Self::shield_flashing`]'s window, whichever fires first -
+    /// **never a blend between the two colours by percentage**. Reusing
+    /// `CRITICAL_PERCENT` rather than a second `20.0` here is deliberate:
+    /// `Ship_Damage`'s energy-critical warning, the low-shield icon and this
+    /// bar tint all read the same literal out of `.rodata`, and the point of
+    /// naming it once is that the three cannot drift apart.
+    ///
+    /// **`iVar1` is not reproduced.** The original guards both branches this
+    /// decides between behind an external override flag
+    /// (`func_0x0003a904` on a global race-state pointer) that is not
+    /// identified - see shield.md's "What is still open". Leaving it out
+    /// means this always takes the forced-red branch on a genuine drop, even
+    /// in whatever mode `iVar1` is meant to suppress it for; a guess at its
+    /// meaning would be worse than the gap.
+    #[must_use]
+    pub fn shield_forced_red(&self) -> bool {
+        self.shield_flashing
+            || self.shield_fraction() * 100.0 <= oag_physics::damage::CRITICAL_PERCENT
     }
 }
 
@@ -657,6 +697,8 @@ pub fn inside_screen(rect: [f32; 4]) -> bool {
 mod pickup_model_tests;
 #[cfg(test)]
 mod reticle_tests;
+#[cfg(test)]
+mod shield_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

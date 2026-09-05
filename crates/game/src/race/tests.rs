@@ -26,6 +26,7 @@ mod models;
 mod pads;
 mod respawn;
 mod scene;
+mod shield_flash;
 mod spawn;
 mod spline;
 mod trail_hits;

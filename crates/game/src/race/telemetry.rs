@@ -159,6 +159,126 @@ impl Race {
             // opening again after a target is lost, which a gate on "has a
             // target" would cut off.
             sight: Some(self.sight),
+            shield_flashing: self.shield_flash_timer > 0.0,
         }
+    }
+
+    /// Advances the shield bar's post-hit flash for the next [`Self::readout`].
+    ///
+    /// Called once a tick, from [`Self::tick`], **after every writer of the
+    /// pool has run** - the wall contact `oag_physics::step` itself applies,
+    /// the weapon damage `oag_gameplay::projectile::step` applies (which does
+    /// not surface through `evaluated.shield`, unlike the contact case), and
+    /// the perfect-zone recharge. Sampling any earlier would flash a weapon
+    /// hit a tick late. Comparing the percentage itself, rather than keying
+    /// off one writer's own edge, is also what makes this catch every source
+    /// of a drop at once - the same thing the original's HUD-side comparison
+    /// does, since `Hud_UpdateEnergyBar` has no idea what dropped the pool
+    /// either.
+    pub(super) fn advance_shield_flash(&mut self) {
+        let ship = self.ship();
+        let current =
+            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
+        let (timer, prev) = shield_flash_step(
+            self.shield_flash_timer,
+            self.shield_flash_prev,
+            current,
+            self.dt,
+        );
+        self.shield_flash_timer = timer;
+        self.shield_flash_prev = prev;
+    }
+}
+
+/// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
+/// `hud+0x118`/`hud+0x11c` pair.
+///
+/// **Ported literally as an up-counter that wraps, not rewritten as a
+/// down-counting timer.** The decompiled branch is `if (dropped ||
+/// timer_running) { timer += dt; if (timer >= 1.0) timer = 0.0; }` - so once
+/// the timer is already running, a *further* drop during the window changes
+/// nothing, because `timer_running` alone already satisfies the `||`.
+/// [shield.md]'s own prose calls this "re-armed by any further drop before it
+/// expires", but that describes the *outcome* under sustained contact (every
+/// tick re-tests the drop condition, so the window effectively never lapses
+/// while the pool keeps falling), not a literal reset - the branch itself
+/// never re-arms an already-running timer early. This follows the branch.
+///
+/// Returns `(next_timer, next_prev)`. `next_timer > 0.0` is "flashing this
+/// frame"; `next_prev` is this tick's percentage, threaded back in as next
+/// tick's "previous".
+///
+/// [shield.md]: ../../../../docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient
+fn shield_flash_step(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32) {
+    let dropped = current < prev;
+    let mut timer = timer;
+    if dropped || timer > 0.0 {
+        timer += dt;
+        if timer >= 1.0 {
+            timer = 0.0;
+        }
+    }
+    (timer, current)
+}
+
+#[cfg(test)]
+mod shield_flash_tests {
+    use super::shield_flash_step;
+
+    /// One 60 Hz tick, the same fixed step [`super::Race`] runs at.
+    const DT: f32 = 1.0 / 60.0;
+
+    /// A drop arms the flash on the very tick it happens.
+    #[test]
+    fn a_drop_arms_the_flash_immediately() {
+        let (timer, prev) = shield_flash_step(0.0, 100.0, 60.0, DT);
+        assert!(timer > 0.0);
+        assert_eq!(prev, 60.0);
+    }
+
+    /// No drop, and no flash already running, leaves the timer at zero - a
+    /// rising or level percentage never arms it.
+    #[test]
+    fn holding_or_rising_does_not_arm_it() {
+        let (timer, _) = shield_flash_step(0.0, 60.0, 60.0, DT);
+        assert_eq!(timer, 0.0);
+        let (timer, _) = shield_flash_step(0.0, 60.0, 80.0, DT);
+        assert_eq!(timer, 0.0);
+    }
+
+    /// The window is roughly a second: still flashing at half a second in,
+    /// expired past 1.1 - bounds rather than an exact tick count, since
+    /// accumulating `1.0 / 60.0` sixty times in `f32` may land either side of
+    /// `1.0`.
+    #[test]
+    fn the_window_is_about_one_second() {
+        // Tick 0 is the drop itself; every tick after holds the percentage
+        // level, so only the timer's own "already running" arm keeps it
+        // going - exactly what a single isolated hit looks like.
+        let (mut timer, mut prev) = shield_flash_step(0.0, 100.0, 60.0, DT);
+        for _ in 0..29 {
+            (timer, prev) = shield_flash_step(timer, prev, prev, DT);
+        }
+        assert!(timer > 0.0, "still flashing half a second after the drop");
+
+        for _ in 0..40 {
+            (timer, prev) = shield_flash_step(timer, prev, prev, DT);
+        }
+        assert_eq!(
+            timer, 0.0,
+            "expired: 1.1s have passed since the drop with no further one"
+        );
+    }
+
+    /// A further drop mid-window changes nothing, per the branch rather than
+    /// the prose - see [`shield_flash_step`]'s own doc comment.
+    #[test]
+    fn a_further_drop_mid_window_does_not_reset_it() {
+        let (timer_a, prev_a) = shield_flash_step(0.0, 100.0, 60.0, DT);
+        let (timer_b, _) = shield_flash_step(timer_a, prev_a, 40.0, DT);
+        // Both branches of the `||` are satisfied on this second tick, and
+        // the accumulation is the same either way: one `dt` further on from
+        // `timer_a`, not reset to it.
+        assert_eq!(timer_b, timer_a + DT);
     }
 }

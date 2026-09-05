@@ -858,6 +858,23 @@ pub struct Race {
     /// the audio layer so that every cue *edge* is raised from one place - see
     /// [`Self::tick`] - and out of the hash like the rest of this group.
     shield_was_up: bool,
+    /// The player's shield percentage as of the previous tick.
+    ///
+    /// `Hud_UpdateEnergyBar`'s own `hud+0x118`. Read-only outside
+    /// [`Self::advance_shield_flash`], which is the only thing that needs
+    /// last tick's value rather than this one's - render-side memory, like
+    /// [`Self::shield_was_up`] beside it, and out of the hash for the same
+    /// reason.
+    shield_flash_prev: f32,
+    /// The shield bar's post-hit flash accumulator.
+    ///
+    /// `Hud_UpdateEnergyBar`'s own `hud+0x11c`: `0.0` means "not flashing",
+    /// and it counts *up* while running rather than down, wrapping to `0.0`
+    /// at `1.0` - see [`Self::advance_shield_flash`] for why that is not
+    /// rewritten as a countdown. `> 0.0` is what
+    /// [`crate::hud::Readout::shield_flashing`] reads out of it every tick.
+    /// Render-side, like [`Self::shield_was_up`], and out of the hash.
+    shield_flash_timer: f32,
     /// The lock-on reticle, and what its tone is doing.
     ///
     /// **Render-only state**, on `Race` rather than in `World` for exactly the
