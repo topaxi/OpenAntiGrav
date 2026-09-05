@@ -459,17 +459,135 @@ The chain, from the same function:
 
 Energy cost, a three-tap left-right-left alternation, a roll phase that
 completes rather than reverses, and a reward paid only if the roll finished
-before the craft touched down. Confidence **80**: every link is read at
-instruction level, and the reading has no runtime leg and no measurement of
-what `+0x87c` drives visually - `DAT_08b36bf0`, the ramp rate, is `.bss` and
-could not be read statically.
+before the craft touched down. Confidence **80** when first written, because
+every link was read at instruction level but the reading had no runtime leg and
+no measurement of what `+0x87c` drives visually - `DAT_08b36bf0`, the ramp rate,
+is `.bss` and was believed unreadable statically. **The subsection below raises
+this to 90 and supersedes that last clause**: the global is `.bss`, but its
+writer is not, and every number turned out to be authored XML on the disc.
 
-**This is not implemented and is not in scope here.** It is recorded because
-`engine.md` explicitly parked it as unknown, and because it is a headline
-mechanic the reimplementation does not have. Two things a follow-up would need:
-`FUN_08840770`'s cost (unread), and what consumes `craft+0x1c0 & 0x400` -
-presumably the ship's visual roll, which would make `+0x87c` an angle rather
-than a phase.
+**This is still not implemented.** It is recorded because `engine.md`
+explicitly parked it as unknown, and because it is a headline mechanic the
+reimplementation does not have.
+
+### The cost, the ramp rate and the roll's effect are read, and every number is authored
+
+Corrects the paragraph above: none of the three needed a live read, and the
+guess that `craft+0x1c0 & 0x400` drives the *visual* roll is **wrong**.
+
+**All four barrel-roll tunables are `<Global><Special>` XML attributes.**
+`Xml_ReadGlobalSettings` (`0x0883a970`) parses `Data\XML\HandlingStats.xml` and
+stores five floats into one contiguous `.bss` run, each keyed by an attribute
+name in `.rodata`:
+
+| Attribute (string address) | Global | Name |
+| --- | --- | --- |
+| `turbo_jump` (`0x08a7b3cc`) | `0x08b36be8` | `g_turbo_jump` |
+| `speedpad_jump` (`0x08a7b3d8`) | `0x08b36bec` | `g_speedpad_jump` |
+| `roll_speed` (`0x08a7b3e8`) | `0x08b36bf0` | `g_roll_speed` |
+| `roll_cost` (`0x08a7b3f4`) | `0x08b36bf4` | `g_roll_cost` |
+| `roll_turbotime` (`0x08a7b400`) | `0x08b36bf8` | `g_roll_turbotime` |
+
+Both shipped PSP pressings author the same line, read with
+`oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\HandlingStats.xml'`:
+
+```xml
+<Special roll_cost="8" roll_speed="1.5" roll_turbotime="0.5"
+         speedpad_jump="0.1" turbo_jump="0.1"/>
+```
+
+`speedpad_jump="0.1"` is the control. That value was already recorded on
+[engine.md](engine.md) from an independent live read of `0x08b36bec`, so the
+same line's other four attributes come from a source this project has already
+validated, and `g_speedpad_jump`'s address confirms the `.bss` run's alignment.
+
+**`Ship_BarrelRollCost` (`0x08840770`) returns 8% of the ship's shield
+capacity.** Ten instructions, a leaf:
+
+```
+lw    a0, 0x94(a0)             ; a0 = craft->0x94
+lw    a0, 0x6c(a0)             ; a0 = [craft->0x94 + 0x6c], the stats base
+lw    a1, 0xb4(a1)             ; a1 = g_skill_level (0x08b31044)
+sll   a1, a1, 0x2
+addu  a0, a0, a1
+lui   a1, 0x3c23 / ori 0xd70a  ; 0x3c23d70a is 0.01f exactly
+lwc1  f12, [g_roll_cost]       ; 8
+lwc1  f0,  0x84(a0)            ; stats_base + 0x84 + g_skill_level*4
+mul.s f12, f12, 0.01
+jr    ra
+mul.s f0,  f12, f0
+```
+
+`roll_cost` is a **percentage** - the `0.01` literal is what makes it one - and
+`stats_base + 0x84 + index*4` is `<Misc>`'s three difficulty slots
+(`easyshield`/`mediumshield`/`hardshield`, offsets `0x84`/`0x88`/`0x8c` per
+[handling-stats.md](../../../formats/handling-stats.md)).
+
+The index needs no separate identification, because
+**`Ship_SetShield` (`0x0883e6f4`) computes the identical expression** as the
+ceiling it clamps every shield write to:
+
+```c
+fVar3 = *(float *)(*(int *)(*(int *)(param_2 + 0x94) + 0x6c)
+                   + _DAT_000578ac * 4 + 0x84);
+if (param_1 <= fVar3) { fVar3 = param_1; }
+```
+
+Same chain, same `+0x84 + index*4`, same global - `_DAT_000578ac` is the naive
+form of `0x08b31044`. So whatever the index selects, the roll costs
+**`roll_cost`% of exactly the number that bounds the shield pool**, which is
+`oag_physics::params::Dimensions::shield` in this project (already resolved for
+the race's skill level by `oag_formats::handling::Misc::shield_for`). The same
+function's HUD call divides by the same expression to get a percentage.
+
+`g_skill_level` (`0x08b31044`) is `0x08b30f90 + 0xb4`, one slot along from the
+speed-class index at `+0xb0` and the race mode at `+0xb8` that
+[pads.md](pads.md) places in the same global block. It was **already named**, on
+[shield.md](shield.md) at confidence 84, and this pass reached the same name
+from the other end without knowing that: written by `Race_ReadSetupOptions`
+(`0x08896b84`) at `0x088970cc`/`0x088970d4`, read at 25 sites,
+`Ship_SetShield` among them. Two independent derivations agreeing is worth
+recording; the row stays on `shield.md`.
+
+**`craft+0x1c0 & 0x400` is a handling modifier, not a visual one.** A complete
+instruction-level scan of the whole `.text` for `lw rX, 0x1c0(rY)` followed
+within six instructions by `andi rX, rX, 0x400` returns **exactly three** sites,
+and all three are ship dynamics:
+
+| Site | Function | What the bit does |
+| --- | --- | --- |
+| `0x08848ba8` -> `0x08848bb4` | `Ship_ApplyLateralGrip` (`0x08848b78`) | both grip terms, `stats+0x10` and `stats+0x14`, are multiplied by **1.5** |
+| `0x0884a708` -> `0x0884a70c` | `Ship_HoverTwoPoint` (`0x0884a658`) | a hover scalar is forced from `stats+0x4` to a literal **1.0** |
+| `0x0884c8b0` -> `0x0884c8b4` | `Ship_UpdateEngine` (`0x0884c5c8`) | enables the uncapped turbo add |
+
+The scan is the searchable form because `get_xrefs_to` cannot help here at all -
+see [workflow.md](../../workflow.md). `scripts/psp-relocate.py masked 0x1c0 0x400`
+reproduces the three; `andi 0x400` alone returns 151 sites.
+
+The hover reading is from the delay slots: `f20` is set to `0x3f800000` (`1.0f`)
+at `0x0884a6bc`, the default `f28` is `lwc1 f28, 0x4(a0)` at `0x0884a704`, and
+`0x0884a720` does `mov.s f28, f20` only on the bit's arm. The same override
+already applies when `craft+0x2a4 == 0`.
+
+`Ship_UpdateEngine`'s use was already recorded from the other direction in
+`crates/physics/src/ship.rs` at confidence 75, as one of two bits (`0x200` or
+`0x400`) that turn the same term on. `roll_turbotime="0.5"` now supplies that
+arm's duration.
+
+So a barrel roll is **four** effects, not one: it costs 8% of shield up front,
+gives 50% more lateral grip and a neutralised hover scalar while the phase
+runs, and pays a 0.5 s turbo on landing if `|craft+0x87c| > 0.5`. And the ramp
+rate being `roll_speed = 1.5` means `+0x87c` reaches `1.0` in **0.667 s**, with
+the half-way split the section above describes crossed at 0.333 s.
+
+Confidence **90** overall, up from 80: every value is authored data read off
+both pressings rather than a measurement, the cost expression is shared verbatim
+with an already-named function, and the `0x400` consumer list is a complete scan
+rather than an xref that could have missed one.
+
+Nothing here says what draws the roll. No render-side consumer of `+0x87c` was
+searched for, so whether the visual is an angle derived from the phase or a
+canned animation is still open - the bit simply is not how it gets there.
 
 ## Applied renames
 
@@ -481,9 +599,22 @@ than a phase.
 | `0x0883672c` | `Options_LoadDefaultControlMapping` | 88 |
 | `0x08836a48` | `Options_LoadControlMapping` | 85 |
 | `0x0889b468` | `Options_BuildControlSchemeRows` | 82 |
+| `0x08840770` | `Ship_BarrelRollCost` | 90 |
+| `0x08b36be8` | `g_turbo_jump` | 82 |
+| `0x08b36bf0` | `g_roll_speed` | 90 |
+| `0x08b36bf4` | `g_roll_cost` | 90 |
+| `0x08b36bf8` | `g_roll_turbotime` | 88 |
+| `0x08b31044` | `g_skill_level` | 85 |
 
-`FUN_088367d8` (the custom-mapping writer) and `FUN_08840770` (the barrel
-roll's energy cost) are left unnamed: both were seen only through a caller.
+`FUN_088367d8` (the custom-mapping writer) is left unnamed: it was seen only
+through a caller.
+
+`g_turbo_jump` is 82 rather than 90 because only its *name* is read - the
+attribute-to-global mapping in `Xml_ReadGlobalSettings` is as direct as the
+other four's, but unlike them nothing has been traced that reads it, so what
+`turbo_jump` does is unknown. `g_roll_turbotime` is 88 for a milder version of
+the same: its consumer is `Ship_UpdateEngine`'s `0x400` arm by elimination
+rather than by a read of the store into `craft+0x898`.
 
 ## For reimplementation
 

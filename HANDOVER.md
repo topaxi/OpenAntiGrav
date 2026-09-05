@@ -517,7 +517,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The race camera's FOV is fitted to the PSP's own aspect on every title, and the PS2's own in-game widening option has no counterpart](handover/the-race-cameras-fov-is-fitted-to-the-psps.md)
 - [The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual](handover/the-ais-six-stage-plan-line-follower-to.md)
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/the-ai-was-never-the-problem-four-contact.md)
-- [A global reached through `$gp` has an instruction displacement unrelated to its address](handover/a-global-reached-through-gp-has-an-instruction.md)
 - [DLC packs are mounted; two things inside them are not read](handover/dlc-packs-are-mounted-two-things-inside-them.md)
 - [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
 - [The menus draw the disc's layout; the footer's ticker and prompts are still unbuilt](handover/the-menus-draw-the-discs-layout-the-chrome.md)
@@ -555,7 +554,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The lap capture's own "the HUD said `Lap 2 of 3`" claim is now in tension with the finding that closed this row, and nobody has reconciled them](handover/the-lap-captures-own-the-hud-said-lap.md)
 - [The 13 % roll-stiffness gap](handover/the-13-roll-stiffness-gap.md)
 - [Craft-to-craft collision is implemented; the stun is still not armed](handover/craft-to-craft-collision-is-implemented-the-stun.md)
-- [The barrel roll is identified and unimplemented](handover/the-barrel-roll-is-identified-and-unimplemented.md)
+- [The barrel roll is read end to end and still unimplemented](handover/the-barrel-roll-is-read-and-unimplemented.md) - the RE is finished at confidence 90 and **every number is authored data**, so nothing here needs a invented constant: `<Global><Special roll_cost="8" roll_speed="1.5" roll_turbotime="0.5"/>`, identical on both PSP pressings. The cost is 8% of the ship's shield capacity - `Ship_BarrelRollCost` (`0x08840770`) computes the same expression `Ship_SetShield` clamps to - the phase ramps at 1.5/s so a roll takes 0.667 s, and a completed roll pays a 0.5 s window in which `craft+0x1c0 & 0x400` is held. That flag is **not** the visual roll the old thread guessed: a complete `.text` scan finds exactly three consumers, all handling - 1.5x lateral grip, a hover scalar forced to 1.0, and the turbo add. Open: nothing draws the roll and no render-side consumer of `entity+0x87c` has been looked for; `<Special turbo_jump>` has a name and no reader; PS2 unchecked
 - [Sideshift has no runtime leg](handover/sideshift-has-no-runtime-leg.md)
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
 - [Menus: no pause overlay while a race is suspended](handover/menus-no-pause-overlay-while-suspended.md)
@@ -1390,16 +1389,33 @@ HI16/LO16 pair or a 32-bit data word that resolves into `.bss`, `.cplinit`,
 and the relocation-record check:
 [anim-transform.md](docs/ghidra/functions/psp-pulse-usa/anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image).
 **2026-09-05: that HI16/LO16 route did turn up for `DAT_08b32428`, and it settled
-two things at once.** First, [the `$gp`-relative thread](handover/a-global-reached-through-gp-has-an-instruction.md)'s
-own premise was wrong: this binary uses `$gp` as a load/store base register
-**zero** times in its entire 521,965-instruction body, so `DAT_08b32428` was
-never `$gp`-relative to begin with - the actual mechanism was this naive-value
-trap all along. Second, applying the segment-1 base (`+0x08ad9798`) here does
-**not** reproduce the independently-known address; a *different* constant
-(`+0x08ad9450`) does, cross-validated three ways in one function. That breaks
-anim-transform.md's "there is no third base to find" - see the correction added
-there, and the thread file, for the full derivation and the writer it found
-(`DAT_08b32428`'s two write sites, one per race mode).
+two things at once.** First, the `$gp` premise was wrong: this binary uses `$gp`
+as a load/store base register **zero** times in its entire 521,965-instruction
+body, so `DAT_08b32428` was never `$gp`-relative to begin with - the actual
+mechanism was this naive-value trap all along. Second, applying the segment-1
+base (`+0x08ad9798`) appeared not to reproduce the known address while a
+different constant (`+0x08ad9450`) did.
+
+**Retracted the same day, and this is the part to read: stop doing the
+arithmetic by hand.** `scripts/psp-relocate.py` replays the PRX relocation
+records instead of decoding immediates, and it shows the second half above was
+a misread. `DAT_08b32428`'s base is built by `addiu ?,?,-0x7378`, not
+`-0x7030`; the naive value is `0x00058c88`, not `0x00058fd0`; and it resolves
+under the ordinary segment-1 base. The three naive values the "third base"
+rested on have **zero** relocation records between them, and each is exactly
+`+0x348` off a real one - one constant slip, cancelled by inventing a base
+`0x348` lower, which is why three cross-checks all seemed to agree. **There are
+two `PT_LOAD` segments and therefore exactly two bases.** The two write sites
+were real but their addresses were `0x134` low; corrected in
+[missile.md](docs/ghidra/functions/psp-pulse-usa/missile.md).
+
+The script reproduces five independently-recorded addresses with no
+special-casing and lands 97.85% of 108,813 resolved targets inside a loaded
+segment. It also carries the two searches Ghidra cannot do here: `xrefs` on the
+relocated value, and `member` for a global reached as base-plus-offset -
+`DAT_08b32428` is `DAT_08b32420 + 8` and has no record of its own, which is the
+zero that started this whole detour. See
+[workflow.md](docs/ghidra/workflow.md#stop-doing-it-by-hand-scriptspsp-relocatepy).
 
 **`get_xrefs_to` can work after all - on the naive address, not the relocated
 one.** Found tracing `g_ingame`'s readers for the same thread: `get_xrefs_to`
