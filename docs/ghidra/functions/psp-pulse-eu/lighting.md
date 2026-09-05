@@ -734,6 +734,22 @@ that never explains its own hits is not trustworthy, and this one does.
 
 ### Missile and Energy Drain remain untested, and why - a real, reproducible PPSSPP crash, not a shrug
 
+> **Diagnosed 2026-09-05, and this section's central uncertainty is now
+> resolved. Read
+> [`psp-pulse-usa/bad-memory-access-halt.md`](../psp-pulse-usa/bad-memory-access-halt.md)
+> instead of re-deriving any of it.** The crash is the emulated game loading a
+> quad from `null + 0x30` inside `FUN_08872f54`, whose one caller is a weapon
+> instance pool. **Only the LeachBeam causes it**, because the raw bit write
+> leaves the instance's matrix pointer `+0xa0` null; the Missile fires and is
+> consumed with no halt at all, so pairing the two under one crash - which this
+> section does throughout - is wrong. "The bit was never observed consumed" also
+> did not reproduce: every bit tried read back **set** at the dispatcher
+> breakpoint and **clear** after the run. That readback is post-hoc, so it shows
+> the bit does not stay stuck, not that a handler certainly ran. What survives: **Energy Drain is
+> permanently untestable through `psp-fire-weapon.py`'s raw-bit mechanism**, and
+> the Missile is testable and was never the problem. The paragraphs below are
+> kept as the record of what was known before that pass.
+
 Both weapons are actually already identified with real confidence -
 `docs/ghidra/functions/psp-pulse-usa/missile.md`'s id-to-bit table gives
 Missile bit `0x40` (confidence 90, `Weapon_FireMissile` named and read in
@@ -838,11 +854,11 @@ pass.
   addresses, positive-control-verified, across ~2 minutes of driving plus
   the rocket/burst/backward weapons - zero hits on both fields throughout,
   the strongest evidence tier this project's rubric has, agreeing with every
-  static pass. **Missile and Energy Drain remain untested** - both attempts
-  to fire them hit a real, reproducible PPSSPP crash (`Bad memory access...
-  Stopping emulation`, identical JIT block both times) whose cause (the
-  test's own bit-write, or an unrelated deterministic race event) is not
-  established; see "Missile and Energy Drain remain untested" below. Either
+  static pass. **The Missile gap is closed and the Energy Drain one never
+  can be** - the crash that blocked both was diagnosed on 2026-09-05 (see
+  the section below): only the LeachBeam causes it, and it causes it
+  *deterministically*, within a frame of the bit write, so Energy Drain
+  cannot be observed through this mechanism at all. Either
   the collection exists for a purpose this project hasn't identified, or it
   has none past track load - not a claim this page can rule between, but the
   search itself has converged as far as it currently can.

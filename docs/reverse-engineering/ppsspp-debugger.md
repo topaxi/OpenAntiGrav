@@ -1194,21 +1194,31 @@ target that counts zero beside it is genuinely not being read.
 
 Getting a craft address needs no new tooling: `psp-drive.py state` prints one.
 
-### A stale or invalid watchpoint address is not harmless - it can stop emulation outright
+### A stale or invalid watchpoint address counts nothing, so bounds-check it
 
 **Verified 2026-08-31, PPSSPP v1.20.4, `pulse-psp-usa.chd`.** A control watch
 computed as `craft + BODY_POINTER` came back reading a body pointer of `0`
 (see the next trap for why), so the watchpoint was armed on address `0x30`
 instead of a real one - well outside `0x08000000`-`0x0A000000`. It sat there,
-`enabled: false`, at 0 hits, looking exactly as harmless as the doc above
-says a working-but-quiet watchpoint should. It was not: minutes later,
-`E[MEMMAP] Bad memory access detected! 00000030 (0x7f8300000030) Stopping
-emulation.` killed the whole session, at the same JIT block
-(`08872f98_z_un_08872f54`, `movaps xmm6,[rbx+rbp]`) both times it recurred
-across two independent sessions. **Always check a computed watch address is
-in PSP RAM bounds before arming it, and remove one that isn't immediately**
-rather than trusting `enabled: false` to make a bad address inert - it does
-not.
+`enabled: false`, at 0 hits. **Always check a computed watch address is in PSP
+RAM bounds before arming it**: a watch on a bogus address is not an instrument,
+it is a zero that looks like a measurement, which is exactly the failure
+["always arm a positive control"](#always-arm-a-positive-control) exists to
+catch.
+
+**Corrected 2026-09-05 - this trap used to claim the bad watchpoint *caused* an
+emulator halt. It did not.** The same session ended in `E[MEMMAP] Bad memory
+access detected! 00000030 ... Stopping emulation.` at JIT block
+`08872f98_z_un_08872f54`, and the coincidence of the number `0x30` made that
+read as cause and effect. It is not: a PPSSPP memory watchpoint cannot produce a
+host `movaps` load fault with the guest memory base in `rbx`, and the halt has
+since been reproduced deliberately on two clean boots **with no watchpoint armed
+at all**. It is the emulated game loading a quad from `null + 0x30`, triggered
+by writing the LeachBeam fire bit by hand - see
+[the `00000030` halt](../ghidra/functions/psp-pulse-usa/bad-memory-access-halt.md).
+The practical rule that replaces the old one: **do not fire the LeachBeam
+(`0x8000`) through `scripts/psp-fire-weapon.py`'s raw-bit mechanism**; it halts
+the emulator within a frame, every time.
 
 ### Two connections racing the same execution breakpoint corrupts the read, not just the timing
 

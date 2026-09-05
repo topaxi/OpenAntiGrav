@@ -39,23 +39,24 @@ structure. `Weapons_DispatchFire` walks an **inline array in the world**:
 from the dispatcher's own argument and indexes that array, which is why the
 breakpoint here is `Weapons_DispatchFire` and not the ship update.
 
-**Missile (bit `0x40`) and LeachBeam (bit `0x8000`) are identified
-(`docs/ghidra/functions/psp-pulse-usa/missile.md`'s id-to-bit table,
-confidence 90 on Missile) but not in `WEAPONS` below, and calling `fire()`
-with those raw bits directly did not work - not "fired but no visible
-effect," the bit was never observed consumed at all.** Tried twice
-(2026-08-31, `docs/ghidra/functions/psp-pulse-eu/lighting.md`'s ninth pass),
-on two separate freshly booted, confirmed-live emulators; both attempts
-were followed by PPSSPP crashing (`Bad memory access... Stopping emulation`,
-identical JIT block both times, a few minutes into the session). Whether
-the crash is caused by firing these two weapons this way, or is a
-coincidence with something else deterministic about that race (an AI
-opponent naturally firing one, for instance - seven other craft call the
-same dispatcher every tick with real state), is not established. Checked
-and ruled out: `Weapon_FireMissile` (`0x088685cc`) writes `craft+0x1bc =
-0xffffffff` itself, unconditionally, so `fire()`'s own null-target write
-isn't the culprit. Before spending a session on either weapon here, read
-that ninth pass first.
+**Never fire the LeachBeam (bit `0x8000`) through this script.** It halts
+PPSSPP within a frame, deterministically: the instance lands in the weapon
+pool `FUN_08866b08` walks with its matrix pointer `+0xa0` never filled in,
+and the next update tick loads a quad from `null + 0x30`
+(`E[MEMMAP] Bad memory access detected! 00000030 ... Stopping emulation`).
+That is why `leachbeam` is deliberately absent from `WEAPONS` below. The
+whole diagnosis, including the register read one instruction before the
+fault, is in
+`docs/ghidra/functions/psp-pulse-usa/bad-memory-access-halt.md`.
+
+**The Missile is fine, and used to be blamed for that halt alongside the
+LeachBeam.** It is not implicated: bit `0x40` was written, consumed and
+produced no halt, in the same session as a rocket control and the LeachBeam
+run that did halt (2026-09-05, two independent boots). The older claim here
+that neither bit was "ever observed consumed" did not reproduce for either
+weapon. What has *not* been confirmed for the Missile is the picture - that
+a missile visibly flies - so treat `missile` below as a bit that dispatches,
+not as a verified visual.
 
 Subcommands are the weapon names in `WEAPONS`. `--probe-dispatch` skips firing
 and just reports the arguments `Weapons_DispatchFire` is called with.
@@ -90,10 +91,14 @@ TARGET_WORD = 0x1BC
 # off `Weapons_DispatchFire`'s dispatch chain and are not in doubt.
 WEAPONS = {
     "rocket": (0x0080, "Weapon_FireRocket 0x0886e104 - three at once, fanned", 88),
-    "burst": (0x0002, "Weapon_UpdateBurstFire_q 0x088675cc - probably the Cannon", 72),
+    "missile": (0x0040, "Weapon_FireMissile 0x088685cc - homing; bit dispatches, visual unconfirmed", 90),
+    "burst": (0x0002, "Weapon_DropMines 0x088675cc - mines, per mine.md", 90),
     "backward": (0x0100, "FUN_08863a20 - fires backwards, reads as a Bomb or Mine", 60),
     "turbo": (0x0200, "timed pickup, the engine gate's half", 65),
 }
+
+# `leachbeam` (bit 0x8000, Weapon_FireLeachBeam 0x08866658) is deliberately not
+# here: setting it halts PPSSPP within a frame. See the module docstring.
 
 
 def gpr(dbg):
