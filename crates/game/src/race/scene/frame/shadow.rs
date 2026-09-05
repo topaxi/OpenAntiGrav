@@ -253,17 +253,7 @@ impl super::super::Scene {
             }
             casters.push(self.ships[slot].caster(race.ship_model_matrix_of(slot)));
         }
-        let fit = oag_render::shadow::map::Fit {
-            centre: mapped_centre(race.ship_model_matrix_of(0)),
-            radius: MAPPED_RADIUS,
-            towards_light: mapped_light(&self.light),
-        }
-        // Snapped to whole texels of the map this fit is about to render
-        // into, in the light's own basis: a centre that slides by an
-        // arbitrary sub-texel amount every frame re-quantises the whole map,
-        // which is the standard cause of a shadow that crawls under a moving
-        // fit. See `Fit::snapped`.
-        .snapped(oag_render::shadow::map::DEPTH_SIZE);
+        let fit = mapped_fit(race.ship_model_matrix_of(0), mapped_light(&self.light));
         // The coverage map stays cleared while this tier is on: two maps are
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.
@@ -291,13 +281,42 @@ impl super::super::Scene {
 /// upward of a hundred texels of this tier's `shadow::map::DEPTH_SIZE` map:
 /// far more than any sub-texel jitter `Fit::snapped` exists to remove, and
 /// enough on its own to read as the box sliding around under the player.
-/// Flattening the heading to the world's horizontal plane leaves only yaw -
-/// the direction the player is actually steering towards - driving the lead.
+///
+/// **Not renormalised after flattening.** A pure heading - normalising the
+/// horizontal part back to unit length - flips 180 degrees the instant the
+/// craft crosses vertical pitch, since the horizontal component's *sign*
+/// carries the direction on either side of it: at 89 degrees of pitch it
+/// points one way, at 91 the other, with nothing between to interpolate
+/// through. Pulse has loops and corkscrews, so a craft passes through
+/// vertical - that flip would swing the centre by a full `2 *
+/// MAPPED_AHEAD`, further than the pitch bug this replaces. Leaving the
+/// projection unnormalised instead makes its own magnitude - not its sign -
+/// carry the craft through vertical: the lead foreshortens smoothly to zero
+/// as pitch approaches 90 degrees (`cos(pitch) * MAPPED_AHEAD`, about nine
+/// texels of shortening per ten degrees) and grows back out the other side,
+/// with no discontinuity anywhere. It still never adds a vertical
+/// component - the lead's own `y` is always zero, pitch or no pitch.
 fn mapped_centre(player: oag_core::math::Mat4) -> Vec3 {
     let position = player.transform_point3(Vec3::ZERO);
-    let forward = player.transform_vector3(Vec3::Z);
-    let heading = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+    let forward = player.transform_vector3(Vec3::Z).normalize_or_zero();
+    let heading = Vec3::new(forward.x, 0.0, forward.z);
     position + heading * MAPPED_AHEAD
+}
+
+/// The `mapped` tier's own fit, built and snapped in one place - so a caller
+/// cannot reach `render_depth` with an unsnapped `Fit` by skipping a step.
+///
+/// Snapped against `shadow::map::DEPTH_SIZE`, the map this tier actually
+/// fills - not `shadow::map::SIZE`, which belongs to the coverage tier and
+/// breathes with its own caster grid every frame, so it has no fixed texel
+/// size worth snapping against. See `Fit::snapped`.
+fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::shadow::map::Fit {
+    oag_render::shadow::map::Fit {
+        centre: mapped_centre(player),
+        radius: MAPPED_RADIUS,
+        towards_light,
+    }
+    .snapped(oag_render::shadow::map::DEPTH_SIZE)
 }
 
 /// Which way the `mapped` tier's light points, per title.
@@ -339,7 +358,7 @@ fn default_fit() -> oag_render::shadow::map::Fit {
 mod tests {
     use oag_core::math::Mat4;
 
-    use super::{MAPPED_AHEAD, mapped_centre};
+    use super::{MAPPED_AHEAD, mapped_centre, mapped_fit};
     use oag_core::math::Vec3;
 
     /// The report under investigation was "the box follows the camera". This
@@ -362,22 +381,64 @@ mod tests {
         assert_eq!(centre, Vec3::new(5.0, 0.0, MAPPED_AHEAD));
     }
 
-    /// Pitching the player - cresting a jump, diving into a dip - does not
-    /// move the lead at all: only the horizontal heading drives it. Before
-    /// this fix the lead swung by `MAPPED_AHEAD * sin(pitch)`, on the order of
-    /// a hundred texels of the `mapped` tier's own map for a modest 10-degree
-    /// pitch - see this module's `mapped_centre` docs for the measurement.
+    /// Pitching the player - cresting a jump, diving into a dip - never adds
+    /// a vertical component to the lead: whatever the pitch, the centre sits
+    /// at exactly the player's own height. Before this fix the lead swung
+    /// vertically by `MAPPED_AHEAD * sin(pitch)`, on the order of a hundred
+    /// texels of the `mapped` tier's own map for a modest 10-degree pitch -
+    /// see this module's `mapped_centre` docs for the measurement.
     #[test]
-    fn pitching_the_player_does_not_move_the_lead() {
-        let level = mapped_centre(Mat4::IDENTITY);
-        for pitch_degrees in [5.0_f32, 10.0, 15.0, -20.0] {
-            let pitched = Mat4::from_rotation_x(pitch_degrees.to_radians());
+    fn pitching_the_player_never_adds_a_vertical_component_to_the_lead() {
+        let position = Mat4::from_translation(Vec3::new(0.0, 12.0, 0.0));
+        for pitch_degrees in [5.0_f32, 10.0, 15.0, -20.0, 45.0, 89.0, 91.0, 135.0] {
+            let pitched = position * Mat4::from_rotation_x(pitch_degrees.to_radians());
             let centre = mapped_centre(pitched);
             assert!(
-                (centre - level).length() < 1e-5,
-                "pitch {pitch_degrees} moved the centre to {centre:?}, level was {level:?}"
+                (centre.y - 12.0).abs() < 1e-5,
+                "pitch {pitch_degrees} put the centre at height {}, player is at 12.0",
+                centre.y
             );
         }
+    }
+
+    /// A pitch does foreshorten the lead now, rather than leaving it
+    /// untouched - `mapped_centre`'s own docs explain why leaving the
+    /// horizontal projection unnormalised is what buys continuity through
+    /// vertical pitch. The shortening tracks `cos(pitch)`.
+    #[test]
+    fn pitching_the_player_foreshortens_the_lead() {
+        let pitched = Mat4::from_rotation_x(10.0_f32.to_radians());
+        let centre = mapped_centre(pitched);
+        let expected = MAPPED_AHEAD * 10.0_f32.to_radians().cos();
+        assert!(
+            (centre.z - expected).abs() < 1e-4,
+            "centre.z was {}, expected {expected}",
+            centre.z
+        );
+    }
+
+    /// The fix this test guards: a heading re-normalised after being
+    /// flattened to the horizontal plane flips 180 degrees the instant pitch
+    /// crosses vertical, since the flattened vector's sign - not its
+    /// magnitude - would carry the direction either side of it. That flip
+    /// would swing the centre by a full `2 * MAPPED_AHEAD` in one frame, well
+    /// past anything the pitch bug this replaces produced, and Pulse's own
+    /// loops and corkscrews cross vertical pitch routinely. Leaving the
+    /// projection unnormalised (see `mapped_centre`) instead lets its
+    /// magnitude shrink smoothly to zero at vertical and grow back out the
+    /// other side, so the centre either side of 90 degrees is close, not
+    /// halfway across the map.
+    #[test]
+    fn pitching_through_vertical_does_not_discontinuously_flip_the_lead() {
+        let just_under = mapped_centre(Mat4::from_rotation_x(89.0_f32.to_radians()));
+        let just_over = mapped_centre(Mat4::from_rotation_x(91.0_f32.to_radians()));
+        let jump = (just_over - just_under).length();
+        assert!(
+            jump < MAPPED_AHEAD * 0.5,
+            "crossing vertical pitch moved the centre by {jump}, \
+             a renormalised heading would move it by {}",
+            MAPPED_AHEAD * 2.0
+        );
     }
 
     /// Turning the player - the legitimate case, per this module's docs -
@@ -388,5 +449,30 @@ mod tests {
         let level = mapped_centre(Mat4::IDENTITY);
         let turned = mapped_centre(Mat4::from_rotation_y(90.0_f32.to_radians()));
         assert!((turned - level).length() > MAPPED_AHEAD * 0.5);
+    }
+
+    /// The chain `render_depth_map` actually calls: `mapped_fit` has to snap
+    /// what `mapped_centre` builds, not just build it. `Fit::snapped` is
+    /// tested on its own in `oag_render::shadow::map::tests`, but nothing
+    /// short of this pins that `mapped_fit` actually calls it - deleting the
+    /// `.snapped(...)` from `mapped_fit`'s body would leave every other test
+    /// in this module passing, since none of them go through `mapped_fit` at
+    /// all.
+    #[test]
+    fn the_mapped_fit_snaps_its_centre() {
+        let towards_light = Vec3::Y;
+        let base = mapped_fit(Mat4::IDENTITY, towards_light);
+        // Comfortably inside this centre's own rounding margin - see the
+        // `map::tests::snap_fixture` comment for why a fixed-size nudge has
+        // to be checked against the specific base it is nudging, not
+        // assumed safe from its size alone.
+        let nudged_player = Mat4::from_translation(Vec3::new(0.0, 0.0, 1e-4));
+        let nudged = mapped_fit(nudged_player, towards_light);
+        assert_eq!(
+            nudged.matrix().to_cols_array(),
+            base.matrix().to_cols_array(),
+            "a sub-texel nudge to the player's own position was not absorbed - \
+             is mapped_fit still snapping?"
+        );
     }
 }

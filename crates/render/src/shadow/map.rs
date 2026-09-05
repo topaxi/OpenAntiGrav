@@ -96,6 +96,16 @@ impl Fit {
     /// this type exists: a track-sized box at [`SIZE`] is metres per texel and
     /// a craft's shadow becomes a smear. Eight craft on a grid fit inside tens
     /// of units.
+    ///
+    /// **The box's own axes come from [`Self::towards_light`] alone - never
+    /// from a caster.** Whatever moves [`Self::centre`] between calls (a
+    /// caster's own position, a lead ahead of it) only ever *translates* the
+    /// box; nothing here rotates it. A caller reporting the box as
+    /// "rotating" is describing that translation swinging in an arc as its
+    /// source turns, not an actual change of orientation - `oag-game`'s
+    /// `race::scene::frame::shadow` module (outside this crate) is a caller
+    /// this bit in exactly that way, before its `mapped_centre` was fixed to
+    /// swing less.
     #[must_use]
     pub fn matrix(&self) -> Mat4 {
         let radius = self.radius.max(1.0);
