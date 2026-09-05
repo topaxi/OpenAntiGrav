@@ -308,8 +308,12 @@ neighbour's decoded texture one slot early, and only ordinal 151 falls
 outside the set entirely and turns white. The fix is a name-based lookup, not
 a dedup-aware ordinal remap - it needs no assumption about the nested set's
 physical ordering, only the name-hash machinery this project already
-trusts elsewhere at confidence 95. Implementing it means changing
-`TextureSlots`'s public shape across `oag-render` and several `oag-game`
-call sites, so it is tracked as a follow-on implementation thread rather than
-done in the same pass as this corroboration - see `HANDOVER.md`'s
-open-thread index.
+trusts elsewhere at confidence 95.
+
+**Fixed 2026-09-05**: `mesh::build_class` now resolves every `Texture` node
+by its own declared name (`mesh::Ps2TextureSet`/`resolve_texture_slots`, see
+[`ps2-texture.md`](ps2-texture.md#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal)),
+so `12_Track`'s sky face binds `sky12_4.tga` rather than the white 1x1
+fallback, and the 87 previously mis-bound ordinals bind their own textures
+rather than a neighbour's. `crates/render/tests/ps2_texture_binding_ground_truth.rs`
+pins both.

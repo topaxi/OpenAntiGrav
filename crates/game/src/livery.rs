@@ -315,7 +315,7 @@ fn one(
         && hull.textures.iter().all(Option::is_none)
         && let Some(external) = ps2_texture_set(archives, &hull_name)
     {
-        hull = mesh::build_with_textures(&hull_name, &blob, Some(external), lod)?;
+        hull = mesh::build_with_textures(&hull_name, &blob, Some(&external), lod)?;
     }
     report.push(format!(
         "{hull_name}: {} triangle(s), model centre {:?}, radius {:.2}",
@@ -781,9 +781,9 @@ fn ps2_skin(
         ));
         return;
     };
-    let found = external.len();
-    let decoded = external.iter().filter(|t| t.is_some()).count();
-    match mesh::build_with_textures(name, blob, Some(external), lod) {
+    let found = external.entry_count();
+    let decoded = external.decoded_count();
+    match mesh::build_with_textures(name, blob, Some(&external), lod) {
         Ok(rebuilt) => {
             *model = rebuilt;
             report.push(format!(

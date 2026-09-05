@@ -404,7 +404,7 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
 pub fn build_with_textures(
     label: &str,
     data: &[u8],
-    external: Option<TextureSlots>,
+    external: Option<&Ps2TextureSet>,
     lod: Lod,
 ) -> Result<Model> {
     build_class(label, data, external, lod, |c| c.mesh)
@@ -428,7 +428,7 @@ pub fn build_with_textures(
 /// Returns a model with no meshes when the file authors no sky. That is not an
 /// error: 4 of the 40 PSP track files have no `fogCube` and a `.vex` that is not
 /// a track has neither.
-pub fn build_sky(label: &str, data: &[u8], external: Option<TextureSlots>) -> Result<Model> {
+pub fn build_sky(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.skycube)
 }
 
@@ -452,7 +452,7 @@ pub fn build_sky(label: &str, data: &[u8], external: Option<TextureSlots>) -> Re
 ///
 /// Returns a model with no meshes when the file authors no pads, which is
 /// ordinary: every Pure track and every `.vex` that is not a track.
-pub fn build_pads(label: &str, data: &[u8], external: Option<TextureSlots>) -> Result<Model> {
+pub fn build_pads(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.speedup_pad)
 }
 
@@ -470,7 +470,7 @@ pub fn build_pads(label: &str, data: &[u8], external: Option<TextureSlots>) -> R
 pub fn build_weapon_pads(
     label: &str,
     data: &[u8],
-    external: Option<TextureSlots>,
+    external: Option<&Ps2TextureSet>,
 ) -> Result<Model> {
     build_optional_class(label, data, external, |c| c.weapon_pad)
 }
@@ -491,7 +491,7 @@ pub fn build_weapon_pads(
 fn build_optional_class(
     label: &str,
     data: &[u8],
-    external: Option<TextureSlots>,
+    external: Option<&Ps2TextureSet>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
     let Ok(classes) = vex::classes_of(data) else {
@@ -532,7 +532,7 @@ fn build_optional_class(
 fn build_class(
     label: &str,
     data: &[u8],
-    external: Option<TextureSlots>,
+    external: Option<&Ps2TextureSet>,
     lod: Lod,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
@@ -557,9 +557,6 @@ fn build_class(
     };
 
     let nodes = vex::nodes(data).context("walking the node tree")?;
-    let slots = classes.texture.map_or(0, |texture| {
-        nodes.iter().filter(|n| n.class_id == texture).count()
-    });
 
     // `Lod::Single` skips every node under a two-child `LodGroup`'s second
     // child - see `Lod`'s own doc comment for why this is an invented
@@ -635,12 +632,15 @@ fn build_class(
             })
         })
         .collect();
-    // A short external set leaves the tail untextured rather than misaligning
-    // the ordinals a material indexes with.
-    let textures = external.map_or(embedded, |mut set| {
-        set.resize_with(set.len().max(slots), || None);
-        set
-    });
+    // The original resolves every `Texture` node by its own declared name,
+    // never by position - see [`Ps2TextureSet::resolve`] and
+    // `docs/formats/ps2-texture.md`. A node whose name resolves to nothing
+    // stays `None` rather than falling back to a neighbour's texture, the way
+    // a flat ordinal index used to.
+    let textures = match external {
+        Some(set) => ps2_textures::resolve_texture_slots(data, &nodes, classes.texture, set),
+        None => embedded,
+    };
 
     // Mesh vertices are in the local space of whichever transform encloses them,
     // nested up to 25 deep on a track, so a model is only assembled once these
@@ -945,7 +945,7 @@ fn build_class(
 }
 
 mod ps2_textures;
-pub use ps2_textures::ps2_texture_set;
+pub use ps2_textures::{Ps2TextureSet, resolve_texture_slots};
 
 mod draw_call;
 pub use draw_call::{Bounds, DrawCall};

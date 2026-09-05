@@ -692,19 +692,19 @@ fn every_ps2_teams_boost_plume_is_skinned_by_the_entry_before_it() {
             let preceding = archives
                 .read_preceding(&name)
                 .unwrap_or_else(|e| panic!("{name}: reading the entry before it: {e}"));
-            let set = mesh::ps2_texture_set(&preceding).unwrap_or_else(|e| {
+            let set = mesh::Ps2TextureSet::parse(&preceding).unwrap_or_else(|e| {
                 panic!("{name}: the entry before it is not a texture set ({e})")
             });
             assert_eq!(
-                set.len(),
+                set.entry_count(),
                 bare.textures.len(),
                 "{name}: the preceding entry holds {} texture(s) against {} declared \
                  slot(s) - the ordinals a material indexes would not line up",
-                set.len(),
+                set.entry_count(),
                 bare.textures.len()
             );
 
-            let skinned = mesh::build_with_textures(&name, &blob, Some(set), mesh::Lod::Both)
+            let skinned = mesh::build_with_textures(&name, &blob, Some(&set), mesh::Lod::Both)
                 .unwrap_or_else(|e| panic!("re-skinning {name}: {e}"));
             assert!(
                 skinned.textures.iter().all(Option::is_some),

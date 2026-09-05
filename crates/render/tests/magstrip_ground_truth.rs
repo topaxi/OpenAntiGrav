@@ -103,8 +103,8 @@ fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Option<(Vec<u8>,
     let mut model = mesh::build(&name, &blob).ok()?;
     if !model.textures.is_empty() && model.textures.iter().all(Option::is_none) {
         let set = archives.read_preceding(&name).ok()?;
-        let external = mesh::ps2_texture_set(&set).ok()?;
-        model = mesh::build_with_textures(&name, &blob, Some(external), mesh::Lod::Both).ok()?;
+        let external = mesh::Ps2TextureSet::parse(&set).ok()?;
+        model = mesh::build_with_textures(&name, &blob, Some(&external), mesh::Lod::Both).ok()?;
     }
     Some((blob, model))
 }

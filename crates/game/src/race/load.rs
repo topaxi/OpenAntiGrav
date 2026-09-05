@@ -368,7 +368,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // see `mesh::build_sky`'s doc comment. Resolved once here, against the track
     // model's own embedded textures, and reused rather than re-read from the
     // archive and re-decoded per model.
-    let mut ps2_track_textures: Option<mesh::TextureSlots> = None;
+    let mut ps2_track_textures: Option<mesh::Ps2TextureSet> = None;
 
     // **A PS3 circuit's geometry is in the `.rcsmodel` beside it.** Both the
     // meshes its `.vex` places - which on HD are all props - and the far larger
@@ -446,9 +446,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             && track_model.textures.iter().all(Option::is_none)
             && let Some(external) = ps2_texture_set(&mut archives, &track)
         {
-            ps2_track_textures = Some(external.clone());
             track_model =
-                mesh::build_with_textures(&track, &track_blob, Some(external), options.lod)?;
+                mesh::build_with_textures(&track, &track_blob, Some(&external), options.lod)?;
+            ps2_track_textures = Some(external);
         }
         track_model
     };
@@ -512,7 +512,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else if !vex_geometry {
         None
     } else {
-        let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.clone())?;
+        let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.as_ref())?;
         if sky.indices.is_empty() {
             report.push(unrecovered_or_absent(
                 track_classes,
@@ -541,7 +541,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else if !vex_geometry {
         None
     } else {
-        let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.clone())?;
+        let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {
             report.push(unrecovered_or_absent(
                 track_classes,
@@ -575,7 +575,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else if !vex_geometry {
         None
     } else {
-        let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.clone())?;
+        let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {
             report.push(unrecovered_or_absent(
                 track_classes,
