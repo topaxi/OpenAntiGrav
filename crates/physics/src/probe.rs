@@ -365,6 +365,10 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         shift_tap_windows,
         shift_armed,
         shift_lockout,
+        roll_taps,
+        roll_tap_timer,
+        roll_phase,
+        roll_target,
         time_since_landing,
         time_airborne,
         mag_lock_blend,
@@ -405,6 +409,17 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(shift_tap_windows[1]);
     hasher.write_u8(u8::from(shift_armed));
     hasher.write_f32(shift_lockout);
+    // The barrel roll's gesture state: the tap history and its inter-tap
+    // timer, and the signed phase it arms. None of the probe scripts taps one
+    // out, so these four contribute a fixed run of bytes per tick today - the
+    // same shape `pad_timer` had before a scenario crossed a pad - and the
+    // first scenario that does one will see all four move together.
+    hasher.write_u8(roll_taps[0]);
+    hasher.write_u8(roll_taps[1]);
+    hasher.write_u8(roll_taps[2]);
+    hasher.write_f32(roll_tap_timer);
+    hasher.write_f32(roll_phase);
+    hasher.write_f32(roll_target);
     hasher.write_f32(time_since_landing);
     hasher.write_f32(time_airborne);
     hasher.write_f32(mag_lock_blend);

@@ -68,6 +68,7 @@
 //! picked is recorded.
 
 pub mod airbrake;
+pub mod barrel_roll;
 pub mod collide;
 pub mod controls;
 pub mod damage;

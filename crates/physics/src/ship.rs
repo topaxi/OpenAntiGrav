@@ -388,6 +388,32 @@ pub struct ShipState {
     /// [`ShipControls::sideshift`], which is a direct request rather than a
     /// gesture.
     pub shift_lockout: f32,
+    /// The barrel roll's three-entry tap-history gesture buffer, oldest first
+    /// (`entity+0x88c`/`+0x890`/`+0x894`).
+    ///
+    /// `0` is an empty slot, `1` a `LEFT` tap and `2` a `RIGHT`. A completed
+    /// three-tap alternation - `[2, 1, 2]` or `[1, 2, 1]` - arms the roll and
+    /// clears this back to `[0, 0, 0]`, so a fourth tap starts a fresh gesture
+    /// rather than immediately re-arming off the sliding window. See
+    /// [`crate::barrel_roll`] and
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    pub roll_taps: [u8; 3],
+    /// Seconds since the last tap recorded into [`Self::roll_taps`]
+    /// (`entity+0x884`).
+    ///
+    /// Accumulates `dt` every tick and is zeroed on every tap. A tap recorded
+    /// at `0.6` s or later does not shift the two older entries down - see
+    /// [`crate::barrel_roll::INTER_TAP_TIMEOUT`].
+    pub roll_tap_timer: f32,
+    /// The barrel roll's signed phase, `-1.0..=1.0` (`entity+0x87c`).
+    ///
+    /// Ramps toward [`Self::roll_target`] at `<Special roll_speed>` and does not
+    /// reverse on its own - see [`crate::barrel_roll::advance_phase`].
+    pub roll_phase: f32,
+    /// Where [`Self::roll_phase`] is currently ramping toward: `1.0` after a
+    /// `[2, 1, 2]` arm, `-1.0` after `[1, 2, 1]`, or `0.0` once the roll has
+    /// released short of completion. See [`crate::barrel_roll::release`].
+    pub roll_target: f32,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -502,6 +528,7 @@ pub struct ShipState {
     /// what a Turbo pickup is for. **The writer of `0x200` has not been found**,
     /// so this is an inference from the pair rather than a traced path -
     /// confidence 75.
+    /// input-bindings.md`.
     ///
     /// **The timer itself is ours.** The original holds a bit and this holds
     /// seconds, because neither `craft+0x1c0`'s writer nor the pickup word
@@ -591,6 +618,13 @@ impl Default for ShipState {
             shift_tap_windows: [0.0, 0.0],
             shift_armed: false,
             shift_lockout: 0.0,
+            roll_taps: [0, 0, 0],
+            // At or past the timeout, so a cold-started ship's first tap never
+            // cascades a stale, all-zero history - see
+            // `crate::barrel_roll::INTER_TAP_TIMEOUT`.
+            roll_tap_timer: crate::barrel_roll::INTER_TAP_TIMEOUT,
+            roll_phase: 0.0,
+            roll_target: 0.0,
             // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
             // recovered, replacing an invented `1.0` that was chosen for the
             // same reason the original's value serves: a freshly spawned ship

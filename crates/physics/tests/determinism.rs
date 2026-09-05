@@ -237,24 +237,43 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   removed - `apply_pending_impulse` still called from `crate::step` - the
 ///   three constants from 2026-08-11 (the `shield_pickup_timer` entry)
 ///   reproduce bit for bit.
+/// - **Regenerated 2026-09-05, and behaviour did not change.** `ShipState`
+///   gained four fields for the barrel roll's gesture and phase - `roll_taps`,
+///   `roll_tap_timer`, `roll_phase` and `roll_target` - see
+///   `crate::barrel_roll` and `docs/ghidra/functions/psp-pulse-usa/
+///   input-bindings.md`. This is steps 2-4 of
+///   `handover/the-barrel-roll-is-read-and-unimplemented.md`: the tap history,
+///   the phase ramp and the shield-gated arm, all unit-tested directly against
+///   `ShipState` and none of it wired into `crate::forces::evaluate` yet - a
+///   later commit does that alongside the landing payout, and regenerates
+///   this again.
+///
+///   `probe::hash_state` now writes three more `u8`s and three more `f32`s
+///   per tick, and nothing here can have exercised any of the four: nothing
+///   in `oag_gameplay` or this crate's own probe scripts calls
+///   `barrel_roll::record_tap` or `barrel_roll::arm`, so all four hold their
+///   defaults for every tick of every run. Checked the same way as every
+///   entry above: with the six new `hash_state` writes alone removed, the
+///   three constants from 2026-08-19 (the `pending_impulse` entry) reproduce
+///   bit for bit.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x3704_c308_e4c7_377c,
-        0x0e58_8040_c263_f562,
+        0x00bb_29d1_33a7_fa73,
+        0x57b7_1848_c778_3404,
     ),
     (
         3_600,
         Script::Corridor,
-        0xda00_a5a1_2b6a_7136,
-        0xe248_bbd7_0b47_e644,
+        0x4388_7f6a_6b92_15f9,
+        0xf5f0_0fe4_f6da_f486,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xe8a8_0115_2a3b_e93d,
-        0xb9c7_aa3c_96d7_add6,
+        0x45ed_ac24_83e1_b170,
+        0xd548_dcfd_34ef_e4e6,
     ),
 ];
 
