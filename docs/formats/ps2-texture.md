@@ -400,6 +400,91 @@ figure says this rule will not fit - that piece is still open and is a
 separate, smaller RE task from "does a circuit's own `track.vex` get its
 textures back," which this section now answers.
 
+### The near-miss shortfall is a duplicated `Texture` node name, not missing data
+
+**Confidence 88, measured 2026-09-05.** The reason the five near-miss circuits'
+resolved sets are short by exactly 1 or 2 entries: **one or two of their
+`Texture` nodes share an identical declared name with an earlier node in the
+same file, and the nested texture-set WAD holds one physical entry per unique
+name, not one per node.** `sort | uniq -d` over `12_Track`'s 152 `Texture`
+node names turns up exactly one repeat -
+`Data\Environments\Tex_Animations\col_display7_GLOW.tga`, at 0-indexed node
+positions 55 and 63 - and 152 nodes minus that one duplicate is 151, the
+nested set's exact entry count. Checked on all five near-miss circuits, same
+method:
+
+| Circuit | `Texture` nodes | Duplicate names found | Previously-measured shortfall |
+| --- | ---: | --- | --- |
+| `02_Track` | 148 | 2 | 2 |
+| `02_Track_reversed` | 148 | 1 | 1 |
+| `06_Track_reversed` | 166 | 2 | 2 |
+| `12_Track` | 152 | 1 | 1 |
+| `12_Track_reversed` | 153 | 1 | 1 |
+
+Every circuit's duplicate count matches its shortfall exactly. None of the 27
+exact-match circuits were re-checked for duplicates (not needed - their count
+already matches with none unaccounted for), but the arithmetic closing on all
+five outliers with no exceptions is the same kind of agreement the ship and
+track counts themselves were scored on.
+
+**The duplicate's own real pixel data was traced independently**, three ways,
+all agreeing: `12_Track`'s repeated node (`col_display7_GLOW.tga`) aside,
+every one of its 152 `Texture` node names was rewritten `.tga` -> `.pct` (the
+already-95-confidence extension rule above) and looked up by name-hash
+against the *outer* archive, and the fetched bytes' sha256 was matched
+against all 151 extracted nested-set entries:
+
+- Node ordinals **0-62**: name-hash lookup lands on set index == node ordinal
+  (identity, no shift yet).
+- Node ordinal **63** (the duplicate's second occurrence): resolves to set
+  index **55** - the same physical entry as its own first occurrence at node
+  55, which independently resolves to set index 55 too. This *is* the
+  collapse: the packer wrote one entry for the name, and both node ordinals
+  that declare it point at it.
+- Node ordinals **64-151**: every one resolves to set index `ordinal - 1`,
+  with no exceptions, ending at node 151 (`sky12_4.tga`) -> set index 150 -
+  the last physical entry of the 151-entry set.
+- A second, unrelated pair inside the same file corroborates the shift point
+  independently: node 24 (`viewing_tower006_GLOW.tga`) and node 113
+  (`viewing_tower006.tga` - a different declared name, authored twice under
+  two names rather than a literal duplicate) are byte-identical content.
+  Node 24 sits before the collapse and resolves to set index 24 (identity);
+  node 113 sits after it and resolves to set index 112 (`ordinal - 1`) -
+  exactly what the col_display7 collapse point predicts, from data that has
+  nothing to do with it.
+
+So `sky12_4.tga`'s pixel data is not absent from the disc at all: it is
+byte-identical to nested-set entry 150 (the set's own last entry, which
+decodes fine) **and** to a standalone top-level `WADS2.WAD` entry reachable
+under its own declared name via the extension-rewrite rule, with negative
+controls (`sky12_4.tga` unrewritten, and a bogus `sky12_99.pct`) both erroring
+honestly rather than silently matching something else.
+
+**This is a real, source-confirmed consequence for the current renderer, not
+speculation about the original.** `mesh::build_with_textures`
+(`crates/render/src/mesh.rs`) resizes a short external set with
+`set.resize_with(set.len().max(slots), || None)` - appending `None` at the
+*end* so a short set's tail goes untextured rather than shifting anything -
+which is a flat "node ordinal `N` reads external-set entry `N`" scheme with no
+awareness that the set's own entries were built by deduplicating names. Under
+that scheme every one of `12_Track`'s node ordinals from 64 to 150 binds the
+*wrong* decoded texture (a real, validly-decoded entry - just its neighbour's,
+one slot early) rather than nothing, and only ordinal 151 - past the end even
+after padding - falls back to the white 1x1. The white sky face is the one
+visible symptom of a wider mis-binding, not an isolated one-off.
+
+**Confidence 88** for the root cause and the exact ordinal-to-index mapping:
+this is data agreement (152 independently-resolved node-to-content matches
+with zero exceptions, corroborated by an unrelated second duplicate pair
+inside the same file), the same tier the directory-position finding itself
+carries, and is capped below 94 for the same reason - it is not a runtime
+trace. **What is not established**, and needs its own check before any fix
+ships: whether the original PS2 build's own loader is dedup-aware (matching
+what the name-hash route finds) or whether it *also* reads this flat and
+mis-textures the same 86 surfaces on real hardware, unnoticed because nobody
+happened to look at the wrong one - see `HANDOVER.md`'s open-thread index for
+the follow-up work this opens.
+
 **A third model type, and the first checked exhaustively: the boost plume**
 (2026-08-23, confidence 90). Every one of the PS2 disc's 24 plume files -
 `Data\Ships\<Team>\shipboost.vex` and `Zoneboost.vex`, twelve teams each -
