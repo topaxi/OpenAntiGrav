@@ -653,3 +653,8 @@
 0x088b34bc	function	MPLobby_UpdateShipPreview	62	ship-skin.md
 0x08a88440	data	g_skin_texture_slot_names	88	ship-skin.md
 0x0881c9d0	function	Hud_UpdateTimeCluster	65	hud-time-caption-substitution.md
+0x08840770	function	Ship_BarrelRollCost	90	input-bindings.md
+0x08b36be8	data	g_turbo_jump	82	input-bindings.md
+0x08b36bf0	data	g_roll_speed	90	input-bindings.md
+0x08b36bf4	data	g_roll_cost	90	input-bindings.md
+0x08b36bf8	data	g_roll_turbotime	88	input-bindings.md
