@@ -688,6 +688,24 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A breakpoint-driven PPSSPP capture (break, screenshot, resume) burns real
+wall-clock time far faster than emulated game time, and the attract-demo
+idle timer runs on the former - so a capture can silently roll into the demo
+mid-run with nothing in the frame indices announcing it.** 2026-09-05,
+measuring the main menu's highlight pulse. Breaking on `Gfx_PresentFrame` and
+photographing between hits costs about a quarter second of wall time per
+frame (the screenshot round trip), so 90 in-game frames (3 s of emulated time)
+took roughly 90 real seconds - and combined with the setup time before the
+capture script even started, real elapsed time since the menu was last
+touched exceeded the documented ~120 s attract-demo threshold well before the
+frame count did. The capture kept running and photographed the demo's own
+race footage, indistinguishable from a real capture until a frame was opened
+and showed a circuit rather than `Main Menu`. **Combine "walk to the state
+you want" and "start capturing" in one process with no gap** - reading tool
+output or writing an analysis script in between is exactly the gap that
+overruns the idle window - and treat total wall-clock time since the last
+input, not frame count, as the budget against the 120 s limit.
+
 **`ghidra-mcp`'s `search_byte_patterns` accepts a `mask` parameter and
 silently ignores it - a masked wildcard search reads exactly like "not
 found" even when the bytes are sitting right there.** 2026-09-05, hunting

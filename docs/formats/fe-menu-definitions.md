@@ -65,8 +65,21 @@ question.
 | `Dialog` | `Icon`, `TextID`, `NumOptions` |
 | `AreaController` | names an `area` |
 
-`Text` widgets carry `RealGlow`, which is undecoded. So are `CalcBlur` on the
-[HUD](../ui/hud.md) and `pulse`/`delay` on `BOOT_PRESS_START`.
+`Text` widgets carry `RealGlow`, which is undecoded. So is `CalcBlur` on the
+[HUD](../ui/hud.md).
+
+**`pulse`/`delay`, censused 2026-09-05 across all 17 GUI files, carry no
+oscillation parameters.** `delay` is a reveal-offset timer - it appears on
+`<Animation>`, `<TextInfo>` and `<Text>` alike (`Skin.xml`'s footer strips and
+news ticker, values `0` to `1.6`), the same role `transition`/`enabletransition`
+play for a page change, not a period. `pulse="true"` is a bare boolean, with no
+numeric value anywhere it appears - `BOOT_PRESS_START` and equivalent blinking
+prompts in `CellMode_Definition`, `Selection_Definition`, `Network_Definition`
+and `Demo_Definition`, but **never on `MainMenu_Definition.xml`'s own
+`Menu`/`Entry` elements**. So the selected row's own highlight pulse (see
+[menus-original.md](../ui/menus-original.md)) is not sourced from this flag at
+all - its period and depth were read off the running original instead, the
+same way `BOOT_PRESS_START`'s own blink still needs to be.
 
 ## `transition` and `enabletransition`
 

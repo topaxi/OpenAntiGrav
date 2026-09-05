@@ -96,7 +96,7 @@ never collide.
 | Role | Measured peak | Authored |
 | --- | --- | --- |
 | unselected row | rgb(64, 205, 230) | `FEGlobals->TextColor` `0xFF33A6B9` |
-| selected row | rgb(157, 255, 255), and rgb(107, 226, 247) on another frame | - |
+| selected row | `0xFFFFFFFF`, exact, on three independent cycles | - |
 | help text | white | `0xffffffff` |
 | screen title | black, on a light top bar | `FEGlobals->TitleColor` `0xFF000000` |
 
@@ -109,11 +109,64 @@ the pink `MenuHighLightArrowColor` the palette declares - no pink appears
 anywhere on this screen. This build drew an invented translucent bar until this
 page existed.
 
-**The highlight moves.** Two frames of the same *still* menu measured different
-peaks. Its period and depth were not measured, so nothing implements a pulse;
-the brighter of the two values is used flat. This is the same discipline
-[HANDOVER](../../HANDOVER.md)'s task 7 states for `BOOT_PRESS_START`'s pulse -
-and the same warning applies: **do not measure it off our own build.**
+### The highlight's pulse - period and depth measured 2026-09-05
+
+**Confidence 90 for the period, 90 for the peak, 75 for the trough.** The two
+single-frame samples this section used to carry - `rgb(157,255,255)` and
+`rgb(107,226,247)` - are retired: both sit at or near saturation on the green
+and blue channels, so solving `lerp(base, white, t)` per channel gives `t`
+values that disagree by a factor of two between channels on the same sample.
+That is the clipping showing, not a measurement of depth, and no curve
+reconciles the two.
+
+**Method**: PPSSPP under Xvfb, breaking on `Gfx_PresentFrame` (`0x0891e1b8`,
+see [main-loop](../ghidra/functions/psp-pulse-usa/main-loop.md)) and
+photographing the X11 root window at every hit - frame-accurate rather than
+wall-clock sampled, so the screenshot cadence cannot alias against the
+animation's own period. A first attempt (breaking on presented frames while
+screenshotting between them, which costs real wall-clock time per frame) idled
+past the documented ~120 s attract-demo threshold partway through and
+captured race footage instead of the still menu without any obvious sign in
+the frame indices; it was discarded once a frame midway through showed a
+racing circuit rather than `Main Menu`. The kept run combined "walk to Main
+Menu" and "start capturing" in one script with no gap, reached the menu and
+captured 150 consecutive presented frames (about 46 real seconds, well inside
+the idle window) without ever leaving it.
+
+**Period: exactly 33 presented frames, four cycles in a row.** Sampling a
+300x30 px box mean over the selected row's own label (`RACE CAMPAIGN`) against
+an identical box over an unselected row (`RACEBOX`) as a control: the control
+never moved (a flat `rgb(18,46,51)` for the whole run bar one single-frame
+outlier at frame 40, discarded), and the selected row's mean rose and fell in
+a repeating wave whose troughs sat at presented frames 12, 45, 78, 111 and 144
+- each exactly 33 frames from the last. At the front end's own measured 30 Hz
+presentation, `33 / 30 = 1.1` seconds.
+
+**Depth: `TextColor` to `0xFFFFFFFF`.** Rather than the diluted box mean, the
+brightest pixel of the selected label's own ink was located (a grid search
+over the "R" of "RACE") and sampled at every trough and peak: `(53,153,169)`
+at all four troughs, bit-identical to the digit; `(255,255,255)`, exact, at
+all three peaks sampled. The trough sits within single-pixel measurement error
+of authored `TextColor` `(51,166,185)` - the largest channel deviation is 16 of
+255 on blue - so the pulse is read as running between the row's own resting
+colour and pure white, not between two otherwise-unexplained numbers.
+
+**The shape between the two endpoints was not solved.** The box-mean sequence
+crosses eleven discrete levels from trough to peak, each held one to three
+frames, and the gaps between consecutive levels are not equal (8.6 to 12.9,
+smallest at the ends) - enough to rule out a linear ramp, not enough samples to
+name the real curve. `oag_game::menu::Skin::selected` uses a raised cosine
+between the two measured endpoints and says so is an invented shape, the same
+way `anim::Tween::eased`'s own curve is marked.
+
+Recorded in `oag_title::MenuSkin::selected` (now the pulse's peak rather than
+a static colour) and the new `selected_pulse_period_secs`, `Some(1.1)` on
+Pulse only - see that type's own field docs. **Do not fill this number in for
+another title just because Pulse has one.** HD authors no oscillation
+anywhere in its front end (a 2026-09-05 whole-archive census - see
+[hd-frontend.md](../formats/hd-frontend.md#three-questions-this-closes)) and
+whether Pure's own, differently-directioned selected effect pulses at all is
+still unmeasured.
 
 ## The transition
 
@@ -258,8 +311,14 @@ the two colours.
 ## Not built
 
 - **The footer's ticker text and button-prompt line** - see above.
-- **The highlight's pulse**, for want of a period and a depth - on Pulse; on
-  Pure, whether the selected row pulses at all is unmeasured.
+- ~~The highlight's pulse, for want of a period and a depth on Pulse~~ -
+  measured 2026-09-05, see "The highlight's pulse" above, and built in
+  `oag_game::menu::Skin::selected`. Its exact curve shape between the two
+  measured endpoints is still invented, the same way `anim::Tween::eased`'s
+  page-change curve is. **On Pure, whether the selected row pulses at all
+  remains unmeasured** - its own effect moves the opposite direction
+  (darkening, not brightening toward white), so Pulse's numbers must never be
+  borrowed for it.
 - **`BackgroundImage`'s own texture on Pure.** Its colour is measured (see
   above); what the disc's engine actually assigns there - whether it is
   static or changes with the chosen mode/theme - needs Ghidra, not a second
