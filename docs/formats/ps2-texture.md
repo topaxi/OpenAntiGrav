@@ -594,9 +594,24 @@ ripple into `oag-game`'s call sites (`race/assets.rs`, `race/load.rs`,
 `zone_grade.rs`'s and `mesh/rcs/skin.rs`'s own `TextureSlots` usage is
 unrelated to `Texture` nodes at all and was not touched. See
 `crates/render/tests/ps2_texture_binding_ground_truth.rs`, which asserts the
-27 exact-match circuits reproduce the old positional answer exactly and
-`12_Track` specifically both fills its previously-white sky slot and rebinds
-at least one of its 87 previously mis-bound ordinals.
+27 exact-match circuits reproduce the old positional answer exactly,
+`12_Track` fills its previously-white sky slot and rebinds all 87 of its
+previously mis-bound ordinals, and the twelve-team ship roster - which never
+showed a duplicate name - is a byte-for-byte no-op.
+
+**Two things this fix did not settle, both still open**: the exact call site
+inside a track's own Mesh-class constructor that resolves its materials was
+never located (see the untraced-link paragraph above, which is what caps the
+combined confidence at 88 rather than raising it); and whether the outer
+archive ever needs consulting for a track's own textures, or the nested set
+alone is always sufficient, was checked only on the exact-match control and
+the five near-miss circuits, not the other 26 - untested whether some
+`Texture` node on some other circuit declares a name that misses its own
+nested set and needs the fallback
+[`oag_pulse::read_image`](../../crates/pulse/src/lib.rs)'s ship/extension-
+rewrite path already established. Neither blocks the fix above: both are
+about raising an already-actionable 88 further, not about whether the
+mechanism is right.
 
 **A third model type, and the first checked exhaustively: the boost plume**
 (2026-08-23, confidence 90). Every one of the PS2 disc's 24 plume files -
