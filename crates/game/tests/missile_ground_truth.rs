@@ -116,7 +116,21 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     // Slot 0 sits at the back of the grid, so everybody is ahead of it. Fire by
     // hand rather than through a pad, because which weapon a pad hands out is a
     // draw and this test is about the missile rather than about the draw.
+    //
+    // **Held for a full second before firing**, since `Race::fire_missile` now
+    // gates slot 0's candidate on `Race::sight`'s own lock - see its doc comment
+    // - and that reticle only starts accumulating hold once the pickup is a
+    // Missile. A second clears the recovered `sight::HOLD_SECONDS` (0.8) with
+    // room for the f32 accumulation to land on either side of the boundary.
     race.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    for _ in 0..60 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    assert!(
+        race.sight().locked(),
+        "the reticle never locked in a full second of holding a Missile at a \
+         full grid - the hold gate would silently turn this test's shot unguided"
+    );
     assert!(
         race.fire_missile(0, &stats),
         "nothing on a full grid was lockable from the back of it - the lock's \
@@ -185,6 +199,16 @@ fn a_missile_never_locks_its_own_firer() {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
     let stats = race.missile_stats().expect("the disc authors a Missile");
+
+    // Slot 0 is the one candidate `Race::fire_missile` additionally gates on
+    // `Race::sight` - see its doc comment - so without this the loop below
+    // would exercise the self-lock invariant against every opponent slot and
+    // never against the player's own. Every other slot's candidate is used as
+    // soon as `lock` finds one and needs no priming.
+    race.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    for _ in 0..60 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
 
     let mut locks = 0;
     for slot in 0..race.world.ship_count as usize {

@@ -529,13 +529,36 @@ impl Race {
     /// the floor, glances off walls and detonates on the recovered
     /// `SELF_DETONATE_SECONDS` timer.
     ///
+    /// # The lock test is shared; the hold is not
+    ///
+    /// `oag_gameplay::projectile::missile::lock` - the window, cone and
+    /// along-track screen `Ship_AcquireLock` (`0x08844784`) runs - is evaluated
+    /// for every slot alike, so a missile's *candidate* target does not depend on
+    /// who fired it. See "The player and an opponent use the same rule, on
+    /// purpose" below.
+    ///
+    /// **Whether that candidate is used is a second, separate question, and it is
+    /// not shared.** `Ship_FireHeldWeapon` reads the candidate only when
+    /// `entity+0x860 & 1` is set, and that bit is written by `HudSight_Update`
+    /// alone - the reticle, which this project has found no evidence runs for
+    /// anything but the craft the HUD is drawn for. So the craft that owns the
+    /// reticle (`slot == 0`) additionally needs [`Self::sight`] to say
+    /// [`sight::Sight::locked`] - held on screen past [`sight::HOLD_SECONDS`] -
+    /// before its candidate is passed through; every other slot's candidate is
+    /// used as soon as `lock` finds one, exactly as before this gate landed.
+    /// **Not recovered and not ported**: whether an opponent's craft has its own
+    /// copy of that bit and something in the original ever sets it - if it does
+    /// not, every AI-fired missile in the original is unguided regardless of
+    /// `Ship_AcquireLock`'s answer, which would make this engine's opponents
+    /// strictly better shots than the original's. See the thread's `## Open`.
+    ///
     /// # The player and an opponent use the same rule, on purpose
     ///
     /// `oag_ai::Driver::wants_to_fire` decides whether an *opponent* pulls the
     /// trigger, and its five gates are about that decision - is there somebody
     /// ahead, is the road straight enough, has the trigger rolled. They are not
-    /// the weapon's rule. `Ship_AcquireLock` (`0x08844784`) is, and the original
-    /// runs it for the player's craft; running it here for both means a missile's
+    /// the weapon's rule. `Ship_AcquireLock` is, and the original runs it for the
+    /// player's craft; running it here for both means a missile's candidate
     /// target does not depend on who fired it.
     ///
     /// So an opponent's shot is gated twice - by its own willingness *and* by the
@@ -563,7 +586,7 @@ impl Race {
         // rather than from the craft's centre: the near bound of the authored
         // window is ten units and a hull is four long, so measuring from the
         // wrong end moves the boundary by most of a craft.
-        let target = oag_gameplay::projectile::missile::lock(
+        let candidate = oag_gameplay::projectile::missile::lock(
             &self.world.ships[..count],
             slot as u8,
             position,
@@ -571,6 +594,15 @@ impl Race {
             stats,
             self.course.as_ref().map(oag_race::Course::length),
         );
+        // Only the craft the reticle is drawn for needs the extra hold - see
+        // "The lock test is shared; the hold is not" above. A press before the
+        // brackets close still fires, same as an opponent's shot always does;
+        // it just carries no candidate through.
+        let target = if slot == 0 {
+            candidate.filter(|_| self.sight.locked())
+        } else {
+            candidate
+        };
         // `target` is passed through as it comes, `None` included: that is the
         // original's null pointer, and `Missile_Update` skips its whole guidance
         // block on it rather than treating it as an error.
