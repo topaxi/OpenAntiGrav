@@ -1,4 +1,4 @@
-# Invented UI text has no translation, and one of four sources still has no id-based indirection
+# Invented UI text has no translation - all four sources are wired, but nothing is translated yet
 
 The disc's own localisation works and is already read: each language is a
 `Data\Plugins\PI0NN` plugin, `<Entry ID="..." String="...">` in a per-language
@@ -17,8 +17,9 @@ loading-screen prose ("READING THE ARCHIVES", "TRANSCODING MOVIES",
 doc comment's admission, and `crates/game/src/main/hints.rs` supplies the
 window title and stdout key-hint text the same way.
 
-**Three of the four are wired now, one turned out already covered, one is
-still open** - landed across two sessions, in this order:
+**All four are wired now, one of them (`Mode::fallback_label`) turning out to
+be already covered by the mechanism** - landed across two sessions, in this
+order:
 
 1. **The mechanism**: `oag_game::strings` (`crates/game/src/strings.rs`)
    merges one project-owned `assets/ui/strings/<language>.toml` over a
@@ -56,16 +57,22 @@ still open** - landed across two sessions, in this order:
    (`an_id_with_an_override_resolves_to_it`,
    `an_id_with_no_override_falls_back_to_the_current_literal`,
    `one_table_answers_every_call_it_is_passed_to`, and the placeholder tests).
-   **`main/hints.rs` is still open** - see below.
+5. **`main/hints.rs` is wired too**: its eight `pub(crate) const &str` became
+   functions taking a `&StringTable`, each looked up by an `OAG_HINTS_*` id
+   and falling back to the old literal. None of these eight has a disc
+   idstring to override - they are window titles and stdout key hints, not
+   anything the front end draws - so every call site builds its own
+   `strings::project_table(language)`, except `prepare::windowed`'s
+   `MENU_KEYS` line, which already had `boot_shell.strings` (the real
+   disc-merged table) in hand and reuses it instead. `Gpu::new` grew a
+   `language: Option<&str>` parameter for `TITLE`, the one hint set before
+   any of the other machinery exists. Proved by `hints.rs`'s own tests -
+   an override resolves, a miss falls back, and `every_hint_has_its_own_id`
+   checks that overriding one of the eight ids never changes another's
+   answer.
 
 ## Open
 
-- `crates/game/src/main/hints.rs` (window titles, stdout key hints) is the
-  same shape, but its eight items are `pub(crate) const &str`, not functions -
-  turning them into functions taking a `&StringTable` touches every
-  `println!`/`window.set_title` call site that names one, fewer than
-  `menu.toml`'s but not zero. Also runs before boot, so also needs
-  `project_table`.
 - `assets/ui/menu.toml` names no `string_id` on any row, and
   `assets/ui/strings/english.toml` ships empty as a result - the mechanism
   has nothing to demonstrate yet beyond its own unit tests. Adding either
@@ -82,14 +89,11 @@ still open** - landed across two sessions, in this order:
 
 ## Next Steps
 
-- Wire `main/hints.rs`: turn `TITLE`/`MENU_KEYS`/`SHELL_TITLE`/`SHELL_KEYS`/
-  `RACE_TITLE`/`RACE_KEYS`/`ESC_TO_MENU`/`ESC_QUITS` into functions taking a
-  `&StringTable`, update their call sites (window titles and the `println!`s
-  that build the various `*_KEYS` lines).
-- Once both have real ids, give `assets/ui/menu.toml` a `string_id` on a row
-  or two and add matching entries to `assets/ui/strings/english.toml` - this
-  is the point where that file stops being empty, and where "the mechanism
-  works" becomes "a row is actually overridden".
+- Now that all four sources have real ids, give `assets/ui/menu.toml` a
+  `string_id` on a row or two and add matching entries to
+  `assets/ui/strings/english.toml` - this is the point where that file
+  stops being empty, and where "the mechanism works" becomes "a row is
+  actually overridden".
 - Add a second language's file (`assets/ui/strings/french.toml`, ...) with a
   real translation of whatever ids exist by then, to prove the *language*
   half rather than only the *override* half.
