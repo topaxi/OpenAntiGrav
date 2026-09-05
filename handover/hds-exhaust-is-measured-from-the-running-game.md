@@ -31,25 +31,49 @@ section) is the current, authoritative state.
   groups (`EF_Main`, `EF_Boost`), not the disc's ten shapes - there is no
   per-spike geometry to flicker yet. See `engine-trail.md`'s
   `EngineFlare_PlaceShapes` bullet.
-- **What arms the boost timer is still open** - the one item this thread
-  keeps. `engine-trail.md`'s "What arms the boost timer stays open, minus
-  two wrong answers" section has the narrowing: one confirmed writer,
-  `0x00090d30`, mirrors a craft countdown at `craft+0x108` (decaying at
-  `2 * dt`) into the flare's timer, gated on mode 10 (plausibly Zone
-  Battle, where boost is banked); two candidates dissolved on reading
-  (`0x0008a5b8`/`0x00089fa8` write a HUD sprite's rotation angle, not any
-  flare). What arms `craft+0x108` itself - pads, barrel rolls, the start
-  boost - is unread, so the boost *duration* this engine uses remains its
-  own number.
+- **What arms the boost timer - reframed 2026-09-05, not yet closed.**
+  `engine-trail.md`'s "What arms the boost timer stays open, minus two
+  wrong answers" section (2026-09-05 entry) has the full account. The
+  premise in this bullet's earlier wording was wrong: `craft+0x108` is not
+  armed by an external writer at all. It is a self-contained rise/fall ramp
+  entirely inside the one confirmed function, `0x00090d30` - it rises at a
+  rate (`2.0` or `4.0` per second) selected by a byte at `craft+0xfc`, falls
+  at a flat `2 * dt` otherwise, and the whole block only runs when the
+  craft's race mode reads `10` (plausibly Zone Battle, where boost is
+  banked) - confirmed from raw disassembly, not the decompiler's pseudocode
+  for this function, which is corrupted (`halt_baddata()`, eleven
+  unreachable-block warnings). A clean negative narrows where to look next:
+  batch-decompiling all ~20 sibling per-tick calls from the craft's own
+  master `Update` (`FUN_0009e3d0`, `0x00090d30`'s only caller) found none of
+  them touch `+0x108` either. So an external "arm" event, if one exists,
+  is not in the per-tick chain - it would be pad-contact, barrel-roll input
+  or race-start code reached some other way. A candidate for what instead
+  sets the `+0xfc` rate-selector byte (confidence 35, not a name, a
+  hypothesis) - a class-ID compare (`sub-object+0x58 == 0xb`) gating a
+  transform load from what may be a pad/track object - is on the page but
+  not verified live.
 
 ## Next Steps
 
-- Find what arms `craft+0x108` (pads, barrel rolls, the start boost).
-  `engine-trail.md`'s own record is eight sessions of breakpoint tracing on
-  adjacent ground (the flare's render gate) before it converged - this
-  needs a live RPCS3 trace bracketing a boost pickup/barrel roll/start
-  sequence, not a static xref sweep; `craft+0x108` is too generic an offset
-  for a blind `stw` search to be useful alone.
+- Confirm live whether `craft+0xfc`'s rate-selector byte is set by driving
+  over a speed pad (or by a barrel roll / the start boost), and whether the
+  `sub-object+0x58 == 0xb` class-ID read this session found is really a pad
+  contact. `engine-trail.md`'s own record is eight sessions of breakpoint
+  tracing on adjacent ground (the flare's render gate) before it converged -
+  this needs a live RPCS3 trace bracketing a boost pickup/barrel
+  roll/start sequence with a breakpoint on `craft+0xfc`'s write sites -
+  static reading (`search_instructions` for `stb`/`stbu` on `0xfc(`,
+  whole-binary) found exactly two writers of that exact addressing form,
+  **both inside `0x00090d30` itself, and both clearing it to `0`**
+  (`stbu r0,0xfc(r28)` at `0x0009113c`/`0x00091b30`, `r0` loaded from
+  `li r0,0x0`). Nothing anywhere sets it to `1` this way, so whatever arms
+  the rise rate either writes a whole word/struct that happens to overlap
+  this byte, or reaches it through indexed addressing (`stbx`) this sweep
+  would not catch - read for that live rather than assuming a breakpoint on
+  the literal `+0xfc(r31)` address will ever fire. A blind `stw`/`stfs
+  0x108(` sweep across the whole binary is
+  **not** useful alone - confirmed again this session, 48+ unrelated hits,
+  mostly stack-frame saves at the same offset.
 - Separately, and explicitly not the next step here: implementing the five
   spike shapes (their own geometry, not just the flicker constant) is a
   renderer feature of its own size, tracked by this bullet rather than
