@@ -32,6 +32,7 @@ fn main() {
         Some(dump),
         None,
         Duration::from_millis(40),
+        false,
     );
     let cache_dir = std::env::temp_dir().join("oag-audio-source-switch-probe-cache");
 

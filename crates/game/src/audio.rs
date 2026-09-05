@@ -671,16 +671,31 @@ impl Audio {
     /// the dump would be a file of silence written next to audio the player
     /// could hear. Forcing the null backend makes the two mutually exclusive
     /// where they would otherwise be quietly wrong.
+    ///
+    /// `no_audio` is `--no-audio`: the same forced null backend as a dump, but
+    /// with nothing collected to write. It exists for the case a dump does not
+    /// cover - a capture that wants the deterministic tick-clocked path (see
+    /// [`Self::movie_playhead`]) without also paying for a growing sample
+    /// buffer and a WAV nobody asked for. Without it, a `--screenshot --until`
+    /// run on a machine with a real device is "audio-clocked" per ADR-0019,
+    /// and a headless run finishes in far less wall-clock time than the movie
+    /// takes to play - so a late frame's `--until` target is never reached.
+    /// Forcing the null backend puts such a run on the same tick-clocked
+    /// fallback ADR-0019 already specifies for a movie with no audio stream,
+    /// which is also exactly what a machine with **no** device does today
+    /// (that path is what CI exercises).
     #[must_use]
     pub fn open(
         settings: &crate::settings::Audio,
         dump: Option<PathBuf>,
         tap: Option<&oag_audio::TapSpec>,
         buffer: std::time::Duration,
+        no_audio: bool,
     ) -> Self {
-        let output = match &dump {
-            Some(_) => Output::null(DUMP_SAMPLE_RATE),
-            None => Output::open_or_null(tap, buffer),
+        let output = if dump.is_some() || no_audio {
+            Output::null(DUMP_SAMPLE_RATE)
+        } else {
+            Output::open_or_null(tap, buffer)
         };
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());

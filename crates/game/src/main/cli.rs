@@ -209,6 +209,24 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "FILE")]
     pub(crate) dump_audio: Option<std::path::PathBuf>,
 
+    /// Force the null audio backend: no device, no dump, nothing played.
+    ///
+    /// The same forced-null trick `--dump-audio` uses, without the WAV: a
+    /// `--screenshot --until` run that has to sit through a movie leg needs the
+    /// mixer to be tick-clocked rather than paced by a real device, and a
+    /// device attached to the machine otherwise makes that a wall-clock race a
+    /// headless run always loses - it finishes in far less real time than the
+    /// movie takes to play, so `--until` spends its tick ceiling on a picture
+    /// that has barely moved. See `crate::audio::Audio::movie_playhead` and
+    /// ADR-0019. `--dump-audio` already forces the same backend and works for
+    /// this too, but it also requires `--screenshot` and grows a sample buffer
+    /// for the length of the run; this is the plain way to ask for the
+    /// tick-clocked movie leg alone. Conflicts with `--tap-audio` for the same
+    /// reason it conflicts with `--dump-audio`: both need a real stream to
+    /// read from, and this one forces there to be none.
+    #[arg(long, conflicts_with_all = ["dump_audio", "tap_audio"])]
+    pub(crate) no_audio: bool,
+
     /// Record what the **device** is handed to a WAV, while it plays.
     ///
     /// Not `--dump-audio`, which forces the null backend so that it can pull
