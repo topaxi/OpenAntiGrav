@@ -1,0 +1,128 @@
+Makes `Allegrex_ElfExtension` actually win adapter selection for a PSP ELF.
+
+Without this, every PSP import on a Ghidra that also has
+`ghidra-emotionengine-reloaded` installed silently loads with **no relocations
+applied at all**: the relocation table stays empty, `lui`/`addiu` pairs keep
+their pre-relocation immediates and `jal` targets keep base-0 encodings, so
+`get_xrefs_to` answers "no references" for functions and data that plainly
+have callers. Measured 2026-09-05 against `psp-pulse-usa`; see
+docs/ghidra/workflow.md, "Why a PSP import silently loses every relocation".
+
+The mechanism, in four steps, all re-checkable with `javap`:
+
+  1. `ElfExtensionFactory.getLoadAdapter(ElfHeader)` is a plain first-match-wins
+     loop over `ClassSearcher.getInstances(ElfExtension.class)`, testing only
+     the **one-arg** `canHandle(ElfHeader)`.
+  2. `ClassSearcher` orders that list by descending
+     `@ExtensionPointProperties(priority)`. `EE_ElfExtension` declares
+     `priority = 2`; `Allegrex_ElfExtension` declares nothing, so it gets
+     `DEFAULT_PRIORITY = 1` and sorts behind it.
+  3. `EE_ElfExtension` overrides only the two-arg `canHandle(ElfLoadHelper)`
+     and inherits stock `MIPS_ElfExtension`'s one-arg version, which accepts
+     **any** `EM_MIPS` ELF - PSP included.
+  4. So the PS2 extension wins the PSP file, and
+     `Allegrex_ElfExtension.processGotPlt` - the sole call site of
+     `AllegrexRelocationProcessor.process` - never runs. Nothing fails and
+     nothing is logged, because nothing is reached.
+
+Note that `Allegrex_ElfExtension`'s existing two-arg
+`canHandle(ElfLoadHelper)`, which checks the language is `Allegrex`, is **dead
+code for adapter selection** - the factory never calls it. That is why the
+language check it performs never prevented any of this, and it is the detail
+that otherwise has to be re-derived.
+
+Both hunks are required and neither works alone:
+
+  - Raising the priority alone would make Allegrex win *PS2* ELFs too, the
+    exact mirror of the bug being fixed - its one-arg predicate accepts any
+    `EM_MIPS` file.
+  - Tightening the predicate alone changes nothing, because EE is still tested
+    first and still accepts.
+
+The tightened predicate keys on `e_type == 0xffa0` (`ET_PSP_EXEC`), which
+holds for all four PSP executables this project uses (`pulse-usa`, `pulse-eu`,
+`pure-eu`, `pure-usa` - all `Processor Specific: (ffa0)` per `readelf -h`)
+while `pulse-ps2-eu`'s `SCES_547.48` is a plain `EXEC`, so it still falls
+through to `EE_ElfExtension`. The `SHT_PSP_REL` section and program-header
+scans are a null-guarded fallback for PSP modules reached before `e_type` is
+decisive; depending on when the factory runs relative to section parsing they
+may be inert, and the `e_type` test is the one that carries the fix.
+
+Applies to ghidra-allegrex commit aec4265, which is what
+scripts/build-ghidra-allegrex.sh pins by default.
+
+**Not verified end to end.** The mechanism above is measured; that this patch
+removes the symptom follows from it but has not been executed, because doing
+so means installing the rebuilt extension into the maintainer's Ghidra and
+reimporting the live databases. See
+handover/ghidra-psp-relocations-never-applied.md.
+
+--- a/src/main/java/ghidra/app/util/bin/format/elf/extend/Allegrex_ElfExtension.java
++++ b/src/main/java/ghidra/app/util/bin/format/elf/extend/Allegrex_ElfExtension.java
+@@ -40,6 +40,7 @@
+ import ghidra.program.model.symbol.Symbol;
+ import ghidra.program.model.symbol.SymbolUtilities;
+ import ghidra.util.Msg;
++import ghidra.util.classfinder.ExtensionPointProperties;
+ import ghidra.util.exception.AssertException;
+ import ghidra.util.exception.CancelledException;
+ import ghidra.util.exception.InvalidInputException;
+@@ -53,8 +54,20 @@
+ // Note that this class is derived from the MIPS_ElfExtension. When the comment
+ // says "PSP relocation section are not supported" it refers to the built-in
+ // MIPS plugin, not the Allegrex one.
++// The priority must stay above ghidra-emotionengine-reloaded's EE_ElfExtension
++// (2), which inherits MIPS_ElfExtension's "any EM_MIPS" claim and would
++// otherwise be selected for PSP files, silently skipping every relocation.
++@ExtensionPointProperties(priority = 3)
+ public class Allegrex_ElfExtension extends ElfExtension {
+
++  // e_type of a PSP executable/PRX. PspElfConstants holds the section types,
++  // but they are duplicated here so canHandle stays free of Kotlin interop.
++  private static final int ET_PSP_EXEC = 0xffa0;
++
++  private static final int SHT_PSP_REL = 0x700000a0;
++
++  private static final int SHT_PSP_REL_TYPE_B = 0x700000a1;
++
+   private static final String MIPS_STUBS_SECTION_NAME = ".MIPS.stubs";
+
+   // GP value reflected by symbol address
+@@ -140,7 +153,36 @@
+
+   @Override
+   public boolean canHandle (ElfHeader elf) {
+-    return elf.e_machine() == ElfConstants.EM_MIPS;
++    return elf.e_machine() == ElfConstants.EM_MIPS && isPsp(elf);
++  }
++
++  // Claim only PSP files. Being selected for a PS2 ELF would be the same bug
++  // this class's raised priority exists to fix, pointing the other way.
++  private static boolean isPsp (ElfHeader elf) {
++    if ((elf.e_type() & 0xffff) == ET_PSP_EXEC) {
++      return true;
++    }
++    ElfSectionHeader[] sections = elf.getSections();
++    if (sections != null) {
++      for (ElfSectionHeader section : sections) {
++        if (isPspRelocationType(section.getType())) {
++          return true;
++        }
++      }
++    }
++    ElfProgramHeader[] headers = elf.getProgramHeaders();
++    if (headers != null) {
++      for (ElfProgramHeader header : headers) {
++        if (isPspRelocationType(header.getType())) {
++          return true;
++        }
++      }
++    }
++    return false;
++  }
++
++  private static boolean isPspRelocationType (int type) {
++    return type == SHT_PSP_REL || type == SHT_PSP_REL_TYPE_B;
+   }
+
+   @Override
