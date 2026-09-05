@@ -554,27 +554,42 @@ apply:
     set all four bar-quad corners to colour;
 ```
 
-`fade_timer` (`hud+0x11c`) is a one-shot flash: it starts counting whenever
-the current percentage is *below the previous frame's* (`fVar8 <
-hud+0x118`, itself updated to `fVar8` every frame) and counts back down to
-zero over roughly the same **rate as the blink cycle** below it in the same
-function. So the widget is forced red in exactly two situations - the pool
-is at or under **20%**, or the pool just *dropped* (a hit landed) - and
+`fade_timer` (`hud+0x11c`) is a one-shot flash, and its mechanics are read
+directly rather than approximated: it **counts up** by the frame's `dt`
+every frame the current percentage is *below the previous frame's*
+(`fVar8 < hud+0x118`, itself updated to `fVar8` every frame) **or** the
+timer is already running, and it resets to `0` the instant it reaches
+`1.0` - a roughly one-second window per drop, re-armed by any further drop
+before it expires. It is a separate accumulator from the blink cycle at
+`hud+0x1dc` (scaled by `8.0`, driving the alpha toggle), which the earlier
+reading of this section conflated with it. So the widget is forced red in
+exactly two situations - the pool is at or under **20%**, or the pool just
+*dropped* and the ~1 s window from that drop has not yet elapsed - and
 otherwise renders the widget's own stored `Color` with only the alpha byte
 modulated for the low-shield blink.
 
 **Why this settles threshold over gradient, and resolves the 79%/100%
 frames without contradiction**: the 100% grid frame has no recent hit and
 `fVar8` far above 20, so it takes the `authored colour` branch - `ShieldBar`'s
-`Color="FEConst->HudColour3"` in `Arcade_HUD.xml`, which
-[`hud.md`](../../../ui/hud.md) already reads off the XML as the literal
-`0xFF0DDFDD` (`0xAARRGGBB`: R=`0x0D`, G=`0xDF`, B=`0xDD`) - a light cyan,
-exactly what the frame shows. The 79% frame was taken **fifty seconds in,
-after wall contact** per the thread's own note - i.e. squarely inside the
-post-hit `fade_timer` window - so it takes the forced branch regardless of
-79% being well above the 20% floor: `0x00ff0000` in the same `0xAARRGGBB`
-order is pure red, matching "solid red" exactly. A gradient model has no way
-to produce a *sudden* full-red at 79% one hit after a full-cyan 100%; the
+`Color="FEConst->HudColour3"` in `Arcade_HUD.xml` (checked directly:
+`Arcade_HUD.xml`'s own `<Variable global="HudColour3">` declares
+`0xFF0DDFDD`, the same value [`hud.md`](../../../ui/hud.md) already reads off
+Time Trial's identical table) - `0xAARRGGBB`: R=`0x0D`, G=`0xDF`, B=`0xDD` -
+a light cyan, exactly what the frame shows. The 79% frame was taken **fifty
+seconds in, after wall contact** per the thread's own note. A single isolated
+hit gives only a ~1 s red window, which a screenshot landing inside would be
+a coincidence worth flagging rather than asserting - but `shield.md`'s own
+runtime leg (below) measured **115 ticks of wall contact in one 200-tick
+run**, one `Ship_Damage` call per contact record per tick: sustained scraping
+drops the pool on most frames, which re-arms `fade_timer` before it can
+reach `1.0` and pins the bar red for the whole contact, not by chance. So the
+79% frame reads as mid-scrape, not as a one-in-sixty-frames coincidence.
+`0x00ff0000` in the same `0xAARRGGBB` order is pure red, matching "solid
+red" exactly, and confirmed to be the shield/energy percentage bar and not
+the km/h speed bar sharing this update path: the digits this function
+formats are followed by the literal at `0x275de0` (rebased `0x08a79de0`),
+which reads back as `"%"`, not `"kmh"`. A gradient model has no way to
+produce a *sudden* full-red at 79% one hit after a full-cyan 100%; the
 threshold-plus-flash model predicts precisely that.
 
 **The `20.0` constant is not read in isolation.** It is the same value
@@ -598,12 +613,16 @@ that, the decompiled branch structure is unambiguous and every value in it
 preserves RGB while only alpha is blink-modulated) is a plain read, not an
 inference.
 
-**What is still open**: `iVar1` (`func_0x0003a904` on a pointer read off
-`hud+0x2c0`'s own game-state struct) is not identified - it is read as "some
-external override that suppresses the forced-red branch entirely", plausibly
-a practice/ghost or no-damage-mode flag, but nothing here names it. It does
-not change the threshold-vs-gradient answer either way: whichever flag it
-is, the function still never blends between two colours by percentage.
+**What is still open**: `iVar1` (`func_0x0003a904` called on
+`*(_DAT_0005801c + 0x2c0)` - a global race-state pointer `Hud_Update` itself
+also dereferences at that same offset, not a field of the HUD object) is not
+identified - it is read as "some external override that suppresses the
+forced-red branch entirely", plausibly a practice/ghost or no-damage-mode
+flag, but nothing here names it. `func_0x0003a904` rebases to `0x0883e904`,
+which falls in an undefined gap between two functions rather than inside
+one, so it was not chased further this pass. It does not change the
+threshold-vs-gradient answer either way: whichever flag it is, the function
+still never blends between two colours by percentage.
 
 ## What is not verified
 

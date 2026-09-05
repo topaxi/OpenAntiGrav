@@ -36,9 +36,10 @@ other thread), but the fill's tint is not read from anywhere at runtime.
   readout - it is not a pure function of the current percentage, it depends
   on whether the value *just dropped*, so it needs one frame of memory
   (mirroring the original's `hud+0x118`/`hud+0x11c` pair)
-- `iVar1` in `Hud_UpdateEnergyBar` (an external override flag read off a
-  pointer at `hud+0x2c0`, per `func_0x0003a904`) is not identified - it
-  suppresses the forced-red branch entirely when set. Not resolved before
+- `iVar1` in `Hud_UpdateEnergyBar` (an external override flag from
+  `func_0x0003a904` called on a global race-state pointer, not a field of
+  the HUD object itself) is not identified - it suppresses the forced-red
+  branch entirely when set. Not resolved before
   wiring the Rust side; if left out, the Rust HUD would always take the
   forced-red branch on a genuine drop even in whatever mode this flag is
   meant to suppress it for (a ghost/practice run is the leading guess, from
