@@ -652,3 +652,4 @@
 0x08911888	function	Texture_Downsample4bpp	84	ship-skin.md
 0x088b34bc	function	MPLobby_UpdateShipPreview	62	ship-skin.md
 0x08a88440	data	g_skin_texture_slot_names	88	ship-skin.md
+0x0881c9d0	function	Hud_UpdateTimeCluster	65	hud-time-caption-substitution.md

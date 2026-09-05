@@ -329,8 +329,29 @@ So a mode's code can **substitute a different string key** into a widget the lay
 has already positioned. That explains the arithmetic: 38 `IG_HUD_*` keys exist in
 the binary against 12 `idstring` values across all five layouts, so 26 keys are
 reachable only from code. This build resolves the layout's own key and therefore
-shows `Total` where a time trial shows `Record`; the substitution rule is unread and
-is **not** worked around by hardcoding.
+shows `Total` where a time trial shows `Record`.
+
+**The rule behind this one pair is now read, confidence 84 for the mapping
+itself.** `Hud_UpdateTimeCluster_q` (`0x0881c9d0`) picks `TotalTimeTxt`'s caption
+key from a five-way table keyed on an ordinal "tier" value, re-resolving the
+localised string only on a transition rather than every tick:
+
+| Tier | Key |
+| ---: | --- |
+| `-1`, or `>= 4` (except `5`) | `IG_HUD_TOTAL` (the layout's own default) |
+| `0` | `IG_HUD_BRONZE` |
+| `1` | `IG_HUD_SILVER` |
+| `2` | `IG_HUD_GOLD` |
+| `3` | `IG_HUD_RECORD` |
+| `5` | caption untouched this tick; only the numeric format differs |
+
+All five string addresses round-trip exactly, and the `IG_HUD_RECORD` load is
+the *only* code reference to that string anywhere in the binary - a search over
+all 525,049 disassembled instructions found one hit. Full evidence, including
+what the tier value itself tracks (not settled - confidence 50, not renamed)
+and why this does not get wired up yet, is on
+[hud-time-caption-substitution.md](../ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md).
+This is one widget pair of the 26 code-only keys; the other 25 are not read.
 
 ## Still open after the frame
 
@@ -725,7 +746,10 @@ Recorded so none of this reads as undiscovered work.
   Pulse-shaped `"Zone"` match arm, which would be wrong for what this widget
   set actually is.
 - **Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need progression
-  data.
+  data. The selection *mechanism* for these four against `TotalTimeTxt` is now
+  read - see the structural finding above and
+  [hud-time-caption-substitution.md](../ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md)
+  - what remains open is what feeds the ordinal tier that table switches on.
 - **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
   than suspending it.
 - **26 unreferenced `Data\HUD\*.vex` models.** `Bar_1`, `Speed`, `Shield`, `Lap`,
