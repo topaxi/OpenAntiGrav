@@ -339,9 +339,12 @@ fn a_modelled_rocket_points_where_it_is_going() {
 fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.world
-        .projectiles
-        .spawn(oag_formats::weapons::Weapon::Rocket, Vec3::X, Vec3::Z * 600.0, 0);
+    race.world.projectiles.spawn(
+        oag_formats::weapons::Weapon::Rocket,
+        Vec3::X,
+        Vec3::Z * 600.0,
+        0,
+    );
     race.world.projectiles.spawn(
         oag_formats::weapons::Weapon::Missile,
         Vec3::Y,
