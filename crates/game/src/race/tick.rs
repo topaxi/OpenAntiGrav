@@ -411,6 +411,13 @@ impl Race {
         // `oag_render::camera::shake`.
         self.shake.advance(self.dt);
 
+        // After every writer of the shield pool this tick has run - the wall
+        // contact above, the weapon damage inside `projectile::step`, and the
+        // perfect-zone recharge - so a hit from any of the three flashes on
+        // the tick it lands rather than one late. See
+        // `Self::advance_shield_flash`.
+        self.advance_shield_flash();
+
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
