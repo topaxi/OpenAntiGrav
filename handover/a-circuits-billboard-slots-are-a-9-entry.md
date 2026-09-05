@@ -46,9 +46,8 @@ each glyph's column crosses its own pair at its own moment. All lettering on the
 gantry is geometry and every texture on it is a palette. The same asset carries the
 FINAL LAP and chequered boards as later windows on the same 60 Hz timeline, which is
 what the two retracted lines used to be separate files for. Full account, phase
-table included: [start-gantry.md](../docs/rendering/start-gantry.md); the
-cross-title plan is
-[the-start-gantry-is-recovered-on-pulse-three.md](the-start-gantry-is-recovered-on-pulse-three.md).
+table included, now covering all four titles in the lineage:
+[start-gantry.md](../docs/rendering/start-gantry.md).
 
 **Scored apart at 55, on purpose**: whether the engine plays that authored track or
 writes the offset itself per countdown state. The four `+0x88`/`+0x90`/`+0x98`/`+0xa0`
