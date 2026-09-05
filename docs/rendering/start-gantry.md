@@ -146,6 +146,15 @@ test asserts the strobe instead.
 The `T = 2.6` frame was **predicted from the texel grid and then rendered**,
 which is what takes this from a plausible reading to a measurement.
 
+**Which of these numbers are measured, and which are derived.** The window
+*boundaries* in the table above are computed from the texel grid and the key
+times - nothing samples them. What the ground-truth test pins is the
+*midpoints*: it evaluates the real track against the real palette at 1.10 s,
+1.85 s and 2.60 s and asserts exactly one digit is lit each time, in order. So
+a decoder change that shifted every window by a fraction of a second would keep
+the tests green and leave this table wrong. Re-derive the boundaries rather
+than trusting them if the offset evaluator ever moves.
+
 So: not node animation, not per-node visibility, not a material swap, and not an
 atlas-cell swap. A shared UV offset against a per-glyph palette column. The
 project already implements both halves - `vex::mesh_tex_transforms` parses the
