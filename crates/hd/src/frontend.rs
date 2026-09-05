@@ -5,27 +5,32 @@
 //! layout global across all six. The evidence, quoted, is in
 //! [`hd-frontend.md`]; this module is the table that page produces.
 //!
-//! # Why [`crate::TITLE`] ships a front end, and what it is not claiming
+//! # Why [`crate::TITLE`] ships a front end, and what it is now claiming
 //!
-//! It ships one as of 2026-08-17, and **the thing that changed is the type, not
-//! the evidence**. This section used to say `front_end: None`, and its reasoning
-//! was sound: [`oag_title::BootProfile::chain`] was defined as a
-//! **measurement** - its own module doc opens by recording that "a front-end
-//! XML's declared entry point is not the runtime's" - and [`DECLARED_CHAIN`] is
-//! the declared order and nothing more. Shipping it as `chain` would have put a
-//! hypothesis in the one field whose contract was that it never held one.
+//! It ships one as of 2026-08-17, and for the first two and a half weeks of that
+//! the chain was labelled [`oag_title::Provenance::Declared`]: the order was
+//! read redirect by redirect out of the XML and nobody had watched a PS3 take
+//! it. [ADR-0025] is the type that let it be expressed and labelled at once,
+//! and it said what would end the state - "an emulator capture now *upgrades* a
+//! title rather than unlocking it."
 //!
-//! [`oag_title::Provenance`] is the way out, and it is a third answer rather
-//! than a compromise on either of the first two. [`BOOT`] carries
-//! [`oag_title::Provenance::Declared`], so the order is expressed *and* labelled
-//! as read rather than watched, and `oag-game` says so on every boot report it
-//! prints. Nothing below is claimed to be what a PS3 does. See
-//! [ADR-0025](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
+//! **That capture happened on 2026-09-05 and [`BOOT`] is
+//! [`oag_title::Provenance::Measured`].** Two cold boots on RPCS3, savedata
+//! moved aside so the boot is genuinely a first play, walked all eight steps of
+//! [`BOOT_CHAIN`] in this order and no other, with nothing extra between them -
+//! `just rpcs3-bootchain`, kept under `data/reference/hd-boot-chain/`. See
+//! [`hd-frontend.md`].
 //!
-//! **What an emulator capture would still settle**, and what this build shows in
-//! the meantime, is on [`hd-frontend.md`]. The short version: the order, whether
-//! the picker runs at all on a machine that takes its language from the XMB,
-//! and which of the six `skin.xml` copies is live.
+//! **Two things that capture did not settle, and they are not this field's.**
+//! [`states::LANGUAGE_SELECTION`] is *entered* on both boots, but no frame of it
+//! was ever caught - `LanguageAutoRedirect` is a sufficient explanation on a
+//! console whose XMB already answers the question, so whether the picker is ever
+//! shown to a player is open. And RPCS3 is an emulator, not a PS3, which is why
+//! [`hd-frontend.md`] scores the chain 85 rather than higher. `Provenance` is
+//! deliberately two-valued and grades neither of those; ADR-0025 rejected a
+//! confidence number in the type and put it on the docs page instead.
+//!
+//! [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 //!
 //! **The entry point specifically is in better shape than the rest of the
 //! chain**, and it is the one part the PS3 executable has been read for.
@@ -38,19 +43,19 @@
 //! front-end order. That is Pure's situation and not Pulse's - but 70 on the one
 //! step nearest the start is not a measured chain of eight.
 //!
-//! There is a second, independent reason and it points the same way: six copies
-//! of `skin.xml` and no manifest means **which of them the runtime loads is
-//! unknown**, and the two families declare different logo movies
-//! ([`names::STUDIO_LOGO_MOVIE`] against [`names::STUDIO_LOGO_MOVIE_FURY`]).
-//! The executable does not settle it either: it composes the skin path from the
-//! plugin's own location, identical for all six, and the strings `LogoFMV`,
-//! `Show Logo`, `StudioLiverpool` and `Backdrop` are **not in the binary at
-//! all**. The reel is chosen by the XML, so the question folds back into which
-//! `skin.xml` is live.
+//! **Which of the six `skin.xml` copies is live is `DATA00`'s**, settled by the
+//! same 2026-09-05 boots and by two independent lines. The game's own `printf`
+//! loads `data01` through `data06` and then `data00` **last**; and during
+//! `Studio Logo` the runtime stats a path ending
+//! [`names::STUDIO_LOGO_MOVIE_FURY`], a filename that appears in exactly one
+//! file on the whole disc - `DATA00`'s copy. Every other copy names
+//! [`names::STUDIO_LOGO_MOVIE`]. Confidence 92; the evidence is quoted on
+//! [`hd-frontend.md`].
 //!
-//! So the layout is recovered and sits here as [`MENU_SKIN`], and what a capture
-//! would now do is *upgrade* [`BOOT`]'s provenance rather than unlock the front
-//! end.
+//! That also retires the framing the other copies used to be discussed in. They
+//! are not alternative boot paths that a run might take instead; they are
+//! superseded copies of one file, and the chains they declare are **unreachable**
+//! rather than merely unexercised.
 //!
 //! [`hd-frontend.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/hd-frontend.md
 
@@ -180,18 +185,24 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     }),
 };
 
-/// The boot order HD's own `skin.xml` **declares**, which is not the same claim
-/// as the order it boots in.
+/// The boot order HD takes, read out of `skin.xml` and then **watched**.
 ///
-/// Confidence **80** that this is what the XML says, and **no claim at all**
-/// about the runtime - which is what [`BOOT`] labels it, rather than what its
-/// use is gated on. `hd-frontend.md` has the redirects this was read out of.
+/// `DATA00`'s `skin.xml` declares these eight redirects and two cold boots on
+/// RPCS3 went through all eight in this order, twice, with nothing extra between
+/// them. Confidence **85** - capped only because an emulator is not a PS3. See
+/// [`hd-frontend.md`] for the transcript and `just rpcs3-bootchain` to repeat it.
 ///
-/// **Three of the nine steps exist only because the game is online**:
+/// **[`states::FIRST_PLAY`] is the step that makes the savedata matter.** With a
+/// save present HD skips it and goes [`states::EPILEPSY_WARNING`] straight to
+/// [`states::SAVE_WARNING`], so a boot watched on a used profile shows seven
+/// steps and looks like a whole chain. Both captures behind this constant moved
+/// `BCES00664-AUTO-` aside first.
+///
+/// **Three of the eight steps exist only because the game is online**:
 /// [`states::PRE_FMV_CONNECT`] runs a connection check before the logo, and
 /// [`states::EULA`] and [`states::UPDATE_ANNOUNCEMENT`] both carry `<SVOData>`.
 /// Pulse's boot has no equivalent to any of them.
-pub const DECLARED_CHAIN: &[oag_title::BootStep] = &[
+pub const BOOT_CHAIN: &[oag_title::BootStep] = &[
     oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
     oag_title::BootStep::screen(states::PRE_FMV_CONNECT),
     oag_title::BootStep::playing(states::STUDIO_LOGO, names::STUDIO_LOGO_MOVIE),
@@ -202,18 +213,18 @@ pub const DECLARED_CHAIN: &[oag_title::BootStep] = &[
     oag_title::BootStep::screen(states::UPDATE_ANNOUNCEMENT),
 ];
 
-/// HD's boot sequence, as data, with [`DECLARED_CHAIN`] as its order.
+/// HD's boot sequence, as data, with [`BOOT_CHAIN`] as its order.
 ///
 /// **The provenance is the field to read first.** Everything else here is a
-/// reading of the disc; `provenance` is what says the order among those
-/// readings has never been watched. See [`oag_title::Provenance`] and this
-/// module's own docs.
+/// reading of the disc; `provenance` is what says whether the order among those
+/// readings has been watched. It has, as of 2026-09-05. See
+/// [`oag_title::Provenance`] and this module's own docs.
 ///
 /// Three fields are `None`/empty and each is a measurement rather than a gap:
 ///
 /// - **No reel.** Pulse's `--reel` is an off-path dev/pub state; HD's two logo
-///   reels are both on the declared boot path, so there is nothing off it to
-///   point the flag at.
+///   reels are both on the boot path, so there is nothing off it to point the
+///   flag at.
 /// - **No menu backdrop.** HD's menus sit on a real-time `.vex` scene
 ///   ([`names::FRONT_END_SCENE`]), not a looping movie, so there is no entry to
 ///   name. This is the same shape of `None` as Pure's, for a different reason:
@@ -222,22 +233,25 @@ pub const DECLARED_CHAIN: &[oag_title::BootStep] = &[
 ///   in `skin.xml` itself - `hd-frontend.md` checked, and found none referenced
 ///   but undeclared in any of the six copies.
 pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
-    // Read, never watched. No PS3 emulator capture of this title exists in this
-    // project, and the executable settles only the entry point (confidence 70).
-    provenance: oag_title::Provenance::Declared,
-    chain: DECLARED_CHAIN,
+    // Read **and** watched, 2026-09-05: two cold boots on RPCS3 walked all eight
+    // steps of `BOOT_CHAIN` in this order and no other, savedata moved aside so
+    // `FIRST_PLAY` was not skipped. `just rpcs3-bootchain`, kept under
+    // `data/reference/hd-boot-chain/`. Confidence 85 - an emulator is not a PS3.
+    provenance: oag_title::Provenance::Measured,
+    chain: BOOT_CHAIN,
     reel: None,
     menu_backdrop: None,
     picker_backdrop_parent: None,
     fallback_globals: &[],
 };
 
-/// HD's front end: the layout it authors and the boot order it declares.
+/// HD's front end: the layout it authors and the boot order it takes.
 ///
-/// The two halves are recovered to very different standards and
-/// [`oag_title::FrontEnd`] cannot say so - which is why [`BOOT`] carries the
-/// caveat rather than this. [`MENU_SKIN`] is confidence 92 off six agreeing
-/// copies of an authored file; the chain is a declaration.
+/// The two halves were recovered to very different standards and
+/// [`oag_title::FrontEnd`] cannot say so - which is why [`BOOT`] carries its own
+/// provenance rather than this. They have since converged: [`MENU_SKIN`] is
+/// confidence 92 off six agreeing copies of an authored file, and [`BOOT_CHAIN`]
+/// is 85 off two boots that were watched.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,

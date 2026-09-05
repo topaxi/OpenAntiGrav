@@ -183,3 +183,31 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
         EntryRef::Name("3d2c85f8".to_string())
     );
 }
+
+/// A declared chain says so in the report, and a measured one says nothing.
+///
+/// **ADR-0025's guarantee, and this is now the only place it is covered.** The
+/// disc-backed test that used to assert the line appeared did so against Wipeout
+/// HD, the last title carrying `Provenance::Declared`; two cold boots on RPCS3
+/// on 2026-09-05 upgraded it to `Measured`, and the assertion had nothing left
+/// to fire on. Deleting it would have retired the ADR's enforcement on the day
+/// the last title stopped exercising it - a fourth title arriving as a
+/// declaration would print nothing and nobody would know.
+///
+/// So the caveat moved into [`super::provenance_caveat`], where both branches
+/// are reachable without a disc image at all.
+#[test]
+fn a_declared_chain_is_labelled_in_the_report_and_a_measured_one_is_not() {
+    let declared = super::provenance_caveat("Some Title", oag_title::Provenance::Declared)
+        .expect("a declared chain must be labelled");
+    assert!(
+        declared.contains("declares") && declared.contains("not a boot anyone has watched"),
+        "the label has to say which it is: {declared}"
+    );
+    assert!(declared.starts_with("Some Title:"), "named: {declared}");
+    assert_eq!(
+        super::provenance_caveat("Some Title", oag_title::Provenance::Measured),
+        None,
+        "a watched chain carries no caveat"
+    );
+}

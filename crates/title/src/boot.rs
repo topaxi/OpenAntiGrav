@@ -93,10 +93,16 @@ pub enum Provenance {
     /// A cold boot of the original was watched, and this is the order it went
     /// in.
     ///
-    /// Both PSP titles. Pulse's is the reason the distinction is needed at all:
-    /// its XML declares the picker first and its runtime opens on `LogoFMV`
-    /// instead, so a build that had trusted the declaration would have shipped
-    /// the wrong sequence and had no way to know.
+    /// Both PSP titles, and Wipeout HD since 2026-09-05. Pulse's is the reason
+    /// the distinction is needed at all: its XML declares the picker first and
+    /// its runtime opens on `LogoFMV` instead, so a build that had trusted the
+    /// declaration would have shipped the wrong sequence and had no way to know.
+    ///
+    /// **"Watched" is not "watched on the console."** HD's is two boots on
+    /// RPCS3, which is why its docs page scores the chain 85 rather than higher.
+    /// This enum is deliberately two-valued and grades nothing - ADR-0025
+    /// rejected a confidence number in the type, and the rubric score lives on
+    /// the docs page where it can carry its evidence.
     Measured,
     /// The title's own front-end XML declares this order, and nothing has
     /// watched it run.
@@ -105,6 +111,13 @@ pub enum Provenance {
     /// screen - and **not** evidence about the runtime. Anything user-facing
     /// that walks such a chain says so rather than presenting it as the disc's
     /// behaviour.
+    ///
+    /// **No title is in this state today**, HD having been the last and its
+    /// chain having been watched. The variant stays because the next title's
+    /// declaration will arrive before its capture does, and because the whole
+    /// point of the field is that arriving as a measurement by omission must not
+    /// be possible. `oag_game::boot::provenance_caveat` is where it is enforced,
+    /// and it is unit-tested rather than disc-tested for exactly this reason.
     Declared,
 }
 

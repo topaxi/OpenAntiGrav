@@ -74,16 +74,22 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
 ///
 /// The whole of what changed is in the first line of this test: `load_shell`
 /// used to refuse this source by name.
+///
+/// **The provenance assertion has flipped since**, on 2026-09-05: two cold boots
+/// on RPCS3 walked all eight steps of `oag_hd::frontend::BOOT_CHAIN` in order,
+/// savedata moved aside so `FirstPlay` was not skipped. It is asserted here as
+/// well as in `oag-hd`'s own test because this is the value that reaches a
+/// running boot - a `Shell` built from the disc, not a constant read in place.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_front_end_opens_on_a_declared_chain() {
+fn the_front_end_opens_on_a_measured_chain() {
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
     assert_eq!(
         shell.profile.provenance,
-        oag_title::Provenance::Declared,
-        "no capture of a PS3 running this title exists in this project"
+        oag_title::Provenance::Measured,
+        "two cold boots on RPCS3, 2026-09-05; see data/reference/hd-boot-chain/"
     );
     assert!(
         !shell.screens.screens.is_empty(),
@@ -91,25 +97,32 @@ fn the_front_end_opens_on_a_declared_chain() {
     );
 }
 
-/// **The boot says the order is a declaration**, in the report, before anything
-/// is drawn.
+/// **The boot no longer says the order is a declaration**, because it is not one.
 ///
-/// The load-bearing test of ADR-0025. What replaced the old `front_end: None`
-/// guarantee is a label, and a label nobody prints is worth nothing - so this
-/// asserts the print rather than the field, which
-/// [`the_front_end_opens_on_a_declared_chain`] already covers.
+/// This was ADR-0025's load-bearing test and it asserted the opposite: that
+/// `load_shell`'s report carried the caveat line, since what replaced the old
+/// `front_end: None` guarantee is a label and a label nobody prints is worth
+/// nothing. HD was the only title that label ever applied to, and the 2026-09-05
+/// capture retired it. So this now guards the other way - **a chain somebody
+/// watched must not be presented as one nobody did**, which is the failure mode
+/// a stale caveat would leave behind.
+///
+/// The caveat's *own* correctness moved to a unit test in `oag-game`'s
+/// `boot::tests`, which reaches both branches with no disc at all. That is
+/// deliberate: with no `Declared` title left on any disc, a disc-backed test
+/// cannot cover ADR-0025's mechanism any more.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_boot_report_says_the_order_is_only_declared() {
+fn the_boot_report_does_not_call_a_watched_order_a_declaration() {
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
     assert!(
-        shell
+        !shell
             .report
             .iter()
-            .any(|line| line.contains("declares") && line.contains("not a boot anyone has watched")),
-        "no line of the report says the order is declared rather than measured: {:#?}",
+            .any(|line| line.contains("not a boot anyone has watched")),
+        "the chain is measured, so no line may call it a declaration: {:#?}",
         shell.report
     );
 }
