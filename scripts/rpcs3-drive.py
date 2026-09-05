@@ -25,7 +25,7 @@ So the display is not optional and is also not the user's desktop:
 
     python3 scripts/rpcs3-drive.py display          # start Xvfb :77
     uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
-    python3 scripts/rpcs3-drive.py stop             # stop Xvfb :77 when done
+    python3 scripts/rpcs3-drive.py stop             # stop RPCS3 and Xvfb :77
 
 Xvfb is started with `-listen tcp -nolisten unix` and addressed as
 `127.0.0.1:77` deliberately: a sandboxed session may not be able to write
@@ -35,11 +35,18 @@ same reason - RPCS3 is Qt, and on a Wayland session it will not look at an X
 display unless told to.
 
 **Always run `stop` at the end of a session.** `boot`/`race`/`shot`/`capture`/
-`browse`/`record` already stop their own RPCS3 process on the way out
-(`Session.__exit__`), but the display is deliberately long-lived across many
-of those calls, so nothing tears it down on its own - measured directly as an
-orphaned two-day-old Xvfb with no client attached. `stop` only ever stops a
-display this script itself started (tracked in
+`browse`/`record` each stop their own RPCS3 process *on a normal exit*
+(`Session.__exit__`) - but that only runs if the driving script gets there. A
+run that is killed, crashes, or loses its terminal detaches RPCS3 instead
+(`start_new_session=True`), and it keeps running with nothing attached to
+it - measured directly as an emulator left up for thirty minutes. `stop`
+covers that: it stops RPCS3 if one is up, unconditionally, since RPCS3 does
+not support a second instance at all so there is no "someone else's" RPCS3 to
+avoid the way there can be someone else's display. The display itself is a
+separate gap: it is deliberately long-lived across many of the calls above,
+so nothing tears it down between them either - measured directly as an
+orphaned two-day-old Xvfb with no client attached. Unlike the emulator, `stop`
+only ever stops a display this script itself started (tracked in
 `~/.cache/oag-rpcs3-drive/xvfb.owner.json`); one that was already running
 when `display` ran is left alone. Never `pkill -x Xvfb` by hand - it would
 reach every virtual display on the machine, not just this one's.
@@ -47,7 +54,7 @@ reach every virtual display on the machine, not just this one's.
 Subcommands:
 
     display   start (or check) the virtual display everything else needs.
-    stop      stop that display - only if this tooling started it.
+    stop      stop RPCS3 (if up) and that display (if this tooling started it).
     preflight the pad, the input profile and the display, with each fix.
     boot      launch and wait for the Main Menu, then hold it there.
     race      boot, walk the menus into a race, optionally drive and screenshot.
@@ -194,6 +201,47 @@ def recordings(title_id="BCES00664"):
     root = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     pattern = os.path.join(root, "rpcs3", "recordings", title_id, "*.mp4")
     return sorted(glob.glob(pattern), key=os.path.getmtime)
+
+
+#: The binary name every helper below matches on. A parameter rather than a
+#: literal in each call so a test can point `emulator_running`/`stop_emulator`
+#: at a harmless fake name instead of the real `rpcs3` - see
+#: `scripts/pcsx2-drive.py`'s identical `stop_emulator`, which this mirrors.
+EMULATOR_BINARY = "rpcs3"
+
+
+def emulator_running(binary=EMULATOR_BINARY):
+    return subprocess.run(["pgrep", "-x", binary],
+                          capture_output=True).returncode == 0
+
+
+def stop_emulator(binary=EMULATOR_BINARY, quiet=False):
+    """Stop a running RPCS3, if one is up.
+
+    `Session.__exit__` already terminates the process it started on a normal
+    exit - `boot`/`race`/`shot`/`capture`/`browse`/`record` all clean up after
+    themselves that way. It runs under `start_new_session=True`, though, so a
+    driving script that dies uncleanly (killed, crashed, the terminal closed)
+    detaches RPCS3 rather than taking it down with it - measured directly as
+    an emulator left running for thirty minutes with nothing attached to it.
+    This is `stop`'s half of covering that case; RPCS3 does not support a
+    second instance at all (see `clear_stale_lock` below), so unlike Xvfb
+    there is no "someone else's" RPCS3 to avoid - matching pid, matching
+    RPCS3 was never possible to begin with.
+    """
+    if not emulator_running(binary):
+        if not quiet:
+            print("no %s running" % binary)
+        return False
+    subprocess.run(["pkill", "-x", binary], capture_output=True)
+    for _ in range(20):
+        time.sleep(0.5)
+        if not emulator_running(binary):
+            if not quiet:
+                print("%s stopped" % binary)
+            return True
+    subprocess.run(["pkill", "-9", "-x", binary], capture_output=True)
+    return True
 
 
 def clear_stale_lock():
@@ -456,14 +504,22 @@ def cmd_display(args):
 
 
 def cmd_stop(args):
-    """Tear down Xvfb :77 - but only the display this tooling started.
+    """Stop RPCS3 if it is up, and Xvfb :77 too - but only what this run owns.
 
     `boot`/`race`/`shot`/`capture`/`browse`/`record` already stop their own
-    RPCS3 process on the way out (`Session.__exit__`); the display is the
-    piece nothing tore down, because `display` is deliberately meant to
-    outlive any one of those calls. Run this when the whole session - not
-    just one race - is done. Safe to run twice, or with nothing up at all.
+    RPCS3 process *on a normal exit* (`Session.__exit__`) - but that only
+    runs if the driving script gets to it; a killed or crashed run leaves
+    RPCS3 detached and running, which is what `stop_emulator` here is for.
+    The display is a separate gap: it is deliberately meant to outlive any
+    one of those calls, so nothing tears it down between them either. Run
+    this when the whole session - not just one race - is done. Safe to run
+    twice, or with nothing up at all.
+
+    Order matters: stop RPCS3 first, then clear its stale lock -
+    `clear_stale_lock` is itself guarded on there being no live process, so
+    running it before the kill would just skip.
     """
+    stop_emulator()
     clear_stale_lock()
     if stop_display():
         print("Xvfb :%d stopped" % DISPLAY_NUMBER)

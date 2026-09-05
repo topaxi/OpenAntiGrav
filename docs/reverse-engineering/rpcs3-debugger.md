@@ -42,7 +42,7 @@ What works is a real renderer on a display that is not the user's:
 ```sh
 python3 scripts/rpcs3-drive.py display        # Xvfb :77, TCP-addressable
 uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
-python3 scripts/rpcs3-drive.py stop           # always, when the session is done
+python3 scripts/rpcs3-drive.py stop           # always: stops RPCS3 AND Xvfb :77
 ```
 
 `--load-shots N` adds N evenly spaced screenshots across the load window, which
@@ -55,15 +55,22 @@ Talon's Junction about 80 seconds after that, and screenshots that are real
 frames rather than black.
 
 **Run `stop` (or `just rpcs3-stop`) when the whole session is done, not just
-after one race.** `boot`/`race`/`shot`/`capture`/`browse`/`record` each stop
-their own RPCS3 process on the way out, but the display is deliberately
-long-lived across many of those calls, so nothing tears it down on its own -
-one agent left it up for thirty minutes today, and it has been measured
-directly as an orphaned two-day-old process with no client attached. `stop`
-only ever stops a display this tooling itself started; it leaves alone one
-that was already running before `display` ran, and it is safe to call twice
-or with nothing up at all. Never `pkill -x Xvfb` to clean up by hand - see the
-trap below for why that specific command is dangerous rather than just
+after one race, and even if the driving script itself already exited.**
+`boot`/`race`/`shot`/`capture`/`browse`/`record` each stop their own RPCS3
+process *on a normal exit* (`Session.__exit__`), but RPCS3 runs detached
+(`start_new_session=True`), so a driving script that is killed, crashes, or
+loses its terminal leaves it running with nothing attached to it - one agent
+left RPCS3 up for thirty minutes today this way. `stop` kills it
+unconditionally if one is up; RPCS3 does not support a second instance at all
+(see the stale-lock trap below), so there is no risk of reaching "someone
+else's" RPCS3. The display is a separate, independent gap: it is
+deliberately long-lived across many of the calls above, so nothing tears it
+down between them either - measured directly as an orphaned two-day-old
+Xvfb process with no client attached. Unlike the emulator, `stop` only ever
+stops a display this tooling itself started; it leaves alone one that was
+already running before `display` ran. The whole command is safe to call
+twice, or with nothing up at all. Never `pkill -x Xvfb` to clean up by hand -
+see the trap below for why that specific command is dangerous rather than just
 imprecise.
 
 Three details in the display that each cost a run:
