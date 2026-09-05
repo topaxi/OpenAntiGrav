@@ -334,20 +334,27 @@ is **not** worked around by hardcoding.
 
 ## Still open after the frame
 
-- **The shield bar is not one colour, and this build draws it as one.** Found
-  2026-08-11 in the two single-race frames that settled the position anchor, which
-  were not looking for it: on the grid the bar is **cyan** at `100%`, and fifty
-  seconds later, after wall contact, it is **solid red** at `79%` - same widget,
-  same rectangle, same authored `Color`. So the original tints `ShieldBar` at
-  runtime from the value, exactly as it substitutes a string key into a positioned
-  widget (see the structural finding above). **What the rule is, is not
-  established**: two samples cannot separate a threshold from a gradient, and 79 %
-  is high enough that "red means critical" is already ruled out. `ShieldBarText`
-  stays white in both. Frames at three or four known levels would settle it; a
-  writer of the colour in `Hud_SetEnergyBar`'s neighbourhood
-  ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md)) would settle it
-  better. The speed bar in the same frames is mint green and fills from the left,
-  which is what this build already draws.
+- **The shield bar is not one colour, and this build draws it as one - resolved
+  2026-09-05, not yet implemented.** Found 2026-08-11 in the two single-race
+  frames that settled the position anchor, which were not looking for it: on
+  the grid the bar is **cyan** at `100%`, and fifty seconds later, after wall
+  contact, it is **solid red** at `79%` - same widget, same rectangle, same
+  authored `Color`. Two samples could not separate a threshold from a
+  gradient, so the colour writer was read directly instead:
+  `Hud_UpdateEnergyBar` (`0x0881c638`,
+  [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient))
+  forces solid red whenever the pool is at or under **20%** or during a
+  one-shot flash right after a hit, and otherwise draws the widget's own
+  authored colour (`HudColour3`, `0xFF0DDFDD`, the cyan the 100% frame shows)
+  with only the alpha byte modulated for the low-shield blink - a threshold
+  plus a transient flash, never a blend between two colours. The 79% frame
+  lands inside that post-hit flash window, which is why it reads solid red
+  well above the 20% floor. Confidence 82. `ShieldBarText` stays white in
+  both, which is consistent - only the bar fill is tinted. The speed bar in
+  the same frames is mint green (`HudColour2`, `0xFF7DEFC0`) and fills from
+  the left, which is what this build already draws. **Not yet implemented**:
+  `oag_game::hud` still draws `ShieldBar` at one static colour; wiring the
+  threshold-plus-flash rule in is a follow-up task, not done in this pass.
 - **The outline colour is approximate.** The default is the layout's own
   `HudBGColour`, `0x40000000` - 25 % black - because that is what every widget that
   *does* name a border points at, which makes it data rather than invention. The
