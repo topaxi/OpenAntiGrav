@@ -40,40 +40,77 @@ fn labels(list: &[Draw]) -> Vec<(f32, f32, [f32; 4], String)> {
         .collect()
 }
 
-/// The root page's entries run left to right from the widget's own anchor.
+/// Where a strip's first label's pen lands, given the anchor and the pads.
+///
+/// The anchor is the **tab's** top-left corner; a label sits one pad in from it
+/// on each axis. See `strip`'s own "what the anchor means" note for the
+/// measurement that settled which of the two the disc's `x`/`y` is.
+fn first_pen(skin: &Skin) -> (f32, f32) {
+    let strip = skin.strip().expect("HD authors a strip");
+    let (left_pad, top_pad) = skin.tab_pad();
+    (strip.x + left_pad, strip.y + top_pad)
+}
+
+/// The root page's entries run left to right from the widget's own anchor, and
+/// the anchor is the first tab's own corner.
 ///
 /// The anchor is `x="160" y="125"` off `MainMenu_Definition.xml`, in the
 /// 1920x1080 grid HD authors in and this skin draws in - so the numbers come
 /// through unconverted, and the test says so by asserting the literals the disc
 /// writes rather than the field it read them into.
+///
+/// **What the literals are attached to changed on 2026-09-05.** They used to be
+/// asserted of the first *label*; a calibrated capture of the real menu shows
+/// the real tab's corner at `(160.5, 126.0)` against those authored `(160, 125)`,
+/// so the anchor is the tab's corner and the label is inset from it. Asserting
+/// the corner is the stronger claim of the two - it pins the pads' *sense* as
+/// well as their size, which is exactly what was wrong before.
 #[test]
 fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
+    let skin = hd_skin();
     let list = draw_list(
         &menu,
-        &hd_skin(),
+        &skin,
         &no_bindings,
         &measure,
         None,
-        &Frame::default(),
+        &frame_with_fills(),
     )
     .flatten();
+
+    // The first tab's own corner is the disc's `x="160" y="125"`, exactly.
+    // `strip::draw` pushes the body before the cut band, and the band carries
+    // the tab's top edge, so the band is the one to read the corner off.
+    let (band, ..) = list
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, *chamfer)),
+            _ => None,
+        })
+        .expect("a tab's cut band");
+    assert!(
+        (band[0] - 160.0).abs() < 0.001 && (band[1] - 125.0).abs() < 0.001,
+        "the first tab's corner is the authored anchor, not {:?}",
+        [band[0], band[1]]
+    );
 
     let rows: Vec<_> = labels(&list)
         .into_iter()
         .filter(|(_, _, _, text)| text != menu.page().title.as_str())
         .collect();
     assert_eq!(rows.len(), 4, "RACE, REMIX, OPTIONS and QUIT: {rows:?}");
+    let (pen_x, pen_y) = first_pen(&skin);
     for (_, y, _, text) in &rows {
         assert!(
-            (y - 125.0).abs() < f32::EPSILON,
-            "every entry shares the strip's y: {text} at {y}"
+            (y - pen_y).abs() < 0.001,
+            "every entry shares the strip's pen y {pen_y}: {text} at {y}"
         );
     }
     assert!(
-        (rows[0].0 - 160.0).abs() < f32::EPSILON,
-        "the first entry sits on the anchor: {}",
+        (rows[0].0 - pen_x).abs() < 0.001,
+        "the first entry sits one left pad in from the anchor, at {pen_x}, not {}",
         rows[0].0
     );
     // Each entry starts one measured width and one gap past the last, which is
@@ -157,7 +194,7 @@ fn every_entry_is_the_same_text_colour_selected_or_not() {
 
     let rows: Vec<_> = labels(&list)
         .into_iter()
-        .filter(|(_, y, _, _)| (y - 125.0).abs() < f32::EPSILON)
+        .filter(|(_, y, _, _)| (y - first_pen(&skin).1).abs() < 0.001)
         .collect();
     assert_eq!(rows.len(), 4, "RACE, REMIX, OPTIONS and QUIT: {rows:?}");
     for (_, _, color, text) in &rows {
@@ -366,7 +403,7 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
     );
     let rows: Vec<_> = labels(&list)
         .into_iter()
-        .filter(|(_, y, _, _)| (y - 125.0).abs() < f32::EPSILON)
+        .filter(|(_, y, _, _)| (y - first_pen(&skin).1).abs() < 0.001)
         .collect();
     assert_eq!(rows.len(), 4, "the text draws regardless: {rows:?}");
 }
