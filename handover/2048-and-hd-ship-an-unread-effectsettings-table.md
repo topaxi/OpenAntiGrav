@@ -301,6 +301,15 @@ no longer disagree.
      change which one a port should bind - it explains the mechanism the
      disc itself uses to choose, for whoever wires per-material selection
      later.
+
+     **2026-09-05, the bit is sourced, and it is not per material.** The
+     record is built in one expression in `Scene_SubmitVisibleChunks`:
+     `rec[2] = (*(short *)(*(int *)(chunk + 8) + 6) << 1) | (chunk[7] == 2)`.
+     So the Scene/Track bit is bit 0 of `(*(chunk+8))->0x06`, read *outside*
+     the per-surface loop - every surface of a chunk gets the same value.
+     **Per chunk, not per material**; the confidence-55 guess is superseded,
+     at 85. What is per material is which *publisher* runs at all. See the
+     Next Steps entry and the twenty-ninth pass.
   2. **`zoneOrigin` (`0x00c81550`) - writer found, 2026-09-03; the radius is
      the one piece still open.** `Scene_PrepareFrame` writes it every frame,
      one call frame above `Environment_UpdateStageBlend` (which is why the
@@ -356,6 +365,18 @@ no longer disagree.
      wants, and whether they line up with the `Fog`/`Alt Fog`/`Track Fog`
      triple the file authors, is **not** established - that is the question
      that replaces this one.
+
+     **Answered 2026-09-05, and no draw picks between them.** Counting the
+     non-stack stores to the parameter table's `+0xf8` across all eight
+     publishers gives exactly three in the whole image, **one each in three
+     different publishers** - `Scene_PrepareFrame` (`0x003ab430`),
+     `FUN_003ff860` (`0x00400658`) and `FUN_00400a00` (`0x00401800`) - with
+     the other five publishers holding none. So it is **one fog buffer per
+     publisher**, and the two that differ are the blended pass and the
+     unblended one. Confidence 80. They do *not* line up with the file's
+     `Fog`/`Alt Fog`/`Track Fog` triple, which the twenty-second pass already
+     placed at `+0x1a0`/`+0x1d0`, uncross-faded. Twenty-ninth pass of
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
   2. ~~Which schema key parses to `iVar8 + 0x3aac`.~~ **Answered the same
      day** - it is `Scene.Texture Colour`'s own fourth lane, i.e.
      `Scene.EQ brightness`, per the measured schema table. The seventeenth
@@ -811,10 +832,36 @@ no longer disagree.
 ## Next Steps
 
 - ~~Read the remaining five `Track.*` rows of the cross-fader.~~ **Done
-  2026-08-31**; the whole block is the table in the twenty-fourth pass. The
-  next step in that direction is the *selection*, not the layout: read which of
-  the eight parameter publishers a material's draw goes through, the same
-  question that decides `zoneMode*` versus `zoneModeTrack*`.
+  2026-08-31**; the whole block is the table in the twenty-fourth pass.
+- ~~Read which of the eight parameter publishers a material's draw goes
+  through, the same question that decides `zoneMode*` versus
+  `zoneModeTrack*`.~~ **Answered 2026-09-05, and the "same question" half of
+  that sentence was wrong** - the two are orthogonal axes. A draw goes
+  through the publisher that owns the draw **bucket** it was routed into, and
+  the two Zone-relevant buckets are split on `material+0x10` bit 0, the
+  transparency mode `rcsmodel.md` already measured from the file side (85).
+  Scene versus Track is a *separate* bit, and it is **per chunk**: record bit
+  1 is bit 0 of `(*(chunk+8))->0x06`, loaded outside the surface loop in
+  `Scene_SubmitVisibleChunks`, which retires the twenty-eighth pass's
+  "plausibly per material" reading rather than confirming it (85). Full
+  trace, including the eight publishers listed by address and the five-way
+  material class that picks the input list: twenty-ninth pass of
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+  **Nothing in it changes what a port binds** - `oag_render` keeps binding
+  the Track set, because the per-chunk bit still has no located writer.
+- **Find the writer of `block->0x06`**, the halfword whose bit 0 is the
+  Scene/Track selector and whose bits 2-4 route a record between the five
+  draw buckets. `block` is `*(chunk + 8)`; its `+0x04` carries the enable bit
+  `Scene_BuildStaticChunkMask` tests and its `+0x74` is OR-accumulated across
+  visible chunks, so the object is well anchored - only this field's author is
+  unread. Once it is, per-chunk Scene/Track selection becomes portable, and
+  whether `zoneModeTrack*` is the right unconditional bind stops being an
+  assumption. **This is the one remaining step between the Zone parameter
+  block and a faithful port of it.**
+- Two smaller ones left by the same pass: which draw list `FUN_004053e0`
+  walks and who consumes bucket B1 (`g+0x311e8`), and what `material+0x10`
+  bit 7 means - it is tested before the transparency mode and short-circuits
+  it, and nothing on either page names it.
 - ~~Settle whether the two Zone publications are sequential or
   alternative~~ **Answered, 2026-09-03, and it was neither.** Both readings
   assumed `FUN_003ff860` is entered once per draw and chooses a path. It

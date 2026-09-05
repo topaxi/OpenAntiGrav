@@ -4456,6 +4456,278 @@ control flow between the two blocks themselves).
 None. The table at `PTR_DAT_008b8264 + 0x491f8` and its flag-bit convention
 are read only for their shape.
 
+## 2026-09-05, a twenty-ninth pass: the publisher is chosen by the **material's transparency mode**, the Scene/Track bit is **per chunk**, and the draw record is now decoded end to end
+
+The twenty-eighth pass left two things standing: that each draw entry's own
+flag bit picks Scene or Track *inside* `FUN_003ff860`, and that what selects
+between the eight publishers themselves was unread - with the bit's meaning
+scored 55, "plausibly per-material, not traced". This pass reads the chain
+whole, from the producer down, and the 55 was wrong in an interesting way.
+
+**First, a framing correction, because it is the part that would otherwise
+cost pass thirty its time.** This thread's Next Steps called the publisher
+question "the same question that decides `zoneMode*` versus `zoneModeTrack*`".
+It is not. They are orthogonal axes, decided in different functions, from
+different data:
+
+| axis | decided by | authored where |
+| --- | --- | --- |
+| which publisher runs | which of five draw buckets the record was routed into | the **material's** transparency mode |
+| Scene vs Track | bit 1 of the record's flag halfword | the **chunk's** own render block |
+
+### The eight publishers, by address
+
+Swept by resolving every `lwz rX, disp(r2)` in module B against the module's
+own TOC base (`0x008BD3C4`, validated on this page's own
+`lwz r30,-0x5a84(r2)` -> `0x008b7940`) and keeping the functions whose loaded
+word lands in the Zone global range `0x00c81340`-`0x00c81540`. Exactly eight
+come back, which is the first time this page has had the list rather than a
+count:
+
+| publisher | Zone globals loaded | the draw list it walks |
+| --- | ---: | --- |
+| `FUN_003fc140` | 23 | B3 count `g+0x431f0` |
+| `FUN_003ff860` | 23 | **B5** count `g+0x4f1f8`, entries `g+0x491f8` |
+| `FUN_00400a00` | 23 | **B4** count `g+0x491f4`, entries `g+0x431f4` |
+| `FUN_00403a30` | 23 | B2 count `g+0x3d1ec`, entries `g+0x371ec` |
+| `FUN_004053e0` | 23 | unresolved; owns state word `g+0x61220` |
+| `FUN_004074e0` | 23 | merged range [`g+0xd1c8`, `g+0xd1cc`) |
+| `FUN_00408fa8` | 23 | merged range [`g+0xd1c0`, `g+0xd1c4`) |
+| `Scene_PrepareFrame` (`0x003aa888`) | 16 | none - scene setup, Scene group only |
+
+`g` is `PTR_DAT_008b8264` = `0x00d44e80` throughout. The seven two-block
+publishers load all 23 globals - both the Scene and the Track constant sets -
+which is the twenty-fifth pass's pairing table seen from an independent sweep
+and agreeing with it. Four own a private state word in one contiguous run:
+`g+0x61214` (`FUN_003fc140`), `+0x61218` (`FUN_00408fa8`), `+0x6121c`
+(`FUN_004074e0`), `+0x61220` (`FUN_004053e0`).
+
+### The draw lists: five in, one merged, five out
+
+The table the twenty-eighth pass found `FUN_003ff860` looping over is not a
+private structure. It is one of five **output buckets** of the scene's own
+draw-list sorter, `Scene_SortAndLightVisibleChunks` (`0x003fdae8`), a function
+[visibility.md](visibility.md) already named. The whole region is contiguous:
+
+```text
+g+0x0d1d0 + i*0x6004   five INPUT lists, i = 0..4   (4096 six-byte records, then a u32 count)
+g+0x2b1e4              the MERGED list, count at g+0x311e4
+g+0x311e8 .. g+0x4f1f8 five OUTPUT buckets, same 4096-record + count shape
+```
+
+The five input lists end at `g+0x2b1e0` and the merged list begins at
+`g+0x2b1e4`, with no gap. The sorter `memcpy`s each input list onto the tail
+of the merged one, depth-sorts the result against a per-chunk camera distance
+built in its own prologue at `g+0x20124c + chunkIndex*4`, then walks it once
+and routes each record:
+
+| bucket | entries | count | routed when | consumer |
+| --- | --- | --- | --- | --- |
+| B1 | `g+0x311e8` | `g+0x371e8` | flag bit 5 clear | unresolved |
+| B2 | `g+0x371ec` | `g+0x3d1ec` | flag bit 4 set | `FUN_00403a30` |
+| B3 | `g+0x3d1f0` | `g+0x431f0` | flag bit 5 set | `FUN_003fc140` |
+| B4 | `g+0x431f4` | `g+0x491f4` | bits 0 and 3 clear, and `(material+0x10 & 1) == 0` | `FUN_00400a00` |
+| B5 | `g+0x491f8` | `g+0x4f1f8` | bits 0 and 3 clear, and `(material+0x10 & 1) != 0` | `FUN_003ff860` |
+
+A record is six bytes, and the stride is proven rather than inferred: the
+append computes it as `n*8 - n*2` (`rlwinm r9,r11,3` / `rlwinm r0,r11,1` /
+`subf r9,r0,r9`, `0x003ff544`-`0x003ff54c`). The append then copies the record
+straight across - `entry[1] = src[2]`, `entry[2] = src[4]` at
+`0x003ff560`-`0x003ff56c` - so the flag halfword reaching `FUN_003ff860` is
+the producer's, unmodified.
+
+**How many buckets one record reaches, stated exactly, because this is what a
+port would get wrong.** The tests are independent `if`s rather than a switch,
+so a record does reach more than one bucket - but not freely:
+
+- **B1 and B3 are mutually exclusive.** Both read the *same* condition
+  register, set once at `0x003ff070` (`rlwinm r0,r8,0,0x1b,0x1b`) and reused
+  unmodified at `0x003ff0f4`. B1 takes the bit-clear arm, B3 the bit-set arm.
+  Every record lands in exactly one of the two.
+- **B4 and B5 are mutually exclusive** for the same structural reason - one
+  `if`/`else` on the material test - and both are additionally gated behind
+  bits 0 and 3 being clear, so a record can reach *neither*.
+- **B2 is independent of all of them**, on its own bit.
+
+So a record reaches one of {B1, B3}, optionally also B2, and optionally also
+one of {B4, B5}. It never reaches both halves of either pair.
+
+### The B4/B5 discriminator: the material's transparency mode
+
+Only the B4/B5 split consults anything outside the record. At
+`0x003ff148`-`0x003ff19c` the sorter resolves the record into a material and
+tests one bit of it:
+
+```c
+ctx  = *(int *)PTR_DAT_008b8260;
+node = (*(int **)(ctx + 0x20))[rec[0]];        // rec[0] is a chunk index
+surf = (*(int **)(node + 0x18))[rec[1]];       // rec[1] is a surface index
+mat  = (*(int **)(ctx + 0x30))[*(int *)surf];  // surface +0x00 is a material index
+if ((*(uint *)(mat + 0x10) & 1) != 0)  -> B5   else  -> B4
+```
+
+**Every offset in that chain is one this project already measured from the
+file side, independently**, in [rcsmodel.md](../../../formats/rcsmodel.md):
+`chunk +0x18` is the surface offset table, `surface +0x00` is the material
+index, the material table is indexed as `materialTable[*(int *)surface]` (the
+idiom `0x003faf00` and `0x003fb330` both use), and `material +0x10` is the
+state word "whose low two bits are the transparency mode", at confidence 88.
+
+Corroborated a second time inside this binary, which is what lifts the score:
+`Scene_BuildStaticChunkMask` (`0x003faf00`) walks the *same* context struct
+and uses `ctx+0x2c` as the material count and `ctx+0x30` as the material
+table, `chunk+0x10` as the surface count and `chunk+0x18` as the surface
+table. Two functions, one struct, and runtime offsets mirroring the file
+header offsets `rcsmodel.md` derived from data alone.
+
+**So a draw goes through `FUN_003ff860` rather than `FUN_00400a00` when its
+material is authored see-through-blended, and through `FUN_00400a00`
+otherwise.** Confidence **85**. Nothing Zone-specific selects between them:
+the discriminator is a per-material property that has been on the disc, and in
+this project's own parser, the whole time.
+
+**One dependency to state plainly, because a reader checking `& 1` against a
+three-valued field will otherwise see a hole.** `material+0x10`'s low two bits
+take three of their four values across all 15,762 materials on the disc: 0
+(opaque, 13,188), 1 (see-through, blended with its own factor pair, 2,362) and
+2 (see-through, 212). A bare `& 1` isolates **mode 1 exactly only because mode
+3 never occurs**; a mode-3 material would land in B5 too. B4 therefore holds
+modes 0 **and 2** - it is the *unblended* bucket, not the *opaque* one, and
+calling it opaque silently misfiles those 212 mode-2 materials.
+`material+0x10` also carries at least a bit 7 outside the transparency mode
+(the classifier below tests `& 0x80` first and short-circuits on it); the
+sorter's test is bare, so its result is a function of bit 0 alone.
+
+### The producer, and the draw record decoded end to end
+
+`Scene_SubmitVisibleChunks` (`0x003fab50`) is what fills the five input lists,
+and it is small enough to read whole. Per visible chunk, per surface of that
+chunk:
+
+```c
+kind  = *(byte  *)(chunk + 7);          // the three-way chunk kind byte
+block = *(int   *)(chunk + 8);          // the chunk's render block
+key   = *(short *)(block + 6);
+cls   = (byte)g[0x1110 + *(int *)surface];   // the material's draw class
+list  = listBase + cls * 0x6004;             // <-- which INPUT list
+rec   = list + (++*(int *)(list + 0x6000)) * 6 - 6;
+rec[0] = chunkIndex;
+rec[1] = surfaceIndex;
+rec[2] = (key << 1) | (kind == 2);
+```
+
+That decodes the record completely, and two things fall out of it:
+
+1. **The flag halfword is `block->0x06` shifted up one, with the kind-2 flag
+   in bit 0.** So record bit 0 is `chunk[7] == 2` - which is exactly what
+   [visibility.md](visibility.md) already recorded at confidence 78, from the
+   other side, and this confirms it - and **record bit N, for N >= 1, is
+   `block->0x06` bit N-1**. The sorter's own routing bits 3, 4 and 5 are
+   therefore `block->0x06` bits 2, 3 and 4.
+2. **`FUN_003ff860`'s Scene/Track bit - record bit 1 - is `block->0x06`
+   bit 0.** `key` is loaded *outside* the surface loop, so every surface of a
+   chunk carries the same value. **Scene versus Track is a per-chunk property,
+   not a per-material one.** Confidence **85**. That retires the twenty-eighth
+   pass's "plausibly authored per material" reading, which was scored 55 and
+   is now superseded rather than confirmed: the material decides the *bucket*,
+   the chunk decides *Scene or Track*, and conflating them is what made the
+   two look like one question.
+
+### Which input list: a five-way material class this engine computes at load
+
+`g[0x1110 + materialIndex]` (`0x00d45f90`, one byte per material) is written
+by `Scene_BuildStaticChunkMask` (`0x003faf00`) from the material's own state
+word and blend pair, and read by `Scene_SubmitVisibleChunks` to pick the input
+list. Its five values line up one-for-one with the five input lists:
+
+| class | condition on `material+0x10` / `+0x14` | reading |
+| ---: | --- | --- |
+| 1 | bit 7 set | unidentified; tested first and short-circuits |
+| 2 | bit 7 clear, bit 1 set | transparency mode 2 |
+| 0 | bits 7, 1, 0 all clear | opaque, mode 0 |
+| 3 | bit 0 set and `*(u32 *)(mat+0x14) == 0x00010001` | mode 1, both blend factors `1` |
+| 4 | bit 0 set, any other blend pair | mode 1, every other pair |
+
+`material+0x14`/`+0x16` are the source and destination blend factors
+`rcsmodel.md` already names, so the `u32` at `+0x14` is `(src << 16) | dst`
+and `^ 0x10001` is zero exactly when both are `1`.
+
+**The polarity of the last two rows is derived, not counted**, so here is the
+derivation rather than the assertion. With `x = *(u32 *)(mat+0x14) ^ 0x10001`
+zero-extended into a `ulonglong`, the code computes
+`3 - (char)((s - (s ^ x)) >> 0x18) >> 7` where `s = (ulonglong)((int)x >> 31)`:
+
+- `x == 0`: `s = 0`, `(0 - 0) >> 24 = 0`, `(char)0 >> 7 = 0` -> class **3**.
+- `x != 0`, bit 31 clear: `s = 0`, `0 - x` wraps to a value whose byte at bit
+  24 is `0xff` -> `-1` -> class **4**.
+- `x != 0`, bit 31 set: `s` is all ones and `s - (s ^ x)` reduces to `x`
+  itself, whose byte at bit 24 is `>= 0x80` -> `-1` -> class **4**.
+
+All three arms agree, so class 3 is the both-factors-`1` case. Confidence
+**80** on the table as a whole. What is *not* established here is what the
+factor encoding's `1` denotes - reading it as `ONE`, and so class 3 as the
+additive equation, is the usual convention and not something this pass
+checked; the class split itself does not depend on it. The rows above class 3
+are the part that corroborates `rcsmodel.md`'s transparency reading from a
+new direction: the engine separates mode 1 from modes 0 and 2 exactly where
+that page's measurement says the boundary is, and then splits mode 1 again on
+its authored equation.
+
+### It also settles the three fog buffers
+
+This page's twentieth and twenty-second passes established three fog-colour
+buffers - `0x00c49110`, `0x00c49120`, `0x00c49130` - all writing the same
+parameter-array offset `0xf8`, parameter 7, `fogColour`, and left "which of
+the three a given draw wants" as the open question replacing the older one.
+
+Counting the non-stack stores to `+0xf8` across all eight publishers answers
+it: there are exactly **three in the whole set, one each, in three different
+publishers** - `Scene_PrepareFrame` at `0x003ab430`, `FUN_003ff860` at
+`0x00400658`, `FUN_00400a00` at `0x00401800`. The other five publishers have
+none. The three buffers are not alternatives a draw picks between: **there is
+one fog buffer per publisher**, and the two that differ are the blended pass
+and the unblended one. Confidence **80**.
+
+### `Scene_ResetDrawLists` (`0x003fb240`)
+
+Found in the same sweep and unambiguous: it zeroes all five input-list counts
+(`g+0x131d0`, `+0x191d4`, `+0x1f1d8`, `+0x251dc`, `+0x2b1e0`), all five bucket
+counts (`g+0x371e8`, `+0x3d1ec`, `+0x431f0`, `+0x491f4`, `+0x4f1f8`) and the
+four merged-list pointer variables (`g+0xd1c0`, `+0xd1c4`, `+0xd1c8`,
+`+0xd1cc`), and does nothing else. Confidence 85.
+
+### One duplicate worth knowing about before the next sweep
+
+`FUN_0040aba0` is a **full copy** of `Scene_SortAndLightVisibleChunks`: all
+twenty list stores present, same five buckets, same conditions, same offsets,
+at `0x0040ca08`-`0x0040cee4`. It is deliberately left unnamed - what
+distinguishes the two copies (plausibly a second viewport, unverified) is not
+read, and a name would assert it. It matters for a sweep either way: a search
+for "the" builder of any of these lists finds two functions, and they are not
+two halves of one mechanism.
+
+### What this does not settle
+
+- **What `block->0x06` is, and whether it is authored on disc.** The
+  Scene/Track bit is now located to one halfword of one runtime object -
+  `*(chunk + 8)`, whose `+0x04` also carries the enable bit
+  `Scene_BuildStaticChunkMask` tests and whose `+0x74` is OR-accumulated
+  across visible chunks - but nothing here reads that halfword's *writer*.
+  Until it is found, per-chunk Scene/Track selection is located, not portable.
+- **B1's consumer**, and which list `FUN_004053e0` walks.
+- **What material state-word bit 7 means** - class 1's condition, tested
+  before everything else, and not the transparency mode.
+- Nothing here changes what a port should bind. `oag_render` binding the Track
+  set unconditionally remains right.
+
+### Names applied
+
+| address | kind | name | confidence |
+| --- | --- | --- | ---: |
+| `0x003fb240` | function | `Scene_ResetDrawLists` | 85 |
+| `0x00d45f90` | data | `g_MaterialDrawClass` | 85 |
+
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
