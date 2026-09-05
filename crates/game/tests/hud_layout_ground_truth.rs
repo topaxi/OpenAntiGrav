@@ -26,6 +26,14 @@
 //! top-left corner. That failure looks like a layout problem in a screenshot and
 //! is a parsing problem in fact.
 //!
+//! [`every_widget_lands_on_screen_on_the_ps2`] is its PS2 counterpart, checked
+//! against the PS2 release's own 640x448 grid rather than the PSP's - added
+//! 2026-09-05. Before it, no PS2 HUD layout had ever been checked for this bug
+//! at all, on the strength of a doc comment that read the two grids as "not a
+//! flat scaling" and left it there; see `oag_game::hud::inside_screen`'s doc
+//! for why the raw XML's exceptions turn out not to threaten this check once
+//! the `<Item>` composition already in [`Layout::from_xml`] is accounted for.
+//!
 //! # The counts are ground truth, not aspiration
 //!
 //! [`EXPECTED`]'s widget counts were taken by expanding each file with
@@ -54,10 +62,10 @@ use std::path::{Path, PathBuf};
 use oag_game::hud::{self, Layout};
 use oag_pulse as pulse;
 
-fn image() -> Option<PathBuf> {
+fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
+        .join(name);
 
     if path.exists() {
         return Some(path);
@@ -70,6 +78,14 @@ fn image() -> Option<PathBuf> {
     println!("skipping: {} not present", path.display());
     None
 }
+
+/// The USA PSP pressing - what [`EXPECTED`] and [`layout_of`] measure against.
+const PSP: &str = "data/images/pulse-psp-usa.chd";
+/// The PS2 pressing, a EU one - the only one this project has. See
+/// `crates/game/tests/frontend_grid_ground_truth.rs` for why a EU-to-EU
+/// comparison against the EU *PSP* disc has one trap (`Show Logo`'s PRESS
+/// START `y`) that does not apply here, since this file never reads `Skin.xml`.
+const PS2: &str = "data/images/pulse-ps2-eu.chd";
 
 /// `(entry, sprites, fills, labels, models)` for each shipped layout.
 ///
@@ -95,7 +111,15 @@ const EXPECTED: &[(&str, usize, usize, usize, usize)] = &[
 ];
 
 fn open() -> Option<oag_assets::Archives> {
-    let image = image()?;
+    let image = image(PSP)?;
+    pulse::open(&image.display().to_string()).ok()
+}
+
+/// The PS2 pressing, opened the same way. A separate function rather than a
+/// parameter on [`open`] because every other test in this file is PSP-only and
+/// should stay that way rather than grow a platform argument it never uses.
+fn open_ps2() -> Option<oag_assets::Archives> {
+    let image = image(PS2)?;
     pulse::open(&image.display().to_string()).ok()
 }
 
@@ -105,6 +129,21 @@ fn layout_of(archives: &mut oag_assets::Archives, entry: &str) -> Layout {
         .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
     let xml =
         oag_formats::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"));
+    Layout::from_xml(&xml)
+}
+
+/// The PS2 disc's own `Data\XML\*_HUD.xml` are plain `<?xml`, unlike the
+/// PSP's shortened dictionary form - see `docs/ui/hud.md`'s "PS2 ships the
+/// same HUD" section - so this reads either without assuming which.
+fn layout_of_either(archives: &mut oag_assets::Archives, entry: &str) -> Layout {
+    let blob = archives
+        .read_name(entry)
+        .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
+    let xml = if oag_formats::fexml::is_fexml(&blob) {
+        oag_formats::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"))
+    } else {
+        String::from_utf8(blob).unwrap_or_else(|e| panic!("{entry} is not UTF-8 text: {e}"))
+    };
     Layout::from_xml(&xml)
 }
 
@@ -151,6 +190,7 @@ fn every_widget_lands_on_screen() {
         return;
     };
 
+    let psp = oag_game::frontend::Space::PSP.size;
     let mut checked = 0usize;
     for &(entry, ..) in EXPECTED {
         let layout = layout_of(&mut archives, entry);
@@ -160,7 +200,7 @@ fn every_widget_lands_on_screen() {
                 continue;
             }
             assert!(
-                hud::inside_screen(sprite.rect),
+                hud::inside_screen(sprite.rect, psp),
                 "{entry}: {} resolved to {:?}, outside 480x272",
                 sprite.name,
                 sprite.rect
@@ -174,7 +214,7 @@ fn every_widget_lands_on_screen() {
                 continue;
             }
             assert!(
-                label.x >= 0.0 && label.x <= 480.0 && label.y >= 0.0 && label.y <= 272.0,
+                label.x >= 0.0 && label.x <= psp.0 && label.y >= 0.0 && label.y <= psp.1,
                 "{entry}: {} anchors at ({}, {}), off screen",
                 label.name,
                 label.x,
@@ -187,6 +227,69 @@ fn every_widget_lands_on_screen() {
     // A skip list plus an assertion is a way to accidentally test nothing, so the
     // count of what was actually checked is asserted too.
     println!("{checked} screen-positioned widget(s) checked");
+    assert!(
+        checked > 150,
+        "only {checked} widgets were checked; the exclusion list has swallowed the test"
+    );
+}
+
+/// The PS2 counterpart of [`every_widget_lands_on_screen`], checked against its
+/// own 640x448 grid rather than the PSP's 480x272.
+///
+/// **Why this is safe despite the raw XML not being a flat scaling.** 22 of
+/// `Arcade_HUD.xml`'s 141 raw `x`/`y` attributes do not scale by 640/480 or
+/// 448/272 - 18 are `<Mode3D><Model>` placements this test never reaches
+/// (`Layout::models` is not [`Sprite`](hud::Sprite) or
+/// [`Label`](hud::Label)), and 4 are small integer nudges on a handful of
+/// widgets that stay byte-identical across consoles while the `<Item>`
+/// enclosing every one of them scales its own `OffsetX`/`OffsetY` correctly.
+/// [`Layout::from_xml`] composes that offset into the widget's `rect`/`x,y`
+/// before this test ever sees it, so the nudge is a pixel or two of slop on a
+/// widget the offset already moved most of the way, not a widget in the wrong
+/// space. See `oag_game::hud::inside_screen`'s doc comment for the coordinate
+/// tally this rests on. If some future layout widget's own unscaled nudge ever
+/// grows large enough to matter, this test is exactly what would catch it -
+/// nothing here assumes composed rects stay on screen without checking.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_widget_lands_on_screen_on_the_ps2() {
+    let Some(mut archives) = open_ps2() else {
+        return;
+    };
+
+    let ps2 = oag_game::frontend::Space::PS2.size;
+    let mut checked = 0usize;
+    for &(entry, ..) in EXPECTED {
+        let layout = layout_of_either(&mut archives, entry);
+
+        for sprite in &layout.sprites {
+            if !hud::is_screen_positioned(&sprite.name) {
+                continue;
+            }
+            assert!(
+                hud::inside_screen(sprite.rect, ps2),
+                "{entry}: {} resolved to {:?}, outside 640x448",
+                sprite.name,
+                sprite.rect
+            );
+            checked += 1;
+        }
+        for label in &layout.labels {
+            if !hud::is_screen_positioned(&label.name) {
+                continue;
+            }
+            assert!(
+                label.x >= 0.0 && label.x <= ps2.0 && label.y >= 0.0 && label.y <= ps2.1,
+                "{entry}: {} anchors at ({}, {}), off the PS2's 640x448",
+                label.name,
+                label.x,
+                label.y
+            );
+            checked += 1;
+        }
+    }
+
+    println!("{checked} screen-positioned widget(s) checked on the PS2 layout");
     assert!(
         checked > 150,
         "only {checked} widgets were checked; the exclusion list has swallowed the test"

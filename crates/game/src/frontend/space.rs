@@ -32,12 +32,11 @@
 /// - `crate::loading`, whose layout this project authored, in these pixels;
 /// - `oag_race::AUTHORED_ASPECT`, where the original's authored field of view is
 ///   only defined at the PSP's aspect;
-/// - [`crate::hud::inside_screen`], which is a **PSP-only** test helper and says
-///   so - the PS2's `Arcade_HUD.xml` authors the same layout in a 640x448 grid,
-///   reaching `y=435`, so checking it against these numbers would fail on nearly
-///   every widget rather than on a parser bug. **It is not a flat scaling**, and
-///   the exceptions matter to anyone attempting the sweep; the measurement is on
-///   [`crate::hud::inside_screen`] itself.
+/// - [`crate::hud::inside_screen`]'s own tests, which still exercise the PSP's
+///   480x272 by name even though the function itself takes a `screen`
+///   parameter and checks the PS2's 640x448 grid just as well - see its doc
+///   comment for the coordinate-by-coordinate measurement of why the raw XML
+///   not being a flat scaling does not stop that PS2 sweep from working.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
 
 /// The coordinate space a source's front-end XML places widgets in, and what

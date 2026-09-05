@@ -48,14 +48,34 @@ geometry differs, and **mostly** by one ratio: `SpeedBarBg` is
 `x=8 y=16 w=224 h=43` where the PSP has `x=6 y=10 w=168 h=26`, which is
 640/480 horizontally and 448/272 vertically.
 
-**Not every coordinate follows it**, and the exceptions are the reason a PS2
-sweep is not a one-line change. Measured across `Arcade_HUD.xml`'s 141
-coordinate values on both discs, 121 are the PSP's own scaled and rounded to an
-integer; the 20 that are not are the nine `<Mode3D><Model>` placements, which sit
-at the PSP's `x="-240" y="136"` unchanged in an orthographic mode, and
-`TimeDiffIcon`'s two small negative offsets. This paragraph said "exactly one
-ratio" until 2026-08-09. That is the front-end coordinate space, not a HUD
-question - see the `SCREEN` thread in [`HANDOVER.md`](../../HANDOVER.md).
+**Not every coordinate follows it**, which is why the PS2 sweep below needed
+more than swapping in the PS2's grid size. Measured across `Arcade_HUD.xml`'s
+141 raw `x`/`y` attribute values on both discs, keyed by tree path rather than
+by document order, **119 are the PSP's own scaled by 640/480 or 448/272 and
+rounded to an integer; 22 are not**. This paragraph said 121 and 20 until
+2026-09-05 - the earlier count used a weaker key and, in one case, paired
+`TimeDiffIcon`'s `y` with a value that actually belongs to
+`RearWarningMissileIcon`. Of the 22: **18 are the nine `<Mode3D><Model>`
+placements**, sitting at the PSP's own `x="-240" y="136"` unchanged in an
+`orthographic` mode this codebase does not drive; **4 are small integer
+nudges** (`LapTxt`'s `y`, `RearWarningMissileIcon`'s and
+`RearWarningRocketIcon`'s `y`, and most of `TimeDiffIcon`'s `x`) that stay
+byte-identical across consoles while the `<Item>` enclosing every one of them
+scales its own `OffsetX`/`OffsetY` correctly, dwarfing the nudge. See
+`oag_game::hud::inside_screen`'s doc comment for the full tally and
+`crates/game/tests/hud_layout_ground_truth.rs` for the check that runs against
+both grids.
+
+**The PS2 layout is now checked for a dropped `<Item>` offset, the same way the
+PSP's has been from the start.** `every_widget_lands_on_screen_on_the_ps2`
+reads `Data\XML\*_HUD.xml` unshortened - the PS2 pressing does not run these
+through the `fexml` dictionary - and checks every composed rect against the
+PS2's 640x448 rather than the PSP's 480x272. It passes: 187 screen-positioned
+widgets checked, the same count as the PSP sweep, none of them off the PS2's
+larger screen. The `<Mode3D><Model>` placements above are not part of that
+check on either console - `Layout::models` is a separate field the sprite/label
+walk never iterates - so their own coordinate space stays unrecovered without
+blocking the widget check that matters.
 
 Two things kept it off the screen entirely, and each hid the other:
 
