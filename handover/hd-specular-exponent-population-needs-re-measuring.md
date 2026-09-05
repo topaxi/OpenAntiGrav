@@ -24,48 +24,85 @@ to still hold.
 
 ## Open
 
-- **The Zone-excluded population histogram moved substantially, and only a first-pass recheck
-  exists so far** (`crates/render/examples/hd_specular_population_recheck.rs`, kept as this
-  thread's starting evidence). Old (pre-fix, Zone-excluded): `0`: 573, `32`: 409, `260`: 24,
-  `200`: 8, `40`: 2, `35`: 4, `300`: 10, `250`: 4 (~1,053 total). New (post-fix): `0`: 1965,
-  `32`: 1444, `260`: 84, `200`: 52, `40`: 32, `35`: 24, `300`: 14, `250`: 8 (3,623 total) - every
-  bucket grew, several by 3-10x. The `5`/`10` Zone-rim exclusion was re-checked and still holds
-  exactly (134/76 unfiltered, 0/0 Zone-excluded) - that finding survives the fix untouched.
-- **Zone-declaring blocks went from a small minority of the resolved population to the majority**
-  (6,464 of 10,087, 64 %, versus a small fraction before). Checked once, not fully explained: this
-  is consistent with the false-negative fix disproportionately unlocking `rim^5`/`rim^10`-style
-  chains, whose registers get written piecewise in exactly the shape that tripped the naive gate -
-  but "consistent with" is not "confirmed as". Worth a per-material read of a handful of newly-Zone
-  chains before trusting the 64 % figure in anything downstream.
-- **The `SpecularPower`-patch census (`hd_specular_patch_census.rs`) moved too and was not
-  re-examined beyond the raw counts.** Old: resolved-`0.0` bucket ~295, of which 62 patched
-  (authored 30-100), leaving 233 (79 %) unexplained. New: resolved-`0.0` 469, of which 86 patched
-  (all 86 authored non-zero), leaving 383 (82 %) unexplained. The *shape* of the finding
-  (SpecularPower patching explains only a minority of the zero bucket) survived, but the exact
-  percentages, and whether the same 62-material set is a subset of the new 86, were not checked.
-- **`200`/`250`/`260`/`35` roughly doubled** (84 total occurrences, Zone-excluded, before; 168
-  after - `200`: 52, `250`: 8, `260`: 84, `35`: 24). The five-draft operand-shape trace in
-  renderer.md (`Sum`/`Normalize`/`Neither`, 82/58/28 of 168 operands) was run against the *old*
-  population and is now sized against roughly half of the current one - needs a full rerun, not
-  just an update of the total.
-- `fragment.rs`'s `specular_exponent`/`dp3_feeding` doc comments were updated to stop citing the
-  stale numbers rather than restate them, but do not yet cite the new ones - once this thread's
-  numbers are trustworthy, they belong back in those doc comments, not just here.
+- **The `200`/`250`/`260`/`35` re-run (2026-09-05) reproduces this thread's own first-pass
+  numbers exactly, once compared to the right column.** `hd_specular_unresolved_trace.rs` never
+  applies the Zone exclusion - filtering its output by `declares_zone=false` reproduces the
+  thread's Zone-excluded **168** exactly (`200`: 52, `250`: 8, `260`: 84, `35`: 24, unchanged);
+  its raw, unfiltered total is **172**, the four extra being the already-known Zone-declaring
+  `martin_inflatable2` `250`s. (An earlier draft of this note compared the tool's unfiltered 172
+  against the thread's filtered 168 and wrongly called the thread's number stale - corrected.)
+  The operand-evidence tally over the unfiltered 344 operands: `Sum` 142, `Normalize` 138,
+  `Neither` 62, `NoSingleWriter` **2** - a category that was 0 at 168 operands. Traced to source:
+  both are the ship's own `nitro_perspex_new.rcsmaterial` (`260`, non-Zone, two variants), **not**
+  the Zone-declaring `250`s - a small, real gap in the operand-shape method within the `260`
+  bucket, unrelated to the Zone finding below. Full numbers and method in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Ships have no Lambert diffuse either",
+  sixth dated entry (2026-09-05).
+- **The 64 % Zone-declaring jump does not mean what the "consistent with rim^N chains" hypothesis
+  suggested, checked by hand with a positive control.** `hd_specular_population_recheck.rs`'s own
+  filtered/unfiltered split shows `5`/`10` (the confirmed rim exponents) are only 3.2 % of the
+  6,464 Zone-declaring total; `200`/`260`/`35` have zero Zone-declaring blocks at all; the other
+  96.8 % of the growth is in the `0` and `32` buckets. `hd_specular_zone_sample.rs` (new) samples
+  13 distinct `.rcsmaterial` files from those two buckets across four archives, three circuits, a
+  DLC copy, and a front-end rank-medal UI material with no relationship to Zone-mode gameplay:
+  **every one declares the identical four-parameter cluster**
+  (`zoneColourTint`/`zoneEffectInner`/`zoneBaseInner`/`zoneBaseAltInner`). Sampling `5`/`10`
+  directly as a control shows their DP3 chains have the *identical* `Sum`/`Normalize`/`Neither`
+  shape mix as the `0`/`32` majority - this page's own history already warned an uncontrolled
+  operand-shape read proves nothing ("`32` was never a valid control"), so that comparison is
+  dropped rather than kept as supporting evidence. What does answer the question: the confirmed
+  `5`/`10` rim materials declare the *same* four-parameter cluster the `0`/`32` majority does, so
+  the cluster's presence cannot itself distinguish a rim chain from an ordinary one. A second
+  check - dumping `declares_zone` across every variant of one sampled material, not just the one
+  variant the main loop selects - shows the cluster is not blanket file-level boilerplate: it
+  toggles across contiguous variant ranges of the same file
+  (`01_normal_diffuse_specularonalpha.rcsmaterial`, 0-14 false/15-34 true/35-49 false/50-69 true).
+  **This file alone does not settle orthogonality**: only 4 of its 70 variants resolve an
+  exponent at all (all `32.0`), and all 4 sit on the Zone-declaring side - equally consistent
+  with "the flag is unrelated to the specular chain" and "only Zone variants happen to carry a
+  resolvable chain here". The orthogonality claim rests on the rim control, not this file: a
+  confirmed rim material declaring the identical cluster rules out the cluster as a rim detector
+  regardless of whether any one file's Zone/non-Zone variants both resolve. **Only `5`/`10`
+  remain confirmed Zone-rim exponents.** Confidence 85 (the declared-parameter overlap against
+  the rim control is direct, controlled evidence; the per-variant split independently shows the
+  cluster isn't file-level boilerplate but not, by itself, orthogonality; 13 hand-read materials
+  against several thousand is not an exhaustive sweep).
+- **The `SpecularPower`-patch census subset question is answered, not just the raw counts.**
+  Re-running `hd_specular_patch_census.rs` at the commit before the `dp3_feeding` fix
+  (`ec762612^`, temporary worktree, removed after) reproduced the old numbers exactly (295/62/62/
+  233) and gave the actual old material list to diff against, rather than trusting the aggregate
+  alone: 12 of the old run's 13 distinct `(material, value)` pairs survive unchanged into the new
+  86 (near-strict superset, not a replacement population); the one exception
+  (`05_ubermall/materials/reflectplane_dc_seawater.rcsmaterial`, authored `52`) most likely moved
+  to `other_nonzero` under the now-lane-sound gate rather than being lost. New aggregate: 469
+  resolved-`0.0`, 86 patched (all authoring non-zero, 30-100), 383 (82 %) still unexplained;
+  4,586 blocks checked, 0 slot collisions (identical to the pre-fix run - this census's walk
+  does not depend on `dp3_feeding`'s correctness).
+- **`fragment.rs`'s doc comments were deliberately left un-updated.** The fourth next step
+  (folding these numbers into `specular_exponent`/`dp3_feeding`'s doc comments) needs the numbers
+  to have settled first, and this pass raised a new unexplained discrepancy (`NoSingleWriter`
+  above) and revised what the 64 % figure means rather than just re-measuring it - both need to
+  survive review before `fragment.rs` states them as fact. The "not pinned to a disc-wide
+  population count" placeholder stays accurate and is left in place.
 
 ## Next Steps
 
-- Re-run the `200`/`250`/`260`/`35` operand-shape trace (`hd_specular_unresolved_trace.rs`,
-  already lane-correct - no changes needed there, just a rerun) against the doubled population,
-  and update renderer.md's five-draft history with a sixth, dated entry rather than editing the
-  old numbers in place - this project's own evidence-keeping rule.
-- Read a handful of the newly-Zone-declaring blocks by hand to confirm the 64 % jump is real
-  `rim^N` chains and not a `declares_zone` false-positive on some other parameter shape - the
-  unfiltered-vs-excluded check in `hd_specular_population_recheck.rs` already rules out the
-  crude version of this (5/10 still behave exactly as before), but a handful of the *new* Zone
-  chains specifically, not just the two known rim values, would close it properly.
-- Re-run `hd_specular_patch_census.rs`'s full analysis (not just the raw counts already pasted
-  above) and check whether the 62-material patched set from the old run is a subset of the new
-  86, or whether the fix surfaced different materials entirely.
-- Once the above settle, fold the confirmed numbers back into `fragment.rs`'s doc comments
-  (`specular_exponent`, `dp3_feeding`) in place of the "not pinned to a population count, see
-  renderer.md" placeholder text the 2026-09-04 fix left there.
+- Trace what the two new `NoSingleWriter` operands (out of 344, in the `200`/`250`/`260`/`35`
+  re-run) actually resolve to - a genuinely new gap in `hd_specular_unresolved_trace.rs`'s own
+  method, not present in the pre-fix 168-operand tally.
+- Extend the by-hand Zone-declaring read beyond the current 13 materials (all sampled from
+  amphiseum, 05_ubermall, 01_vineta_k plus its DLC copy, and one front-end medal) to more
+  circuits, to check whether the "Zone-mode-variant flag, not a rim chain" finding holds
+  disc-wide or is itself circuit-specific. Confirming the per-variant toggle against the game's
+  own render-path/variant-selection code (rather than inferring it from one file's variant
+  pattern alone) would raise this past its current 85.
+- Settle the orthogonality question directly: find a material with at least one
+  `declares_zone=false` variant that still resolves a specular exponent.
+  `01_normal_diffuse_specularonalpha.rcsmaterial` could not answer this on its own - all four of
+  its resolving variants happen to sit on the Zone-declaring side, so it is equally consistent
+  with "unrelated" and with "only Zone variants resolve here". A material with a resolving
+  non-Zone variant would close this cleanly; one without would instead be worth investigating for
+  why non-Zone variants of this shader family never resolve at all.
+- Once both of the above are closed, fold the settled numbers into `fragment.rs`'s
+  `specular_exponent`/`dp3_feeding` doc comments in place of the "not pinned to a population
+  count, see renderer.md" placeholder text.

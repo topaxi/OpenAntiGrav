@@ -2471,6 +2471,133 @@ first-pass numbers) rather than edited in place here - this page's own rule
 for a superseded finding is a dated paragraph noting what changed, not a
 silent rewrite of the numbers above it.
 
+**Re-measured 2026-09-05, three of the open handover thread's next steps
+taken in order (this page is cited as evidence there, not the other way
+round); a fourth was found premature and deliberately not taken.**
+
+1. **`200`/`250`/`260`/`35` operand-shape trace re-run against the doubled
+   population** (`hd_specular_unresolved_trace.rs`, unchanged - see its own
+   note that no code change was needed). **Read carefully, since a first
+   pass at this comparison mixed up filtered and unfiltered counts and
+   wrongly called the thread's own number stale.** This tool never applies
+   the Zone exclusion - it prints `declares_zone` per block but tallies
+   every one - so its total is the *unfiltered* count: **172**, not 168.
+   Filtering by `declares_zone=false` in its own output reproduces the
+   thread's published Zone-excluded **168** exactly (`200`: 52, `250`: 8,
+   `260`: 84, `35`: 24, unchanged from the thread's first pass) - the four
+   extra unfiltered occurrences are exactly the Zone-declaring `250`s this
+   page's own 2026-09-03 draft already named (`martin_inflatable2`'s base
+   and DLC copies, "4 of the 84"). The thread's number was correct; the
+   discrepancy was in comparing it against the wrong column. The
+   operand-evidence tally over the unfiltered 344 operands: `Sum` 142,
+   `Normalize` 138, `Neither` 62, and - new - `NoSingleWriter` **2** (was 0
+   at 168 operands). Traced to source: both belong to the ship's own
+   `nitro_perspex_new.rcsmaterial` (`260`, `declares_zone=false`, operand 0
+   of its winning `DP3`, two separate variants) - **not** the Zone-declaring
+   `250` occurrences, so this is a real, small gap in the operand-shape
+   method within the already-"confirmed real" `260` bucket, unrelated to the
+   Zone reattribution below. Not investigated further - flagged as this
+   measurement's own open item.
+2. **A handful of newly Zone-declaring blocks read by hand, with a positive
+   control and a per-variant check this pass added after the first draft
+   lacked both** (`hd_specular_zone_sample.rs`, new).
+   `hd_specular_population_recheck.rs`'s own filtered/unfiltered split
+   localises where the 64 % Zone-declaring growth actually is: `200`/`260`/
+   `35` are identical filtered and unfiltered (zero Zone-declaring blocks in
+   any of the three), `5`/`10` are the already-confirmed rim exponents
+   (134/76, 3.2 % of the 6,464 Zone-declaring total), and the other
+   **96.8 %** sits in the `0` and `32` buckets (2,538 and 3,690
+   Zone-declaring occurrences respectively). Sampling those two buckets, one
+   to two materials per archive, over 13 distinct `.rcsmaterial` files
+   across four archives, three circuits, a DLC copy, and `DATA06`'s
+   front-end `/data/fe/rank/materials/medal.rcsmaterial` (a UI rank-medal
+   icon with no relationship to Zone-mode gameplay): **every one declares
+   the same four-parameter cluster** (`zoneColourTint`, `zoneEffectInner`,
+   `zoneBaseInner`, `zoneBaseAltInner`). **This page's own history already
+   warns that an uncontrolled operand-shape read is not evidence** ("`32`
+   was never a valid control") - so this pass also sampled `5`/`10` directly
+   as a positive control, and the result rules out using
+   `classify()`'s `Sum`/`Normalize`/`Neither` categories as a discriminator
+   here at all: the confirmed rim materials (`glasstest`,
+   `temp_testing_mat_diffuse`, `lambertshine`, `jd_simplespecular`,
+   `and_tunnelmat`) show the identical mix of shapes the `0`/`32` sample
+   does, so "the DP3 chain looks like ordinary specular, not Fresnel" is not
+   a claim this method can support either way - dropped, not carried
+   forward. **What the control sample does show, and what actually answers
+   the question, is the declared-parameter overlap itself**: every `5`/`10`
+   material samples the identical `zoneColourTint`/`zoneEffectInner`/
+   `zoneBaseInner`/`zoneBaseAltInner` cluster the `0`/`32` majority does
+   (`lambertshine` a superset, adding the three `*Outer` siblings) - so the
+   cluster's presence cannot be distinguishing "a rim chain" from "an
+   ordinary one", because confirmed rim materials and confirmed non-rim
+   majority materials both declare it identically. A second check this pass
+   added - dumping `declares_zone` across *every* variant of the first
+   sampled material rather than only the one variant the main loop's own
+   filter selects - shows the cluster is **not** file-level: it toggles
+   across contiguous variant ranges of the same file
+   (`01_normal_diffuse_specularonalpha.rcsmaterial`'s 70 variants: 0-14
+   false, 15-34 true, 35-49 false, 50-69 true). **This one file does not by
+   itself settle orthogonality, and is not overstated as doing so**: within
+   it, only four variants resolve an exponent at all (16, 21, 51, 56, every
+   one `32.0`), and all four sit on the Zone-declaring side of the split -
+   so this file alone is equally consistent with "the flag is unrelated to
+   the specular chain" and with "only Zone-declaring variants happen to
+   carry a chain this method can resolve". **The orthogonality claim rests
+   on the rim control above, not on this file**: a confirmed rim material
+   declaring the identical cluster is what rules out the cluster as a rim
+   detector, independent of whether any given file's Zone and non-Zone
+   variants both resolve. Net: the four-parameter cluster measures "this
+   variant supports the Zone colour-tint overlay" - which confirmed rim
+   materials also carry, for an unrelated reason - not "this chain computes
+   a rim exponent". **Only `5`/`10` remain confirmed as Zone-rim exponents;
+   the 64 % figure does not mean what "consistent with rim^N chains"
+   suggested.** Confidence 85 - the
+   declared-parameter overlap against the rim control is direct, controlled
+   structural evidence; the per-variant split independently establishes the
+   cluster is not blanket file-level boilerplate but does not by itself
+   establish orthogonality (see above); 13 hand-read materials against
+   several thousand is not an exhaustive or statistical sweep, and the
+   mechanism
+   (a per-variant Zone render-path flag) is inferred from one file's variant
+   pattern, not confirmed against the game's own render-path selection code.
+3. **`hd_specular_patch_census.rs` re-run in full, including the subset
+   question the thread's raw counts left open.** The aggregate numbers
+   reproduce the thread's first-pass figures exactly: 469 resolved-`0.0`
+   blocks, 86 patched by `SpecularPower`, all 86 authoring a non-zero value
+   (30 to 100), 383 (82 %) unexplained; 4,586 blocks checked for a shared
+   patch slot, 0 collisions - the same 4,586 as the pre-fix run, because this
+   census's own reachable-variant walk is independent of `dp3_feeding`'s
+   correctness. **The subset question was answered by rerunning the same
+   harness at the commit before the fix** (`ec762612^`, in a disposable
+   worktree, removed after) rather than left as "not checked": of the old
+   run's 13 distinct `(material, authored value)` pairs (62 slot
+   occurrences over 11 files), **12 survive unchanged into the new 86**: the
+   fix is a near-strict superset, not a replacement population. The one
+   exception - `05_ubermall/materials/reflectplane_dc_seawater.rcsmaterial`
+   slot 310, authored `52` - drops out of the patched-`0.0` bucket in the new
+   run; its chain most likely now resolves to a real non-zero value directly
+   under the lane-sound gate, landing in `other_nonzero` instead, consistent
+   with the fix's known effect rather than a data loss. The 24 new
+   `(material, value)` pairs the fix adds span three more files
+   (`amphiseum/materials/biodome_reflect`, `dc_windowstest`, `metallic`;
+   `modesto_heights/materials/reflectplane_dc_seawater`,
+   `windowsdiffusespecular_nonemissive_customr`,
+   `windowsnormaldiffusespecular`; `tech_de_ra/materials/biodome_reflect`,
+   `temp_testing_mat_colour_spec_alpha`), taking the patched-material count
+   from 11 to 20 distinct files. Confidence 95 - exact reproduction of the
+   published aggregate, and the subset comparison is a direct historical
+   rerun, not an inference.
+4. **The fourth next step - folding these numbers into `fragment.rs`'s
+   `specular_exponent`/`dp3_feeding` doc comments - was deliberately not
+   taken.** That step is conditioned on the numbers having "settled", and
+   finding #1's own `NoSingleWriter` anomaly (0 at 168 operands, 2 at 344) is
+   a new, unexplained discrepancy this pass raised rather than closed;
+   finding #2 also reframes what the 64 % figure means, which needs to
+   survive review before it is quoted from `fragment.rs` as settled fact.
+   The doc comments' current "not pinned to a disc-wide population count"
+   wording stays accurate and is left as-is rather than replaced with
+   numbers that might move again.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
