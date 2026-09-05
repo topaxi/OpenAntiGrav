@@ -34,6 +34,10 @@ pub(super) struct Snapshot {
     pub(super) camera_translation: Mat4,
     ships: Vec<Mat4>,
     pub(super) rockets: Vec<Mat4>,
+    /// The Mine's own, same terms as [`Self::rockets`].
+    pub(super) mines: Vec<Mat4>,
+    /// The Bomb's own, same terms.
+    pub(super) bombs: Vec<Mat4>,
 }
 
 impl Snapshot {
@@ -45,6 +49,8 @@ impl Snapshot {
                 .map(|slot| race.ship_model_matrix_of(slot))
                 .collect(),
             rockets: race.rocket_model_matrices(),
+            mines: race.mine_model_matrices(),
+            bombs: race.bomb_model_matrices(),
         }
     }
 

@@ -14,6 +14,7 @@ mod geometry;
 mod pads;
 mod roster;
 mod surfaces;
+mod weapon_models;
 use crate::remix::craft_of;
 use environment::{hd_sky_model, psp2_sky_model};
 
@@ -421,33 +422,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         &mut report,
     );
-    // The Rocket's own model, on the same terms as the boost plume: absence is
-    // reported, not fatal. It is not per-team and not per-track - one entry
-    // serves every rocket in the game, which is why it loads here once and the
-    // scene clones it per projectile slot.
-    let rocket_model = match archives.read_name(ROCKET_MODEL_ENTRY) {
-        Ok(blob) => match mesh::build_with_textures(ROCKET_MODEL_ENTRY, &blob, None, options.lod) {
-            Ok(model) => {
-                report.push(format!(
-                    "{ROCKET_MODEL_ENTRY}: {} triangle(s), radius {:.2} - a rocket in \
-                     flight is this model, not a billboard",
-                    model.indices.len() / 3,
-                    model.radius
-                ));
-                Some(model)
-            }
-            Err(error) => {
-                report.push(format!("{ROCKET_MODEL_ENTRY}: did not decode ({error})"));
-                None
-            }
-        },
-        Err(_) => {
-            report.push(format!(
-                "{ROCKET_MODEL_ENTRY}: absent - rockets fall back to a billboard"
-            ));
-            None
-        }
+    // The Rocket's, the Mine's and the Bomb's own bodies - see
+    // `weapon_models::load` for the shared shape, and
+    // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` for why the latter two carry no
+    // drop-time effect alongside them.
+    let mut body_model = |entry, fallback| {
+        weapon_models::load(&mut archives, entry, fallback, options.lod, &mut report)
     };
+    let rocket_model = body_model(ROCKET_MODEL_ENTRY, "a rocket");
+    let mine_model = body_model(MINE_MODEL_ENTRY, "a laid mine");
+    let bomb_model = body_model(BOMB_MODEL_ENTRY, "a laid bomb");
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -987,6 +971,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         zone_grade,
         liveries,
         rocket_model,
+        mine_model,
+        bomb_model,
         shield_cockpit,
         visibility,
         flare,

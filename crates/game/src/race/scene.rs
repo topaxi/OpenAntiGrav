@@ -11,6 +11,7 @@ use log::warn;
 mod frame;
 mod motion;
 mod queries;
+mod weapon_models;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
@@ -140,6 +141,12 @@ pub struct Scene {
     /// its model matrix goes in, and three rockets in the air at once need three
     /// matrices. Eighty-four vertices apiece makes sixteen copies cheap.
     rockets: Vec<Drawable>,
+    /// The Mine's own drawables, one per pool slot, on the same terms as
+    /// [`Self::rockets`]: empty when `Data\Weapons\Pulse_Mine.vex` did not
+    /// load. See [`weapon_models::build`].
+    mines: Vec<Drawable>,
+    /// The Bomb's own, one size up from the Mine's model, same terms.
+    bombs: Vec<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -361,6 +368,8 @@ impl Scene {
         weapon_pad_model: Option<Model>,
         mode: Mode,
         rocket_model: Option<Model>,
+        mine_model: Option<Model>,
+        bomb_model: Option<Model>,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -846,31 +855,29 @@ impl Scene {
             )?),
             None => None,
         };
-        // One per projectile slot, cloned the way the hulls and plumes above are.
-        // A rocket's hull is opaque - it is a painted dart, not a glow - so this
-        // takes the ordinary transparent blend and the protected glow mask the
-        // ships take, and the flare around it stays in the additive pass with
-        // the exhaust where it belongs.
-        let mut rockets = Vec::new();
-        if let Some(model) = rocket_model.filter(|model| !model.indices.is_empty()) {
-            for _ in 0..oag_gameplay::projectile::MAX_PROJECTILES {
-                rockets.push(Drawable::new(
-                    device,
-                    queue,
-                    model.clone(),
-                    format,
-                    anisotropy,
-                    sample_count,
-                    scene_depth,
-                    mesh_render::TRANSPARENT_BLEND,
-                    mesh_render::GlowMask::Protected,
-                    zone_art,
-                    Some(shadow_map.view()),
-                    Some(shadow_map.depth_view()),
-                    mesh_render::ShadowReceiver::Mapped,
-                )?);
-            }
-        }
+        // One per projectile slot, cloned the way the hulls and plumes above are -
+        // the Rocket's, the Mine's and the Bomb's, all three built the same way by
+        // [`weapon_models::build`]. A laid mine's hull is opaque too - a painted
+        // shell, not a glow - so every one of the three takes the ordinary
+        // transparent blend and the protected glow mask the ships take, and any
+        // flare around one stays in the additive pass with the exhaust where it
+        // belongs.
+        let weapon_drawables = |model| {
+            weapon_models::build(
+                device,
+                queue,
+                model,
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                zone_art,
+                &shadow_map,
+            )
+        };
+        let rockets = weapon_drawables(rocket_model)?;
+        let mines = weapon_drawables(mine_model)?;
+        let bombs = weapon_drawables(bomb_model)?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -960,6 +967,8 @@ impl Scene {
             shield,
             shield_cockpit,
             rockets,
+            mines,
+            bombs,
             boost_uv_transforms,
             collision,
             sky,
