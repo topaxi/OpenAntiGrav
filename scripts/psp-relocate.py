@@ -15,7 +15,13 @@ Subcommands:
   callers  <addr>      every `jal` into addr
   field    <off>       every load/store using the given struct offset
   andi     <imm>       every `andi`/`ori` with the given immediate
+  masked   <off> <m>   every `lw ?,<off>(?)` whose result is `andi`ed with m
+  member   <base> <o>  every load/store at `<o>` from a register holding <base>
   segments             the PT_LOAD table and the load base of each segment
+
+`xrefs` cannot find a global that is reached as base-plus-offset rather than by
+its own relocation record - `DAT_08b32428` is `DAT_08b32420 + 8` and has zero
+records of its own. `member` is the subcommand for that case.
 """
 
 import argparse
@@ -236,6 +242,79 @@ def cmd_andi(prx, args):
     print(f"{n} andi/ori site(s) with immediate 0x{want:x}")
 
 
+def cmd_masked(prx, args):
+    """Loads at one struct offset whose result is immediately mask-tested.
+
+    A flag word read as `lw rX, off(rY)` and then `andi rX, rX, mask` is the
+    shape a per-craft bitfield's consumers take, and pairing the two is far
+    more selective than either half alone - `andi 0x400` on its own returns
+    151 sites in this binary, of which three are the ones wanted.
+    """
+    off = int(args.offset, 0)
+    mask = int(args.mask, 0)
+    words = [w for _, w in iter_instructions(prx)]
+    _, va, _ = prx.text()
+    n = 0
+    for i, word in enumerate(words):
+        if (word >> 26) != 0x23 or (word & 0xFFFF) != off:  # lw
+            continue
+        rt = (word >> 16) & 0x1F
+        for j in range(i + 1, min(i + 1 + args.window, len(words))):
+            w2 = words[j]
+            if (w2 >> 26) != 0x0C or ((w2 >> 21) & 0x1F) != rt:
+                continue
+            if (w2 & 0xFFFF) != mask:
+                break
+            a = prx.to_loaded(va + i * 4)
+            b = prx.to_loaded(va + j * 4)
+            rs = (word >> 21) & 0x1F
+            print(f"0x{a:08x} lw r{rt},0x{off:x}(r{rs})  ->  0x{b:08x} andi 0x{mask:x}")
+            n += 1
+            break
+    print(f"{n} masked read(s) of offset 0x{off:x} against 0x{mask:x}")
+
+
+def cmd_member(prx, args):
+    """Accesses at a fixed offset from a register holding a known global.
+
+    Tracks what each register was last given by a `lui`/`addiu` pair the
+    relocator resolved, then reports every load or store at the wanted offset
+    off such a register.
+    """
+    base = int(args.base, 0)
+    want = int(args.offset, 0)
+    held = {}
+    n = 0
+    for vaddr, word in iter_instructions(prx):
+        op = word >> 26
+        rs, rt = (word >> 21) & 0x1F, (word >> 16) & 0x1F
+        if op == 0x0F:  # lui starts a pair; the resolver keyed it by address
+            held.pop(rt, None)
+            continue
+        if op == 0x09:  # addiu completes one
+            target = prx.resolved.get(vaddr)
+            if target is not None:
+                held[rt] = target
+            else:
+                held.pop(rt, None)
+            continue
+        if op in LOADS:
+            imm = word & 0xFFFF
+            imm = imm - 0x10000 if imm & 0x8000 else imm
+            if imm == want and held.get(rs) == base:
+                print(
+                    f"0x{prx.to_loaded(vaddr):08x}  {LOADS[op]} r{rt}, "
+                    f"0x{want:x}(r{rs})   [0x{base + want:08x}]"
+                )
+                n += 1
+        if op in (0x00, 0x09, 0x0C, 0x0D, 0x0F, 0x23, 0x24):
+            # A destination write invalidates whatever the register held.
+            dst = rt if op != 0x00 else (word >> 11) & 0x1F
+            if op != 0x09 and dst in held and dst != rs:
+                held.pop(dst, None)
+    print(f"{n} access(es) at 0x{base:08x} + 0x{want:x}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--binary", required=True, type=Path)
@@ -253,6 +332,13 @@ def main():
     q.add_argument("offset")
     q = sub.add_parser("andi")
     q.add_argument("immediate")
+    q = sub.add_parser("masked")
+    q.add_argument("offset")
+    q.add_argument("mask")
+    q.add_argument("--window", type=int, default=6)
+    q = sub.add_parser("member")
+    q.add_argument("base")
+    q.add_argument("offset")
 
     args = p.parse_args()
     prx = Prx(args.binary, int(args.load_base, 0))
@@ -263,6 +349,8 @@ def main():
         "callers": cmd_callers,
         "field": cmd_field,
         "andi": cmd_andi,
+        "masked": cmd_masked,
+        "member": cmd_member,
     }[args.cmd](prx, args)
     return 0
 
