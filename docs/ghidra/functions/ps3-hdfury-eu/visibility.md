@@ -381,6 +381,24 @@ guards two of its five draw buckets with `((key & 1) == 0) && (((key >> 1) & 4)
 `g+0x4f1f8` lists. Confidence 78. This project's renderer does not model those
 buckets.
 
+**Confirmed and completed, 2026-09-05, from the producer's side.** The sort
+key is built in one expression in `Scene_SubmitVisibleChunks`:
+`rec[2] = (*(short *)(*(int *)(chunk + 8) + 6) << 1) | (chunk[7] == 2)`. So
+`key.lo` really is the kind-2 test - the reading above stands, at 85 now
+rather than 78 - and every *other* bit of the key, the ones that route a
+record between the five buckets, is the halfword at `+0x06` of the chunk's
+render block shifted up by one. The five buckets, their five consumers, and
+the material-transparency test that splits the `g+0x491f4` and `g+0x4f1f8`
+pair are written up in the twenty-ninth pass of
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md).
+
+Two names from that pass belong to this subsystem: `Scene_ResetDrawLists`
+(`0x003fb240`), the per-frame zeroing of all ten list counts and the four
+merged-list pointers, and `g_MaterialDrawClass` (`0x00d45f90`), the one-byte
+per-material class `Scene_BuildStaticChunkMask` computes and
+`Scene_SubmitVisibleChunks` uses to pick which of the five input lists a
+surface is submitted to.
+
 **`+0x05` is read by nothing.** The one `lbz` of it in the geometry path,
 `0x003f01e0`, sits inside an unrolled byte-by-byte block copy that carries
 `+0x04` through `+0x08` alike - `+0x07` included, so even that site is not

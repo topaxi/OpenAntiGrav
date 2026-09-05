@@ -110,6 +110,8 @@
 0x003fdae8	function	Scene_SortAndLightVisibleChunks	78	visibility.md
 0x003fb330	function	Scene_RefreshNodeMatrices	80	visibility.md
 0x003faf00	function	Scene_BuildStaticChunkMask	75	visibility.md
+0x003fb240	function	Scene_ResetDrawLists	85	visibility.md
+0x00d45f90	data	g_MaterialDrawClass	85	visibility.md
 
 0x006b6870	function	Trail_InitManagerBuffers	85	engine-trail.md
 0x002e2188	function	Trail_ResetCraftSlotState	85	engine-trail.md
