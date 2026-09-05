@@ -42,6 +42,7 @@ pub mod hud;
 pub mod loading;
 pub mod menu;
 pub mod race;
+pub mod speed;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
@@ -50,8 +51,9 @@ pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
 pub use race::{
-    GuestRoster, RaceDefaults, SoundBanks, TeamVariant, TeamVariants, VariantJoin, ZoneAnnouncer,
-    ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages,
+    GuestRoster, RaceDefaults, SoundBanks, SpeedClasses, TeamVariant, TeamVariants, VariantJoin,
+    ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures,
+    ZoneStages,
 };
 
 /// One title's release-level facts.

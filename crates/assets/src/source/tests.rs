@@ -79,6 +79,8 @@ const TITLE: &Title = &Title {
         // Unread here too: nothing in this crate resolves a team's variant.
         team_variants: None,
         guest_roster: None,
+        // A fixture: this test needs a `Title` to exist, not a real ladder.
+        speed_classes: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this

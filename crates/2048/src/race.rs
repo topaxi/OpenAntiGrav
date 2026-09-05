@@ -64,6 +64,19 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_sky: None,
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&GUEST_ROSTER),
+    // **Unread, not empty.** This title ships no race box at all - no
+    // `Track Creation`, no settings page, racing entered from the campaign
+    // event grid instead (`docs/formats/race-setup.md`) - so there is no menu
+    // to read a class ladder off, and its per-craft `Data\HandlingStats\`
+    // tree has no ground-truth test that lists one either. `None` keeps the
+    // caller on its own ladder rather than lending this title Pulse's four as
+    // if someone had checked. Do not fill this in without reading the files.
+    //
+    // Note that `ZONE_STAGES` below is a *different* ladder and is not
+    // evidence for this one: it maps a zone count onto `MX_CLASS`/`A_CLASS`
+    // and friends for the Zone HUD, which is a per-zone escalation rather
+    // than the speed class a race is started in.
+    speed_classes: None,
 };
 
 /// Wipeout 2048's zone-number to speed-class ladder, read out of the

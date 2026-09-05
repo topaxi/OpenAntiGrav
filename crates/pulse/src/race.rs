@@ -48,6 +48,18 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Pulse authors one roster and no numbered variant of anything in it.
     team_variants: None,
     guest_roster: None,
+    // Four rungs, and the four are the *per-team* file's, not the global
+    // one's. Pulse's `Data\XML\HandlingStats.xml` authors five `<GlobalClass>`
+    // blocks with `VECTOR` first, and every one of the eight teams'
+    // `Data\Ships\<Team>\handlingstats.xml` authors exactly four `<Class>`
+    // rungs with no `VECTOR` among them - checked on both pressings. The
+    // original's own parser discards the global `VECTOR` block (it matches
+    // `name` against a four-entry table and leaves the previous index in
+    // place), so four is what this title really has. See
+    // `docs/formats/handling-stats.md`.
+    speed_classes: Some(oag_title::SpeedClasses {
+        names: oag_title::SpeedClasses::PULSE_LADDER,
+    }),
 };
 
 /// Pulse's Zone milestone announcer.

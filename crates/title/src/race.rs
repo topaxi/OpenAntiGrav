@@ -87,6 +87,7 @@ pub struct ShipPaths {
 
 mod announcer;
 mod variants;
+pub use crate::speed::SpeedClasses;
 pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
 pub use variants::{GuestRoster, TeamVariant, TeamVariants, VariantJoin};
 
@@ -207,6 +208,17 @@ pub struct RaceDefaults {
     /// `None` on every title but Wipeout 2048, whose twelve HD-derived teams
     /// are the one measured case.
     pub guest_roster: Option<&'static GuestRoster>,
+    /// The speed classes this title's **own data** authors, slowest first. See
+    /// [`SpeedClasses`].
+    ///
+    /// `None` for a title whose per-team handling files have not been read -
+    /// Wipeout 2048 today, which ships no race box at all
+    /// (`docs/formats/race-setup.md`) and has no handling ground-truth test.
+    /// The caller then supplies its own ladder rather than borrowing another
+    /// title's measurement, exactly as [`crate::MenuSkin::row_extra_leading`]
+    /// is handled. An empty ladder would say something different and stronger
+    /// - "this title authors no classes" - which nothing has established.
+    pub speed_classes: Option<SpeedClasses>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by

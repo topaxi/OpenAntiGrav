@@ -341,6 +341,9 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_sky: None,
     team_variants: Some(&NATIVE),
     guest_roster: Some(&GUEST_ROSTER),
+    // A fixture, not a measurement: this crate holds no title's data, so the
+    // ladder here is only shaped like one.
+    speed_classes: None,
 };
 
 /// A combined id is recognised exactly when it is one of the table's own
