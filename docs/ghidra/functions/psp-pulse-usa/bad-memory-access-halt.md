@@ -209,7 +209,19 @@ hit 0  ra=0x08866c88  s0=0x09b74750  s1=0x09a031b0
        s1->0x2c        = 0x0105e006     <- dirty bit 0x1000 clear
 ```
 
-and the emulator log, immediately after:
+**Reproduced on a second, independently booted emulator**, same track and mode,
+to the byte:
+
+```text
+hit 0  ra=0x08866c88  s0=0x09b74750  s1=0x09a031b0
+       a0 = 0x09835820   s0->0xa0 = 0x00000000   s1->0x2c = 0x0105e006
+```
+
+Every value identical across the two boots - the allocation is deterministic,
+so this reproduces for anyone with the same disc, and the halt followed within
+a frame both times.
+
+The emulator log, immediately after:
 
 ```text
 E[MEMMAP]: Core/MemFault.cpp:330 Bad memory access detected! 00000030
@@ -225,7 +237,8 @@ That settles every open question this page opened with:
   faulting instruction is therefore `0x08872fa4`, `lv.q C400,0x0(a1)`.
   **Confidence 95** - the pointer was read null at a breakpoint one instruction
   ahead of a fault whose reported guest address, width and direction all match
-  that load, and the alternative was measured non-null in the same hit.
+  that load; the alternative was measured non-null in the same hit; and the
+  whole observation repeated identically on a second boot.
 - **`s1->0x2c & 0x1000` is clear and `node->0x30` is valid**, so
   `func_0x00140544` was correctly skipped. The transform-resolver path is not
   implicated at all.
@@ -255,9 +268,9 @@ update tick measures from it.
 
 **This is a defect of the test technique, not of the game**, and it is the one
 weapon of the four tried where the technique is not sound. Firing a LeachBeam
-this way will halt the emulator, every time, within a frame. **Confidence 85**
-on the mechanism (one live observation plus three prior sessions' identical
-signature); **confidence 60** on "the grant path is what fills `+0xa0`" - that
+this way will halt the emulator, every time, within a frame. **Confidence 92**
+on the mechanism (two independent boots with identical registers, plus three
+prior sessions' identical signature); **confidence 60** on "the grant path is what fills `+0xa0`" - that
 path is still unread, per [`../../../gameplay/pickups.md`](../../../gameplay/pickups.md).
 
 ## What this corrects
