@@ -95,13 +95,11 @@ struct Cli {
     /// Skin a `--mesh`, `--sky` or `--pads` from an external texture set, by
     /// entry index or `0x`-prefixed name hash.
     ///
-    /// PS2 models carry no textures of their own: their texture set is a
-    /// separate archive entry, a nested WAD of Graphics Synthesizer upload
-    /// packets. A track's art mesh, its `Skycube` and its `Speedup Pad`
-    /// geometry all live in the same `.vex` and share one ordinal space, so
-    /// the same set skins all three - see `mesh::build_sky`'s doc comment. In
-    /// `oag-game`, which entry belongs to which model is found by directory
-    /// position (`docs/formats/ps2-texture.md`); here it is named by hand.
+    /// PS2 models carry no textures of their own: their texture set is a separate archive entry, a
+    /// nested WAD keyed by each `Texture` node's own declared name. A track's art mesh, its
+    /// `Skycube` and its `Speedup Pad` geometry share one file and one set - see
+    /// `mesh::build_sky`'s doc comment. In `oag-game`, which entry is which model's set is found by
+    /// directory position (`ps2-texture.md`); here it is named by hand.
     #[arg(long)]
     textures: Option<String>,
 
@@ -411,7 +409,7 @@ fn inspect(model: mesh::Model, data: &[u8], cli: &Cli) -> mesh::Model {
 }
 
 /// Reads and decodes an external texture set out of the same archive.
-fn load_texture_set(spec: &str, entry: &str) -> Result<mesh::TextureSlots> {
+fn load_texture_set(spec: &str, entry: &str) -> Result<mesh::Ps2TextureSet> {
     let mut archive = Archive::open(spec)?;
     let index = if let Some(hex) = entry.strip_prefix("0x") {
         let hash = u32::from_str_radix(hex, 16).context("parsing the entry hash")?;
@@ -426,7 +424,7 @@ fn load_texture_set(spec: &str, entry: &str) -> Result<mesh::TextureSlots> {
             .with_context(|| format!("{entry} is not in {}", archive.label()))?
     };
     let blob = archive.read(index)?;
-    mesh::ps2_texture_set(&blob).with_context(|| format!("entry {index} is not a texture set"))
+    mesh::Ps2TextureSet::parse(&blob).with_context(|| format!("entry {index} is not a texture set"))
 }
 
 fn main() -> Result<()> {
@@ -602,12 +600,13 @@ fn main() -> Result<()> {
         if let Some(set) = &external {
             println!(
                 "texture set: {} of {} entries decoded",
-                set.iter().filter(|slot| slot.is_some()).count(),
-                set.len()
+                set.decoded_count(),
+                set.entry_count()
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = inspect(mesh::build_sky(name, &data, external)?, &data, &cli);
+        let sky = mesh::build_sky(name, &data, external.as_ref())?;
+        let model = inspect(sky, &data, &cli);
         println!(
             "{}: {} sky node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
@@ -653,12 +652,13 @@ fn main() -> Result<()> {
         if let Some(set) = &external {
             println!(
                 "texture set: {} of {} entries decoded",
-                set.iter().filter(|slot| slot.is_some()).count(),
-                set.len()
+                set.decoded_count(),
+                set.entry_count()
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = inspect(mesh::build_pads(name, &data, external)?, &data, &cli);
+        let pads = mesh::build_pads(name, &data, external.as_ref())?;
+        let model = inspect(pads, &data, &cli);
         println!(
             "{}: {} Speedup Pad node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
@@ -703,8 +703,8 @@ fn main() -> Result<()> {
         if let Some(set) = &external {
             println!(
                 "texture set: {} of {} entries decoded",
-                set.iter().filter(|slot| slot.is_some()).count(),
-                set.len()
+                set.decoded_count(),
+                set.entry_count()
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
@@ -712,7 +712,7 @@ fn main() -> Result<()> {
             .inspect(|(_, report)| println!("{}", report.describe()));
         let model = match ps3 {
             Some((model, _)) => ps3_mesh::with_pads(&cli.archive, name, &data, model),
-            None => mesh::build_with_textures(name, &data, external, cli.lod)?,
+            None => mesh::build_with_textures(name, &data, external.as_ref(), cli.lod)?,
         };
         let model = inspect(model, &data, &cli);
         println!(

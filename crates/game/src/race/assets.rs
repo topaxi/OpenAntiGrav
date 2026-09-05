@@ -536,9 +536,9 @@ pub fn shield_entry_names(ship_dir: &str, team: &str) -> [String; 2] {
 pub(crate) fn ps2_texture_set(
     archives: &mut oag_assets::Archives,
     entry_name: &str,
-) -> Option<mesh::TextureSlots> {
+) -> Option<mesh::Ps2TextureSet> {
     let blob = archives.read_preceding(entry_name).ok()?;
-    mesh::ps2_texture_set(&blob).ok()
+    mesh::Ps2TextureSet::parse(&blob).ok()
 }
 
 /// The error a circuit that is in none of the source's archives produces.
