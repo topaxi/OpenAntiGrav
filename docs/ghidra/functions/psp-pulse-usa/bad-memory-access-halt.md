@@ -115,6 +115,70 @@ proof.
 
 Either way this is a **game-side null dereference**, not an emulator artefact.
 
+## Its only caller: a weapon-instance pool update, beside the LeachBeam
+
+`get_xrefs_to` on `0x08872f54` returns nothing, and that is an artefact worth
+knowing about rather than a fact about the binary: **Ghidra renders `jal`
+targets in this program un-rebased** (`FUN_08872f54`'s own body calls
+`jal 0x00140544`, not `0x08944544`). So a call to `FUN_08872f54` is encoded as
+`jal 0x0006ef54` and Ghidra hangs the reference on `0x0006ef54`, where nobody
+thinks to look.
+
+Scanning `BOOT.BIN` directly for all three ways the address could be reached -
+this is a relocatable PRX, so everything is stored un-rebased - finds exactly
+one:
+
+| How it could be reached | Encoding searched for | Hits |
+| --- | --- | ---: |
+| Direct call | `jal` word `0x0c01bbd5` | **1**, at `0x08866c80` |
+| Function pointer in data | u32 `0x0006ef54` | 0 |
+| Address built in code | `lui`/`addiu`/`ori` with lo16 `0xef54` | 0 |
+
+So `FUN_08872f54` has **one caller in the entire executable**, `FUN_08866b08`
+(`0x08866b08`-`0x08866f13`), and cannot be reached indirectly - there is no
+pointer to it anywhere. **Confidence 88**: the scan is exhaustive over the three
+encodings, and the one `lo16 = 0xef54` match elsewhere in the file
+(`0x088da994`) resolves to `0x0027ef54`, a string, not this function.
+
+`FUN_08866b08` is a **live weapon-instance pool update**:
+
+- Early-outs entirely on `self->0x68 == 0`, so it costs nothing when the pool is
+  empty. `self->0x68` is the live count; `self->0x64 + i*4` the instance
+  pointers; the loop compacts the array and frees `+0x50`/`+0x4c` as it retires
+  an entry.
+- Each instance carries a kind at `+0x54` (`1` and `2` are both handled), flags
+  at `+0x3c` (bit `0x1` armed, bit `0x4` retire-me, bit `0x40` latched), an owner
+  index at `+0x48` into the craft array `DAT_00057ff0`, a target at `+0x5c`, and
+  the matrix at `+0xa0` that `FUN_08872f54` measures from.
+- It reads the **fire-request word** in the same loop -
+  `*(uint *)(craft->0x4c + 0x1b8) & 0x10` - the same `craft+0x1b8` that
+  [`weapon-fire.md`](weapon-fire.md) and `scripts/psp-fire-weapon.py` use.
+- `FUN_08872f54`'s result is compared against `stats->0x11c`, adjacent to the
+  `+0x114`/`+0x118` **LeachBeam lock distances** [`missile.md`](missile.md)
+  records.
+
+It is **vtable slot `+0x24`** of a scene-node class: its pointer appears exactly
+once in the binary, at `0x08acaa5c`, in a method table whose base is
+`0x08acaa38` - the same table shape [`bloom.md`](bloom.md) identified, where
+`+0x44` is the draw slot. Slot `+0x24` is where the bloom class leaves the
+framework default `0x001407ac`, so it is a **per-frame update** override. The
+class's code sits at `0x08864xxx`-`0x08866xxx`, immediately around
+`Weapon_FireLeachBeam` (`0x08866658`).
+
+**Confidence 78** on "this is weapon-instance pool machinery": the fire word,
+the craft-array index, the stats offset adjacent to the LeachBeam lock
+distances, and the code's address neighbourhood all agree. **Confidence 60** on
+anything narrower than that - whether the pool is specifically the LeachBeam's,
+the Missile's lock, or a shared one is *not* established here.
+
+### Why this matters for reproducing the halt
+
+`FUN_08872f54` runs **only** when that pool is non-empty. A mode with no weapons
+in play never calls it and therefore can never produce this halt - so a Time
+Trial is not a valid negative control for "does the game crash on its own", only
+for "does the emulator crash on its own". Any attempt to reproduce or rule out
+the halt has to put a weapon instance in the pool first.
+
 ## What this corrects
 
 - **`ppsspp-debugger.md`'s "a stale or invalid watchpoint address ... can stop
@@ -156,9 +220,9 @@ class. Below the 50 floor, no rename, per
 - **Which of the two `lv.q`s faults**, and therefore which pointer is null. One
   execution breakpoint at `0x08872f98` reading `a0` (already the raw
   `s1->0x30`) and `s0->0xa0` settles it in one hit.
-- **Who calls `FUN_08872f54`.** No static xref exists and its pointer is not in
-  the data section, so the caller is a runtime-built table entry. `ra` at a
-  breakpoint on `0x08872f98` names it directly, and that is also what would put
-  `FUN_08944544` and this function's owning class above the rename floor.
+- **Which class owns `FUN_08866b08`.** Its `Vex_RegisterClass` id is not
+  recovered, so whether the pool is the LeachBeam's, the Missile's lock, or a
+  shared weapon-instance pool is open. That id is what would take these names
+  above the rename floor.
 - **Whether the halt reproduces with no debugger instrumentation at all.** If
   it does, every "my test crashed the emulator" reading of it is wrong.
