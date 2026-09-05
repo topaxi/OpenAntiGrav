@@ -234,6 +234,32 @@ pub fn ps2_texture_name(name: &str) -> Option<String> {
         .then(|| format!("{stem}.pct"))
 }
 
+/// The build-time path prefix `Texture_FindOrLoad` strips before it hashes a
+/// name, if present.
+///
+/// A `Texture` node's own declared name is sometimes the artists' authoring
+/// path rather than the archive-relative one every other asset class uses.
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) removes this one
+/// substring, wherever it occurs in the name, before doing anything else -
+/// see the pseudocode in
+/// `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`. The disc's own
+/// constant is spelled uppercase and matched there with a case-sensitive
+/// `strstr`; stripped case-insensitively here instead, since a name that
+/// varies only in case would otherwise resolve on one disc and not the
+/// other for no reason the format cares about, and [`wad::hash_name`]
+/// downstream lower-cases everything anyway.
+///
+/// [`wad::hash_name`]: oag_formats::wad::hash_name
+#[must_use]
+pub fn ps2_strip_build_prefix(name: &str) -> String {
+    const PREFIX: &str = r"WIPEOUT PSP\PS2\";
+    let lower = name.to_ascii_lowercase();
+    match lower.find(&PREFIX.to_ascii_lowercase()) {
+        Some(pos) => format!("{}{}", &name[..pos], &name[pos + PREFIX.len()..]),
+        None => name.to_string(),
+    }
+}
+
 /// The four archives a PSP Pulse disc ships, relative to the image root.
 pub mod archives {
     /// Front-end fonts and shared images.
@@ -580,6 +606,25 @@ mod tests {
         assert_eq!(ps2_texture_name(r"Data\Defaults\Skycube.vex"), None);
         assert_eq!(ps2_texture_name("Data/Tex/Missing.pct"), None);
         assert_eq!(ps2_texture_name("nodot"), None);
+    }
+
+    /// `Texture_FindOrLoad` strips the build prefix wherever it appears, so a
+    /// name with no prefix at all comes back unchanged and one that carries it
+    /// under any case comes back with just the archive-relative part.
+    #[test]
+    fn build_prefix_is_stripped_case_insensitively() {
+        assert_eq!(
+            ps2_strip_build_prefix(r"Wipeout PSP\PS2\Data\Environments\12_Track\sky12_4.tga"),
+            r"Data\Environments\12_Track\sky12_4.tga"
+        );
+        assert_eq!(
+            ps2_strip_build_prefix(r"WIPEOUT PSP\PS2\Data\Ships\Feisar\Textures\hull.tga"),
+            r"Data\Ships\Feisar\Textures\hull.tga"
+        );
+        assert_eq!(
+            ps2_strip_build_prefix(r"Data\Environments\01_Track\Textures\sky1_1.tga"),
+            r"Data\Environments\01_Track\Textures\sky1_1.tga"
+        );
     }
 
     /// Both consoles' archives are offered, bulk before companion, so a "nothing
