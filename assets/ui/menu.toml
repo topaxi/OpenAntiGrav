@@ -162,21 +162,31 @@ label = "BACK"
 id = "remix"
 title = "RACE REMIX"
 
-# Mode, speed class and AI difficulty are title-agnostic and shared with the
-# ordinary RACE page verbatim - same settings keys, same values, same
-# `disabled_by`. Nothing about racing a mixed grid changes what a mode, a
-# class or a difficulty means.
+# Mode and AI difficulty are title-agnostic and shared with the ordinary RACE
+# page verbatim - same settings keys, same values, same `disabled_by`.
+# Nothing about racing a mixed grid changes what a mode or a difficulty means.
+#
+# **SPEED CLASS is no longer one of them.** It shares the settings key, and
+# that is all: the RACE page offers the booted title's ladder and the row
+# below offers the union across every title this machine can open. A mixed
+# grid is exactly the case where one title's four rungs are the wrong list.
 [[page.entry]]
 kind = "choice"
 label = "MODE"
 setting = "race.mode"
 values_from = "race_modes"
 
+# The union of every available title's ladder, not this one title's - the row
+# that makes RACE REMIX a cross-title surface for the class the way TRACK
+# TITLE and CRAFT TITLE already are for the circuit and the craft. Built from
+# whichever titles this machine can actually open a source for, so a class
+# whose title is absent is not offered at all rather than offered and then
+# unable to load. See `oag_title::SpeedClasses::union`.
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
 setting = "race.class"
-values = ["venom", "flash", "rapier", "phantom"]
+values_from = "remix_speed_classes"
 
 [[page.entry]]
 kind = "choice"

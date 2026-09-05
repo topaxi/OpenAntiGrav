@@ -197,6 +197,27 @@ impl Session {
             menu::ValueSource::SpeedClasses,
             &speed_class_choices(shell.title),
         );
+        // RACE REMIX's own axis: the union across every title this machine can
+        // currently open a source for, so a class is offered exactly when the
+        // data behind it is actually here. See `Self::remix_speed_classes`.
+        //
+        // **Settled only when the union has something in it**, the same rule
+        // the RACE REMIX rows below follow and for the same reason: an empty
+        // union is not evidence that a saved pick is wrong, and settling
+        // against it would clear `race.class` to the empty string. That is a
+        // reachable configuration rather than a hypothetical - a machine whose
+        // only playable source is Wipeout 2048, whose ladder is unread, unions
+        // to nothing - and it would silently lose the player's saved class
+        // while the RACE page above still displayed its own fallback.
+        //
+        // `supply` is unconditional because it does not touch `self.settings`:
+        // it keeps the row on its current value when the list still offers it
+        // and falls to the first entry for *display* otherwise.
+        let remix_classes = self.remix_speed_classes();
+        if !remix_classes.is_empty() {
+            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
+        }
+        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,

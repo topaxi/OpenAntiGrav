@@ -42,6 +42,26 @@ they disagree.
 
 **Note this does not say Pulse has a fifth class.** See the Pure thread.
 
+**DONE, 2026-09-05.** `oag_title::SpeedClasses` (`crates/title/src/speed.rs`)
+is the axis, filled per title from each one's own **per-team**
+`handlingstats.xml` - which is the file that decides what a class does, and is
+not the global one: all three measured titles author five `<GlobalClass>`
+rungs with `VECTOR` first, and only Pure backs one with per-team tuning.
+Pulse 4, HD 4, Pure 5, 2048 `None` (unread, not empty). Both `menu.toml` rows
+are now `values_from`.
+
+**And the fifth rung is authored, measured, and still not offered.** Pure's
+`VECTOR` has real tuning in every one of its race teams' files - so the union
+genuinely carries five names when a Pure image is present - but nothing
+downstream can *name* it: `oag_physics::SpeedClass` has four variants, whose
+discriminants index fixed four-wide arrays for per-class weapon speeds and the
+global speed-pad/gravity/weapon-pad tables, and whose `ALL` means "the rungs
+every title has". `SpeedClasses::is_selectable` filters it out rather than let
+a menu offer a class that would silently race on another class's tuning.
+Making it selectable is a real change to two determinism-bound crates and is
+its own piece of work - **not** the same question as
+`handover/is-there-a-fifth-handling-class.md`, which is about *Pulse*.
+
 ### 2. AI DIFFICULTY differs in cardinality and in existence
 
 | | levels | key |
@@ -92,6 +112,13 @@ This is the row where "the contents come off the disc" and "the player has a
 profile" meet, and there is no profile in this build yet. It may be right to
 decide the race box simply ignores unlocks and offers everything - but that
 should be a stated decision, not an omission.
+
+**DONE, 2026-09-05 - the maintainer settled it and it is written down.** The
+race box offers everything and gates on nothing, for now, because there is no
+profile to gate against. It is a `## Unlocks` section in
+`docs/architecture/menus.md`, framed as a deliberate divergence with the
+reason, so nobody later "fixes" it back into a lock; the originals' two gate
+axes are recorded there beside it, because the contrast is the argument.
 
 ### 6. The flow has to be re-entrant, not a wizard
 

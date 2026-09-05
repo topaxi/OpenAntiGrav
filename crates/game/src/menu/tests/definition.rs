@@ -127,11 +127,10 @@ fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
     // four, so a hand-spelled list would be either wrong for Pure or silently
     // reused as if someone had measured it.
     //
-    // A row is acceptable either way round - supplied from
-    // `oag_title::SpeedClasses`, or still spelling values the engine accepts -
-    // because the two `race.class` rows are being moved across one at a time.
-    // What is *not* acceptable is a spelled value that no longer parses, which
-    // is the drift this test exists to catch.
+    // Both rows are now supplied rather than spelled, from two *different*
+    // sources: the RACE page offers the booted title's own ladder, RACE REMIX
+    // offers the union across every title this machine can open. Neither may
+    // carry a hand-written list again.
     let class_rows = rows("race.class");
     assert_eq!(
         class_rows.len(),
@@ -139,12 +138,12 @@ fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
         "RACE and RACE REMIX should both author a race.class row"
     );
     for values in class_rows {
-        for name in values {
-            assert!(
-                oag_physics::SpeedClass::from_name(&name).is_some(),
-                "{name:?} is not a speed class"
-            );
-        }
+        assert!(
+            values.is_empty(),
+            "the speed-class row must be supplied, not spelled: the ladder is \
+             the title's own, and Pure authors five rungs where Pulse authors \
+             four"
+        );
     }
 }
 
