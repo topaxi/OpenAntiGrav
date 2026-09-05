@@ -642,6 +642,25 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**`ghidra-mcp`'s `search_byte_patterns` accepts a `mask` parameter and
+silently ignores it - a masked wildcard search reads exactly like "not
+found" even when the bytes are sitting right there.** 2026-09-05, hunting
+`stfs ...,0x108(rX)` for any register `X` on `ps3-hdfury-eu`. A function
+disassembly-confirmed to contain three `stfs ...,0x108(r31)` instructions
+(`d03f0108`) at known addresses returned **zero** matches for
+`pattern=d0000108, mask=fc00ffff` (byte0 masked down to just the `stfs`
+opcode bits, byte1 wildcarded to catch any register pair, byte2/3 pinned to
+the `0x108` displacement) - and the identical mask against the pattern with
+the *real* byte1 value already filled in (`d03f0108`) found all three, i.e.
+masking degrades to an exact-match requirement rather than a wildcard.
+**Use `search_instructions` with `mnemonic`/`operand_pattern` instead** - it
+matches after Ghidra's own disassembly, so `mnemonic="stfs",
+operand_pattern="0x108("` finds every register variant in one call (48 for
+this offset) with no encoding math and no mask to get wrong. Reserve
+`search_byte_patterns` for a pattern with no live-register component, and
+sanity-check any use of its `mask` against a byte sequence you already know
+is present before trusting a "no matches" result from it.
+
 **`ghidra-mcp`'s `rename_data` rejects this project's own global-naming
 convention outright, and `rename_function` merely warns about it - so a
 data name silently doesn't land while a function name does.** 2026-09-05,
