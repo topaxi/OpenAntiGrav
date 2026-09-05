@@ -139,6 +139,7 @@ around `0x006bxxxx`:
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
 | `0x005bd2f8` | `GcmContext_Callback` | 76 |
 | `0x008c0854` | `g_GcmContext` (data) | 85 |
+| `0x005c18d8` | `Rsx_UploadVertexConstantBlock` | 88 |
 | `0x005cd728` | `ShaderRegistry_Find` | 86 |
 | `0x005cd6d8` | `ShaderRegistry_Register` | 84 |
 | `0x005cd990` | `ShaderRegistry_LoadAll` | 86 |
@@ -245,6 +246,78 @@ returns 1 otherwise. It is called from the device init when `current + 6`
 would pass `end`, which is what fixes the field at `+0x0c` as the callback and
 therefore the whole `{begin, end, current, callback}` layout. **76** - the
 behaviour is certain and only the name is a convention.
+
+### Every word of that init was confirmed live, and the command stream is a chain (2026-09-05)
+
+Read out of a running race through the RPCS3 stub - see
+[rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), which uses
+this for the camera. **Confidence 90.**
+
+`g_GcmContext` is **two** dereferences from the `CellGcmContextData`, not one:
+`[0x008c0854]` is `0x013be314`, libgcm's own `CellGcmContextData *`, and
+`[0x013be314]` is `0x016a0ccc`, the struct. It reads
+
+    0x016a0ccc:  40001000 40007ffc 400013a4 016a0504
+                 begin     end      current  callback
+
+confirming the `{begin, end, current, callback}` order the callback function
+had already fixed behaviourally.
+
+**The ring this context owns is the device bring-up buffer and nothing else.**
+Its `current` is `0x400013a4` in two separate boots and never advances, and its
+32 KB do not change by one byte across three shots six seconds apart in a live
+race. The last word before `current` is
+
+    0x400013a0:  20010000
+
+an RSX **JUMP** (`0x20000000 | io_offset`) to IO offset `0x10000` - which is
+`0x40010000`, the first of the four 4 KiB auxiliary contexts step 6 above
+recovered statically. That is independent runtime corroboration of step 6, and
+of step 7: each of those four segments holds the same ~0xb8 bytes of commands,
+`0x41fcc/0x6f`, `0x401a8/0xfeed0001` and `0x41450` among them.
+
+Each auxiliary segment ends in a JUMP of its own:
+
+    0x400100b4:  20074100    ->  0x40074100
+    0x400110b4:  20075100    ->  0x40075100
+    0x400120b4:  20074100
+    0x400130b4:  20075100
+
+Two targets, alternating - a double-buffered pair. **The frame's actual draw
+commands are there**, at IO `0x77000` and up, and nowhere below it.
+
+### `Rsx_UploadVertexConstantBlock` (`0x005c18d8`), the bulk constant uploader
+
+`Rsx_UploadVertexConstants` (`0x005c176c`) is not the only emitter of
+`NV4097_SET_TRANSFORM_CONSTANT_LOAD`. `0x005c18d8` is the bulk form, and it is
+the one a camera matrix arrives through. **88.**
+
+Its arguments are `(context, start_index, vec4_count, values)`. It writes the
+count as `vec4_count >> 3` blocks of eight `vec4` with the literal header
+`0x00841efc` - `(33 << 18) | 0x1efc`, an index plus 32 floats - and then a
+tail of `vec4_count & 7` more, whose header it *computes*:
+
+```c
+*puVar21 = (int)(uVar25 << 0x14) + 0x40000U | 0x1efc;
+```
+
+`(n << 20) + 0x40000 | 0x1efc` is `((4n + 1) << 18) | 0x1efc`, so `n` `vec4`s
+cost `4n + 1` words. **`n = 4` gives `0x00441efc`**, one index and sixteen
+floats: a whole `float4x4` in a single packet. That header is what appears
+hundreds of times per frame in the live pushbuffer, and `0x00441efc` never
+appears as an immediate anywhere in the image precisely because it is computed
+here rather than written down.
+
+The context handling is identical to `Rsx_UploadVertexConstants`' - `+0x8` as
+`current`, `+0x4` as `end`, `GcmContext_Callback` when the write would pass it
+- which is the second reason to read the two as a pair.
+
+**What that gets, measured**: the constant registers actually loaded during a
+Talon's Junction race are `c[462..467]` through the count-5 form (the
+material's own block, matching the `track_surface.rcsmaterial` values read
+below) and **`c[256]` and `c[260]`** through the count-17 form. Under this
+page's `N + 256` rule those are the shader's `c[0..3]` and `c[4..7]`, and
+`c[0..3]` is where `viewProj` lands.
 
 ### The per-eye draw dispatch, and what it says about sort order
 
