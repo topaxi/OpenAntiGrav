@@ -24,48 +24,55 @@ to still hold.
 
 ## Open
 
-- **The Zone-excluded population histogram moved substantially, and only a first-pass recheck
-  exists so far** (`crates/render/examples/hd_specular_population_recheck.rs`, kept as this
-  thread's starting evidence). Old (pre-fix, Zone-excluded): `0`: 573, `32`: 409, `260`: 24,
-  `200`: 8, `40`: 2, `35`: 4, `300`: 10, `250`: 4 (~1,053 total). New (post-fix): `0`: 1965,
-  `32`: 1444, `260`: 84, `200`: 52, `40`: 32, `35`: 24, `300`: 14, `250`: 8 (3,623 total) - every
-  bucket grew, several by 3-10x. The `5`/`10` Zone-rim exclusion was re-checked and still holds
-  exactly (134/76 unfiltered, 0/0 Zone-excluded) - that finding survives the fix untouched.
-- **Zone-declaring blocks went from a small minority of the resolved population to the majority**
-  (6,464 of 10,087, 64 %, versus a small fraction before). Checked once, not fully explained: this
-  is consistent with the false-negative fix disproportionately unlocking `rim^5`/`rim^10`-style
-  chains, whose registers get written piecewise in exactly the shape that tripped the naive gate -
-  but "consistent with" is not "confirmed as". Worth a per-material read of a handful of newly-Zone
-  chains before trusting the 64 % figure in anything downstream.
-- **The `SpecularPower`-patch census (`hd_specular_patch_census.rs`) moved too and was not
-  re-examined beyond the raw counts.** Old: resolved-`0.0` bucket ~295, of which 62 patched
-  (authored 30-100), leaving 233 (79 %) unexplained. New: resolved-`0.0` 469, of which 86 patched
-  (all 86 authored non-zero), leaving 383 (82 %) unexplained. The *shape* of the finding
-  (SpecularPower patching explains only a minority of the zero bucket) survived, but the exact
-  percentages, and whether the same 62-material set is a subset of the new 86, were not checked.
-- **`200`/`250`/`260`/`35` roughly doubled** (84 total occurrences, Zone-excluded, before; 168
-  after - `200`: 52, `250`: 8, `260`: 84, `35`: 24). The five-draft operand-shape trace in
-  renderer.md (`Sum`/`Normalize`/`Neither`, 82/58/28 of 168 operands) was run against the *old*
-  population and is now sized against roughly half of the current one - needs a full rerun, not
-  just an update of the total.
-- `fragment.rs`'s `specular_exponent`/`dp3_feeding` doc comments were updated to stop citing the
-  stale numbers rather than restate them, but do not yet cite the new ones - once this thread's
-  numbers are trustworthy, they belong back in those doc comments, not just here.
+- **The `200`/`250`/`260`/`35` re-run (2026-09-05) landed past this thread's own first-pass
+  estimate.** `hd_specular_unresolved_trace.rs` against the current disc: **172** occurrences,
+  not 168 - `200`: 52, `250`: **12** (this thread's own first-pass number of 8 was itself stale),
+  `260`: 84, `35`: 24. The operand-evidence tally over 344 operands: `Sum` 142, `Normalize` 138,
+  `Neither` 62, `NoSingleWriter` **2** - a category that was 0 at 168 operands. **Unexplained**:
+  what the two new `NoSingleWriter` operands actually trace to was not investigated - a genuinely
+  new open item this re-measurement raised rather than closed. Full numbers and method in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Ships have no Lambert diffuse either",
+  sixth dated entry (2026-09-05).
+- **The 64 % Zone-declaring jump does not mean what the "consistent with rim^N chains" hypothesis
+  suggested, checked by hand.** `hd_specular_population_recheck.rs`'s own filtered/unfiltered
+  split shows `5`/`10` (the confirmed rim exponents) are only 3.2 % of the 6,464 Zone-declaring
+  total; `200`/`260`/`35` have zero Zone-declaring blocks at all; the other 96.8 % of the growth
+  is in the `0` and `32` buckets. Reading 13 distinct `.rcsmaterial` files from those two buckets
+  by hand (`hd_specular_zone_sample.rs`, new), across four archives, three circuits, a DLC copy,
+  and - decisively - a front-end rank-medal UI material with no relationship to Zone-mode
+  gameplay: **every one declares the identical four-parameter cluster**
+  (`zoneColourTint`/`zoneEffectInner`/`zoneBaseInner`/`zoneBaseAltInner`) as boilerplate on a
+  shared material-template family, not because its resolved chain computes a rim exponent - the
+  DP3 chains read as ordinary half-vector/normalize-tail specular, the same shapes seen
+  elsewhere. **Only `5`/`10` remain confirmed Zone-rim exponents.** Confidence 85 (13 hand-read
+  materials against several thousand - strong structural evidence, not an exhaustive sweep).
+- **The `SpecularPower`-patch census subset question is answered, not just the raw counts.**
+  Re-running `hd_specular_patch_census.rs` at the commit before the `dp3_feeding` fix
+  (`ec762612^`, temporary worktree, removed after) reproduced the old numbers exactly (295/62/62/
+  233) and gave the actual old material list to diff against, rather than trusting the aggregate
+  alone: 12 of the old run's 13 distinct `(material, value)` pairs survive unchanged into the new
+  86 (near-strict superset, not a replacement population); the one exception
+  (`05_ubermall/materials/reflectplane_dc_seawater.rcsmaterial`, authored `52`) most likely moved
+  to `other_nonzero` under the now-lane-sound gate rather than being lost. New aggregate: 469
+  resolved-`0.0`, 86 patched (all authoring non-zero, 30-100), 383 (82 %) still unexplained;
+  4,586 blocks checked, 0 slot collisions (identical to the pre-fix run - this census's walk
+  does not depend on `dp3_feeding`'s correctness).
+- **`fragment.rs`'s doc comments were deliberately left un-updated.** The fourth next step
+  (folding these numbers into `specular_exponent`/`dp3_feeding`'s doc comments) needs the numbers
+  to have settled first, and this pass raised a new unexplained discrepancy (`NoSingleWriter`
+  above) and revised what the 64 % figure means rather than just re-measuring it - both need to
+  survive review before `fragment.rs` states them as fact. The "not pinned to a disc-wide
+  population count" placeholder stays accurate and is left in place.
 
 ## Next Steps
 
-- Re-run the `200`/`250`/`260`/`35` operand-shape trace (`hd_specular_unresolved_trace.rs`,
-  already lane-correct - no changes needed there, just a rerun) against the doubled population,
-  and update renderer.md's five-draft history with a sixth, dated entry rather than editing the
-  old numbers in place - this project's own evidence-keeping rule.
-- Read a handful of the newly-Zone-declaring blocks by hand to confirm the 64 % jump is real
-  `rim^N` chains and not a `declares_zone` false-positive on some other parameter shape - the
-  unfiltered-vs-excluded check in `hd_specular_population_recheck.rs` already rules out the
-  crude version of this (5/10 still behave exactly as before), but a handful of the *new* Zone
-  chains specifically, not just the two known rim values, would close it properly.
-- Re-run `hd_specular_patch_census.rs`'s full analysis (not just the raw counts already pasted
-  above) and check whether the 62-material patched set from the old run is a subset of the new
-  86, or whether the fix surfaced different materials entirely.
-- Once the above settle, fold the confirmed numbers back into `fragment.rs`'s doc comments
-  (`specular_exponent`, `dp3_feeding`) in place of the "not pinned to a population count, see
-  renderer.md" placeholder text the 2026-09-04 fix left there.
+- Trace what the two new `NoSingleWriter` operands (out of 344, in the `200`/`250`/`260`/`35`
+  re-run) actually resolve to - a genuinely new gap in `hd_specular_unresolved_trace.rs`'s own
+  method, not present in the pre-fix 168-operand tally.
+- Extend the by-hand Zone-declaring read beyond the current 13 materials (all sampled from
+  amphiseum, 05_ubermall, 01_vineta_k plus its DLC copy, and one front-end medal) to more
+  circuits, to check whether the "boilerplate template cluster, not a rim chain" finding holds
+  disc-wide or is itself circuit-specific.
+- Once both of the above are closed, fold the settled numbers into `fragment.rs`'s
+  `specular_exponent`/`dp3_feeding` doc comments in place of the "not pinned to a population
+  count, see renderer.md" placeholder text.

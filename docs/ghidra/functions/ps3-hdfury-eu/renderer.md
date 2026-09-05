@@ -2471,6 +2471,93 @@ first-pass numbers) rather than edited in place here - this page's own rule
 for a superseded finding is a dated paragraph noting what changed, not a
 silent rewrite of the numbers above it.
 
+**Re-measured 2026-09-05, three of the open handover thread's next steps
+taken in order (this page is cited as evidence there, not the other way
+round); a fourth was found premature and deliberately not taken.**
+
+1. **`200`/`250`/`260`/`35` operand-shape trace re-run against the doubled
+   population** (`hd_specular_unresolved_trace.rs`, unchanged - see its own
+   note that no code change was needed). The total moved again, past the
+   thread's own first-pass estimate: **172** occurrences, not 168 -
+   `200`: 52, `250`: **12** (not 8), `260`: 84, `35`: 24. All four still trace
+   to the same eight material files this section's 2026-09-03 draft named.
+   The operand-evidence tally over the new 344 operands: `Sum` 142,
+   `Normalize` 138, `Neither` 62, and - new - `NoSingleWriter` **2** (was 0
+   at 168 operands). Unexplained: two of the newly-included `250` occurrences
+   trace to an operand with no single lane-sound writer, a category the
+   163-operand draft did not have at all. Not investigated further here -
+   flagged as this measurement's own open item, not smoothed over.
+2. **A handful of newly Zone-declaring blocks read by hand**
+   (`hd_specular_zone_sample.rs`, new), to check the 64 % jump's "consistent
+   with rim^N chains" hypothesis directly rather than leave it at "consistent
+   with". `hd_specular_population_recheck.rs`'s own filtered/unfiltered split
+   already localises where the growth actually is: `200`/`260`/`35` are
+   identical filtered and unfiltered (zero Zone-declaring blocks in any of
+   the three), `5`/`10` are the already-confirmed rim exponents (134/76,
+   3.2 % of the 6,464 Zone-declaring total), and the other **96.8 %** of the
+   growth sits in the `0` and `32` buckets (2,538 and 3,690 Zone-declaring
+   occurrences respectively). Sampling those two buckets directly, one to two
+   materials per archive, over 13 distinct `.rcsmaterial` files across four
+   archives and three circuits plus a DLC copy: **every one declares the
+   identical fixed four-parameter cluster** (`zoneColourTint`,
+   `zoneEffectInner`, `zoneBaseInner`, `zoneBaseAltInner`), regardless of the
+   material's own name or purpose - ordinary track surfaces
+   (`diffuse_specular`, `track_wall`-adjacent shaders), glass, a seawater
+   reflection plane, a bomb, and - decisively - `DATA06`'s front-end
+   `/data/fe/rank/materials/medal.rcsmaterial`, a UI rank-medal icon with no
+   relationship to Zone-mode gameplay geometry at all. **The hypothesis this
+   set out to check does not hold for the `0`/`32` majority.** `declares_zone`
+   is true for these because the four-parameter cluster is declared as
+   boilerplate on a shared material template family, not because the
+   resolved chain computes a rim exponent - the DP3 chains sampled in both
+   buckets read as ordinary `Sum`/`Normalize`-shaped half-vector or
+   normalize-tail specular, the same shapes `hd_specular_unresolved_trace.rs`
+   already classifies elsewhere, with nothing resembling a view-only Fresnel
+   term. **Only `5`/`10` remain confirmed as Zone-rim exponents; the 64 %
+   figure measures "declares the Zone-tint parameter block", not "computes a
+   rim falloff".** Confidence 85 - direct decode across 13 materials spanning
+   four archives and a UI context is strong structural evidence against the
+   rim hypothesis for the bulk of the population, but is 13 hand-read
+   materials against several thousand, not an exhaustive or statistical
+   sweep.
+3. **`hd_specular_patch_census.rs` re-run in full, including the subset
+   question the thread's raw counts left open.** The aggregate numbers
+   reproduce the thread's first-pass figures exactly: 469 resolved-`0.0`
+   blocks, 86 patched by `SpecularPower`, all 86 authoring a non-zero value
+   (30 to 100), 383 (82 %) unexplained; 4,586 blocks checked for a shared
+   patch slot, 0 collisions - the same 4,586 as the pre-fix run, because this
+   census's own reachable-variant walk is independent of `dp3_feeding`'s
+   correctness. **The subset question was answered by rerunning the same
+   harness at the commit before the fix** (`ec762612^`, in a disposable
+   worktree, removed after) rather than left as "not checked": of the old
+   run's 13 distinct `(material, authored value)` pairs (62 slot
+   occurrences over 11 files), **12 survive unchanged into the new 86**: the
+   fix is a near-strict superset, not a replacement population. The one
+   exception - `05_ubermall/materials/reflectplane_dc_seawater.rcsmaterial`
+   slot 310, authored `52` - drops out of the patched-`0.0` bucket in the new
+   run; its chain most likely now resolves to a real non-zero value directly
+   under the lane-sound gate, landing in `other_nonzero` instead, consistent
+   with the fix's known effect rather than a data loss. The 24 new
+   `(material, value)` pairs the fix adds span three more files
+   (`amphiseum/materials/biodome_reflect`, `dc_windowstest`, `metallic`;
+   `modesto_heights/materials/reflectplane_dc_seawater`,
+   `windowsdiffusespecular_nonemissive_customr`,
+   `windowsnormaldiffusespecular`; `tech_de_ra/materials/biodome_reflect`,
+   `temp_testing_mat_colour_spec_alpha`), taking the patched-material count
+   from 11 to 20 distinct files. Confidence 95 - exact reproduction of the
+   published aggregate, and the subset comparison is a direct historical
+   rerun, not an inference.
+4. **The fourth next step - folding these numbers into `fragment.rs`'s
+   `specular_exponent`/`dp3_feeding` doc comments - was deliberately not
+   taken.** That step is conditioned on the numbers having "settled", and
+   finding #1's own `NoSingleWriter` anomaly (0 at 168 operands, 2 at 344) is
+   a new, unexplained discrepancy this pass raised rather than closed;
+   finding #2 also reframes what the 64 % figure means, which needs to
+   survive review before it is quoted from `fragment.rs` as settled fact.
+   The doc comments' current "not pinned to a disc-wide population count"
+   wording stays accurate and is left as-is rather than replaced with
+   numbers that might move again.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
