@@ -743,7 +743,9 @@ that never explains its own hits is not trustworthy, and this one does.
 > leaves the instance's matrix pointer `+0xa0` null; the Missile fires and is
 > consumed with no halt at all, so pairing the two under one crash - which this
 > section does throughout - is wrong. "The bit was never observed consumed" also
-> did not reproduce, for either weapon. What survives: **Energy Drain is
+> did not reproduce: every bit tried read back **set** at the dispatcher
+> breakpoint and **clear** after the run. That readback is post-hoc, so it shows
+> the bit does not stay stuck, not that a handler certainly ran. What survives: **Energy Drain is
 > permanently untestable through `psp-fire-weapon.py`'s raw-bit mechanism**, and
 > the Missile is testable and was never the problem. The paragraphs below are
 > kept as the record of what was known before that pass.

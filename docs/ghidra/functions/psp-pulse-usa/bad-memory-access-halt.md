@@ -97,9 +97,11 @@ loads and not one of the three `sv.q`s in the same block. And the JIT block is
 named for its start address `08872f98`, the `beql` join point - both `lv.q`s lie
 inside `0x08872f98`-`0x0887301c`.
 
-**Confidence 92** that the fault is one of `0x08872fa4` / `0x08872fb4`: the
-guest address, the access width, the access direction, and the block range all
-agree, and no other instruction in the block can produce a load at `0x30`.
+**Confidence 92** that the fault is one of `0x08872fa4` / `0x08872fb4` on this
+evidence alone: the guest address, the access width, the access direction, and
+the block range all agree, and no other instruction in the block can produce a
+load at `0x30`. The live measurement below narrows it to `0x08872fa4`
+specifically at confidence 95 - quote that, not this, as the current state.
 
 **Statically the two cannot be told apart.** They differ only in the VFPU
 register they target (`C400` versus `C300`), and PPSSPP's own register
@@ -194,7 +196,7 @@ execution breakpoint fires on v1.20.4, the fire bit is written at a
 `Weapons_DispatchFire` breakpoint which is then **removed** before the join
 point is armed - sequenced, never interleaved.
 
-| Bit written on craft 0 | Bit consumed | Hits at `0x08872f98` | Halt |
+| Bit written on craft 0 | Read back clear after | Hits at `0x08872f98` | Halt |
 | --- | --- | ---: | --- |
 | `0x0080` rocket (positive control) | yes | **0** | no |
 | `0x0040` **Missile** | yes | **0** | **no** |
