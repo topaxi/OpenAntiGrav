@@ -339,10 +339,16 @@ Put back.
   and the reason it exists is fairness rather than fidelity - a charge the
   player can steer around and an opponent cannot is a worse wrong answer than a
   dodge nobody has verified.
-- **A mine and a bomb both draw no model.** `Pulse_Mine.vex` and
-  `Pulse_Bomb.vex` are both named and located and no renderer reads either.
-  They were not, however, invisible - see the fixed bug below, which is what
-  a maintainer who plays Pulse was actually seeing.
+- ~~**A mine and a bomb both draw no model.**~~ **Done 2026-09-05** - see
+  Next Steps.
+- **A laid mine's or bomb's own drop orientation is recovered and unwired.**
+  `Mine_Init` copies the firing craft's anchor matrix into the entity once,
+  at drop, and nothing found updates it afterward - a frozen heading, not a
+  velocity. `oag_gameplay::Projectile` carries no field to hold that pose in,
+  so `oag_game::race::Race::mine_model_matrices`/`bomb_model_matrices` draw
+  both translation-only for now. Adding the field touches the determinism
+  hash for a value nothing else in the simulation reads, which is why this
+  is recorded rather than done on the spot.
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the
@@ -386,15 +392,37 @@ detonating projectile rather than reading which file each weapon authors.
 
 ## Next Steps
 
-- **Draw the two rear weapons.** `Data\Weapons\Pulse_Mine.vex` and
-  `Data\Weapons\Pulse_Bomb.vex` through the existing `.vex` path, plus their
-  own cues (`MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/`~BOMBRADAR`,
-  `BOMBEXPL`/`BOMBEXPL_PC`) - all six strings are located. This is now the
-  biggest gap on both weapons: they work and draw no model. **Read
-  `Mine_Init`/`Mine_Construct` for a drop-time effect before wiring one** -
-  the fixed bug above is evidence there may be a real, smaller one (an arming
-  flash, a muzzle puff) rather than none at all; do not reuse `ignite_blast`'s
-  detonation effect at lay time on a guess.
+- ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**
+  `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`) load
+  `Data\Weapons\Pulse_Mine.vex`/`Pulse_Bomb.vex` through the existing `.vex`
+  path, drawn translation-only (a laid charge carries zero velocity - see
+  `oag_gameplay::projectile::mine::at_rest`). `Mine_Init`/`Mine_Construct`
+  were read live first, per this item's own instruction: no call in
+  `Mine_Init` resolves to `Psys_Spawn_q`, so there is no drop-time particle
+  effect to wire, checked rather than assumed - see `mine.md`'s
+  2026-09-05 section. Two real pre-existing bugs came out of adding a second
+  and third model to the same code path: `Race::rocket_model_matrices`
+  filtered `kind.is_some()` rather than `kind == Some(Weapon::Rocket)`, so
+  any live projectile drew as a Rocket mesh whenever one was airborne
+  alongside a loaded `Rocket.vex`; and `Race::projectile_sprites` gated its
+  billboard fallback on one `bool` for every kind, so a live Missile,
+  Plasma or Shuriken drew nothing at all (no mesh, and no billboard either)
+  whenever `Rocket.vex` had loaded. Both fixed, both with a regression test.
+- **Their own cues are still unwired, and are a separate, larger piece of
+  work than the model was.** `MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/
+  `~BOMBRADAR` and `BOMBEXPL`/`BOMBEXPL_PC` are all six located (`mine.md`),
+  but nothing in this engine fires a weapon-launch sound for *any* weapon
+  yet - `crate::audio::sfx::Cue`'s nine variants (`Cue::ALL`,
+  `crates/game/src/audio/sfx.rs`) are all HUD, collision, shield and speech
+  cues, none of them a weapon fire or detonation. Wiring the Mine's and the
+  Bomb's needs: new `Cue` variants, a `BankName::Weapons` mapping (already
+  the category `Absorb`/`Shield` use), and - for `MINERADAR` specifically -
+  a *held, positionally-tracked* voice the way `Cue::Engine`/`Cue::Shield`
+  are, but anchored to a projectile slot rather than a craft, which nothing
+  in the existing `CueEvent` plumbing does today. Scoped out of the model
+  work deliberately rather than bolted on at the end of it - RE and
+  implementation for a new cue subsystem is its own unit of work per this
+  project's own workflow, not a tail on a model-drawing change.
 - ~~**Give the Missile its own detonation and bounce effects.**~~ **Done
   2026-08-26.** `Race::blast_for` now takes `kind` and maps `Missile` to
   `MISSILE_EXPLO_EFFECT` (`WO_MISSILE_EXPLO`, one file whatever it hit -

@@ -504,3 +504,34 @@ second page would be nine tenths this one.
   `.rodata` group carries `BOMBLAUNCH`, `~BOMBRADAR` and `Pulse_Bomb.vex`.
 - [missile.md](missile.md)'s weapon-id table stays correct as printed - it never
   claimed which weapon ids 8 and 9 were, only which bits they set.
+
+## 2026-09-05: re-read live for a drop-time effect, and a live-database caveat
+
+Before wiring `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`), the
+handover thread's own instruction was to read `Mine_Init` and `Mine_Construct`
+again rather than assume the reading above still covered "does dropping a
+mine trigger a particle effect". It does: `Mine_Init`'s full call list, read
+straight off a live decompile, is two sound-cue calls (matching `MINELAUNCH`
+and `MINERADAR` above), an allocator and an init for the second cue's tracked
+handle. No call in it resolves to `Psys_Spawn_q` (`0x08915484`). **A mine or
+a bomb is laid with no drop-time visual effect**, which the port now draws as
+exactly that: nothing, on purpose.
+
+**A live-database caveat surfaced by the same read, worth flagging rather
+than acting on.** This session's Ghidra instance resolves `Mine_Init`'s and
+`Mine_Construct`'s own function *entry addresses* differently from the two
+rows above (`0x08859ac8` and `0x08859930`): decompiling those exact addresses
+returns two other functions - a small teardown-shaped routine and a
+20-instruction sound-effect fragment - and the matrix-copy/velocity/fuse/
+drift logic this page describes as `Mine_Init` is, in this instance, reached
+at `0x08859954` instead. Disassembling around `0x08859930` byte-for-byte
+confirms it sits mid-instruction inside the neighbouring function rather
+than at a function boundary. The **content** at both documented addresses
+still matches this page's reading exactly - every offset, every literal,
+every call shape - which is what today's finding rests on rather than the
+addresses lining up. The likely cause is that `just apply-names` has not
+been replayed into this particular Ghidra project (a fresh import re-derives
+function boundaries from scratch; see `CLAUDE.md`'s note on this), not that
+either reading here was wrong. Left as a caveat rather than a correction:
+nobody has a confident replacement address, and there is nothing here that
+contradicts the confidence-90/92 rows above.
