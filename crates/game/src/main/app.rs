@@ -241,6 +241,7 @@ impl App {
                 self.media.take(),
                 &self.loading_assets,
                 self.trace,
+                self.settings.language.as_deref(),
             )?
         } else {
             return Ok(None);

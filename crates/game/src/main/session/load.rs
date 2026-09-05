@@ -74,6 +74,7 @@ impl Session {
             Some(prepared.media),
             &assets,
             self.trace,
+            self.settings.language.as_deref(),
         )?;
         // Kept rather than dropped with the stage: the same screen goes up
         // again for every race this run launches. See `Session::loading_assets`.
@@ -421,6 +422,7 @@ impl Session {
             &self.loading_assets,
             self.races_launched,
             self.trace,
+            self.settings.language.as_deref(),
         )?;
         Ok(())
     }

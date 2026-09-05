@@ -86,6 +86,13 @@ impl Stage {
         media: Option<boot::MediaWorker>,
         assets: &loading::Assets,
         trace: bool,
+        // The player's chosen language, so this screen's own invented prose
+        // can be overridden the same way the disc's own strings already are
+        // elsewhere - see `loading::Screen::new`. Both callers have a
+        // `Settings` open already; this screen goes up before any disc's own
+        // language plugin does, so `Settings::language` is the only source
+        // there is.
+        language: Option<&str>,
     ) -> Result<Self> {
         // The **disc's** font, not the built-in 5x7 set: the tips are the
         // disc's own prose in the player's own language, and `push_text` skips
@@ -125,7 +132,7 @@ impl Stage {
             wave,
             // Seed 0 on the boot screen: it goes up once per run, and the
             // title that has features does not draw this one anyway.
-            screen: loading::Screen::new(assets, line_height, 0),
+            screen: loading::Screen::new(assets, line_height, 0, language),
             shell: Some(shell),
             media,
             race: None,
@@ -157,6 +164,8 @@ impl Stage {
         assets: &loading::Assets,
         draw: u64,
         trace: bool,
+        // See `Stage::loading`'s own parameter of the same name.
+        language: Option<&str>,
     ) -> Result<Self> {
         let renderer = Renderer::new(
             &gpu.device,
@@ -180,7 +189,7 @@ impl Stage {
             atlas: font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::new(assets, font.line_height, draw),
+            screen: loading::Screen::new(assets, font.line_height, draw, language),
             shell: None,
             media: None,
             race: Some(worker),
