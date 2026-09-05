@@ -84,15 +84,19 @@ setting = "race.mode"
 values_from = "race_modes"
 
 # Speed class, team and track are the three things `race::Options` actually
-# carries, so all three are live rather than decorative. The values are the
-# ones `SpeedClass::from_name` and the disc's own directory layout accept; a
-# value this list offers that the source does not have fails at load with the
-# entry name in the message, which is the honest failure.
+# carries, so all three are live rather than decorative.
+#
+# `values_from` rather than a list, because the ladder is the *release's*:
+# Wipeout Pure's per-team `handlingstats.xml` authors five `<Class>` rungs
+# where Wipeout Pulse's authors four, each measured on its own disc. A literal
+# list here would have to be either wrong for Pure or silently reused as if
+# someone had checked - see `oag_title::SpeedClasses`. This row offers the
+# booted title's own ladder; RACE REMIX below unions every available title's.
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
 setting = "race.class"
-values = ["venom", "flash", "rapier", "phantom"]
+values_from = "speed_classes"
 
 # The roster comes from the source for the same reason the circuits below do,
 # and one more: it is not fixed. A player who owns a downloadable pack has teams

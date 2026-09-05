@@ -6,6 +6,29 @@
 
 So every shipped-data table anyone has checked - two per-title handling XMLs (Pulse's two discs, HD's), the AI per-class stats file, and the front-end message keys - has exactly four real classes and nothing for a fifth. The name survives only as a string constant recognised by matching code and then discarded.
 
+**A data point, not an answer (2026-09-05).** Every check above is about
+Pulse and HD; **Wipeout Pure's per-team files were read for the first time and
+they are not the same shape**. Every one of Pure's race teams authors a full
+`<Class name="VECTOR">` block in `Data\Ships\<Team>\handlingstats.xml`, beside
+the other four - seven of eight teams read directly off `pure-psp-eu.chd`,
+with `oag_pure::race::handling_stats` recording the wider sweep at ten of
+eleven ship directories. Pulse's per-team files, re-checked the same day the
+same way, carry exactly four. So the distinction that matters is **global
+versus per-team**: all three titles author five `<GlobalClass>` rungs with
+`VECTOR` first, and only Pure backs one with per-team tuning.
+`docs/formats/handling-stats.md` had said "no per-team file has a
+`<Class name="VECTOR">`" unqualified, which was true of the titles then
+measured and is now qualified to them.
+
+**This does not move this thread's question.** Pure having a real fifth rung
+is not evidence that Pulse has one - if anything it sharpens the contrast the
+findings above already draw, since it shows what a title that *does* ship the
+class looks like in the one file that decides what a class does. The four
+Pulse-side checks (two handling XMLs, the AI per-class stats, the front-end
+message keys) are untouched, and no live runtime check has been attempted on
+any title. Recorded here so the next person does not re-derive it, and so that
+"Pure has five" is not mistaken for an answer about Pulse.
+
 ## Open
 
 - Whether a fifth handling class is ever *live* at runtime is still unanswered by any of this - every finding so far is "the shipped data doesn't contain one" and "the code that would recognise one discards the match", never a traced execution that reaches the discard path or a screen that shows a fifth option.
