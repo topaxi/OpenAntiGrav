@@ -256,11 +256,83 @@ do with a circuit.
 - **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit, with
   nothing read about what selects them.
 
+## Wipeout 2048 authors the same shape under different key names
+
+Every base and DLC circuit ships a `track.EnvSettings` (capitalised
+differently, read case-insensitively the same way every other sibling-path
+lookup in this project is) in the identical `"Key.Subkey"=float [float...]`
+syntax - no format change, so `oag_formats::envsettings::EnvSettings::parse`
+reads it unmodified. **The key names differ, confirmed from the executable's
+own registrar rather than guessed from the file**:
+`Environment_RegisterLightingSchema` (`0x810175fc` in
+`vita-2048-eu-v104/eboot.elf`, confidence 85 - see
+[lighting-schema.md](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md))
+binds every key a `track.EnvSettings` can carry, and the ambient and sun
+terms are spelled differently from HD's:
+
+| HD | Wipeout 2048 |
+| --- | --- |
+| `"Lighting.Constant ambient color"` | `"Lighting.Constant ambient colour"` |
+| `"Lighting.Sun color"` | `"Lighting.Sun diffuse colour"` (plus a separate `"Lighting.Sun specular colour"`, an RGB term where HD has only a scalar `Sun specular scale`) |
+| `"Lighting.Sun direction"` | Same key, unchanged |
+
+Before this was found, `envsettings_light` read HD's keys against every
+title's file indiscriminately, so a Wipeout 2048 race always reported *"no
+usable sun direction, colour and ambient; lighting with the stand-in rig"* -
+not because the file was missing or malformed, but because none of its real
+keys matched the constants being asked for.
+[`oag_formats::envsettings::PSP2_AMBIENT_COLOUR`](../../crates/formats/src/envsettings.rs)
+and `PSP2_SUN_DIFFUSE_COLOUR` are 2048's own spellings, and
+`crate::race::load::environment::envsettings_light` picks between the two
+key sets on whether the circuit's geometry is `psp2` (`mesh::rcs::psp2::is_psp2`).
+A race now reports, for example:
+
+```text
+Data\art\published\environments\altima\track.envsettings: sun [-0.16, 0.56, 0.81]
+colour [2.00, 1.80, 1.70] over ambient [0.15, 0.25, 0.38], prelit 1.0*lightmap^1.0,
+specular x0.00 - 2048 authors no equivalent prelit or specular keys, so both stay
+at the identity
+```
+
+**2048 additionally authors a literal `"Lighting.Sun color"` key, spelled
+exactly like HD's, and it is deliberately not wired as the diffuse term.**
+The registrar binds it to its own field, distinct from `Sun diffuse
+colour`/`Sun specular colour` - not a parser alias - but every consumer-search
+technique this pass tried either found nothing or was inapplicable to this
+binary's addressing mode for that field (see
+[lighting-schema.md](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md)
+for the full account, including why an absolute-address xref check is blind
+here). Five of the 14 sampled circuits carry the exact value the registrar's
+own compiled-in default initialises the field to, which is corroborating,
+not conclusive, evidence that the shading path does not read it. Wiring it
+as a light-rig colour on the strength of its name alone is exactly the
+"plausible-looking stand-in" `CLAUDE.md` warns against - it stays unwired
+until a real consumer, or the confirmed absence of one, is found.
+
+**`"Lighting.Sun specular colour"` is left unwired too, for a different
+reason: a shape mismatch, not an unresolved key.** `mesh_render::Light::authored`
+takes a scalar `specular_scale`; 2048 authors a full RGB term. Reducing it to
+a scalar (a luminance, say) would be this project inventing a blend the disc
+never specifies, so it is left absent - the same as a missing key - rather
+than approximated.
+
+`Fog.*` and `HDR and Bloom.*` are not read for this title at all:
+`environment::staging` gates both behind the same `ps3_geometry` flag it
+always has, and 2048's own fog block is structurally unrelated to HD's (a
+`Lighting.Fog colour`/`Fog Region Colour Override %d` per-region ladder with
+no `Fog.*`-prefixed keys at all - see the registrar's own key list on
+[lighting-schema.md](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md)),
+so reading it against HD's `FOG_COLOUR`/`FOG_DENSITY` constants would be
+exactly the same title-key-mismatch this section exists to document a second
+time. Modelling 2048's own fog and bloom schema is unstarted.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer across the whole disc
 - [gtf](gtf.md) - the textures, including the sky cubemap that is refused
 - [rcsmodel](rcsmodel.md) - the geometry this lights
 - [skycube](skycube.md) - how Pulse authors a sky, which HD does not
+- [lighting-schema](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md) -
+  the registrar this page's 2048 section is read from
 - [ADR-0020](../architecture/adr/0020-gamma-authoritative-colour-space.md) - the
   colour-space decision this file argues against for HD

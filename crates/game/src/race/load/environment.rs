@@ -353,9 +353,18 @@ pub(super) fn envsettings_bloom(
 /// is silent, because an absence that is true of a whole title is not news; a
 /// file that is there and does not yield a rig is reported, because that is a
 /// gap in this reading rather than in the data.
+///
+/// **`psp2` picks the key spelling, not the file.** Wipeout 2048 ships the
+/// same `"Key.Subkey"=float [float...]` syntax beside its own `track.vex`, but
+/// its registrar spells the ambient and sun-diffuse terms differently from
+/// HD's - see `oag_formats::envsettings`'s "Wipeout 2048 authors the same
+/// shape under different key names". Reading HD's keys against a 2048 file
+/// resolves nothing and falls back to the stand-in rig silently wrong about
+/// why; this is what tells the two schemas apart.
 pub(super) fn envsettings_light(
     archives: &mut oag_assets::Archives,
     track: &str,
+    psp2: bool,
     report: &mut Vec<String>,
 ) -> mesh_render::Light {
     let Some(name) = envsettings_name(track) else {
@@ -379,12 +388,23 @@ pub(super) fn envsettings_light(
         }
     };
     use oag_formats::envsettings::{
-        AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
+        AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR,
+        SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
+    };
+    let ambient_key = if psp2 {
+        PSP2_AMBIENT_COLOUR
+    } else {
+        AMBIENT_COLOUR
+    };
+    let colour_key = if psp2 {
+        PSP2_SUN_DIFFUSE_COLOUR
+    } else {
+        SUN_COLOUR
     };
     let (Some(direction), Some(colour), Some(ambient)) = (
         env.direction(SUN_DIRECTION),
-        env.vec3(SUN_COLOUR),
-        env.vec3(AMBIENT_COLOUR),
+        env.vec3(colour_key),
+        env.vec3(ambient_key),
     ) else {
         report.push(format!(
             "{name}: no usable sun direction, colour and ambient; lighting with the \
@@ -393,10 +413,12 @@ pub(super) fn envsettings_light(
         return mesh_render::Light::stand_in();
     };
     // The prelit curve and the specular weight feed terms whose *combination*
-    // is read out of the circuit's own fragment microcode - see
-    // `mesh_render::Light`. A file missing one of them gets the identity for
-    // that term rather than the stand-in rig: the sun and ambient above are
-    // still the circuit's.
+    // is read out of the circuit's own fragment microcode on HD - see
+    // `mesh_render::Light`. 2048 authors no equivalent keys at all (a genuine
+    // RGB `Sun specular colour` rather than a scalar - see the module docs for
+    // why that is left unwired rather than reduced to a scalar), so both
+    // terms take the identity there, same as a file missing one of them: the
+    // sun and ambient above are still the circuit's.
     let prelit_scale = env.vec3(PRELIT_SCALE).unwrap_or([1.0; 3]);
     let prelit_power = env.vec3(PRELIT_POWER).unwrap_or([1.0; 3]);
     let specular_scale = env.scalar(SUN_SPECULAR_SCALE).unwrap_or(0.0);
@@ -408,11 +430,15 @@ pub(super) fn envsettings_light(
         prelit_power,
         specular_scale,
     );
+    let combination = if psp2 {
+        "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
+    } else {
+        "the combination is the microcode's own; the render target's saturation stands in \
+         for HD's tonemap"
+    };
     report.push(format!(
         "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
-         [{:.2}, {:.2}, {:.2}], prelit {:.1}*lightmap^{:.1}, specular x{:.2} - the \
-         combination is the microcode's own; the render target's saturation stands in \
-         for HD's tonemap",
+         [{:.2}, {:.2}, {:.2}], prelit {:.1}*lightmap^{:.1}, specular x{:.2} - {combination}",
         direction[0],
         direction[1],
         direction[2],
@@ -447,17 +473,54 @@ pub(super) struct Staging {
     pub(super) zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
 }
 
+/// Which title's `.rcsmodel` container [`staging`] is reading a light rig
+/// beside, where there is one.
+///
+/// Both non-`None` variants set the flag `ps3_geometry` used to be - the two
+/// readers that only a `.rcsmodel`-backed circuit answers stay gated on
+/// "either", per [`staging`]'s own doc. Only the light rig cares which one,
+/// because only its key spelling differs - see [`envsettings_light`]. A
+/// third bool argument would have pushed [`staging`] over
+/// `clippy::too_many_arguments`; this replaces the one it already had rather
+/// than adding to it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum GeometryKind {
+    /// No `.rcsmodel` sibling - Pulse, Pure, PS2, or a title falling back to
+    /// the derived ribbon.
+    None,
+    /// Wipeout HD's own container.
+    Hd,
+    /// Wipeout 2048's own container - the same extension, an unrelated binary
+    /// shape (see `oag_formats::rcsmodel::psp2`).
+    Psp2,
+}
+
+impl GeometryKind {
+    /// Classifies a `.rcsmodel` sibling already read off the archive, or its
+    /// absence - the same test `load.rs` already made to decide the sky and
+    /// pad readers, kept in one place rather than repeated at each call site.
+    pub(super) fn of(rcsmodel: Option<&[u8]>) -> Self {
+        match rcsmodel {
+            None => Self::None,
+            Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => Self::Psp2,
+            Some(_) => Self::Hd,
+        }
+    }
+}
+
 /// Reads the circuit's staging: its rig, its fog, its bloom and its Zone
 /// grade.
 ///
-/// `ps3_geometry` gates the two readers that only a Wipeout HD circuit
+/// `geometry` gates the two readers that only a `.rcsmodel`-backed circuit
 /// answers - a Pulse circuit fogs through its `fogCube` volumes and authors no
 /// `.envsettings` at all - and the Zone grade is gated on the mode and on the
-/// title shipping a table, not on the geometry.
+/// title shipping a table, not on the geometry. Which of the two non-`None`
+/// variants it is additionally picks the light rig's key spelling - see
+/// [`envsettings_light`].
 pub(super) fn staging(
     archives: &mut oag_assets::Archives,
     track: &str,
-    ps3_geometry: bool,
+    geometry: GeometryKind,
     // The three Zone axes travel together and all come off the same title
     // record, so this takes the record rather than three loose fields - which
     // is also what keeps the argument count under `clippy::too_many_arguments`.
@@ -466,18 +529,20 @@ pub(super) fn staging(
     zone_stage: Option<u32>,
     report: &mut Vec<String>,
 ) -> Staging {
+    let ps3_geometry = geometry != GeometryKind::None;
     // **The circuit's own light rig, where it authors one.** Wipeout HD does:
     // `track.envsettings` sits beside `track.vex` and states a sun direction, a
     // sun colour and a constant ambient. `mesh.wgsl`'s two-light rig is a
     // stand-in for exactly this and says so, and `CLAUDE.md`'s rule about not
     // inventing what the assets already author is why it is read here rather
-    // than approximated.
+    // than approximated. Wipeout 2048 ships the same shape under its own
+    // `track.EnvSettings`, keyed differently - see [`envsettings_light`].
     //
     // A sibling-path rewrite, the same shape as `mesh::rcs::sibling_name`, and
     // the same failure behaviour: no file, an unparsable one, or a degenerate
     // sun direction all fall back to the stand-in and say so. Nothing is
     // substituted for a value the file does not carry.
-    let light = envsettings_light(archives, track, report);
+    let light = envsettings_light(archives, track, geometry == GeometryKind::Psp2, report);
     // The circuit's authored distance fog, on the same file. **The curve is no
     // longer a guess**: every fogged fragment variant of an HD circuit
     // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a
