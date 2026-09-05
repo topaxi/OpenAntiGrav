@@ -272,3 +272,122 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         );
     }
 }
+
+/// **VECTOR races on Pure's own authored tuning, and on nobody else's.**
+///
+/// This is the assertion the fifth speed class exists for. "Five rows are
+/// offered" would not prove it - a row that quietly loaded `VENOM`'s numbers
+/// would pass that and be exactly the invented stand-in this project forbids.
+/// So the check is that the resolved parameter set **differs** from `VENOM`'s,
+/// which can only be true if `Stats::class_named` reached the
+/// `<Class name="VECTOR">` block rather than falling back.
+///
+/// The inputs a race takes per rung are checked separately, because they come
+/// out of three different files and a regression in one would otherwise hide
+/// behind the others:
+///
+/// | Input | File |
+/// | --- | --- |
+/// | `<Class>` tunables | `Data\Ships\<Team>\handlingstats.xml` |
+/// | speed pads, gravity scale, weapon-pad debounce | `Data\XML\HandlingStats.xml` |
+/// | pickup odds | `Data\XML\weaponstats.xml` |
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn vector_loads_pures_own_tuning_and_not_venoms() {
+    for (label, image) in images() {
+        let track = oag_pure::race::DEFAULT_TRACK;
+        let options = |class: &str| race::Options {
+            source: image.display().to_string(),
+            class: class.to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            track: Some(track.to_string()),
+            ..race::Options::default()
+        };
+
+        let vector = race::load(&options("VECTOR"))
+            .unwrap_or_else(|e| panic!("{label}: loading VECTOR: {e:#}"));
+        let venom = race::load(&options("VENOM"))
+            .unwrap_or_else(|e| panic!("{label}: loading VENOM: {e:#}"));
+
+        // The per-team `<Class>` block. Pure authors VECTOR as the rung *below*
+        // Venom, so at least one force-law parameter has to differ; asserting
+        // the whole block differs rather than naming a field keeps this from
+        // encoding a value.
+        assert_ne!(
+            vector.setup.handling, venom.setup.handling,
+            "{label}: VECTOR resolved to VENOM's parameter set, which means the \
+             <Class name=\"VECTOR\"> block was not reached"
+        );
+
+        // The engine-wide `<GlobalClass>`, which `Global::extra` now keeps
+        // instead of discarding. Reported rather than asserted unequal: two
+        // rungs authoring the same speed-pad boost is a thing a file is allowed
+        // to do, and the block above already proves the lookup is name-keyed.
+        println!(
+            "{label}: VECTOR gravity scale {} vs VENOM {}",
+            vector.setup.class_gravity_scale, venom.setup.class_gravity_scale
+        );
+
+        // The pickup odds. `<Pickupodds class="Vector">` is authored beside the
+        // four, and `pickup::table_for` matches the name case-insensitively.
+        let weapons = vector
+            .setup
+            .weapons
+            .as_ref()
+            .expect("Pure authors a weapon table");
+        assert!(
+            oag_gameplay::pickup::table_for(weapons, "VECTOR").is_some(),
+            "{label}: Pure authors <Pickupodds class=\"Vector\"> and it was not found"
+        );
+
+        println!("{label}: VECTOR resolves to its own tuning");
+    }
+}
+
+/// The other arm: **Pulse has no fifth rung and refuses one outright.**
+///
+/// A Pulse source asked for `VECTOR` must fail to load rather than silently
+/// race on some other rung - and the failure has to name what the file *does*
+/// carry, so the next reader is not left guessing. Pulse authors a
+/// `<GlobalClass name="VECTOR">` like every measured disc, which is exactly why
+/// this needs asserting: the engine-wide file alone would let a rung look
+/// available that no team can actually fly.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_source_has_no_fifth_rung_and_says_so() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let image = root.join("data/images/pulse-psp-usa.chd");
+    if !image.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            image.display()
+        );
+        println!("skipping: {} not present", image.display());
+        return;
+    }
+
+    let err = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VECTOR".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        ..race::Options::default()
+    })
+    .expect_err("Pulse authors no <Class name=\"VECTOR\"> in any team");
+
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("VECTOR") && text.contains("VENOM"),
+        "the failure must name the rung asked for and the ladder the file \
+         carries; was {text}"
+    );
+
+    // And the ladder Pulse's own package declares is the four, so the menu
+    // never offers the rung this refused in the first place.
+    let ladder = oag_pulse::TITLE
+        .race
+        .speed_classes
+        .expect("Pulse's ladder is measured");
+    assert_eq!(ladder.names(), oag_title::SpeedClasses::PULSE_LADDER);
+    assert!(!ladder.names().contains(&oag_title::SpeedClasses::VECTOR));
+}
