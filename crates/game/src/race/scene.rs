@@ -265,6 +265,9 @@ pub struct Scene {
     /// to the same question, wrong in exactly the way that produces a
     /// plausible picture. `None` until the first frame.
     last_frame: std::cell::Cell<Option<TemporalFrame>>,
+    /// The camera view and player respawn count as of the last recorded
+    /// frame, for detecting a camera cut mid-race - see `motion::CutWatch`.
+    cut_watch: std::cell::Cell<motion::CutWatch>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -959,6 +962,7 @@ impl Scene {
             motion: std::cell::RefCell::new(None),
             frame_index: std::cell::Cell::new(0),
             last_frame: std::cell::Cell::new(None),
+            cut_watch: std::cell::Cell::new(motion::CutWatch::default()),
             track,
             visibility,
             ships,

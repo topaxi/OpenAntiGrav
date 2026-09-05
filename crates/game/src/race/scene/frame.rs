@@ -82,7 +82,12 @@ impl Scene {
         let prev_vp = prev.view_projection;
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Recorded before the offset is applied - see `Scene::record_frame`.
-        self.record_frame(camera_jitter, race.projection(aspect, self.far, fov));
+        self.record_frame(
+            camera_jitter,
+            race.projection(aspect, self.far, fov),
+            race.camera_view(),
+            race.respawns(),
+        );
         // Above this line the camera is unjittered, below it is not, and the
         // frustum and the snapshot are above deliberately - see the call.
         let (view_projection, prev_vp) =
