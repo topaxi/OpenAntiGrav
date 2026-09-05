@@ -512,6 +512,19 @@ match instead of asserting the constants against themselves.
 - **`+0x08` and `+0x0c`.** They move together — `0x00400000` with 68,
   `0x00100000` with 20, `0x01000000` with 4 — and look like a GS memory
   allocation, which the file would have no reason to fix. Not needed to decode.
+  A wider sweep (403 textures across `01_Track`, `02_Track`, `05_Track`, run
+  while investigating a mirrored-speed-pad texture pair) measured both fields
+  against dimensions directly rather than against each other: `+0x0c` takes 9
+  distinct values and tracks size closely
+  (`0x04` at 256x256, `0x14` at 64x64, `0x0c` at both 64x32 and 128x16, `0x08`
+  at 32x32, `0x05` at both 8x8 and 16x16), and `+0x08` is a single bit walking
+  alongside it across five observed values (`0x01000000`, `0x00100000`,
+  `0x00080000`, `0x00040000`, `0x00010000`). Read together this looks like a
+  size class (`+0x0c`) paired with a log2-derived allocation hint (`+0x08`) -
+  plausible given the "GS memory allocation" reading above, but a correlation
+  across files, not a formula checked against the GS's own allocation rules or
+  a runtime trace. Confidence 55: consistent across a few hundred real files,
+  meaning not verified. Still not needed to decode.
 - **The eight quadwords at `+0x0d`.** GS state the game replays; `TEX0`-shaped
   values are in there but nothing depends on reading them.
 - **The `Texture` node payloads in a PS2 `.vex` are stale.** They still carry
