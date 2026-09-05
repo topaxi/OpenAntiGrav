@@ -2477,49 +2477,89 @@ round); a fourth was found premature and deliberately not taken.**
 
 1. **`200`/`250`/`260`/`35` operand-shape trace re-run against the doubled
    population** (`hd_specular_unresolved_trace.rs`, unchanged - see its own
-   note that no code change was needed). The total moved again, past the
-   thread's own first-pass estimate: **172** occurrences, not 168 -
-   `200`: 52, `250`: **12** (not 8), `260`: 84, `35`: 24. All four still trace
-   to the same eight material files this section's 2026-09-03 draft named.
-   The operand-evidence tally over the new 344 operands: `Sum` 142,
+   note that no code change was needed). **Read carefully, since a first
+   pass at this comparison mixed up filtered and unfiltered counts and
+   wrongly called the thread's own number stale.** This tool never applies
+   the Zone exclusion - it prints `declares_zone` per block but tallies
+   every one - so its total is the *unfiltered* count: **172**, not 168.
+   Filtering by `declares_zone=false` in its own output reproduces the
+   thread's published Zone-excluded **168** exactly (`200`: 52, `250`: 8,
+   `260`: 84, `35`: 24, unchanged from the thread's first pass) - the four
+   extra unfiltered occurrences are exactly the Zone-declaring `250`s this
+   page's own 2026-09-03 draft already named (`martin_inflatable2`'s base
+   and DLC copies, "4 of the 84"). The thread's number was correct; the
+   discrepancy was in comparing it against the wrong column. The
+   operand-evidence tally over the unfiltered 344 operands: `Sum` 142,
    `Normalize` 138, `Neither` 62, and - new - `NoSingleWriter` **2** (was 0
-   at 168 operands). Unexplained: two of the newly-included `250` occurrences
-   trace to an operand with no single lane-sound writer, a category the
-   163-operand draft did not have at all. Not investigated further here -
-   flagged as this measurement's own open item, not smoothed over.
-2. **A handful of newly Zone-declaring blocks read by hand**
-   (`hd_specular_zone_sample.rs`, new), to check the 64 % jump's "consistent
-   with rim^N chains" hypothesis directly rather than leave it at "consistent
-   with". `hd_specular_population_recheck.rs`'s own filtered/unfiltered split
-   already localises where the growth actually is: `200`/`260`/`35` are
-   identical filtered and unfiltered (zero Zone-declaring blocks in any of
-   the three), `5`/`10` are the already-confirmed rim exponents (134/76,
-   3.2 % of the 6,464 Zone-declaring total), and the other **96.8 %** of the
-   growth sits in the `0` and `32` buckets (2,538 and 3,690 Zone-declaring
-   occurrences respectively). Sampling those two buckets directly, one to two
-   materials per archive, over 13 distinct `.rcsmaterial` files across four
-   archives and three circuits plus a DLC copy: **every one declares the
-   identical fixed four-parameter cluster** (`zoneColourTint`,
-   `zoneEffectInner`, `zoneBaseInner`, `zoneBaseAltInner`), regardless of the
-   material's own name or purpose - ordinary track surfaces
-   (`diffuse_specular`, `track_wall`-adjacent shaders), glass, a seawater
-   reflection plane, a bomb, and - decisively - `DATA06`'s front-end
-   `/data/fe/rank/materials/medal.rcsmaterial`, a UI rank-medal icon with no
-   relationship to Zone-mode gameplay geometry at all. **The hypothesis this
-   set out to check does not hold for the `0`/`32` majority.** `declares_zone`
-   is true for these because the four-parameter cluster is declared as
-   boilerplate on a shared material template family, not because the
-   resolved chain computes a rim exponent - the DP3 chains sampled in both
-   buckets read as ordinary `Sum`/`Normalize`-shaped half-vector or
-   normalize-tail specular, the same shapes `hd_specular_unresolved_trace.rs`
-   already classifies elsewhere, with nothing resembling a view-only Fresnel
-   term. **Only `5`/`10` remain confirmed as Zone-rim exponents; the 64 %
-   figure measures "declares the Zone-tint parameter block", not "computes a
-   rim falloff".** Confidence 85 - direct decode across 13 materials spanning
-   four archives and a UI context is strong structural evidence against the
-   rim hypothesis for the bulk of the population, but is 13 hand-read
-   materials against several thousand, not an exhaustive or statistical
-   sweep.
+   at 168 operands). Traced to source: both belong to the ship's own
+   `nitro_perspex_new.rcsmaterial` (`260`, `declares_zone=false`, operand 0
+   of its winning `DP3`, two separate variants) - **not** the Zone-declaring
+   `250` occurrences, so this is a real, small gap in the operand-shape
+   method within the already-"confirmed real" `260` bucket, unrelated to the
+   Zone reattribution below. Not investigated further - flagged as this
+   measurement's own open item.
+2. **A handful of newly Zone-declaring blocks read by hand, with a positive
+   control and a per-variant check this pass added after the first draft
+   lacked both** (`hd_specular_zone_sample.rs`, new).
+   `hd_specular_population_recheck.rs`'s own filtered/unfiltered split
+   localises where the 64 % Zone-declaring growth actually is: `200`/`260`/
+   `35` are identical filtered and unfiltered (zero Zone-declaring blocks in
+   any of the three), `5`/`10` are the already-confirmed rim exponents
+   (134/76, 3.2 % of the 6,464 Zone-declaring total), and the other
+   **96.8 %** sits in the `0` and `32` buckets (2,538 and 3,690
+   Zone-declaring occurrences respectively). Sampling those two buckets, one
+   to two materials per archive, over 13 distinct `.rcsmaterial` files
+   across four archives, three circuits, a DLC copy, and `DATA06`'s
+   front-end `/data/fe/rank/materials/medal.rcsmaterial` (a UI rank-medal
+   icon with no relationship to Zone-mode gameplay): **every one declares
+   the same four-parameter cluster** (`zoneColourTint`, `zoneEffectInner`,
+   `zoneBaseInner`, `zoneBaseAltInner`). **This page's own history already
+   warns that an uncontrolled operand-shape read is not evidence** ("`32`
+   was never a valid control") - so this pass also sampled `5`/`10` directly
+   as a positive control, and the result rules out using
+   `classify()`'s `Sum`/`Normalize`/`Neither` categories as a discriminator
+   here at all: the confirmed rim materials (`glasstest`,
+   `temp_testing_mat_diffuse`, `lambertshine`, `jd_simplespecular`,
+   `and_tunnelmat`) show the identical mix of shapes the `0`/`32` sample
+   does, so "the DP3 chain looks like ordinary specular, not Fresnel" is not
+   a claim this method can support either way - dropped, not carried
+   forward. **What the control sample does show, and what actually answers
+   the question, is the declared-parameter overlap itself**: every `5`/`10`
+   material samples the identical `zoneColourTint`/`zoneEffectInner`/
+   `zoneBaseInner`/`zoneBaseAltInner` cluster the `0`/`32` majority does
+   (`lambertshine` a superset, adding the three `*Outer` siblings) - so the
+   cluster's presence cannot be distinguishing "a rim chain" from "an
+   ordinary one", because confirmed rim materials and confirmed non-rim
+   majority materials both declare it identically. A second check this pass
+   added - dumping `declares_zone` across *every* variant of the first
+   sampled material rather than only the one variant the main loop's own
+   filter selects - shows the cluster is **not** file-level: it toggles
+   across contiguous variant ranges of the same file
+   (`01_normal_diffuse_specularonalpha.rcsmaterial`'s 70 variants: 0-14
+   false, 15-34 true, 35-49 false, 50-69 true). **This one file does not by
+   itself settle orthogonality, and is not overstated as doing so**: within
+   it, only four variants resolve an exponent at all (16, 21, 51, 56, every
+   one `32.0`), and all four sit on the Zone-declaring side of the split -
+   so this file alone is equally consistent with "the flag is unrelated to
+   the specular chain" and with "only Zone-declaring variants happen to
+   carry a chain this method can resolve". **The orthogonality claim rests
+   on the rim control above, not on this file**: a confirmed rim material
+   declaring the identical cluster is what rules out the cluster as a rim
+   detector, independent of whether any given file's Zone and non-Zone
+   variants both resolve. Net: the four-parameter cluster measures "this
+   variant supports the Zone colour-tint overlay" - which confirmed rim
+   materials also carry, for an unrelated reason - not "this chain computes
+   a rim exponent". **Only `5`/`10` remain confirmed as Zone-rim exponents;
+   the 64 % figure does not mean what "consistent with rim^N chains"
+   suggested.** Confidence 85 - the
+   declared-parameter overlap against the rim control is direct, controlled
+   structural evidence; the per-variant split independently establishes the
+   cluster is not blanket file-level boilerplate but does not by itself
+   establish orthogonality (see above); 13 hand-read materials against
+   several thousand is not an exhaustive or statistical sweep, and the
+   mechanism
+   (a per-variant Zone render-path flag) is inferred from one file's variant
+   pattern, not confirmed against the game's own render-path selection code.
 3. **`hd_specular_patch_census.rs` re-run in full, including the subset
    question the thread's raw counts left open.** The aggregate numbers
    reproduce the thread's first-pass figures exactly: 469 resolved-`0.0`
