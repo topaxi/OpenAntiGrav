@@ -524,6 +524,87 @@ those two values only matter when the game mode (`DAT_08b31048`) is `>= 0xe`
 unverified hypothesis, until someone reaches a multiplayer mode with the
 debugger attached.
 
+## `Hud_UpdateEnergyBar` (`0x0881c638`) tints the bar from a 20% threshold, not a gradient
+
+2026-09-05. [hud.md](../../../ui/hud.md#still-open-after-the-frame) found the
+shield bar reading cyan at 100% and solid red at 79% in two captured frames
+and could not tell a threshold model from a gradient from two samples alone.
+Read the colour writer directly instead of gathering more frames.
+
+`Hud_Update` (`0x0881bf50`) dispatches to one sub-updater per active widget
+type through a bitmask at the HUD object's `+0x40`; bit `0x2` calls
+`Hud_UpdateEnergyBar(dt, hud)` - previously `FUN_0881c638`, immediately
+after `Hud_SetEnergyBar` in the binary and reachable only through the same
+`jal`-rebasing correction (`pseudo + 0x08804000`) `workflow.md` documents,
+since the call renders unrebased as `func_0x00018638`. Read in full, the
+relevant part is:
+
+```c
+fVar8 = max((entity_value / entity_max) * 100.0, 0);   // 0..100 percentage
+// ... fill-crop math (width, x-offset) uses fVar8, unrelated to colour ...
+
+if (iVar1 == 0) {                       // iVar1: an external override flag
+    if (0.0 < fade_timer || fVar8 <= 20.0) {
+        colour = (blink_alpha << 24) | 0x00ff0000;   // forced solid red
+        goto apply;
+    }
+}
+colour = (widget_colour & 0xffffff) | (blink_alpha << 24);  // authored colour, alpha only
+apply:
+    set all four bar-quad corners to colour;
+```
+
+`fade_timer` (`hud+0x11c`) is a one-shot flash: it starts counting whenever
+the current percentage is *below the previous frame's* (`fVar8 <
+hud+0x118`, itself updated to `fVar8` every frame) and counts back down to
+zero over roughly the same **rate as the blink cycle** below it in the same
+function. So the widget is forced red in exactly two situations - the pool
+is at or under **20%**, or the pool just *dropped* (a hit landed) - and
+otherwise renders the widget's own stored `Color` with only the alpha byte
+modulated for the low-shield blink.
+
+**Why this settles threshold over gradient, and resolves the 79%/100%
+frames without contradiction**: the 100% grid frame has no recent hit and
+`fVar8` far above 20, so it takes the `authored colour` branch - `ShieldBar`'s
+`Color="FEConst->HudColour3"` in `Arcade_HUD.xml`, which
+[`hud.md`](../../../ui/hud.md) already reads off the XML as the literal
+`0xFF0DDFDD` (`0xAARRGGBB`: R=`0x0D`, G=`0xDF`, B=`0xDD`) - a light cyan,
+exactly what the frame shows. The 79% frame was taken **fifty seconds in,
+after wall contact** per the thread's own note - i.e. squarely inside the
+post-hit `fade_timer` window - so it takes the forced branch regardless of
+79% being well above the 20% floor: `0x00ff0000` in the same `0xAARRGGBB`
+order is pure red, matching "solid red" exactly. A gradient model has no way
+to produce a *sudden* full-red at 79% one hit after a full-cyan 100%; the
+threshold-plus-flash model predicts precisely that.
+
+**The `20.0` constant is not read in isolation.** It is the same value
+`Hud_SetEnergyBar` (`0x0881a1c8`) already uses for its own two-tier
+low-shield icon (blink below 20%, faster/different blink below 10%), and the
+same value `Ship_Damage`'s `DAT_08a7b6a4` uses to fire the `energycritical`
+warning sound on the downward crossing of 20% (see above). Three independent
+call sites in three different subsystems - the icon, the warning sound and
+this bar tint - agree on the same literal, which is why this reads as the
+game's one canonical "critical" threshold rather than a coincidence.
+
+Confidence **82**: decompilation only, capped at 84 per the
+[rubric](../../../reverse-engineering/confidence-rubric.md)'s ceiling for
+that evidence class, not runtime-verified for this specific function. What
+would raise it: a live breakpoint on `Hud_UpdateEnergyBar` reading `fVar8`
+and the resulting colour word across a controlled damage sequence (idle at
+100%, a scripted hit that drops it to e.g. 60%, then a further hit below
+20%) - the same probe class already used elsewhere on this page. Short of
+that, the decompiled branch structure is unambiguous and every value in it
+(the `20.0` floor, the `0x00ff0000` constant, the `0xffffff` mask that
+preserves RGB while only alpha is blink-modulated) is a plain read, not an
+inference.
+
+**What is still open**: `iVar1` (`func_0x0003a904` on a pointer read off
+`hud+0x2c0`'s own game-state struct) is not identified - it is read as "some
+external override that suppresses the forced-red branch entirely", plausibly
+a practice/ghost or no-damage-mode flag, but nothing here names it. It does
+not change the threshold-vs-gradient answer either way: whichever flag it
+is, the function still never blends between two colours by percentage.
+
 ## What is not verified
 
 - **Whether `1` means "network human" and `3` is genuinely unused** is still
@@ -538,6 +619,12 @@ debugger attached.
 
 ## History
 
+- 2026-09-05: **`Hud_UpdateEnergyBar` (`0x0881c638`) named and read in
+  full**, closing the handover thread on whether the shield bar's colour is
+  a threshold or a gradient. It is a threshold: solid red at or under 20%
+  or during a one-shot post-hit flash, the widget's own authored colour
+  (cyan, `0xFF0DDFDD` off the XML) otherwise - never a blend. Confidence 82,
+  decompilation only.
 - 2026-08-25, live pass: `entity + 0x368` read off all eight craft in a
   breakpoint-driven Single Race, twice (idle, then holding thrust). `0` on
   the one craft with a digital throttle (the human), `2` on all seven
