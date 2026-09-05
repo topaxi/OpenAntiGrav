@@ -252,3 +252,4 @@
 0x003ee398	function	Resource_FindOrLoadByHashedPath	75	shadow-stencilvolume.md
 0x005ee2c0	function	Shadow_AllocateStencilVolumeBuffers	82	shadow-stencilvolume.md
 0x005ee7d0	function	Shadow_ParseStencilVolumeGeometry	75	shadow-stencilvolume.md
+0x005c18d8	function	Rsx_UploadVertexConstantBlock	88	renderer.md

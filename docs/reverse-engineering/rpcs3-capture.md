@@ -145,22 +145,153 @@ recording it is that each is a boot someone else does not have to spend:
 | The `RenderManager` | `0x008b3d00@+0x14@:0x4d90` | one, the same 90-degree 1:1 cube face |
 | `Render_FrameContextPtr`'s target | `0x936fd4@:0x8000` | eight, all the same cube face |
 | 1 MB of heap at `0x30000000` | `0x30000000:0x100000` | **0.3 %** of it changes between two frames five seconds apart, and exactly one changed window parses as a camera - another 90-degree 1:1 |
+| libgcm's own data area | `0x008c0854@@:0x20000` | 128 KB with **0.00 %** churn across three shots twelve seconds apart, no matrix and no constant packet |
+| The main GCM ring | `0x008c0854@@@:0x8000` | device bring-up commands, static; no `0x1efc` method anywhere in it |
 
 Relaxing the unit-`w` test - in case the projection scales that row - adds
-nothing convincing to any of them.
+nothing convincing to any of them. The last two rows are the boots this page's
+next section spent before it found the right pointer level.
 
-**So the working hypothesis is that no CPU-side copy of `viewProj` is kept.**
-The vertex program is fed `c[0..3]` and the engine may compute the matrix and
-push it straight into the command buffer, in which case the only place it
+**So the working hypothesis was that no CPU-side copy of `viewProj` is kept**:
+the vertex program is fed `c[0..3]` and the engine computes the matrix and
+pushes it straight into the command buffer, in which case the only place it
 exists is the RSX pushbuffer - where it is *exactly* findable rather than
 heuristically, as the operand of a `NV4097_SET_TRANSFORM_CONSTANT_LOAD`.
 
-The next step is therefore the GCM context rather than more heap.
-`g_GcmContext` (`0x008c0854`, confidence 85) holds `0x013be314`, and a
-`CellGcmContextData` is `{begin, end, current, callback}`:
+## `viewProj` is in the pushbuffer, and here is where (2026-09-05)
 
-    --region "0x008c0854@:0x20"          # the context: begin, end, current
-    --region "<current - N>:<N>"         # the pushbuffer behind the write head
+**Confirmed, confidence 93.** Three boots. What follows is the whole route,
+because two of the three were spent on a wrong pointer level and a wrong idea
+of what a matrix looks like in a FIFO, and neither is worth repeating.
+
+### The context is two dereferences deep, not one
+
+`g_GcmContext` (`0x008c0854`) is not the address of the `CellGcmContextData`.
+It holds `0x013be314`, which is libgcm's own `CellGcmContextData *`, which
+holds `0x016a0ccc`, which is the struct:
+
+    0x013be314:  016a0ccc 00000000 00000000 00000000    <- one pointer, then nothing
+    0x016a0ccc:  40001000 40007ffc 400013a4 016a0504
+                 begin     end      current  callback
+
+Read one level short - which is what `--region "0x008c0854@:0x20"` does - the
+context looks like a struct whose `end`, `current` and `callback` are all
+**zero**, so every chain built on `+0x4` or `+0x8` resolves to null and is
+skipped, and the boot produces nothing at all. At the second level
+`begin < current < end` holds and `callback` is a plausible descriptor.
+
+    --region "0x008c0854@@:0x20"        # the context struct
+    --region "0x008c0854@@@:0x8000"     # the ring, from `begin`
+    --region "0x008c0854@@+0x8@-N:N"    # behind the write head
+
+### That ring is the bring-up buffer; the frame is three JUMPs away
+
+`0x40001000..0x40007ffc`, and it does not change by one byte across three
+shots six seconds apart in a live race - `current` is `0x400013a4` in two
+separate boots and never advances. It ends in `20010000`, an RSX JUMP
+(`0x20000000 | io_offset`) to `0x40010000`; the four 4 KiB auxiliary contexts
+there each end in a JUMP of their own, to IO `0x74100` and `0x75100`
+alternating. The draw commands are downstream of *those*: **220-394 constant
+loads a frame over IO `0x77000..0x9f000`.** Below that, what has actually been
+read is the four auxiliary segments (`0x10000..0x14000`) and `0x60000..0x77000`,
+and there are none in either; `0x14000..0x60000` has never been dumped and is
+not claimed either way. See
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md).
+
+### A matrix in a FIFO is not sixteen consecutive floats - except when it is
+
+This is the trap that makes a null result meaningless.
+`Rsx_UploadVertexConstants` (`0x005c176c`) emits **one packet per `vec4`**:
+header `0x00141efc`, an index, four floats. Under that emitter a `float4x4` is
+four rows **24 bytes apart** with two non-float words before each, and
+`ps3_pose.candidates`, which slides over raw bytes looking for sixteen
+consecutive floats, cannot see it at all.
+
+`Rsx_UploadVertexConstantBlock` (`0x005c18d8`) is the other emitter, and it
+*does* write the sixteen floats consecutively - header `0x00441efc`, an index,
+then the matrix. So during a race both forms are in the stream:
+
+| Header | count | Payload | Registers loaded |
+| --- | --- | --- | --- |
+| `0x00141efc` | 5 | index + one `vec4` | `c[462..467]`, the material's own block |
+| `0x00441efc` | **17** | index + **a whole `float4x4`** | `c[256]` and `c[260]` |
+
+Under `renderer.md`'s `N + 256` rule those two are the shader's `c[0..3]` and
+`c[4..7]` - and `c[0..3]` is exactly where the hypothesis said the vertex
+program is fed `viewProj`.
+
+### Picking the camera out: multiplicity, not a score
+
+`c[256]` takes **89, 104 and 106 distinct values** in the three frames, so it
+is generally a per-object `worldViewProj`. That is the discriminator, and it
+is a stronger one than any algebraic test:
+
+| distinct values in one frame | changes between frames | what it is |
+| --- | --- | --- |
+| many | - | a per-object world matrix |
+| one | no | a static constant (a cube face, a bias) |
+| one | **yes** | **the camera** |
+
+Exactly one value per frame passes `ps3_pose.score`, and the same matrix is
+also written to `c[260]`, eight or nine times a frame:
+
+| Shot | Address | eye | `fov_y` | aspect | unit error |
+| --- | --- | --- | --- | --- | --- |
+| 00 | `0x40077308` | -143.58, -48.44, -175.13 | 60.0001 | 1.777778 | 7.1e-08 |
+| 01 | `0x40077308` | 88.88, -46.39, -178.36 | 68.9974 | 1.777778 | 1.9e-08 |
+| 02 | `0x400779fc` | 502.72, -24.36, -61.46 | 64.8137 | 1.777790 | 3.1e-05 |
+
+**Which tests it passed, said out loud**, because this page's own warning is
+that a degenerate matrix passes every algebraic one:
+
+1. **No denormal components at all** - the false positive in
+   `data/reference/hd-capture/talons/00.json` is ~1e-38 noise with a lone
+   `1.0` in the `w` slot, and this has none.
+2. **`aspect` is 1.777778**, 16:9 to six digits, which is HD's own 1280x720.
+3. **Unit error 7e-08**, against a tolerance of 3e-2 - seven digits, not one.
+4. **An orthonormal basis**, with `up` within six degrees of world up: a race
+   camera is nearly level and this one banks slightly.
+5. **`fov_y` is 60.0001 and then moves** - an authored base value, widening
+   and narrowing frame to frame, which is the speed-dependent field of view
+   the series has always had.
+6. **The eye moves coherently**: 232 units over the first six-second interval
+   and 430 over the second, accelerating, with `cross` held down throughout,
+   and the height staying between -24 and -48. By shot 02 `forward` has swung
+   from `+X` to `(0.80, -0.06, 0.59)`: the ship is in a bend.
+7. **It is a command operand**, not an offset that happens to parse, and it is
+   re-uploaded eight or nine times a frame.
+8. **It goes to both `c[256]` and `c[260]`** - `c[0..3]` and `c[4..7]` - with
+   the same sixteen floats. If the engine's convention is `viewProj` in the
+   first and `worldViewProj` in the second, those coincide *exactly* on a draw
+   whose world matrix is the identity, and a matrix landing in both is evidence
+   that it is the camera rather than some object's transform.
+
+**What this does not settle** is which of those two it is. A *translated*
+object's `worldViewProj` decomposes to an identical basis, field of view and
+aspect, and an eye offset by a constant - the eye is the camera in that draw's
+own space and equals the world-space eye only where the world matrix is the
+identity. The two are indistinguishable in these numbers, and the way they
+differ is the one that misreads as a translation bug rather than a wrong
+matrix. Rendering from the pose and overlaying the captured frame settles it.
+
+The four earlier eliminations are explained rather than contradicted: there
+need be no CPU-side copy, because the matrix reaches the RSX as a FIFO
+operand and nothing else has to hold it.
+
+### Reproducing it
+
+    uv run --with evdev python3 scripts/rpcs3-drive.py capture \
+        --shots 3 --interval 6 --keep-dumps \
+        --out data/reference/hd-capture/talons-fifo3 \
+        --region "0x40010000:0x4000" \
+        --region "0x40060000:0x20000" \
+        --region "0x40080000:0x20000"
+
+**`capture`'s own finder reports a different and wrong camera for these
+dumps** - an eye on the X axis at 11.0 and 34.4 units, `fov` 39 - because
+`ps3_pose.candidates` knows nothing about packets. Wiring the packet-aware
+finder into the harness is what closes the loop; until it is, read the dumps
+rather than the JSON.
 
 ## What is free, and what costs packets
 

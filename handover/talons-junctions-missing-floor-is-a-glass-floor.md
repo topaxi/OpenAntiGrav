@@ -12,8 +12,8 @@
   renderer's other missing inputs rather than being duplicated here
 - Tone gap: renders clip 21 % to white against a reference's 15 % - a
   same-camera comparison needs
-  [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)'s
-  own open item (`viewProj` not yet located) before this can be measured
+  [viewproj-is-located-the-capture-harness-still.md](viewproj-is-located-the-capture-harness-still.md)'s
+  own open item (`viewProj` is located; the harness's finder does not read it yet) before this can be measured
   precisely rather than eyeballed off the existing `data/reference/hd-talons-glass/`
   capture
 
@@ -22,5 +22,5 @@
 - Pick up [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
   for the shading work - normal map, specular map and this material's facing
   ramp all live there now
-- Pick up [an-rpcs3-capture-harness-a-reference-frame-paired.md](an-rpcs3-capture-harness-a-reference-frame-paired.md)
+- Pick up [viewproj-is-located-the-capture-harness-still.md](viewproj-is-located-the-capture-harness-still.md)
   first if the goal is the tone gap specifically
