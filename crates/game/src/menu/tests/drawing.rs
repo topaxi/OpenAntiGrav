@@ -10,7 +10,22 @@ use super::*;
 fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
     let mut menu = Menu::new(fixture());
     press(&mut menu, &[Button::Cross]);
-    let list = list(&menu, &no_bindings, None);
+    // A quarter of Pulse's own measured pulse period, not zero: at `elapsed
+    // == 0.0` the highlight starts exactly at its trough, which is `normal()`
+    // by construction (see `Skin::selected`) and indistinguishable from every
+    // other row's own colour - a real edge of the animation, not a bug, but
+    // the wrong moment to assert "exactly one row is highlighted" against.
+    let mut skin = skin();
+    skin.tick_pulse(skin.selected_pulse_period_secs().unwrap_or(0.0) / 4.0);
+    let list = draw_list(
+        &menu,
+        &skin,
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+    )
+    .flatten();
 
     let texts: Vec<&String> = list
         .iter()
@@ -42,7 +57,7 @@ fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
         .iter()
         .filter(|draw| {
             matches!(draw, Draw::Text { color, align, .. }
-                if *color == skin().selected() && *align == Align::Left)
+                if *color == skin.selected() && *align == Align::Left)
         })
         .count();
     assert_eq!(highlighted, 1, "exactly one row label is highlighted");

@@ -239,6 +239,14 @@ pub struct Skin {
     /// [`oag_title::MenuSkin::space`], which is not always [`Self::space`].
     from_theirs: (f32, f32),
     line_height: f32,
+    /// A free-running clock for [`Self::selected`]'s pulse, advanced by
+    /// [`Self::tick_pulse`]. Never reset: the capture that measured Pulse's
+    /// period never moved the cursor, so there is no evidence the original
+    /// resets phase on a selection change, and a clock that ticks
+    /// unconditionally is the null hypothesis until one turns up. Zero on a
+    /// title with no [`oag_title::MenuSkin::selected_pulse_period_secs`],
+    /// where nothing ever reads it.
+    pulse_elapsed: f32,
 }
 
 impl Skin {
@@ -314,7 +322,18 @@ impl Skin {
             from_ours: into(crate::frontend::SCREEN),
             from_theirs: into(skin.space),
             line_height,
+            pulse_elapsed: 0.0,
         }
+    }
+
+    /// Advances [`Self::selected`]'s pulse clock by one tick's worth of time.
+    ///
+    /// Called from `MenuStage::tick` alongside the marquee's own clock, for
+    /// the same reason `anim.rs`'s module doc gives: `dt` is the stage's fixed
+    /// step, never the wall clock, so a captured frame does not depend on how
+    /// fast the machine that captured it happened to be.
+    pub fn tick_pulse(&mut self, dt: f32) {
+        self.pulse_elapsed += dt.max(0.0);
     }
 
     /// The grid these numbers are in, for whoever has to set a `screen` uniform
@@ -453,10 +472,27 @@ impl Skin {
         self.skin.text.map_or(OUR_NORMAL, argb)
     }
 
-    /// The selected row, brightened toward white rather than given a bar.
+    /// The selected row, brightened toward white rather than given a bar -
+    /// pulsing between [`Self::normal`] and the title's own peak when
+    /// [`oag_title::MenuSkin::selected_pulse_period_secs`] measured one, flat
+    /// at the peak otherwise (today, every title but Pulse).
+    ///
+    /// The oscillation's *shape* between the two measured endpoints is
+    /// **ours** - a raised cosine, the simplest curve that starts and ends
+    /// flat rather than with a visible corner - the same discipline
+    /// `anim::Tween::eased` marks its own invented curve with: the capture
+    /// found eleven discrete brightness levels, unevenly spaced enough to
+    /// rule out a linear ramp, but not enough samples to name the real one.
+    /// See `docs/ui/menus-original.md`.
     #[must_use]
     pub fn selected(&self) -> [f32; 4] {
-        self.skin.selected.map_or(OUR_SELECTED, argb)
+        let peak = self.skin.selected.map_or(OUR_SELECTED, argb);
+        let Some(period) = self.skin.selected_pulse_period_secs.filter(|p| *p > 0.0) else {
+            return peak;
+        };
+        let phase = (self.pulse_elapsed / period).fract();
+        let t = 0.5 - 0.5 * (phase * std::f32::consts::TAU).cos();
+        lerp_color(self.normal(), peak, t)
     }
 
     /// A full-screen fill for a frame whose own screen carries neither a
@@ -478,6 +514,14 @@ impl Skin {
     #[must_use]
     pub fn transition_secs(&self) -> f32 {
         self.skin.transition_secs
+    }
+
+    /// How long one cycle of [`Self::selected`]'s pulse takes, where this
+    /// title has one measured. See
+    /// [`oag_title::MenuSkin::selected_pulse_period_secs`].
+    #[must_use]
+    pub fn selected_pulse_period_secs(&self) -> Option<f32> {
+        self.skin.selected_pulse_period_secs
     }
 
     /// Where the screen title sits, and how big.
@@ -583,6 +627,20 @@ fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
     let byte = |shift: u32| ((value >> shift) & 0xFF) as f32 / 255.0;
     [byte(16), byte(8), byte(0), byte(24)]
 }
+
+/// `from` to `to`, channel by channel, at `t` in `0..=1`. [`Skin::selected`]'s
+/// own lerp: `oag_render` is exempt from the workspace's determinism rules
+/// and this module is outside them entirely (`oag-game` is not one of the
+/// crates `just check-determinism` scans), but there is still no reason for a
+/// menu colour to reassociate float arithmetic it does not need to.
+fn lerp_color(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
+    let t = t.clamp(0.0, 1.0);
+    let mut out = [0.0; 4];
+    for i in 0..4 {
+        out[i] = from[i] + (to[i] - from[i]) * t;
+    }
+    out
+}
 /// An unselected row, for a title that declares no `TextColor`.
 ///
 /// **Ours**, and only ever reached by a title whose own disc is silent. Pulse's
@@ -595,3 +653,84 @@ const OUR_NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
 /// as a brightening toward white rather than as a bar behind the row, so this
 /// is white rather than a fourth hue. Pulse supplies its own measured value.
 const OUR_SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pulse's own measured shape, as a fixture: `TextColor` to white over a
+    /// 1.1 s period. Not a dependency on `oag-pulse` - this module already
+    /// promises nothing in [`draw_list`] reads [`oag_title::MenuSkin`]
+    /// directly, and a fixture here keeps that true of its own tests too.
+    const PULSING: oag_title::MenuSkin = oag_title::MenuSkin {
+        space: (480.0, 272.0),
+        menu_x: 50.0,
+        menu_scale: 1.0,
+        title_x: 50.0,
+        title_y: 0.0,
+        title_scale: 1.0,
+        first_row_y: Some(32.0),
+        row_extra_leading: Some(6.0),
+        menu_font: Some("menu"),
+        text: Some(0xFF33_A6B9),
+        title: Some(0xFF00_0000),
+        background: None,
+        selected: Some(0xFFFF_FFFF),
+        selected_pulse_period_secs: Some(1.1),
+        transition_secs: 0.5,
+        strip: None,
+    };
+
+    fn skin() -> Skin {
+        Skin::new(&PULSING, crate::frontend::Space::PSP, 22.0)
+    }
+
+    /// The trough: a fresh clock has not moved, so the pulse starts exactly
+    /// at its own resting colour - the phase the capture's own troughs sat
+    /// at, not an arbitrary zero.
+    #[test]
+    fn a_fresh_clock_starts_at_the_trough() {
+        assert_eq!(skin().selected(), skin().normal());
+    }
+
+    /// Half a period on, the pulse is at its measured peak.
+    #[test]
+    fn half_a_period_on_it_is_at_the_peak() {
+        let mut skin = skin();
+        skin.tick_pulse(1.1 / 2.0);
+        let peak = skin.selected();
+        let white = argb(0xFFFF_FFFF);
+        for channel in 0..4 {
+            assert!(
+                (peak[channel] - white[channel]).abs() < 1e-5,
+                "{peak:?} should be white at the measured half-period"
+            );
+        }
+    }
+
+    /// A whole period on, it is back at the trough - the point of measuring a
+    /// period at all being that the animation repeats rather than drifts.
+    #[test]
+    fn a_whole_period_returns_to_the_trough() {
+        let mut skin = skin();
+        skin.tick_pulse(1.1);
+        assert_eq!(skin.selected(), skin.normal());
+    }
+
+    /// A title with no measured pulse - every title but Pulse, today - stays
+    /// flat at its own peak no matter how much the clock advances. This is
+    /// what keeps Pure's own, differently-directioned `selected` colour from
+    /// silently inheriting Pulse's oscillation.
+    #[test]
+    fn a_title_with_no_measured_period_never_pulses() {
+        const FLAT: oag_title::MenuSkin = oag_title::MenuSkin {
+            selected_pulse_period_secs: None,
+            ..PULSING
+        };
+        let mut skin = Skin::new(&FLAT, crate::frontend::Space::PSP, 22.0);
+        let at_rest = skin.selected();
+        skin.tick_pulse(10.0);
+        assert_eq!(skin.selected(), at_rest);
+        assert_eq!(skin.selected(), argb(FLAT.selected.unwrap()));
+    }
+}

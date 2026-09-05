@@ -202,6 +202,16 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.marquee.tick(dt as f32, marquee::focus(&self.menu));
+        // The selected row's own pulse, measured on Pulse - see
+        // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
+        // the marquee's clock is reset-on-focus-change: unconditional here
+        // because nothing measured suggests the original resets phase on a
+        // selection change.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        self.skin.tick_pulse(dt as f32);
     }
 
     /// Starts a page change, snapshotting the page being left.
