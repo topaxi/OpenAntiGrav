@@ -4,8 +4,10 @@ Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 `0x00100000`.
 
 Found chasing the PS2 `Aspect Ratio` camera-widen (see
-[camera.md](camera.md)), reading `FUN_0013e280` in full turned up a
-shake-decay block at its start. The PSP's own collision-response path had a
+[camera.md](camera.md)), reading `Camera_SubmitScene` (`0x0013e280`, named
+2026-09-05 once this page's shake block and camera.md's own frustum-plane
+reading were both complete) in full turned up a shake-decay block at its
+start. The PSP's own collision-response path had a
 "camera shake" reading retracted for calling no camera API at all
 ([contact-response.md](../psp-pulse-usa/contact-response.md#fun_088418e0s-contact-loop-drives-three-separate-reactions-and-one-of-them-is-a-particle))
 - checked closely enough to be right about the function, and wrong about the
@@ -92,14 +94,14 @@ writes, below.
 
 **Decompiled in full**, a single-purpose setter. **Corrected 2026-09-03**: an
 earlier pass here missed two literal writes and mislabelled `+0x198`/`+0x19c`
-as "periods" - re-reading `FUN_0013e280`'s own consumption (below) makes
+as "periods" - re-reading `Camera_SubmitScene`'s own consumption (below) makes
 these unambiguous: a **three-keyframe, piecewise-linear falloff envelope**,
 positions and values both authored by this function:
 
 ```c
 void Camera_ArmShake(float magnitude, float duration, Camera *cam, int mode)
 {
-    if (currently-in-replay-mode-2) return;      // gated the same way FUN_0013e280 is
+    if (currently-in-replay-mode-2) return;      // gated the same way Camera_SubmitScene is
     cam->shake_timer          = duration;          // +0x194
     cam->shake_duration_recip = 1.0 / duration;     // +0x190
     cam->falloff_value[0]     = magnitude * 0.25;   // +0x198, at position 0.0
@@ -137,12 +139,14 @@ range" shape `oag_render::exhaust`'s own `FLICKER`/`Rng_RangeF(0.75, 1.25)`
 already reproduces for the engine flare, on a different function - not
 renamed here, out of scope for this page.
 
-## `FUN_0013e280` applies the shake every frame - still not renamed
+## `Camera_SubmitScene` applies the shake every frame
 
-See [camera.md](camera.md#the-aspect-ratio-options-widen-at-one-address-inside-a-much-bigger-function)
-for why the containing function stays unnamed. **The shake-apply block at its
-start was re-read in full** (not just at call-shape depth) to settle what it
-actually perturbs:
+This page's own reading of the shake-apply block, plus
+[camera.md](camera.md#the-aspect-ratio-options-widen-at-one-address-inside-camera_submitscene)'s
+reading of the frustum-plane block further down the same function, is what
+earned `FUN_0013e280` its name on 2026-09-05 - see that page for the naming
+rationale and confidence. **The shake-apply block at its start was re-read in
+full** (not just at call-shape depth) to settle what it actually perturbs:
 
 - Bails immediately if `shake_timer <= 0.0` or this camera is not the process's
   single active one (`DAT_0027e7f0 != this`).
@@ -177,7 +181,7 @@ orientation, not a positional jitter of the eye.**
 
 **Settled 2026-09-05: the rotation axis is not fixed at all - it is a live
 snapshot of one of the camera's own three basis rows, picked by `shake_mode`,
-and each mode applies *two* sequential rotations, not one.** `FUN_0013e280`'s
+and each mode applies *two* sequential rotations, not one.** `Camera_SubmitScene`'s
 disassembly (not just its decompile) around the `FUN_0025cbb0` call sites
 shows a fresh `lq a1,<offset>(s2)` immediately before every call, with nothing
 between that load and the `jal` that could change `$a1` - the register the
@@ -241,7 +245,7 @@ confidence (~55) than the finding above and not needed to settle it.**
 object, that "the camera's world axes are the stored matrix's *columns*",
 which would make a single *row* here the local representation of a world
 axis rather than a local right/up/forward vector outright. One piece of
-in-function corroboration for that reading: `FUN_0013e280` at
+in-function corroboration for that reading: `Camera_SubmitScene` at
 `0x0013e784`-`0x0013e7c8` sums the squares of lane 2 (the third element)
 across all three rows and gates on the total - the squared length of
 *column* 2, which only reads as a meaningful degeneracy guard if the
@@ -304,7 +308,7 @@ which stays a separate, open question.
 
 ## History
 
-- 2026-09-03: first pass, from reading `FUN_0013e280` in full while writing up
+- 2026-09-03: first pass, from reading `Camera_SubmitScene` in full while writing up
   [camera.md](camera.md)'s `Aspect Ratio` section. `ShipShield_Hit` added the
   same day, prompted by a maintainer's own play-testing observation of a
   shield element flashing on a hit - traced to the pickup bubble's mechanism,
@@ -315,7 +319,7 @@ which stays a separate, open question.
   out to be the PSP's own `Camera_ArmShake` - the platform-difference framing
   earlier on this page did not survive that.
 - 2026-09-03, same day, before implementing: re-read `Camera_ArmShake` and
-  `FUN_0013e280` in full rather than by call shape alone, prompted by a
+  `Camera_SubmitScene` in full rather than by call shape alone, prompted by a
   reviewer catching that the earlier pass's pseudocode silently dropped two
   of `Camera_ArmShake`'s literal writes. That surfaced the exact three-key
   falloff envelope and the two arm-call scale constants (both read directly
@@ -327,7 +331,7 @@ which stays a separate, open question.
 - 2026-09-05: the rotation axis, this page's own longest-standing "not
   determined" item, is settled - a live basis row (`+0x40`/`+0x50`/`+0x60`),
   picked by `shake_mode`, applied as two sequential rotations per frame, not
-  a fixed constant. Read straight off `FUN_0013e280`'s disassembly (no p-code
+  a fixed constant. Read straight off `Camera_SubmitScene`'s disassembly (no p-code
   needed - the register origin was visible from the `lq a1` right before each
   call) and cross-checked independently on the PSP's `Camera_SubmitScene`,
   whose decompile shows the same axis as an explicit pointer argument at the

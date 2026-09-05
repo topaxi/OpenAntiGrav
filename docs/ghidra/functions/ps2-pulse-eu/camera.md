@@ -14,6 +14,7 @@ PS2 equivalent and confirms the cycle in a second binary.
 | --- | --- | ---: |
 | `0x0014f208` | `Camera_UpdatePlayerView` | 88 |
 | `0x002db350` | `g_settings` | 78 |
+| `0x0013e280` | `Camera_SubmitScene` | 80 |
 
 The parameter blocks themselves are parsed by the five
 `HandlingXml_Parse*Camera` functions, documented in
@@ -90,33 +91,100 @@ different algorithm rather than as a second copy of the same one. Confidence
 **70** on that negative: the function was read, not run, and the trace at
 `0x00132ed0` was not decoded.
 
-## The `Aspect Ratio` option's widen, at one address inside a much bigger function
+## The `Aspect Ratio` option's widen, at one address inside `Camera_SubmitScene`
 
 `docs/ps2/aspect-ratio.md` ("What the option changes: one multiply, in the
 camera") already reads this in full - confidence 95, verified against every
 reference to the setting's global. Restated here only because that page lives
 outside this directory and `names.tsv` needs a citation inside it: at
-`0x0013e6ec`, `FUN_0013e280` reads `DAT_00284fe8` (`0` for `4:3`, `1` for
+`0x0013e6ec`, `Camera_SubmitScene` reads `DAT_00284fe8` (`0` for `4:3`, `1` for
 `16:9`) and multiplies the projection's aspect by `4/3` before building it -
 `FUN_001e9420(fov_rad, aspect, near, far, 1.0)`, an ordinary perspective
 build. The authored FOV degrees are unchanged; only the aspect widens, so at
 `16:9` the horizontal field is genuinely a third wider, not a stretch of the
 same picture.
 
-**`FUN_0013e280` itself is not renamed, and should not be from this alone.**
-Read in full while chasing the multiply above: the function opens with a
-camera-shake decay/apply block, now understood and documented on its own page
-- [collision-shake.md](collision-shake.md), which also has the arming side of
-it (`Camera_ArmShake`, called from the collision-response path on impact).
-Past the multiply this page covers, `FUN_0013e280` also pushes a view matrix
-to the GS display stack (`DAT_00282aec+0x1410`..`+0x144c`) before building the
-projection, and afterward computes four (possibly six) plane-like `{xyz, dot}`
-quads (`+0x150`, `+0x160`, `+0x170`, `+0x180`) that read like frustum planes
-derived from the same fov/aspect - **that part is still unanalysed**. Naming
-the whole function off the multiply and the now-understood shake block would
-still overclaim what's known about it: both are documented as one behaviour
-each, at one address each, and the frustum-plane-shaped tail neither of them
-covers is still unread.
+**`FUN_0013e280` is now named `Camera_SubmitScene`, at confidence 80 - the
+same name and the same confidence the PSP disc's own equivalent already
+carries** ([`psp-pulse-usa/camera.md`](../psp-pulse-usa/camera.md), which
+named its `0x08878874` at 80 for exactly the same reason: "the plane block is
+read as shape, hence 80 rather than 90"). Read in full while chasing the
+multiply above: the function opens with a camera-shake decay/apply block, now
+understood and documented on its own page - [collision-shake.md](collision-shake.md),
+which also has the arming side of it (`Camera_ArmShake`, called from the
+collision-response path on impact). Past the multiply this page covers,
+`Camera_SubmitScene` also pushes a view matrix to the GS display stack
+(`DAT_00282aec+0x1410`..`+0x144c`) before building the projection, and
+afterward computes five plane-like `{xyz, dot}` quads (`+0x140`, `+0x150`,
+`+0x160`, `+0x170`, `+0x180`) - see the next section for what those actually
+are, now that both blocks this page previously left unread (the shake and the
+quads) have been read properly. That reading, plus the PSP function of the
+same name already doing the identical sequence in the identical order
+(shake apply -> GS matrix push -> projection build -> frustum-plane set), is
+what earns the whole-function name here: not the aspect-multiply alone, which
+was never enough on its own.
+
+## The plane-like quads are five view-frustum culling planes, cross-checked against the PSP's own `Camera_SubmitScene`
+
+The PS2 function's own decompilation of this block is VU0 macro-pipeline
+pseudocode of the same unreliable shape this project already discounts
+elsewhere (`FUN_0020cf50`/`FUN_0020cec0`, sin/cos-shaped, "unread beyond
+that") - one operand even shows Ghidra rendering a raw bit-pattern move as a
+genuine `(int)` truncation of a cosine (`(long)(int)-fVar18`) right next to
+an operand it renders correctly as a raw move (`(long)iVar11`), which cannot
+both be right and is a known class of decompiler artifact for this
+instruction mix, not a fact about the disc's own arithmetic. So this reading
+leans on the PSP's `Camera_SubmitScene` (`0x08878874`), whose equivalent
+block decompiles as ordinary scalar float code with no VU0 ambiguity at all,
+and treats the PS2 side as confirming *shape and landing offsets* rather than
+exact per-term signs.
+
+**What the PSP's clean version does, section by section** (`param_1+0x90`
+through `+0xdc`, five quads spaced `0x10` apart - the PS2's are at
+`+0x140`-`+0x18c`, offset because the PS2 reuses `+0x90..+0x10c` as scratch
+for the GS matrix push a few lines earlier instead of separate globals the
+way the PSP does):
+
+1. `+0x90/.../+0x9c`: normal `= (row0.z, row1.z, row2.z)` - the same three
+   z-lane values the degeneracy check just above summed the squares of -
+   dotted with the camera's own position. A plane through the eye,
+   perpendicular to whichever world axis that z-lane column represents (the
+   forward axis, on the reading `positional-audio.md` and `collision-shake.md`
+   both already lean on: the basis's *columns*, not its rows, are the world
+   axes). Reads as a near/forward reference plane.
+2. `+0xa0`: normal `= sin(h)*row0 - cos(h)*row2`, `+0xb0`: normal
+   `= -sin(h)*row0 - cos(h)*row2` - the forward row rotated by `±h` around
+   the up row, combined with the right row, `h` being the *horizontal*
+   half-FOV. Reads as the right/left side clip planes.
+3. `+0xc0`: normal `= -sin(v)*row1 - cos(v)*row2`, `+0xd0`: normal
+   `= sin(v)*row1 - cos(v)*row2` - the same shape, one row over, `v` the
+   *vertical* half-FOV. Reads as the top/bottom clip planes.
+4. Every plane's fourth term is `-dot(normal, position)` - each plane passes
+   through the camera, as a frustum plane must.
+
+`h` is `v * 1.7647059` on the PSP (`v` in radians is `fov_deg * pi/180 * 0.5`,
+and `1.7647059 = 480/272`, the PSP's own render aspect) and `v * 1.4285715` on
+the PS2 (`1.4285715 = 10/7 = 640/448`, a PS2-typical render-target aspect) -
+**both a hardcoded literal, not the runtime `Aspect Ratio` setting's widened
+aspect.** So whatever consumes these five planes keeps culling against the
+*render target's own* aspect on both platforms, unaffected by the 16:9 option
+this section's multiply implements - the widen only reaches the visible
+projection matrix, not this frustum set. That is read at the same confidence
+as the plane block itself (below), since it rests on the same literal.
+
+Confidence **80** for "these are five view-frustum culling planes (one
+forward/near, two horizontal side, two vertical side), each through the
+camera's position, built from the camera's own basis and the vertical/
+horizontal half-FOV": the PSP reading is unambiguous scalar arithmetic
+(confidence ~90 on its own), cross-checked structurally against the PS2's
+five quads landing at the same relative offsets in the same order doing the
+same class of sin/cos-weighted row combination (confidence ~70 given the
+VU0 decompile noise above) - averaging to the function's own overall 80,
+matching the PSP page's own precedent for scoring this exact block. **Not
+determined**: what actually reads these five planes back (no caller of
+`Camera_SubmitScene` was found to check against - see the "Not determined"
+xref note below), and therefore whether "culling" is the right verb rather
+than, say, a shadow-volume or reflection-clip use.
 
 ## Not determined
 
@@ -127,12 +195,43 @@ covers is still unread.
 - **The rig lookup** at `0x00149450` and the trace at `0x00132ed0`.
 - **The second, spectator/photo camera enum** that the PSP page warns not to
   confuse with this one. Not searched for here.
-- **`FUN_0013e280`'s full purpose** - the shake/decay block at its start is
-  now documented ([collision-shake.md](collision-shake.md)); the
-  four-or-more plane-like quads it computes after building the projection
-  are still unread beyond noticing their shape.
+- **No caller of `Camera_SubmitScene` was found** - `get_xrefs_to` on
+  `0x0013e280` returns nothing, and a byte-pattern search for the direct
+  `jal Camera_SubmitScene` encoding (`A0 F8 04 0C`) finds no match anywhere
+  in the image either, so it is not a missed-xref problem Ghidra could fix
+  with more analysis: nothing calls this address with a direct `jal` at all.
+  Checked whether this is the PSP relocation-table defect other threads have
+  hit: it is not - `SCES_547.48`'s relocation table has **zero** entries
+  total (checked with `getRelocations`, both globally and at this address
+  and at `Camera_UpdatePlayerView`'s for comparison), which is a different
+  situation from an *unapplied* one, and consistent with this being a fully
+  linked PS2 executable that never carried a relocation section to begin
+  with. The likelier explanation is an indirect call - `jalr` through a
+  per-camera function-pointer/vtable slot, which a direct-`jal` byte search
+  cannot find and which would also fit the "second, spectator/photo camera"
+  object this page already can't locate (a vtable would explain both at
+  once). Not chased further; worth flagging for whoever picks up the vtable
+  question or the general relocation-defect thread, since the empty-xrefs
+  symptom looks identical to that defect's from the outside and isn't it.
 - **`FUN_001e9420`**, the perspective-matrix builder the aspect widen calls
   into - read only for its two diagonal terms, not renamed.
+- **What reads the five frustum planes back** - see the plane section above.
+- **The roll/bank angle at `+0x124`** (PSP's equivalent is the global
+  `DAT_002ad0a8`, not a struct field - a platform layout difference, not a
+  behavioural one): computed by Gram-Schmidt-orthogonalising the "up" column
+  against a horizontal reference built from two basis rows' z-lanes, then an
+  `asin`-shaped call (`FUN_0023dd20` PS2 / `func_0x0017ad98` PSP, neither
+  named) on the residual, sign-flipped by a forward/right dot test. Reads as
+  a camera bank/roll angle, structurally identical on both platforms, but
+  nothing that *consumes* `+0x124` was traced, so what it drives (HUD
+  horizon indicator, motion-blur direction, or something else) is unknown.
+  Confidence 60 on "it's a roll angle in radians"; 0 on what uses it.
+- **The PSP's own tail past this** (a screen-space, texture-LOD-bias-shaped
+  calculation using `log2`-style divides by `0.6931472` = `ln 2`) **has no
+  PS2 counterpart in this function** - the PS2 side ends three calls after
+  the plane block (`FUN_001d39b8`, `FUN_001e88b8` x2, none read here) with
+  nothing resembling the PSP's LOD math. Genuine platform difference or
+  handled elsewhere on PS2 - not chased.
 - **Nothing here was verified at runtime.**
 
 ## Cross-platform
@@ -142,6 +241,7 @@ covers is still unread.
 | `Camera_UpdatePlayerView` | `0x0014f208` | `0x0883c0cc` |
 | `g_settings` | `0x002db350` | `0x08b31774` |
 | `Camera_SetMode` | not located | `0x08880724` |
+| `Camera_SubmitScene` | `0x0013e280` | `0x08878874` |
 
 ## History
 
@@ -155,3 +255,18 @@ covers is still unread.
   ([collision-shake.md](collision-shake.md)) once its arming side was found.
   Still deliberately did not rename `FUN_0013e280` itself: a frustum-plane-
   shaped tail past the projection build remains unanalysed.
+- 2026-09-05: the frustum-plane tail is read - five plane equations, cross-
+  checked against the PSP's own `Camera_SubmitScene` (`0x08878874`), whose
+  equivalent block decompiles cleanly with none of the PS2's VU0 pseudocode
+  ambiguity. Both the shake block (settled the same day on
+  [collision-shake.md](collision-shake.md)) and this block now being read
+  properly - the bar an open thread set for naming the whole function -
+  `FUN_0013e280` is now `Camera_SubmitScene`, confidence 80, the same name
+  and the same confidence the PSP disc's own equivalent already carries, for
+  the same reason ("the plane block is read as shape, hence 80 rather than
+  90"). Also checked,
+  prompted by the empty xrefs to this address: `SCES_547.48`'s relocation
+  table is entirely empty, so this is not the PSP relocation-table defect
+  other threads have hit, just a program that never carried one - the
+  missing callers are more likely an indirect `jalr` dispatch than a Ghidra
+  analysis gap.
