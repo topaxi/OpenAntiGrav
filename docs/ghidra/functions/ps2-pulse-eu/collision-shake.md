@@ -175,14 +175,79 @@ the PSP's `vmmul_t` at `func_0x002676b4` (`0x08a6b6b4`). **Both binaries agree
 independently: the shake is an angular perturbation of the camera's
 orientation, not a positional jitter of the eye.**
 
-The rotation *axis* is not settled: Ghidra drops the same non-GPR argument at
-every call level here (`FUN_0013e280` -> `FUN_0025cbb0` -> `FUN_0025ca48`),
-so nothing in the decompiled C text names which register carries it, and
-reading it out needs raw p-code/register dataflow rather than the decompiler's
-one-function-at-a-time view. `mode`'s `1`/`3`/else split plausibly picks
-between two different axes (matching the doc's earlier "front vs behind"
-framing) rather than just negating a shared one, but that's a hypothesis, not
-a read.
+**Settled 2026-09-05: the rotation axis is not fixed at all - it is a live
+snapshot of one of the camera's own three basis rows, picked by `shake_mode`,
+and each mode applies *two* sequential rotations, not one.** `FUN_0013e280`'s
+disassembly (not just its decompile) around the `FUN_0025cbb0` call sites
+shows a fresh `lq a1,<offset>(s2)` immediately before every call, with nothing
+between that load and the `jal` that could change `$a1` - the register the
+call passes straight through into `FUN_0025ca48`'s `in_a1_qw`, whose `mtc1`/
+`dsrl32`/`pcpyud` triplet (confirmed by decompile) fans exactly that
+register's three lanes into the Rodrigues axis. Reading the register origin
+this way needed no p-code beyond what the disassembly already shows:
+
+```text
+mode == 1: FUN_0025cbb0(angle = f[0x60(sp)] + shake, axis = s2+0x50)   // row1
+           FUN_0025cbb0(angle = shake,                axis = s2+0x60)   // row2
+mode == 3: FUN_0025cbb0(angle = -(f[0x60(sp)] + shake), axis = s2+0x50) // row1, negated
+           FUN_0025cbb0(angle = shake,                   axis = s2+0x60) // row2
+else:      FUN_0025cbb0(angle = shake,                   axis = s2+0x50) // row1
+           FUN_0025cbb0(angle = osc2 * 0.06,              axis = s2+0x40) // row0 - the basis's own row, already rotated by the first call
+```
+
+(`s2+0x40`/`+0x50`/`+0x60` are the same three basis rows this page already
+placed - see above.) Confidence **92**: every step is a direct disassembly
+read with no interpretation, on one binary.
+
+**Cross-checked on the PSP the same day, independently, at confidence 95.**
+`Camera_SubmitScene` (`0x08878874`, [camera.md](../psp-pulse-usa/camera.md))
+decompiles the equivalent block *without* the dropped-argument gap the PS2
+copy has - the PSP's wrapper (`func_0x00266f04`, `0x08a6af04`, not yet named)
+shows its axis as an explicit third pointer argument, not a register Ghidra
+had to be walked past:
+
+```c
+// shake_mode == 1
+func_0x00266f04(fVar13 + fVar22, param_1 + 0x40, param_1 + 0x50);  // row1
+func_0x00266f04(fVar22,          param_1 + 0x40, param_1 + 0x60);  // row2
+// shake_mode == 3
+func_0x00266f04(-(fVar13 + fVar22), param_1 + 0x40, param_1 + 0x50); // row1, negated
+func_0x00266f04(fVar22,             param_1 + 0x40, param_1 + 0x60); // row2
+// else
+func_0x00266f04(fVar22, param_1 + 0x40, param_1 + 0x50);            // row1
+func_0x00266f04(fVar19 * fVar21 * fVar20 * 0.1 * 0.6, iVar9, iVar9); // row0 (iVar9 == param_1+0x40)
+```
+
+Same three offsets, same per-mode selection, same "second call's axis is the
+matrix's own row0" shape in the `else` branch, in an independently-written
+binary. This is not a hypothesis about which of "local right/up/forward" the
+shake picks - the disc's own code does not select a fixed local axis at all;
+it re-reads whichever basis row the current mode names, including reading
+back the very row the first call in the `else` branch just rotated.
+
+What this means for a from-scratch reimplementation: **a single fixed
+rotation axis cannot reproduce this.** The two rotations per mode are about
+different vectors (row1 then row2, or row1 then row0), composed on top of
+each other, and the axes are the camera's own live orientation state, not
+constants - so reproducing this needs the camera's current basis passed into
+whatever plays the shake, not a module-level constant. `Shake::rotation`'s
+own doc comment is corrected to say so rather than name a stand-in axis; see
+`crates/render/src/camera/shake.rs`.
+
+**What each row means physically (right/up/forward vs. the camera.md
+transposition reading) is deliberately left open, at a much lower
+confidence (~55) than the finding above and not needed to settle it.**
+`positional-audio.md` established, for the same class of active-camera
+object, that "the camera's world axes are the stored matrix's *columns*",
+which would make a single *row* here the local representation of a world
+axis rather than a local right/up/forward vector outright. One piece of
+in-function corroboration for that reading: `FUN_0013e280` at
+`0x0013e784`-`0x0013e7c8` sums the squares of lane 2 (the third element)
+across all three rows and gates on the total - the squared length of
+*column* 2, which only reads as a meaningful degeneracy guard if the
+columns, not the rows, are the basis's real axes. Whether `s2` here is
+provably the same struct camera.md examined was not chased - the axis
+finding above does not depend on it.
 
 - Decrements `shake_timer` by a per-call constant (`+0x1d4`) on the way out.
 
@@ -213,9 +278,15 @@ which stays a separate, open question.
 
 ## Not determined
 
-- The rotation axis `FUN_0025ca48` builds its matrix from - Ghidra drops the
-  carrying register from the decompiled signature at every call level; needs
-  a p-code/register-dataflow read, not another decompile.
+- What each basis row physically represents (world right/up/forward directly,
+  or the transposed reading `positional-audio.md` establishes for the active
+  camera elsewhere) - see the axis section above; confidence ~55, and not
+  needed to answer which registers/offsets carry the rotation axis.
+- Whether `s2+0x40..0x60` is mutated in place by the shake *before* the
+  `0x13e648` copy-out to the render slot and the `0x13e784`+
+  normalise/orthogonalise pass, and whether that perturbation therefore
+  accumulates frame to frame rather than being reset upstream - order
+  suggests yes, not traced further.
 - `FUN_0020cf50`/`FUN_0025cbb0`/`FUN_0025ca48`/`FUN_00159268`/`FUN_001cc100` -
   read only for the one call shape each was seen in here (`FUN_0025cbb0` and
   `FUN_0025ca48` now decompiled in full, the other three not), none renamed.
@@ -253,3 +324,17 @@ which stays a separate, open question.
   offset vector as the call shape alone had suggested. Cross-checked against
   the PSP's `func_0x002676b4`/`func_0x00267820`, which do the identical
   Rodrigues-rotation-then-`vmmul_t` in an independent binary.
+- 2026-09-05: the rotation axis, this page's own longest-standing "not
+  determined" item, is settled - a live basis row (`+0x40`/`+0x50`/`+0x60`),
+  picked by `shake_mode`, applied as two sequential rotations per frame, not
+  a fixed constant. Read straight off `FUN_0013e280`'s disassembly (no p-code
+  needed - the register origin was visible from the `lq a1` right before each
+  call) and cross-checked independently on the PSP's `Camera_SubmitScene`,
+  whose decompile shows the same axis as an explicit pointer argument at the
+  same three offsets. `oag_render::camera::shake`'s doc comment is corrected
+  to stop presenting a fixed "local right" axis as this module's own
+  placeholder for an unconfirmed reading - the disc's own code does not pick
+  a fixed axis at all, so no single constant is a faithful stand-in, and the
+  module's rotation arithmetic is left as a known simplification rather than
+  rewritten to a shape (axis input into `Shake::rotation`) this pass did not
+  scope.
