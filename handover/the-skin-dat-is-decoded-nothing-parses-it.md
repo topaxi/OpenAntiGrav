@@ -76,6 +76,17 @@ arithmetic closes with nothing left over against all sixteen real files.
   Tracing the six non-lobby callers of `Skin_ApplyToModel` - `0x08825638`,
   `0x088256b8`, `0x08828398`, `0x0882885c`, `0x08843804`, `0x088eaa84` - is the
   way to settle it without needing either address.
+- **The generic `%s\%s.dat` fallback path is unexercised.** When the specific
+  file fails to load, the loader walks the team node's children for the one
+  named `Normal` and rebuilds the path from that child's `+0x94` field. Nothing
+  observed what that field holds, so **which file the fallback names is
+  unknown** - do not assume it is `ship_alt.dat`. The byte format is the same
+  whichever it is, so this does not block the parser.
+- **The applier's flag argument was only ever seen as zero.** A non-zero flag
+  uploads the *stored* 64x64 block 4 instead of the composite, which is the
+  only thing that makes block 4 meaningful at all - and the one traced caller
+  passes zero. A parser must read block 4 regardless; what needs settling is
+  which callers pass what, which is the same six-caller trace listed below.
 - **What `loyalty` accumulates is still untraced**, unchanged from the previous
   thread: whether it is per-save or per-team, and what `Team="any"` changes
   about the check.
