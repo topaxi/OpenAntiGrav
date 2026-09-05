@@ -425,7 +425,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/pulses-draw-order-is-recovered-and-it-is.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
-- [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
+- [`viewProj` is located; the capture harness still reports the wrong camera](handover/viewproj-is-located-the-capture-harness-still.md)
 - [`Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded](handover/material-states-upper-bits-bit-7-is-measured-mode.md)
 - [Wipeout HD's front end boots, off a chain that says it is only declared](handover/wipeout-hds-front-end-boots-off-a-chain.md)
 - [HD's menus are drawn inside its own frame, and the `HD_*` palette turned out to be the FE style](handover/hds-menus-are-drawn-inside-its-own-frame.md)
