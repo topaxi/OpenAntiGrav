@@ -822,6 +822,45 @@ fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
 ///   slide term is at its largest. On a straight `target` is infinite and this
 ///   gate is what keeps the differential off it.
 ///
+/// # This also gates out corner *entry*, and that is a live, unfixed bug
+///
+/// Read literally, "never below the corner's target speed" sounds like it
+/// only ever excludes corner exit. It does not: `speed < target` fires for as
+/// long as the craft's speed has not yet crossed a target computed from
+/// [`Tuning::lateral_accel`] - a model of the grip available, not a
+/// measurement of it on this corner - which is equally true on the way *in*.
+/// A craft understeering hard enough to saturate the steering loop while
+/// still measurably below that assumed target gets no assistance at all:
+/// exactly the case the paragraph above says this exists for.
+///
+/// **Measured** on a real circuit (Talon's Junction, Pulse PSP): `command`
+/// pinned at `+-1.0`, `rate_error` 0.5-0.6 rad/s - both well past
+/// `trail_saturation`/`trail_deadband` - for over ten consecutive ticks while
+/// speed collapsed from 111 to 39.5 units/s and `target` sat at 160-180
+/// throughout. `speed < target` held on every one of those ticks, so the
+/// differential was zero on every one of them. See
+/// `docs/gameplay/ai.md#airbrakes-and-what-a-differential-one-actually-does`.
+///
+/// **Tried and reverted**: replacing the condition with `!target.is_finite()`,
+/// off only on a genuine straight where [`corner_target`] returns infinity
+/// rather than below-target anywhere. That passed every `tests/closed_loop.rs`
+/// case including the stability guard, because [`super::line::oval_of`]'s
+/// straights are built from exactly collinear points and so are genuinely
+/// infinite. **A real racing line's three sampled points are never exactly
+/// collinear**, so `target` is finite everywhere on a disc track - measured
+/// as zero `f32::INFINITY` targets over a full lap of Talon's Junction,
+/// against 303 on the closed-loop oval in the same run. The replacement gate
+/// was therefore inert on real geometry: the differential fired on every
+/// saturated tick anywhere, including off-line recovery mid-corner, which
+/// `tests/closed_loop.rs` cannot see because its own recoveries only happen
+/// on its exactly-straight segments. On a real seven-craft field
+/// (`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`)
+/// this ground one opponent's shield to zero over a minute of ordinary
+/// racing, against a `full * 0.45` floor the unmodified gate clears
+/// comfortably. A fix needs a threshold that actually discriminates on real
+/// track curvature - not a re-derivation of "is this a straight" - and that
+/// is a tuning question, not a logic one: see `HANDOVER.md`.
+///
 /// No slew limiting here, and none needed: this is a *target*, and
 /// `oag_physics::controls::update` ramps the airbrake states toward it at
 /// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the driver
