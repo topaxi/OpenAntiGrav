@@ -267,26 +267,37 @@ impl Race {
     /// `right` and `up` are the camera's, read out of the view matrix the same
     /// way the exhaust's are.
     ///
-    /// `modelled` says the caller is drawing the rockets as
-    /// [`ROCKET_MODEL_ENTRY`]'s mesh, in which case this draws **nothing**:
-    /// the glow around a modelled rocket is [`ROCKET_FLARE_EFFECT`], played
-    /// off the disc through [`Race::stage`], and a billboard on top of it
-    /// would be a second invented one. What is left here is the case where
-    /// the model did not load and a projectile would otherwise be invisible -
-    /// see [`PROJECTILE_SPRITE_HALF_SIZE`].
+    /// `modelled` says, **per live projectile's own kind**, whether the
+    /// caller is already drawing it as a mesh - [`ROCKET_MODEL_ENTRY`],
+    /// [`MINE_MODEL_ENTRY`] or [`BOMB_MODEL_ENTRY`] - in which case this draws
+    /// **nothing** for that one: the glow around a modelled rocket is
+    /// [`ROCKET_FLARE_EFFECT`], played off the disc through [`Race::stage`],
+    /// and a billboard on top of it would be a second invented one. What is
+    /// left here is the case where a kind's own model did not load, or a kind
+    /// (the Missile, the Plasma, the Shuriken) has no model at all, and a
+    /// projectile would otherwise be invisible - see
+    /// [`PROJECTILE_SPRITE_HALF_SIZE`].
+    ///
+    /// **Was one flag for every kind at once, fixed 2026-09-05 alongside
+    /// [`Self::projectile_model_matrices`]'s own kind filter.** A single
+    /// `bool` gated *all* projectiles on whether the Rocket's model happened
+    /// to load, so on a real disc (where it does) a live Missile, Plasma or
+    /// Shuriken drew nothing at all: no mesh, because it authors none, and no
+    /// billboard, because the flag said "modelled" for a kind it was never
+    /// about. `modelled` is now asked once per live projectile's own kind.
     #[must_use]
     pub fn projectile_sprites(
         &self,
         right: Vec3,
         up: Vec3,
-        modelled: bool,
+        modelled: impl Fn(oag_formats::weapons::Weapon) -> bool,
     ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        if modelled {
-            return vertices;
-        }
         for projectile in &self.world.projectiles.slots {
-            if projectile.kind.is_none() {
+            let Some(kind) = projectile.kind else {
+                continue;
+            };
+            if modelled(kind) {
                 continue;
             }
             vertices.extend(exhaust::sprite(
@@ -349,11 +360,64 @@ impl Race {
     /// script replayed through `oag-trace run --script`.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_formats::weapons::Weapon::Rocket)
+    }
+
+    /// Where each live mine is, for the model draw.
+    ///
+    /// **Translation only, and that is a reading rather than a shortcut.**
+    /// `oag_gameplay::projectile::mine::at_rest` is the recovered velocity a
+    /// laid mine carries - zero, so [`Self::projectile_model_matrices`]'s
+    /// `forward == Vec3::ZERO` branch is exactly what fires here and there is
+    /// no separate degenerate case to handle the way the Rocket's has one.
+    ///
+    /// **`Mine_Init` does carry an orientation** - it copies the firing
+    /// craft's own anchor matrix into the entity once, at drop, and nothing
+    /// found updates it afterward (see `mine.md`'s "`Mine_Init` scatters"
+    /// section) - but `oag_gameplay::Projectile` has no field to carry a
+    /// frozen pose in, and adding one touches the determinism hash for a
+    /// value nothing else in the simulation reads. Left as an open item
+    /// rather than invented; see `handover/`.
+    #[must_use]
+    pub fn mine_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_formats::weapons::Weapon::Mine)
+    }
+
+    /// Where each live bomb is, for the model draw - the Mine's, one size up.
+    ///
+    /// Same reading as [`Self::mine_model_matrices`]: `Weapon_FireBomb`'s own
+    /// direction argument is a heading, not a velocity a laid bomb keeps (see
+    /// `mine.md`'s "The Bomb is the same weapon, one size up"), so this is
+    /// translation only for the same reason.
+    #[must_use]
+    pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_formats::weapons::Weapon::Bomb)
+    }
+
+    /// Where each live projectile of one `kind` is and how it is oriented, for
+    /// the model draw - shared by [`Self::rocket_model_matrices`],
+    /// [`Self::mine_model_matrices`] and [`Self::bomb_model_matrices`].
+    ///
+    /// **Filters on `kind` specifically, which is the fix over what this did
+    /// before 2026-09-05.** Before, the filter was `kind.is_some()` - any live
+    /// projectile at all - so a live Missile, Plasma, Shuriken, Mine or Bomb
+    /// was drawn as a **Rocket** mesh whenever one was airborne alongside a
+    /// loaded [`ROCKET_MODEL_ENTRY`], because [`Race::rocket_model_matrices`]'s
+    /// one caller zips its result against the Rocket's own drawables with no
+    /// kind check on either side. No test caught it because every test here
+    /// only ever spawns a single Rocket - see
+    /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot` for the
+    /// one that does not. The same shape of bug, in the model path rather
+    /// than the effect path, as the mine that used to ride
+    /// [`ROCKET_FLARE_EFFECT`] from the moment it landed - see
+    /// [`Race::advance_projectile_flares`]'s doc comment.
+    #[must_use]
+    fn projectile_model_matrices(&self, kind: oag_formats::weapons::Weapon) -> Vec<Mat4> {
         self.world
             .projectiles
             .slots
             .iter()
-            .filter(|projectile| projectile.kind.is_some())
+            .filter(|projectile| projectile.kind == Some(kind))
             .map(|projectile| {
                 let forward = projectile.velocity.normalize_or_zero();
                 if forward == Vec3::ZERO {

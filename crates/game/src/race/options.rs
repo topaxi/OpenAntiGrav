@@ -474,6 +474,12 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
+    /// The model a laid Mine is drawn as: [`MINE_MODEL_ENTRY`]. `None` on the
+    /// same terms as [`Self::rocket_model`].
+    pub mine_model: Option<Model>,
+    /// The model a laid Bomb is drawn as: [`BOMB_MODEL_ENTRY`]. `None` on the
+    /// same terms.
+    pub bomb_model: Option<Model>,
     /// The sphere a fired Shield shows from **inside** the cockpit, drawn
     /// instead of the per-team shell when the camera is in the craft.
     ///

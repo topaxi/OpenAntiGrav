@@ -237,7 +237,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     let right = Vec3::X;
     let up = Vec3::Y;
     assert!(
-        race.projectile_sprites(right, up, false).is_empty(),
+        race.projectile_sprites(right, up, |_| false).is_empty(),
         "an empty sky must draw nothing rather than a quad at the origin"
     );
 
@@ -250,7 +250,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
             0,
         );
     }
-    let vertices = race.projectile_sprites(right, up, false);
+    let vertices = race.projectile_sprites(right, up, |_| false);
     assert_eq!(
         vertices.len(),
         oag_gameplay::projectile::MAX_PROJECTILES * 6,
@@ -259,7 +259,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     // A modelled rocket's glow comes off the disc instead, so this buffer
     // gets nothing at all from it.
     assert!(
-        race.projectile_sprites(right, up, true).is_empty(),
+        race.projectile_sprites(right, up, |_| true).is_empty(),
         "a modelled rocket must not also get an invented billboard"
     );
     // Every craft's flare shares this buffer with the projectiles, so the
@@ -324,6 +324,70 @@ fn a_modelled_rocket_points_where_it_is_going() {
         );
     }
     assert!(x.dot(y).abs() < 1e-5 && x.dot(z).abs() < 1e-5 && y.dot(z).abs() < 1e-5);
+}
+
+/// A rocket and a missile in flight at once do not share a model slot.
+///
+/// **The regression test for the bug [`Race::rocket_model_matrices`] used to
+/// carry**: before 2026-09-05 it filtered `kind.is_some()` rather than
+/// `kind == Some(Weapon::Rocket)`, so a live projectile of *any* kind was
+/// handed a Rocket matrix and drawn as the Rocket's own mesh. Every other
+/// test here spawns a Rocket alone, which is exactly why none of them caught
+/// it - the filter and the "any kind" version agree whenever there is only
+/// one kind in the air.
+#[test]
+fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    race.world.projectiles.spawn(
+        oag_formats::weapons::Weapon::Rocket,
+        Vec3::X,
+        Vec3::Z * 600.0,
+        0,
+    );
+    race.world.projectiles.spawn(
+        oag_formats::weapons::Weapon::Missile,
+        Vec3::Y,
+        Vec3::Z * 600.0,
+        0,
+    );
+    assert_eq!(
+        race.rocket_model_matrices().len(),
+        1,
+        "one live rocket, and the missile alongside it must not count"
+    );
+    assert_eq!(
+        race.mine_model_matrices().len(),
+        0,
+        "neither a rocket nor a missile is a mine"
+    );
+}
+
+/// A laid mine or bomb is drawn with no orientation - a reading, not a
+/// shortcut, since a laid charge carries zero velocity ([`at_rest`]) and
+/// there is nowhere recovered to put a rotation on it. See
+/// [`Race::mine_model_matrices`]'s own doc comment for what `Mine_Init`
+/// carries that this does not yet draw.
+///
+/// [`at_rest`]: oag_gameplay::projectile::mine::at_rest
+#[test]
+fn a_laid_mine_and_bomb_are_translation_only() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    race.world
+        .projectiles
+        .spawn(oag_formats::weapons::Weapon::Mine, Vec3::X, Vec3::ZERO, 0);
+    race.world
+        .projectiles
+        .spawn(oag_formats::weapons::Weapon::Bomb, Vec3::Y, Vec3::ZERO, 0);
+
+    let mine = race.mine_model_matrices();
+    assert_eq!(mine.len(), 1);
+    assert_eq!(mine[0], Mat4::from_translation(Vec3::X));
+
+    let bomb = race.bomb_model_matrices();
+    assert_eq!(bomb.len(), 1);
+    assert_eq!(bomb[0], Mat4::from_translation(Vec3::Y));
 }
 
 /// A rocket fired straight down still gets a usable basis.

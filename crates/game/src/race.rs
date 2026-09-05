@@ -338,6 +338,38 @@ pub const SHAKE_SEED: u64 = 0x5_9a_2b_02;
 /// the loader assembles paths, which is what the name hash needs.
 pub const ROCKET_MODEL_ENTRY: &str = r"Data\Weapons\Rocket.vex";
 
+/// The archive entry a Mine's model comes from.
+///
+/// **Recovered, confidence 92**, off `mine.md`'s reading of `Mine_Construct`
+/// (`0x08859930`), which loads the entity's model by exactly this name.
+///
+/// **Drawn with no drop-time effect alongside it, and that is a checked
+/// negative rather than an omission.** The Next Step that wired this asked
+/// for `Mine_Init` (`0x08859ac8`) and `Mine_Construct` to be read for one
+/// before any was; both were, live, in the same session this constant was
+/// added. `Mine_Init`'s call list is two sound cues (`MINELAUNCH`,
+/// `MINERADAR`, both already in `mine.md`) plus an allocator and an init for
+/// the second cue's tracked handle - no call anywhere in it resolves to
+/// `Psys_Spawn_q` (`0x08915484`). So a mine is laid silently on the visual
+/// side, the same as it always was; only the sound and the body model are new.
+/// See `handover/weapons-eight-of-thirteen-the-plasma-and-the.md` for the read
+/// and the live-database caveat it carries (this session's Ghidra instance
+/// resolves `Mine_Init`'s and `Mine_Construct`'s own function boundaries to
+/// different addresses than `mine.md` records, most likely because
+/// `just apply-names` has not been replayed into it - the *content* at both
+/// documented addresses still matches `mine.md`'s reading byte for byte,
+/// which is what this finding rests on rather than the addresses lining up).
+pub const MINE_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Mine.vex";
+
+/// The archive entry a Bomb's model comes from.
+///
+/// **Recovered, confidence 92**, off `mine.md`'s "The Bomb is the same
+/// weapon, one size up" section: the Bomb's own model-loading group mirrors
+/// the Mine's exactly, at `Data\Weapons\Pulse_Bomb.vex`. Same no-drop-effect
+/// finding as [`MINE_MODEL_ENTRY`] - the two share `Mine_Init`'s code path
+/// per that section, so what is true of one's drop is true of the other's.
+pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
+
 /// Half-width of the sprite a projectile in flight is drawn as, in world units.
 ///
 /// **Invented**, and now only a *fallback*: a rocket is drawn as
