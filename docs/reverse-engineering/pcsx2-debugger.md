@@ -48,6 +48,17 @@ is only meaningful within that one session. The savestate has to be made once,
 by walking the front end into a race (see below) and running
 `just pcsx2-state save 2`.
 
+**`just pcsx2-stop` really does mean always, not just when `pcsx2-qt` is
+still up.** It also tears down the Xvfb `:78` that `display`/`boot` started,
+and nothing else ever does - `display`, `boot`, `press`, `shot` and `input`
+are deliberately separate invocations against one long-lived display, so a
+session that ends without this call leaves that display running. Measured
+directly: three orphaned Xvfb processes on this project's own machine, all
+two or more days old with no client attached, one of them `:78` from this
+harness. `pcsx2-stop` is safe to call twice and safe to call when nothing is
+up at all - it only ever stops a display this tooling itself started, never
+one that was already there.
+
 ## Booting without a human, and without a window
 
 PCSX2 has **no `--headless`**. `-nogui` hides the *main* window and still opens

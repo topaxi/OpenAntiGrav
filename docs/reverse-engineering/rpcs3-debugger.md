@@ -42,6 +42,7 @@ What works is a real renderer on a display that is not the user's:
 ```sh
 python3 scripts/rpcs3-drive.py display        # Xvfb :77, TCP-addressable
 uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
+python3 scripts/rpcs3-drive.py stop           # always, when the session is done
 ```
 
 `--load-shots N` adds N evenly spaced screenshots across the load window, which
@@ -52,6 +53,18 @@ it - the loading screen is the case it was added for. See
 Measured on that path: `Main Menu` in about 45 seconds, a race running on
 Talon's Junction about 80 seconds after that, and screenshots that are real
 frames rather than black.
+
+**Run `stop` (or `just rpcs3-stop`) when the whole session is done, not just
+after one race.** `boot`/`race`/`shot`/`capture`/`browse`/`record` each stop
+their own RPCS3 process on the way out, but the display is deliberately
+long-lived across many of those calls, so nothing tears it down on its own -
+one agent left it up for thirty minutes today, and it has been measured
+directly as an orphaned two-day-old process with no client attached. `stop`
+only ever stops a display this tooling itself started; it leaves alone one
+that was already running before `display` ran, and it is safe to call twice
+or with nothing up at all. Never `pkill -x Xvfb` to clean up by hand - see the
+trap below for why that specific command is dangerous rather than just
+imprecise.
 
 Three details in the display that each cost a run:
 
@@ -490,11 +503,15 @@ window's own rectangle**, and nothing here currently reports where that is;
 until it does, treat an unexplained region beside the expected content as
 ghosting first, not as a feature, and crop it out by hand (the real content in
 both cases started at a consistent x-offset from the left edge of the
-trimmed image). Restarting Xvfb (`pkill Xvfb`, then let `start_display()`
-spawn a fresh one) is the sure fix but costs every other script sharing `:77`
-its state; finding the live RPCS3 window's own geometry (`xdotool` or
-`xwininfo` against the game's window, not the root) and cropping to exactly
-that would fix it without the blast radius.
+trimmed image). Restarting Xvfb (`python3 scripts/rpcs3-drive.py stop`, then
+let `start_display()` spawn a fresh one) is the sure fix but costs every
+other script sharing `:77` its state; finding the live RPCS3 window's own
+geometry (`xdotool` or `xwininfo` against the game's window, not the root)
+and cropping to exactly that would fix it without the blast radius.
+**Never `pkill Xvfb` or `pkill -x Xvfb` for this** - that reaches every
+virtual display on the machine, including one another script or another
+agent's session is using right now, not just `:77`; `rpcs3-drive.py stop`
+kills only the specific process this tooling's own marker file names.
 
 ### `Z0` breakpoints fire, but only under the interpreter
 
