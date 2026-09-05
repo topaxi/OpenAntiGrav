@@ -26,6 +26,9 @@ fn pads() -> fmt::SpeedupPads {
 fn special() -> fmt::Special {
     fmt::Special {
         speedpad_jump: 3000.0,
+        roll_cost: 3001.0,
+        roll_speed: 3002.0,
+        roll_turbotime: 3003.0,
     }
 }
 

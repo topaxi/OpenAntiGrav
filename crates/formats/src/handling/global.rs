@@ -144,11 +144,22 @@ impl GravityMul {
     }
 }
 
-/// The one attribute of `<Special>` this project reads.
+/// Four of `<Special>`'s five attributes.
 ///
 /// The element carries five - `roll_cost roll_speed roll_turbotime speedpad_jump
-/// turbo_jump` - and the other four are left alone until something needs them,
-/// the way the rest of `<Global>` is. Only `speedpad_jump` has a consumer.
+/// turbo_jump` - and `turbo_jump` is left alone until something needs it, the
+/// way the rest of `<Global>` is; see `docs/ghidra/functions/psp-pulse-usa/
+/// input-bindings.md`'s barrel-roll section for why it is probably not this
+/// mechanic's.
+///
+/// The other four are the **barrel roll**'s tunables, all read from
+/// `Xml_ReadGlobalSettings` (`0x0883a970`) into one contiguous `.bss` run,
+/// confidence **90**. Both shipped PSP pressings author the same line:
+///
+/// ```text
+/// <Special roll_cost="8" roll_speed="1.5" roll_turbotime="0.5"
+///          speedpad_jump="0.1" turbo_jump="0.1"/>
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Special {
     /// How far the speed-pad boost tilts toward the hull's up axis while the
@@ -165,6 +176,32 @@ pub struct Special {
     /// `oag_gameplay::handling::SCALED_FIELDS`: the parse writes
     /// `Xml_AttributeAsFloat`'s return straight into the global.
     pub speedpad_jump: f32,
+    /// What a completed barrel roll costs, as a **percentage** of the ship's
+    /// shield capacity. `8` on both shipped discs.
+    ///
+    /// `Ship_BarrelRollCost` (`0x08840770`) reads `g_roll_cost` (`0x08b36bf4`)
+    /// and returns `roll_cost * 0.01 * stats_base[skill_level].shield` - the
+    /// **identical** expression `Ship_SetShield` (`0x0883e6f4`) clamps every
+    /// shield write to, i.e. `oag_physics::params::Dimensions::shield` in this
+    /// crate. The gesture arms nothing unless this is strictly less than the
+    /// current shield. See `docs/ghidra/functions/psp-pulse-usa/
+    /// input-bindings.md`.
+    pub roll_cost: f32,
+    /// How fast the barrel roll's signed phase ramps toward `+/-1.0`, in units
+    /// per second. `1.5` on both shipped discs, so a full roll takes `0.667 s`.
+    ///
+    /// `g_roll_speed` (`0x08b36bf0`).
+    pub roll_speed: f32,
+    /// How long the landing payout holds, in seconds, once a completed roll
+    /// touches down. `0.5` on both shipped discs.
+    ///
+    /// `g_roll_turbotime` (`0x08b36bf8`). While it runs the original's
+    /// `craft+0x1c0 & 0x400` is held, which is a **1.5x lateral grip
+    /// multiplier**, the hover spring's damping scalar forced to `1.0`, and the
+    /// same uncapped turbo add `oag_physics::ship::ShipState::turbo_timer`
+    /// already models for the other source of that bit. Confidence 90; see
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    pub roll_turbotime: f32,
 }
 
 impl Special {
@@ -173,6 +210,9 @@ impl Special {
     fn from_node(node: &Node) -> Result<Self> {
         Ok(Self {
             speedpad_jump: number(node, Self::ELEMENT, "speedpad_jump")?,
+            roll_cost: number(node, Self::ELEMENT, "roll_cost")?,
+            roll_speed: number(node, Self::ELEMENT, "roll_speed")?,
+            roll_turbotime: number(node, Self::ELEMENT, "roll_turbotime")?,
         })
     }
 }
@@ -185,8 +225,8 @@ impl Special {
 /// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
 /// added when something needs them.
 ///
-/// Of `<Special>`'s five attributes only `speedpad_jump` is read - see
-/// [`Special`].
+/// Of `<Special>`'s five attributes, `turbo_jump` is the only one left unread -
+/// see [`Special`].
 /// A `<GlobalClass>` whose `name` is outside [`SpeedClass`].
 ///
 /// The counterpart of [`super::Class`]'s `raw_name`, one level up: the same rung
@@ -212,8 +252,8 @@ pub struct ForeignGlobalClass {
 /// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
 /// added when something needs them.
 ///
-/// Of `<Special>`'s five attributes only `speedpad_jump` is read - see
-/// [`Special`].
+/// Of `<Special>`'s five attributes, `turbo_jump` is the only one left unread -
+/// see [`Special`].
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Global {
     /// `<Zone/>`.
