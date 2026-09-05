@@ -514,6 +514,38 @@ The first-boot dialogs are handled too, from the sequence below, so a fresh
 memory stick needs no hand-holding either - though the SDL build persists the
 profile, so that path runs once per install.
 
+### Stopping *at* `Track Creation` or `Team Selection`, instead of walking through them
+
+`menu()` is deliberately not reusable for this: it presses `cross`, `cross`
+straight through both screens into `InGame` with no stop in between, because
+finishing a race is the whole point of that function. Screenshotting the
+screens themselves (done for
+[race-setup.md's live capture](../formats/race-setup.md#captured-live-in-ppsspp-2026-09-05))
+needs the same back-out/`Racebox`/`Custom Race` prefix but has to interpose a
+screenshot and stop before the two `cross` presses that `menu()` fires
+unconditionally.
+
+The reusable shape: import `psp-drive.py` as a module (`importlib` off its
+file path, since `psp-drive` is not a valid Python identifier for a normal
+`import`) and reuse its `Debugger`, `tap`, `expect`, `named` and `FIRST_BOOT`
+rather than re-deriving the two naming gotchas above (`Main menu` vs
+`Main Menu`, `Demo InGame`). Everything up to and including
+`expect(dbg, TRACK_SELECT, ...)` is copy-pasteable from `menu()` verbatim;
+what comes after is whatever the capture needs instead of the next `tap`.
+`Team Selection` has no exported constant - compare against the literal
+string, as `race-setup.md`'s capture script did.
+
+Two things that capture found worth keeping here:
+
+- **`square` is inert on `Track Creation`, opens `Pre Race Music Select` on
+  `Team Selection`, and `triangle`/`select` both open a `*_Help` overlay on
+  either screen** (`Track Help`, `Team Help`) - three button bindings that
+  were not otherwise recorded on this page.
+- **The wrapping three-entry track list can be walked all the way round with
+  `down` alone** (four presses lands back at the start) to enumerate every
+  reachable circuit and its stated distance, without ever needing to read the
+  index off memory.
+
 ## Getting into a race, once
 
 **Automated now** - see the section above; what follows is the underlying

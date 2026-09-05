@@ -119,7 +119,9 @@ same five in the same order as `Slide_0`..`Slide_4` with idstrings `RC_SPEED`,
 
 ## The previews are rendered 3D meshes
 
-**Confidence 93 for the track, 88 for the craft.** This is the result most
+**Confidence 97 for the track, 95 for the craft, on the PSP pressing** - raised
+from string archaeology to a direct capture; see
+[below](#captured-live-in-ppsspp-2026-09-05). This is the result most
 likely to be guessed wrong: a selection screen with a circuit on it invites the
 reading "a flat 2D map" or "a prerendered image", and on every title where the
 question is resolved it is neither.
@@ -137,6 +139,14 @@ The block holds, in order: `Info Track 2.2`, `3.1`, `3.2`, `3.3`,
 **`reverse`**, **`%s\FE\%s.vex`**, `%d / %d`, `honey`, `Class`, `Info1`,
 `MSC_DISTANCE`, `Info2`, `IG_HUD_LAP_REC`, `Info3`, `ER_RR`, `Info3 Title`,
 `zone`, `ER_ZONE_SCORE`, `Info1 Title`, then `TrackSelection`.
+
+**`Black` and `White` are the two circuit runs, not a preview-view toggle.**
+Confirmed live: the screen's own Help overlay (`triangle`) reads "Select your
+circuit, and choose the BLACK RUN or WHITE RUN for the circuit. Black and
+White runs vary in size, direction or difficulty, and can provide different
+challenges at different speed classes." Confidence 92 - the disc's own help
+text, verbatim. That leaves `Top->Ship` as the one string in this block with
+no confirmed referent; see the capture below.
 
 Every widget name in that list - `Info Track 2.2`, `linebg1l`, `honey`,
 `Info1`, `Info2`, `Info3`, `IG_HUD_LAP_REC`, `ER_RR` - is one the XML authors
@@ -214,6 +224,77 @@ whose neighbours are this screen's own widget names.
 Both resolve in `54748/WADS2.WAD`, with their own geometry:
 `Data\Environments\16_Track\FE\forward.vex` at 10,432 bytes and
 `Data\Ships\Assegai\ship_FE.vex` at 126,784 bytes. Confidence 90.
+
+### Captured live in PPSSPP, 2026-09-05
+
+Both screens were walked and screenshotted end to end: PPSSPP v1.20.4, SDL
+build under Xvfb, `pulse-psp-usa.chd`, a fresh profile, following
+[the debugger page's](../reverse-engineering/ppsspp-debugger.md) menu walk as
+far as `Track Creation` and then driving custom input past that point instead
+of straight through to `InGame`, since the ordinary walk never stops there.
+Screenshots are game content and were not committed; described here with
+measurements instead.
+
+**Both previews are confirmed live, animated 3D renders, not stills.** Two
+screenshots taken one second apart on the same track show the same static
+architecture with the camera visibly further along the corridor and the
+motion-blur streak in a different position; the same pair on the ship preview
+shows the identical craft rotated a few degrees further round its own turntable.
+That is what raises the confidence at the top of this section from
+string-archaeology to directly observed.
+
+**`Track Creation`'s preview is a first-person flythrough down the circuit's
+own corridor, framed in a hexagonal window - never a top-down map and never a
+ship.** Confirmed across all three reachable circuits and after pressing
+`square`, `triangle` and `select` on the screen (the first is inert here,
+the other two open a `Track Help` overlay): no ship model, silhouette or
+top-down framing appeared under any of them. So on the evidence gathered,
+**`Top->Ship` does not visibly draw a ship on this screen** - confidence 65
+for the negative, since `square`/`triangle`/`select`/`up`/`down` is a bounded
+probe, not an exhaustive one, and the widget path's actual behaviour is still
+unread in code.
+
+**The wrapping three-entry list was walked all the way round** (`down` x4,
+landing back where it started): `1/3` Talon's Junction White (`Distance(m)
+5178`), `2/3` Moa Therma White (`5350`), `3/3` Metropia White (`4419`), then
+back to `1/3`. That is `16_Track`, `03_Track` and `18_Track` in list order,
+confirming both the "exactly three, wrapping" reading and the
+`18_Track` = `02_Track Reversed` = "Metropia" identification live rather than
+only from XML. Confidence 95.
+
+**Every one of the three used the same single-row info-panel layout** -
+`Distance(m)` / `Lap record` / `Race record` over one value column - with no
+layout ever switching to a multi-row `2.x`/`3.x` template. So this capture
+does not confirm the `Info Track %d.%d` = (count, index) hypothesis; it is
+consistent with "always 1.1 when nothing multi-line is needed" just as much as
+with any other reading, and stays unresolved. The rendered label for the
+disputed stat row read **`Distance(m)`** regardless of which idstring drove it
+(`IG_HUD_DISTANCE` from the XML or `MSC_DISTANCE` from the class) - the two
+evidently resolve to the same or near-identical English text, so a screenshot
+alone cannot discriminate which key actually rendered; the localisation table
+that could was not located this session. The 85-confidence conflict stands.
+
+**The locked-circuit info panel is confirmed unreachable from `Track
+Creation`, not just inferred from `<Unlock>` XML.** All three list entries
+are the three ungated `PI_Track`s on every lap around the wrapping list;
+there is no key sequence that reaches a fourth. Answering what a locked
+circuit's panel looks like needs a different entry point - `Tournament C` or
+campaign-grid progression, both untried here, both a different screen from
+`Track Creation` per this page's own reading above. Left open.
+
+**`Team Selection`'s preview is the craft alone on an unlit black background**,
+turntable-rotating, with all five bars rendered exactly as authored - `Speed`,
+`Thrust`, `Handling`, `Shield` as bars, `Loyalty` as a separate bar below a
+divider - and the livery name (`Classic`) between two small arrow glyphs under
+the team name. `down` moved the team from Assegai (`1/8`) to Qirex (`2/8`);
+`right` on a fresh, `Loyalty 0` team's livery selector produced no visible
+change, which is consistent with the variant-unlock gating this page already
+reads out of `Definition.xml` (`Alternative` costs 4,000/60,000) and is now a
+live corroboration of it rather than only an XML reading. Confidence 80 for
+the gating read (one team, one press, not an exhaustive test). `square` opened
+`Pre Race Music Select` (the bottom bar's "Music playlist" label) and
+`triangle`/`select` both opened `Team Help` - both button bindings confirmed
+live.
 
 ### HD/Fury authors its previews as widgets
 
@@ -354,7 +435,12 @@ track-plus-class picker is the crossplay lobby vote.
   evidence that a reference does not exist** - the same caution
   [ship-skin](../ghidra/functions/psp-pulse-usa/ship-skin.md) already
   documents for `.rodata` strings. Reading a class's contiguous string block
-  works around it for *names*; it recovers no behaviour.
+  works around it for *names*; it recovers no behaviour. **The 2026-09-05
+  capture upgrades what the two screens draw from names to an observed,
+  running frame** - see [above](#captured-live-in-ppsspp-2026-09-05) - but
+  this is still a fact about *pixels*, not code: nothing about the capture
+  reaches the functions that build the frame, so this limit's substance is
+  unchanged.
 - **What populates either list is unfound**, on Pulse and on HD alike -
   see [track-selection-screen](../ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
 - **Pure's track and craft previews are unresolved.** A craft candidate exists

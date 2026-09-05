@@ -25,6 +25,17 @@ divergences are all around the page, and they are recorded on the docs page
 too: the `Racebox` menu bypassed, split screen added, `Team Selection` widget
 names `0`-suffixed, `Tournament C` widened from four track slots to twelve.
 
+**Both previews are now captured live in PPSSPP, not just read out of
+`.rodata`** - 2026-09-05, see
+[the docs page's capture section](../docs/formats/race-setup.md#captured-live-in-ppsspp-2026-09-05).
+`Track Creation`'s preview is an animated first-person flythrough of the
+circuit corridor in a hexagonal frame; `Team Selection`'s is a turntable-
+rotating craft on black. The three-entry wrapping track list was walked all
+the way round and confirmed to be exactly `16_Track`/`03_Track`/`18_Track`
+with no locked entry reachable from this screen. `Black`/`White` in the
+`TrackSelection` string block are confirmed to be the two circuit runs (the
+screen's own Help text says so), not a preview toggle.
+
 ## Open
 
 - **The two screen classes cannot be followed in Ghidra.** `TrackSelection`
@@ -70,18 +81,30 @@ names `0`-suffixed, `Tournament C` widened from four track slots to twelve.
   yet listed in `docs/formats/ps2-texture.md`, falling straight out of that
   page's own `.mip` -> `.pct` rule. Unverified by eye.
 
+- **`Top->Ship` still has no confirmed referent.** The 2026-09-05 capture
+  found no ship model, silhouette or top-down framing on `Track Creation`
+  under any of `square`/`triangle`/`select`/`up`/`down` - a bounded negative,
+  confidence 65, not proof the path never renders anything. Unread in code.
+
+- **The locked-circuit info panel is confirmed unreachable from `Track
+  Creation` itself** (the wrapping list only ever holds the three ungated
+  tracks), but still genuinely unanswered: reaching one needs `Tournament C`
+  (a different screen, own binding) or campaign-grid progression, neither
+  tried.
+
+- **The `Info Track %d.%d` = (count, index) layout-selection hypothesis is
+  untested rather than confirmed or refuted.** All three of Pulse's reachable
+  circuits rendered the same single-row layout; nothing in this capture
+  exercised the 2-row or 3-row templates the string block also lists.
+
 ## Next Steps
 
-1. **Capture `Track Creation` and `Team Selection` in PPSSPP.** One capture
-   answers what the previews look like framed, whether `Top->Ship` draws a ship
-   on the track screen, and what the info panel shows for a locked circuit -
-   three open items for one action. `docs/reverse-engineering/ppsspp-debugger.md`.
-2. Once the PSP relocation patch lands, decompile the `TrackSelection` class
+1. Once the PSP relocation patch lands, decompile the `TrackSelection` class
    and find the list-population site. That is the same missing piece HD's
    `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md#not-found`
    records, so solving it on either title informs the other.
-3. Decode `WADS2.WAD` entry 3410 and confirm it is `hex_bg`, then add the row
+2. Decode `WADS2.WAD` entry 3410 and confirm it is `hex_bg`, then add the row
    to `docs/formats/ps2-texture.md`. Five minutes.
-4. Do not rename either screen class in Ghidra until its code is actually read.
+3. Do not rename either screen class in Ghidra until its code is actually read.
    The strings are proof the classes exist, not evidence of what any function
    does, and the rubric's floor is 50 to rename at all.
