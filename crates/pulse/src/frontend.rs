@@ -161,8 +161,16 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `Frame::marks` already paints over every pixel and the field stays
     // unneeded.
     background: None,
-    // Measured. The XML states no selected colour at all.
-    selected: Some(0xFF9D_FFFF),
+    // Measured. The XML states no selected colour at all - a 2026-09-05
+    // frame-accurate capture (150 consecutive `Gfx_PresentFrame` hits) found
+    // the selected label's own ink hitting exactly white at its peak, on three
+    // independent cycles; this supersedes the two ad hoc, channel-clipped
+    // samples this field used to hold. See `oag_title::MenuSkin::selected`.
+    selected: Some(0xFFFF_FFFF),
+    // Measured, same capture: an exact, repeating 33-presented-frame period
+    // (30 Hz) across four consecutive cycles. See
+    // `oag_title::MenuSkin::selected_pulse_period_secs`.
+    selected_pulse_period_secs: Some(1.1),
     transition_secs: 0.5,
     // **A measurement, not a gap.** Pulse's main menu is a vertical `<Menu>`,
     // and no `<HorizMenu>` exists anywhere on either pressing: every blob of

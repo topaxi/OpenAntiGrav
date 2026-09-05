@@ -262,14 +262,44 @@ pub struct MenuSkin {
     ///
     /// Nothing in Pulse's XML states a selected colour. A capture shows the row
     /// brightened toward white rather than given a fill bar or the pink
-    /// `MenuHighLightArrowColor`, which appears nowhere on these screens. Two
-    /// frames of the same still menu measured different peaks - rgb(157,255,255)
-    /// and rgb(107,226,247) - so **the highlight moves**, and this is the
-    /// brighter of the two rather than a phase of a pulse whose period and depth
-    /// were not measured. See `docs/ui/menus-original.md`.
+    /// `MenuHighLightArrowColor`, which appears nowhere on these screens.
+    ///
+    /// **This is the pulse's peak, not a static colour, when
+    /// [`Self::selected_pulse_period_secs`] is `Some`.** A frame-accurate
+    /// PPSSPP capture (breaking on `Gfx_PresentFrame`, 150 consecutive
+    /// presented frames, one uncontaminated run) superseded the two ad hoc
+    /// samples this field used to hold (`rgb(157,255,255)`,
+    /// `rgb(107,226,247)`, both channel-clipped and irreconcilable under any
+    /// single lerp): the brightest pixel of the selected label's own ink hit
+    /// exactly `0xFFFFFFFF` on three independent cycles, while the same pixel
+    /// on an unselected row never moved off `TextColor`. See
+    /// `docs/ui/menus-original.md`.
     ///
     /// `None` where no capture has been taken; the caller supplies its own.
     pub selected: Option<Argb>,
+    /// How long one brighten-and-return cycle of [`Self::selected`] takes, in
+    /// seconds. **Measured on Pulse only.**
+    ///
+    /// The same capture as [`Self::selected`]: the selected label's own ink
+    /// cycles between `TextColor` and white with an exact, repeating period of
+    /// 33 presented frames across four consecutive cycles (troughs at frames
+    /// 12, 45, 78, 111, 144 - each exactly 33 apart), at the front end's own
+    /// measured 30 Hz presentation rate - `33 / 30 = 1.1` seconds. Confidence
+    /// 90: one capture, but four cycles agreeing to the frame and a flat
+    /// control column (an unselected row sampled at the same coordinates
+    /// never moved). The shape of the curve between the two endpoints was not
+    /// solved - eleven discrete brightness levels were measured, unevenly
+    /// spaced, which rules out a linear ramp but does not by itself name a
+    /// curve - so the drawing side picks its own shape between the measured
+    /// endpoints and period, marked as ours the same way
+    /// `oag_game::anim::Tween::eased`'s own invented curve is.
+    ///
+    /// `None` where no capture exists (HD authors [`Self::selected`] as a
+    /// flat, undecorated colour - a 2026-09-05 census of its whole front-end
+    /// XML found no oscillation attribute anywhere) or where the highlight's
+    /// own behaviour is simply unmeasured (Pure). `None` must never be filled
+    /// in from Pulse's own number - see `docs/ui/menus-original.md`.
+    pub selected_pulse_period_secs: Option<f32>,
     /// How long a page change takes, in seconds. Authored, `transition=`.
     ///
     /// Confirmed as seconds rather than assumed: Pulse's `Main Menu` is
@@ -328,7 +358,8 @@ mod tests {
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
         background: None,
-        selected: Some(0xFF9D_FFFF),
+        selected: Some(0xFFFF_FFFF),
+        selected_pulse_period_secs: Some(1.1),
         transition_secs: 0.5,
         // Pulse's own answer: its discs author no `<HorizMenu>` at all.
         strip: None,

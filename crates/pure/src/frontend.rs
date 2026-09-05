@@ -283,6 +283,11 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // is what caught this. Confidence 65, the same basis as this file's other
     // pixel measurements - one capture, effect rather than source.
     selected: Some(0xFF16_AED1),
+    // Whether this darkening pulses at all is unmeasured - it moves in the
+    // opposite direction from Pulse's own brightening-toward-white, so
+    // Pulse's period must never be filled in here. See
+    // `oag_title::MenuSkin::selected_pulse_period_secs`.
+    selected_pulse_period_secs: None,
     // Authored, but as one of four values this disc uses (0, 0.25, 0.3, 0.5)
     // rather than the single dominant one Pulse has. 0.5 is the most common of
     // them in the five definition files read; which value a *menu* page change

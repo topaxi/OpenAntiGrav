@@ -144,6 +144,11 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // constant here would hard-code one of them into a table that cannot say
     // which. See `docs/formats/hd-frontend.md`.
     selected: None,
+    // A 2026-09-05 census of HD's entire front-end XML (772 entries, all seven
+    // archives) found no oscillation attribute anywhere - no `<Key>` can key a
+    // colour, and `pulse="true"` never appears on a menu `<Entry>` - so this is
+    // a measurement, not a gap. See `docs/formats/hd-frontend.md`.
+    selected_pulse_period_secs: None,
     // The dominant `<LeftLayer transition=>` across HD's own GUI files, which is
     // the weakest number here: confidence **70**, because HD spreads transitions
     // across eleven distinct values where Pulse uses four, so "dominant" carries
