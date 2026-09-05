@@ -640,6 +640,22 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**`ghidra-mcp`'s `rename_data` rejects this project's own global-naming
+convention outright, and `rename_function` merely warns about it - so a
+data name silently doesn't land while a function name does.** 2026-09-05,
+recovering `g_MaterialDrawClass` on `ps3-hdfury-eu`. The tool enforces a
+Hungarian-prefix rule (`g_dw...`, `g_ab...`, `g_p...`) and returns
+`{"status":"rejected","issue":"missing_hungarian_prefix"}` for a plain
+`g_MaterialDrawClass` - even though `g_ChunkVisibilityMask` and every other
+`data` row in `names.tsv` is spelled that way, per
+[ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md). **Do not
+rename to satisfy the validator**; ADR-0005 and `names.tsv` are
+authoritative and `just check-names` polices them. Use `create_label`
+instead, which applies the same name and only warns. The same validator
+also warns that `Subsystem_VerbNoun` "is not PascalCase" and "does not
+start with a recognized verb" on every function rename this project makes -
+those warnings are noise, and the rename does land.
+
 **A `--screenshot --until` run over a movie leg on a machine with a real audio
 device fails with `never reached "X" in 3600 ticks`, or worse, silently
 captures an early frame instead of the one asked for - cost two wrong
