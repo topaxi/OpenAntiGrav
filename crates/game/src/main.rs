@@ -284,6 +284,7 @@ fn main() -> Result<()> {
         cli.dump_audio.clone(),
         tap.as_ref(),
         buffer,
+        cli.no_audio,
     );
 
     let (pose, camera) = match &cli.pose_from {

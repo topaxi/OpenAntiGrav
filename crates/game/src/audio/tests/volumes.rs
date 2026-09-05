@@ -44,6 +44,7 @@ fn every_settings_volume_reaches_the_bus_it_names() {
         None,
         None,
         oag_audio::MIN_BUFFER,
+        false,
     );
     audio.output().with_mixer(|mixer| {
         assert_eq!(mixer.bus_gain(Bus::Music), 0.25);
