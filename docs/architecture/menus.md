@@ -73,7 +73,7 @@ the release rather than of this project:
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
-| SPEED CLASS | `oag_physics::SpeedClass::ALL` |
+| SPEED CLASS | `values_from = "speed_classes"` - the ladder the booted title's own per-team `handlingstats.xml` authors, off `oag_title::SpeedClasses`. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
@@ -100,6 +100,56 @@ distinguished by `Reversed="True"` on its `Values` node. Listing
 twenty-four, and no amount of path arithmetic recovers the difference. The
 settings file stores the plugin id and only the source can say which `.vex` that
 id loads.
+
+## Unlocks: our race box offers everything, deliberately
+
+**This is a divergence from every original, and it is a decision rather than a
+gap.** Our RACE and RACE REMIX pages offer every circuit the source declares,
+every team on its roster and every craft variant those teams carry, with no
+progression gate of any kind. Nothing on those pages is ever hidden, greyed or
+priced.
+
+The reason is that **there is no profile in this build.** A gate needs something
+to gate against - a campaign record, a per-team loyalty balance, a save slot -
+and this project has none of those, so a lock here could only ever be a lock
+against a value that is always zero. That is not the original's behaviour
+reproduced; it is a permanently closed door. Offering everything is the honest
+shape for a build whose race box is a way to reach a circuit, not a reward for
+having reached it.
+
+**"For now" is meant literally.** If a profile lands, this decision is worth
+revisiting, and the data to revisit it with is already read - see
+[race-setup](../formats/race-setup.md#two-unlock-axes-and-they-are-not-the-same-axis).
+Until then, a contributor finding an ungated row here should read it as this
+section and not as an unimplemented feature.
+
+### What the originals actually do, because the contrast is the point
+
+Two gates, on two different axes, and a single "unlocked" flag models neither.
+
+- **Circuits gate on a named campaign grid.** In Pulse's
+  `Data\Plugins\PI001\Definition.xml`, a `<PI_Track>` either carries an
+  `<Unlock Grid="...">` child or it does not, and the `Grid` attribute holds a
+  **name** (`Grid0`, `Grid1`, ...) rather than an integer. **Exactly three
+  `PI_Track` entries carry no `<Unlock>` at all** - `16_Track`, `03_Track` and
+  `18_Track` - so Pulse's Custom Race track select opens as a wrapping list of
+  three entries, against the twenty-four the same file declares. Confidence 95.
+- **Craft variants gate on per-team loyalty, which is not campaign progress at
+  all.** Every `PI_TeamModel` / `PI_ModelSkin` leaf carries *two* `<Unlock>`
+  rows, both `Exclusive="true"`: a cheap own-team price and an expensive
+  `Team="any"` one (`Alternative` 4,000/60,000 up to `Concept`
+  25,000/100,000). That second axis is what `Team Selection`'s `Loyalty` bar
+  displays. Confidence 95.
+
+So the shipped game's answer to "what may I race" is two independent
+progression systems, not one flag - which is precisely why standing in for them
+with a flag would be worse than not gating at all.
+
+**Wipeout Pure already agrees with us**, and that is worth recording because it
+shows the ungated shape is not unheard of in the lineage: Pure authors **zero**
+`<Unlock>`, zero `Grid=` and zero `GSDisableEntriesBitField` across all eleven
+of its front-end definition files, and its `Show Unlocks` subtree is a
+post-race reward reveal rather than a gate. Confidence 94.
 
 ## The format
 

@@ -82,43 +82,69 @@ fn every_page_can_be_left_from_its_own_rows() {
 /// Both of these fail at *race load*, deep inside an archive lookup, with a
 /// message about a missing WAD entry - so they are pinned here, where the
 /// message names the menu.
+///
+/// **Every matching row, not the first.** This used to `find_map`, which only
+/// ever reached the RACE page's `race.class` row and left RACE REMIX's own
+/// copy of the same setting unchecked - so a change to one and not the other
+/// passed silently. `race.class` is authored twice on purpose, with two
+/// different value sources, which is exactly the shape that needs all of them
+/// looked at.
 #[test]
 fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
     let definition = built_in();
-    let values = |setting: &str| -> Vec<String> {
-        #[allow(clippy::redundant_closure_for_method_calls)]
-        definition
+    let rows = |setting: &str| -> Vec<Vec<String>> {
+        let found: Vec<Vec<String>> = definition
             .pages
             .iter()
             .flat_map(|page| page.entries.iter())
-            .find_map(|entry| match entry {
+            .filter_map(|entry| match entry {
                 Entry::Choice {
                     setting: key,
                     values,
                     ..
-                } if key == setting => Some(values.iter().map(|v| v.value.clone()).collect()),
+                } if key == setting => {
+                    Some(values.iter().map(|value| value.value.clone()).collect())
+                }
                 _ => None,
             })
-            .unwrap_or_else(|| panic!("no choice edits {setting:?}"))
+            .collect();
+        assert!(!found.is_empty(), "no choice edits {setting:?}");
+        found
     };
 
-    assert!(
-        values("race.team").is_empty(),
-        "the team row must be supplied, not spelled: the roster is what the \
-         source offers plus what a mounted pack adds, and no list in this \
-         repository can know either"
-    );
-    for name in values("race.class") {
+    for values in rows("race.team") {
         assert!(
-            oag_physics::SpeedClass::from_name(&name).is_some(),
-            "{name:?} is not a speed class"
+            values.is_empty(),
+            "the team row must be supplied, not spelled: the roster is what \
+             the source offers plus what a mounted pack adds, and no list in \
+             this repository can know either"
         );
     }
+
+    // The same argument, reached later and for a different reason: the ladder
+    // is a property of the *release*. Wipeout Pure's per-team
+    // `handlingstats.xml` authors five `<Class>` rungs where Pulse's authors
+    // four, so a hand-spelled list would be either wrong for Pure or silently
+    // reused as if someone had measured it.
+    //
+    // Both rows are now supplied rather than spelled, from two *different*
+    // sources: the RACE page offers the booted title's own ladder, RACE REMIX
+    // offers the union across every title this machine can open. Neither may
+    // carry a hand-written list again.
+    let class_rows = rows("race.class");
     assert_eq!(
-        values("race.class").len(),
-        oag_physics::SpeedClass::ALL.len(),
-        "every speed class should be offerable"
+        class_rows.len(),
+        2,
+        "RACE and RACE REMIX should both author a race.class row"
     );
+    for values in class_rows {
+        assert!(
+            values.is_empty(),
+            "the speed-class row must be supplied, not spelled: the ladder is \
+             the title's own, and Pure authors five rungs where Pulse authors \
+             four"
+        );
+    }
 }
 
 /// The mode row is supplied rather than spelled, so what it must agree with

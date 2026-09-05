@@ -91,6 +91,25 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Pure authors one roster and no numbered variant of anything in it.
     team_variants: None,
     guest_roster: None,
+    // **Five**, and this is the disagreement that licenses the axis at all.
+    // Measured 2026-09-05 on `pure-psp-eu.chd`: seven of Pure's eight race
+    // teams' `Data\Ships\<Team>\handlingstats.xml` were read directly and
+    // every one authors five `<Class>` rungs with `VECTOR` among them, where
+    // Pulse's author four. `crate::race::handling_stats`' own doc comment
+    // records the wider sweep - ten of eleven ship directories, the eleventh
+    // being `Zone_01`, which authors no `<Class>` ladder at all.
+    //
+    // Pure's front end agrees from a completely separate file: it authors five
+    // `<Menu name="Class">` entries on its own `Class Selection` screen, with
+    // a per-class stat graph for each. See `docs/formats/race-setup.md`.
+    //
+    // `VECTOR` is listed because Pure authors it; it is not *offered* yet,
+    // because nothing downstream can name it. See
+    // `oag_title::SpeedClasses::VECTOR`, which is where that is explained and
+    // where the filter lives.
+    speed_classes: Some(oag_title::SpeedClasses {
+        names: &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
+    }),
 };
 
 /// Pure's Zone milestone announcer.

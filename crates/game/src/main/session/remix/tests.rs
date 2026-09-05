@@ -147,3 +147,142 @@ fn settle_clears_against_an_empty_list() {
     settle(&mut stored, &[]);
     assert_eq!(stored, "");
 }
+
+/// RACE REMIX's speed-class row, over the *real* title packages rather than a
+/// shaped fixture - the composition `Session::remix_speed_classes` performs,
+/// with the survey list supplied directly so no disc has to be present.
+fn union_over(titles: &[&'static oag_title::Title]) -> Vec<&'static str> {
+    let ladders = titles.iter().filter_map(|title| title.race.speed_classes);
+    oag_title::SpeedClasses::union(ladders)
+}
+
+/// The offered row: the union, less the rungs this build cannot race.
+fn offered_over(titles: &[&'static oag_title::Title]) -> Vec<&'static str> {
+    union_over(titles)
+        .into_iter()
+        .filter(|name| oag_title::SpeedClasses::is_selectable(name))
+        .collect()
+}
+
+/// **Arm one: a machine with no Pure image.** The union is Pulse's own four
+/// rungs and there is no `VECTOR` anywhere in it - not filtered out, simply
+/// never contributed, because the title that authors it is not here.
+#[test]
+fn without_pure_the_union_is_the_four_pulse_rungs() {
+    let union = union_over(&[oag_pulse::TITLE]);
+
+    assert_eq!(union, vec!["VENOM", "FLASH", "RAPIER", "PHANTOM"]);
+    assert!(!union.contains(&oag_title::SpeedClasses::VECTOR));
+}
+
+/// **Arm two: the same machine with a Pure image on it.** The union grows by
+/// exactly the rung Pure authors, at the front, where Pure's own file puts
+/// it. This is the pair that proves the row is built from what is mounted
+/// rather than from a fixed list with a filter bolted on.
+#[test]
+fn with_pure_the_union_gains_vector_at_the_front() {
+    let without = union_over(&[oag_pulse::TITLE]);
+    let with = union_over(&[oag_pulse::TITLE, oag_pure::TITLE]);
+
+    assert_eq!(with.len(), without.len() + 1);
+    assert_eq!(with[0], oag_title::SpeedClasses::VECTOR);
+    assert_eq!(&with[1..], &without[..]);
+}
+
+/// The order the survey happens to list the titles in does not change the
+/// row, so a machine that finds Pure first shows the same ladder as one that
+/// finds Pulse first.
+#[test]
+fn the_union_does_not_depend_on_the_survey_order() {
+    assert_eq!(
+        union_over(&[oag_pulse::TITLE, oag_pure::TITLE]),
+        union_over(&[oag_pure::TITLE, oag_pulse::TITLE])
+    );
+}
+
+/// A title whose ladder is unread contributes nothing rather than lending the
+/// union another title's measurement - Wipeout 2048's `speed_classes: None`.
+#[test]
+fn an_unread_ladder_adds_nothing_to_the_union() {
+    assert_eq!(
+        union_over(&[oag_pulse::TITLE, oag_2048::TITLE]),
+        union_over(&[oag_pulse::TITLE])
+    );
+    assert!(union_over(&[oag_2048::TITLE]).is_empty());
+}
+
+/// **The third arm, and the one that bites**: a machine whose only playable
+/// source is Wipeout 2048 unions to *nothing*, because that title's ladder is
+/// unread.
+///
+/// An empty list must not be settled against. `settle` clears a stored value
+/// that the offered list does not contain, and against an empty list it
+/// clears unconditionally - see `settle_clears_against_an_empty_list` above -
+/// so settling here would wipe the player's saved `race.class` to `""` on a
+/// legitimate configuration. `Session::open_menus` guards the settle on the
+/// union being non-empty for exactly this case; this pins the premise that
+/// makes the guard necessary, since the two facts live in different files and
+/// neither one alone looks dangerous.
+#[test]
+fn a_2048_only_machine_unions_to_nothing_which_must_not_be_settled_against() {
+    let union = union_over(&[oag_2048::TITLE]);
+    assert!(union.is_empty());
+
+    // What the guard prevents, spelled out: settling a saved class against
+    // this list would lose it.
+    let mut saved = "phantom".to_string();
+    let offered: Vec<menu::Choice> = union.iter().map(|n| menu::Choice::plain(*n)).collect();
+    settle(&mut saved, &offered);
+    assert_eq!(saved, "", "this is why open_menus does not settle on empty");
+}
+
+/// What the player actually sees, on both arms: **four either way today**,
+/// because `VECTOR` is authored by Pure and cannot yet be named by
+/// `oag_physics::SpeedClass`.
+///
+/// So a Pure image being present does *not* currently add a row. That is the
+/// honest outcome rather than a bug: the alternative is an option that loads
+/// some other class's tuning. When the engine can name a fifth rung, this
+/// test is the one that changes, and the two above it should not need to.
+#[test]
+fn the_offered_row_is_four_on_both_arms_because_vector_is_unnameable() {
+    let without = offered_over(&[oag_pulse::TITLE]);
+    let with = offered_over(&[oag_pulse::TITLE, oag_pure::TITLE]);
+
+    assert_eq!(without, vec!["VENOM", "FLASH", "RAPIER", "PHANTOM"]);
+    assert_eq!(with, without);
+
+    // And every name the row does offer is one a race can actually start on.
+    for name in with {
+        assert!(
+            oag_physics::SpeedClass::from_name(name).is_some(),
+            "{name:?} is offered but cannot be raced"
+        );
+    }
+}
+
+/// The union is drawn from *playable* survey rows only: a source that will
+/// not open contributes no classes, the same way it contributes no circuits.
+#[test]
+fn an_unavailable_source_contributes_no_classes() {
+    let rows = [
+        candidate(oag_pulse::TITLE),
+        oag_game::launcher::Candidate {
+            source: "fixture:broken".to_string(),
+            name: "broken".to_string(),
+            platform: oag_disc::Platform::Unknown,
+            serial: None,
+            state: oag_game::launcher::State::Unavailable("unreadable".to_string()),
+        },
+    ];
+
+    let ladders = rows.iter().filter_map(|row| match &row.state {
+        oag_game::launcher::State::Playable(title) => title.race.speed_classes,
+        oag_game::launcher::State::Unavailable(_) => None,
+    });
+
+    assert_eq!(
+        oag_title::SpeedClasses::union(ladders),
+        union_over(&[oag_pulse::TITLE])
+    );
+}

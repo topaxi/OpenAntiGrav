@@ -53,6 +53,15 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: None,
+    // Four, the same shape Pulse has and for the same reason. HD's global
+    // `handlingstats.xml` authors five `<GlobalClass>` rungs with `VECTOR`
+    // first - identical to both Pulse pressings - and **no HD team file
+    // carries a `<Class name="VECTOR">`** either. So on the one title whose
+    // ladder was supposed to begin at Vector, the per-team shape is Pulse's
+    // exactly. See `docs/formats/handling-stats.md`.
+    speed_classes: Some(oag_title::SpeedClasses {
+        names: oag_title::SpeedClasses::PULSE_LADDER,
+    }),
 };
 
 /// The twelve teams a Wipeout HD/Fury race can pick, spelled the way

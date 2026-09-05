@@ -155,6 +155,29 @@ pub enum ValueSource {
     /// [`Self::MusicSources`] uses - a row with nothing to offer draws
     /// unusable rather than lying about having a choice.
     RaceVariant,
+    /// The speed classes the **booted** title's own data authors, filtered to
+    /// the ones this build can actually put a ship on.
+    ///
+    /// Supplied rather than spelled because the ladder is a property of the
+    /// release: Wipeout Pure's per-team `handlingstats.xml` authors five
+    /// `<Class>` rungs and Wipeout Pulse's authors four, each read off its own
+    /// disc. A literal list in the definition file would have to be either
+    /// wrong for Pure or silently reused as if measured - the trap
+    /// `oag_title::SpeedClasses` was added to close.
+    ///
+    /// The ordinary RACE page offers **this title's** ladder and no other's.
+    /// RACE REMIX unions them instead - see [`Self::RemixSpeedClasses`].
+    SpeedClasses,
+    /// [`Self::SpeedClasses`]' sibling for RACE REMIX: every speed class any
+    /// title whose source this machine can currently open authors, as one
+    /// ladder.
+    ///
+    /// A grid that mixes titles is not restricted to one title's rungs, so
+    /// this row unions them - and unions only what is actually *available*,
+    /// the same way [`Self::Titles`] does. A machine holding one disc offers
+    /// that disc's ladder; a class whose title is not on this machine is not
+    /// offered at all, rather than shown and then unable to load.
+    RemixSpeedClasses,
     /// [`Self::RaceVariant`]'s sibling for RACE REMIX's craft-side `TEAM` -
     /// scoped to whichever title `CRAFT TITLE` picked rather than to the
     /// title this process booted from.
@@ -178,6 +201,8 @@ impl ValueSource {
             Self::CraftTitles => "craft_titles",
             Self::RemixTracks => "remix_tracks",
             Self::RemixTeams => "remix_teams",
+            Self::SpeedClasses => "speed_classes",
+            Self::RemixSpeedClasses => "remix_speed_classes",
             Self::RaceVariant => "race_variant",
             Self::RemixVariant => "remix_variant",
         }
@@ -199,6 +224,8 @@ impl ValueSource {
             "craft_titles" => Some(Self::CraftTitles),
             "remix_tracks" => Some(Self::RemixTracks),
             "remix_teams" => Some(Self::RemixTeams),
+            "speed_classes" => Some(Self::SpeedClasses),
+            "remix_speed_classes" => Some(Self::RemixSpeedClasses),
             "race_variant" => Some(Self::RaceVariant),
             "remix_variant" => Some(Self::RemixVariant),
             _ => None,

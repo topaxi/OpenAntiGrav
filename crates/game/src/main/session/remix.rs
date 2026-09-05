@@ -191,6 +191,50 @@ impl Session {
         (titles, craft_titles)
     }
 
+    /// Every speed class any title this machine can currently open a source
+    /// for authors, as one ladder, filtered to the rungs this build can put a
+    /// ship on.
+    ///
+    /// # Built from what is actually here, not from a list of every title
+    ///
+    /// [`Self::titles`] is the survey of *readable* sources, so a machine
+    /// holding only the Pulse images unions Pulse's ladder and nothing else,
+    /// and a machine that also has Wipeout Pure unions Pure's five rungs in
+    /// too. A class whose title is absent is not offered at all - not greyed,
+    /// not shown as a hint that the disc exists elsewhere. Drawing nothing is
+    /// the honest absence; an entry that cannot load is not.
+    ///
+    /// That is the same rule the rows above it already follow: `TRACK TITLE`
+    /// offers the titles this machine can open rather than the four this
+    /// project knows about.
+    ///
+    /// # Vector is authored and still not offered
+    ///
+    /// Wipeout Pure authors a fifth rung, `VECTOR`, in every one of its race
+    /// teams' `handlingstats.xml` files - so with a Pure image present the
+    /// *union* genuinely contains five names. It is filtered back out by
+    /// `oag_title::SpeedClasses::is_selectable`, because
+    /// `oag_physics::SpeedClass` has no variant that can name it and an option
+    /// that raced on some other class's tuning would be exactly the invented
+    /// stand-in this project forbids. See that constant for what closing the
+    /// gap needs.
+    pub(super) fn remix_speed_classes(&self) -> Vec<menu::Choice> {
+        let ladders = self
+            .titles
+            .iter()
+            .filter_map(|candidate| match &candidate.state {
+                oag_game::launcher::State::Playable(title) => title.race.speed_classes,
+                oag_game::launcher::State::Unavailable(_) => None,
+            });
+        let union = oag_title::SpeedClasses::union(ladders);
+        super::menus::to_choices(
+            union
+                .into_iter()
+                .filter(|name| oag_title::SpeedClasses::is_selectable(name))
+                .collect(),
+        )
+    }
+
     /// Which real candidate backs `remix.craft_title` -
     /// [`resolve_craft_backing`]'s own doc comment for the rule.
     fn craft_backing(&self) -> Option<&oag_game::launcher::Candidate> {

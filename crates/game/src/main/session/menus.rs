@@ -15,6 +15,39 @@ use crate::window::monitor_names;
 
 use super::{Session, remix_menu};
 
+/// The speed classes one title offers, in the shape [`menu::Menu::supply`]
+/// wants.
+///
+/// **The value is lowercase and the label is the disc's own spelling.** The
+/// value is what a settings file already holds (`race.class` defaults to
+/// `"venom"`) and what `SpeedClass::from_name` parses case-insensitively, so
+/// lowercasing keeps every existing settings file working; the label is the
+/// `<Class name="...">` the title actually authors, so what a reviewer reads
+/// on screen is what the file says.
+///
+/// A title whose ladder is unread (`speed_classes: None`, Wipeout 2048 today)
+/// falls back to `SpeedClass::ALL`, which is this build's own list rather than
+/// some other title's measurement. That is the same rule
+/// `oag_title::MenuSkin::row_extra_leading` follows for an unmeasured leading,
+/// and it is why the fallback is spelled here, at the caller, instead of being
+/// a default inside the title package.
+fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
+    let named: Vec<&'static str> = match title.race.speed_classes {
+        Some(ladder) => ladder.selectable().collect(),
+        None => SpeedClass::ALL.iter().map(|class| class.as_str()).collect(),
+    };
+    to_choices(named)
+}
+
+/// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
+/// union spell a class exactly the same way.
+pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
+    names
+        .into_iter()
+        .map(|name| menu::Choice::labelled(name.to_lowercase(), name))
+        .collect()
+}
+
 /// Which picture [`Session::open_menus`] should seed the new renderer's
 /// planes with.
 ///
@@ -156,6 +189,35 @@ impl Session {
         let race_variants = variant_choices(shell.title, &self.settings.race.team);
         remix_menu::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);
+        // The booted title's own ladder, filtered to the rungs this build can
+        // put a ship on. `None` means the title's per-team handling files have
+        // not been read - Wipeout 2048 - and the caller keeps its own list
+        // rather than lending that title another's measurement.
+        model.supply(
+            menu::ValueSource::SpeedClasses,
+            &speed_class_choices(shell.title),
+        );
+        // RACE REMIX's own axis: the union across every title this machine can
+        // currently open a source for, so a class is offered exactly when the
+        // data behind it is actually here. See `Self::remix_speed_classes`.
+        //
+        // **Settled only when the union has something in it**, the same rule
+        // the RACE REMIX rows below follow and for the same reason: an empty
+        // union is not evidence that a saved pick is wrong, and settling
+        // against it would clear `race.class` to the empty string. That is a
+        // reachable configuration rather than a hypothetical - a machine whose
+        // only playable source is Wipeout 2048, whose ladder is unread, unions
+        // to nothing - and it would silently lose the player's saved class
+        // while the RACE page above still displayed its own fallback.
+        //
+        // `supply` is unconditional because it does not touch `self.settings`:
+        // it keeps the row on its current value when the list still offers it
+        // and falls to the first entry for *display* otherwise.
+        let remix_classes = self.remix_speed_classes();
+        if !remix_classes.is_empty() {
+            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
+        }
+        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,

@@ -468,8 +468,29 @@ compression untouched and the `1.05 %` gap with it. That is the same answer the
 
 ### There are five `<GlobalClass>` blocks and only four speed classes
 
-Both discs author **`VECTOR` first**, then the four. No per-team file has a
-`<Class name="VECTOR">`, and `SpeedClass` has no such variant.
+Both discs author **`VECTOR` first**, then the four. No **Pulse** per-team file
+has a `<Class name="VECTOR">`, and `SpeedClass` has no such variant.
+
+**That qualifier is load-bearing, and was added on 2026-09-05.** The sentence
+above once read "no per-team file", unqualified, which is true of Pulse and of
+Wipeout HD and **false of Wipeout Pure**: every one of Pure's race teams
+authors a full `<Class name="VECTOR">` block beside the other four. So the
+per-team file is what tells the two situations apart - on Pulse the name is a
+string a matcher recognises and discards, on Pure it is a rung with real tuning
+behind it. Read directly off `pure-psp-eu.chd` and `pulse-psp-usa.chd`:
+
+| | global `<GlobalClass>` | per-team `<Class>` |
+| --- | --- | --- |
+| Pulse (PSP, PS2) | 5, `VECTOR` first | **4**, no `VECTOR` |
+| Wipeout HD | 5, `VECTOR` first | **4**, no `VECTOR` |
+| Wipeout Pure | 5, `VECTOR` first | **5**, `VECTOR` among them |
+
+Confidence 92: seven of Pure's eight race teams were read directly and agree,
+and `oag_pure::race::handling_stats`' own doc comment records the wider sweep -
+ten of eleven ship directories, the eleventh being `Zone_01`, which authors no
+`<Class>` ladder at all. **This says nothing about whether Pulse has a fifth
+class**; it says the two titles differ, which is what makes the per-team file
+the thing to check rather than the global one.
 
 **The original does not recognise it either.** `Xml_ReadGlobalSettings` matches
 `name` against a four-entry table and, on no match, simply leaves
