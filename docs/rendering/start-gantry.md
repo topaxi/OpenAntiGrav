@@ -8,11 +8,13 @@ checked), and this page covers the physical gantry, which arrives through
 `TrackStartup.xml`'s **billboard slot 8** ([`formats/README.md`](../formats/README.md)'s
 Track startup row).
 
-**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`) and Wipeout Pure
-(`pure-psp-usa.chd`, `UCUS-98612`).** HD/Fury and 2048 ship the same family of
-assets and are unmeasured here; the closing section says what looks title-wide
-and what does not. Pure's own section, below, is the one surprise so far: it
-does not have a track-side gantry at all.
+**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`), Wipeout Pure
+(`pure-psp-usa.chd`, `UCUS-98612`) and Wipeout HD/Fury
+(`hdfury-ps3-eu-dec.iso`).** 2048 ships the same family of assets and is
+unmeasured here; the closing section says what looks title-wide and what does
+not. Pure ships no track-side gantry at all; HD ships four, and its own
+section below is where the packaging question the Pulse pass left open
+finally gets an answer.
 
 > **Nothing on this page places the gantry.** Where slot 8's transform comes
 > from is still unrecovered - see
@@ -256,10 +258,13 @@ path at all.
 
 **Do not inherit HD's shape.** HD/Fury ships four distinct `321Go_*.vex`
 (`StartFinish`, `Zone`, `HD_Zone_Battle`, `hd_detonator`) with four different
-byte sizes and a runtime mode-descriptor pointer choosing between them
-([`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md));
-2048 ships those four plus two of its own. Pulse has one file and no chooser.
-The per-mode axis is real on the later titles and absent on this one.
+byte sizes, and a code-confirmed substitution site exists at runtime - see
+[the HD section below](#wipeout-hdfury-four-files-one-mechanism-concept-two-encodings)
+and
+[`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)
+for exactly what it does and does not settle; 2048 ships those four plus two
+of its own. Pulse has one file and no chooser. The per-mode axis is real on
+the later titles and absent on this one.
 
 ## Wipeout Pure: no track-side gantry at all. Confidence 85
 
@@ -351,28 +356,293 @@ even the physical countdown Pure's players see is itself unmeasured, since
 be conflated the way this project's own notes once did for one session before
 catching it (see `ui/hud.md`'s own warning).
 
-## What a later title should expect to reuse
+## Wipeout HD/Fury: four files, one mechanism concept, two encodings
 
-**Neither half generalised the way the Pulse-only version of this page
-guessed.** Pure was the test, and it came back negative on both counts:
+**Read on `hdfury-ps3-eu-dec.iso`.** HD is the interesting case the Pulse and
+Pure passes both flagged: it ships **four** distinct `321Go_*.vex` files under
+`/data/billboards/hd_adverts/321go/` rather than Pulse's one, confirmed as
+genuinely different content by rendering them in the prior scoping session -
+see [`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
+This pass measured `321go_startfinish.vex` (the one slot 8 actually names on
+every circuit) the same way the Pulse and Pure passes measured their own
+assets: `oag-view --nodes`/`--draws`, then the geometry and material tables
+directly through `oag_formats`, no Ghidra and no emulator.
 
-The **mechanism** looked like it should generalise - a palette texture, one UV
-cell per state, and the material's own `TEXOFFSET` track walking between them,
-with both halves already implemented title-agnostically
-(`vex::mesh_tex_transforms` parses the block big-endian for HD as readily as
-little-endian for Pulse, and the renderer replays it per frame). **Pure does
-not use it.** Its nearest asset drives a scrolling alpha gradient over
-continuous ribbon UVs instead, and the mechanism the parser already supports
-sits unused on this title's own equivalent.
+**The four files are not all in one archive, and not even self-consistent
+under one name.** `python3 scripts/psarc.py list` over the whole disc finds
+`321go_startfinish.vex` (12,544 B) and `fx350.vex` only in `DATA02.PSARC`;
+`321go_hd_detonator.vex` and `321go_hd_zone_battle.vex` only in `DATA00.PSARC`;
+and `321go_zone.vex` in **both**, at two different sizes - 8,368 B in
+`DATA00.PSARC`, 2,672 B in `DATA02.PSARC`, each with its own distinct texture
+(`321_go_zone.gtf`, 2048x1024, beside the `DATA00` copy;
+`321_go_64_zone2.gtf`, 64x128, beside the `DATA02` copy). **Measured, not
+traced**: which archive set a given mode actually loads from is unread, so
+this is recorded as a fact about the disc's own packaging rather than
+resolved to a loader. Confidence 90 for the listing itself, and explicitly
+open which copy (if either alone) a race reaches.
 
-The **packaging** looked Pulse-specific: one model holding the whole race's
-gantry states on one timeline, where HD splits them across four files, and
-Pulse's own commented-out `14_Track` lines showed it used to split them too.
-**Pure has no packaging to compare, because it authors no track-side gantry
-slot at all** - the billboard mechanism itself, not just what fills it, is
-absent.
+### The geometry moved out of the `.vex`; the mechanism has to be looked for beside it
 
-A reader on HD or 2048 should not inherit either Pulse's or Pure's answer:
+Every HD `Mesh` node's own payload is a bounding box and a hash, nothing else
+- `oag_formats::rcsmodel` is where the real vertices, indices, texture
+coordinates and material table for a PS3 model live (see that module's own
+doc comment, and `docs/rendering/scenery-animation.md`). `321go_startfinish.vex`
+is exactly that shape: 43 nodes, 19 of them `Mesh`, and reading any of their
+288-byte-or-smaller payloads finds a bounding box, a hash, and zeroes - no
+embedded palette, no `TEXOFFSET` block, because there is nowhere in this
+payload shape for either to live. **This is the first fact that has to be
+priced in before comparing HD to Pulse at all**: Pulse's whole mechanism lived
+inside the `.vex`; HD's geometry-bearing half of the same story lives in
+`321go_startfinish.rcsmodel` (51,796 B), beside it in the same `DATA02.PSARC`
+entry list.
+
+The glyph node itself is named `pasted__Go_HD_start_light_321go` - an
+`Anim Transform` node carrying one `Mesh` child, the same two-node shape
+Pulse's own `start_light_321go` takes. Its payload's hash (`0x81f409f5`)
+resolves to one chunk of the `.rcsmodel`, material index 2:
+`data/materials/billboards/simpletextureandtexturealphauvoffsetscale.rcsmaterial`,
+texture `data/billboards/hd_adverts/321go/321_go_64.gtf`.
+
+### The texture is Pulse's staircase, scaled up and DXT-compressed - confidence 88
+
+`321_go_64.gtf` decodes (`oag_formats::gtf`, format `Dxt45`) to **64x128** -
+exactly 4x Pulse's 16x32 in both dimensions - and a full-texel opaque-white
+scan (every texel with alpha > 200 and RGB > 200) finds:
+
+```text
+rows  7..14  cols  0..7    opaque white  (band 1)
+rows 15..22  cols  8..15   opaque white  (band 2)
+rows 23..30  cols 16..23   opaque white  (band 3)
+cols 32..39, rows 40..127  alternating opaque/dark 8-row bands
+cols 48..54                red   (255,0,0), alpha ~128 (half), rows 32..127 only
+cols 57..59                green (0,169,25), alpha ~128 (half), full height
+```
+
+That is Pulse's own staircase shape, at 4x scale and moved onto a diagonal:
+Pulse held `u` fixed per digit and walked a shared `v` down three row-pairs at
+one `u`; HD's three white bands step **both** row and column together, three
+8x8-texel blocks descending a diagonal. The red and green columns at the far
+right - half-alpha rather than Pulse's fully opaque markers, but otherwise the
+same idea - are the same "authored, unused by this node" markers Pulse's own
+`321go_NOMIP.tga` carries at columns 12 and 14 - present at both resolutions,
+on both platforms, doing nothing either time.
+
+**The glyph's own five per-vertex UV cells align to these bands once the
+material's own static `u` offset is added**, which is the strongest evidence
+this is the same authored concept: reading `pasted__Go_HD_start_light_321goShape`'s
+`.rcsmodel` chunk (stride 14, 200 vertices) finds five distinct `(u, v)`
+cells, not Pulse's four:
+
+| raw `u` | raw `v` | `x` span | `+0.04` `u` in texels | falls in band |
+| --- | --- | --- | --- | --- |
+| 0.0547 | 0.0128 | -16.60..-4.95 | 6.06 | 1 (cols 0-7) |
+| 0.1831 | 0.0128 | -5.05..5.35 | 14.26 | 2 (cols 8-15) |
+| 0.1920 | 0.0128 | -4.10..6.30 | 14.86 | 2 (cols 8-15) |
+| 0.3079 | 0.0128 | 6.12..16.59 | 22.26 | 3 (cols 16-23) |
+| 0.4968 | 0.0451 | -11.94..11.30 | 34.4 | the alternating column |
+
+`0.04` is exactly the material's own authored `uvOffset.x` (below). Adding it
+to each cell's raw `u` lands the leftmost cell (`x` -16.60..-4.95, reading-order
+"3") in band 1's own column range, the two near-identical middle cells (`x`
+-5.05..6.30, "2"'s position) in band 2's, and the rightmost cell (`x`
+6.12..16.59, "1"'s position) in band 3's - the same reading-order-by-`x`
+outcome Pulse's own four cells give, and not a coincidence four independent
+column ranges land where four independent digit positions do. The fifth cell
+is wide (`x` -11.94..11.30, spanning the whole board like Pulse's `GO`) and,
+after the same offset, sits in the alternating column rather than any of the
+three staircase bands.
+
+**Two things are reported rather than storied, because the evidence does not
+resolve them and a tidy label would look measured without being it** - the
+same trap a first pass at Pulse's own test fell into sorting by `x` instead of
+`u`:
+
+- **Five cells for four states.** The two near-`u` cells at `x`
+  -5.05..5.35 and -4.10..6.30 are not identical - a real, if small,
+  `x`-shifted twin - and nothing here explains the second one. It is left
+  unexplained rather than folded into "two overlapping quads for the 2" on a
+  guess.
+- **The alternating column is not confirmed to be a "GO" flash.** It reads as
+  the same *shape* of thing Pulse's `GO` column does (alternating opaque and
+  transparent 8-row bands over a much taller span than any digit needs), but
+  nothing here traces it to the word "GO" the way Pulse's own strobe test
+  samples a known span and asserts exactly one label. Confidence 60 on "this
+  is HD's `GO` region" alone, separate from the 88 above on the staircase
+  correspondence.
+
+### What is not proven: whether anything ever changes it - confidence 40, and this is where HD's answer genuinely differs from Pulse's
+
+**The material's `uvOffset`/`uvScale` are a static value, not a keyframe
+track, and this is a fact about the format, not an inference from one
+file.** `oag_formats::rcsmodel::material::parameters` decodes a material
+record's parameter table as a name-hashed array of `{value: [f32; 4], quads:
+u32}` entries with no time axis at all - a `quads` above one would be a longer
+vector the shader indexes, not a sequence of keys, and every parameter this
+material carries reports `quads == 1`. Feeding this exact node's payload
+through `oag_formats::vex::mesh_tex_transforms` - the same parser that
+recovers Pulse's `TEXOFFSET` track and is proven title-agnostic on HD's own
+byte order (`docs/rendering/scenery-animation.md`) - returns `None` for every
+material on the node: there is no texture-transform block here for it to
+find, because a PS3 `Mesh` payload carries no batches at all past its
+bounding box and hash. **So if HD's countdown swaps between states, no track
+on disk drives it, on either the geometry or the material side - the same
+conclusion Pulse's own competing "does the engine write it per state"
+candidate reached for different reasons, except here it is not a competing
+candidate, it is the only mechanism the file format has room for.**
+
+**That does not mean the countdown swaps at all, and the material's own
+disc-wide use argues against reading too much into one static value.**
+`simpletextureandtexturealphauvoffsetscale.rcsmaterial` is not
+countdown-specific: the same material, by name, backs at least nine other
+advert boards surveyed across both archives - `aftermath_board`,
+`blitzed_board`, `corruption_board`, `impact_board`, `nuked_board`,
+`turbulance_board`, `voltage_board`, `vortex_board` and `arial_landscape_01` -
+each with its own baked, unrelated `uvOffset` (`(0, 1)`, `(0, 0)`, `(0,
+0.958)`, ...) and every one of them a single static advert, not a
+multi-state display. Read plainly, this is a generic "sample one fixed
+window of a shared texture" shader used disc-wide, and `321go_startfinish`'s
+own instance - `uvOffset = (0.04, 0.4189558)` - is one more static value in
+that same family. Sampled at rest, none of the five glyph cells lands on
+opaque white: the four digit-shaped cells land at texel row ~55, well below
+every staircase band (rows 7-30), and the wide cell lands in a gap between
+two of the alternating column's opaque bands (`rgba = [255, 255, 255, 71]`,
+near-white but 28% alpha) - so as authored, at rest, nothing reads as lit.
+
+**Both readings are left standing rather than one being picked**: the
+geometry's own column alignment against the texture's diagonal staircase (88
+above) is real evidence an artist laid this out as a walkable countdown the
+same conceptual way Pulse's palette is; the material system's disc-wide,
+single-static-value usage is real evidence this specific instance is nothing
+more than one crop window like every other advert's. If the display does
+change at runtime, this project's own reading of the format says the write
+has to land in this exact shader parameter (or an equivalent uniform this
+static value seeds) once per state, since there is nowhere else in either
+file for a change to come from - but nothing here observed that write happen,
+and settling it needs the same live-tracing step
+[`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)
+already named for `mode_descriptor`. Confidence 40, and explicitly the
+softest claim on this page - lower than Pulse's already-open 55, because
+Pulse has an authored track to weigh against a competing write and HD does
+not even have that much to weigh.
+
+### The 6.000-second loop close generalises - the best result of the three-title sequence
+
+**Confidence 85.** `pasted__Go_HD_start_light_321go`'s own `Anim Transform`
+carries a translation channel with exactly two keys, at frames 359 and 360 -
+5.983 s and 6.000 s, `seconds_per_key` confirmed 1/60 the same way every other
+HD node's is. Sampling it (`AnimTransform::sample`, `step` false) holds the
+node at its rest position through 5.9 s, then moves it **+10.004 in world Y**
+by the time the second key lands at exactly **6.000 s**. That is the same
+shape and the same instant as Pulse's own finding: `start_light_background`
+and the digit panel "teleport +9.99 in y - out of the aperture, as the
+texture loop closes" at Pulse's frames 360/361 - also 6.000 s on Pulse's own
+60 Hz clock. The frame indices differ by one (359/360 against 360/361) and the
+magnitudes differ (+10.004 against +9.99, off different quanta), so this is
+not claimed as the identical authored value - it is claimed as what it is:
+**both titles move their countdown glyph roughly ten units up and out of view
+at the same 6.000-second loop-closing instant**, independently authored, on
+two different platforms, in two different file formats. A sibling node,
+`Go_HD_start_light_background`, does the same kind of teleport (+11.149 in Y)
+at a different, earlier instant (3.35 s) - the same "something moves away
+before the loop resets" shape Pulse's `start_light_background`/`Board`/`Text`/
+`Arrow` group also carries, just at a different node boundary.
+
+### Which model a mode selects: a substitution site exists, at slot 7 - not slot 8
+
+**Confidence capped at 84**, the whole page's own static-reading ceiling,
+inherited from [`ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
+That page traced `TrackStartup_Load` end to end and found a real,
+code-confirmed substitution: when `num == 7`, and `mode_descriptor`'s own
+`field_0x90` and `field_0x4c` are both non-null, the engine throws away
+whatever `fx350.vex` slot 7's own manifest authored and substitutes a
+computed pointer instead. **This fires on slot 7, not slot 8** -
+`321Go_StartFinish.vex` (slot 8) is not special-cased anywhere in that
+function and loads exactly as authored, on every circuit, in every mode.
+
+Four strings that look like the four `321Go_*.vex` names sit in the same TOC
+window as the attribute names that substitution reads, which is a real lead -
+the mode-free single race/time trial, Zone, Zone Battle and Detonator each
+have exactly one - but the computed pointer was never traced to one of those
+four addresses, so **which of the four names slot 7 actually resolves to in
+which mode remains unread**, and stays a lead rather than a finding per that
+page's own account. No new Ghidra time was spent chasing it this pass: the
+mechanism question above was the cheap one, per this thread's own priority
+order, and answering it did not make the chooser question moot, but it does
+mean **the countdown asset itself is mode-independent as authored** - if
+Zone's gantry really does show a track icon instead of `3 2 1 GO`, per the
+player's own memory `billboards.md` already recorded, that difference has to
+come from slot 7's own substituted content standing in for or beside slot 8's,
+not from slot 8 switching files. That tension is unresolved and is exactly
+where the next Ghidra or live-tracing pass on this subsystem should start.
+
+### Is the gantry placed on HD? No - a second, independent witness
+
+**Confidence 90, agreeing with `ps3-hdfury-eu/billboards.md`'s own reading by
+a completely different route.** That page found nothing in `TrackStartup_Load`
+or either billboard constructor that reads a position, rotation or scale.
+This pass's own geometry-side reading agrees: `pasted__Go_HD_start_light_321goShape`'s
+`.rcsmodel` chunk carries `bias = [-0.0078, -0.0078, 0.047]`, `scale =
+[0.0078, 0.0078, 0.0078]` - centred on the origin, the same "node-local with a
+bias near the origin" shape `docs/formats/README.md`'s Track startup row
+already records for HD's ordinary advert billboards. Nothing on this page's
+own HD section places the gantry either; the loader report has nothing to
+name yet because nothing here loads `321go_startfinish.vex` at all.
+
+## What three titles now say, and what a fourth should expect
+
+**Nothing generalised the way the Pulse-only version of this page guessed,
+and one thing generalised that no version of this page predicted.** Three
+titles in, this is the actual state:
+
+| | Pulse | Pure | HD/Fury |
+| --- | --- | --- | --- |
+| Slot 8 exists | yes, on 11/12 circuits | **no**, on any of 16 | yes, on all 16 |
+| Files behind it | one, `321Go_StartFinish.vex` | none | four, mode-specific by name |
+| Geometry lives in | the `.vex` itself | n/a | a sibling `.rcsmodel` |
+| State encoding | 4 UV cells + an **animated** material track | n/a (nearest asset uses a different technique) | 5 UV cells + a **static** material parameter |
+| Palette shape | 16x32, vertical staircase, `u` fixed per digit | n/a | 64x128 (4x), **diagonal** staircase, DXT4/5 |
+| Unused marker columns | yes (2, in the palette) | n/a | yes (2, wider, same idea) |
+| 6.000 s loop-close teleport | yes, ~+9.99 in Y | n/a | yes, ~+10.0 in Y, independently authored |
+| Per-mode chooser | none - one file | n/a - no slot to choose into | a substitution site exists, at **slot 7**, untraced to a result |
+| Placed at the start line | no | n/a | no |
+
+**What holds across every title that has a slot 8 at all**, so far Pulse and
+HD: the model name (`321Go_StartFinish`/`321go_startfinish`), the node names
+inside it (`polySurface7`, `start_light_background`/`Go_HD_start_light_background`,
+`Final_Lap`/`pasted__Final_Lap`, `start_light_321go`/`pasted__Go_HD_start_light_321go`),
+the "one asset carries the whole race's states, including the chequered board
+and FINAL LAP" design, an authored countdown built from a palette texture and
+a shared UV cell per state, unused marker columns baked into that palette and
+never read, and a hard move of the countdown glyph roughly ten world units in
+Y at the exact same 6.000-second instant the texture loop itself closes. That
+last one is new this pass and is the strongest single result the sequence has
+produced: it was not predicted going in, and it survived a completely
+different platform, byte order, and geometry format.
+
+**What is per-title, not shared**: whether slot 8 exists at all (Pure says
+no); how many files answer it (one against four); where the geometry lives
+(embedded against a sibling file); and - the one still genuinely open -
+whether the UV offset that selects a state is an **authored, played-back
+track** (Pulse, confidence 55 on the "played" half) or has to be **written by
+the engine because the format has no room for a track at all** (HD,
+confidence 40, the necessary conclusion of a stronger premise but not itself
+observed happening). Those are not the same question answered two ways; HD's
+version is strictly weaker evidence for anything actually changing at
+runtime, because nothing here caught either title's engine in the act.
+
+**Placement is the one constant nobody has broken.** Three titles, three
+completely different geometry formats, and not one of them reads a position,
+rotation or scale for the gantry anywhere between a manifest attribute and a
+constructor. A fourth title should expect the same and look for the same
+absence rather than assume this time is different.
+
+A reader on 2048 should not inherit any single row of the table above wholesale:
 measure the manifest schema first (does slot 8 exist, and what does it
-carry), then the mechanism (UV cells and a `TEXOFFSET` track, or something
-else), the way both passes here did.
+carry), then the mechanism (UV cells against a static or animated block, or
+something else again), the way all three passes here did. What is worth
+carrying forward is the *shape* of the check, not any one answer: read the
+node tree, find the glyph node by name, decode its texture, and look for
+whether a track or a static value drives the offset - and check whether
+2048's own six or seven `321Go_*.vex` files (string-search-only as of this
+pass) resolve to real, listed archive entries the way HD's four did, before
+trusting anything about them.
