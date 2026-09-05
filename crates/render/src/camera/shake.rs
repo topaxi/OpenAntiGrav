@@ -1,7 +1,7 @@
 //! The camera shake a hard wall hit arms, decaying over a fixed duration.
 //!
 //! Recovered at instruction level from `Camera_ArmShake` and the shake-apply
-//! block inside `FUN_0013e280` (PS2) / `Camera_SubmitScene` (PSP), cross-
+//! block inside `Camera_SubmitScene` (both PS2 and PSP now share the name), cross-
 //! corroborated between the two binaries. Evidence, addresses and confidence
 //! scores are in
 //! `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`; this module
@@ -64,7 +64,7 @@
 //! the two readings; either way the shake's shape - a decaying wobble - does
 //! not change.
 //!
-//! `FUN_0013e280`'s third combination (`shake_mode` neither `1` nor `3`, a
+//! `Camera_SubmitScene`'s third combination (`shake_mode` neither `1` nor `3`, a
 //! second oscillator at `1.5x` frequency) is not implemented: nothing on the
 //! collision path this module wires arms that mode, and drawing behaviour for
 //! a caller nobody has found would be exactly the invented-stand-in this
@@ -93,7 +93,7 @@ const ENVELOPE_VALUE: [f32; 3] = [0.25, 0.125, 0.0];
 /// The oscillator's base frequency - `DAT_0027e7e0`, read off `.data`.
 pub const BASE_FREQUENCY: f32 = 30.0;
 
-/// Shared scale on the oscillator term, the literal `FUN_0013e280` loads
+/// Shared scale on the oscillator term, the literal `Camera_SubmitScene` loads
 /// alongside it.
 const OSCILLATOR_SCALE: f32 = 0.1;
 
@@ -197,7 +197,7 @@ impl Shake {
     /// This tick's rotation of the camera basis, [`Quat::IDENTITY`] once the
     /// shake has decayed away or was never armed.
     ///
-    /// Combines `FUN_0013e280`'s two-call angle arithmetic for `shake_mode`
+    /// Combines `Camera_SubmitScene`'s two-call angle arithmetic for `shake_mode`
     /// `1`/`3` into one angle about one [`AXIS`] - **an approximation, now
     /// known to be one**, not the reading it once looked like. The original
     /// calls its rotation builder twice per mode, each time about a

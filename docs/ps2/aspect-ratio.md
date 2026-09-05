@@ -64,7 +64,9 @@ of the XML's `Value`.
 
 ## What the option changes: one multiply, in the camera
 
-`FUN_0013e280` is the per-frame camera update. At `0x0013e6ec`:
+`Camera_SubmitScene` (`0x0013e280`, named 2026-09-05 - see
+[`docs/ghidra/functions/ps2-pulse-eu/camera.md`](../ghidra/functions/ps2-pulse-eu/camera.md))
+is the per-frame camera update. At `0x0013e6ec`:
 
 ```
 0013e604  lui at,0x3fb6 / ori 0xdb6e     ; f21 = 1.4285714 = 640/448
