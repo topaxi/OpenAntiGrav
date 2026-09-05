@@ -33,26 +33,35 @@ persistence and conflict handling - see `docs/architecture/menus.md`'s
 Rebinding section for why (`menu.rs` has no size-gate headroom left to draw
 one from inside the menu tree itself).
 
-Two things a live game still needs are not there:
+**The pause overlay landed (2026-09-05).** Backing into the menus over a
+parked race now renders that race's own scene into the frame - the same
+`RaceStage::render` call `Stage::Race` itself makes, from inside
+`Session::draw` - and `MenuStage::render` draws over the resolved result
+with `LoadOp::Load` and a translucent `Draw::Fill` instead of its usual
+black clear, leaving the disc's own looping backdrop out for as long as a
+race is parked. See `docs/architecture/menus.md`'s "and backing into the
+menus..." paragraph for the full account and `crates/game/src/main/menu_stage.rs`'s
+`PAUSE_OVERLAY` for the tint, which is chosen rather than authored - neither
+PSP title's front-end XML defines a pause screen, and the one HUD string
+that names pausing (`IG_PAUSE_QUIT`) is drawn nowhere. Verified headlessly:
+`render::tests::a_translucent_fill_blends_over_whatever_load_kept` in
+`crates/game/src/render/tests.rs` pins the new `render_with(LoadOp::Load,
+..)` + translucent-fill mechanism directly - confirmed sensitive by
+temporarily swapping in `LoadOp::Clear` and watching it fail. This also
+pushed `session/frame.rs` past the 1,000-line size-gate ceiling, split into
+`Session::draw` in the new `session/draw.rs`.
 
-- **No pause overlay while suspended.** Backing into the menus over a parked
-  race draws the ordinary menu screen, not a translucent pause layer over the
-  frozen picture - a real "paused" look is a rendering feature of its own, not
-  part of what dropping-vs-parking the `World` needed.
+One thing a live game still needs is not there:
+
 - **No on-screen prompt while a binding capture is open**, per the rough edge
   above.
 
 ## Open
 
-- No pause overlay while a race is suspended behind the menus
 - No "press a key..." prompt while a binding row's capture is open
 
 ## Next Steps
 
-- Draw a translucent layer over the frozen race picture instead of the
-  ordinary menu background when `Session::suspended_race` is `Some` - a
-  rendering feature over `MenuStage`, not a change to what the `World`'s
-  lifetime already does correctly.
 - Give the CONTROLS page a way to say a capture is open - a new `Draw` the
   composition root overlays over `MenuStage`'s own picture while
   `Session::awaiting_binding` is `Some`, rather than a `menu.rs` change: that
