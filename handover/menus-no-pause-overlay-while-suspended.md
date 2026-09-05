@@ -51,14 +51,29 @@ temporarily swapping in `LoadOp::Clear` and watching it fail. This also
 pushed `session/frame.rs` past the 1,000-line size-gate ceiling, split into
 `Session::draw` in the new `session/draw.rs`.
 
-One thing a live game still needs is not there:
+One thing a live game still needs is not there, and one gap in what landed
+is real but invisible on both titles this build actually plays:
 
 - **No on-screen prompt while a binding capture is open**, per the rough edge
   above.
+- **A title whose frame authors a `<ScreenClear>`, or whose `MenuSkin`
+  carries a `background` (only Pure's does, per `Skin::background`'s own
+  doc), still hides the parked race outright rather than dimming it.**
+  `menu::draw_list` puts that clear in as an opaque `Draw::Fill` ahead of
+  everything else regardless of `frozen_race`, and nothing in the pause
+  overlay's own code taught it to skip that layer. Both PSP titles' frames
+  are unread and neither authors a `MenuSkin::background`, so this cannot
+  fire today - it would need a title whose frame *is* read (HD's is, per
+  menus.md's "the page is drawn inside the disc's own frame") to actually
+  suspend a race and show it.
 
 ## Open
 
 - No "press a key..." prompt while a binding row's capture is open
+- The pause overlay does not suppress a title's own `<ScreenClear>` /
+  `MenuSkin::background` fill, so a title that authors one would show an
+  opaque menu background over the parked race rather than a dimmed picture
+  of it
 
 ## Next Steps
 
