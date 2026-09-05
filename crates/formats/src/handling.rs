@@ -772,6 +772,20 @@ impl Stats {
             .find(|block| block.raw_name.eq_ignore_ascii_case(name))
     }
 
+    /// The rungs this file authors, in ladder order, as a readable list.
+    ///
+    /// For the one thing a caller does when [`Self::class_named`] returns
+    /// `None`: say what the file *does* carry. A message naming only the rung
+    /// that was missing sends the reader to the wrong file.
+    #[must_use]
+    pub fn ladder(&self) -> String {
+        self.classes
+            .iter()
+            .map(|block| block.raw_name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     /// Whether this file carries exactly Pulse's four-class ladder.
     ///
     /// Every shipped Pulse `handlingstats.xml` does. Pure's do not - they carry

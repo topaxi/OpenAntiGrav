@@ -133,12 +133,11 @@ BASELINE = {
     "crates/game/src/menu.rs": 1274,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
-    "crates/trace/src/main.rs": 1614,
+    "crates/trace/src/main.rs": 1543,
     # Ratcheted down from 1,506 when `FlareTexture` moved out into
     # `exhaust/texture.rs`, which is where the ribbon's second texture is
     # uploaded from.
     "crates/render/src/exhaust.rs": 1430,
-    "crates/formats/src/handling.rs": 1273,
     "crates/physics/tests/ship_dynamics.rs": 1366,
     "crates/game/src/display.rs": 1110,
     "crates/formats/tests/audio_ground_truth.rs": 1226,

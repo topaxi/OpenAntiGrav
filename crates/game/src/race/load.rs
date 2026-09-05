@@ -11,6 +11,7 @@ mod audio;
 mod cameras;
 mod environment;
 mod geometry;
+mod global;
 mod pads;
 mod roster;
 mod surfaces;
@@ -273,142 +274,30 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The engine-wide block, out of `Data\XML\HandlingStats.xml` rather than this
     // team's file - see `handling::GLOBAL_ENTRY`. Read on **every** mode now, not
     // only Zone: the speed-pad tunables live here too and every mode has pads.
-    // Three distinct failures, reported as three distinct lines. The decoder was
-    // deliberately tightened so an incomplete `<Global>` names the element,
-    // attribute or class that is missing rather than returning a zero, and
-    // collapsing that into one "unreadable" would throw the whole point away -
-    // especially now that `<Zone>` and `<SpeedupPads>` share one result, so a
-    // malformed pad block would otherwise be reported as a missing Zone law.
-    let global = match read(&mut archives, handling::GLOBAL_ENTRY) {
-        Err(e) => {
-            report.push(format!("{}: {e}", handling::GLOBAL_ENTRY));
-            None
-        }
-        Ok(blob) => match handling::global_from_blob(&blob) {
-            Err(e) => {
-                report.push(format!("{}: {e}", handling::GLOBAL_ENTRY));
-                None
-            }
-            Ok(None) => {
-                report.push(format!(
-                    "{} carries no <Global> block",
-                    handling::GLOBAL_ENTRY
-                ));
-                None
-            }
-            Ok(some) => some,
-        },
-    };
-    // An absent or unreadable file means no boost and no auto-speed rather than
-    // invented numbers. Said out loud, because a speed pad that quietly does
-    // nothing reads as a physics bug and gets looked for in the force law.
-    //
-    // Looked up by **name**, not by an enum discriminant, so a title whose
-    // ladder is not Pulse's is served by its own file: Wipeout Pure authors a
-    // fifth `<GlobalClass name="VECTOR">` and this reaches it. A rung the file
-    // does not author is `None` and is reported - never quietly filled from a
-    // neighbouring rung, which would be racing on borrowed numbers.
-    let global_class = global
-        .as_ref()
-        .and_then(|global| global.class_named(&options.class));
-    if global.is_some() && global_class.is_none() {
-        report.push(format!(
-            "{}: authors no <GlobalClass name=\"{}\"> - this run gets no speed \
-             pads, unscaled gravity and no weapon-pad debounce rather than \
-             another class's numbers",
-            handling::GLOBAL_ENTRY,
-            options.class
-        ));
-    }
-    let pad_tunables = match global_class {
-        Some((pads, _, _)) => pads,
-        None => {
-            report.push("speed pads apply no boost this run".to_string());
-            handling::SpeedupPads::default()
-        }
-    };
-    // `<Special speedpad_jump>`, out of the same file and with the same fallback
-    // reasoning: a zero means the boost simply does not tilt, which is a missing
-    // feature rather than a broken race.
-    let special = global
-        .as_ref()
-        .map(|global| global.special)
-        .unwrap_or_default();
-    // Reported for the same reason the pad tunables are: a tilt that silently
-    // reads zero is indistinguishable from a tilt that is not implemented, and
-    // this is the only place the number's journey off the disc is observable.
-    report.push(format!(
-        "<Special speedpad_jump>: {} - the boost tilts {:.2} degrees toward the \
-         hull's up while the pitch axis is held up",
-        special.speedpad_jump,
-        special.speedpad_jump.atan().to_degrees()
-    ));
+    // The engine-wide `<Global>` block and the four numbers this race's rung
+    // takes out of it. Resolved by **name**, so a title whose ladder is not
+    // Pulse's reaches its own block - see `global::resolve`.
+    let global::GlobalTunables {
+        pad_tunables,
+        special,
+        class_gravity_scale,
+        zone,
+        weapon_pad_refresh,
+    } = global::resolve(&mut archives, options, &mut report);
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens, and neither `<SpeedupPads>` nor
     // `<Special>` is one of them.
-    // `None` where this team's file does not author the requested rung, which
-    // is a race that cannot be set up rather than one to run on a substitute:
-    // every other rung's numbers are somebody else's tuning.
+    // `None` where this team's file does not author the requested rung: a race
+    // that cannot be set up, rather than one run on somebody else's tuning.
     let handling =
         handling_for(&stats, &options.class, pad_tunables, special).with_context(|| {
-            format!(
-                "{stats_name} authors no <Class name=\"{}\"> - it carries {}",
-                options.class,
-                stats
-                    .classes
-                    .iter()
-                    .map(|block| block.raw_name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+            let (class, ladder) = (&options.class, stats.ladder());
+            format!("{stats_name} authors no <Class name=\"{class}\"> - it carries {ladder}")
         })?;
     // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
     // here, by its own function: it is per team rather than per class, and it
     // is graphics, so it deliberately never enters `Handling`.
     let airbrake_graphics = oag_gameplay::airbrake_graphics_for(&stats);
-    // The per-class scale on grounded gravity, `g_class_gravity_scale`. **The
-    // fallback is the identity, not zero**, unlike the pad tunables above: a
-    // missing boost is a missing feature, but a zero here would leave a grounded
-    // craft weightless, which is not a degraded race - it is a broken one.
-    //
-    // Named `airborne` in the XML and applied to the *grounded* term; see
-    // `oag_formats::handling::GravityMul`, which reads the VFPU pair chain out.
-    let class_gravity_scale = match global_class {
-        Some((_, mul, _)) => {
-            let scale = mul.airborne;
-            report.push(format!(
-                "<GravityMul>: grounded gravity scaled by {scale} for the {} class",
-                options.class
-            ));
-            scale
-        }
-        None => {
-            report.push("gravity is unscaled this run".to_string());
-            1.0
-        }
-    };
-    let zone = if options.mode == Mode::Zone {
-        match global.as_ref() {
-            Some(global) => report.push(format!(
-                "<Zone>: start {}, increment {} per zone, recharge {}",
-                global.zone.start, global.zone.increment, global.zone.recharge
-            )),
-            None => report.push("this run has no auto-speed".to_string()),
-        }
-        global.as_ref().map(|g| g.zone)
-    } else {
-        None
-    };
-    // The weapon-pad debounce, out of the same `<GlobalClass>` block as the two
-    // above and with the same "absent means the feature is off" fallback. Zero
-    // is a real degradation rather than a neutral value - it would let one
-    // crossing grant a pickup on every tick the hull is inside the volume - so
-    // the trigger treats a zero as "grant once and never again on this pad"
-    // rather than trusting it; see `Race::test_weapon_pads`.
-    let weapon_pad_refresh = match global_class {
-        Some((_, _, pad)) => pad.refresh_time,
-        None => 0.0,
-    };
     // The weapon table. Read on every mode even though only a single race arms
     // the pads: which mode is racing is a gameplay question and this is the
     // asset half, and reading it unconditionally is what makes a broken file a
