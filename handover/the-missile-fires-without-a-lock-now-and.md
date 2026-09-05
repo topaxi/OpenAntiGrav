@@ -94,13 +94,23 @@ reticle is render-only state on `Race`.
 
 ## Open
 
-- **The 0.8-second hold does not gate firing yet.** `Ship_FireHeldWeapon` passes
-  a target only when `entity+0x860 & 1` is set, so in the original a press before
-  the reticle locks fires a **dumb** missile - which is the same behaviour the
-  first half of this change built. Wiring the two together closes the loop and
-  changes which shots are guided, so it wants its own change: the five disc-backed
-  missile tests call `Race::fire_missile` directly after 30 ticks and would all
-  start getting unguided missiles.
+- **Whether an opponent's craft has its own `entity+0x860` at all is
+  unrecovered, and it changes what "guided AI missile" means.** `HudSight_Update`
+  is the sole writer this thread found, and nothing read says it runs for
+  anything but the craft the HUD is drawn for. If it never runs for an AI craft,
+  that craft's copy of the bit - if the field is even per-craft rather than a
+  single global - is never set, and `Ship_FireHeldWeapon` takes the no-lock arm
+  for every missile an opponent fires in the original, regardless of what
+  `Ship_AcquireLock` found. This engine's opponents already run the geometric
+  lock unconditionally (a deliberate, already-documented deviation - see
+  `Race::fire_missile`'s doc comment), and the hold gate just landed leaves that
+  choice untouched: only `slot == 0`'s candidate is gated on `sight::Sight`,
+  because that is the only craft this project has found a reticle for. If the
+  hypothesis above is right, this engine's opponents are strictly better shots
+  with the Missile than the original's are. Not chased here - it needs
+  `Ship_FireHeldWeapon`'s and `HudSight_Update`'s callers resolved, and both
+  currently return no xrefs from Ghidra's static analysis (probably reached
+  through a function-pointer table).
 - **The LeachBeam's reticle is not driven.** Its four widgets are bound and its
   model is in the sheet; what is missing is upstream - `oag_formats::weapons`
   parses no `<Weapon type="LeachBeam">`, so there are no `lock_min_dist` /
@@ -129,11 +139,23 @@ reticle is render-only state on `Race`.
   `"MISSILEEXPWALL"` and `"MISSILEEXPSHIP"`. Checked twice. Confidence 60 that it
   is a copy-paste in the original; not load-bearing here.
 
+**The gate landed.** `Race::fire_missile` now passes the geometric candidate
+through only when the *firing craft's own* hold has caught up -
+`self.sight.locked()` for `slot == 0`, since `sight::Sight` is the reticle and it
+is drawn for one craft. A press before the brackets close still fires - the
+pickup is still spent and the missile still flies - it just carries no
+candidate, same as this thread's first half already made an unlocked press do.
+Every other slot's candidate is used exactly as before this gate: unchanged,
+because nothing here says an opponent's craft has a hold to check at all - see
+the new `## Open` line below. Of the file's five tests, only
+`a_missile_turns_toward_the_craft_it_locked` needed a real hold before firing to
+keep asserting on a genuine lock; `a_missile_never_locks_its_own_firer` was
+primed the same way so its self-lock invariant still gets exercised against
+slot 0 and not only against the opponents. The other three needed no change -
+neither fires expecting a *specific* lock outcome from slot 0's shot.
+
 ## Next Steps
 
-- Gate `Race::fire_missile` on the reticle's lock, so firing early gives the dumb
-  missile the original gives. Re-time the five disc-backed missile tests to hold
-  past `sight::HOLD_SECONDS` first.
 - Parse `<Weapon type="LeachBeam">` and give its four sight widgets the same
   treatment the Missile's five just got.
 
