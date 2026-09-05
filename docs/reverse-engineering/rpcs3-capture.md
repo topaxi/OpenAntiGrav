@@ -288,10 +288,70 @@ operand and nothing else has to hold it.
         --region "0x40080000:0x20000"
 
 **`capture`'s own finder reports a different and wrong camera for these
-dumps** - an eye on the X axis at 11.0 and 34.4 units, `fov` 39 - because
-`ps3_pose.candidates` knows nothing about packets. Wiring the packet-aware
-finder into the harness is what closes the loop; until it is, read the dumps
-rather than the JSON.
+dumps** - an eye on the X axis at 11.0 and 34.4 units, `fov` 39 - which reads
+like a packet-format problem and is not one: measured below, `ps3_pose`
+already finds the real camera in this data without any packet awareness at
+all. Read the dumps rather than the JSON until the fix below lands.
+
+## A packet-aware finder exists; the wrong pick was never the packet format (2026-09-05)
+
+**Confidence 95**, three shots of `talons-fifo3` measured directly.
+`ps3_pose.packet_candidates` scans for `TRANSFORM_CONSTANT_LOAD_HEADER`
+(`0x00441efc`) and scores only the register index and sixteen floats that
+follow each one, rather than sliding a `score` call over every four-byte
+offset in the dump. On these three shots that is 66-68 candidates instead of
+218-241, in 6 ms instead of 180-220 ms - and it recovers the same real camera
+(`eye` within 0.01 of the byte-slider's own hit, in all three shots) that
+`ps3_pose.candidates` already found. The cost win is real; a packet-format
+gap was never why `capture` reported the wrong camera.
+
+**The actual bug is in `describe`'s pick, and it is independent of which
+finder runs.** `describe` keeps whichever hit has the lowest `unit_error`
+across every blob, and several other packets in the very same dump decompose
+to an *exactly* zero error - `eye (-0.0, -0.0, 12.0)`, `(-0.0, -0.0, 30.0)`
+and similar, recurring dozens of times a frame. `0.0 < 7.128e-08`, so that
+tie always wins over the real camera. Reproduced directly:
+
+    >>> min(ps3_pose.candidates(blob, base=...) for each region, by error)
+    (0x40077...c, 'col', 0.0, (11.002091407775879, -0.0, -0.0))
+
+which is bit-for-bit the wrong pose already recorded in
+`talons-fifo3/00.json`. Feeding `packet_candidates`' output through the same
+`min(unit_error)` rule reproduces the identical class of wrong pick - a
+different exact-zero tie, not the camera - so wiring the packet-aware finder
+into `describe` as a drop-in replacement would still report a wrong camera,
+just with a `"finder": "packet"` label next to it that reads as fixed when it
+is not. It is *not* wired in for exactly this reason: an absent camera is an
+honest gap, a plausible-looking wrong one is not (the same rule this
+project applies to a stand-in asset applies to a stand-in camera pose).
+
+`ps3_pose.packet_candidates` also settles - by absence - the earlier worry
+that `talons/00.json`'s recorded pose (`eye` near the origin at `z=-3.3069`,
+`fov_y_deg` 92.9, `aspect` 1.9) needed a stricter `score` to reject. It does
+not: `score` is unchanged and still accepts that matrix when handed it
+directly (`unit_error` exactly `0.0`), because it is one of the seven
+authored cube-face/shadow matrices this page already described as
+algebraically valid and simply not the camera - not a broken matrix `score`
+should catch. What actually keeps it out of a packet-aware capture is that it
+lives in the EBOOT's static data segment, where `packet_candidates` finds
+**zero** `0x00441efc` headers at all; a region with no packet is never
+offered as a candidate in the first place, which is a stronger exclusion than
+any algebraic test could give it.
+
+The register index is one concrete gain for the `viewProj`-vs-`worldViewProj`
+question this page's previous section left open: every packet hit now
+carries which RSX register it loaded (`256` or `260`), which the byte-slider
+structurally cannot report. That makes the two hypotheses cheaper to compare
+- whether the single recurring value at `c[256]` and the one at `c[260]`
+agree frame over frame - but it does not settle which name belongs to which
+register; only the overlay render this page already named as the deciding
+test does that.
+
+Fixing the pick needs the multiplicity this page's "Picking the camera out"
+section already named as the real discriminator - a value single-valued
+within a frame and different between frames - which needs at least two
+frames' worth of packets in hand at once, not a per-blob `min`. That is
+tracked as an open item, not solved here.
 
 ## What is free, and what costs packets
 
