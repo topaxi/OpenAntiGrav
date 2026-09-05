@@ -456,10 +456,27 @@ letting it drop, and backing all the way out of the menus reaches
 `Session::resume_race` in place of quitting - the fourth row in the table
 above. A finished race is the one exception: there is a results table behind
 it rather than a track, nothing to resume into, so that one is still
-discarded exactly as every race used to be. There is deliberately no pause
-*overlay* yet - backing into the menus over a parked race draws the ordinary
-menu screen, not a translucent layer over the frozen picture - only the
-World's own lifetime changed. See `crates/game/src/main/session/menus.rs`.
+discarded exactly as every race used to be. See
+`crates/game/src/main/session/menus.rs`.
+
+**And backing into the menus over a parked race now draws it, dimmed,
+rather than the ordinary menu screen.** `Session::draw` (the draw half of
+`Session::frame`, split into `session/draw.rs` once this pushed the whole
+function past `scripts/check-file-size.py`'s ceiling) renders the parked
+`RaceStage`'s scene into the scene target whenever `Stage::Menu` has one
+waiting, exactly the call `Stage::Race` itself makes, and `resolve_scene`
+carries it into the presentation target the same way a live race's picture
+gets there. `MenuStage::render` then draws over that picture with
+`LoadOp::Load` instead of its usual black clear, leaves out the disc's own
+looping backdrop movie (the race's picture takes its place), and draws a
+translucent `Draw::Fill` first so the rows read over it. The overlay's own
+tint is **chosen, not authored**: neither PSP title's front-end XML defines
+a pause screen to read one off - `Skin.xml`'s `LoadXML` list is exhaustively
+22 files, per [fe-menu-definitions.md](../formats/fe-menu-definitions.md),
+and none of them is a `Pause` definition - and the one HUD string that
+names pausing, `IG_PAUSE_QUIT`, is drawn by nothing (see
+[hud.md](../ui/hud.md)'s "There is no pause"). See `PAUSE_OVERLAY` in
+`crates/game/src/main/menu_stage.rs`.
 
 **The race's own music already worked this way**, and is the reason the
 World's turn was safe to build the same way. Its playlist - through the

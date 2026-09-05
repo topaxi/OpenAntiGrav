@@ -2,12 +2,27 @@
 
 use anyhow::{Result, bail};
 
+use oag_game::frontend::Draw;
 use oag_game::input::Button;
-use oag_game::render::Renderer;
+use oag_game::render::{Renderer, letterbox_in};
 use oag_game::{font, marquee, menu, movie};
 
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
+
+/// The pause overlay's tint, over a parked race's picture.
+///
+/// **Chosen, not authored.** Neither PSP title's own front-end XML defines a
+/// pause screen to read one off: `Skin.xml`'s own `LoadXML` list is
+/// exhaustively 22 files - see
+/// [fe-menu-definitions.md](../../../../docs/formats/fe-menu-definitions.md) -
+/// and none of them is a `Pause` definition. The one HUD string that names
+/// pausing, `IG_PAUSE_QUIT`, is drawn by nothing:
+/// [hud.md](../../../../docs/ui/hud.md) records "There is no pause" against
+/// it, because leaving a race used to drop the `World` outright. So there is
+/// no colour or alpha on the disc for this to recover, and this one is
+/// this project's own rather than a reading of one.
+const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
 
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
@@ -241,6 +256,10 @@ impl MenuStage {
     ///   quad before the first frame lands would flash green over the menu. The
     ///   rows draw on black instead, exactly as they do on a source with no
     ///   backdrop.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "frozen_race is one more fact the caller already has"
+    )]
     pub(crate) fn render(
         &mut self,
         gpu: &Gpu,
@@ -250,9 +269,33 @@ impl MenuStage {
         feed: Option<&mut movie::Feed>,
         // The **live** table, off `Session::controls` - not
         // `oag_input::keys::bound_keys`'s default one. This stage holds no
-        // input state of its own to read it from; see `Session::frame`'s call
+        // input state of its own to read it from; see `Session::draw`'s call
         // site for why the closure has to be built there instead.
         bound_keys: &dyn Fn(Button) -> Vec<&'static str>,
+        // Whether `Session::suspended_race` holds a parked race, off
+        // `Session::draw` - this stage holds no session state of its own to
+        // read it from either. Changes two things: the disc's own looping
+        // backdrop is left out (see `shown` below - the parked race's own
+        // picture is what shows through instead), and this draws with
+        // `LoadOp::Load` plus a translucent [`PAUSE_OVERLAY`] rather than
+        // clearing to black. `Session::draw` has already resolved the
+        // parked race's scene into `view` by the time this runs, past
+        // `has_scene`, which is what there is to load rather than clear -
+        // and `resolve_scene` clears the *whole* target to black before it
+        // draws that scene into its own rect, per `Framebuffer::present`, so
+        // the aspect bars outside it are exactly as black as they would be
+        // from this stage's own clear on an ordinary frame.
+        //
+        // **A known gap this does not cover**: a title whose frame authors a
+        // `<ScreenClear>`, or whose `MenuSkin` carries a `background` (only
+        // Pure's does, per `Skin::background`'s own doc), still draws that
+        // as an opaque `Draw::Fill` first in `menu::draw_list`'s own
+        // `backdrops` layer regardless of `frozen_race` - hiding the parked
+        // race outright rather than dimming it. Both PSP titles' frames are
+        // unread and neither authors a `MenuSkin::background`, so this is
+        // invisible on the two titles this build actually plays, but it is
+        // real and undocumented anywhere else; see this thread's `## Open`.
+        frozen_race: bool,
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -286,7 +329,12 @@ impl MenuStage {
             &self.skin,
             bound_keys,
             &|text| font::measure(&self.text_atlas, text),
-            shown,
+            // `None` over a parked race even when `shown` just decoded a
+            // fresh frame above: the decode keeps running so the loop has
+            // not drifted by the time a player resumes, but the picture
+            // behind the menus is the race's own, not the disc's backdrop
+            // movie playing underneath it.
+            if frozen_race { None } else { shown },
             &self.frame,
         );
         let (list, clip) = match &self.change {
@@ -324,7 +372,34 @@ impl MenuStage {
                 self.marquee.elapsed(),
             ),
         };
-        self.renderer.render(
+        // The pause overlay, drawn under the rows and over everything else:
+        // first in the list, since the list paints back to front. Ahead of
+        // `list` rather than pushed onto it, so it sits under the frame's own
+        // marks and the transition tween too, not only under the rows -
+        // `list` already carries every layer flattened together by this
+        // point and there is no later seam to insert behind just the body.
+        // See [`overlay_rect`] for why it is not simply `space.size`.
+        let list: Vec<Draw> = if frozen_race {
+            std::iter::once(Draw::Fill {
+                rect: overlay_rect(self.skin.space(), viewport),
+                color: PAUSE_OVERLAY,
+            })
+            .chain(list)
+            .collect()
+        } else {
+            list
+        };
+        // `LoadOp::Load` over a parked race - `Session::draw` already
+        // resolved its scene into `view` this frame, and clearing here would
+        // erase it. `Renderer::render`'s own black clear is right the rest
+        // of the time, when this stage owns the frame outright.
+        let load = if frozen_race {
+            wgpu::LoadOp::Load
+        } else {
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+        };
+        self.renderer.render_with(
+            load,
             &gpu.device,
             &gpu.queue,
             encoder,
@@ -334,5 +409,99 @@ impl MenuStage {
             clip,
         );
         Ok(())
+    }
+}
+
+/// A grid-space rectangle for the pause overlay's [`Draw::Fill`], sized so it
+/// covers the whole of `viewport` once `Renderer::render_with` letterboxes
+/// it - **not** `space.size` itself.
+///
+/// Every `Draw` this stage emits is fit into `viewport` through the same
+/// `letterbox_in` scale the rows are, but the parked race behind the overlay
+/// is not: `Framebuffer::resolve_scene` fills the whole viewport rectangle at
+/// whatever aspect the player's ASPECT setting picked, with no notion of this
+/// title's own `display_aspect` at all. A fill sized to exactly `space.size`
+/// would then be letterboxed *again* on top of an already-correct picture,
+/// leaving undimmed bands of live race wherever the two aspects disagree -
+/// reachable any time ASPECT is not this title's own shape, `Aspect::Free`
+/// included, which asks for whatever the window is and so has no bound on
+/// how far the two can drift.
+///
+/// Dividing by the same scale the row layer is about to be shrunk by is what
+/// cancels that shrink **exactly**: `a_mismatched_aspect_still_covers_the_
+/// whole_viewport` below re-derives `Renderer`'s own clip-space mapping
+/// independently and checks the four edges land at exactly `-1.0`/`1.0`,
+/// not merely close.
+fn overlay_rect(space: oag_game::frontend::Space, viewport: (f32, f32, f32, f32)) -> [f32; 4] {
+    let (width, height) = space.size;
+    let [scale_x, scale_y] =
+        letterbox_in((viewport.2 as u32, viewport.3 as u32), space.display_aspect);
+    let (full_width, full_height) = (width / scale_x, height / scale_y);
+    [
+        (width - full_width) * 0.5,
+        (height - full_height) * 0.5,
+        full_width,
+        full_height,
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Renderer`'s own clip-space mapping, reimplemented independently of
+    /// `crate::render`'s `ui.wgsl`/`to_clip` rather than calling it, so this
+    /// cannot pass by sharing a mistake with the code under test.
+    fn to_clip_x(x: f32, screen_width: f32, scale_x: f32) -> f32 {
+        (2.0 * (x / screen_width) - 1.0) * scale_x
+    }
+
+    fn to_clip_y(y: f32, screen_height: f32, scale_y: f32) -> f32 {
+        (1.0 - 2.0 * (y / screen_height)) * scale_y
+    }
+
+    /// The bug this pins: a fill sized to exactly `space.size` is correct
+    /// only when `viewport`'s own aspect happens to match the title's
+    /// `display_aspect`. `overlay_rect` has to keep covering the whole
+    /// viewport - both of the parked race's picture and the aspect bars
+    /// `Framebuffer::resolve_scene` clears to black around it - at any
+    /// aspect a player's ASPECT row (`Free` included) can produce.
+    #[test]
+    fn a_mismatched_aspect_still_covers_the_whole_viewport() {
+        let space = oag_game::frontend::Space::PSP;
+        for viewport in [
+            // Matched: `viewport`'s own aspect equals the PSP's own.
+            (0.0, 0.0, 480.0, 272.0),
+            // Pillarboxed: much taller than the PSP's own 480/272 shape.
+            (0.0, 0.0, 480.0, 1000.0),
+            // Letterboxed the other way: much wider.
+            (0.0, 0.0, 3000.0, 272.0),
+            // An extreme `Aspect::Free` window with nothing to bound it.
+            (0.0, 0.0, 7680.0, 200.0),
+        ] {
+            let rect = overlay_rect(space, viewport);
+            let [scale_x, scale_y] =
+                letterbox_in((viewport.2 as u32, viewport.3 as u32), space.display_aspect);
+            let left = to_clip_x(rect[0], space.size.0, scale_x);
+            let right = to_clip_x(rect[0] + rect[2], space.size.0, scale_x);
+            let top = to_clip_y(rect[1], space.size.1, scale_y);
+            let bottom = to_clip_y(rect[1] + rect[3], space.size.1, scale_y);
+            assert!(
+                (left - -1.0).abs() < 1e-4,
+                "{viewport:?}: left edge {left}, wanted -1.0 (rect {rect:?})"
+            );
+            assert!(
+                (right - 1.0).abs() < 1e-4,
+                "{viewport:?}: right edge {right}, wanted 1.0 (rect {rect:?})"
+            );
+            assert!(
+                (bottom - -1.0).abs() < 1e-4,
+                "{viewport:?}: bottom edge {bottom}, wanted -1.0 (rect {rect:?})"
+            );
+            assert!(
+                (top - 1.0).abs() < 1e-4,
+                "{viewport:?}: top edge {top}, wanted 1.0 (rect {rect:?})"
+            );
+        }
     }
 }
