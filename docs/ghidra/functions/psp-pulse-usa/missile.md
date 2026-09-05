@@ -76,6 +76,28 @@ a third global, `DAT_08b31048`, which reads `3` in a Single Race and `8` in
 Eliminator. Three globals it is easy to conflate; see
 [weapon-ai.md](weapon-ai.md), which spends the third.
 
+**2026-09-05: the writer is found, statically, and it is not `$gp`-relative.** This
+program never uses `$gp`-relative addressing at all (`search_instructions` for the
+substring `(gp)` returns zero matches across its entire 521,965-instruction body, and
+`SceModuleInfo.gp_value` reads `0`); the access is a naive/unrelocated `lui`/`addiu`
+pair Ghidra's decompiler shows as a small, wrong-looking constant instead of the real
+address, the same trap as [anim-transform.md](anim-transform.md#the-second-relocation-base-is-found-it-is-per-segment-not-per-image)'s
+correction below. `DAT_08b32428` is written in
+exactly two places, both per-race-mode constructor case blocks reached from
+`Race_CreateModeObject`'s (`0x08821038`) mode-dispatch jump table:
+
+- **Single Race (mode 3), `FUN_0882bfd4`, `0x0882c2e8`:** `sw zero,0x8(a1)` (`a1` built
+  by `lui a1,0x6 ; addiu a1,a1,-0x7030` two instructions earlier; the `sw` is the
+  preceding branch's delay slot, so it always executes) - writes `DAT_08b32428 = 0`.
+- **Eliminator (mode 8), `FUN_0882c880`, `0x0882cb38`:** `sw a1,0x8(a2)` (`a2` built the
+  same way, `a1` loaded with `li a1,0x1`) - writes `DAT_08b32428 = 1`.
+
+Both match the live-measured values above exactly. Confidence **88**: instruction-level
+read, the naive base is independently triple-confirmed elsewhere to be
+`DAT_08b32420`/`DAT_08b32428`, and the write executes unconditionally. Not higher only
+because the two enclosing functions do much more than this one field (RTTI
+registration, a per-craft init loop) that was not read closely enough to name them.
+
 **LeachBeam's lock distances are at `+0x114`/`+0x118`** in the same struct, read
 by the same function as the Missile's - see the lock below. It is the only other
 weapon that locks.
