@@ -276,5 +276,22 @@ one circuit. **This corrects an earlier claim on this page** that both
 `02_Track` and `12_Track`, despite their short sets, "draw fully textured" -
 true for `02_Track` (and its reversed twin, and `06_Track_reversed`, the third
 near-miss circuit - all three checked in this sweep and clean) but not for
-`12_Track`. The root cause of the one-slot shortfall itself is still
-unidentified; see [`ps2-texture.md`](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).
+`12_Track`.
+
+**The one-slot shortfall's root cause was identified 2026-09-05: a duplicated
+`Texture` node name** collapses two node ordinals onto one physical entry in
+the nested texture-set WAD, shifting every later ordinal down by one slot -
+see [`ps2-texture.md`](ps2-texture.md#the-near-miss-shortfall-is-a-duplicated-texture-node-name-not-missing-data)
+for the full evidence. `sky12_4.tga`'s pixel data is **not absent from the
+disc** - it is present both as a standalone top-level `WADS2.WAD` entry and
+as the nested set's own last entry (index 150), byte-identical either way.
+The white face is this project's own renderer reading a flat, un-shifted
+mapping (`mesh::build_with_textures`, confirmed in source) rather than an
+honestly-missing asset, and per this project's own rule against inventing
+what the disc already supplies, the fix is a dedup-aware ordinal-to-index
+mapping rather than a texture substitution - not yet implemented, and not
+yet corroborated against what the original PS2 build's own loader does with
+the same shift. Per the per-node sweep, this is not cosmetic on this one
+face alone: ordinals 64-150 (87 of `12_Track`'s 152) each currently bind
+their neighbour's decoded texture one slot early, and only ordinal 151 falls
+outside the set entirely and turns white.
