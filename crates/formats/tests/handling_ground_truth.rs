@@ -471,6 +471,63 @@ fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
     println!("{checked} release(s) carry a complete <Global> block");
 }
 
+/// The barrel roll's three tunables - `roll_cost`, `roll_speed` and
+/// `roll_turbotime` - agree between the USA and EU PSP pressings.
+///
+/// Deliberately two **pressings of the same platform** rather than PSP against
+/// PS2, because
+/// [`docs/reverse-engineering/confidence-rubric.md`](../../../docs/reverse-engineering/confidence-rubric.md)
+/// prices a second independent binary above a second reading of the first, and
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s barrel-roll section
+/// was read entirely off the USA disc. If the EU disc's `<Special>` disagreed,
+/// every number that section names would be pinned to one region rather than
+/// to the mechanic.
+///
+/// No literal is asserted or printed, per
+/// `docs/architecture/adr/0006-no-copyrighted-content.md`: what is checked is
+/// that both pressings author the same three numbers, and that all three are
+/// physically sane for what they gate - a cost that is a percentage, and two
+/// positive durations.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_barrel_roll_tunables_agree_on_both_psp_pressings() {
+    let mut checked = 0;
+    let mut special = None;
+    for image_name in ["pulse-psp-usa.chd", "pulse-psp-eu.chd"] {
+        let Some(blob) = global_blob(image_name, PSP_ARCHIVE) else {
+            continue;
+        };
+        let global = handling::global_from_blob(&blob)
+            .unwrap_or_else(|e| panic!("{image_name}: {e}"))
+            .unwrap_or_else(|| panic!("{image_name}: the global file carries no <Global>"));
+
+        assert!(
+            (0.0..=100.0).contains(&global.special.roll_cost),
+            "{image_name}: roll_cost is documented as a percentage of the shield pool"
+        );
+        assert!(
+            global.special.roll_speed > 0.0,
+            "{image_name}: a non-positive ramp rate never completes a roll"
+        );
+        assert!(
+            global.special.roll_turbotime > 0.0,
+            "{image_name}: a non-positive payout window pays out nothing"
+        );
+
+        if let Some(prev) = special {
+            assert_eq!(
+                global.special, prev,
+                "{image_name}: the barrel roll's tunables differ from the other \
+                 PSP pressing, so input-bindings.md's reading is not both discs'"
+            );
+        }
+        special = Some(global.special);
+        checked += 1;
+    }
+    assert!(checked > 0, "nothing was checked");
+    println!("{checked} PSP pressing(s) agree on the barrel roll's tunables");
+}
+
 /// The finding `oag_formats::handling::global_classes` is shaped around: the
 /// shipped file authors a **fifth** `<GlobalClass>`, named `VECTOR`, and it is
 /// **first**.

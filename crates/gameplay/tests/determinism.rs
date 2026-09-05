@@ -390,6 +390,29 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   informative: its craft never gets close enough to a detonation to be
 ///   pushed, so the two scenarios cover different halves of this function.
 ///
+/// - **Moved 2026-09-05**, inherited the same way the 2026-08-19
+///   `pending_impulse` entry above is: `oag_physics::ShipState` gained four
+///   fields for the barrel roll's gesture and phase, see
+///   `crates/physics/tests/determinism.rs`'s own history for that field set.
+///   **The move is the hash stream and nothing else** - neither scenario here
+///   taps out a roll, so all four fields hold their defaults on every tick of
+///   both. No isolation repeated in this file for the same reason the
+///   inherited entry gives. The constants this commit replaces -
+///   `0xde9b_58b2_91cb_0dfb` / `0xc5fb_0d05_0b56_bb85` at 60 ticks and
+///   `0x91fe_78d0_5a4b_01aa` / `0x08a9_2c99_ab0f_f54c` at 600 - are what
+///   [`REFERENCE`] held before this move.
+///
+/// - **Moved 2026-09-05, later the same day**, inherited the same way: a fifth
+///   barrel-roll field, `roll_payout_timer`, plus its three consumer branches
+///   in `crate::airbrake`/`crate::hover`/`crate::engine` and the
+///   landing-transition wiring in `crate::forces::evaluate` - see
+///   `crates/physics/tests/determinism.rs`'s own history for that step.
+///   **Still the hash stream and nothing else**: `roll_payout_timer` can never
+///   leave `0.0` here either, so every new consumer branch's `else` arm is
+///   byte-for-byte what ran before it existed. Replaces
+///   `0x2e8b_8631_f20f_99d1` / `0xfb92_8769_d310_f9eb` at 60 ticks and
+///   `0xf9b1_492d_6749_a348` / `0x46e3_c9f5_b867_ef0a` at 600.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -397,8 +420,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xde9b_58b2_91cb_0dfb, 0xc5fb_0d05_0b56_bb85),
-    (600, 0x91fe_78d0_5a4b_01aa, 0x08a9_2c99_ab0f_f54c),
+    (60, 0xc2cd_afd3_1c1f_7e01, 0x4bf6_9ad5_c266_27db),
+    (600, 0x7713_5775_9662_2238, 0xe413_77c8_89ff_33ba),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -508,11 +531,23 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0x87aa_86d6_9f6b_73e8` / `0x525b_5a02_6095_f7a0` at 60 ticks and
 ///   `0x5cab_0e84_dfbe_0a9b` / `0xce16_0eaa_37a7_9f16` at 600.
 ///
+/// - **Moved 2026-09-05**, the same barrel-roll field addition [`REFERENCE`]'s
+///   own history records, inherited through the same `hash_world` call and not
+///   re-isolated here for the same reason. Replaces `0x2d4d_2f6e_a306_041c` /
+///   `0x9b66_0ce3_df4f_59f4` at 60 ticks and `0x10cd_79fd_a58d_243b` /
+///   `0x8ab3_7516_6ae2_aa42` at 600.
+///
+/// - **Moved 2026-09-05, later the same day**, the same `roll_payout_timer`
+///   plus three-consumer addition [`REFERENCE`]'s own history records,
+///   inherited the same way. Replaces `0x4148_5ed1_decf_60ec` /
+///   `0xdfed_3982_a8f4_7a18` at 60 ticks and `0x5a0b_3d23_e346_8677` /
+///   `0x7311_e129_616d_bc8e` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x2d4d_2f6e_a306_041c, 0x9b66_0ce3_df4f_59f4),
-    (600, 0x10cd_79fd_a58d_243b, 0x8ab3_7516_6ae2_aa42),
+    (60, 0x0549_867b_d291_294c, 0x1f6d_7622_eb31_7338),
+    (600, 0x626e_0aee_2d8b_48f7, 0x78f9_263c_8a07_97ee),
 ];
 
 #[test]

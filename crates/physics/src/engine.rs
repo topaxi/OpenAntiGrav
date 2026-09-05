@@ -417,7 +417,13 @@ pub fn engine(
     // The turbo add, `T += Engine.turbo`, between the cap and the doubling -
     // which is where the original puts it, so it is **uncapped**: that is what
     // makes it a turbo rather than a nudge. See `ShipState::turbo_timer`.
-    if state.turbo_timer > 0.0 {
+    //
+    // **Either source arms it, exactly as the original's own
+    // `(flags & 0x200) || (flags & 0x400)` reads**: a fired Turbo pickup
+    // ([`ShipState::turbo_timer`]) or a completed barrel roll's landing
+    // payout ([`ShipState::roll_payout_timer`]) grant the identical add. See
+    // `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    if state.turbo_timer > 0.0 || state.roll_payout_timer > 0.0 {
         thrust += handling.engine.turbo;
     }
 

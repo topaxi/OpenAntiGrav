@@ -70,6 +70,7 @@
 //!
 use oag_core::math::Vec3;
 
+use crate::barrel_roll;
 use crate::collide::{Ray, Raycaster};
 use crate::forces::Environment;
 use crate::params::Handling;
@@ -792,13 +793,12 @@ fn probe_from_hit(
     let spring = handling.physical.mass * 0.3 * (target_height - height) * HOVER_K * load * gravity;
 
     let damping = (-0.1 * normal_velocity).clamp(-1.0, 2.0);
-    let rebound = rebound_coefficient(handling, state.time_since_landing);
+    let reb = rebound_coefficient(handling, state.time_since_landing);
+    let rebound = barrel_roll::rebound_override(state, reb);
 
-    // The magstrip blend fades the ordinary suspension out entirely, and what
-    // replaces it is `crate::maglock`: a kinematic hold rather than a force, which
-    // is why nothing here has to make up for the spring it cancels. The two halves
-    // are gated on one field (`craft+0x280`) and drive each other - the blend is
-    // ramped by `maglock::ramp` from the mag-floor probe, and read here.
+    // The magstrip blend fades the ordinary suspension out for `crate::maglock`'s
+    // kinematic hold, ramped by `maglock::ramp` from the mag-floor probe and read
+    // here rather than made up for.
     let force = up * spring * (1.0 + rebound * damping) * (1.0 - state.mag_lock_blend);
 
     HoverProbe {

@@ -237,24 +237,63 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   removed - `apply_pending_impulse` still called from `crate::step` - the
 ///   three constants from 2026-08-11 (the `shield_pickup_timer` entry)
 ///   reproduce bit for bit.
+/// - **Regenerated 2026-09-05, and behaviour did not change.** `ShipState`
+///   gained four fields for the barrel roll's gesture and phase - `roll_taps`,
+///   `roll_tap_timer`, `roll_phase` and `roll_target` - see
+///   `crate::barrel_roll` and `docs/ghidra/functions/psp-pulse-usa/
+///   input-bindings.md`. This is steps 2-4 of
+///   `handover/the-barrel-roll-is-read-and-unimplemented.md`: the tap history,
+///   the phase ramp and the shield-gated arm, all unit-tested directly against
+///   `ShipState` and none of it wired into `crate::forces::evaluate` yet - a
+///   later commit does that alongside the landing payout, and regenerates
+///   this again.
+///
+///   `probe::hash_state` now writes three more `u8`s and three more `f32`s
+///   per tick, and nothing here can have exercised any of the four: nothing
+///   in `oag_gameplay` or this crate's own probe scripts calls
+///   `barrel_roll::record_tap` or `barrel_roll::arm`, so all four hold their
+///   defaults for every tick of every run. Checked the same way as every
+///   entry above: with the six new `hash_state` writes alone removed, the
+///   three constants from 2026-08-19 (the `pending_impulse` entry) reproduce
+///   bit for bit.
+/// - **Regenerated 2026-09-05, later the same day, and behaviour did not
+///   change either.** `ShipState` gained a fifth barrel-roll field,
+///   `roll_payout_timer`, ours for the original's `craft+0x1c0 & 0x400` -
+///   step 5 of `handover/the-barrel-roll-is-read-and-unimplemented.md`. Three
+///   branches were wired into terms this gate exercises every tick -
+///   `crate::airbrake::lateral_grip`'s `ROLL_GRIP_MULTIPLIER`,
+///   `crate::hover::probe_from_hit`'s `barrel_roll::rebound_override`, and
+///   `crate::engine::engine`'s turbo add - and `crate::forces::evaluate`
+///   now resolves [`crate::barrel_roll::release`] on the airborne-to-grounded
+///   transition and counts the new timer down.
+///
+///   All three branches are provably inert here, the same way the four
+///   fields above are: nothing calls `barrel_roll::record_tap` or `arm`, so
+///   `roll_payout_timer` can never leave `0.0` and every new branch's `else`
+///   arm is byte-for-byte what ran before it existed. Checked the same way as
+///   every entry above: with the one new `hash_state` write alone removed and
+///   every other change - the three consumer branches, the phase ramp calls,
+///   the payout countdown, and the landing-transition arm in
+///   `crate::forces::evaluate` - left in place, the three constants from
+///   earlier the same day (the four-field entry above) reproduce bit for bit.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x3704_c308_e4c7_377c,
-        0x0e58_8040_c263_f562,
+        0xed82_f552_02bb_8fc7,
+        0xbe94_acee_140a_bd4c,
     ),
     (
         3_600,
         Script::Corridor,
-        0xda00_a5a1_2b6a_7136,
-        0xe248_bbd7_0b47_e644,
+        0xe41e_11c5_4cb4_9c56,
+        0x5c51_d236_218a_bc68,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xe8a8_0115_2a3b_e93d,
-        0xb9c7_aa3c_96d7_add6,
+        0xbaa2_3831_9d13_185f,
+        0xb91b_fab9_2c59_3d70,
     ),
 ];
 

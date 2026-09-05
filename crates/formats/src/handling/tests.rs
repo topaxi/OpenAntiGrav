@@ -550,8 +550,8 @@ fn global_document(classes: &[&str]) -> String {
 }
 
 /// `<Special>` as [`global_document`] authors it. All five attributes, so
-/// the fixture is the shape the disc's own file is rather than only the one
-/// attribute [`Special`] reads; only `speedpad_jump` is asserted on.
+/// the fixture is the shape the disc's own file is rather than only the four
+/// [`Special`] reads; `turbo_jump` is authored but not asserted on.
 const SPECIAL: &str = r#"<Special roll_cost="4" roll_speed="5" roll_turbotime="6" speedpad_jump="7" turbo_jump="8"/>"#;
 
 const FOUR: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
@@ -567,8 +567,11 @@ fn each_global_class_lands_in_its_own_slot() {
         .expect("parses")
         .expect("has a <Global>");
     assert_eq!(global.zone.start, 1.0);
-    // The one `<Special>` attribute with a consumer, read off the same
-    // `<Global>` as the rest and distinct from every other number here.
+    // The four `<Special>` attributes with a consumer, read off the same
+    // `<Global>` as the rest and each distinct from every other number here.
+    assert_eq!(global.special.roll_cost, 4.0);
+    assert_eq!(global.special.roll_speed, 5.0);
+    assert_eq!(global.special.roll_turbotime, 6.0);
     assert_eq!(global.special.speedpad_jump, 7.0);
     for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
         let n = (index + 1) as f32;

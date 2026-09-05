@@ -319,6 +319,18 @@ pub struct Handling {
     /// Unscaled, like both `<SpeedupPads>` fields. See
     /// `crate::engine::speedup_pad`.
     pub speedpad_jump: f32,
+    /// `<Global><Special roll_cost>`: what a completed barrel roll costs, as a
+    /// percentage of [`Dimensions::shield`]. See
+    /// [`crate::barrel_roll::arm`].
+    pub roll_cost: f32,
+    /// `<Global><Special roll_speed>`: how fast
+    /// [`crate::ship::ShipState::roll_phase`] ramps, in units per second. See
+    /// [`crate::barrel_roll::advance_phase`].
+    pub roll_speed: f32,
+    /// `<Global><Special roll_turbotime>`: how long the landing payout holds,
+    /// in seconds. See
+    /// [`crate::ship::ShipState::roll_payout_timer`].
+    pub roll_turbotime: f32,
 }
 
 impl Handling {
@@ -387,6 +399,9 @@ impl Handling {
             time: 0.0,
         },
         speedpad_jump: 0.0,
+        roll_cost: 0.0,
+        roll_speed: 0.0,
+        roll_turbotime: 0.0,
     };
 }
 

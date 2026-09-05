@@ -56,6 +56,7 @@
 use oag_core::math::Vec3;
 
 use crate::airbrake::{self, AirbrakeForces};
+use crate::barrel_roll;
 use crate::collide::Raycaster;
 use crate::hover::{self, Hover};
 use crate::maglock;
@@ -575,6 +576,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let sideshift = airbrake::sideshift_force(state, handling, control_grounded);
     acc.world_force += sideshift;
 
+    // The barrel roll's own timers. Nothing here yet turns a real d-pad press
+    // or a steering-axis crossing into [`barrel_roll::record_tap`]/[`barrel_roll::arm`]
+    // calls - `ShipControls` carries no such event - so [`ShipState::roll_taps`]
+    // never advances past `[0, 0, 0]` today. The ramp and the payout countdown
+    // still run every tick, so a caller that does start recording taps needs no
+    // further change here. See `crate::barrel_roll`.
+    barrel_roll::advance_tap_timer(state, dt);
+    barrel_roll::advance_phase(state, handling.roll_speed, dt);
+    state.roll_payout_timer = (state.roll_payout_timer - dt).max(0.0);
+
     // 4. Steering and 5. pitch, both body-local angular.
     let steering = engine::steering(state, handling);
     let pitch = engine::pitch(input, handling, control_contact);
@@ -632,6 +643,21 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let contact_grounded = state.grounded;
     let contact = contact_grounded > 0.0;
+
+    // The barrel roll's landing payout: resolve the self-completing ramp on
+    // this tick's airborne-to-grounded transition and, if the roll finished,
+    // arm [`ShipState::roll_payout_timer`] for `<Special roll_turbotime>`.
+    //
+    // Runs after hover, so on the exact landing tick the hover spring above
+    // already used the *pre*-arm value of the timer and only sees the payout
+    // from next tick on; lateral grip below, which runs after this point,
+    // sees it immediately. Which of the original's own steps this arming
+    // happens in relative to hover and lateral grip was not traced - see
+    // `crate::barrel_roll`'s module docs for why this crate ties the release
+    // to this transition at all.
+    if contact && control_grounded <= 0.0 && barrel_roll::release(state) {
+        state.roll_payout_timer = handling.roll_turbotime;
+    }
 
     // Still step 8: `Ship_UpdateHover` runs one of the two hover models and then
     // `Ship_UpdateMagLock` unconditionally. It is **not** a force term - it writes

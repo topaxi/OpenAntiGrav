@@ -202,6 +202,13 @@ pub fn handling() -> Handling {
         // `<Special speedpad_jump>`, the tilt toward the hull's up axis. A round
         // number, **not** the disc's - see the module docs.
         speedpad_jump: 0.2,
+        // `<Special roll_cost/roll_speed/roll_turbotime>`. Round numbers, **not**
+        // the disc's, same as `speedpad_jump` above. No probe script taps out a
+        // barrel roll, so these three hold their defaults for every tick of
+        // every run here - see `crates/physics/tests/determinism.rs`.
+        roll_cost: 8.0,
+        roll_speed: 1.5,
+        roll_turbotime: 0.5,
     }
 }
 
@@ -365,6 +372,11 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         shift_tap_windows,
         shift_armed,
         shift_lockout,
+        roll_taps,
+        roll_tap_timer,
+        roll_phase,
+        roll_target,
+        roll_payout_timer,
         time_since_landing,
         time_airborne,
         mag_lock_blend,
@@ -405,6 +417,17 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(shift_tap_windows[1]);
     hasher.write_u8(u8::from(shift_armed));
     hasher.write_f32(shift_lockout);
+    // The barrel roll's own gesture state. None of the probe scripts taps out
+    // a roll, so these five contribute a fixed run of bytes per tick today -
+    // the same shape `pad_timer` had before a scenario crossed a pad - and the
+    // first scenario that does one will see all five move together.
+    hasher.write_u8(roll_taps[0]);
+    hasher.write_u8(roll_taps[1]);
+    hasher.write_u8(roll_taps[2]);
+    hasher.write_f32(roll_tap_timer);
+    hasher.write_f32(roll_phase);
+    hasher.write_f32(roll_target);
+    hasher.write_f32(roll_payout_timer);
     hasher.write_f32(time_since_landing);
     hasher.write_f32(time_airborne);
     hasher.write_f32(mag_lock_blend);
