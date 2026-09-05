@@ -31,9 +31,19 @@ use super::{Session, remix_menu};
 /// `oag_title::MenuSkin::row_extra_leading` follows for an unmeasured leading,
 /// and it is why the fallback is spelled here, at the caller, instead of being
 /// a default inside the title package.
+///
+/// **Confined to `oag_title::SpeedClasses::is_offered_outside_remix`, not
+/// `selectable()` alone.** A Pure boot's own ladder carries `VECTOR`, and this
+/// build can race it - but only RACE REMIX offers it, by a 2026-09-05
+/// maintainer decision. See that function's doc comment and
+/// `docs/architecture/menus.md` for why offering it here too would diverge
+/// wider than asked, even though it is what Pure's own front end does.
 fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
     let named: Vec<&'static str> = match title.race.speed_classes {
-        Some(ladder) => ladder.selectable().collect(),
+        Some(ladder) => ladder
+            .selectable()
+            .filter(|name| oag_title::SpeedClasses::is_offered_outside_remix(name))
+            .collect(),
         None => SpeedClass::ALL.iter().map(|class| class.as_str()).collect(),
     };
     to_choices(named)
@@ -807,5 +817,46 @@ impl Session {
         }
 
         self.quit = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The names a call to [`speed_class_choices`] actually offers, in the
+    /// order they were supplied - `menu::Choice::label` is the disc's own
+    /// spelling, the same string [`to_choices`] wrote in.
+    fn offered(title: &'static oag_title::Title) -> Vec<String> {
+        speed_class_choices(title)
+            .into_iter()
+            .map(|choice| choice.label)
+            .collect()
+    }
+
+    /// **The confinement, on the title that made it matter.** Wipeout Pure's
+    /// own ladder carries `VECTOR`, and this build can race it - but the
+    /// ordinary RACE page is not where that is offered. See
+    /// `oag_title::SpeedClasses::is_offered_outside_remix` and
+    /// `docs/architecture/menus.md` for why.
+    #[test]
+    fn a_pure_boots_race_page_offers_four_and_not_vector() {
+        let names = offered(oag_pure::TITLE);
+
+        assert_eq!(names.len(), 4);
+        assert!(
+            !names
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(oag_title::SpeedClasses::VECTOR)),
+            "VECTOR is a RACE REMIX offering, not this page's: {names:?}"
+        );
+    }
+
+    /// Pulse never authored a fifth rung on its own per-team files, so this
+    /// page's count is unchanged from before the confinement existed - the
+    /// fix narrows Pure's page, not Pulse's.
+    #[test]
+    fn a_pulse_boots_race_page_still_offers_four() {
+        assert_eq!(offered(oag_pulse::TITLE).len(), 4);
     }
 }

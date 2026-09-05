@@ -73,7 +73,7 @@ the release rather than of this project:
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
-| SPEED CLASS | `values_from = "speed_classes"` - the ladder the booted title's own per-team `handlingstats.xml` authors, off `oag_title::SpeedClasses`. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that |
+| SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
@@ -150,6 +150,35 @@ shows the ungated shape is not unheard of in the lineage: Pure authors **zero**
 `<Unlock>`, zero `Grid=` and zero `GSDisableEntriesBitField` across all eleven
 of its front-end definition files, and its `Show Unlocks` subtree is a
 post-race reward reveal rather than a gate. Confidence 94.
+
+## SPEED CLASS: `VECTOR` is confined to RACE REMIX
+
+**This is also a divergence from what the disc does, and it is a decision
+rather than a gap.** Wipeout Pure's own front end authors **five**
+`<Menu name="Class">` entries - `VECTOR`, `VENOM`, `FLASH`, `RAPIER`,
+`PHANTOM` - and this build's engine can name and race every one of them: see
+[handling-stats.md](../formats/handling-stats.md#pures-fifth-rung-is-raceable-and-speedclass-still-has-four-variants)
+for how `Stats::class_named`, `Global::class_named` and
+`oag_gameplay::pickup::table_for` resolve a rung by the name the disc spells,
+with no enum widened to fit it. Despite that, **the ordinary per-title RACE
+page offers four**, even when the booted title is Wipeout Pure - `VECTOR` is
+offered on the RACE REMIX page only.
+
+The mechanism is `oag_title::SpeedClasses::is_offered_outside_remix`, layered
+on top of `is_selectable` rather than replacing it: `is_selectable` still says
+`true` for `VECTOR`, which is what keeps RACE REMIX's union, `oag-trace`'s
+`--class` spell-check and every resolution path exactly as they were. Only the
+one menu row - the ordinary RACE page's `speed_classes` supply - asks the
+narrower question and drops the one name that fails it.
+
+**Why offer four when Pure authors five:** asked whether a Pure-only boot
+offering five classes on the ordinary RACE page (a side effect of making
+`VECTOR` selectable at all, wider than what had been asked for) was wanted,
+the maintainer's answer was **"Confined to remix."** That is the whole of the
+reasoning - the same kind of call as the unlocks section above, made by the
+person who gets to make it, and it is recorded here for the same reason: so
+the four-rung RACE page reads as this decision to the next contributor and
+not as an unimplemented feature or a bug to "fix" back to five.
 
 ## The format
 

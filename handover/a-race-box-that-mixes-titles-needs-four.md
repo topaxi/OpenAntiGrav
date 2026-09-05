@@ -71,10 +71,18 @@ Pure arm asserts `VECTOR`'s resolved `Handling` *differs* from `VENOM`'s, since
 "five rows are offered" would not have caught a row quietly loading Venom's
 numbers.
 
-**One consequence wider than the original ask, stated rather than left to be
-found:** a Pure-only boot now also offers five on the ordinary RACE page, not
-only in remix. That is correct - Pure's own front end authors five
-`<Menu name="Class">` entries - but it was not what was asked for.
+**One consequence wider than the original ask, surfaced and then settled.** A
+Pure-only boot briefly offered five on the ordinary RACE page too, not only in
+remix - correct in that Pure's own front end authors five `<Menu name="Class">`
+entries, but not what was asked for. Asked about it, the maintainer's answer
+was **"Confined to remix."**
+
+**DONE, 2026-09-05.** `oag_title::SpeedClasses::is_offered_outside_remix`
+narrows the ordinary RACE page's row to four, on every title including Pure;
+RACE REMIX's union is untouched and still offers five with a Pure source
+mounted. Recorded as a deliberate divergence, the same way the unlocks
+decision above is, in `docs/architecture/menus.md`'s "SPEED CLASS: `VECTOR` is
+confined to RACE REMIX" section.
 
 Still **not** the same question as
 `handover/is-there-a-fifth-handling-class.md`, which is about *Pulse*. Pure
