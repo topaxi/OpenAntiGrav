@@ -492,7 +492,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)
-- [`--until` cannot reach a late movie frame on a machine with an audio device](handover/until-cannot-reach-a-late-movie-frame-on.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's string tables are not read, and its front-end font is absent](handover/pures-string-tables-are-not-read-and-its.md)
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
