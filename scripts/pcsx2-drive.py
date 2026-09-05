@@ -38,7 +38,7 @@ Commands:
     python3 scripts/pcsx2-drive.py press cross cross        # abstract button names
     python3 scripts/pcsx2-drive.py shot /tmp/frame.png      # GS screenshot, exact output
     python3 scripts/pcsx2-drive.py input                    # read the game's own pad mask
-    python3 scripts/pcsx2-drive.py stop
+    python3 scripts/pcsx2-drive.py stop                      # stop pcsx2-qt AND Xvfb :78
 
 `display`, `config` and `boot` are all idempotent and `boot` runs the first two
 for you, so the one-liner is:
@@ -48,6 +48,14 @@ for you, so the one-liner is:
 Nothing this script writes goes anywhere near the repository: the emulator's
 data path is `~/.cache/oag-pcsx2`, screenshots go where you name them, and the
 disc image is read out of `data/`, which is gitignored.
+
+**Always end a session with `stop`.** Xvfb :78 is deliberately long-lived
+across `boot`/`press`/`shot`/`input` calls - nothing tears it down between
+them - so `stop` is the one explicit step that closes it out. It only ever
+stops a display this script itself started (tracked in
+`~/.cache/oag-pcsx2/xvfb.owner.json`); a display already there when `display`
+ran is left alone. Never `pkill -x Xvfb` by hand - it would reach every
+virtual display on the machine, not just this one's.
 """
 
 import argparse
@@ -61,12 +69,19 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pcsx2_pine import Pine, PineError, STATUS_NAMES  # noqa: E402
+import xvfb_display  # noqa: E402
 
 DISPLAY_NUMBER = 78
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 DISPLAY_GEOMETRY = "1600x1200x24"
 
 DATA_PATH = os.path.expanduser("~/.cache/oag-pcsx2")
+
+#: Records the pid of the `Xvfb` *this tooling* started, so a later `stop` -
+#: in a different process - can tell it apart from a display that was already
+#: there. Lives in the same cache dir as everything else this script writes,
+#: never under `/tmp`. See `xvfb_display` for why this exists.
+DISPLAY_MARKER = os.path.join(DATA_PATH, "xvfb.owner.json")
 INI_DIR = os.path.join(DATA_PATH, "PCSX2", "inis")
 SNAP_DIR = os.path.join(DATA_PATH, "PCSX2", "snaps")
 STATE_DIR = os.path.join(DATA_PATH, "PCSX2", "sstates")
@@ -227,13 +242,7 @@ def log(message):
 
 
 def display_running():
-    probe = subprocess.run(
-        [sys.executable, "-c",
-         "import socket,sys;s=socket.socket();s.settimeout(2);"
-         "sys.exit(0 if s.connect_ex(('127.0.0.1', %d)) == 0 else 1)"
-         % (6000 + DISPLAY_NUMBER)],
-        capture_output=True)
-    return probe.returncode == 0
+    return xvfb_display.display_running(DISPLAY_NUMBER)
 
 
 def start_display():
@@ -243,19 +252,22 @@ def start_display():
     cosmetic: a sandboxed session may be unable to write `/tmp/.X11-unix`, and
     then the unix socket never appears while the server itself is perfectly
     fine. The RPCS3 harness hit this first; it costs a run every time.
+
+    Ownership is recorded in `DISPLAY_MARKER` so `stop` - a separate
+    invocation later - can tear this down without ever touching a display it
+    did not start. See `xvfb_display`.
     """
-    if display_running():
-        return False
-    subprocess.Popen(
-        ["Xvfb", ":%d" % DISPLAY_NUMBER, "-screen", "0", DISPLAY_GEOMETRY,
-         "-listen", "tcp", "-nolisten", "unix"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True)
-    for _ in range(20):
-        time.sleep(0.5)
-        if display_running():
-            return True
-    raise RuntimeError("Xvfb :%d did not come up" % DISPLAY_NUMBER)
+    return xvfb_display.bring_up(DISPLAY_NUMBER, DISPLAY_GEOMETRY,
+                                 DISPLAY_MARKER)
+
+
+def stop_display():
+    """Tear down Xvfb :78, but only if this tooling started it.
+
+    Idempotent: no-op and no error when the display was never ours, is
+    already down, or `stop` runs a second time.
+    """
+    return xvfb_display.tear_down(DISPLAY_NUMBER, DISPLAY_MARKER)
 
 
 def write_config(slot, renderer=12, screenshot_size=SCREENSHOT_INTERNAL,
@@ -765,7 +777,21 @@ def cmd_status(args):
 
 
 def cmd_stop(args):
+    """Stop pcsx2-qt, and Xvfb :78 too - but only the display this ran started.
+
+    Always run this at the end of a drive session. `display`/`boot` are
+    deliberately long-lived across many `press`/`shot` calls, so nothing
+    tears the display down automatically between them; this is the explicit
+    step that closes it out. Safe to run twice, or with nothing up at all.
+    """
     stop_emulator()
+    if stop_display():
+        log("Xvfb :%d stopped" % DISPLAY_NUMBER)
+    elif display_running():
+        log("Xvfb :%d left running (not started by this tooling)"
+            % DISPLAY_NUMBER)
+    else:
+        log("no Xvfb :%d running" % DISPLAY_NUMBER)
     return 0
 
 

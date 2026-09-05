@@ -117,11 +117,25 @@ Verified 2026-08-04, PPSSPP v1.20.4, `pulse-psp-usa.iso`, on a machine with no
 Wayland session running at all:
 
 ```sh
-Xvfb :97 -screen 0 1280x720x24 &
+Xvfb :97 -screen 0 1280x720x24 & XVFB_PID=$!
 DISPLAY=:97 SDL_VIDEODRIVER=x11 setsid PPSSPPSDL --appendconfig=/tmp/debugger.ini \
     --windowed data/cache/pulse-psp-usa.iso < /dev/null &
 DISPLAY=:97 import -window root shot.png   # ImageMagick, stands in for the compositor grab below
+# ... drive the session ...
+kill "$XVFB_PID"                           # always - see the note below
 ```
+
+**Nothing here tears this Xvfb down automatically, unlike `scripts/pcsx2-drive.py
+stop` and `scripts/rpcs3-drive.py stop` for the other two harnesses' displays.**
+This one is started by hand at the shell, one command at a time, so
+`$XVFB_PID` from the line that started it is the only handle on it - capture it
+and kill it yourself when the session ends, or it joins the orphans: three
+Xvfb processes were found running on this project's own machine, all two or
+more days old with no client attached, after sessions that never killed the
+one they started. **Never `pkill Xvfb` or `pkill -x Xvfb`** to clean up
+instead - that reaches every virtual display on the machine, including one a
+different script or a different agent's session is using right now, not just
+`:97`.
 
 The SDL build boots normally under Xvfb: GPU probing finds a real Vulkan device
 (`AMD Radeon Graphics (RADV RENOIR)`) alongside the `llvmpipe` software

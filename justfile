@@ -448,6 +448,13 @@ rpcs3-pad seconds="30":
 rpcs3-display:
     python3 scripts/rpcs3-drive.py display
 
+# Stop that display - always run this when the whole session is done. Unlike
+# pcsx2-stop this does not also stop RPCS3 itself: boot/race/shot/capture/
+# browse/record already do that on the way out. Only tears down a display
+# this tooling started; one that was already there is left alone.
+rpcs3-stop:
+    python3 scripts/rpcs3-drive.py stop
+
 # Boot WipEout HD and hold it at the Main Menu, on that display, with no window
 # on anyone's desktop. `--headless` cannot get here - it stalls inside
 # cellGameDataCheck with the null renderer; see
@@ -516,8 +523,10 @@ pcsx2-state action="save" slot="1":
 pcsx2-read addr count="1":
     python3 scripts/pcsx2_pine.py read {{addr}} {{count}}
 
-# Stop the headless emulator. Always run this when you are done; a stale
-# process holds the PINE socket and the next launch looks broken.
+# Stop the headless emulator AND its virtual display. Always run this when
+# you are done; a stale process holds the PINE socket and the next launch
+# looks broken, and an untorn-down Xvfb :78 just accumulates. Only stops the
+# display if this tooling started it - one already there is left alone.
 pcsx2-stop:
     python3 scripts/pcsx2-drive.py stop
 
