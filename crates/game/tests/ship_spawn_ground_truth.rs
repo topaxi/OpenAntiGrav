@@ -30,7 +30,6 @@ use std::path::{Path, PathBuf};
 
 use oag_game::race;
 use oag_gameplay::input::Button;
-use oag_physics::SpeedClass;
 
 /// Ticks the per-tick suspension assertions cover: two seconds at 60 Hz, driven
 /// *after* the start-line countdown rather than from tick zero.
@@ -60,7 +59,7 @@ fn load() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");

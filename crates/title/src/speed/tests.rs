@@ -75,15 +75,18 @@ fn a_union_of_no_ladders_is_empty() {
     assert!(SpeedClasses::union([]).is_empty());
 }
 
-/// `VECTOR` is authored by Pure and is **not** offered, because nothing
-/// downstream can name it. The filter is what keeps a measured-but-unusable
-/// rung out of a menu instead of racing it on another class's tuning.
+/// `VECTOR` is authored by Pure **and is offered**, since 2026-09-05.
+///
+/// The filter that used to remove it is gone because the reason for it is:
+/// a race carries the rung's name and resolves it against the file that
+/// authored it, so there is no longer a measured-but-unnameable rung. Nothing
+/// on any measured ladder is filtered now.
 #[test]
-fn vector_is_authored_but_not_selectable() {
-    assert!(!SpeedClasses::is_selectable(SpeedClasses::VECTOR));
-    assert!(!SpeedClasses::is_selectable("vector"));
+fn every_name_a_measured_ladder_carries_is_selectable() {
+    assert!(SpeedClasses::is_selectable(SpeedClasses::VECTOR));
+    assert!(SpeedClasses::is_selectable("vector"));
 
-    for name in SpeedClasses::PULSE_LADDER {
+    for name in SpeedClasses::MEASURED {
         assert!(
             SpeedClasses::is_selectable(name),
             "{name} should be offered"
@@ -92,11 +95,12 @@ fn vector_is_authored_but_not_selectable() {
 }
 
 /// The consequence, stated as its own case because it is the thing a reader
-/// will want to check: **the offered union is four on every configuration
-/// today**, with or without Pure. When `oag_physics::SpeedClass` can name a
-/// fifth rung, this test is the one that should change.
+/// will want to check: **the offered union is four without Pure and five with
+/// it.** That, and nothing else, is how "offer VECTOR only when Pure's data is
+/// available" is implemented - the union is built from the ladders of the
+/// titles actually mounted, and only Pure's names the rung.
 #[test]
-fn the_offered_union_is_four_with_or_without_pure() {
+fn the_offered_union_gains_a_rung_exactly_when_pure_is_present() {
     let offered = |ladders: Vec<SpeedClasses>| -> Vec<&'static str> {
         SpeedClasses::union(ladders)
             .into_iter()
@@ -105,16 +109,27 @@ fn the_offered_union_is_four_with_or_without_pure() {
     };
 
     assert_eq!(offered(vec![FOUR]), SpeedClasses::PULSE_LADDER.to_vec());
-    assert_eq!(
-        offered(vec![FOUR, FIVE]),
-        SpeedClasses::PULSE_LADDER.to_vec()
-    );
+    assert_eq!(offered(vec![FOUR, FIVE]), FIVE.names().to_vec());
 }
 
 /// `selectable` and `is_selectable` cannot drift apart.
 #[test]
 fn selectable_agrees_with_the_predicate() {
-    assert_eq!(FIVE.selectable().count(), 4);
+    assert_eq!(FIVE.selectable().count(), 5);
     assert_eq!(FOUR.selectable().count(), 4);
     assert!(FIVE.selectable().all(SpeedClasses::is_selectable));
+}
+
+/// [`SpeedClasses::MEASURED`] is a spell-checking vocabulary and must stay the
+/// union of the ladders actually read, or `--class` would accept a rung nothing
+/// authors - or reject one something does.
+#[test]
+fn the_measured_vocabulary_is_the_union_of_the_read_ladders() {
+    assert_eq!(
+        SpeedClasses::union(vec![FOUR, FIVE]),
+        SpeedClasses::MEASURED
+    );
+    assert!(SpeedClasses::is_measured_name("vector"));
+    assert!(SpeedClasses::is_measured_name("PHANTOM"));
+    assert!(!SpeedClasses::is_measured_name("nonsense"));
 }

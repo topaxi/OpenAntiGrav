@@ -157,7 +157,8 @@ fn every_parameter_arrives_with_the_documents_value() {
         let block = stats
             .class(to_format_class(class))
             .expect("a Pulse handlingstats.xml carries all four speed classes");
-        let mapped = handling_for(&stats, class, pads(), special());
+        let mapped = handling_for(&stats, class.as_str(), pads(), special())
+            .expect("the fixture authors this class");
 
         assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
         assert_eq!(
@@ -236,10 +237,14 @@ fn every_parameter_arrives_with_the_documents_value() {
 #[test]
 fn the_hull_is_shared_by_every_speed_class() {
     let stats = stats();
-    let venom = handling_for(&stats, SpeedClass::Venom, pads(), special()).dimensions;
+    let venom = handling_for(&stats, "VENOM", pads(), special())
+        .expect("the fixture authors VENOM")
+        .dimensions;
     for class in SpeedClass::ALL {
         assert_eq!(
-            handling_for(&stats, class, pads(), special()).dimensions,
+            handling_for(&stats, class.as_str(), pads(), special())
+                .expect("the fixture authors this class")
+                .dimensions,
             venom
         );
     }
@@ -255,7 +260,10 @@ fn each_speed_class_maps_to_a_different_parameter_set() {
     let stats = stats();
     let mapped: Vec<_> = SpeedClass::ALL
         .into_iter()
-        .map(|class| handling_for(&stats, class, pads(), special()))
+        .map(|class| {
+            handling_for(&stats, class.as_str(), pads(), special())
+                .expect("the fixture authors this class")
+        })
         .collect();
     for (i, a) in mapped.iter().enumerate() {
         for b in &mapped[i + 1..] {
@@ -277,7 +285,8 @@ fn the_brake_parameter_arrives_negative() {
         "the fixture's XML value is positive, or this test proves nothing"
     );
     assert!(
-        handling_for(&stats, SpeedClass::Venom, pads(), special())
+        handling_for(&stats, "VENOM", pads(), special())
+            .expect("the fixture authors VENOM")
             .brakes
             .amount
             < 0.0
@@ -345,7 +354,8 @@ fn the_airbrake_flap_deflection_is_converted_to_radians() {
 fn the_siblings_of_the_scaled_fields_are_untouched() {
     let stats = stats();
     let block = stats.class(FmtClass::Venom).expect("four rungs");
-    let mapped = handling_for(&stats, SpeedClass::Venom, pads(), special());
+    let mapped =
+        handling_for(&stats, "VENOM", pads(), special()).expect("the fixture authors VENOM");
     assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
     assert_eq!(mapped.engine.turbo, block.engine.turbo);
     assert_eq!(mapped.airbrake.drag, block.airbrake.drag);
@@ -362,7 +372,8 @@ fn the_siblings_of_the_scaled_fields_are_untouched() {
 fn the_speed_pad_tunables_arrive_from_the_argument_unscaled() {
     let stats = stats();
     for class in SpeedClass::ALL {
-        let mapped = handling_for(&stats, class, pads(), special());
+        let mapped = handling_for(&stats, class.as_str(), pads(), special())
+            .expect("the fixture authors this class");
         assert_eq!(mapped.speedup_pads.amount, pads().amount);
         assert_eq!(mapped.speedup_pads.time, pads().time);
     }

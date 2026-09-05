@@ -118,7 +118,7 @@ fn run(ticks: u32) -> (u64, u64) {
             TICK,
             &world_geometry,
             Some(&stats),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             DamageRules::default(),
             &mut [],
         );
@@ -450,8 +450,9 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         &world.ships[0].physics,
         &world.ships[0].handling.dimensions,
         &stats,
-        oag_formats::handling::SpeedClass::Venom,
-    );
+        "VENOM",
+    )
+    .expect("Pulse's weapon table authors a Venom rocket speed");
     for (position, velocity) in shots {
         assert!(
             world
@@ -468,7 +469,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             TICK,
             &world_geometry,
             Some(&weapon_stats()),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             DamageRules::default(),
             &mut [],
         );
@@ -558,12 +559,8 @@ fn the_volley_actually_fans() {
     };
     ship.physics.body.orientation = Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
 
-    let shots = projectile::launch(
-        &ship.physics,
-        &ship.handling.dimensions,
-        &stats,
-        oag_formats::handling::SpeedClass::Venom,
-    );
+    let shots = projectile::launch(&ship.physics, &ship.handling.dimensions, &stats, "VENOM")
+        .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
     assert!(
         directions[1].distance(directions[0]) > 1.0 && directions[2].distance(directions[0]) > 1.0,
@@ -638,7 +635,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             TICK,
             &world_geometry,
             Some(&stats),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             DamageRules::default(),
             &mut [],
         );

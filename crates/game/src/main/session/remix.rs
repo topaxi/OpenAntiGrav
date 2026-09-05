@@ -10,7 +10,6 @@
 use log::{error, info, warn};
 
 use oag_game::{catalogue, menu, remix, strings};
-use oag_physics::SpeedClass;
 
 use crate::hints;
 use crate::stage::Stage;
@@ -320,8 +319,13 @@ impl Session {
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }
-        if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
-            race_options.class = class;
+        // Carried as a **name** - see the same assignment in `menus.rs`. The
+        // union this came from is built from the ladders of the titles this
+        // machine can actually open, so `VECTOR` is in it exactly when Pure's
+        // data is present.
+        let class = self.settings.race.class.trim();
+        if !class.is_empty() {
+            race_options.class = class.to_string();
         }
         if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
             race_options.difficulty = difficulty;

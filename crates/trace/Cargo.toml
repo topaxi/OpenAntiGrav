@@ -29,6 +29,10 @@ oag-formats.workspace = true
 oag-gameplay.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
+# For `SpeedClasses::is_measured_name`: `--class` is spell-checked against every
+# measured ladder rather than against a four-variant enum, so `vector` reaches a
+# Wipeout Pure replay. See `oag_title::SpeedClasses::MEASURED`.
+oag-title.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true

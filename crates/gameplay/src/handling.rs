@@ -224,20 +224,36 @@ pub const PITCH_STAND_IN: Pitch = Pitch {
     antigrav_height_adjust: 1.0,
 };
 
+/// # The class arrives as a **name**, not as [`SpeedClass`]
+///
+/// The rung is looked up with [`fmt::Stats::class_named`], which reaches a
+/// `<Class>` block whether or not `SpeedClass` has a variant for it. That is
+/// what lets a race run on Wipeout Pure's `VECTOR`, a fifth rung below `VENOM`
+/// that every Pure race team authors in full and that no four-variant enum can
+/// name. Widening the enum instead would have meant a five-wide table on every
+/// title, including the ones that author four - a fabricated fifth entry, which
+/// is the invented stand-in this project forbids.
+///
+/// So the ladder's *length* stays the title's own measured business
+/// (`oag_title::SpeedClasses`), and this function resolves whatever name that
+/// ladder yields against the file that authored it.
+///
+/// # `None` rather than a panic
+///
+/// A file whose ladder does not reach the requested rung returns `None`. It used
+/// to `expect`, which was safe only while the menu could not offer a fifth rung;
+/// now that it can, a mismatched title and class has to degrade visibly rather
+/// than abort. The caller reports the absence - it must not substitute a
+/// neighbouring rung's tuning.
 #[must_use]
 pub fn handling_for(
     stats: &fmt::Stats,
-    class: SpeedClass,
+    class: &str,
     speedup_pads: fmt::SpeedupPads,
     special: fmt::Special,
-) -> Handling {
-    // Pulse ships all four rungs on every team, which `handling_ground_truth`
-    // checks against the disc. A file whose ladder does not reach this class is
-    // another generation of the schema, and this conversion is Pulse's.
-    let block = stats
-        .class(to_format_class(class))
-        .expect("a Pulse handlingstats.xml carries all four speed classes");
-    Handling {
+) -> Option<Handling> {
+    let block = stats.class_named(class)?;
+    Some(Handling {
         speedup_pads: SpeedupPads {
             amount: speedup_pads.amount,
             time: speedup_pads.time,
@@ -304,7 +320,7 @@ pub fn handling_for(
             // rather than on a value invented here.
             weight_distribution: stats.misc.weight_distribution.unwrap_or(0.0),
         },
-    }
+    })
 }
 
 /// The document's speed class for a physics one.

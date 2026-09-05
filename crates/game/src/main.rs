@@ -50,7 +50,6 @@ use log::warn;
 
 use oag_game::frontend;
 use oag_game::{audio, display, launcher, loading, race, settings, source};
-use oag_physics::SpeedClass;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -204,12 +203,18 @@ fn main() -> Result<()> {
     // Parsed before anything is loaded, and for both ways in: the front end can
     // hand off to a race, so a misspelled class must not be discovered eight
     // seconds of intro later.
-    let class = SpeedClass::from_name(&cli.class).with_context(|| {
-        format!(
-            "{:?} is not a speed class; try venom, flash, rapier or phantom",
-            cli.class
-        )
-    })?;
+    // Checked against the union of every ladder read so far rather than
+    // against `oag_physics::SpeedClass`'s four, so `--class vector` reaches a
+    // Wipeout Pure race. This is spell-checking only: whether *this* disc's
+    // files author the rung is settled by `race::load`, which names what the
+    // file does carry when they do not.
+    let class = cli.class.trim().to_string();
+    anyhow::ensure!(
+        oag_title::SpeedClasses::is_measured_name(&class),
+        "{:?} is not a speed class; try {}",
+        cli.class,
+        oag_title::SpeedClasses::MEASURED.join(", ").to_lowercase()
+    );
     // Parsed here for the same reason as the speed class: `--race` goes straight
     // to a track, so a misspelled mode has to be a message about the command
     // line rather than a race that quietly runs under different rules.

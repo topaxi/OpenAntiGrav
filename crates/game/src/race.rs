@@ -96,7 +96,7 @@ use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
-    handling_for, ship_controls, to_format_class,
+    handling_for, ship_controls,
 };
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_pulse::race::ships;
@@ -733,7 +733,10 @@ pub struct Race {
     /// This race's weapon table - see [`Setup::weapons`].
     weapons: Option<oag_formats::weapons::WeaponStats>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
-    class: SpeedClass,
+    ///
+    /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
+    /// with `VECTOR` - selects its own row.
+    class: String,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason

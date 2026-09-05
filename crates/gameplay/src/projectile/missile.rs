@@ -42,7 +42,6 @@
 //!   being in a `Copy` world snapshot.
 
 use oag_core::math::Vec3;
-use oag_formats::handling::SpeedClass;
 use oag_formats::weapons::MissileStats;
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
@@ -471,7 +470,7 @@ pub fn launch(
     // than where it starts (`speed_kmh`). Dropping the parameter would make the
     // two launchers look gratuitously different and invite somebody to "fix" this
     // one back to the rocket's rule.
-    _class: SpeedClass,
+    _class: &str,
 ) -> (Vec3, Vec3, f32) {
     let forward = state.body.forward();
     let nose = state.body.position

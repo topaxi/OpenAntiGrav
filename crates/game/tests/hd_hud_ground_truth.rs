@@ -337,7 +337,7 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
     };
     let loaded = oag_game::race::load(&oag_game::race::Options {
         source: image.display().to_string(),
-        class: oag_physics::SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::TimeTrial,
         ..oag_game::race::Options::default()
     })

@@ -52,7 +52,7 @@ fn image() -> Option<PathBuf> {
 fn race_on(image: &Path) -> race::Loaded {
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: oag_physics::SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })

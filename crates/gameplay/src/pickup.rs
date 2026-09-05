@@ -451,20 +451,22 @@ fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapo
 ///
 /// Matched case-insensitively here rather than by adding a second spelling to
 /// [`SpeedClass`]: the difference is between two documents, not between two
-/// concepts, and the parser deliberately keeps `PickupTable::class` a `String`
-/// because it knows a fifth name the data never uses.
+/// concepts, and the parser deliberately keeps `PickupTable::class` a `String`.
+///
+/// **The rung arrives as a name**, which is what lets this answer for a ladder
+/// that is not Pulse's. Wipeout Pure authors a `<Pickupodds class="Vector">`
+/// beside its four, and this reaches it with no change beyond the parameter
+/// type; Pulse authors four and no `Vector`, so a `Vector` lookup there is
+/// `None` - the same honest absence any unauthored rung gets.
 ///
 /// [`SpeedClass`]: oag_formats::handling::SpeedClass
 /// [`SpeedClass::as_str`]: oag_formats::handling::SpeedClass::as_str
 #[must_use]
-pub fn table_for(
-    stats: &WeaponStats,
-    class: oag_formats::handling::SpeedClass,
-) -> Option<&PickupTable> {
+pub fn table_for<'a>(stats: &'a WeaponStats, class: &str) -> Option<&'a PickupTable> {
     stats
         .pickups
         .iter()
-        .find(|table| table.class.eq_ignore_ascii_case(class.as_str()))
+        .find(|table| table.class.eq_ignore_ascii_case(class))
 }
 
 #[cfg(test)]

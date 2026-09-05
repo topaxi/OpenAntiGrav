@@ -50,7 +50,7 @@ fn workspace(relative: &str) -> std::path::PathBuf {
 /// teams, so the wrong one here would silently move the constant these tests
 /// validate.
 const TEAM: &str = "Assegai";
-const CLASS: oag_physics::SpeedClass = oag_physics::SpeedClass::Venom;
+const CLASS: &str = "VENOM";
 
 /// How far the replayed yaw rate may sit from the recorded one, in rad/s, as an
 /// RMS over the window. The signal itself is near `1.5`, so this is a few percent
@@ -118,6 +118,7 @@ fn shipped_handling() -> Handling {
         handling::SpeedupPads::default(),
         handling::Special::default(),
     )
+    .expect("this team's file authors the class under test")
 }
 
 /// A capture under `data/traces/`, or `None` on a checkout that lacks it.

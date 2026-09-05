@@ -26,7 +26,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -76,7 +75,7 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         // The one mode that fields a grid, so there are eight clocks to compare
         // rather than one.
         mode: oag_race::Mode::SingleRace,

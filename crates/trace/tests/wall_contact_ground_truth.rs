@@ -89,7 +89,7 @@ const LAP_CAPTURE: &str = "data/traces/talons-junction-time-trial-lap.csv";
 /// `yaw_authority_ground_truth.rs` for why this is written down rather than
 /// inferred from the filename.
 const TEAM: &str = "Assegai";
-const CLASS: oag_physics::SpeedClass = oag_physics::SpeedClass::Venom;
+const CLASS: &str = "VENOM";
 
 /// Paths in `data/` are workspace-relative, but a test's working directory is its
 /// own package root.
@@ -175,7 +175,7 @@ fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
     let text = std::fs::read_to_string(capture_path).expect("reading the capture");
     let trace = Trace::parse(&text).expect("parsing the capture");
 
-    Some((handling, collision, trace))
+    Some((handling?, collision, trace))
 }
 
 /// The first recorded tick at which our hull reports a respondable contact.

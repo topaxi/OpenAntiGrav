@@ -31,7 +31,7 @@ use oag_gameplay::ControlScheme;
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
 use oag_gameplay::{Ship, collision_world, handling_for};
-use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster, SpeedClass};
+use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster};
 use oag_pulse as pulse;
 use oag_race::Course;
 use oag_trace::compare::Tolerances;
@@ -700,8 +700,14 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         );
     }
 
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    // Spell-checked against every measured ladder, then resolved by name
+    // against the file that authored the rung - see `oag_title::SpeedClasses`.
+    let class = args.class.trim();
+    anyhow::ensure!(
+        oag_title::SpeedClasses::is_measured_name(class),
+        "{:?} is not a speed class",
+        args.class
+    );
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
     let samples = locator::load_samples(Some(&args.source), &args.track)?;
     let start_position = load_start_position(&args.source, &args.track)?;
@@ -837,8 +843,14 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     if args.every == 0 {
         bail!("--every must be at least 1");
     }
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    // Spell-checked against every measured ladder, then resolved by name
+    // against the file that authored the rung - see `oag_title::SpeedClasses`.
+    let class = args.class.trim();
+    anyhow::ensure!(
+        oag_title::SpeedClasses::is_measured_name(class),
+        "{:?} is not a speed class",
+        args.class
+    );
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
     let blob = read_track_blob(&args.source, &args.track)?;
     let ai = ai_of(&blob, &args.track)?;
@@ -1399,8 +1411,14 @@ fn run(args: RunArgs) -> Result<()> {
         bail!("{}: no ticks in the trace", args.trace.display());
     }
 
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    // Spell-checked against every measured ladder, then resolved by name
+    // against the file that authored the rung - see `oag_title::SpeedClasses`.
+    let class = args.class.trim();
+    anyhow::ensure!(
+        oag_title::SpeedClasses::is_measured_name(class),
+        "{:?} is not a speed class",
+        args.class
+    );
     let (handling, collision) = match &args.source {
         Some(source) => load(source, &args.track, &args.team, class)?,
         None => {
@@ -1543,12 +1561,7 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
 /// by name and searches the companion archive too. This deliberately prints
 /// nothing extra: `run` output is compared byte-for-byte against earlier
 /// captures, so the layout appears only in an error's context.
-fn load(
-    source: &str,
-    track: &str,
-    team: &str,
-    class: SpeedClass,
-) -> Result<(Handling, CollisionWorld)> {
+fn load(source: &str, track: &str, team: &str, class: &str) -> Result<(Handling, CollisionWorld)> {
     let mut archives = pulse::open(source)?;
     let where_from = archives.layout.describe();
 
@@ -1584,16 +1597,34 @@ fn load(
             handling::GLOBAL_ENTRY
         );
     }
+    // Resolved by **name**, so a title whose ladder is not Pulse's reaches its
+    // own `<GlobalClass>`. A rung this file does not author gets no boost
+    // rather than another rung's.
     let pad_tunables = global
-        .map(|global| global.speedup_pads(oag_gameplay::to_format_class(class)))
+        .as_ref()
+        .and_then(|global| global.class_named(class))
+        .map(|(pads, _, _)| pads)
         .unwrap_or_default();
     // `<Special speedpad_jump>` rides along: a capture taken with the pitch axis
     // held over a pad tilts, and a replay that dropped the field would read that
     // as a force-law error.
-    let special = global.map(|global| global.special).unwrap_or_default();
-    let handling = handling_for(&stats, class, pad_tunables, special);
+    let special = global
+        .as_ref()
+        .map(|global| global.special)
+        .unwrap_or_default();
+    let handling = handling_for(&stats, class, pad_tunables, special).with_context(|| {
+        format!(
+            "{stats_name} authors no <Class name=\"{class}\"> - it carries {}",
+            stats
+                .classes
+                .iter()
+                .map(|block| block.raw_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
     info!(
-        "{stats_name}: team {:?}, {class:?} class, mass {}, ride_height {}",
+        "{stats_name}: team {:?}, {class} class, mass {}, ride_height {}",
         stats.team, handling.physical.mass, handling.antigrav.ride_height
     );
 

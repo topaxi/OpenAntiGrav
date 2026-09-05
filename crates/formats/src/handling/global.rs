@@ -337,6 +337,14 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     }))
 }
 
+/// The four arrays [`Global`] holds, plus the rungs they cannot hold.
+type GlobalClasses = (
+    [SpeedupPads; 4],
+    [GravityMul; 4],
+    [WeaponPad; 4],
+    Vec<ForeignGlobalClass>,
+);
+
 /// Collects `<GlobalClass><SpeedupPads/></GlobalClass>` into an array indexed by
 /// [`SpeedClass`], plus the rungs that array cannot hold.
 ///
@@ -375,14 +383,7 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
 /// The decision about which rungs a title *offers* moved to
 /// `oag_title::SpeedClasses`, where it is measured per title. See
 /// [`Global::extra`].
-fn global_classes(
-    global: &Node,
-) -> Result<(
-    [SpeedupPads; 4],
-    [GravityMul; 4],
-    [WeaponPad; 4],
-    Vec<ForeignGlobalClass>,
-)> {
+fn global_classes(global: &Node) -> Result<GlobalClasses> {
     const ELEMENT: &str = "GlobalClass";
     let mut found: [Option<(SpeedupPads, GravityMul, WeaponPad)>; 4] = [None; 4];
     let mut extra: Vec<ForeignGlobalClass> = Vec::new();

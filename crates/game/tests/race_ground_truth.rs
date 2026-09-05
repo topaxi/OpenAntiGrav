@@ -62,7 +62,7 @@ use oag_core::math::Vec3;
 use oag_game::frontend::states;
 use oag_game::{boot, catalogue, movie, race};
 use oag_gameplay::input::{Button, Input};
-use oag_physics::{Raycaster, SpeedClass};
+use oag_physics::Raycaster;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -85,7 +85,7 @@ fn load() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -107,7 +107,7 @@ fn load_with_opponents() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         opponents: true,
         ..race::Options::default()
     })
@@ -124,7 +124,7 @@ fn load_single_race() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })
@@ -589,7 +589,7 @@ fn the_captured_start_pose_faces_along_the_forward_layout() {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
             track: Some(name.clone()),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             ..race::Options::default()
         })
         .expect("loading the race");
@@ -1197,7 +1197,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     let race_at_pad_seeded = |mode: oag_race::Mode, seed: Option<u64>| {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode,
             seed,
             pose: Some(race::PoseRequest::SplineAligned {
@@ -1347,7 +1347,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     let race_at_pad = |seed: u64| {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             seed: Some(seed),
             pose: Some(race::PoseRequest::SplineAligned {
@@ -1736,7 +1736,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     };
     let Ok(loaded) = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         track: Some(track.to_string()),
@@ -1927,7 +1927,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
     {
         let Ok(loaded) = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             track: Some(track.entry_name()),
             ..race::Options::default()
@@ -2126,7 +2126,7 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
     {
         let Ok(loaded) = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             track: Some(track.entry_name()),
             ..race::Options::default()

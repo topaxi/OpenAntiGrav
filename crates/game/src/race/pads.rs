@@ -254,8 +254,7 @@ impl Race {
         let Some(weapons) = self.weapons.as_ref() else {
             return;
         };
-        let Some(table) = oag_gameplay::pickup::table_for(weapons, to_format_class(self.class))
-        else {
+        let Some(table) = oag_gameplay::pickup::table_for(weapons, &self.class) else {
             return;
         };
         // **The `human` column for slot 0 and the `ai` column for the rest**, and

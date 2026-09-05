@@ -26,7 +26,6 @@
 //! use - and reports the distribution, not a single lucky/unlucky count.
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// How many ticks past the boost's own duration to keep watching, for the
 /// coast into whatever corner the boost carried the craft towards. Ours -
@@ -62,7 +61,7 @@ fn run(seeds: &[u64], look_max: f32) -> RunStats {
     for &seed in seeds {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             difficulty: oag_ai::Difficulty::Ace,
             track: Some("Data\\Environments\\16_Track\\track.vex".to_string()),

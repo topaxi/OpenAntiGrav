@@ -236,28 +236,70 @@ fn a_2048_only_machine_unions_to_nothing_which_must_not_be_settled_against() {
     assert_eq!(saved, "", "this is why open_menus does not settle on empty");
 }
 
-/// What the player actually sees, on both arms: **four either way today**,
-/// because `VECTOR` is authored by Pure and cannot yet be named by
-/// `oag_physics::SpeedClass`.
+/// What the player actually sees on each arm, and the whole point of the
+/// change that made `VECTOR` selectable: **four without Pure, five with it.**
 ///
-/// So a Pure image being present does *not* currently add a row. That is the
-/// honest outcome rather than a bug: the alternative is an option that loads
-/// some other class's tuning. When the engine can name a fifth rung, this
-/// test is the one that changes, and the two above it should not need to.
+/// This is "offer it only if Pure's data is available" in its entirety, and no
+/// flag implements it. The union is built from the ladders of the titles this
+/// machine can actually open; `VECTOR` is on exactly one measured ladder, so a
+/// machine with no Pure image never sees the name at all.
+///
+/// The Pulse-only arm is the one worth reading twice. Pulse *does* author a
+/// `<GlobalClass name="VECTOR">` in its engine-wide handling file - all four
+/// measured discs do - and it still offers four here, because a title's ladder
+/// is measured from its **per-team** `handlingstats.xml`, which is the file
+/// that decides what a rung does. Pulse's author four `<Class>` blocks and no
+/// `VECTOR`, so there is no fifth rung to offer and nothing borrows one.
 #[test]
-fn the_offered_row_is_four_on_both_arms_because_vector_is_unnameable() {
+fn vector_is_offered_with_pure_present_and_not_without_it() {
     let without = offered_over(&[oag_pulse::TITLE]);
     let with = offered_over(&[oag_pulse::TITLE, oag_pure::TITLE]);
 
-    assert_eq!(without, vec!["VENOM", "FLASH", "RAPIER", "PHANTOM"]);
-    assert_eq!(with, without);
+    assert_eq!(
+        without,
+        vec!["VENOM", "FLASH", "RAPIER", "PHANTOM"],
+        "a Pulse-only machine must see no fifth rung"
+    );
+    assert_eq!(
+        with,
+        vec!["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
+        "with Pure mounted the union gains its rung, slowest first"
+    );
 
-    // And every name the row does offer is one a race can actually start on.
-    for name in with {
+    // Every name offered is one some mounted ladder authors - the row never
+    // grows a rung out of a table's width.
+    let mounted: Vec<&str> = oag_pulse::TITLE
+        .race
+        .speed_classes
+        .into_iter()
+        .chain(oag_pure::TITLE.race.speed_classes)
+        .flat_map(|ladder| ladder.names().iter().copied())
+        .collect();
+    for name in &with {
         assert!(
-            oag_physics::SpeedClass::from_name(name).is_some(),
-            "{name:?} is offered but cannot be raced"
+            mounted.contains(name),
+            "{name:?} is offered but no mounted title authors it"
         );
+    }
+}
+
+/// `oag_physics::SpeedClass` **still names four**, and that is the load-bearing
+/// half of how the fifth rung was added.
+///
+/// The alternative - a fifth variant - would have widened the fixed tables its
+/// discriminants index, and every title that authors four would have grown a
+/// fabricated fifth entry. Instead a race carries the rung's *name* and
+/// resolves it against the file that authored it. This test fails the moment
+/// somebody widens the enum, which is the change this design exists to avoid.
+#[test]
+fn the_physics_enum_still_names_exactly_the_four_every_title_shares() {
+    assert_eq!(oag_physics::SpeedClass::ALL.len(), 4);
+    assert!(
+        oag_physics::SpeedClass::from_name("VECTOR").is_none(),
+        "the fifth rung is carried as a name, never as a variant"
+    );
+    for name in oag_title::SpeedClasses::PULSE_LADDER {
+        assert!(oag_physics::SpeedClass::from_name(name).is_some());
     }
 }
 

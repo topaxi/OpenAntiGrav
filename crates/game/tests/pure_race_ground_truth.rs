@@ -42,7 +42,6 @@
 //! down, which is noise. See `docs/formats/pure-status.md`.
 
 use oag_game::{catalogue, race};
-use oag_physics::SpeedClass;
 use std::path::{Path, PathBuf};
 
 /// Both Pure pressings, whichever are present.
@@ -87,7 +86,7 @@ fn circuits(image: &Path) -> Vec<catalogue::Track> {
 fn load(image: &Path, track: &str) -> race::Loaded {
     race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         // Time Trial: the milestone's mode, and the one with no weapons. Pure's
         // `Weapon Pad` class id is recovered now (`vex::classes::V4::weapon_pad`,
         // 2026-08-13), but Pure's own weapon-pickup behaviour has not been
@@ -146,7 +145,7 @@ fn every_pure_circuit_decodes_geometry_collision_and_a_spline() {
             // asserts that some remained.
             let Ok(loaded) = race::load(&race::Options {
                 source: image.display().to_string(),
-                class: SpeedClass::Venom,
+                class: "VENOM".to_string(),
                 mode: oag_race::Mode::TimeTrial,
                 track: Some(entry.clone()),
                 ..race::Options::default()

@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_physics::{Body, Environment, ShipControls, ShipState, SpeedClass, Surface, step};
+use oag_physics::{Body, Environment, ShipControls, ShipState, Surface, step};
 
 /// A fixed 60 Hz tick, matching the rest of the simulation.
 const TICK: f32 = 1.0 / 60.0;
@@ -69,7 +69,7 @@ fn load() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");

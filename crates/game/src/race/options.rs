@@ -69,8 +69,21 @@ pub struct Options {
     /// Which of them ends up in which slot is [`crate::livery::teams_for_slots`],
     /// and is this project's rule rather than the original's.
     pub opponent_teams: Vec<String>,
-    /// Speed class the handling parameters are read for.
-    pub class: SpeedClass,
+    /// Speed class the handling parameters are read for, spelled the way the
+    /// disc spells it.
+    ///
+    /// **A name rather than [`SpeedClass`]**, because the ladder's length is
+    /// per-title measured data and no four-variant enum can carry every
+    /// title's. Wipeout Pure authors five rungs - `VECTOR` below `VENOM` - in
+    /// every race team's `handlingstats.xml`, in its engine-wide
+    /// `<GlobalClass>` table and in its pickup odds; Pulse and HD author four.
+    /// The name is resolved against the file that authored it, by
+    /// `oag_formats::handling::Stats::class_named` and its siblings, so a title
+    /// that authors four never grows a fabricated fifth entry.
+    ///
+    /// Matched case-insensitively wherever it is resolved. See
+    /// `oag_title::SpeedClasses`, which is where a title's ladder is measured.
+    pub class: String,
     /// How good the opponents are.
     ///
     /// Applied by degrading the measured tuning rather than by boosting a weak
@@ -220,7 +233,10 @@ impl Default for Options {
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.
             opponent_teams: Vec::new(),
-            class: SpeedClass::Venom,
+            // The rung every measured title shares, named rather than
+            // defaulted from an enum: a title whose ladder was never read must
+            // not silently inherit one that was.
+            class: SpeedClass::Venom.as_str().to_string(),
             mode: Mode::default(),
             zone_stage: None,
             ribbon: false,
@@ -245,7 +261,7 @@ pub struct Setup {
     pub mode: Mode,
     /// How good the opponents are. See [`Options::difficulty`].
     pub difficulty: oag_ai::Difficulty,
-    /// The speed class the race is run in.
+    /// The speed class the race is run in, spelled the way the disc spells it.
     ///
     /// Most of what the class decides is already resolved by the time a `Setup`
     /// exists - the handling block, the gravity scale and the speed-pad tunables
@@ -253,7 +269,10 @@ pub struct Setup {
     /// [`Self::weapons`]' pickup odds are indexed by class *inside* a table this
     /// keeps whole, and resolving that at load would throw away the other
     /// classes' rows for no gain.
-    pub class: SpeedClass,
+    ///
+    /// A name rather than [`SpeedClass`], for the reason
+    /// [`Options::class`] gives.
+    pub class: String,
     /// Whether to spawn the rest of the grid regardless of what `mode` says.
     ///
     /// The resolved form of [`Options::opponents`] - see its doc comment.

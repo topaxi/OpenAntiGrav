@@ -21,7 +21,6 @@ use log::info;
 
 use oag_game::frontend;
 use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings, strings};
-use oag_physics::SpeedClass;
 
 use crate::args::{resolve_difficulty, resolve_scheme};
 use crate::cli::Cli;
@@ -41,7 +40,7 @@ pub(crate) struct Pending {
     /// the intro.
     pub(crate) definition: menu::Definition,
     pub(crate) dlc: Vec<PathBuf>,
-    pub(crate) class: SpeedClass,
+    pub(crate) class: String,
     pub(crate) mode: oag_race::Mode,
     pub(crate) leg: frontend::Leg,
     pub(crate) pose: Option<race::PoseRequest>,
@@ -118,7 +117,7 @@ impl Pending {
             // which is the only place the title is known. See
             // `race::Options::team`.
             team: self.cli.team.clone(),
-            class: self.class,
+            class: self.class.clone(),
             mode: self.mode,
             zone_stage: self.cli.zone_stage,
             opponent_teams,

@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use oag_core::math::Vec3;
 use oag_game::race;
 use oag_gameplay::input::InputSnapshot;
-use oag_physics::{SpeedClass, Surface};
+use oag_physics::Surface;
 
 fn disc(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -82,7 +82,7 @@ fn load(track: &str) -> Option<race::Loaded> {
 fn load_from(source: &Path, track: Option<&str>) -> Option<race::Loaded> {
     race::load(&race::Options {
         source: source.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         track: track.map(str::to_string),
         ..race::Options::default()
     })

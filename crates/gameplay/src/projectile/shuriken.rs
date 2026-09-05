@@ -90,9 +90,9 @@ pub fn launch(
     state: &ShipState,
     dimensions: &Dimensions,
     stats: &ShurikenStats,
-    class: oag_formats::handling::SpeedClass,
+    class: &str,
     rng: &mut Rng,
-) -> (Vec3, Vec3) {
+) -> Option<(Vec3, Vec3)> {
     let forward = state.body.forward();
     let up = state.body.up();
     let nose = state.body.position
@@ -101,7 +101,8 @@ pub fn launch(
     // The craft's speed along its own nose, floored at zero: a craft being
     // shunted backwards throws a blade forwards, not into itself.
     let craft_kmh = state.body.linear_velocity.dot(forward).max(0.0) * KMH_PER_UNIT_PER_SECOND;
-    let speed = (craft_kmh + stats.speed_for(class) + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
+    let speed =
+        (craft_kmh + stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
 
     // The coin, drawn before the angle is chosen so the draw happens exactly
     // once whichever way it lands.
@@ -111,5 +112,5 @@ pub fn launch(
         LAUNCH_ANGLE
     };
     let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
-    (nose, direction * speed)
+    Some((nose, direction * speed))
 }

@@ -100,12 +100,17 @@ impl Race {
             return false;
         };
         let ship = &self.world.ships[slot];
-        let shots = oag_gameplay::projectile::launch(
+        // `None` where the weapon table authors a speed per class and this
+        // race's rung is outside them - the shot does not happen rather than
+        // flying at a rung it was not tuned for.
+        let Some(shots) = oag_gameplay::projectile::launch(
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
-            to_format_class(self.class),
-        );
+            &self.class,
+        ) else {
+            return false;
+        };
         let mut fired = 0;
         for (position, velocity) in shots {
             if self.world.projectiles.spawn(
@@ -158,12 +163,14 @@ impl Race {
             return false;
         };
         let ship = &self.world.ships[slot];
-        let (position, velocity) = oag_gameplay::projectile::plasma::launch(
+        let Some((position, velocity)) = oag_gameplay::projectile::plasma::launch(
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
-            to_format_class(self.class),
-        );
+            &self.class,
+        ) else {
+            return false;
+        };
         self.world.projectiles.spawn(
             oag_formats::weapons::Weapon::Plasma,
             position,
@@ -212,13 +219,15 @@ impl Race {
         }
         let physics = self.world.ships[slot].physics;
         let dimensions = self.world.ships[slot].handling.dimensions;
-        let (position, velocity) = oag_gameplay::projectile::shuriken::launch(
+        let Some((position, velocity)) = oag_gameplay::projectile::shuriken::launch(
             &physics,
             &dimensions,
             &stats,
-            to_format_class(self.class),
+            &self.class,
             &mut self.world.rng,
-        );
+        ) else {
+            return false;
+        };
         self.world
             .projectiles
             .throw(position, velocity, slot as u8, stats.fuse)

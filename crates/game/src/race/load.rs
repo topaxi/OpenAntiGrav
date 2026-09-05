@@ -302,8 +302,26 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // An absent or unreadable file means no boost and no auto-speed rather than
     // invented numbers. Said out loud, because a speed pad that quietly does
     // nothing reads as a physics bug and gets looked for in the force law.
-    let pad_tunables = match global {
-        Some(global) => global.speedup_pads(to_format_class(options.class)),
+    //
+    // Looked up by **name**, not by an enum discriminant, so a title whose
+    // ladder is not Pulse's is served by its own file: Wipeout Pure authors a
+    // fifth `<GlobalClass name="VECTOR">` and this reaches it. A rung the file
+    // does not author is `None` and is reported - never quietly filled from a
+    // neighbouring rung, which would be racing on borrowed numbers.
+    let global_class = global
+        .as_ref()
+        .and_then(|global| global.class_named(&options.class));
+    if global.is_some() && global_class.is_none() {
+        report.push(format!(
+            "{}: authors no <GlobalClass name=\"{}\"> - this run gets no speed \
+             pads, unscaled gravity and no weapon-pad debounce rather than \
+             another class's numbers",
+            handling::GLOBAL_ENTRY,
+            options.class
+        ));
+    }
+    let pad_tunables = match global_class {
+        Some((pads, _, _)) => pads,
         None => {
             report.push("speed pads apply no boost this run".to_string());
             handling::SpeedupPads::default()
@@ -312,7 +330,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `<Special speedpad_jump>`, out of the same file and with the same fallback
     // reasoning: a zero means the boost simply does not tilt, which is a missing
     // feature rather than a broken race.
-    let special = global.map(|global| global.special).unwrap_or_default();
+    let special = global
+        .as_ref()
+        .map(|global| global.special)
+        .unwrap_or_default();
     // Reported for the same reason the pad tunables are: a tilt that silently
     // reads zero is indistinguishable from a tilt that is not implemented, and
     // this is the only place the number's journey off the disc is observable.
@@ -325,7 +346,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens, and neither `<SpeedupPads>` nor
     // `<Special>` is one of them.
-    let handling = handling_for(&stats, options.class, pad_tunables, special);
+    // `None` where this team's file does not author the requested rung, which
+    // is a race that cannot be set up rather than one to run on a substitute:
+    // every other rung's numbers are somebody else's tuning.
+    let handling =
+        handling_for(&stats, &options.class, pad_tunables, special).with_context(|| {
+            format!(
+                "{stats_name} authors no <Class name=\"{}\"> - it carries {}",
+                options.class,
+                stats
+                    .classes
+                    .iter()
+                    .map(|block| block.raw_name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
     // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
     // here, by its own function: it is per team rather than per class, and it
     // is graphics, so it deliberately never enters `Handling`.
@@ -337,11 +373,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Named `airborne` in the XML and applied to the *grounded* term; see
     // `oag_formats::handling::GravityMul`, which reads the VFPU pair chain out.
-    let class_gravity_scale = match global {
-        Some(global) => {
-            let scale = global.gravity_mul(to_format_class(options.class)).airborne;
+    let class_gravity_scale = match global_class {
+        Some((_, mul, _)) => {
+            let scale = mul.airborne;
             report.push(format!(
-                "<GravityMul>: grounded gravity scaled by {scale} for the {:?} class",
+                "<GravityMul>: grounded gravity scaled by {scale} for the {} class",
                 options.class
             ));
             scale
@@ -352,14 +388,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
     let zone = if options.mode == Mode::Zone {
-        match global {
+        match global.as_ref() {
             Some(global) => report.push(format!(
                 "<Zone>: start {}, increment {} per zone, recharge {}",
                 global.zone.start, global.zone.increment, global.zone.recharge
             )),
             None => report.push("this run has no auto-speed".to_string()),
         }
-        global.map(|g| g.zone)
+        global.as_ref().map(|g| g.zone)
     } else {
         None
     };
@@ -369,12 +405,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // crossing grant a pickup on every tick the hull is inside the volume - so
     // the trigger treats a zero as "grant once and never again on this pad"
     // rather than trusting it; see `Race::test_weapon_pads`.
-    let weapon_pad_refresh = match global {
-        Some(global) => {
-            global
-                .weapon_pads(to_format_class(options.class))
-                .refresh_time
-        }
+    let weapon_pad_refresh = match global_class {
+        Some((_, _, pad)) => pad.refresh_time,
         None => 0.0,
     };
     // The weapon table. Read on every mode even though only a single race arms
@@ -923,7 +955,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         setup: Setup {
             mode: options.mode,
             difficulty: options.difficulty,
-            class: options.class,
+            class: options.class.clone(),
             opponents: options.opponents,
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),

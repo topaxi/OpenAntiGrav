@@ -38,7 +38,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// One image, or `None` with a printed reason when it is not present.
 fn image(name: &str) -> Option<PathBuf> {
@@ -70,7 +69,7 @@ fn load_on(mode: oag_race::Mode, track: &str) -> Option<race::Loaded> {
     Some(
         race::load(&race::Options {
             source: path.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode,
             track: Some(track.to_string()),
             ..race::Options::default()

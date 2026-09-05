@@ -258,8 +258,6 @@ fn the_lock_refuses_a_craft_that_is_close_in_space_and_far_round_the_lap() {
 /// which is what `launchSpeed` turned out to be for.
 #[test]
 fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
-    use oag_formats::handling::SpeedClass;
-
     let stats = stats();
     let dimensions = Dimensions {
         length: 4.0,
@@ -272,7 +270,7 @@ fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
     state.body.position = Vec3::ZERO;
     // 100 units/s is 360 km/h, plus the fixture's launchSpeed of 100.
     state.body.linear_velocity = state.body.forward() * 100.0;
-    let (_, velocity, launch_kmh) = launch(&state, &dimensions, &stats, SpeedClass::Venom);
+    let (_, velocity, launch_kmh) = launch(&state, &dimensions, &stats, "VENOM");
     assert!(
         (launch_kmh - 460.0).abs() < 1e-3,
         "launch speed {launch_kmh} km/h, expected 360 + 100"
@@ -284,7 +282,7 @@ fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
 
     // A parked craft still gets out of the tube: the floor applies.
     let parked = ShipState::default();
-    let (_, slow, base) = launch(&parked, &dimensions, &stats, SpeedClass::Venom);
+    let (_, slow, base) = launch(&parked, &dimensions, &stats, "VENOM");
     assert_eq!(base, stats.launch_speed, "the ramp blends from the raw sum");
     assert!(slow.length() > 0.0);
 }
@@ -293,8 +291,6 @@ fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
 /// to special-case a projectile that starts inside a craft.
 #[test]
 fn a_missile_launches_from_the_nose_and_not_the_centre() {
-    use oag_formats::handling::SpeedClass;
-
     let dimensions = Dimensions {
         length: 4.0,
         width: 2.0,
@@ -302,7 +298,7 @@ fn a_missile_launches_from_the_nose_and_not_the_centre() {
         ..Dimensions::default()
     };
     let state = ShipState::default();
-    let (position, _, _) = launch(&state, &dimensions, &stats(), SpeedClass::Venom);
+    let (position, _, _) = launch(&state, &dimensions, &stats(), "VENOM");
     assert!(
         position.length() > 0.0,
         "the missile spawned inside the craft"

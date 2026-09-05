@@ -42,7 +42,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// Ticks per race: over three minutes at the fixed 60 Hz.
 ///
@@ -111,7 +110,7 @@ struct Shift {
 fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         // The rung that leaves every appetite at full, so a ram is not gated
         // down to nothing before this can look at it.

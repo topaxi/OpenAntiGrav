@@ -55,28 +55,49 @@ pub struct SpeedClasses {
 }
 
 impl SpeedClasses {
-    /// The rung Wipeout Pure authors below Venom, and the one name in this
-    /// module that **no title's engine side can select yet**.
+    /// The rung Wipeout Pure authors below Venom, and the one name here that
+    /// only one measured title has.
     ///
-    /// Pure authors it fully: a `<Class name="VECTOR">` block in every one of
-    /// its race teams' `handlingstats.xml` files, plus a `<GlobalClass>` of
-    /// its own, plus five `<Menu name="Class">` entries in its front end. So
-    /// the tuning is real, measured and readable - this is **not** a name with
-    /// nothing behind it.
+    /// Pure authors it fully, on both pressings:
     ///
-    /// What is missing is a way to *name* it downstream.
-    /// `oag_physics::SpeedClass` has four variants and its `ALL` means "the
-    /// rungs every title has": it backs `from_name`, it backs
-    /// `oag_formats::handling::Stats::has_pulse_class_ladder`'s
-    /// `classes.len() == ALL.len()`, and `class as usize` indexes fixed
-    /// four-wide arrays for per-class weapon speeds and the global
-    /// speed-pad/gravity/weapon-pad tables. Growing it to five is a real
-    /// change to two determinism-bound crates and is its own piece of work,
-    /// not a side effect of listing a name here.
+    /// | Where | What |
+    /// | --- | --- |
+    /// | `Data\Ships\<Team>\handlingstats.xml` | `<Class name="VECTOR">`, in every race team |
+    /// | `Data\XML\HandlingStats.xml` | `<GlobalClass name="VECTOR">`, first of five |
+    /// | `Data\XML\weaponstats.xml` | `<Pickupodds class="Vector">`, beside the four |
+    /// | the front end | five `<Menu name="Class">` entries |
     ///
-    /// Until that lands, [`Self::selectable`] filters this out, so the menu
-    /// offers nothing it cannot race. Recorded here rather than dropped
-    /// because dropping it would lose the measurement.
+    /// So every input a race needs is on the disc, and none of it is borrowed.
+    ///
+    /// # It is selectable, and what had to change first
+    ///
+    /// It used to be filtered out of every menu, because `oag_physics::SpeedClass`
+    /// has four variants and nothing downstream could *name* a fifth rung. The
+    /// fix was not to grow that enum: its discriminants index fixed four-wide
+    /// tables, and a five-wide table would have had to invent a fifth entry for
+    /// Pulse and HD, which author four. That is the stand-in this project
+    /// forbids.
+    ///
+    /// Instead a race carries the rung's **name** and resolves it against the
+    /// file that authored it -
+    /// `oag_formats::handling::Stats::class_named`,
+    /// `oag_formats::handling::Global::class_named` and
+    /// `oag_gameplay::pickup::table_for`. A title that authors four is asked
+    /// for four and grows nothing; Pure is asked for five and answers with
+    /// five. `oag_physics::SpeedClass` still has exactly four variants and its
+    /// `ALL` still means "the rungs every measured title has", which is what
+    /// keeps `has_pulse_class_ladder` meaningful.
+    ///
+    /// **Pulse authors a `<GlobalClass name="VECTOR">` too and still offers
+    /// four**, because its per-team files author no such `<Class>` and its
+    /// weapon table no such `<Pickupodds>`. The ladder is measured from the
+    /// per-team files, which is the file that decides what a rung *does*. That
+    /// is why "only if Pure's data is available" needs no flag: the union is
+    /// built from the ladders of the titles actually mounted, and only Pure's
+    /// names this rung.
+    ///
+    /// Whether *Pulse* has a hidden fifth class is a separate, still-open
+    /// question - Pure authoring one says nothing about it.
     pub const VECTOR: &'static str = "VECTOR";
 
     /// The four rungs every title measured so far shares, slowest first.
@@ -84,6 +105,32 @@ impl SpeedClasses {
     /// Not a default and not a fallback - each title names it explicitly, so a
     /// title whose ladder was never read cannot silently inherit one that was.
     pub const PULSE_LADDER: &'static [&'static str] = &["VENOM", "FLASH", "RAPIER", "PHANTOM"];
+
+    /// Every rung any measured ladder names, slowest first.
+    ///
+    /// **A spell-checking vocabulary, not a table to index.** It exists for one
+    /// caller: `--class` on the command line, which is parsed before a disc is
+    /// opened and so cannot yet know which title's ladder applies. Catching a
+    /// typo there is worth a list; racing on it is not, and nothing does - the
+    /// rung is resolved against the file that authored it, and a name that is
+    /// on this list but not in *that* file is still an honest load failure.
+    ///
+    /// It is the union of [`Self::PULSE_LADDER`] and Wipeout Pure's, which is
+    /// every ladder read so far. Wipeout 2048's is unread, so a 2048 rung this
+    /// does not name is a gap in the measurement rather than in the list.
+    pub const MEASURED: &'static [&'static str] =
+        &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+
+    /// Whether `name` is a rung some measured ladder carries.
+    ///
+    /// See [`Self::MEASURED`] for why this is not the check that decides a
+    /// race.
+    #[must_use]
+    pub fn is_measured_name(name: &str) -> bool {
+        Self::MEASURED
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(name))
+    }
 
     /// Every name this title authors, slowest first.
     #[must_use]
@@ -93,18 +140,23 @@ impl SpeedClasses {
 
     /// Whether this build can actually put a ship on the class called `name`.
     ///
-    /// Today the answer is "everything except [`Self::VECTOR`]", for the
-    /// reason that constant gives. It is a function rather than a list so that
-    /// every caller - the ordinary RACE page, RACE REMIX's union, and any test
-    /// - answers the question the same way and in one place.
+    /// **Every name a measured ladder carries, since 2026-09-05.** It used to
+    /// reject [`Self::VECTOR`], because nothing downstream could name a fifth
+    /// rung; a race now carries the rung's name and resolves it against the
+    /// file that authored it, so there is nothing left to filter. See
+    /// [`Self::VECTOR`] for what that took.
     ///
-    /// **A class this rejects is drawn nowhere.** It is not greyed and it is
-    /// not shown as a locked row: an option that appears and then races on
-    /// some other class's tuning is the invented stand-in this project
-    /// forbids, and an honest absence is the alternative.
+    /// Kept as a function rather than deleted for two reasons. It is the one
+    /// place every caller - the ordinary RACE page, RACE REMIX's union, and
+    /// any test - asks the question, so the next rung that turns out to be
+    /// authored-but-unraceable has somewhere to go. And it states the
+    /// invariant: **a class this rejects is drawn nowhere.** Not greyed, not
+    /// shown as a locked row - an option that appears and then races on some
+    /// other class's tuning is the invented stand-in this project forbids, and
+    /// an honest absence is the alternative.
     #[must_use]
-    pub fn is_selectable(name: &str) -> bool {
-        !name.eq_ignore_ascii_case(Self::VECTOR)
+    pub fn is_selectable(_name: &str) -> bool {
+        true
     }
 
     /// The subset of [`Self::names`] this build can actually put a ship on.

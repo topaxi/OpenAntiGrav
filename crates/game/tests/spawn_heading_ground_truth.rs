@@ -43,7 +43,6 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// How far a craft's heading may be off the track's own before this calls it
 /// wrong: `cos 60 degrees`, the same band
@@ -133,7 +132,7 @@ fn image(name: &str) -> Option<PathBuf> {
 fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         track: Some(track.to_string()),
         opponents: true,
         ..race::Options::default()
@@ -309,7 +308,7 @@ fn the_ps2s_stale_slot_is_corrected_to_what_the_psps_own_file_authors() {
     let slot_of = |image: &Path| {
         race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             track: Some(entry.to_string()),
             ..race::Options::default()
         })

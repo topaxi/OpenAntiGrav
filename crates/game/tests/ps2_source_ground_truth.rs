@@ -44,7 +44,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::input::Button;
-use oag_physics::SpeedClass;
 use oag_pulse as pulse;
 
 use oag_game::race;
@@ -83,7 +82,7 @@ fn load(name: &str) -> Option<race::Loaded> {
     let image = image(name)?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("loading a race off {name}: {e:#}"));
@@ -416,7 +415,7 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
             team: Some(team.to_string()),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             ..race::Options::default()
         })
         .unwrap_or_else(|e| panic!("loading {team} off {PS2_IMAGE}: {e:#}"));
@@ -465,7 +464,7 @@ fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
             let loaded = race::load(&race::Options {
                 source: image.display().to_string(),
                 track: Some(track.clone()),
-                class: SpeedClass::Venom,
+                class: "VENOM".to_string(),
                 ..race::Options::default()
             })
             .unwrap_or_else(|e| panic!("loading {track} off {PS2_IMAGE}: {e:#}"));
