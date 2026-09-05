@@ -508,8 +508,15 @@ impl Renderer {
         );
     }
 
+    /// `pub` rather than private, and for the same reason [`Self::render`]
+    /// and [`Self::overlay`] already are: the composition root's own
+    /// `menu_stage` module is a different crate (the `[[bin]]` over this
+    /// `[lib]`), and it draws its own rows over a parked race's
+    /// already-resolved picture exactly this way - `LoadOp::Load` with the
+    /// menu's own marquee `clip` still honoured, which neither
+    /// [`Self::render`] nor [`Self::overlay`] alone offers.
     #[expect(clippy::too_many_arguments, reason = "one wrapper's worth of load op")]
-    fn render_with(
+    pub fn render_with(
         &mut self,
         load: wgpu::LoadOp<wgpu::Color>,
         device: &wgpu::Device,
@@ -998,55 +1005,4 @@ pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A PS2 front end is fitted as 480/272, not as its own 640x448.
-    ///
-    /// The difference is 24%, it is a horizontal squeeze of the entire front
-    /// end, and it is invisible on the PSP because there the two numbers agree.
-    /// See `crate::frontend::Space` and `docs/ps2/aspect-ratio.md`.
-    #[test]
-    fn a_ps2_screen_is_letterboxed_by_what_it_is_shown_as() {
-        // A window of the shape the artwork was stretched for: it fills.
-        let window = (480 * 3, 272 * 3);
-        let fitted = letterbox_in(window, Space::PS2.display_aspect);
-        assert!((fitted[0] - 1.0).abs() < 1e-6, "{fitted:?}");
-        assert!((fitted[1] - 1.0).abs() < 1e-6, "{fitted:?}");
-        // Fitting it by the grid instead: 640/448 is *narrower* than that
-        // window, so it gives the width away and leaves the front end in a
-        // pillarboxed column a fifth short of the window it should have filled.
-        let by_grid = letterbox_in(window, Space::PS2.size.0 / Space::PS2.size.1);
-        assert!(
-            by_grid[0] < 0.82,
-            "the bug this exists to stop: {by_grid:?}"
-        );
-    }
-
-    #[test]
-    fn a_matching_aspect_ratio_needs_no_letterboxing() {
-        let scale = letterbox((960, 544));
-        assert!((scale[0] - 1.0).abs() < 1e-6, "{scale:?}");
-        assert!((scale[1] - 1.0).abs() < 1e-6, "{scale:?}");
-    }
-
-    #[test]
-    fn a_wide_window_shrinks_horizontally() {
-        let scale = letterbox((1920, 544));
-        assert!(scale[0] < 1.0);
-        assert!((scale[1] - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn a_tall_window_shrinks_vertically() {
-        let scale = letterbox((480, 1000));
-        assert!((scale[0] - 1.0).abs() < 1e-6);
-        assert!(scale[1] < 1.0);
-    }
-
-    #[test]
-    fn a_zero_sized_window_does_not_divide_by_zero() {
-        let scale = letterbox((0, 0));
-        assert!(scale[0].is_finite() && scale[1].is_finite());
-    }
-}
+mod tests;

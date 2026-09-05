@@ -2,12 +2,27 @@
 
 use anyhow::{Result, bail};
 
+use oag_game::frontend::Draw;
 use oag_game::input::Button;
 use oag_game::render::Renderer;
 use oag_game::{font, marquee, menu, movie};
 
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
+
+/// The pause overlay's tint, over a parked race's picture.
+///
+/// **Chosen, not authored.** Neither PSP title's own front-end XML defines a
+/// pause screen to read one off: `Skin.xml`'s own `LoadXML` list is
+/// exhaustively 22 files - see
+/// [fe-menu-definitions.md](../../../../docs/formats/fe-menu-definitions.md) -
+/// and none of them is a `Pause` definition. The one HUD string that names
+/// pausing, `IG_PAUSE_QUIT`, is drawn by nothing:
+/// [hud.md](../../../../docs/ui/hud.md) records "There is no pause" against
+/// it, because leaving a race used to drop the `World` outright. So there is
+/// no colour or alpha on the disc for this to recover, and this one is
+/// this project's own rather than a reading of one.
+const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
 
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
@@ -241,6 +256,10 @@ impl MenuStage {
     ///   quad before the first frame lands would flash green over the menu. The
     ///   rows draw on black instead, exactly as they do on a source with no
     ///   backdrop.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "frozen_race is one more fact the caller already has"
+    )]
     pub(crate) fn render(
         &mut self,
         gpu: &Gpu,
@@ -253,6 +272,16 @@ impl MenuStage {
         // input state of its own to read it from; see `Session::frame`'s call
         // site for why the closure has to be built there instead.
         bound_keys: &dyn Fn(Button) -> Vec<&'static str>,
+        // Whether `Session::suspended_race` holds a parked race, off
+        // `Session::frame` - this stage holds no session state of its own to
+        // read it from either. Changes two things: the disc's own looping
+        // backdrop is left out (see `shown` below - the parked race's own
+        // picture is what shows through instead), and this draws with
+        // `LoadOp::Load` plus a translucent [`PAUSE_OVERLAY`] rather than
+        // clearing to black. `Session::frame` has already resolved the
+        // parked race's scene into `view` by the time this runs, past
+        // `has_scene`, which is what there is to load rather than clear.
+        frozen_race: bool,
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -286,7 +315,12 @@ impl MenuStage {
             &self.skin,
             bound_keys,
             &|text| font::measure(&self.text_atlas, text),
-            shown,
+            // `None` over a parked race even when `shown` just decoded a
+            // fresh frame above: the decode keeps running so the loop has
+            // not drifted by the time a player resumes, but the picture
+            // behind the menus is the race's own, not the disc's backdrop
+            // movie playing underneath it.
+            if frozen_race { None } else { shown },
             &self.frame,
         );
         let (list, clip) = match &self.change {
@@ -324,7 +358,34 @@ impl MenuStage {
                 self.marquee.elapsed(),
             ),
         };
-        self.renderer.render(
+        // The pause overlay, drawn under the rows and over everything else:
+        // first in the list, since the list paints back to front. Ahead of
+        // `list` rather than pushed onto it, so it sits under the frame's own
+        // marks and the transition tween too, not only under the rows -
+        // `list` already carries every layer flattened together by this
+        // point and there is no later seam to insert behind just the body.
+        let list: Vec<Draw> = if frozen_race {
+            let (width, height) = self.skin.space().size;
+            std::iter::once(Draw::Fill {
+                rect: [0.0, 0.0, width, height],
+                color: PAUSE_OVERLAY,
+            })
+            .chain(list)
+            .collect()
+        } else {
+            list
+        };
+        // `LoadOp::Load` over a parked race - `Session::frame` already
+        // resolved its scene into `view` this frame, and clearing here would
+        // erase it. `Renderer::render`'s own black clear is right the rest
+        // of the time, when this stage owns the frame outright.
+        let load = if frozen_race {
+            wgpu::LoadOp::Load
+        } else {
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+        };
+        self.renderer.render_with(
+            load,
             &gpu.device,
             &gpu.queue,
             encoder,

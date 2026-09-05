@@ -21,6 +21,8 @@ use crate::stage::Stage;
 
 #[path = "session/apply.rs"]
 mod apply;
+#[path = "session/draw.rs"]
+mod draw;
 #[path = "session/frame.rs"]
 mod frame;
 #[path = "session/load.rs"]
