@@ -39,12 +39,12 @@ const MAPPED_STRENGTH: f32 = 0.4;
 /// leaves at zero.
 const MAPPED_DEPTH_BIAS: f32 = 0.0004;
 
-/// How far in front of the camera the `mapped` tier's own box is centred, and
-/// how wide it is.
+/// How far ahead of the player the `mapped` tier's own box is centred, and how
+/// wide it is.
 ///
 /// **Ours.** One cascade has to choose where its texels go; putting the box
-/// around the craft and the road ahead of it spends them where a player is
-/// looking. A cascade ladder would not have to choose - see
+/// around the craft and the road ahead of it spends them where the player is
+/// heading. A cascade ladder would not have to choose - see
 /// `docs/rendering/shadows.md`.
 const MAPPED_AHEAD: f32 = 40.0;
 const MAPPED_RADIUS: f32 = 70.0;
@@ -253,16 +253,17 @@ impl super::super::Scene {
             }
             casters.push(self.ships[slot].caster(race.ship_model_matrix_of(slot)));
         }
-        // Centred ahead of the player rather than on it: one cascade's texels
-        // go where the camera is pointed. See `MAPPED_AHEAD`.
-        let player = race.ship_model_matrix_of(0);
-        let centre = player.transform_point3(Vec3::ZERO)
-            + player.transform_vector3(Vec3::Z).normalize_or_zero() * MAPPED_AHEAD;
         let fit = oag_render::shadow::map::Fit {
-            centre,
+            centre: mapped_centre(race.ship_model_matrix_of(0)),
             radius: MAPPED_RADIUS,
             towards_light: mapped_light(&self.light),
-        };
+        }
+        // Snapped to whole texels of the map this fit is about to render
+        // into, in the light's own basis: a centre that slides by an
+        // arbitrary sub-texel amount every frame re-quantises the whole map,
+        // which is the standard cause of a shadow that crawls under a moving
+        // fit. See `Fit::snapped`.
+        .snapped(oag_render::shadow::map::DEPTH_SIZE);
         // The coverage map stays cleared while this tier is on: two maps are
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.
@@ -270,6 +271,33 @@ impl super::super::Scene {
         map.render_depth(queue, encoder, &fit, &casters);
         casters.len()
     }
+}
+
+/// Where the `mapped` tier's depth map is centred: ahead of the player rather
+/// than on it, so one cascade's texels go where the player is heading. See
+/// `MAPPED_AHEAD`.
+///
+/// A pure function of the player's own model matrix - no camera state reaches
+/// it, which is what makes "the box follows the camera" and "the box follows
+/// the craft" different, testable claims rather than a matter of reading the
+/// code closely enough. See `shadow::tests::mapped_centre` for the regression
+/// guard.
+///
+/// **Only the horizontal heading leads, not the full 3D forward.** The
+/// player's own `transform_vector3(Vec3::Z)` carries pitch as well as yaw, and
+/// a craft pitches constantly - cresting a jump, diving into a dip -
+/// independently of where it is actually travelling. At `MAPPED_AHEAD`'s
+/// lever arm, a 10-degree pitch alone swings the lead by about 7 world units,
+/// upward of a hundred texels of this tier's `shadow::map::DEPTH_SIZE` map:
+/// far more than any sub-texel jitter `Fit::snapped` exists to remove, and
+/// enough on its own to read as the box sliding around under the player.
+/// Flattening the heading to the world's horizontal plane leaves only yaw -
+/// the direction the player is actually steering towards - driving the lead.
+fn mapped_centre(player: oag_core::math::Mat4) -> Vec3 {
+    let position = player.transform_point3(Vec3::ZERO);
+    let forward = player.transform_vector3(Vec3::Z);
+    let heading = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+    position + heading * MAPPED_AHEAD
 }
 
 /// Which way the `mapped` tier's light points, per title.
@@ -304,5 +332,61 @@ fn default_fit() -> oag_render::shadow::map::Fit {
         centre: Vec3::ZERO,
         radius: 1.0,
         towards_light: Vec3::Y,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use oag_core::math::Mat4;
+
+    use super::{MAPPED_AHEAD, mapped_centre};
+    use oag_core::math::Vec3;
+
+    /// The report under investigation was "the box follows the camera". This
+    /// pins the actual dependency: [`mapped_centre`] takes a model matrix and
+    /// nothing else, so no camera field exists for it to read even if some
+    /// future change wanted it to. A camera-position parameter added here
+    /// would be the regression this guards against - not a value this test
+    /// could vary, since there is deliberately nothing to vary it with.
+    #[test]
+    fn the_centre_is_a_pure_function_of_the_players_own_matrix() {
+        let at_origin = Mat4::from_translation(Vec3::new(3.0, 1.0, -2.0));
+        assert_eq!(mapped_centre(at_origin), mapped_centre(at_origin));
+    }
+
+    /// A level player leads straight along its own forward axis.
+    #[test]
+    fn a_level_player_leads_along_its_forward_axis() {
+        let player = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
+        let centre = mapped_centre(player);
+        assert_eq!(centre, Vec3::new(5.0, 0.0, MAPPED_AHEAD));
+    }
+
+    /// Pitching the player - cresting a jump, diving into a dip - does not
+    /// move the lead at all: only the horizontal heading drives it. Before
+    /// this fix the lead swung by `MAPPED_AHEAD * sin(pitch)`, on the order of
+    /// a hundred texels of the `mapped` tier's own map for a modest 10-degree
+    /// pitch - see this module's `mapped_centre` docs for the measurement.
+    #[test]
+    fn pitching_the_player_does_not_move_the_lead() {
+        let level = mapped_centre(Mat4::IDENTITY);
+        for pitch_degrees in [5.0_f32, 10.0, 15.0, -20.0] {
+            let pitched = Mat4::from_rotation_x(pitch_degrees.to_radians());
+            let centre = mapped_centre(pitched);
+            assert!(
+                (centre - level).length() < 1e-5,
+                "pitch {pitch_degrees} moved the centre to {centre:?}, level was {level:?}"
+            );
+        }
+    }
+
+    /// Turning the player - the legitimate case, per this module's docs -
+    /// does swing the lead: yaw is the direction actually being steered
+    /// towards, unlike pitch.
+    #[test]
+    fn turning_the_player_does_move_the_lead() {
+        let level = mapped_centre(Mat4::IDENTITY);
+        let turned = mapped_centre(Mat4::from_rotation_y(90.0_f32.to_radians()));
+        assert!((turned - level).length() > MAPPED_AHEAD * 0.5);
     }
 }

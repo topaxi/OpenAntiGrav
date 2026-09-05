@@ -92,3 +92,97 @@ fn a_zero_radius_is_clamped_to_something_drawable() {
     let clip = matrix * fit().centre.extend(1.0);
     assert!((clip.w - 1.0).abs() < 1e-5);
 }
+
+/// A fit whose centre sits exactly on a `map_size`-texel grid point for a
+/// light pointing straight up: `x` and `z` are both already whole multiples
+/// of the texel size (zero qualifies), so a nudge has a full half-texel of
+/// room in every direction before it crosses into the next bucket.
+///
+/// The plain [`fit`] fixture above does not have this property - its centre
+/// is arbitrary, so a fixed-size nudge can land arbitrarily close to a
+/// rounding boundary already, and cross it. That is a property of the
+/// fixture, not of [`Fit::snapped`]: this fixture exists so the nudge tests
+/// below are testing snapping and not, by accident, a boundary they didn't
+/// choose.
+fn snap_fixture() -> Fit {
+    Fit {
+        centre: Vec3::new(0.0, -5.0, 0.0),
+        radius: 12.0,
+        towards_light: Vec3::Y,
+    }
+}
+
+/// The whole reason [`Fit::snapped`] exists: a centre nudged by less than half
+/// a texel must land on the exact same texel, so its matrix comes out
+/// byte-identical to the unnudged one. This is the "the mapped shadow box
+/// slides and rotates with the player" bug's own regression test - without
+/// snapping, any nonzero nudge moves the matrix by some amount, never zero.
+#[test]
+fn a_sub_texel_nudge_snaps_to_the_same_matrix() {
+    let map_size = 1024_u32;
+    let base = snap_fixture().snapped(map_size);
+    let texel = snap_fixture().radius.max(1.0) * 2.0 / map_size as f32;
+    // A light straight up has its light-space axes in the world's X/Z plane,
+    // so nudging on X and Z is nudging in light space.
+    for nudge in [
+        Vec3::new(texel * 0.1, 0.0, 0.0),
+        Vec3::new(0.0, 0.0, texel * 0.4),
+        Vec3::new(-texel * 0.2, 0.0, texel * 0.3),
+        Vec3::new(texel * 0.45, 0.0, -texel * 0.45),
+    ] {
+        let nudged = Fit {
+            centre: snap_fixture().centre + nudge,
+            ..snap_fixture()
+        }
+        .snapped(map_size);
+        assert_eq!(
+            nudged.matrix().to_cols_array(),
+            base.matrix().to_cols_array(),
+            "nudge {nudge:?} was not absorbed by snapping"
+        );
+    }
+}
+
+/// A nudge past half a texel does move the snapped result - snapping quantises
+/// to the grid, it does not freeze the centre in place.
+#[test]
+fn a_whole_texel_nudge_moves_the_snapped_centre_by_a_whole_texel() {
+    let map_size = 1024_u32;
+    let texel = snap_fixture().radius.max(1.0) * 2.0 / map_size as f32;
+    let base = snap_fixture().snapped(map_size);
+    let moved = Fit {
+        centre: snap_fixture().centre + Vec3::new(texel, 0.0, 0.0),
+        ..snap_fixture()
+    }
+    .snapped(map_size);
+    let delta = (moved.centre - base.centre).length();
+    assert!(
+        (delta - texel).abs() < 1e-4,
+        "delta was {delta}, expected one texel ({texel})"
+    );
+}
+
+/// Snapping only touches the two axes across the light: the axis along it -
+/// depth into the light, never a texel choice - passes through untouched.
+#[test]
+fn snapping_does_not_move_the_centre_along_the_light() {
+    let map_size = 1024_u32;
+    let towards_light = fit().towards_light.normalize_or_zero();
+    let snapped = fit().snapped(map_size);
+    let along_before = fit().centre.dot(towards_light);
+    let along_after = snapped.centre.dot(towards_light);
+    assert!((along_before - along_after).abs() < 1e-4);
+}
+
+/// A degenerate light direction still snaps to a finite centre - the same
+/// fallback [`Fit::matrix`] uses, read the same way, so the two never
+/// disagree on what "no usable direction" means.
+#[test]
+fn a_degenerate_light_direction_still_snaps_to_something_finite() {
+    let snapped = Fit {
+        towards_light: Vec3::ZERO,
+        ..fit()
+    }
+    .snapped(1024);
+    assert!(snapped.centre.is_finite());
+}

@@ -67,6 +67,24 @@ pub struct Fit {
 }
 
 impl Fit {
+    /// The light direction actually used for the view: [`Self::towards_light`],
+    /// or a fallback that keeps the view non-degenerate.
+    ///
+    /// Shared by [`Self::matrix`] and [`Self::snapped`] so both build the same
+    /// basis from the same fallback - two independent readings of "is this
+    /// direction usable" would let them disagree on a degenerate rig.
+    fn resolved_direction(&self) -> Vec3 {
+        let direction = self.towards_light.normalize_or_zero();
+        if direction.length_squared() < 0.5 {
+            // A rig with no usable direction points straight down rather than
+            // producing a degenerate view: nothing is shadowed either way,
+            // since the strength that reaches the shader is the caller's.
+            Vec3::NEG_Y
+        } else {
+            direction
+        }
+    }
+
     /// World to the map's clip space: an orthographic box down the light,
     /// sized to [`Self::radius`].
     ///
@@ -81,15 +99,7 @@ impl Fit {
     #[must_use]
     pub fn matrix(&self) -> Mat4 {
         let radius = self.radius.max(1.0);
-        let direction = self.towards_light.normalize_or_zero();
-        let direction = if direction.length_squared() < 0.5 {
-            // A rig with no usable direction points straight down rather than
-            // producing a degenerate view: nothing is shadowed either way,
-            // since the strength that reaches the shader is the caller's.
-            Vec3::NEG_Y
-        } else {
-            direction
-        };
+        let direction = self.resolved_direction();
         let eye = self.centre + direction * (radius + NEAR_MARGIN);
         // Any up that is not the direction itself; the choice only rotates the
         // map's texels, which nothing reads across frames.
@@ -113,6 +123,59 @@ impl Fit {
             radius * 2.0 + NEAR_MARGIN * 2.0,
         );
         projection * view
+    }
+
+    /// This fit, with [`Self::centre`] snapped to whole texels of a `map_size`
+    /// square map, in the light's own basis.
+    ///
+    /// **Why this exists**: a directional light's ortho box whose centre moves
+    /// by arbitrary sub-texel amounts re-quantises every texel of the map it
+    /// fits, every frame - the standard cause of a shadow that crawls or swims
+    /// under a moving view. Snapping the centre to the texel grid **in light
+    /// space** removes that: the box still translates as its caster moves, but
+    /// only by whole texels, so a texel that was covered stays covered exactly
+    /// until the box has moved a full texel width.
+    ///
+    /// Only the two axes perpendicular to the light are snapped; the axis
+    /// along it is untouched; because it is depth *into* the light and never
+    /// decides which texel a receiver samples.
+    ///
+    /// The caller supplies `map_size` rather than this reaching for [`SIZE`]
+    /// itself: [`Self`] is also used to fit the coverage map, whose radius
+    /// breathes with the caster grid every frame and whose texel size is
+    /// therefore not even constant - snapping only makes sense where the size
+    /// fed in is the one the fit is about to render into.
+    ///
+    /// **Testable without a GPU**: nudging [`Self::centre`] by a fraction of a
+    /// texel must leave the snapped centre - and therefore
+    /// [`Self::matrix`] built from it - byte-identical.
+    #[must_use]
+    pub fn snapped(&self, map_size: u32) -> Self {
+        let radius = self.radius.max(1.0);
+        let texel = radius * 2.0 / map_size as f32;
+        let direction = self.resolved_direction();
+        // The same up-vector tie-break `matrix` uses, read back out of the
+        // view it would build - the same pattern `frame.rs` uses for the
+        // render camera's own axes - rather than re-deriving right/up a
+        // second, independent way that could disagree with it. Only the
+        // rotation matters here, so any point along `direction` stands in for
+        // the eye.
+        let up_hint = if direction.y.abs() > 0.99 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+        let view = camera::look_at(direction, Vec3::ZERO, up_hint);
+        let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
+        let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+        let snap_offset = |axis: Vec3| {
+            let projected = self.centre.dot(axis);
+            (projected / texel).round() * texel - projected
+        };
+        Self {
+            centre: self.centre + right * snap_offset(right) + up * snap_offset(up),
+            ..*self
+        }
     }
 }
 
