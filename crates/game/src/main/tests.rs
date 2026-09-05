@@ -275,3 +275,31 @@ fn a_capture_already_open_is_left_alone() {
 
     assert_eq!(awaiting, Some(oag_gameplay::input::Button::Circle));
 }
+
+/// `app.rs` diverts every keyboard event away from `Controls::set_key` for as
+/// long as a capture is open, so the key that confirmed this row never gets
+/// to report its own release - the same failure `Keyboard::release_all`'s own
+/// doc comment describes for a window losing focus while a key is held.
+/// Without the release in `maybe_begin_binding`, Cross would still read held
+/// on the very next tick's snapshot, with nobody touching a keyboard.
+#[test]
+fn opening_a_capture_releases_whatever_confirmed_it() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    controls.set_key(&winit::keyboard::Key::Character("x".into()), true);
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let mut awaiting = None;
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Cross));
+
+    let next_tick = controls.snapshot();
+    assert!(
+        !next_tick
+            .buttons
+            .is_held(oag_gameplay::input::Button::Cross),
+        "the swallowed key-up must not leave Cross stuck held"
+    );
+}

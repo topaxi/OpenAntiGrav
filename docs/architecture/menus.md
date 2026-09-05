@@ -296,6 +296,18 @@ keyboard event then goes to `crate::rebind::decide` instead of
 not the menus' own back key) or leaves the capture open for anything else,
 including a key off the closed candidate set.
 
+**Nothing on screen says a capture is open.** Confirming a row changes
+nothing drawn, and every other row is frozen for as long as
+`Session::awaiting_binding` is `Some` - so for however long it takes to press
+the next key, the CONTROLS page looks like it has stopped responding rather
+than like it is waiting for one. It always resolves itself (any candidate key
+binds it, Escape cancels), so this is a rough edge rather than a stuck state,
+but it is a real gap: a "press a key..." prompt would need either a `menu.rs`
+change - the file sits at its 1,000-line size-gate ceiling with no headroom,
+see `scripts/check-file-size.py`'s `BASELINE` - or a new `Draw` the
+composition root overlays itself, and neither was in scope for what this
+thread asked for (a table, persistence, conflict handling).
+
 Three choices worth stating outright, since none of them are the only
 defensible one:
 

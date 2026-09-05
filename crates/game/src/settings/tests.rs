@@ -443,3 +443,21 @@ msaa = \"4x\"
     assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr3);
     assert_eq!(profile.msaa, crate::display::Msaa::X4);
 }
+
+/// `Bindings`'s own tests prove it round-trips through a `BTreeMap`; this is
+/// the other half, that the map itself survives a real TOML file - `settings`'s
+/// actual persistence format, which nothing above exercises. `bindings` has
+/// to stay `Controls`'s last field for this to parse at all: `toml` refuses
+/// a scalar after a table inside the same table.
+#[test]
+fn controls_bindings_round_trips_through_a_real_toml_file() {
+    let settings = Settings::default();
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    let round_tripped: Settings = toml::from_str(&written).expect("parse");
+    assert_eq!(
+        round_tripped.controls.bindings.len(),
+        oag_input::bindings::Bindings::default().to_pairs().len(),
+        "every candidate key is written, complete, every time"
+    );
+    assert_eq!(round_tripped.controls.bindings, settings.controls.bindings);
+}

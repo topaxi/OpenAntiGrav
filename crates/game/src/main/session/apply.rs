@@ -580,6 +580,15 @@ impl Session {
     /// was. Does nothing while a capture is already in flight, so holding
     /// Cross down through the capture cannot immediately restart it.
     ///
+    /// **Releases every key the moment a capture opens.** `app.rs` diverts
+    /// every keyboard event away from `Controls::set_key` while a capture is
+    /// live, so the eventual release of whatever key confirmed this row - and
+    /// of anything else a player happened to be holding - would otherwise
+    /// never reach `Keyboard`, exactly the stuck-held-forever failure
+    /// `Keyboard::release_all`'s own doc comment describes for a focus loss.
+    /// Releasing here means that swallowed key-up lands on an already-clear
+    /// bit instead.
+    ///
     /// Takes `awaiting_binding` and `controls` apart from `self` rather than
     /// as a `&mut self` method: `Session::frame` calls this from inside a
     /// `match &mut self.stage` arm, and a `&mut self` receiver there would
@@ -600,6 +609,7 @@ impl Session {
         let taken = controls.buttons_mut();
         if taken.take(input::Button::Cross) || taken.take(input::Button::Start) {
             *awaiting_binding = Some(button);
+            controls.release_all();
         }
     }
 
