@@ -1334,6 +1334,78 @@ elsewhere - pads, barrel rolls, the start boost - is unread, so the boost
 *duration* this engine uses remains its own number; the gate, the blends and
 the scales above are not.
 
+**2026-09-05: static-only session reframes the question rather than answering
+it, plus a clean negative.** Confidence 75 for the reframe, 85 for the
+negative - both read straight off disassembly, not the decompiler's
+pseudocode for `0x00090d30`, which carries `halt_baddata()` and eleven
+"Removing unreachable block" warnings and should not be trusted for control
+flow in this function; the raw instruction listing is.
+
+- **`craft+0x108` is not "armed" by any external writer at all - it is a
+  self-contained rise/fall ramp entirely inside `FUN_00090d30`, and the
+  whole block it lives in (`+0xf4` through `+0x110`) only runs at all when
+  the RaceManager slot for this craft's team reads mode `10`** (`lwz
+  r9,0x208(r11); cmpwi cr7,r9,0xa`, or the `+0x204` twin) - confirming
+  engine-trail.md's existing "gated on mode 10" claim independently, at the
+  assembly level. Inside that gate, two `stfs ...,0x108(r31)` sites do all
+  the work: `0x00091418` rises by `fmadds f1,f0,f27,f1` where `f0` is `2.0`
+  or `4.0` selected by a byte at `craft+0xfc`, and `0x0009167c` falls by
+  `fsubs` at a flat `2 * dt` - both paths run every tick this block is live,
+  so there is no separate "arm" event to find inside this function; the
+  byte at `+0xfc` is the only thing that changes behaviour, and it selects
+  a *rate*, not a duration.
+- **Negative, checked exhaustively for the per-tick path**: `FUN_00090d30`
+  has exactly one caller, `FUN_0009e3d0` (confidence 90 this is the craft's
+  own master per-tick `Update`, since it also calls the two dissolved `+0x12c`
+  writers `0x0008a5b8`/`0x00089fa8` and about twenty other per-tick
+  subsystem functions on the same `param_2`). Batch-decompiling all twenty
+  of those siblings and grepping for `0x108` found it in **none of them** -
+  so nothing else the craft's own tick calls touches this field either
+  directly or through a documented subsystem call. If something external
+  arms it, it is event-driven code reached from *outside* the per-tick
+  chain (pad contact, barrel-roll input, race-start), not a sibling method.
+- **A candidate for what sets the `+0xfc` rate-selector byte, confidence 35,
+  below naming and stated as a hypothesis only**: the same function has a
+  block (`0x00091104`-`0x0009111c` and its `0x000917d8` branch) that reads a
+  sub-object at `craft+0x40`, checks its `+0x58` field against the constant
+  `0xb`, and on match reads a `+0x5f70` pointer - the same offset
+  `nozzle_local_of` corrects for elsewhere on this page - before loading a
+  transform via `lvx` into the same `+0xf4..+0x108` block. The shape (a
+  class-ID compare gating a transform copy from a track-side object) reads
+  like a pad/surface-contact check, which would make the rate-selector -
+  and so the ramp's *rise* - pad-driven. **Not verified**: `0xb`'s meaning as
+  a class ID is not read from any enum, and the block was reached only by
+  static tracing, never observed live. **A whole-binary `stb`/`stbu` sweep
+  for `0xfc(` addressing found only two writers of the byte at all, both
+  inside `0x00090d30` itself (`stbu r0,0xfc(r28)` at `0x0009113c` and
+  `0x00091b30`), and both clear it to `0`** - nothing sets it to `1` through
+  this addressing form anywhere in the binary, so either a whole-word/struct
+  write elsewhere overlaps this byte, or it is reached through indexed
+  addressing (`stbx`) a mnemonic-filtered sweep does not catch. Read for
+  that live before trusting a breakpoint on the literal `+0xfc(r31)` address
+  to fire on the arming write.
+- **A tooling trap worth carrying forward**: `search_byte_patterns`'s
+  `mask` parameter does not implement a wildcard. `d0000108`/`fc00ffff`
+  (byte0 masked to the `stfs` opcode, byte1 wildcarded, byte2/3 exact)
+  returned zero matches against a function disassembly-confirmed to contain
+  three `stfs ...,0x108(r31)` instructions at that exact address; the
+  identical mask against the *actual* byte1 value (`d03f0108`) found all
+  three. The mask is accepted and silently ignored rather than rejected -
+  a masked byte-pattern sweep for "any register" reads as "not found"
+  regardless of what is actually there. `search_instructions` with a
+  `mnemonic`/`operand_pattern` filter is the reliable equivalent and found
+  48 real `stfs ...,0x108(...)` sites in one call. Full account in
+  `HANDOVER.md`'s Traps section.
+- Also ruled out this session, each read in full: `FUN_000f9628` (writes
+  `world+0x2d0+0x108`, a time-dilation ramp reached from
+  `Physics_TickWorld`, gated on `world+0x3d4` - nothing to do with a craft);
+  `FUN_0010d580` (`+0x10d`/`+0x50`/`+0x140`, an unrelated struct);
+  `FUN_002bf3e8` (one-time geometry/node-hierarchy construction, writing
+  `+0x104` through `+0x118` once from a model's own header fields, not a
+  per-tick craft value); `FUN_0024f2e0` (an eight-slot decay array at
+  `+0xf4..+0x110` each paired with a light handle at `+0x114..+0x130` -
+  the same offset range by coincidence, a different, larger struct).
+
 ## What follows for the renderer, and what stays open
 
 Implemented in `oag_render::exhaust::hd` (the tube and the flame blends),
