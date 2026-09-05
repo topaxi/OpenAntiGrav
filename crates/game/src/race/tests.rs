@@ -122,7 +122,7 @@ fn setup(handling: Handling) -> Setup {
         },
         mode: Mode::TimeTrial,
         difficulty: oag_ai::Difficulty::default(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         opponents: false,
         seed: SEED,
         // A time trial does not read it, and these tests never run a Zone

@@ -2170,6 +2170,7 @@ dependencies = [
  "oag-physics",
  "oag-pulse",
  "oag-race",
+ "oag-title",
  "thiserror 2.0.19",
 ]
 

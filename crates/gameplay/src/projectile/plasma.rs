@@ -47,11 +47,11 @@ pub fn launch(
     state: &ShipState,
     dimensions: &Dimensions,
     stats: &PlasmaStats,
-    class: oag_formats::handling::SpeedClass,
-) -> (Vec3, Vec3) {
+    class: &str,
+) -> Option<(Vec3, Vec3)> {
     let forward = state.body.forward();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = (stats.speed_for(class) + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
-    (nose, forward * speed)
+    let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
+    Some((nose, forward * speed))
 }

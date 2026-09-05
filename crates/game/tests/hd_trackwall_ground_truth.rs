@@ -42,7 +42,7 @@ use oag_core::math::Vec3;
 use oag_formats::collision::{self, CollisionNode, SurfaceKind};
 use oag_game::race;
 use oag_gameplay::collision_world;
-use oag_physics::{Body, Environment, ShipControls, ShipState, SpeedClass, Surface, step};
+use oag_physics::{Body, Environment, ShipControls, ShipState, Surface, step};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -343,7 +343,7 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
     // The ship's own hull box, from HD's own handling stats.
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -446,7 +446,7 @@ fn every_hd_grid_lands_on_the_track() {
         let track = format!("/data/environments/{circuit}/{file}.vex");
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             track: Some(track.clone()),
             opponents: true,
             ..race::Options::default()

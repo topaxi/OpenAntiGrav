@@ -52,7 +52,9 @@ GAMEPLAY_CRATES = {
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
 
 # The crates that link `oag-title` without being title packages: the reader of
-# any title's archives, and the composition root that picks one. Every *other*
+# any title's archives, the composition root that picks one, and the trace
+# harness, which is a CLI over a race and reads the vocabulary to spell-check
+# `--class` against every measured speed-class ladder. Every *other*
 # workspace member that links `oag-title` is a title package by construction -
 # a package exists to fill that vocabulary in - so it belongs in
 # GAMEPLAY_CRATES above.
@@ -63,7 +65,7 @@ FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu
 # before. So a new crate reaching for `oag-title` now has to be classified
 # here or there, and cannot be neither.
 TITLE_VOCABULARY = "oag-title"
-NOT_TITLE_PACKAGES = {"oag-assets", "oag-game"}
+NOT_TITLE_PACKAGES = {"oag-assets", "oag-game", "oag-trace"}
 
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"

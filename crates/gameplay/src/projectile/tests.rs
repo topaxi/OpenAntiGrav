@@ -107,7 +107,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             &ships(&[]),
             None,
             TriggerRadii::default(),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
         );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
         let p = projectiles.slots[0];
@@ -148,7 +148,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             &ships(&[]),
             None,
             TriggerRadii::default(),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -192,7 +192,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             &ships(&[]),
             None,
             TriggerRadii::default(),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
         );
         if let Some(hit) = impacts.into_iter().flatten().next() {
             impact = Some(hit);
@@ -226,7 +226,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 &grid,
                 None,
                 TriggerRadii::default(),
-                oag_formats::handling::SpeedClass::Venom,
+                "VENOM",
             )
             .into_iter()
             .flatten()
@@ -257,7 +257,7 @@ fn an_inactive_slot_is_not_a_target() {
             &grid,
             None,
             TriggerRadii::default(),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -284,7 +284,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 &grid,
                 None,
                 TriggerRadii::default(),
-                oag_formats::handling::SpeedClass::Venom,
+                "VENOM",
             )
             .into_iter()
             .flatten()
@@ -320,7 +320,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             &ships(&[]),
             None,
             TriggerRadii::default(),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -476,7 +476,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             1.0 / 60.0,
             &empty,
             Some(&stats),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             oag_physics::DamageRules::default(),
             &mut [],
         );
@@ -517,7 +517,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             1.0 / 60.0,
             &wall,
             None,
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             oag_physics::DamageRules::default(),
             &mut [],
         );
@@ -590,8 +590,6 @@ fn the_hull_radius_circumscribes_the_longest_axis_and_bulges_past_the_rest() {
 /// A test that only counted three would pass with all three on the same ray.
 #[test]
 fn a_launch_fires_three_fanned_about_the_craft_forward() {
-    use oag_formats::handling::SpeedClass;
-
     let state = ShipState::default();
     let dimensions = Dimensions {
         length: 4.0,
@@ -612,7 +610,8 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
     .rocket()
     .expect("a Rocket");
 
-    let shots = launch(&state, &dimensions, &stats, SpeedClass::Venom);
+    let shots = launch(&state, &dimensions, &stats, "VENOM")
+        .expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
 
     let forward = state.body.forward();
@@ -663,8 +662,6 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
 /// an error - and not a crash from normalising a zero.
 #[test]
 fn a_zero_spread_still_fires_three() {
-    use oag_formats::handling::SpeedClass;
-
     let stats = oag_formats::weapons::parse(
         r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -681,8 +678,9 @@ fn a_zero_spread_still_fires_three() {
         &ShipState::default(),
         &Dimensions::default(),
         &stats,
-        SpeedClass::Venom,
-    );
+        "VENOM",
+    )
+    .expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
     for (_, velocity) in shots {
         assert!(velocity.is_finite(), "{velocity:?}");
@@ -716,7 +714,7 @@ fn missile_stats() -> oag_formats::weapons::MissileStats {
 fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     let stats = missile_stats();
     let world = wall_at_z(60.0);
-    let class = oag_formats::handling::SpeedClass::Venom;
+    let class = "VENOM";
     let ships: Vec<crate::world::Ship> = Vec::new();
 
     let mut projectiles = Projectiles::new();
@@ -817,7 +815,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
             0,
         ));
     }
-    let class = oag_formats::handling::SpeedClass::Venom;
+    let class = "VENOM";
     let ships: Vec<crate::world::Ship> = Vec::new();
 
     let mut projectiles = Projectiles::new();
@@ -860,7 +858,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
 fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
     let stats = missile_stats();
     let world = empty_world();
-    let class = oag_formats::handling::SpeedClass::Venom;
+    let class = "VENOM";
     let ships: Vec<crate::world::Ship> = Vec::new();
 
     let mut projectiles = Projectiles::new();
@@ -969,7 +967,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             1.0 / 60.0,
             &empty,
             Some(&table),
-            oag_formats::handling::SpeedClass::Venom,
+            "VENOM",
             oag_physics::DamageRules::default(),
             &mut [false; 2],
         );

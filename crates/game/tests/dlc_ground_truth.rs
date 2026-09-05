@@ -268,7 +268,7 @@ fn every_pack_team_loads_a_ship_and_a_full_set_of_handling_stats() {
             source: image.clone(),
             dlc: vec![root.clone()],
             team: Some(team.to_string()),
-            class: oag_physics::SpeedClass::Venom,
+            class: "VENOM".to_string(),
             ..race::Options::default()
         })
         .unwrap_or_else(|e| panic!("loading {team} off {IMAGE} with the packs: {e:#}"));
@@ -280,15 +280,15 @@ fn every_pack_team_loads_a_ship_and_a_full_set_of_handling_stats() {
         // Every speed class, not just the one loaded: a stats file short a
         // `<Class>` would load here and fail the moment a player changed the
         // class, which is the wrong place to find out.
-        for class in oag_physics::SpeedClass::ALL {
+        for class in oag_title::SpeedClasses::PULSE_LADDER {
             race::load(&race::Options {
                 source: image.clone(),
                 dlc: vec![root.clone()],
                 team: Some(team.to_string()),
-                class,
+                class: (*class).to_string(),
                 ..race::Options::default()
             })
-            .unwrap_or_else(|e| panic!("loading {team} in {class:?}: {e:#}"));
+            .unwrap_or_else(|e| panic!("loading {team} in {class}: {e:#}"));
         }
     }
 }

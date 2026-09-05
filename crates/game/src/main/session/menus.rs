@@ -631,8 +631,15 @@ impl Session {
                             .unwrap_or("this source's own default"),
                     ),
                 }
-                if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
-                    race_options.class = class;
+                // Carried as a **name**. The row this came from was built out
+                // of the booted title's own ladder (or, in RACE REMIX, the
+                // union of the mounted titles'), so a rung outside
+                // `oag_physics::SpeedClass`'s four - Pure's `VECTOR` - survives
+                // to the race instead of being dropped here. An empty setting
+                // leaves the previous class in place, as it always did.
+                let class = self.settings.race.class.trim();
+                if !class.is_empty() {
+                    race_options.class = class.to_string();
                 }
                 // The mode itself was already resolved above, before the
                 // circuit - see the comment there.

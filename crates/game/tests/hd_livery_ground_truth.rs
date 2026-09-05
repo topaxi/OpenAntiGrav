@@ -38,7 +38,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -61,7 +60,7 @@ fn load() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         // Deliberately empty, exactly as in the PSP file: `load` then reads the
         // disc's own plugin definition, which is the path `--race`, a capture
@@ -255,7 +254,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     let chosen = teams.last().expect("a team").id.clone();
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         team: Some(chosen.clone()),
         ..race::Options::default()

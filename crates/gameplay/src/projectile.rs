@@ -484,7 +484,7 @@ impl Projectiles {
         ships: &[crate::world::Ship],
         missile: Option<&oag_formats::weapons::MissileStats>,
         trigger_radii: TriggerRadii,
-        class: oag_formats::handling::SpeedClass,
+        class: &str,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
 
@@ -516,8 +516,18 @@ impl Projectiles {
             // would be one number written twice, and the second one is what goes
             // wrong.
             let age = MAX_FLIGHT_SECONDS - projectile.lifetime;
-            let pinned_kmh = missile.filter(|_| guided).map(|stats| {
-                missile::speed_kmh(projectile.launch_speed_kmh, stats.speed_for(class), age)
+            // `None` where the file authors a speed *per* class and this
+            // race's rung is outside them - the missile then flies on its
+            // integrated velocity rather than on a ramp borrowed from some
+            // other rung. Unreachable on every measured disc: the only ladder
+            // with a fifth rung is Pure's, and Pure authors one
+            // class-independent speed per weapon.
+            let pinned_kmh = missile.filter(|_| guided).and_then(|stats| {
+                Some(missile::speed_kmh(
+                    projectile.launch_speed_kmh,
+                    stats.speed_for_named(class)?,
+                    age,
+                ))
             });
 
             let from = projectile.position;
@@ -802,7 +812,7 @@ pub fn step<R: Raycaster + ?Sized>(
     dt: f32,
     raycaster: &R,
     weapons: Option<&oag_formats::weapons::WeaponStats>,
-    class: oag_formats::handling::SpeedClass,
+    class: &str,
     rules: oag_physics::DamageRules,
     absorbed: &mut [bool],
 ) -> [Option<Impact>; MAX_PROJECTILES] {

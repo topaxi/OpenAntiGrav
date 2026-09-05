@@ -40,7 +40,6 @@ use std::path::{Path, PathBuf};
 use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
-use oag_physics::SpeedClass;
 
 /// Long enough that the craft is genuinely up to speed before a test measures
 /// anything.
@@ -78,7 +77,7 @@ fn single_race() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })

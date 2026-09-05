@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_physics::{Raycaster, SpeedClass};
+use oag_physics::Raycaster;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -53,7 +53,7 @@ fn the_reversed_grid_lands_on_the_track_too() {
     let Some(image) = image() else { return };
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         track: Some(r"Data\Environments\16_Track\track_reversed.vex".to_string()),
         opponents: true,
         ..race::Options::default()

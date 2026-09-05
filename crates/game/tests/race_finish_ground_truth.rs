@@ -51,7 +51,6 @@ use std::path::{Path, PathBuf};
 
 use oag_game::race;
 use oag_gameplay::InputSnapshot;
-use oag_physics::SpeedClass;
 
 /// Ticks to give the race before calling it stuck: a little over eight minutes
 /// at the fixed 60 Hz, where a Venom-class lap of the default circuit runs
@@ -81,7 +80,7 @@ fn autopiloted_race() -> Option<race::Race> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })

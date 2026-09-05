@@ -30,7 +30,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -53,7 +52,7 @@ fn load() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         // Deliberately empty: `load` then reads the disc's own plugin
         // definition, which is the path `--race`, a capture and this test all
@@ -180,7 +179,7 @@ fn the_zone_hull_carries_its_own_nozzle_too() {
     };
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
         opponent_teams: Vec::new(),
         ..race::Options::default()
@@ -220,7 +219,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     let chosen = teams.last().expect("a team").id.clone();
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         team: Some(chosen.clone()),
         ..race::Options::default()

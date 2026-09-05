@@ -20,7 +20,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -49,7 +48,7 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         seed: Some(seed),

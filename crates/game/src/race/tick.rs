@@ -178,7 +178,7 @@ impl Race {
             self.dt,
             &self.collision,
             self.weapons.as_ref(),
-            super::to_format_class(self.class),
+            &self.class,
             damage_rules,
             &mut absorbed,
         );

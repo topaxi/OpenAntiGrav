@@ -34,7 +34,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// One image, or `None` with a printed reason when it is not present.
 fn image(name: &str) -> Option<PathBuf> {
@@ -58,7 +57,7 @@ fn load(mode: oag_race::Mode) -> Option<race::Loaded> {
     Some(
         race::load(&race::Options {
             source: path.display().to_string(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode,
             ..race::Options::default()
         })
@@ -474,7 +473,7 @@ fn a_title_with_no_zone_table_leaves_every_albedo_alone() {
     };
     let loaded = race::load(&race::Options {
         source: path.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
         ..race::Options::default()
     })

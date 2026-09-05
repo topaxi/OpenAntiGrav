@@ -448,7 +448,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) dlc: Vec<String>,
 
-    /// The speed class: venom, flash, rapier or phantom.
+    /// The speed class: venom, flash, rapier or phantom - or vector, which
+    /// only Wipeout Pure authors.
+    ///
+    /// Checked here against every ladder measured so far, which is
+    /// spell-checking rather than availability: whether *this* source's files
+    /// author the rung is settled when the race loads, and a source that does
+    /// not names the ladder it does carry.
     #[arg(long, default_value = "venom")]
     pub(crate) class: String,
 

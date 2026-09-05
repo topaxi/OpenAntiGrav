@@ -28,7 +28,6 @@
 //!    cannot open.
 
 use oag_game::{race, remix};
-use oag_physics::SpeedClass;
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
@@ -221,7 +220,7 @@ fn a_team_variant_races_on_both_join_shapes() {
         let loaded = load(race::Options {
             source: image.display().to_string(),
             team: Some("Assegai_c1".to_string()),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             opponents: false,
             ..race::Options::default()
         });
@@ -236,7 +235,7 @@ fn a_team_variant_races_on_both_join_shapes() {
         let loaded = load(race::Options {
             source: track_source.display().to_string(),
             team: Some(r"Auricom2048\1".to_string()),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             opponents: false,
             ..race::Options::default()
         });
@@ -275,7 +274,7 @@ fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
     let loaded = load(race::Options {
         source: source.display().to_string(),
         team: Some("Triakis_n1".to_string()),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         opponents: false,
         ..race::Options::default()
     });

@@ -349,7 +349,7 @@ fn the_circuit_load_runs_on_a_worker_and_names_what_it_is_reading() {
     };
     let options = oag_game::race::Options {
         source: image.display().to_string(),
-        class: oag_physics::SpeedClass::Venom,
+        class: "VENOM".to_string(),
         track: Some(r"Data\Environments\Talons_Junction\track.vex".to_string()),
         ..oag_game::race::Options::default()
     };

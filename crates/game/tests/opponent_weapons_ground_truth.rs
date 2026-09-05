@@ -42,7 +42,6 @@ use std::path::{Path, PathBuf};
 
 use oag_formats::weapons::Weapon;
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -67,7 +66,7 @@ fn single_race() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })

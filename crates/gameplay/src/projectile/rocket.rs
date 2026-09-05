@@ -85,19 +85,19 @@ pub fn launch(
     state: &ShipState,
     dimensions: &Dimensions,
     stats: &RocketStats,
-    class: oag_formats::handling::SpeedClass,
-) -> [(Vec3, Vec3); ROCKET_SHOTS] {
+    class: &str,
+) -> Option<[(Vec3, Vec3); ROCKET_SHOTS]> {
     let forward = state.body.forward();
     let up = state.body.up();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = (stats.speed_for(class) + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
+    let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
 
     // The original's own order. A zero `spread` collapses all three onto the
     // same ray rather than erroring: that is a file that authors no fan, not a
     // broken weapon.
-    [0.0, stats.spread, -stats.spread].map(|angle| {
+    Some([0.0, stats.spread, -stats.spread].map(|angle| {
         let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
         (nose, direction * speed)
-    })
+    }))
 }

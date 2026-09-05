@@ -49,7 +49,6 @@
 
 use oag_game::{catalogue, race};
 use oag_gameplay::input::Button;
-use oag_physics::SpeedClass;
 use oag_title::ZoneCircuit;
 use std::path::{Path, PathBuf};
 
@@ -214,7 +213,7 @@ fn every_zone_circuit_pulse_offers_loads_as_a_zone_race() {
     for circuit in &offered {
         let loaded = race::load(&race::Options {
             source: source.clone(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::Zone,
             track: Some(circuit.entry_name()),
             ..race::Options::default()
@@ -232,7 +231,7 @@ fn every_zone_circuit_pulse_offers_loads_as_a_zone_race() {
         // an equality here would have been a claim it does not.
         let racing = race::load(&race::Options {
             source: source.clone(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::TimeTrial,
             track: Some(circuit.entry_name()),
             ..race::Options::default()
@@ -316,7 +315,7 @@ fn a_zone_race_and_a_time_trial_load_different_environments() {
     let load_as = |mode| {
         race::load(&race::Options {
             source: source.clone(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode,
             track: Some(race_track.to_string()),
             ..race::Options::default()
@@ -618,7 +617,7 @@ fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
         // report line.
         let racing = race::load(&race::Options {
             source: source.clone(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::TimeTrial,
             track: Some(race_track.to_string()),
             ..race::Options::default()
@@ -630,7 +629,7 @@ fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
         // the shape of the bug.
         let zoning_the_race_circuit = race::load(&race::Options {
             source: source.clone(),
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::Zone,
             track: Some(race_track.to_string()),
             ..race::Options::default()
@@ -659,7 +658,7 @@ fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
         // rewritten.
         let zoning_a_zone_circuit = race::load(&race::Options {
             source,
-            class: SpeedClass::Venom,
+            class: "VENOM".to_string(),
             mode: oag_race::Mode::Zone,
             track: Some(own_zone_track.to_string()),
             ..race::Options::default()
@@ -696,7 +695,7 @@ fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
 
     let racing = race::load(&race::Options {
         source: source.clone(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::TimeTrial,
         track: Some(race_track.to_string()),
         ..race::Options::default()
@@ -705,7 +704,7 @@ fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
 
     let zoning_the_race_circuit = race::load(&race::Options {
         source: source.clone(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
         track: Some(race_track.to_string()),
         ..race::Options::default()
@@ -732,7 +731,7 @@ fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
     let own_zone_track = oag_hd::race::ZONE_TRACK_2;
     let zoning_a_zone_circuit = race::load(&race::Options {
         source,
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
         track: Some(own_zone_track.to_string()),
         ..race::Options::default()
@@ -914,7 +913,7 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
 
     let loaded = race::load(&race::Options {
         source: source.clone(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Zone,
         ..race::Options::default()
     })

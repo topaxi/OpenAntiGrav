@@ -27,7 +27,6 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_physics::SpeedClass;
 use oag_render::mesh;
 
 fn image() -> Option<PathBuf> {
@@ -60,7 +59,7 @@ fn load_track(track: Option<&str>) -> Option<race::Loaded> {
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         track: track.map(str::to_string),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         opponent_teams: Vec::new(),
         ..race::Options::default()

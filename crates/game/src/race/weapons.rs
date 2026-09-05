@@ -200,12 +200,17 @@ impl Race {
                     // `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`. The
                     // order is the original's, and it matters: it decides which
                     // slot each rocket lands in, and the slot is hashed state.
-                    let shots = oag_gameplay::projectile::launch(
+                    // `None` where the table authors a speed per class and
+                    // this race's rung is outside them: no shot, rather than a
+                    // shot at some other rung's speed.
+                    let Some(shots) = oag_gameplay::projectile::launch(
                         &ship.physics,
                         &ship.handling.dimensions,
                         &stats,
-                        to_format_class(self.class),
-                    );
+                        &self.class,
+                    ) else {
+                        return;
+                    };
                     // Spent on the *first* shot getting away. A partial volley
                     // is better than a pickup that survives having fired two of
                     // three, and the array cannot fill from one press in a race
@@ -238,12 +243,14 @@ impl Race {
                     // (`0x0886a868`) spawns once and clears its own request
                     // bit; the `<Stats>` carry no `spread` to fan a volley
                     // with. See `oag_gameplay::projectile::plasma::launch`.
-                    let (position, velocity) = oag_gameplay::projectile::plasma::launch(
+                    let Some((position, velocity)) = oag_gameplay::projectile::plasma::launch(
                         &ship.physics,
                         &ship.handling.dimensions,
                         &stats,
-                        to_format_class(self.class),
-                    );
+                        &self.class,
+                    ) else {
+                        return;
+                    };
                     if !self.world.projectiles.spawn(
                         oag_formats::weapons::Weapon::Plasma,
                         position,
@@ -278,13 +285,15 @@ impl Race {
                     // **One blade, twenty degrees off the nose, side chosen by
                     // a coin.** See `oag_gameplay::projectile::shuriken::launch`
                     // and `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
-                    let (position, velocity) = oag_gameplay::projectile::shuriken::launch(
+                    let Some((position, velocity)) = oag_gameplay::projectile::shuriken::launch(
                         &physics,
                         &dimensions,
                         &stats,
-                        to_format_class(self.class),
+                        &self.class,
                         &mut self.world.rng,
-                    );
+                    ) else {
+                        return;
+                    };
                     if !self
                         .world
                         .projectiles
@@ -507,7 +516,7 @@ impl Race {
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
-            to_format_class(self.class),
+            &self.class,
         );
         oag_gameplay::projectile::missile::lock(
             &self.world.ships[..count],
@@ -580,7 +589,7 @@ impl Race {
             &ship.physics,
             &ship.handling.dimensions,
             stats,
-            to_format_class(self.class),
+            &self.class,
         );
         // The lock is taken from the **nose**, where the missile actually starts,
         // rather than from the craft's centre: the near bound of the authored

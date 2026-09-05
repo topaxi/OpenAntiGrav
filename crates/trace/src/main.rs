@@ -16,9 +16,11 @@
 //! Traces are derived game data and live under `data/traces/`, which is
 //! gitignored; nothing here can run in CI.
 
+mod loader;
 mod locator;
 mod logging;
 
+use loader::{checked_class, load};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
@@ -26,12 +28,12 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use log::{info, warn};
 use oag_core::math::Vec3;
-use oag_formats::{collision, handling, track, vex};
+use oag_formats::{track, vex};
 use oag_gameplay::ControlScheme;
+use oag_gameplay::Ship;
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
-use oag_gameplay::{Ship, collision_world, handling_for};
-use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster, SpeedClass};
+use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster};
 use oag_pulse as pulse;
 use oag_race::Course;
 use oag_trace::compare::Tolerances;
@@ -700,8 +702,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         );
     }
 
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    let class = checked_class(&args.class)?;
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
     let samples = locator::load_samples(Some(&args.source), &args.track)?;
     let start_position = load_start_position(&args.source, &args.track)?;
@@ -837,8 +838,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     if args.every == 0 {
         bail!("--every must be at least 1");
     }
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    let class = checked_class(&args.class)?;
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
     let blob = read_track_blob(&args.source, &args.track)?;
     let ai = ai_of(&blob, &args.track)?;
@@ -1399,8 +1399,7 @@ fn run(args: RunArgs) -> Result<()> {
         bail!("{}: no ticks in the trace", args.trace.display());
     }
 
-    let class = SpeedClass::from_name(&args.class)
-        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    let class = checked_class(&args.class)?;
     let (handling, collision) = match &args.source {
         Some(source) => load(source, &args.track, &args.team, class)?,
         None => {
@@ -1529,75 +1528,6 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
         airbrake_left: args.airbrake_left.unwrap_or(0.0),
         airbrake_right: args.airbrake_right.unwrap_or(0.0),
     }))
-}
-
-/// Reads the handling parameters and the track's collision geometry off a disc.
-///
-/// The same two reads `oag_game::race::load` does, without the spline, the models
-/// or the camera: a comparison run is seeded from the recording rather than from
-/// a grid slot, so it needs nothing that decides where a ship starts.
-///
-/// **Which archives the source has, not which archives a PSP disc has.** Both
-/// entry names below are spelled the same on both releases, so the layout is the
-/// whole of the difference - [`oag_assets::Archives`] finds `Data.wad` or `WADS2.WAD`
-/// by name and searches the companion archive too. This deliberately prints
-/// nothing extra: `run` output is compared byte-for-byte against earlier
-/// captures, so the layout appears only in an error's context.
-fn load(
-    source: &str,
-    track: &str,
-    team: &str,
-    class: SpeedClass,
-) -> Result<(Handling, CollisionWorld)> {
-    let mut archives = pulse::open(source)?;
-    let where_from = archives.layout.describe();
-
-    let track_blob = archives
-        .read_name(track)
-        .with_context(|| format!("reading {track} out of {where_from}"))?;
-    let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{track}: {e}"))?;
-    let collision = collision_world(&nodes);
-    info!(
-        "{track}: {} collision node(s) -> {} collider(s)",
-        nodes.len(),
-        collision.colliders().len()
-    );
-
-    let stats_name = handling::entry_name(team);
-    let stats_blob = archives
-        .read_name(&stats_name)
-        .with_context(|| format!("reading {stats_name} out of {where_from}"))?;
-    let stats =
-        handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
-    // The speed-pad tunables are engine-wide rather than per team, so they come
-    // out of a second file. A capture that crosses a pad is compared against a
-    // force law that has them; without this the replay would be missing step 15
-    // entirely and the difference would be read as a fit error somewhere else.
-    let global = archives
-        .read_name(handling::GLOBAL_ENTRY)
-        .ok()
-        .and_then(|blob| handling::global_from_blob(&blob).ok())
-        .flatten();
-    if global.is_none() {
-        warn!(
-            "{}: unreadable, so this replay applies no speed-pad boost",
-            handling::GLOBAL_ENTRY
-        );
-    }
-    let pad_tunables = global
-        .map(|global| global.speedup_pads(oag_gameplay::to_format_class(class)))
-        .unwrap_or_default();
-    // `<Special speedpad_jump>` rides along: a capture taken with the pitch axis
-    // held over a pad tilts, and a replay that dropped the field would read that
-    // as a force-law error.
-    let special = global.map(|global| global.special).unwrap_or_default();
-    let handling = handling_for(&stats, class, pad_tunables, special);
-    info!(
-        "{stats_name}: team {:?}, {class:?} class, mass {}, ride_height {}",
-        stats.team, handling.physical.mass, handling.antigrav.ride_height
-    );
-
-    Ok((handling, collision))
 }
 
 fn read_script(path: &Path) -> Result<Script> {

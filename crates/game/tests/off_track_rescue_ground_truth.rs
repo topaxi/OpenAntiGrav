@@ -30,7 +30,6 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
-use oag_physics::SpeedClass;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -77,7 +76,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         track: Some(track.to_string()),
@@ -182,7 +181,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     };
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: SpeedClass::Venom,
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some("Data\\Environments\\14_Track\\track_reversed.vex".to_string()),
         ..race::Options::default()
@@ -268,7 +267,7 @@ fn not_every_circuit_authors_reset_geometry() {
             let entry = format!("Data\\Environments\\{track}\\{variant}");
             let Ok(loaded) = race::load(&race::Options {
                 source: image.display().to_string(),
-                class: SpeedClass::Venom,
+                class: "VENOM".to_string(),
                 mode: oag_race::Mode::SingleRace,
                 track: Some(entry.clone()),
                 ..race::Options::default()
