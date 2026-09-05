@@ -1262,9 +1262,20 @@ naive `0x0027bf7c`; `search_instructions` returns nothing for `addiu` with
 `-0x4084`, nothing for `lui` with `0x8a8`, and `search_byte_patterns` finds no
 stored pointer either - yet the reference exists and is an ordinary
 `lui`/`addiu` pair. Calibrate before believing an empty result: `%s\Ship.vex`
-and `Data\Psys\%s.POB`, whose consumers are known, come back just as empty, so
-**no path template in this binary has a working xref** and an empty result
-proves nothing about whether a string is used.
+(`0x08a7ba64`) and `Data\Psys\%s.POB` (`0x08a884dc`), whose consumers are
+known, come back just as empty on their naive forms too, so **no path template
+in this binary has a working xref** and an empty result proves nothing about
+whether a string is used.
+
+**Check the naive address against the section table before you trust it**, and
+this one nearly went wrong here: `0x08a884dc - 0x08804000` is `0x002844dc`, and
+mis-borrowing one digit gives `0x000844dc`, which is inside `.text`.
+`.rodata` runs `0x274000` to `0x2ac5e4` in `psp-pulse-usa`, so a naive address
+for a `.rodata` string that lands below `0x274000` means the *subtraction* is
+wrong, not that the reference is missing - and it produces a confident empty
+result on an address that never could have matched. Same rule for `.data`
+(`0x2ac600`) and `.text` (below `0x272a3c`): the naive value has to land in the
+section the symbol actually lives in.
 
 **What worked was scanning the ELF outside Ghidra, and it is quick.**
 `BOOT.BIN` is a PRX (`e_type` `0xff80`) whose `.text` is at file offset `0x80`,

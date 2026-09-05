@@ -17,8 +17,10 @@ raceable hull's path; that is still the team directory plus `Ship.vex`.
 The format side is
 [`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`](../docs/ghidra/functions/psp-pulse-usa/ship-skin.md),
 new with this thread. In one line: **a skin is a texture swap on the same
-geometry, not a second model.** A `.dat` is a `0x20` header (team name, `"ms"`
-tag) then four palette-plus-pixels blocks - `0x20`/`0x2060`/`0x40a0`/`0x60e0`,
+geometry, not a second model.** A `.dat` is a `0x20` header (the team's display
+name, NUL-terminated - the `"ms"` tag both earlier readings recorded is not a
+field, it is residue in a reused export buffer, and validating it would reject
+AG Systems) then four palette-plus-pixels blocks - `0x20`/`0x2060`/`0x40a0`/`0x60e0`,
 three of them 128x128 4bpp and the last 64x64 4bpp, sixteen `RGBA8` entries
 each - which the loader uploads over the hull model's `texture1.tga` through
 `texture4.tga`, matched by name, case-insensitively. Every shipped file is
@@ -57,10 +59,17 @@ arithmetic closes with nothing left over against all sixteen real files.
   swizzle flag, which would move each tile. Settle it before drawing the
   composite, or skip the composite (it is only reached for models that have a
   `texture4.tga` at all, which is the race hull and not the front-end preview).
-- **What selects `Eliminator` is a mode check, not an unlock - probably.** The
-  loader picks `ship_eliminator.dat` when a global compares equal to `0x12`,
-  which reads as the Eliminator race mode being active; `ship_alt.dat` is the
-  `loyalty`-gated one. Confidence 70 on that split. **Neither global's address
+- **What selects `Eliminator` is a state check, not an unlock.** The loader
+  picks `ship_eliminator.dat` when a global compares equal to `0x12`, and
+  consults no unlock at all on that path; `ship_alt.dat` is the `loyalty`-gated
+  one. Confidence 75 on that split. **What `0x12` denotes is a separate and
+  much weaker claim (55).** "Eliminator race mode" is the natural reading, but
+  there is **no recovered Pulse mode-id table to check it against** -
+  `oag_race::Mode` has no Eliminator variant and the twenty-two documented mode
+  ids are HD's and 2048's, a different engine - and the enclosing function is
+  multiplayer-lobby code, so a lobby game-type id fits the evidence equally
+  well. Do not build a mode gate on this number without checking it first.
+  **Neither global's address
   is resolved**: both fall inside `.text` under the usual base, the tell that
   the relocation base is wrong for them, and they are most likely `$gp`-relative
   (see [the `$gp` thread](a-global-reached-through-gp-has-an-instruction.md)).

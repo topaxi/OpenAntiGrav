@@ -105,8 +105,10 @@ handling globals. The *relationship* above (two tiers, own team below `any`)
 is a format fact and is what's recorded.
 
 **`ship_alt.dat`/`ship_eliminator.dat` are not meshes - they are liveries, and
-the format is decoded.** Each is a `0x20` header (the team name, then an ASCII
-`"ms"` tag) followed by four palette-plus-pixels blocks: three 128x128 and one
+the format is decoded.** Each is a `0x20` header (the team's display name,
+NUL-terminated - **there is no `"ms"` tag**, that reading came from one team
+whose name is exactly eight bytes long, and the bytes after the terminator are
+exporter residue) followed by four palette-plus-pixels blocks: three 128x128 and one
 64x64, every one of them 4 bits per pixel behind its own sixteen-entry `RGBA8`
 palette. All sixteen shipped files are exactly 26912 bytes. The loader matches
 each block against the hull model's own texture names and uploads it in place

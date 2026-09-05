@@ -6,7 +6,8 @@ files at a shape reading: a name, an `"ms"` tag, sixteen `RGBA8` entries at
 `0x20`, then bytes in `0..15`. Paletted image data, dimensions unresolved, no
 loader traced. This page traces the loader and settles all three of the
 questions that were open - what precedes the payload, what the dimensions are,
-and whether it is a texture upload.
+and whether it is a texture upload. It also **retires the `"ms"` tag**, which
+was never a tag at all.
 
 **It is a texture upload.** A skin file is four palette-plus-pixels blocks,
 one per texture slot of the hull model, matched to the model's own texture
@@ -27,9 +28,12 @@ sixteen shipped `.dat` files on `pulse-psp-usa.chd` and against
 | `0x088b34bc` | `MPLobby_UpdateShipPreview_q` | 62 |
 | `0x08a88440` | `g_skin_texture_slot_names` | 88 |
 
-The four texture functions sit in the 85-94 band on the strength of two
-independent confirmations meeting at the byte (below); `Skin_ComposeQuarterAtlas`
-is one band lower because *what* it computes is unambiguous and *what it is
+`Skin_ApplyToModel` and `Texture_UploadPaletted` are in the rubric's 85-94
+band, on the strength of two independent confirmations meeting at the byte
+(below). The other two are deliberately in the 70-84 Probable band and are not
+in the higher one: `Texture_Downsample4bpp` (84) is read off its body and its
+two call sites with no external corroboration, and `Skin_ComposeQuarterAtlas`
+(80) is lower again because *what* it computes is unambiguous and *what it is
 for* is not. `MPLobby_UpdateShipPreview_q` is a sub-70 name and carries the
 rubric's `_q`: it is certainly the site that builds a lobby slot's preview
 ship, but it does several unrelated things in one body, has no `jal` caller to
@@ -45,6 +49,17 @@ returns nothing for the naive form `0x0027bf7c`**, which that section's
 "try the naive address first for a data reference" note predicts should work.
 It does not, for a `.rodata` string: `search_instructions` is likewise empty
 for `addiu`/`-0x4084`, for `lui`/`0x8a8`, and for the literal pointer bytes.
+Two controls whose consumers are already known behave the same way -
+`%s\Ship.vex` (`0x08a7ba64`, naive `0x00277a64`) and `Data\Psys\%s.POB`
+(`0x08a884dc`, naive `0x002844dc`) both return nothing - so **no path template
+in this binary has a working xref**, and an empty result proves nothing about
+whether a string is used.
+
+**Sanity-check the naive address against the section table before believing
+it.** `.rodata` runs `0x274000` to `0x2ac5e4`, so a naive `.rodata` address
+below `0x274000` means the subtraction is wrong, not that the reference is
+missing - a mis-borrowed digit turns `0x002844dc` into `0x000844dc`, which
+lands in `.text` and would have "confirmed" the wrong thing.
 
 What worked was scanning the ELF's own `.text` outside Ghidra. `BOOT.BIN` is a
 PRX (`e_type` `0xff80`) whose `.text` runs `0x0` to `0x272a3c` at file offset
@@ -115,7 +130,7 @@ the last:
 
 | Offset | Size | Content |
 | --- | --- | --- |
-| `0x0000` | `0x20` | header: NUL-terminated team name at `0x00`, ASCII `"ms"` at `0x08`, zero to `0x20` |
+| `0x0000` | `0x20` | header: the team's **display** name, NUL-terminated. Everything after the terminator is exporter residue, not a field - see below |
 | `0x0020` | `0x40` | palette 1 - sixteen `RGBA8` entries |
 | `0x0060` | `0x2000` | texture 1 - 128x128, 4 bits per pixel, two pixels per byte |
 | `0x2060` | `0x40` | palette 2 |
@@ -136,6 +151,38 @@ nothing left over, and a hexdump of `Data\Ships\Assegai\ship_alt.dat` shows a
 run of sixteen `RGBA8` entries beginning at each of `0x20`, `0x2060`, `0x40a0`
 and `0x60e0`. `ship_eliminator.dat` for the same team is byte-for-byte the same
 shape, header included.
+
+### The `"ms"` tag does not exist - it is residue in a reused export buffer
+
+Both earlier shape readings recorded "a two-byte `"ms"` tag" at `0x08`, off
+`Assegai\ship_alt.dat`. That file really does read `Assegai\0ms\0`. But
+`Assegai` is seven characters plus a terminator - exactly eight - so it is the
+one team whose name cannot distinguish a fixed-width field from a terminated
+one. Dumping the header of all eight base teams' `ship_alt.dat` settles it:
+
+| Team | First sixteen header bytes |
+| --- | --- |
+| AG Systems | `AG Systems\0` then zero |
+| Assegai | `Assegai\0` then `ms\0` then zero |
+| EGX | `EGX\0` then zero |
+| Feisar | `Feisar\0` then zero |
+| Goteki | `Goteki\0` then zero |
+| Piranha | `Piranha\0` then zero |
+| Qirex | `Qirex\0` then `a\0` then zero |
+| Triakis | `Triakis\0` then zero |
+
+Six of the eight have nothing after the terminator at all, which alone disposes
+of the tag. The two that do are explained exactly: **AG Systems is ten
+characters and its last two are `ms`**, so writing the shorter `Assegai\0` over
+a buffer that last held `AG Systems\0` leaves `m`, `s` at `0x08` and `0x09`
+untouched. Qirex is the same trick one letter wide - `Piranha`'s `a` at index 6
+survives `Qirex\0`. Nothing reads these bytes; the header is a `0x20`-byte
+field holding one NUL-terminated string and nothing else.
+
+Two consequences for an implementation. **A parser must not validate a tag at
+`0x08`** - it would reject AG Systems, which has real name data there. And the
+string is the team's **display** name, not its directory name: `AG Systems`
+with a space, where the directory is `AG_Systems` with an underscore.
 
 ### There is no dimension field in the file
 
@@ -223,13 +270,25 @@ resource and hands its payload to `Skin_ApplyToModel`. If that load fails it
 falls back: it walks the team node's children for the one named `Normal` and
 rebuilds the path from the generic `%s\%s.dat` template.
 
-So `ship_eliminator.dat` is reached because **a global compared against `0x12`
-holds a particular value**, not because anything was unlocked - which reads as
-the Eliminator race mode being active. That splits what
+So `ship_eliminator.dat` is reached because **a global holds a particular
+value**, not because anything was unlocked. Confidence 90 on that much: an
+equality test against a plain immediate is what selects the file, so the
+selection is state-driven and there is no unlock check anywhere on this path.
+
+**What `0x12` denotes is not established, and is weaker than it looks.**
+Eliminator being a race mode makes "the Eliminator mode is active" the natural
+reading, but there is **no recovered Pulse mode-id table to check `0x12`
+against** - `oag-race`'s `Mode` has no Eliminator variant, and the twenty-two
+mode ids that are documented belong to HD and 2048, a different engine. The
+enclosing function is multiplayer-lobby code, so a lobby game-type id is just
+as consistent with the evidence as a race-mode id. Confidence 55 on the mode
+reading; it is a hypothesis to test, not a finding to build on.
+
+What that does settle, at confidence 75, is a split in what
 [`dlc-pack.md`](../../../formats/dlc-pack.md)'s schema left as one question:
-the `Alternative` skin is the `loyalty`-gated one, and the `Eliminator` skin
-looks mode-selected. Confidence 70 on the split, 90 on the mechanical fact
-that a `== 0x12` comparison is what selects the file.
+the two skins are not reached the same way. `Alternative` is the one the
+`loyalty` thresholds gate; `Eliminator` is selected by this state check, which
+never consults an unlock.
 
 **Neither global's address is resolved and neither is written down as one.**
 Both `0x000578b0` (the `0x12` comparison) and the per-slot record array at
