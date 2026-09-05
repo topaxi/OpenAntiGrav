@@ -28,6 +28,7 @@ exits 2 (could not check) rather than 0 or 1.
 
 Usage:
   scripts/check-ghidra-import.py [--url URL] [--program PATH] [--verbose]
+  scripts/check-ghidra-import.py --self-test   # no Ghidra needed
 """
 
 from __future__ import annotations
@@ -166,18 +167,63 @@ def allegrex_programs(url: str) -> tuple[list[str], str]:
     return [p["path"] for p in allegrex], current
 
 
+def verdict(probes: dict[str, str], program: str) -> tuple[bool, list[str]]:
+    """Turn a parsed probe result into a pass/fail and the lines to print.
+
+    Split out from `check` so both branches are exercisable without a running
+    Ghidra - see `--self-test`. The passing branch has never been reachable on
+    this machine, because no PSP database here has a non-empty relocation table
+    yet, and it is the first branch the maintainer will hit after a reimport.
+    """
+    lines: list[str] = []
+
+    if "relocCount" not in probes:
+        lines.append(f"{program}: FAIL - the probe returned no result at all.")
+        lines.append("  Is Ghidra running with GHIDRA_MCP_ALLOW_SCRIPTS=1 in its own environment?")
+        lines.append("  Re-run with --verbose to see what the bridge said.")
+        return False, lines
+
+    reloc = int(probes["relocCount"])
+    functions = probes.get("functionCount", "?")
+
+    if reloc == 0:
+        lines.append(f"{program}: FAIL - relocation table is empty ({functions} functions).")
+        lines.append("  No PSP relocation was applied. Every `jal` target and every")
+        lines.append("  `lui`/`addiu` constant still holds its pre-relocation value, so")
+        lines.append("  xref queries answer 'no references' for callers that plainly exist.")
+        lines.append("  Cause and fix: docs/ghidra/workflow.md, 'Why a PSP import")
+        lines.append("  silently loses every relocation'.")
+        # The secondary probes are the same bug seen from three more angles, so
+        # printing them here would be noise, not information.
+        return False, lines
+
+    lines.append(f"{program}: relocations={reloc} functions={functions}")
+    if program != PULSE_USA:
+        return True, lines
+
+    ok = True
+    if probes.get("hi16", "") == "0x3c110028":
+        ok = False
+        lines.append("  FAIL - 0x0894f6d8 still holds the on-disk `lui` immediate (0x3c110028).")
+    jal_seen = int(probes.get("jalSeen", "0"))
+    jal_ok = int(probes.get("jalOk", "0"))
+    if jal_seen == 0 or jal_ok != jal_seen:
+        ok = False
+        lines.append(f"  FAIL - {jal_seen - jal_ok}/{jal_seen} `jal` targets in")
+        lines.append("    Billboard_ConstructResource do not resolve to a function.")
+    scream = int(probes.get("screamInText", "0"))
+    if scream != 40:
+        ok = False
+        lines.append(f"  FAIL - {40 - scream}/40 g_scream_opcode_table entries fall outside .text.")
+    return ok, lines
+
+
 def check(url: str, program: str, verbose: bool) -> bool:
     args = "PULSE_USA" if program == PULSE_USA else ""
     reply = post(url, "run_script_inline", code=PROBE_SOURCE, program=program, args=args)
     if verbose:
         print(reply)
     probes = parse_probes(reply)
-
-    if "relocCount" not in probes:
-        print(f"{program}: FAIL - the probe returned no result at all.")
-        print("  Is Ghidra running with GHIDRA_MCP_ALLOW_SCRIPTS=1 in its own environment?")
-        print("  Re-run with --verbose to see what the bridge said.")
-        return False
 
     # `run_script_inline` ignores the `program` parameter and runs against
     # whatever program is current, so without this every program in the list
@@ -188,46 +234,73 @@ def check(url: str, program: str, verbose: bool) -> bool:
     if ran_on and ran_on != program:
         raise ProgramNotCurrent(program, ran_on)
 
-    reloc = int(probes["relocCount"])
-    functions = probes.get("functionCount", "?")
-    ok = True
-
-    if reloc == 0:
-        ok = False
-        print(f"{program}: FAIL - relocation table is empty ({functions} functions).")
-        print("  No PSP relocation was applied. Every `jal` target and every")
-        print("  `lui`/`addiu` constant still holds its pre-relocation value, so")
-        print("  xref queries answer 'no references' for callers that plainly exist.")
-        print("  Cause and fix: docs/ghidra/workflow.md, 'Why a PSP import")
-        print("  silently loses every relocation'.")
-    else:
-        print(f"{program}: relocations={reloc} functions={functions}")
-
-    if program != PULSE_USA:
-        return ok
-
-    # These read as noise on a database that already failed the count check -
-    # they are all the same bug seen from three angles - so only report them
-    # when the primary check passed and something is still wrong.
-    if not ok:
-        return ok
-
-    hi16 = probes.get("hi16", "")
-    if hi16 == "0x3c110028":
-        ok = False
-        print("  FAIL - 0x0894f6d8 still holds the on-disk `lui` immediate (0x3c110028).")
-    jal_seen = int(probes.get("jalSeen", "0"))
-    jal_ok = int(probes.get("jalOk", "0"))
-    if jal_seen == 0 or jal_ok != jal_seen:
-        ok = False
-        print(f"  FAIL - {jal_seen - jal_ok}/{jal_seen} `jal` targets in")
-        print("    Billboard_ConstructResource do not resolve to a function.")
-    scream = int(probes.get("screamInText", "0"))
-    if scream != 40:
-        ok = False
-        print(f"  FAIL - {40 - scream}/40 g_scream_opcode_table entries fall outside .text.")
-
+    ok, lines = verdict(probes, program)
+    for line in lines:
+        print(line)
     return ok
+
+
+# Real probe output, copied from a headless run against psp-pulse-usa
+# (data/ghidra-reloc-experiment/afull.log), and the same shape as it would read
+# once the relocation fix is installed.
+BAD_REPLY = """INFO  OagCheckImport.java> PROBE path=/psp-pulse-usa/BOOT.BIN (GhidraScript)
+INFO  OagCheckImport.java> PROBE imageBase=08804000 (GhidraScript)
+INFO  OagCheckImport.java> PROBE functionCount=10679 (GhidraScript)
+INFO  OagCheckImport.java> PROBE relocCount=0 (GhidraScript)
+INFO  OagCheckImport.java> PROBE hi16=0x3c110028 (GhidraScript)
+INFO  OagCheckImport.java> PROBE jalSeen=4 jalOk=0 (GhidraScript)
+INFO  OagCheckImport.java> PROBE screamInText=0 (GhidraScript)
+"""
+
+GOOD_REPLY = BAD_REPLY.replace("relocCount=0", "relocCount=93443") \
+    .replace("hi16=0x3c110028", "hi16=0x3c1108a9") \
+    .replace("jalSeen=4 jalOk=0", "jalSeen=4 jalOk=4") \
+    .replace("screamInText=0", "screamInText=40")
+
+
+def self_test() -> int:
+    """Exercise both verdict branches on recorded probe output."""
+    failures = 0
+
+    bad = parse_probes(BAD_REPLY)
+    assert bad["path"] == PULSE_USA, bad
+    assert bad["relocCount"] == "0", bad
+    ok, lines = verdict(bad, PULSE_USA)
+    if ok or "relocation table is empty" not in "\n".join(lines):
+        print("FAIL: an empty relocation table did not fail the check")
+        failures += 1
+
+    good = parse_probes(GOOD_REPLY)
+    assert good["hi16"] == "0x3c1108a9", good
+    assert good["jalOk"] == "4", good
+    ok, lines = verdict(good, PULSE_USA)
+    if not ok:
+        print("FAIL: a relocated database did not pass:\n  " + "\n  ".join(lines))
+        failures += 1
+
+    # Each secondary probe must be able to fail on its own, or it is decoration.
+    for key, broken in (
+        ("hi16=0x3c1108a9", "hi16=0x3c110028"),
+        ("jalSeen=4 jalOk=4", "jalSeen=4 jalOk=3"),
+        ("screamInText=40", "screamInText=39"),
+    ):
+        ok, _ = verdict(parse_probes(GOOD_REPLY.replace(key, broken)), PULSE_USA)
+        if ok:
+            print(f"FAIL: {broken} did not fail the check")
+            failures += 1
+
+    # A non-pulse program must not be judged on pulse-only addresses.
+    other = "/psp-pure-eu/BOOT.BIN"
+    ok, _ = verdict(parse_probes(BAD_REPLY.replace("relocCount=0", "relocCount=1")), other)
+    if not ok:
+        print("FAIL: a non-pulse program was judged on psp-pulse-usa's addresses")
+        failures += 1
+
+    if failures:
+        print(f"{failures} self-test failure(s)")
+        return 1
+    print("self-test: both verdict branches and all three secondary probes behave")
+    return 0
 
 
 def main() -> int:
@@ -235,7 +308,15 @@ def main() -> int:
     ap.add_argument("--url", default=DEFAULT_URL, help="GhidraMCP bridge URL")
     ap.add_argument("--program", help="program path, e.g. /psp-pulse-usa/BOOT.BIN")
     ap.add_argument("--verbose", action="store_true", help="print the raw bridge reply")
+    ap.add_argument(
+        "--self-test",
+        action="store_true",
+        help="check the pass/fail logic against recorded probe output, no Ghidra needed",
+    )
     opts = ap.parse_args()
+
+    if opts.self_test:
+        return self_test()
 
     try:
         allegrex, current = allegrex_programs(opts.url)

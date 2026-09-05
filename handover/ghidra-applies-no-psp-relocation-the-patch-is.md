@@ -57,6 +57,16 @@ Two claims this killed, both of which had been carried forward as fact:
   should be unchanged - the image base is the same and nothing about
   relocations moves a function - but `just apply-names` refuses rows whose
   evidence does not match, so a reimport is the moment to find out.
+- **Three evidence pages quote raw pre-relocation constants as evidence**, and
+  a correct reimport makes those constants stop appearing in the database.
+  Their `names.tsv` rows will still pass (they key on address and name), so
+  nothing will fail - the pages just quietly start describing values no longer
+  visible. Needs a post-reimport pass:
+  [sound.md](../docs/ghidra/functions/psp-pulse-usa/sound.md)'s `0x0018xxxx`
+  table, [shield.md](../docs/ghidra/functions/psp-pulse-usa/shield.md)'s
+  `0x00277c40`, and
+  [billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md)'s
+  `func_0x0013ff08`.
 
 ## Next Steps
 

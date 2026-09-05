@@ -151,8 +151,6 @@ if [[ $apply_patch -eq 1 ]]; then
     patch -d "$checkout_dir" -p1 -i "$patch_path"
 else
     step "Skipping the local patch (--no-patch)"
-    echo "warning: PSP imports will load with no relocations applied if" >&2
-    echo "         ghidra-emotionengine-reloaded is also installed." >&2
 fi
 
 step "Building"
@@ -190,10 +188,19 @@ cp -f "$zip_path" "$final"
 
 step "Done"
 
+if [[ $apply_patch -eq 1 ]]; then
+    patch_state="with $(basename "$patch_path")"
+else
+    patch_state="WITHOUT the local patch - PSP imports will load with no
+            relocations applied if ghidra-emotionengine-reloaded is also
+            installed. See docs/ghidra/workflow.md."
+fi
+
 cat <<EOF
 Extension: $final
 Declares:  version=$declared  (matches Ghidra $ghidra_version)
 Built from: $(git -C "$checkout_dir" rev-parse --short HEAD)
+Patched:   $patch_state
 
 Install it:
   1. Ghidra: File > Install Extensions > + > select the zip above
