@@ -439,7 +439,7 @@ reported success with zero instructions decoded rather than an error.
 
 **The blocker was the address, not the code.** Those four values are raw
 `.text`-relative offsets the table stores unrelocated - the same wart
-[`workflow.md`](../../workflow.md#known-imperfect-and-why-it-does-not-block)
+[`workflow.md`](../../workflow.md#reading-an-unrelocated-database-until-it-is-reimported)
 already documents for `jal` targets and manually-found jump-table bases on
 `psp-pulse-usa`, one shape further: a data table of function pointers the
 auto-analyzer never walked, so nothing patched its entries to real

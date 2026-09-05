@@ -1065,7 +1065,7 @@ Compared byte-for-byte against `pulse-psp-usa.chd`'s `Data.wad`, per
   starts at `piVar5 = &DAT_002ad10c` and walks it as a null-terminated pointer
   list (`piVar5 = piVar5 + 1` each iteration until `*piVar5 == 0`) - resolving
   the pseudo-address the same way this project's own `psp-pulse-usa` warts do
-  (`real = pseudo + 0x08804000`, [`workflow.md`](../ghidra/workflow.md#known-imperfect-and-why-it-does-not-block))
+  (`real = pseudo + 0x08804000`, [`workflow.md`](../ghidra/workflow.md#reading-an-unrelocated-database-until-it-is-reimported))
   gives `0x002ad10c + 0x08804000 = 0x08ab110c` - the exact 11-pointer table
   address this bullet already names from the string-search side, now also
   read off the function's own instructions. No direct caller was found for

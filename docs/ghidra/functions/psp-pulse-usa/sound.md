@@ -449,7 +449,7 @@ PSP** - the four handler addresses it derived from `g_scream_opcode_table`
 `decompile_function`, `disassemble_function` and `create_function` alike, and
 `disassemble_bytes` reported success with zero instructions decoded.
 
-**The blocker was the same wart [`workflow.md`](../../workflow.md#known-imperfect-and-why-it-does-not-block)
+**The blocker was the same wart [`workflow.md`](../../workflow.md#reading-an-unrelocated-database-until-it-is-reimported)
 already names for `jal` targets and manually-found jump-table bases, one
 shape further: a data table of function pointers the auto-analyzer never
 walked.** `g_scream_opcode_table`'s 40 entries read back as `0x0018xxxx`-range

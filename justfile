@@ -708,3 +708,10 @@ check-size:
 # it needs to make them. CI has no Ghidra, so without this nothing reads the file
 check-names:
     python3 scripts/check-ghidra-names.py
+
+# Assert the open PSP program actually had its relocations applied. Deliberately
+# not part of `just check`: it needs a running Ghidra, which CI does not have.
+# Three sessions each rediscovered the same empty relocation table by hand
+# before anything measured it - see docs/ghidra/workflow.md
+check-ghidra-import *ARGS:
+    python3 scripts/check-ghidra-import.py {{ARGS}}
