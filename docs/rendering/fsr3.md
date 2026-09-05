@@ -201,6 +201,28 @@ a mip chain over `(log(luma), luma)` down to 1x1 and the
 `ComputeAutoExposureFromLavg` smoothing - goes back into `luma_pyramid.wgsl`,
 which says so. It is left out rather than left half-built.
 
+### The game decides when a reset happens, not the port
+
+Nothing here schedules a reset on its own initiative - `Fsr3::render` only
+ever does what `Temporal::reset` tells it to, and that flag is produced
+entirely on the `oag-game` side, by `race::scene::motion::CutWatch`. It
+observes `Race::camera_view()` and the player's own `Race::respawns()` once a
+frame and reports a cut whenever either has moved since the last observation:
+a `SELECT`-cycled view change (`Race::set_camera_view`), or the player's craft
+being teleported back onto the track after a `Reset` contact. Both hand the
+next frame's resolve a history of a different shot than the one it is about
+to draw, the same way the sequence's opening frame does, and
+`scene::motion::record_frame` throws the history away for exactly the same
+reason in both cases: `reset: phase == 0 || cut`.
+
+Deliberately the *player's* respawn count and not the field's: the camera
+being watched is the player's, and an opponent recovering elsewhere on the
+circuit is not a cut in this shot. Pinned by `CutWatch`'s own unit tests
+beside `record_frame`, which need no adapter - this is a pure book-keeping
+question, not a pixel one. What a mid-race view switch or respawn actually
+looks like through FSR 3.1 is unread; see the handover thread's open items
+for playing it.
+
 ### A reset clears the accumulation it reads, as a render pass
 
 Not a deviation in *what* happens but in *how*, and recorded because the first
