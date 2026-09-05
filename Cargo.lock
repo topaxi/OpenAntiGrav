@@ -2010,6 +2010,7 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-pulse",
+ "oag-pure",
  "re_rav1d",
 ]
 

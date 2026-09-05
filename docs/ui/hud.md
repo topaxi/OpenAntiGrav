@@ -682,7 +682,12 @@ Recorded so none of this reads as undiscovered work.
   `Data\HUD\Cockpit_321GO.vex` - Zone's own copy is byte-for-byte the same
   block as Arcade's. Pure's `Arcade_HUD.xml` and `Zone_HUD.xml` agree the same
   way on a single model, `Data\HUD\Ready_GO.vex` (Pure has no separate cockpit
-  entry in either file). **HD/Fury agrees too, and more thoroughly than
+  entry in either file) - measured in more depth in
+  [`rendering/start-gantry.md`](../rendering/start-gantry.md#wipeout-pure-no-track-side-gantry-at-all-confidence-85)'s
+  Pure section, since it turned out to be the nearest thing to a gantry this
+  title ships: 3 static mesh nodes, an all-white varying-alpha palette, and a
+  per-node `TEXOFFSET` scroll unrelated to the track-side gantry's per-vertex
+  UV-cell walk. **HD/Fury agrees too, and more thoroughly than
   either PSP title**: its `hud_ready_go.xml` fragment - included by every
   mode's own HUD file via `LoadXML SrcRel`, per this page's own "`SrcRel`
   resolves against the including file's directory" section above, which
