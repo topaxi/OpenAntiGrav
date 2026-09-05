@@ -232,6 +232,61 @@ def candidates(blob, base=0, stride=4):
                 yield (base + at, order, hit[0], hit[1], candidate)
 
 
+#: The RSX command header for a count-17 `NV4097_SET_TRANSFORM_CONSTANT_LOAD`:
+#: `((4*4 + 1) << 18) | 0x1efc`, a register-index word followed by a whole
+#: `float4x4` in one packet - see `Rsx_UploadVertexConstantBlock` (`0x005c18d8`)
+#: in `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` and "A matrix in a
+#: FIFO is not sixteen consecutive floats - except when it is" in
+#: `docs/reverse-engineering/rpcs3-capture.md`. This is the *only* packet
+#: shape decoded here: the count-5 form (`0x00141efc`, one `vec4` at a time,
+#: rows 24 bytes apart) is a different emitter and nothing needs it yet - a
+#: finder that only understands this one shape says so rather than looking
+#: general.
+TRANSFORM_CONSTANT_LOAD_HEADER = 0x00441efc
+
+#: Header word (4 bytes) plus register-index word (4 bytes) precede the
+#: matrix in a count-17 packet.
+_PACKET_PREFIX = 8
+
+
+def packet_candidates(blob, base=0):
+    """Every count-17 `NV4097_SET_TRANSFORM_CONSTANT_LOAD` packet's matrix.
+
+    `candidates` slides over every four-byte offset because it has no idea
+    what is and is not a command packet; in a raw RSX pushbuffer dump that is
+    tens of thousands of offsets to score for a few hundred real packets.
+    This instead looks only at the fixed positions the command stream itself
+    marks - `TRANSFORM_CONSTANT_LOAD_HEADER`, then the register index, then
+    the matrix - so it scores a few hundred candidates instead of tens of
+    thousands on the same input.
+
+    `score` is applied unchanged: a header match on a degenerate payload is
+    still degenerate, and this narrows *which offsets* get scored, not *how
+    strictly*.
+
+    Yields `(address, order, unit_error, eye, matrix, register)`. `address` is
+    where the matrix itself starts (header address + 8), the same convention
+    `candidates` uses so a hit from either finder is directly comparable.
+    `register` is the RSX constant register the packet loads - `256`/`260` are
+    where a live capture found `viewProj`/`worldViewProj` (see
+    `rpcs3-capture.md`'s "Picking the camera out" section); nothing here
+    assumes that in advance, so any register comes through.
+    """
+    limit = len(blob) - _PACKET_PREFIX - 64
+    at = 0
+    while at <= limit:
+        header = struct.unpack_from(">I", blob, at)[0]
+        if header == TRANSFORM_CONSTANT_LOAD_HEADER:
+            register = struct.unpack_from(">I", blob, at + 4)[0]
+            m = list(struct.unpack_from(">16f", blob, at + _PACKET_PREFIX))
+            for order, candidate in (("row", m), ("col", transpose(m))):
+                hit = score(candidate)
+                if hit:
+                    yield (base + at + _PACKET_PREFIX, order, hit[0], hit[1],
+                           candidate, register)
+        at += 4
+
+
 def perspective(fov_y, aspect, near, far):
     """A right-handed perspective matrix, row-vector convention.
 
@@ -321,7 +376,57 @@ def self_test():
     return 0
 
 
+def self_test_packet():
+    """Plants a `TRANSFORM_CONSTANT_LOAD` packet in noise and insists the
+    packet-aware finder recovers it, and only it - `candidates`' byte-slider
+    still finds the same matrix at the same 4-byte-aligned offset, since a
+    packet's payload is itself 4-byte aligned, but at vastly higher cost.
+    """
+    import random
+
+    random.seed(20260905)
+    eye = (-143.58, -48.44, -175.13)
+    target = (0.0, -48.44, 0.0)
+    m = multiply(look_at(eye, target), perspective(math.radians(60), 16 / 9, 1.0, 8000.0))
+
+    noise = bytearray(random.randbytes(1 << 18))
+    header_at = 0x800
+    register = 256
+    struct.pack_into(">II", noise, header_at, TRANSFORM_CONSTANT_LOAD_HEADER, register)
+    struct.pack_into(">16f", noise, header_at + _PACKET_PREFIX, *m)
+    blob = bytes(noise)
+
+    found = list(packet_candidates(blob))
+    planted = [c for c in found if c[0] == header_at + _PACKET_PREFIX]
+    assert planted, "the planted packet was not found"
+    _, order, error, recovered, _, reg = planted[0]
+    assert order == "row", order
+    assert reg == register, reg
+    for k in range(3):
+        assert abs(recovered[k] - eye[k]) < 0.05, (recovered, eye)
+    print(f"packet self test: recovered eye {recovered} from register {reg}, "
+          f"{len(found)} candidate(s) in 256 KB of noise, unit error {error:.2e}")
+
+    # The byte-slider still sees the same matrix - it is 4-byte aligned like
+    # everything else - just at far higher cost: it has to score every
+    # offset, not only the ones a header marks.
+    slid = [c for c in candidates(blob) if c[0] == header_at + _PACKET_PREFIX]
+    assert slid, "the byte-slider lost a packet's matrix it should still see"
+    print(f"                  byte-slider confirms the same matrix at the same "
+          f"offset among {len(list(candidates(blob)))} candidate(s)")
+
+    # A header match on a degenerate payload must not be relaxed into a hit:
+    # planting a zeroed matrix behind a real header still has to fail `score`.
+    degenerate = bytearray(random.randbytes(1 << 12))
+    struct.pack_into(">II", degenerate, 0, TRANSFORM_CONSTANT_LOAD_HEADER, 256)
+    struct.pack_into(">16f", degenerate, _PACKET_PREFIX, *([0.0] * 16))
+    assert not list(packet_candidates(bytes(degenerate))), \
+        "a header match on a zeroed payload must still be rejected by score"
+    print("                  a header on a zeroed payload is still rejected")
+    return 0
+
+
 if __name__ == "__main__":
     import sys
 
-    raise SystemExit(self_test() if "--self-test" in sys.argv else self_test())
+    raise SystemExit(self_test() or self_test_packet())
