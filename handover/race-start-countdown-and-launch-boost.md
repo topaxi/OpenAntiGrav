@@ -271,8 +271,8 @@ The same pass recovered what that one model *does*, which is this thread's other
 its `3`, `2`, `1` and `GO` are four per-vertex UV cells of one mesh node, walked across a
 16x32 palette staircase by the material's own `TEXOFFSET` track. Full account, with the
 phase table and the 90/55 split between what the asset authors and what the engine does
-with it, in [start-gantry.md](../docs/rendering/start-gantry.md); the cross-title plan is
-[the-start-gantry-is-recovered-on-pulse-three.md](the-start-gantry-is-recovered-on-pulse-three.md).
+with it, in [start-gantry.md](../docs/rendering/start-gantry.md), now covering all four
+titles in the lineage.
 **The asset's `GO` lands ~1.5 s / 90 ticks before the 272-tick gate this thread measured**,
 and nothing measures the gap - so nothing was wired to `COUNTDOWN_TICKS`.
 

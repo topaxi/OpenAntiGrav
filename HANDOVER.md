@@ -382,6 +382,25 @@ docs page with the evidence - **do not requote from this file**:
 - Race sound effects on all three titles, off the discs' own `.bnk` banks:
   six cues on Pulse and Pure, four of the six on HD.
   [psp-audio.md](docs/formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
+- The start gantry's `3`, `2`, `1`, `GO` on all four titles: Pulse walks four
+  per-vertex UV cells across a shared palette staircase (90); Pure ships no
+  track-side gantry at all (85); HD ships four files whose geometry moved to
+  a sibling `.rcsmodel` and whose own five UV cells sit against a *static*
+  material parameter rather than a track (88 for the packaging, 40 for
+  whether it ever changes at runtime); 2048 is a fourth mechanism again - four
+  separate mesh nodes, each slid on and off screen by its own transform track
+  (90), with no shared UV walk at all. What held across every title that has
+  a gantry: something moves at the same 6.000 s loop-closing instant on
+  Pulse, HD and 2048, and 2048 reproduces Pulse's own frame numbers for the
+  whole post-countdown timeline, node name (`polySurface7`) included.
+  **Nothing is placed on any title** - slot 8's transform is unrecovered on
+  Pulse and HD and untried on 2048.
+  [start-gantry.md](docs/rendering/start-gantry.md), one page for all four
+  titles; `crates/formats/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
+  `start_gantry_pure_ground_truth.rs` (2/2, Pure),
+  `crates/game/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure),
+  `crates/hd/tests/start_gantry_hd_ground_truth.rs` (4/4, HD),
+  `start_gantry_2048_ground_truth.rs` (8/8, 2048).
 
 **What M5 still wants**: Zone's explosion. Positional audio and the Autopilot
 pickup both landed 2026-08-24; each has a row under Open threads carrying what
@@ -454,7 +473,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/hd-collisions-flatten-a-severity-tree.md)
 - [The audio queue is ours now, and the frame stalls are what is left](handover/the-device-queue-is-sized-off-the-configured-cap.md)
-- [The start gantry's 3-2-1-GO: recovered on three titles; 2048 to go](handover/the-start-gantry-is-recovered-on-pulse-three.md) - **Pulse (90)**: `3`, `2`, `1` and `GO` are four per-vertex UV cells of one mesh node, and the material's own `TEXOFFSET` track slides one shared offset up a 16x32 palette *staircase* so each glyph's column crosses its own opaque-white pair at its own moment, then a `u` step hands the board to a strobing `GO`. One gantry model, no per-mode chooser (85). **Pure (85)**: ships no track-side gantry at all - no circuit's `TrackStartup.xml` reaches billboard slot 8, and its `<Billboard>` schema carries no `location` at all. **HD/Fury**: ships four `321Go_*.vex` files, unevenly split across `DATA00`/`DATA02.PSARC`; its geometry lives in a sibling `.rcsmodel`, not the `.vex`. The glyph node authors **five** UV cells against a 64x128 DXT-compressed texture that is Pulse's own staircase-and-marker-columns layout, 4x scaled onto a diagonal - adding the material's own static `u` offset lands four of the five cells in the same reading order the diagonal bands run in (confidence 88). **The encoding does not generalise**: HD's offset is a static material parameter with no time axis in the format at all (confirmed against the same parser that finds Pulse's animated track and finds nothing here), and that same material backs at least nine unrelated, ordinary advert boards disc-wide - so whether HD's countdown changes at runtime is unresolved and scored low (40) on purpose. **What did generalise, unpredicted**: HD's glyph teleports ~+10 in world Y at the exact same 6.000-second loop-closing instant Pulse's own panel does (Pulse ~+9.99 at frames 360/361; HD +10.004 at frames 359/360), independently authored on two platforms. HD's slot-7 substitution site (`num == 7`, gated on `mode_descriptor`) is real and code-confirmed but targets slot 7 (`fx350.vex`), not slot 8 - so the countdown asset itself loads unconditionally regardless of mode; which of the four names it resolves to stays a lead, not a finding (capped 84). **Nothing is placed on any of the three titles** - HD's own geometry-side bias-near-origin reading agrees independently with the executable-side "nothing reads a position" finding. [start-gantry.md](docs/rendering/start-gantry.md), one page for all three titles; `crates/formats/tests/start_gantry_ground_truth.rs` (4/4, Pulse), `crates/formats/tests/start_gantry_pure_ground_truth.rs` (2/2, Pure), `crates/game/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure), `crates/hd/tests/start_gantry_hd_ground_truth.rs` (4/4, HD)
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/a-circuits-billboard-slots-are-a-9-entry.md)
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/a-parser-cannot-fail-on-a-field-it.md)
 - [A chunk header is 0x20 bytes and then a *surface* record, and the byte after the layout says which space it is in](handover/a-chunk-header-is-0x20-bytes-and-then.md)
