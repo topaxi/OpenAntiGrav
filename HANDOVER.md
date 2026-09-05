@@ -41,11 +41,14 @@ file does not need to carry its own.
   citations inside `wall.rs` pointing at files that were not there. Anything
   under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
   committed `verification/scenarios/*.inputs` are what reproduce it.
-  **Three are absent as of 2026-09-02**, confirmed by `/bin/ls data/traces/`
-  rather than inferred: `pad0-boost.csv` (cited from `race/scene.rs` and
-  `race/effects.rs`), `talons-junction-time-trial-lap-omega.csv`, and
+  **Five are absent as of 2026-09-05** (corrected from "three" recorded
+  2026-09-02, which missed a pair), confirmed by `/bin/ls data/traces/` rather
+  than inferred: `pad0-boost.csv` (cited from `race/scene.rs` and
+  `race/effects.rs`), `talons-junction-time-trial-lap-omega.csv`,
   `talons-junction-standing-start.csv` - which `crates/trace/tests/wall_contact_ground_truth.rs`
-  names as its `CAPTURE` and which no earlier note listed. Beware
+  names as its `CAPTURE` - and **`talons-junction-steer-left.csv` and
+  `talons-junction-steer-right.csv`**, `yaw_authority_ground_truth`'s own two
+  captures, missing the same way and not previously listed here. Beware
   `talons-junction-time-trial-lap.csv`, which *is* present and is a different
   file from the `-omega` one.
 - **Four numbers about this suite look green and are not, and each hid the next.
@@ -166,17 +169,58 @@ file does not need to carry its own.
   `check-size`, `check-names` and `check-handover` all clean (575 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
   `git stash && just test` is how the drift was caught last time.
-- **The whole disc-backed sweep is 2,488 of 2,494 in about 7:40**, measured
-  2026-08-18 with `cargo nextest run --workspace --run-ignored all
-  --no-fail-fast`. **Five of the six that fail are the `data/traces/` absence
-  below**; the sixth is
-  `ps2_source_ground_truth::an_uncapped_transcode_still_reports_a_total_to_divide_by`,
-  and it is a **flake under load, not a failure**: it transcodes a PS2 `.PSS`
-  through ffmpeg, takes 342s and returns no frames when the whole sweep is
-  competing for the machine, and passes in 124s run on its own. Re-run it alone
-  before chasing it. Use
-  `--no-fail-fast`, because two of the trace ones sort early enough to stop the
-  run at 335 of 2,494 and that reads like a much worse tree than it is.
+- **Plain `just test-data` is 2 failed / 0 skipped; `OAG_REQUIRE_GAME_DATA=1`
+  is 13 failed / 0 skipped - both measured 2026-09-05 against local `main`.**
+  Say which one a number means, always: this file has been burned by exactly
+  this ambiguity before (see the 6-vs-17 entry below, 2026-09-02). Plain
+  `just test-data` (486s) is the command CLAUDE.md documents and the one the
+  next agent will actually run; it shows only the 2 deterministic reds below,
+  because the other 11 are absent-derived-data tests that silently pass
+  without the flag. The 13-under-the-flag number was **reproduced twice**, at
+  load 22-29 (10:51) and on a quiet machine (6:49) - both runs named the
+  **exact same 13 tests**, with byte-identical assertion values on the two
+  that assert a value, so contention cost wall time on this measurement, not
+  correctness. Re-measure the same way rather than trusting either list past
+  the next batch of merges; it is exactly the kind of number three sessions
+  disagreed on this same day before this was pinned down.
+  - **11 of 13 are environment-dependent, not code bugs**: absent derived
+    data that `OAG_REQUIRE_GAME_DATA=1` turns into a hard failure instead of a
+    silent early return. `chase_camera_ground_truth` (3, needs
+    `data/traces/pad0-boost.csv`), `wall_contact_ground_truth` (3, needs
+    `data/traces/talons-junction-standing-start.csv`), `yaw_authority_ground_truth`
+    (2, needs the `-steer-left`/`-steer-right` pair), `maglock_ground_truth`
+    (1, needs `data/traces/talons-junction-time-trial-lap-omega.csv`) - all
+    five files confirmed absent, see the trace-absence bullet above - and
+    `pure_dlc_ground_truth` (2, needs `data/keys/pure-dlc-keys.txt`, a
+    maintainer-only decryption key table; the DLC zips themselves *are*
+    present under `data/dlc/`). Neither cause got its own `handover/` thread:
+    the trace-capture gap is the already-documented, already-actionable
+    situation two bullets up (`verification/scenarios/*.inputs` regenerates
+    them; the recorded absence there is now the whole account) and the DLC
+    key table is a maintainer-supplied credential this repo cannot regenerate
+    at all, not an investigation with a next step.
+  - **2 of 13 are deterministically red, both traced to a same-day commit,
+    neither fixed** (per this file's own standing rule: a red ground-truth
+    test usually encodes a real disagreement, so "make it green" is the wrong
+    instinct without understanding why first):
+    [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/shuriken-throw-returns-zero-blades-after-the-vector-class-refactor.md)
+    (one press throws zero blades, since `0c78c477`'s VECTOR-class refactor
+    made `shuriken::launch` fallible) and
+    [`stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md)
+    (a healthy craft blips stalled for exactly one tick on `16_Track` Ace,
+    likely the countdown-hold fix `cc395862` releasing opponent thrust one
+    tick before velocity rises off zero). Both have handover threads with the
+    evidence trail and a concrete, cheap next step.
+  - `ps2_source_ground_truth`'s transcode test - historically flaky under load
+    per the entries below - **passed cleanly in both runs today**, including
+    at load 22-29 (298s), the same contention level the older flake reports
+    were attributed to. That weakens rather than confirms "ordinary contention
+    triggers it"; whatever the older failures needed, this session's load
+    wasn't it.
+  - This supersedes the 2,488-of-2,494 count below, which is over two weeks
+    stale (2026-08-18) and against a workspace that has nearly tripled in
+    test count since; the mechanism notes below it (the ffmpeg flake's shape,
+    the build-profile fix) are still accurate and worth reading.
 - **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
   you are on a tree from before the build-profile fix: `[profile.dev.package."*"]`
   never matched a workspace member, so our own decoders and the sim compiled at
@@ -514,6 +558,8 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
+- [A thrown Shuriken now leaves zero blades on the disc-backed test](handover/shuriken-throw-returns-zero-blades-after-the-vector-class-refactor.md) - `shuriken_ground_truth` regressed the same day the VECTOR speed-class refactor (`0c78c477`) landed; evidenced but not yet pinned to one of four candidate early returns in `Race::spend_pickup`'s `Weapon::Shuriken` arm.
+- [A healthy AI craft blips stalled for one tick off the line](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md) - `stall_rescue_ground_truth`'s zero-tolerance test reads a one-tick stall on `16_Track` at Ace; leading hypothesis is an unavoidable transition tick where the countdown-hold fix (`cc395862`) releases opponent thrust before velocity has risen off zero, not a physics or AI bug.
 
 ## Pending maintainer decision: shipped design data in tracked docs
 
