@@ -252,6 +252,9 @@ impl App {
         // that changes them. See `Session::apply_setting`.
         controls.set_trigger_mode(crate::args::resolve_triggers(&self.settings));
         controls.set_trigger_curve(self.settings.controls.trigger_sensitivity.exponent());
+        // The keyboard's own live table - a rebind changes it again, and
+        // persists it, through `Session::rebind`.
+        controls.set_bindings(crate::args::resolve_bindings(&self.settings));
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }
@@ -373,6 +376,7 @@ impl App {
             pick_language: self.pick_language,
             race_ready_at: None,
             suspended_race: None,
+            awaiting_binding: None,
         }))
     }
 
@@ -455,6 +459,26 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => session.controls.release_all(),
 
             WindowEvent::KeyboardInput { event, .. } => {
+                // A CONTROLS row is waiting for its new key, and this raw event
+                // is the only place that key still exists as itself - past
+                // this point `Controls::set_key` would already have mapped it
+                // through the very table a rebind is here to change, dropping
+                // it silently if it is not already bound to something. Neither
+                // the abstract `Input` nor `Menu::update` sees this event at
+                // all while a capture is open.
+                if let Some(awaiting) = session.awaiting_binding {
+                    match crate::rebind::decide(
+                        awaiting,
+                        &event.logical_key,
+                        event.state == ElementState::Pressed,
+                        event.repeat,
+                    ) {
+                        crate::rebind::Capture::Bind(button, name) => session.rebind(button, name),
+                        crate::rebind::Capture::Cancel => session.cancel_binding(),
+                        crate::rebind::Capture::Ignore => {}
+                    }
+                    return;
+                }
                 // **`repeat` matters now that escape navigates.** winit resends
                 // `Pressed` while a key is held, and back-one-level repeated
                 // thirty times a second walks out of the menus and quits. It

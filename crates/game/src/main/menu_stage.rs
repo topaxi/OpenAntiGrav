@@ -2,7 +2,7 @@
 
 use anyhow::{Result, bail};
 
-use oag_game::keys;
+use oag_game::input::Button;
 use oag_game::render::Renderer;
 use oag_game::{font, marquee, menu, movie};
 
@@ -248,6 +248,11 @@ impl MenuStage {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         feed: Option<&mut movie::Feed>,
+        // The **live** table, off `Session::controls` - not
+        // `oag_input::keys::bound_keys`'s default one. This stage holds no
+        // input state of its own to read it from; see `Session::frame`'s call
+        // site for why the closure has to be built there instead.
+        bound_keys: &dyn Fn(Button) -> Vec<&'static str>,
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -279,7 +284,7 @@ impl MenuStage {
         let arriving = menu::draw_list(
             &self.menu,
             &self.skin,
-            &keys::bound_keys,
+            bound_keys,
             &|text| font::measure(&self.text_atlas, text),
             shown,
             &self.frame,

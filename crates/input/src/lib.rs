@@ -254,6 +254,12 @@ impl Controls {
         self.keyboard.set_bindings(bindings);
     }
 
+    /// The keyboard's live table. See [`Keyboard::bindings`].
+    #[must_use]
+    pub fn bindings(&self) -> &Bindings {
+        self.keyboard.bindings()
+    }
+
     /// Mutable access to the keyboard's live table. See
     /// [`Keyboard::bindings_mut`].
     pub fn bindings_mut(&mut self) -> &mut Bindings {

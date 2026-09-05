@@ -155,10 +155,14 @@ pub(super) fn menu_page(
     // The same window the live menus use, so a captured page scrolls where a
     // played one does rather than where a default happened to put it.
     model.set_visible_rows(crate::menu::visible_rows(skin));
+    // The file's own table, not the built-in default: a settings file that
+    // rebound a key should show that key here too. See
+    // `crate::settings::Controls::live_bindings`.
+    let bindings = settings.controls.live_bindings();
     let layers = crate::menu::draw_list(
         &model,
         skin,
-        &oag_input::keys::bound_keys,
+        &|button| bindings.names_for(button),
         measure,
         backdrop,
         frame,

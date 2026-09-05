@@ -6,8 +6,11 @@
 //! here claims to be - `scheme` is the one key that mirrors the original's own
 //! `Control_Type`.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
+use oag_input::bindings::Bindings;
 use oag_input::pad::TriggerMode;
 
 /// How the pilot's buttons reach the ship.
@@ -46,6 +49,52 @@ pub struct Controls {
     /// than a control discovered by feel to do nothing.
     #[serde(default)]
     pub trigger_sensitivity: TriggerSensitivity,
+    /// Which key produces each abstract button, when a player has moved one
+    /// off `oag_input::keys::candidates`'s built-in layout.
+    ///
+    /// A plain `BTreeMap<String, String>` and not [`Bindings`] itself: this
+    /// crate already depends on serde and [`Bindings`] deliberately does
+    /// not, per its own module doc, so the table this file persists is the
+    /// same shape [`AnisotropyDef`](super::AnisotropyDef) and
+    /// [`LodDef`](super::LodDef) are, a type this crate owns standing in for
+    /// one it does not derive on.
+    ///
+    /// **Complete on every write, one row per candidate key, `"none"` for a
+    /// key nothing currently produces** - never a diff against the default -
+    /// so a button a rebind emptied stays empty across a restart rather than
+    /// reverting the moment the file that recorded the steal is rewritten.
+    /// See [`Bindings::to_pairs`].
+    ///
+    /// An entry this build cannot parse - a name it does not offer, or a
+    /// value that is not a button name or `"none"` - is dropped and the
+    /// default kept for that key, never a load failure: see
+    /// [`Bindings::from_pairs`] and `main::args::resolve_bindings`, which is
+    /// what reports the fallback for a live keyboard. [`Self::live_bindings`]
+    /// is the same fallback without the reporting, for a caller - the
+    /// `--menu-page` capture - that only draws a picture of the file rather
+    /// than driving a ship with it.
+    #[serde(default = "default_bindings")]
+    pub bindings: BTreeMap<String, String>,
+}
+
+/// See [`Controls::bindings`]: the default table, complete, with nothing
+/// rebound.
+fn default_bindings() -> BTreeMap<String, String> {
+    Bindings::default().to_pairs()
+}
+
+impl Controls {
+    /// [`Self::bindings`] turned back into a live table, falling back to the
+    /// default for any entry that does not parse.
+    ///
+    /// Silent about what it fell back on, unlike `main::args::resolve_bindings`:
+    /// this is the settings side handing a picture over, the same seam
+    /// [`crate::settings::menu_seeds`]'s own doc comment describes, and a
+    /// capture drawing one page of the menus has nobody to tell.
+    #[must_use]
+    pub fn live_bindings(&self) -> Bindings {
+        Bindings::from_pairs(&self.bindings).0
+    }
 }
 
 /// How much airbrake a given amount of trigger travel asks for, as a
@@ -169,6 +218,7 @@ impl Default for Controls {
             scheme: default_scheme(),
             triggers: default_triggers(),
             trigger_sensitivity: TriggerSensitivity::default(),
+            bindings: default_bindings(),
         }
     }
 }

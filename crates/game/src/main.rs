@@ -89,6 +89,8 @@ mod pose;
 mod prepare;
 #[path = "main/race_stage.rs"]
 mod race_stage;
+#[path = "main/rebind.rs"]
+mod rebind;
 #[path = "main/session.rs"]
 mod session;
 #[path = "main/stage.rs"]
@@ -545,13 +547,17 @@ fn main() -> Result<()> {
 /// exactly as they did when all three lived in this file.
 #[cfg(test)]
 use crate::{
-    args::parse_progress, frontend_stage::HeldFrame, menu_stage::menu_playhead,
+    args::parse_progress, frontend_stage::HeldFrame, menu_stage::menu_playhead, session::Session,
     session::menus::backdrop_seed,
 };
 /// Same reasoning, for a library module `main` itself no longer names: the
-/// windowed load moved into [`prepare`] and took `movie` with it.
+/// windowed load moved into [`prepare`] and took `movie` with it. `menu` and
+/// `language` are here for [`Session::maybe_begin_binding`]'s own tests, which
+/// need a [`menu::Menu`] and nothing else this file already imports names one.
 #[cfg(test)]
-use oag_game::movie;
+use oag_game::{language, menu, movie};
+#[cfg(test)]
+use oag_input::Controls;
 
 #[cfg(test)]
 #[path = "main/tests.rs"]

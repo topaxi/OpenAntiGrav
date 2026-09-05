@@ -4,7 +4,6 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 
 use oag_game::frontend::{self};
-use oag_game::keys;
 use oag_game::{boot, display, drs, font, menu, movie, perf, race, report, settings, upscale};
 use oag_gameplay::input::Button;
 
@@ -377,12 +376,28 @@ impl Session {
                     let leaving = menu::draw_list(
                         &stage.menu,
                         &stage.skin,
-                        &keys::bound_keys,
+                        &|button| self.controls.bound_keys(button),
                         &|text| font::measure(&stage.text_atlas, text),
                         None,
                         &stage.frame,
                     );
-                    let events = stage.menu.update(self.controls.buttons_mut());
+                    // Off the raw `Input`, ahead of `Menu::update` - see
+                    // `Session::maybe_begin_binding`'s own doc comment for why
+                    // it takes its fields apart rather than borrowing `self`.
+                    Session::maybe_begin_binding(
+                        &mut self.awaiting_binding,
+                        &mut self.controls,
+                        &stage.menu,
+                    );
+                    // Frozen while a capture is in flight: `app.rs` diverts
+                    // every keyboard event away from `Controls::set_key` for
+                    // as long as `awaiting_binding` is `Some`, so there is
+                    // nothing new here for the menus to navigate with anyway.
+                    let events = if self.awaiting_binding.is_some() {
+                        Vec::new()
+                    } else {
+                        stage.menu.update(self.controls.buttons_mut())
+                    };
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);
                     }
@@ -650,6 +665,7 @@ impl Session {
                     ui_target,
                     rect,
                     self.backdrop.as_mut(),
+                    &|button| self.controls.bound_keys(button),
                 )?;
                 (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
             }

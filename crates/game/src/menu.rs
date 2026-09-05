@@ -356,11 +356,11 @@ pub enum Entry {
     },
     /// Shows what an abstract button is currently bound to.
     ///
-    /// **Read-only in this build.** Rebinding needs a binding table where
-    /// `oag_input::keys::map_key` currently has a hardcoded `match`, plus
-    /// persistence and conflict handling; the row exists so the shape of the
-    /// definition is settled before that lands, and so the gap is visible in
-    /// the game rather than only in a document.
+    /// **`Menu::activate` still treats confirming this as a no-op.** A rebind
+    /// needs the raw key just pressed, gone by the time an event reaches this
+    /// crate's abstract buttons - `Session::maybe_begin_binding` and
+    /// `oag_input::bindings::Bindings` do the rest. See
+    /// `docs/architecture/menus.md`.
     Binding {
         /// Row label.
         label: String,

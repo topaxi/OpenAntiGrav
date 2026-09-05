@@ -898,11 +898,13 @@ label = "BACK"
 id = "controls"
 title = "CONTROLS"
 
-# Read-only in this build. `oag_input::keys::map_key` is a hardcoded match, so
-# rebinding needs a table, persistence and conflict handling before a row here
-# can do anything; these exist so what is bound is visible in the game rather
-# than only in that file, and so the format does not have to change when
-# rebinding lands.
+# Cross or Start confirms a row below, which waits for the next key pressed
+# and gives it exactly that key: `oag_input::bindings::Bindings` steals the
+# key from whatever button held it before, and the row that used to hold it
+# is left showing whatever it has left, empty included - a real state, not a
+# broken one. See `docs/architecture/menus.md`'s rebinding section and
+# `crates/game/src/main/rebind.rs`, which decides what a raw key press means
+# while a row is waiting.
 [[page.entry]]
 kind = "binding"
 label = "THRUST"
@@ -955,25 +957,26 @@ kind = "binding"
 label = "CAMERA VIEW"
 button = "select"
 
-# The one row on this page that is not read-only, and the reason it sits below
-# the bindings rather than above them: it does not rebind anything. It chooses
-# which *gesture* a sideshift takes, which is the original's own `Control_Type`
-# and the reason the bindings above differ between the two - veteran spends both
-# shoulders on the separate airbrakes, novice gives one of them to the sideshift
-# and puts both airbrakes on the other. See
+# The one row on this page that is not a key binding, and the reason it sits
+# below the bindings rather than above them: it does not rebind a key. It
+# chooses which *gesture* a sideshift takes, which is the original's own
+# `Control_Type` and the reason the bindings above differ between the two -
+# veteran spends both shoulders on the separate airbrakes, novice gives one of
+# them to the sideshift and puts both airbrakes on the other. See
 # `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #
 # The values are the binary's own tokens, not labels this project chose, so a
 # `custom` third value is deliberately absent: in the original that is a
-# rebinding of whichever scheme is live, and rebinding is what this page cannot
-# do yet.
+# rebinding of *which abstract button each of its eight actions fires*
+# (`ControlMapping2`), a different axis from the key-to-button table the
+# bindings above edit, and one with no menu row here yet.
 [[page.entry]]
 kind = "choice"
 label = "SIDESHIFT"
 setting = "controls.scheme"
 values = ["veteran", "novice"]
 
-# The other two rows that are not read-only, and the only ones on this page
+# The other two rows that are not key bindings, and the only ones on this page
 # about hardware the original never had: the PSP has no analog triggers. So
 # neither is recovered behaviour, and neither is a rebinding - the shoulders are
 # the airbrakes whatever these say. `airbrakes` puts an airbrake on each trigger
