@@ -69,6 +69,12 @@ pairs**, and each one is a glyph. Their model-space `x` spans say which:
 Left, middle, right, then one wide centred shape - which is what "3 2 1" side by
 side and a `GO` across the board looks like.
 
+**Order them by `u`, not by where they sit.** `u` is the axis the offset track
+walks, so it is the mechanism's own order - and it is the only one that gets the
+labels right: `GO` spans the whole board, so its left edge sorts it *second* by
+x, between `3` and `2`. A first pass at the ground-truth test sorted by x and
+mislabelled two of the four while still looking like it measured something.
+
 `321go_NOMIP.tga` is a **staircase**, not a ramp. Its 16x32 texels, by region:
 
 ```text
@@ -112,6 +118,16 @@ Outside its window a digit is the dark red the same columns hold at rows 23-29,
 and above row 23 (past 3.18 s) or below row 29 (before ~0.56 s) it is alpha 0 -
 gone rather than dimmed. `GO` reaches its own opaque column only after the
 `u` step at frames 181-182, which is what hands the board over from the digits.
+
+**`GO`'s column is not solid, and that is a real difference, not noise.**
+Columns 0-5 are opaque across the digits' whole row band, but columns 8-9
+*alternate* opaque and alpha-0 row by row over rows 0-21 (opaque on 0, 1, 2, 4,
+6, 8, 10, 12, 14, 15, 16, 18, 20, 21; transparent on 3, 5, 7, 9, 11, 13, 17,
+19). Scrolling through that makes the word **flash** rather than fade in, while
+the digits do not. Over the 3.60-5.95 s span `GO` owns, sampling every 50 ms
+finds it lit on 33 of 47 samples and dark on 14. A test that pinned `GO` to one
+instant the way the digits are pinned would answer by luck; the ground-truth
+test asserts the strobe instead.
 
 **Verified headlessly**, one capture per phase, with
 `oag-view --mesh ... --only start_light_321go --anim-seconds T --yaw 1.5708
