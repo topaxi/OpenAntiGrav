@@ -86,17 +86,29 @@ correction below. `DAT_08b32428` is written in
 exactly two places, both per-race-mode constructor case blocks reached from
 `Race_CreateModeObject`'s (`0x08821038`) mode-dispatch jump table:
 
-- **Single Race (mode 3), `FUN_0882bfd4`, `0x0882c2e8`:** `sw zero,0x8(a1)` (`a1` built
-  by `lui a1,0x6 ; addiu a1,a1,-0x7030` two instructions earlier; the `sw` is the
-  preceding branch's delay slot, so it always executes) - writes `DAT_08b32428 = 0`.
-- **Eliminator (mode 8), `FUN_0882c880`, `0x0882cb38`:** `sw a1,0x8(a2)` (`a2` built the
-  same way, `a1` loaded with `li a1,0x1`) - writes `DAT_08b32428 = 1`.
+- **Single Race (mode 3), `0x0882c41c`:** `sw zero,0x8(a1)` (`a1` built by
+  `lui a1,0x6 ; addiu a1,a1,-0x7378`; the `sw` is the preceding branch's delay slot at
+  `0x0882c418`, so it always executes) - writes `DAT_08b32428 = 0`.
+- **Eliminator (mode 8), `0x0882cc6c`:** `sw a1,0x8(a2)` (`a2` built the same way by
+  `addiu a2,a2,-0x7378` at `0x0882cc5c`, `a1` loaded with `1`) - writes
+  `DAT_08b32428 = 1`.
 
 Both match the live-measured values above exactly. Confidence **88**: instruction-level
 read, the naive base is independently triple-confirmed elsewhere to be
 `DAT_08b32420`/`DAT_08b32428`, and the write executes unconditionally. Not higher only
 because the two enclosing functions do much more than this one field (RTTI
 registration, a per-craft init loop) that was not read closely enough to name them.
+
+**Addresses corrected 2026-09-05.** This section previously cited `0x0882c2e8` and
+`0x0882cb38`, and gave the base immediate as `-0x7030`. Both addresses are
+`0x134` low and the immediate is `0x348` low; the instructions described are simply
+not at the cited addresses, in this binary or in Ghidra's own bytes for it. The
+*findings* are unaffected - the two sites above hold exactly the instructions
+described, in exactly the delay slots described, writing exactly `0` and `1` - and
+they were located with `scripts/psp-relocate.py member 0x08b32420 0x8`, which lists
+all 11 writers and 62 readers of a global that has no relocation record of its own.
+The same `0x348` slip is what produced the retracted "third relocation base"; see
+[anim-transform.md](anim-transform.md) and [workflow.md](../../workflow.md).
 
 **LeachBeam's lock distances are at `+0x114`/`+0x118`** in the same struct, read
 by the same function as the Missile's - see the lock below. It is the only other

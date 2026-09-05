@@ -71,11 +71,14 @@ arithmetic closes with nothing left over against all sixteen real files.
   well. Do not build a mode gate on this number without checking it first.
   **Neither global's address
   is resolved**: both fall inside `.text` under the usual base, the tell that
-  the relocation base is wrong for them, and they are most likely `$gp`-relative
-  (see [the `$gp` thread](a-global-reached-through-gp-has-an-instruction.md)).
-  Tracing the six non-lobby callers of `Skin_ApplyToModel` - `0x08825638`,
-  `0x088256b8`, `0x08828398`, `0x0882885c`, `0x08843804`, `0x088eaa84` - is the
-  way to settle it without needing either address.
+  the relocation base is wrong for them. They are **not** `$gp`-relative - that
+  hypothesis is retracted, this binary never uses `$gp` as a load/store base -
+  they need the segment-1 base, and
+  `scripts/psp-relocate.py resolve <instruction-address>` reads it straight off
+  the relocation record rather than deriving it. Try that first; tracing the six
+  non-lobby callers of `Skin_ApplyToModel` - `0x08825638`, `0x088256b8`,
+  `0x08828398`, `0x0882885c`, `0x08843804`, `0x088eaa84` - settles it without
+  either address if the resolve comes back empty.
 - **The generic `%s\%s.dat` fallback path is unexercised.** When the specific
   file fails to load, the loader walks the team node's children for the one
   named `Normal` and rebuilds the path from that child's `+0x94` field. Nothing
