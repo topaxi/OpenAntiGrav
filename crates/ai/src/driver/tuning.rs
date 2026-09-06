@@ -26,6 +26,67 @@ pub struct Tuning {
     /// Roughly "how many seconds ahead the craft looks". Longer is calmer and
     /// cuts corners; shorter tracks the line harder and, past a point, is what
     /// makes the loop ring.
+    ///
+    /// **Ours, and this project's own** - the disc authors a per-class
+    /// `LookAheadSecs` (`docs/ghidra/functions/psp-pulse-usa/ai-stats.md`,
+    /// `AiStats_ParseController`), but that page's own header says its units
+    /// are not determined and its consumer is not identified: a lookahead in
+    /// an unknown formula is not a value this crate's differently-shaped pure
+    /// pursuit could read off the disc without inventing the missing half.
+    /// So this stays a project constant, chosen and swept the way
+    /// [`Tuning::max_turn_rate`] and [`Tuning::lateral_accel`] were.
+    ///
+    /// # Lowered from `0.35`, and 07 unaffected
+    ///
+    /// **`13_Track`'s driver was measured carrying lateral momentum across a
+    /// wide S-bend for tens of samples before its own corridor went
+    /// negative** - see `docs/gameplay/ai.md`'s convergence section for the
+    /// full trace. The pure-pursuit correction is
+    /// `curvature = 2 * offset / distance^2`, and `distance` grows with this
+    /// constant, so a longer lookahead answers a given lateral error with a
+    /// gentler request - exactly backwards from what a craft already outside
+    /// its corridor needs. `Tuning::rate_gain` was swept first and ruled
+    /// out: at `10.0` and `20.0` the loop is already saturated at full lock
+    /// through these sites, so more gain buys nothing there and instead
+    /// breaks the field - `opponent_weapons_ground_truth`'s floors fail at
+    /// `10.0` (worst opponent shield `0.00`, a craft destroyed) and again at
+    /// `20.0`.
+    ///
+    /// Swept by `sweep_look_speed` and `sweep_rate_gain` in
+    /// `crates/game/tests/ai_look_sweep.rs` - a lone Ace, twelve forward
+    /// circuits, 18,000 ticks each - against the two committed field fixtures
+    /// (`lap_times_ground_truth::clocks`'s and
+    /// `opponent_weapons_ground_truth::single_race`'s own setups, tuned
+    /// through [`crate::Difficulty::tune`] exactly as `Race::start` does):
+    ///
+    /// | value | 13 end shield | 07 end shield | solo total | field mean | field worst |
+    /// | --- | --- | --- | --- | --- | --- |
+    /// | 0.35 (old) | 6.52 | 0.00 | 705.68 | 0.88 | 0.64 |
+    /// | 0.33 | 17.86 | 0.00 | 774.28 | 0.87 | 0.63 |
+    /// | 0.32 | 24.17 | 0.00 | 788.97 | 0.93 | 0.74 |
+    /// | **0.30** | **39.07** | **0.00** | **863.10** | **0.93** | **0.82** |
+    /// | 0.25 | 59.50 | 0.00 | 932.20 | 0.84 | 0.67 |
+    /// | 0.22 | 67.55 | 0.00 | 937.78 | 0.89 | **0.41 (fails 0.45)** |
+    /// | 0.20 | 63.45 | 0.00 | 934.48 | **0.69 (fails 0.70)** | **0.18 (fails 0.45)** |
+    /// | 0.15 | 58.02 | 0.00 | 914.41 | 0.86 | 0.57 |
+    ///
+    /// **`0.30` is chosen, not the total-maximising row.** `0.25` scores
+    /// higher on both `13` and the solo total, but `0.22` and `0.20` - one and
+    /// two steps further down the same slope - both fail the field floors
+    /// outright, the same "one craft switches basin" trap
+    /// `Tuning::curvature_span` documents. `0.30` is the smallest move off the
+    /// old default and the only row whose field margins **improve** on the
+    /// baseline in both columns rather than sitting close to a value that
+    /// fails; distance from that cliff is worth more here than the last few
+    /// points of `13`'s number.
+    ///
+    /// **`07_Track` is unchanged at every value tested** - `0.00` end shield
+    /// in every row, the same craft destroyed at the same eventual state as
+    /// the old default. Its per-lap loss does fall (28-30 down to 22-25 at
+    /// `0.30`), but the end state does not move, so this constant neither
+    /// fixes nor regresses 07's own wall-grind problem - a separate, still-open
+    /// question about the damage-charging model rather than about
+    /// convergence.
     pub look_speed: f32,
     /// Lookahead ceiling. Past this a craft stops seeing the corner it is in.
     pub look_max: f32,
@@ -287,7 +348,7 @@ impl Default for Tuning {
     fn default() -> Self {
         Self {
             look_min: 20.0,
-            look_speed: 0.35,
+            look_speed: 0.30,
             look_max: 90.0,
             rate_gain: 5.0,
             max_turn_rate: 1.8,
