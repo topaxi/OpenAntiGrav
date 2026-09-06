@@ -321,6 +321,7 @@ const SOUNDS: SoundBanks = SoundBanks {
     ship_zone: "ship.bnk",
     weapons: "weapons.bnk",
     speech: "speech.bnk",
+    track_general: Some("generaltrack.bnk"),
 };
 
 /// A fixture with both a native `team_variants` table and a `guest_roster` -

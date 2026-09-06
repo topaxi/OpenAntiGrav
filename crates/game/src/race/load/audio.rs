@@ -37,3 +37,22 @@ pub(super) fn banks_and_announcers(
 
     (sounds, announcer, class_announcer)
 }
+
+/// The circuit's own authored sound emitters, read off the track `.vex` already
+/// in hand.
+///
+/// Separate from [`banks_and_announcers`] because it is keyed by *circuit*
+/// rather than by title: one disc's twelve tracks author twelve different sets
+/// and a Zone circuit authors none, where the bank table is one per release.
+/// See [`crate::audio::sfx::TrackEmitters`].
+pub(super) fn track_emitters(
+    archives: &mut oag_assets::Archives,
+    banks: &oag_title::SoundBanks,
+    track: &str,
+    blob: &[u8],
+    report: &mut Vec<String>,
+) -> crate::audio::sfx::TrackEmitters {
+    let loaded = crate::audio::sfx::TrackEmitters::load(archives, banks, track, blob);
+    report.extend(loaded.report.iter().cloned());
+    loaded
+}

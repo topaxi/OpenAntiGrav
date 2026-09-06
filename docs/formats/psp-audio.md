@@ -155,12 +155,48 @@ expansion resolves on the EU disc** - twelve language names were tried
 either this build ships only the unsuffixed banks or the token is not a plain
 language name.
 
-**The 24 per-circuit banks are not named by any executable string.** The full
-scan returns 14 `.bnk` paths and no `Data\Sound\%s.bnk`-style template, so the
-circuit banks are addressed some other way. The lead worth following is the
-`soundregister="N"` attribute the track `Definition.xml` carries, already parsed
-into context by `crates/game/src/catalogue.rs` with its meaning unrecorded -
-name mining from the self-name field is now known to be a dead end for them.
+### The per-circuit banks are named by the circuit, and they are not under `Data\Sound\`
+
+**The 24 per-circuit banks are not named by any executable string**, and that is
+not the dead end it looked like. The full scan returns 14 `.bnk` paths and no
+`Data\Sound\%s.bnk`-style template, because a circuit's bank is named by *the
+circuit's own manifest* and lives beside it:
+
+```text
+Data\Environments\01_Track\trackstartup.xml
+  <LoadSoundBank Filename="BASILICO_ENV.bnk"/>
+Data\Environments\01_Track\BASILICO_ENV.bnk        253,664 bytes, self-name `basilic`
+```
+
+`oag_formats::trackstartup` already read that element; what was missing was
+where the file it names sits. **`Data\Sound\BASILICO_ENV.bnk` hashes to nothing
+on `pulse-psp-usa`** - which is why an earlier guess by analogy with
+`Data\Sound\ZONE_ENV.bnk` above missed - and the circuit's own directory
+resolves. Confirmed on all twelve race circuits: every manifest names one, every
+name resolves in the circuit's directory, and each bank's self-name is the label
+the circuit's own `sound` nodes spell.
+
+| Circuit | `<LoadSoundBank>` | Self-name | Circuit | `<LoadSoundBank>` | Self-name |
+| --- | --- | --- | --- | --- | --- |
+| `01_Track` | `BASILICO_ENV.bnk` | `basilic` | `07_Track` | `OUTPOST_7_ENV.bnk` | `outpost` |
+| `02_Track` | `METROPIA_ENV.bnk` | `metropi` | `09_Track` | `THE_AMPHISEUM_ENV.bnk` | `amphise` |
+| `03_Track` | `MOA_THERMA_ENV.bnk` | `moather` | `10_Track` | `ARC_PRIME_ENV.bnk` | `arcprim` |
+| `04_Track` | `TECH_DE_RA_ENV.bnk` | `techder` | `13_Track` | `PLATINUM_RUSH_ENV.bnk` | `platinu` |
+| `05_Track` | `DE_KONSTRUCT_ENV.bnk` | `dekonst` | `14_Track` | `FORT_GALE_ENV.bnk` | `fortcle` |
+| `06_Track` | `VERTICA_ENV.bnk` | `vertica` | `16_Track` | `TALONS_JUNCTION_ENV.bnk` | `talonsj` |
+
+Confidence **94**: each name comes out of the disc's own manifest rather than a
+guess, resolves to an archive entry holding an `SBlk`, and the self-name it
+reports matches what
+[`track-sound-emitters.md`](../ghidra/functions/psp-pulse-usa/track-sound-emitters.md)
+independently found the circuit's nodes spelling. The rubric caps
+name-resolution-against-shipped-data at 94; the executable's own loader has not
+been read, so **how the game joins the filename to a directory is still
+inferred** rather than seen. `soundregister="N"` in the track `Definition.xml`
+remains unexplained and is no longer needed to find a bank.
+
+`oag_game::audio::sfx::TrackEmitters::load` is what does this, and reaches the
+shared `generaltrack.bnk` through `oag_title::SoundBanks::track_general`.
 
 ### `speech_zone.bnk` names the zone announcer, one ladder per title
 

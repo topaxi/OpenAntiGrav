@@ -263,10 +263,16 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
     // `c_CShipShip` and `c_CShipWall`, each of which has S/M/L children of its
     // own - 112 waveforms in all. See `oag_formats::sblk::child`.
     let sounds = bank.cue_tree_sounds(&record);
+    // **The opcodes go in the message.** 38 of a circuit's authored emitters
+    // land here (`track-sound-emitters.md`), and which opcode blocked them is
+    // the whole question: `0x1e` is in every `~SetReg*` cue and plausibly emits
+    // nothing, `0x14` is in cues named after sounds. A message that said only
+    // "some opcode" would have left that unmeasurable.
     anyhow::ensure!(
         !sounds.is_empty(),
-        "{name} binds no waveform: its {} command(s) are all opcodes this does not read",
-        record.commands
+        "{name} binds no waveform: its {} command(s) run only {:02x?}, opcodes this does not read",
+        record.commands,
+        cue_opcodes(bank, &record)
     );
 
     let mut waveforms = Vec::with_capacity(sounds.len());
@@ -298,4 +304,19 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
         "all {skipped} of {name}'s waveforms decoded to nothing"
     );
     Ok((Loaded { waveforms }, skipped))
+}
+
+/// The opcode byte of each command in a cue's own run, in command order.
+///
+/// The opcode is the high byte of the command's first word - byte 3 in memory,
+/// which is what `Scream_StepCommandList` reads. Duplicated from
+/// `oag_formats::sblk::Bank::sounds`, which needs the same byte for a different
+/// purpose and does not expose it.
+fn cue_opcodes(bank: &sblk::Bank, cue: &sblk::Cue) -> Vec<u8> {
+    cue.range()
+        .filter_map(|at| {
+            let word = bank.commands.get(at * sblk::COMMAND_LEN..)?;
+            Some((bank.order.u32(word, 0) >> 24) as u8)
+        })
+        .collect()
 }

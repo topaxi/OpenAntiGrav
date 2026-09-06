@@ -823,6 +823,12 @@ impl Race {
         &self.sounds
     }
 
+    /// The circuit's own authored sound emitters, as this race loaded them.
+    #[must_use]
+    pub fn track_emitters(&self) -> &crate::audio::sfx::TrackEmitters {
+        &self.track_emitters
+    }
+
     /// The decoded Zone milestone announcer this race loaded.
     #[must_use]
     pub fn announcer(&self) -> &crate::audio::sfx::Announcer {

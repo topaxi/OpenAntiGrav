@@ -490,6 +490,23 @@ pub struct SoundBanks {
     pub weapons: &'static str,
     /// Where `shieldactive` is: the announcer, not an effect.
     pub speech: &'static str,
+    /// The bank every circuit's authored emitters share, or [`None`].
+    ///
+    /// The odd one out in this struct, because it is the only entry no *cue*
+    /// names. A circuit's `.vex` authors its own emitters and each of them
+    /// spells the bank it wants by that bank's own seven-character label - and
+    /// on Pulse, 568 of the 1,164 `sound` nodes spell `gentrak`, which is
+    /// `generaltrack.bnk`'s label rather than any part of its path
+    /// (`docs/formats/psp-audio.md`, "the field is an abbreviation, not a
+    /// truncation"). The circuit-specific bank beside it is named by the
+    /// circuit's own `trackstartup.xml` and so needs no field here; this one is
+    /// named by nothing on the disc, only by the executable.
+    ///
+    /// [`None`] where a title has no bank at the analogous path - Wipeout HD
+    /// and 2048 - which is also where no circuit has been swept for the three
+    /// `.vex` audio classes. See `crate::audio::sfx::TrackEmitters` in
+    /// `oag-game`.
+    pub track_general: Option<&'static str>,
 }
 
 /// Where a title keeps the hull a Zone race flies.

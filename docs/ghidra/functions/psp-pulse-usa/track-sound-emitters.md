@@ -10,6 +10,17 @@ All three are one 80-byte node payload, and it decodes whole. The evidence is
 two-sided throughout: the executable says which offset it reads, and the disc's
 own 1,298 authored nodes say what is in it.
 
+**They are played now.** `oag_game::audio::sfx::TrackEmitters` opens a held
+looping voice for each `sound` `0x3e1` node the moment the listener comes inside
+its radius and stops it when the listener leaves, off the law on
+[`positional-audio.md`](positional-audio.md). A `soundcone` stays unwired for
+the reason [below](#what-a-soundcone-is-and-what-is-still-a-hypothesis-about-it).
+Two numbers came out of doing it, and neither had been measured: **at most eight
+emitters are inside their radius at once** on a real lap of `01_Track` (peak 7)
+or `14_Track` (peak 8), against a 32-voice pool; and 38 nodes name a cue that
+resolves and binds no waveform - see
+["A second, larger set"](#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits).
+
 ## The three classes are registered, and one of them is never authored
 
 Each has its own registration function, found by the id it passes to
@@ -217,6 +228,54 @@ play. Confidence **80** that it never sounds: the name comparison itself is
 inside `Scream_FindSoundInBank` and has not been read, so a lookup that
 tolerates a truncated bank name is not excluded.
 
+### A second, larger set resolves and still cannot be played: 38 nodes on eight circuits
+
+The dangling list above was built by checking each `bank~cue` pair against the
+bank's **name table**. Playing them found a different failure one level down:
+a cue that is in the name table and whose command run binds **no waveform at
+all**, because every one of its commands is an opcode
+[`oag_formats::sblk`](../../../formats/psp-audio.md) does not decode. Measured
+by `crates/game/tests/track_audio_ground_truth.rs`, which loads all twelve
+circuits' banks and reports each miss with its reason:
+
+| Circuit | Cue | Nodes | Opcodes its commands run |
+| --- | --- | --: | --- |
+| `03_Track` | `moather~birds` | 5 | **`0x14`** |
+| `04_Track` | `techder~SetReg`, `~SetReg_2` | 2, 2 | `0x1e` |
+| `05_Track` | `dekonst~CRANE` | 1 | **`0x14`** |
+| `06_Track` | `vertica~SetReg_01`, `~SetReg_02` | 2, 2 | `0x1e` |
+| `09_Track` | `amphise~SetReg_01`, `~SetReg_02` | 4, 6 | `0x1e` |
+| `13_Track` | `platinu~SetReg`, `~SetReg_2` | 2, 3 | `0x1e` |
+| `14_Track` | `fortcle~SETREG_01`, `~SETREG_02` | 2, 4 | `0x1e` |
+| `16_Track` | `talonsj~SETREG_01`, `~SETREG_02` | 1, 2 | **`0x14`**, `0x1e` |
+
+**The opcodes are read, and they split the set cleanly in two.** `0x1e` is in
+every `~SetReg*` cue and in nothing else; the name reads as "set register" and
+a control cue that emits no sample is a coherent explanation for all 29 of
+those nodes. `0x14` is in `moather~birds` and `dekonst~CRANE` - both named
+after sounds - and, decisively, in `talonsj~SETREG_01`/`_02` **beside** their
+`0x1e`, which is a cue that both sets a register and does something else.
+
+So `0x14` is the opcode worth decoding, and 9 of the 38 nodes are waiting on
+it: Moa Therma's five birds, De Konstruct's crane, and Talon's Junction's
+three. It is one of the 41 command opcodes
+[`psp-audio.md`](../../../formats/psp-audio.md) lists as unread, and its likely
+shapes are "bind a waveform another way" or "play a cue in another bank" -
+`oag_formats::sblk::child` already handles the second for HD's `0x0f`-style
+indirection and finds nothing here.
+
+Confidence **88** that `0x14` binds something audible: the two-opcode split is
+exact across eight circuits with no exception, and the `talonsj` cues carrying
+both is what rules out "these cues are all just registers". What is **not**
+established is what `0x14` does - the handler has not been found in
+`Scream_StepCommandList`'s dispatch, and no waveform has been recovered through
+it.
+
+Reproduce the table with
+`crates/game/tests/track_audio_ground_truth.rs`'s
+`every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label`,
+which prints every unplayed reference with its reason.
+
 ## Census
 
 Zone circuits author **none** of the three classes - all nine `zone_track.vex`
@@ -286,11 +345,10 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
 
 ## What this does not answer
 
-- **Nothing triggers these yet.** The nodes are read; wiring them to
-  `oag_audio`'s emitter pool is a separate piece of work, and per `CLAUDE.md`'s
-  rule an effect with no recovered trigger stays unwired rather than fired on a
-  guess. Here the trigger is not in doubt - `Init` plays the cue at construction
-  - but the loop, the voice budget and what happens on a dangling reference are.
+- **Which undecoded opcode binds a waveform**, which is what leaves
+  `moather~birds` and 37 other nodes silent - see
+  ["A second, larger set"](#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
+  above.
 - **`emitter+0x3c` has no meaning.** It is written from `+0x0c` and
   `positional-audio.md`'s three-way-pinned emitter table does not list it, so
   nothing observed so far reads it back.

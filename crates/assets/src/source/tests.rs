@@ -66,6 +66,7 @@ const TITLE: &Title = &Title {
             ship_zone: r"Data\Sound\nowhere.bnk",
             weapons: r"Data\Sound\nowhere.bnk",
             speech: r"Data\Sound\nowhere.bnk",
+            track_general: Some(r"Data\Sound\nowhere.bnk"),
         },
         // Unread here too: nothing in this crate reads the Zone ladder.
         zone_announcer: None,

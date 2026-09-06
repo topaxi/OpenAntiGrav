@@ -87,10 +87,12 @@ use super::{Audio, TICK_HZ};
 mod announcer;
 mod banks;
 mod engine;
+mod track;
 pub use announcer::{Announcer, ClassAnnouncer};
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
 pub use engine::Engine;
+pub use track::TrackEmitters;
 
 /// The seed the effects generator starts from.
 ///
@@ -132,6 +134,17 @@ pub(super) struct SfxVoices {
     /// Whether this explosion has already been responded to, for the same
     /// reason [`Self::shield_open`] exists: the level must arm the voice once.
     blowup_open: bool,
+    /// The circuit's own ambience: one held voice per authored emitter that is
+    /// currently in range. See [`TrackEmitters`].
+    ambience: track::Ambience,
+    /// Ticks since the race's voices were built, which is the age every
+    /// authored emitter's radius curve is sampled at.
+    ///
+    /// Its own counter rather than the world's tick: `stop_race_sfx` drops the
+    /// whole `SfxVoices` at every race launch, so this restarts with the
+    /// emitters it drives, and nothing audio does may read simulation state it
+    /// could then be tempted to write.
+    ambience_ticks: u32,
     rng: Rng,
 }
 
@@ -163,6 +176,7 @@ impl Audio {
         if race.sounds().is_empty()
             && race.announcer().is_empty()
             && race.class_announcer().is_empty()
+            && race.track_emitters().omni.is_empty()
         {
             return;
         }
@@ -175,10 +189,13 @@ impl Audio {
                 shield_open: false,
                 blowup: None,
                 blowup_open: false,
+                ambience: track::Ambience::default(),
+                ambience_ticks: 0,
                 rng: Rng::new(SFX_SEED),
             }
         });
         let banks = race.sounds();
+        let emitters = race.track_emitters();
         let announcer = race.announcer();
         let class_announcer = race.class_announcer();
         let listener = listener_of(race);
@@ -382,7 +399,35 @@ impl Audio {
                     DT,
                 );
             }
+
+            // The circuit's own ambience, from the same ears and the same law.
+            // **After the craft**, so that on a starved pool the race's own
+            // cues have already taken their voices - the original's pool is
+            // hardware and this one is not, so the order is this project's
+            // choice and is written down as one. Measured on the two circuits
+            // `track_audio_ground_truth` flies, the peak is eight against
+            // `oag_audio::mixer::MAX_VOICES`, so it has not yet mattered.
+            #[expect(clippy::cast_precision_loss, reason = "a tick count")]
+            let frame = voices.ambience_ticks as f32;
+            voices
+                .ambience
+                .tick(mixer, emitters, &listener, frame, &mut voices.rng);
+            voices.ambience_ticks = voices.ambience_ticks.saturating_add(1);
         });
+    }
+
+    /// How many of the circuit's own emitters are sounding right now.
+    ///
+    /// Separate from `Mixer::active_voices`, which counts the race's cues too:
+    /// what this answers is "is the circuit audible", which is the claim
+    /// `crates/game/tests/track_audio_ground_truth.rs` makes and the one a
+    /// silent-ambience regression would break without changing any other count.
+    #[must_use]
+    pub fn ambient_voices(&self) -> usize {
+        self.sfx.as_ref().map_or(0, |voices| {
+            self.output
+                .with_mixer(|mixer| voices.ambience.playing(mixer))
+        })
     }
 
     /// Releases the held race voices, which is what leaving a race does.
@@ -406,6 +451,8 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                voices.ambience.stop(mixer);
+                voices.ambience_ticks = 0;
             });
         }
         self.sfx = None;
@@ -795,7 +842,11 @@ impl Cue {
 /// from the audio side. Inverting `Race::view` recovers both halves at once:
 /// the camera's world matrix, whose translation is the eye and whose first
 /// column is the right axis the pan projects onto.
-fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
+///
+/// `pub` because a circuit's own emitters are placed against the same ears the
+/// craft cues are, and the two must not be allowed to disagree about where the
+/// listener is - see [`TrackEmitters`].
+pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
     let camera = race.view().inverse();
     oag_audio::Listener {
         position: camera.w_axis.truncate().to_array(),

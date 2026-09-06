@@ -485,9 +485,13 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
         // measuring the wrong thing.
         audio.tick();
     }
+    // Everything still sounding is the *circuit's*, not the craft's. The track
+    // ambience deliberately outlives the flag: the circuit is still loaded
+    // under the results table and `VexSound_Init`'s cues were never tied to the
+    // race's state in the first place. See `audio::sfx::TrackEmitters`.
     assert_eq!(
         voices(&audio),
-        0,
+        audio.ambient_voices(),
         "the engine is still sounding ten seconds after the race ended"
     );
 }
@@ -584,6 +588,14 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         ..race::Options::default()
     })
     .expect("loading the race");
+    let mut loaded = loaded;
+    // **The circuit's own ambience is dropped from this fixture on purpose.**
+    // What is under test below is the *panner*, measured in the rendered
+    // samples, and the circuit's authored emitters sit on the same bus with
+    // positions of their own - so leaving them in would make a claim about one
+    // rival's stereo position into a claim about wherever the start line
+    // happens to be. `track_audio_ground_truth` is where they are tested.
+    loaded.setup.track_emitters = oag_game::audio::sfx::TrackEmitters::default();
     let mut race = race::Race::start(loaded.setup);
     assert!(
         race.ship_count() > 1,
@@ -603,7 +615,15 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         audio.tick();
     }
 
-    let voices = audio.output().with_mixer(|mixer| mixer.active_voices());
+    // **The circuit's own ambience is subtracted, not switched off.** A race
+    // on a real circuit opens a held voice for every authored emitter within
+    // its radius (`oag_game::audio::sfx::TrackEmitters`), and those are not
+    // engines. Counting them here would make this assertion a function of
+    // which circuit the default happens to be.
+    let voices = audio
+        .output()
+        .with_mixer(|mixer| mixer.active_voices())
+        .saturating_sub(audio.ambient_voices());
     assert_eq!(
         voices,
         race.ship_count() as usize,

@@ -277,6 +277,12 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\ship_zone.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
+    // Resolves on both Pure pressings and holds an `SBlk` whose own label is
+    // `GENTRAK` - Pulse's `gentrak` in Pure's upper case. Name resolution
+    // against a shipped archive, like the five above; Pure's executable has
+    // not been read for it, and whether Pure's circuits author the `.vex`
+    // audio classes at all is unswept.
+    track_general: Some(r"Data\Sound\generaltrack.bnk"),
 };
 
 /// The circuit a Zone race loads when the caller names none.
