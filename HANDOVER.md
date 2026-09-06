@@ -199,9 +199,9 @@ file does not need to carry its own.
     them; the recorded absence there is now the whole account) and the DLC
     key table is a maintainer-supplied credential this repo cannot regenerate
     at all, not an investigation with a next step.
-  - **2 of 13 are deterministically red, both traced to a same-day commit,
-    neither fixed** (per this file's own standing rule: a red ground-truth
-    test usually encodes a real disagreement, so "make it green" is the wrong
+  - **1 of 13 is deterministically red, traced to a same-day commit, not
+    fixed** (per this file's own standing rule: a red ground-truth test
+    usually encodes a real disagreement, so "make it green" is the wrong
     instinct without understanding why first):
     [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md)
     (one press throws zero blades - **not** `0c78c477`, that attribution is
@@ -211,14 +211,14 @@ file does not need to carry its own.
     class, so this scenario - a blade thrown off a standing start in a single
     race - is one no implemented mode can produce a weapon pad for; it needs
     `Mode::Eliminator`, which does not exist yet, so chasing `hull_radius`
-    further is parked rather than a next step)
-    and
-    [`stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md)
-    (a healthy craft blips stalled for exactly one tick on `16_Track` Ace,
-    likely the countdown-hold fix `cc395862` releasing opponent thrust one
-    tick before velocity rises off zero). The second still has a concrete,
-    cheap next step; the first's thread carries the evidence trail but is
-    parked, not actionable, until Eliminator mode lands.
+    further is parked rather than a next step).
+    `stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`
+    was the other one - **fixed 2026-09-07**: instrumenting `(tick, thrust,
+    speed)` around the countdown release confirmed the standing hypothesis
+    exactly (thrust 0 -> 100 at `COUNTDOWN_TICKS`, speed still ~0.57 <
+    `STALL_SPEED`, then >1.0 the very next tick, identically on `16_Track`,
+    `03_Track` and `06_Track`), so the test now excludes that one understood
+    tick from the stall count rather than the threshold being loosened.
   - `ps2_source_ground_truth`'s transcode test - historically flaky under load
     per the entries below - **passed cleanly in both runs today**, including
     at load 22-29 (298s), the same contention level the older flake reports
@@ -590,7 +590,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Players should be able to build pilots in game, and a naive editor would eat their comments](handover/players-should-be-able-to-edit-pilots-in-game.md) - **requested by the maintainer 2026-09-06**: in-game CRUD over the pilot `.toml` files. It fits `assets/ui/menu.toml`, which is explicitly project-owned for "the menus a PC game has", so there is no tension with the disc-driven menus. **Two things bite.** `pilots.rs` deliberately never rewrites these files because they are hand-authored and "clobbering those would be hostile" - a round-trip editor using `toml::to_string_pretty` the way `settings.rs` does destroys every comment a player wrote, so a format-preserving write (`toml_edit`) or an editor-owned-files-only rule has to be chosen first. And **no text entry exists anywhere** in this project, so naming a pilot is a prerequisite screen (an on-screen keyboard on abstract buttons), not a detail. Read-only listing is the right first cut
 - [Five reference traces are missing here, and the silent skip is why nobody noticed](handover/five-reference-traces-are-gone-and-the-skip-hid-it.md) - five of the six trace captures the ground-truth tests name do not exist in this checkout, and their absence never turned a build red because a missing reference **skips**. `just test-data` reports 2 failures; the same suite under `OAG_REQUIRE_GAME_DATA=1` reports 14, eleven of them missing-file panics rather than behaviour. [ADR-0046](docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md) now tracks a trace a test names, per file by name, so this cannot recur - it does not recover the five. Open: removing the skip path, recapturing, and two docs that assert a capture this checkout cannot demonstrate
 - [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - **deferred by maintainer decision, 2026-09-06**, not blocked and not resolved. `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. **Bisected and confirmed**: `cc395862` (hold AI opponents at the line through the start countdown) is the exact commit - `9785a177` (its parent) passes twice, `cc395862` fails twice with the identical panic `d11c5fb7`/`main` also show. A diagnostic readout (headings ~1.0, field 15-136 units out in grid order post-fix vs 536-681 units out on a since-curved line pre-fix) confirms this is a grid-tight field at throw time, not a steering-displacement bug in the gate itself - `cc395862`'s own fix is not implicated. **Deferred rather than chased further**: the test sets the pickup directly to get a thrown blade off a standing start at all - `WeaponStats_Race.xml` zeroes the Shuriken's odds in every class (see [pickups.md](docs/gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)), so a weapon pad in any implemented mode can never produce this scenario; it is Eliminator's alone, and `Mode::Eliminator` does not exist in this engine yet. The bisect and the open `hull_radius` question stand as written for whoever picks this up once Eliminator lands; this thread has already been misattributed to two different commits (`0c78c477`, then `cc395862`, both cleared above), which is itself a reason to stop guessing rather than open a third
-- [A healthy AI craft blips stalled for one tick off the line](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md) - `stall_rescue_ground_truth`'s zero-tolerance test reads a one-tick stall on `16_Track` at Ace; leading hypothesis is an unavoidable transition tick where the countdown-hold fix (`cc395862`) releases opponent thrust before velocity has risen off zero, not a physics or AI bug.
 
 ## Pending maintainer decision: shipped design data in tracked docs
 
