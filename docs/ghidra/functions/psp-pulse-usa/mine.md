@@ -494,6 +494,89 @@ second page would be nine tenths this one.
 - **`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
   mechanic's fate on every other weapon.
 
+## 2026-09-06: `MINELAUNCH` is a plain, positional, craft-emitter cue - `MINERADAR` is not
+
+The evidence-in-one-line section above establishes *that* `Mine_Init` plays
+both cues; it does not say *how*. Both calls were decompiled directly this
+session (`decompile_function` on `0x08859ac8`, confidence 92 already):
+
+```c
+func_0x001352b0(0x3f800000, param_6, _DAT_002bddf8, 0, _DAT_00277ffc, 0);
+// ... allocates a 0x70-byte object, points its own +0x50 at param_1+0x60
+// (the entity's own matrix) ...
+func_0x001352b0(0x3f800000, *(param_1 + 0x4c), _DAT_002bddf8, 0,
+                _DAT_0027800c, param_1 + 0x50);
+```
+
+Both calls are the same function, `func_0x001352b0` - one call, one emitter
+argument each, not two different play/loop functions. The two differ in that
+argument, and that argument is what a maintainer wiring this needs, not what
+either call's own line has read.
+
+**`MINELAUNCH`'s emitter is `param_6`, and `param_6` traces back to the
+firing craft's own `+0x50`.** `Weapon_DropMines` (`0x088675cc`) is the only
+caller, and its call site (also decompiled directly this session) reads:
+
+```c
+func_0x00055ac8(iVar2, uVar4, param_3 + 0x10, param_4, uVar1,
+                *(int *)(*(int *)(*(int *)(iVar3 + 0x44) + 0xf0) + 0x50), 0);
+```
+
+The sixth argument (`param_6`) is `*(*(*(iVar3+0x44)) + 0xf0) + 0x50)` - two
+pointer hops off the subsystem's per-craft slot, landing on a `+0x50` field.
+`+0x50` is the same offset `ShipCollisionFx_Trigger` (`0x089246b4`) reads as
+the craft's own emitter for `.COLLISIONS` and `Shield_Activate`
+(`0x0883e544`) reads it for `~SHIELD` - see
+[`Cue::Collision`/`Cue::Shield`'s placement reading](../../../../crates/game/src/audio/sfx.rs).
+Two levels of indirection is more inferential than either of those single-hop
+reads, so this is scored **78** (probable: strong structural fit, the same
+offset three call sites now agree on, not runtime-verified) rather than
+matching their 82-85. **So `MINELAUNCH` is a one-shot, positional cue off the
+firing craft's own emitter** - the same placement `Cue::Craft` already gives
+`Collision`, `Absorb` and `Shield` - fired once per mine as it leaves the
+back of the craft, which for the Mine is once every `DROP_INTERVAL` while a
+cluster is coming out.
+
+**`MINERADAR` is a different shape and stays unwired.** Its emitter,
+`*(param_1 + 0x4c)`, is not the craft at all - it is a new `0x70`-byte object
+`Mine_Init` allocates on the spot and anchors to *the mine entity's own
+matrix* (`param_1 + 0x60`, i.e. `entity->matrix`), and the handle this call
+returns is stored at `entity + 0x50` - the mine's own field, not the craft's.
+That is a per-projectile emitter with a held handle, the shape
+`docs/`'s own audio module (`crates/game/src/audio/sfx.rs`) calls a *held*
+voice - and every held voice this engine plays today (`Engine`, `Shield`,
+`Blowup`) is anchored to a **craft**, keyed by grid slot; nothing in
+`CueEvent` or `SfxVoices` can anchor one to a projectile pool slot instead.
+Building that is real work on its own (a new held-voice table sized to the
+projectile pool, opened at lay time and closed at detonation or expiry) and
+is not done here. Worth noting for whoever picks it up: the bank's own data
+says the single waveform bound to `MINERADAR` does **not** carry the loop bit
+(`oag-wad sounds ...:PSP_GAME/USRDIR/Data.wad --cue MINERADAR` reports "0
+looping"), so the held handle is not for a continuous drone - what recurring
+or one-shot use the original makes of that handle is unread, and is exactly
+why this stays silent rather than guessed at.
+
+**Confirmed against the disc's own bank, not just the executable's strings**:
+`oag-wad sounds <image>:PSP_GAME/USRDIR/Data.wad --cue <name>` finds
+`MINELAUNCH`, `MINERADAR`, `BOMBLAUNCH` and `~BOMBRADAR` all in bank `#866`
+(hash `01bec824`), which is `Data\Sound\weapons.bnk` per this project's own
+table in `docs/formats/psp-audio.md`.
+
+**`BOMBLAUNCH`/`~BOMBRADAR` are not wired, and this session's own read of
+`Weapon_FireBomb` (`0x08863a20`, decompiled directly) is why: it never calls
+`func_0x001352b0` at all.** Its only calls inside the pool-allocation branch
+are `func_0x0005f188` (the spawn helper contact-response.md already
+documents as unresolved past its prologue) and `func_0x0005abc4` (the shared
+`< 14` side-effect call every function on this page has now shown at least
+once). So the two Bomb cues' *presence* in the same `.rodata` group as the
+model string is confirmed, but their *call site* is not - either it is inside
+`func_0x0005f188` itself, or it is not played from the fire path at all. The
+distinction the "evidence in one line" section already drew between "the
+`.rodata` group pairs a handler with a weapon" and "the handler plays the
+cue" turns out to matter here: the Mine's own pairing was later confirmed by
+a direct decompile and the Bomb's was not, so treating them as equally solid
+would have been wrong.
+
 ## What this changes for the docs
 
 - [weapon-fire.md](weapon-fire.md): `Weapon_UpdateBurstFire_q` (`0x088675cc`) is
