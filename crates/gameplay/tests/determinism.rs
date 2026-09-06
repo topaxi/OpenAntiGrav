@@ -432,6 +432,28 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x4bf6_9ad5_c266_27db` at 60 ticks and `0x7713_5775_9662_2238` /
 ///   `0xe413_77c8_89ff_33ba` at 600.
 ///
+/// - **Moved 2026-09-06, later the same day**, when the weapon slowdown
+///   mechanic landed: `world::Ship` gained `pending_slowdown`, the original's
+///   `entity+0x130`, and `hash_world` writes it. **The move is the hash stream
+///   and nothing else.** No scenario in this file detonates anything against a
+///   craft - `run` fires no weapon at all and [`run_volley`]'s shots never
+///   reach one, which the 2026-08-26 falloff entry above already established
+///   from the other side - so the field is `0.0` on every tick of both and the
+///   addition contributes a fixed four bytes per ship per tick, exactly as
+///   `autopilot_timer` did.
+///
+///   Isolated the way the paragraph below requires: with that one
+///   `hasher.write_f32(*pending_slowdown)` removed from `hash::write_ship` and
+///   the credit, the drain and the physics timer all left in place, the
+///   constants this commit replaces - `0x3259_455a_d157_329f` /
+///   `0x6351_a74b_9671_1835` at 60 ticks and `0xe010_a59d_c8a2_8cc6` /
+///   `0x4634_1855_0c96_d234` at 600, and `0x84fa_0540_953f_7dbc` /
+///   `0x5544_ea00_8147_b29c` and `0x71c8_e66d_871f_8f3b` /
+///   `0x9c54_22cf_8958_48ea` for the volley - reproduce bit for bit. That is
+///   the load-bearing check here: the drain runs from `oag_game::race::Race`
+///   rather than from this crate, so a scenario that armed a timer would have
+///   moved these for a reason the removal could not have hidden.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -439,8 +461,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x3259_455a_d157_329f, 0x6351_a74b_9671_1835),
-    (600, 0xe010_a59d_c8a2_8cc6, 0x4634_1855_0c96_d234),
+    (60, 0x0ca8_8bcb_59f4_d6c8, 0x4c2e_808f_e4ea_8942),
+    (600, 0x83f1_5eb6_24e7_ce19, 0x3f71_f02f_a5c1_c9ff),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -570,8 +592,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x84fa_0540_953f_7dbc, 0x5544_ea00_8147_b29c),
-    (600, 0x71c8_e66d_871f_8f3b, 0x9c54_22cf_8958_48ea),
+    (60, 0x8d70_dd11_11c4_76dc, 0xf938_44ff_2975_003c),
+    (600, 0x2e31_a417_64b8_be7b, 0xe3ca_edf9_6c76_8fca),
 ];
 
 #[test]
