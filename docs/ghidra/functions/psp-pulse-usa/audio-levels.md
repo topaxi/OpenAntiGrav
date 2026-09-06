@@ -302,6 +302,136 @@ is not a bug in what any single voice is told to be, and no attenuation is
 invented here either, per the same rule that applied before this
 measurement existed.
 
+## The original measured live (2026-09-07): it does not meaningfully clip
+
+**The load-bearing result on this whole page: our music bus alone, on its
+own, measures louder than the original's entire race mix - engines
+included.** That single comparison is what actually settles whether the
+summing-headroom theory above (several honestly-scaled voices adding past
+full scale) explains our port's saturation, and it does not: adding
+uncorrelated sound sources cannot reduce RMS, so no SFX-side mechanism, on
+either side, can produce our music track alone outmeasuring the original's
+whole mix. The problem is in the music path, not in how SFX voices sum.
+
+### Method: PPSSPP's own audio dump, bracketed by PSP cycle-counter ticks
+
+Everything above this section was read from the decompilation or from a
+static memory layout. This section is the first time the original was run
+live for its audio specifically: `PPSSPPSDL` v1.20.4 under its own Xvfb and
+websocket port, `[General] DumpAudio = True` appended to its config, booting
+`data/images/pulse-psp-usa.chd` directly (no `chdman` step needed on this
+version). `DumpAudio` writes every mixed HLE audio buffer to a `.wav` under
+the profile's `PSP/AUDIO/`, continuously from boot - not from when a race
+starts, so a segment has to be sliced out.
+
+**Two things cost real time to find here, recorded so nobody re-derives
+them:**
+
+- **The wav's timeline is 1:1 with emulated seconds
+  (`cpu.status`'s `ticks / 222_000_000`), not wall-clock seconds.** This
+  PPSSPP logged `Secondary instance 2 - silencing audio` on boot (another
+  PPSSPP instance was detected elsewhere in the shared sandbox this was run
+  in) and ran anywhere from 0.68x to 2.46x real time depending on phase -
+  menus and loading ran far faster than real time, the race itself measured
+  directly at 0.80x. A slice taken by wall-clock elapsed time would be off by
+  a large, phase-dependent factor. The fix: read `cpu.status`'s `ticks`
+  immediately before and after the window of interest, convert to a sample
+  range with `sample = ticks / 222_000_000 * 44100`, and slice the wav on
+  that. Cross-checked at the end of a session: final `ticks / 222e6` = 328.3 s
+  against a final wav duration of 334.4 s (the process was killed about 6 s
+  after the last tick read) - matches, confirming the mapping.
+- **`sceSasSetVolume`'s ceiling claim in the previous section carried an
+  unresolved absolute address for the group table.** Resolved here the same
+  way `sound.md` resolves call targets in this region: this page's own
+  image-base-offset convention (`func_0x00272cf4` is `0x08a76cf4`) applies to
+  data too, so `Audio_SetGroupVolume`'s table at the decompiled offset
+  `0x2bf910` is `0x08804000 + 0x002bf910 = 0x08ac3910` at runtime, named here
+  `g_audio_group_volumes` (`0x08ac3910`, confidence 85), the sixteen-entry
+  table `Audio_SetGroupVolume` indexes into. Read live with `memory.read`
+  while sitting at the Main Menu (a fresh profile, `scripts/psp-drive.py`'s
+  own first-boot walk): **all 15 usable group slots read exactly `1024`
+  (`0x400`)** - the documented ceiling, now a genuine runtime measurement
+  rather than the static decompile's own claim about what `Audio_Init`
+  writes. Confidence **85**: one live read, one instant (idle at the Main
+  Menu, not mid-race), one binary. The master (`_DAT_002bfa10`,
+  group `0x10`) was not read - its absolute address is still unconfirmed (see
+  above) and it is not needed for the finding below, since it would move both
+  the original's own music and its own SFX equally and could not explain an
+  anomaly that is specific to the music bus.
+
+Driven into a race with `scripts/psp-drive.py`'s own `menu()` (imported as a
+module, `--single-race` for the full eight-craft grid), then held `cross` for
+a tick-bracketed window post-countdown, free-running - no breakpoints, so the
+CPU is never stopped mid-race and the timing bracket above is exact.
+
+### Measurement 1: the race mix, original versus ours
+
+24.07 s window, mid-race, full throttle, full eight-craft grid:
+
+| | Peak | RMS | Clipped samples |
+| --- | --- | --- | --- |
+| **Original** (`pulse-psp-usa`, live, PPSSPP) | 0 dBFS | -15.27 dBFS | 930 / 2,123,332 (**0.044 %**) |
+| **Our port** (`pulse-psp-eu.chd`, `--race --autopilot`, 30 s, this page's earlier 2026-08-24/09-06 captures) | 0 dBFS | -7.52 dBFS | 80,164 / 2,880,000 (**2.783 %**) |
+
+**Read this as "the original does not meaningfully clip," not "both clip,
+ours more."** 930 samples in 24 s, each at exactly one rail, is the signature
+of isolated transients (a collision, a pad, a pickup chime) touching full
+scale - not a mix sitting on the rail the way our port's continuous 2.783 %
+does.
+
+**Cross-release caveat, stated plainly rather than left to be noticed:** the
+original-side capture is `pulse-psp-usa`; the port-side number is
+`pulse-psp-eu.chd`, from this page's earlier captures. There is no reason to
+expect the two releases differ in mix level, but this has not been
+corroborated, and it specifically weakens this clip-rate table. It does not
+touch Measurement 2 below, which is entirely within our own port plus a raw
+disc decode and is release-independent.
+
+### Measurement 2: our music bus alone already outmeasures their whole mix
+
+This is the comparison that actually carries the conclusion, and it needs no
+further isolation of the original at all:
+
+- **Our port, race context, `sfx_volume = 0`** in our own settings
+  (`music_volume = 100`, `master_volume = 100`): peak 0 dBFS, **RMS
+  -11.53 dBFS**, 2 of 2,880,000 clipped (0.000 %). That clip count matches
+  this page's own "Music alone: 2 of 2,880,000" row above exactly, which is
+  what confirms this new capture is calibrated against the earlier one
+  rather than being a fresh, uncorroborated number.
+- **Our music decode is faithful to the disc's own authored PCM.** The
+  soundtrack track this race plays logs as "race music PSP soundtrack track
+  0, 187.6 s as its own disc lists it, 187.7 s". An already-cached raw
+  decode of it exists on this machine from earlier project work:
+  `data/cache/audio/11ac097f4895d45e-2ch-44100hz.s16le`, 33,103,872 bytes,
+  which at 2 channels x 2 bytes x 44,100 Hz is `187.66 s` - matching the
+  logged duration to two decimal places (an inference from duration, not a
+  hash match against the disc's own entry, though no other file under
+  `data/cache/audio/` lands within a second of it). Its own RMS, computed
+  directly off the raw samples with no mixer involved at all: **-11.37
+  dBFS** - within 0.16 dB of our music-alone dump above. This directly
+  confirms `crates/game/src/audio.rs`'s own documented claim that an
+  unattenuated voice "round-trips the disc's own PCM sample-for-sample": our
+  music path adds no gain of its own, and the disc's own track is simply
+  mastered this loud.
+- **Our music bus alone (-11.53 dBFS) is louder than the original's entire
+  race mix, music and eight craft's engines together (-15.27 dBFS).** Adding
+  uncorrelated sound sources cannot reduce RMS - so no amount of SFX-side
+  voice-summing headroom, on either side, reconciles these two numbers.
+  Something makes the *original's actual playback* of this same,
+  faithfully-decoded music quieter during a race than the raw track is on
+  its own, and it is not anything either this page or `sound.md`'s per-voice
+  SAS measurement already covers - both were measured to be honest and
+  unattenuated. It points at whatever varies a group's volume **after**
+  `Audio_Init`'s one-time ceiling write, during an actual race - which
+  nothing measured so far, on this page or elsewhere, actually reads mid-race
+  rather than at rest.
+
+**No attenuation is invented here either.** The gap is real and now narrowed
+to "something scales a group after boot, during a race, that we do not
+model" - but which group, by how much, and on what trigger is unmeasured. See
+the next section for the specific, already-documented mechanism this points
+at.
+
 ## One more thing on this page's own subject
 
 `Audio_UpdateGroupVolumes` (`0x0893ac70`, confidence 82) is called once a frame
@@ -313,3 +443,14 @@ second factor at `+0xcc` that ramps toward `1.0` at `+0xc8` per second and
 retreats toward `+0xc4` when the flag at `+0xc0` is set - the shape of a duck,
 almost certainly music under speech. The trigger is not recovered, so nothing
 of it is ported.
+
+**This mechanism now has a second, independent reason to be worth reading,
+beyond a speech duck.** The live group-volume read in the section above found
+all 15 groups at `1024` - but that read was taken idle, at the Main Menu, not
+mid-race, and a `memory.read` while the CPU is running costs about 520 ms
+(see [`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)),
+which would have stalled the tick-bracketed timing that race capture needed.
+So whether group `0` (or whichever group turns out to be music) reads below
+`1024` while actually racing is still an open, direct measurement - and per
+Measurement 2 above, something has to be attenuating the music bus during a
+race for the original's numbers to make sense at all.

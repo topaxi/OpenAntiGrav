@@ -389,6 +389,7 @@
 0x08a2b590	function	Audio_OutputPannedBlocking	88	audio-levels.md
 0x08a2ac90	function	Sas_Init	88	audio-levels.md
 0x0893ac70	function	Audio_UpdateGroupVolumes	82	audio-levels.md
+0x08ac3910	data	g_audio_group_volumes	85	audio-levels.md
 0x08991b20	function	Scream_PlaySoundByName	85	sound.md
 0x08992264	function	Scream_FindBankByName	80	sound.md
 0x0898f864	function	Scream_StartSound	85	sound.md
