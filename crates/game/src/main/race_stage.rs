@@ -119,12 +119,24 @@ impl RaceStage {
     /// the lap counter and the clock are all reporting a simulation nobody is
     /// stepping any more, and the original hides the HUD at its own race end
     /// too - see the `_BLOWUP` note in `race::tick`.
+    ///
+    /// `target_size` is `view`'s own full pixel dimensions - **not** derived
+    /// from `gpu.config` here, because it used to be and that is exactly what
+    /// broke: the ordinary per-frame call draws into `Framebuffer::output`,
+    /// which does track the surface, but [`RaceStage::warm_up`] draws this
+    /// same pass into the scene's own (possibly letterboxed, smaller) target
+    /// instead - see its own doc. `Countdown::draw` builds its private depth
+    /// attachment from this value and has to match `view`'s real size or the
+    /// pass is a validation error, so each caller passes the size of the
+    /// texture it actually handed in as `view` rather than one this function
+    /// would have to guess at.
     pub(crate) fn draw_hud(
         &mut self,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
     ) {
         match self.race.results() {
             Some(board) => {
@@ -160,7 +172,7 @@ impl RaceStage {
                             view,
                             readout.race_ticks as f32 / 60.0,
                             viewport,
-                            (gpu.config.width, gpu.config.height),
+                            target_size,
                         );
                     }
                 }
@@ -193,11 +205,21 @@ impl RaceStage {
     /// the loading screen does not draw into the scene target at all - it goes
     /// straight to the presentation target - so this target sits idle from the
     /// moment a race is being built until the first frame that draws one.
+    ///
+    /// `target_size` is `target`'s own full pixel dimensions - the caller's
+    /// `Framebuffer::allocation`, not `Gpu::size`. The two agree only when the
+    /// window is undecorated and exactly the configured aspect; anywhere else
+    /// the scene target is letterboxed smaller than the window, and passing
+    /// the window's own size on to [`RaceStage::draw_hud`] is the mismatch
+    /// that surfaced as a `depth attachment`/`color attachment` size
+    /// validation error - see `oag_game::hud::Countdown::draw`'s doc for why
+    /// that pass in particular is where it shows.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn warm_up(
         &mut self,
         gpu: &Gpu,
         target: &wgpu::TextureView,
+        target_size: (u32, u32),
         viewport: (f32, f32, f32, f32),
         fov: display::Fov,
         cull: bool,
@@ -250,8 +272,12 @@ impl RaceStage {
         // even though the real frame now draws them into the presentation
         // target instead. What a driver defers is a compile, and a pipeline is
         // keyed on its format - which is the same for both targets - not on
-        // the size of the attachment it is first used against.
-        self.draw_hud(gpu, &mut encoder, target, viewport);
+        // the size of the attachment it is first used against. `target_size`
+        // still has to be `target`'s own size and not the presentation
+        // target's, though: it is what the countdown's own depth attachment
+        // is built from, and that one *is* sized against the attachment
+        // rather than only its format. See this function's own doc.
+        self.draw_hud(gpu, &mut encoder, target, viewport, target_size);
         gpu.queue.submit(Some(encoder.finish()));
         if let Err(e) = gpu.device.poll(wgpu::PollType::wait_indefinitely()) {
             // Not fatal: the worst outcome is the compile this call exists to

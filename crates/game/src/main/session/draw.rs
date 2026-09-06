@@ -507,7 +507,18 @@ impl Session {
         // this target already did, above - **except the menus**, which draw
         // here instead. See the block below.
         if let Stage::Race(stage) = &mut self.stage {
-            stage.draw_hud(&self.gpu, &mut encoder, self.framebuffer.output(), rect);
+            // `self.gpu.size()`, matching `Framebuffer::output`'s own size:
+            // `resize_output` above already made sure of that this frame, and
+            // `RaceStage::draw_hud`'s `target_size` has to be `view`'s real
+            // size rather than assumed from `gpu.config` internally - see its
+            // own doc.
+            stage.draw_hud(
+                &self.gpu,
+                &mut encoder,
+                self.framebuffer.output(),
+                rect,
+                self.gpu.size(),
+            );
         }
 
         // **The menus draw here, after the resolve, rather than in the match

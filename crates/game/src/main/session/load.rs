@@ -514,6 +514,13 @@ impl Session {
                     race_stage.warm_up(
                         &self.gpu,
                         self.framebuffer.view(),
+                        // The allocation, not `size` above: `target_size` has
+                        // to be the scene texture's own full dimensions - see
+                        // `RaceStage::warm_up`'s own doc for the validation
+                        // error this stops, which a windowed run at any
+                        // letterboxed aspect used to hit here on the
+                        // countdown's own pass.
+                        self.framebuffer.allocation(),
                         (0.0, 0.0, size.0 as f32, size.1 as f32),
                         self.settings.graphics.fov,
                         self.settings.graphics.frustum_culling,
