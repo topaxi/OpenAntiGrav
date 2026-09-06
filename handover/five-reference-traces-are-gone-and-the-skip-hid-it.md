@@ -106,6 +106,33 @@ divergences past tick ~300 that `docs/physics/angular-velocity-column.md`
 already documents elsewhere - not a regression, and not this scenario's
 subject (it never leaves the start line).
 
+## One of the six is not test-referenced, and ADR-0046's rule does not strictly cover it
+
+Established while recapturing, 2026-09-06. `talons-junction-pitch-both-ways.csv`
+is named by **no live test** - checked against `cargo nextest list` and against
+the `format!()`-constructed path pattern that some ground-truth tests use, which
+a plain grep misses. Its only consumers are doc comments in
+`crates/physics/src/forces.rs` and `engine.rs`, citing constants already baked
+into the source.
+
+[ADR-0046](../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md)
+says "a trace a test names is tracked". By that rule this file does not qualify,
+and it is tracked anyway. **That is a deliberate call, not an oversight**: the
+capture is the standing evidence for `PITCH_INVERSE_INERTIA`, it verified that
+constant to within noise on recapture (`avel_x`/`omega_x` ratio to median
+`15.6001`; `trace-angular-fit.py` fits `k = -15.619` against a documented
+`-15.620`), and a doc comment asserting a measurement whose measurement no
+longer exists is the same failure this whole thread is about, one step removed.
+
+If the rule is ever restated, "a trace a test or a doc comment's evidence claim
+names" is the shape that matches practice. It is recorded here rather than
+edited into the ADR, which is immutable.
+
+**A grep over `crates/*/tests/` under-reports which traces are test-referenced**,
+because of those constructed paths - it puts `venom-straight.csv` at zero tests
+when two `yaw_authority_ground_truth` cases fail for its absence. Use a real run
+under `OAG_REQUIRE_GAME_DATA=1` to answer that question, not a grep.
+
 ## Open
 
 - **The docs assert captures this checkout cannot demonstrate.**
