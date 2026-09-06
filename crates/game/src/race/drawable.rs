@@ -784,9 +784,70 @@ pub(crate) struct Uniforms {
 }
 
 /// A craft's model matrix, which is the only correct way to place its mesh.
+///
+/// The barrel roll turns this about the craft's own nose: `FUN_08841f88`
+/// composes its rotation with the rigid body's own matrix, about the
+/// forward axis that matrix's own third row carries, so it is folded into
+/// `body.orientation` here rather than applied as a separate factor -
+/// `orientation * roll` is a local-space rotation about `-Z`
+/// ([`oag_physics::ship::Body::forward`]'s own axis), and composing it there
+/// keeps it independent of whatever `vmmul.q`'s unresolved operand order
+/// would otherwise carry through a following scale. See
+/// `oag_render::roll` and `handover/the-barrel-roll-has-a-drawing-job.md`.
 pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
     let body = &ship.physics.body;
-    Mat4::from_rotation_translation(body.orientation, body.position)
+    let roll = oag_render::roll::rotation(Vec3::NEG_Z, ship.physics.roll_phase);
+    Mat4::from_rotation_translation(body.orientation * roll, body.position)
         * Mat4::from_rotation_y(MODEL_YAW)
         * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ship at the origin, upright and facing the body's own `-Z` - the
+    /// axis [`model_matrix_of`] rolls about. `roll_phase` starts at `0.0`
+    /// from [`ShipState::default`], so a level ship draws exactly what it
+    /// drew before the roll landed.
+    fn level_ship() -> Ship {
+        Ship::default()
+    }
+
+    #[test]
+    fn a_level_roll_phase_leaves_the_matrix_unrolled() {
+        let ship = level_ship();
+        assert_eq!(ship.physics.roll_phase, 0.0);
+        let rolled = model_matrix_of(&ship);
+        let expected = Mat4::from_rotation_translation(
+            ship.physics.body.orientation,
+            ship.physics.body.position,
+        ) * Mat4::from_rotation_y(MODEL_YAW)
+            * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE));
+        assert_eq!(rolled, expected);
+    }
+
+    /// A non-zero roll phase visibly changes the matrix - the point of this
+    /// whole thread - and it does so about the body's own forward axis,
+    /// which a rotation about that axis leaves fixed.
+    #[test]
+    fn a_rolling_ship_turns_about_its_own_forward_axis() {
+        let mut ship = level_ship();
+        ship.physics.roll_phase = 1.0;
+        let rolled = model_matrix_of(&ship);
+        let level = {
+            let mut level = ship;
+            level.physics.roll_phase = 0.0;
+            model_matrix_of(&level)
+        };
+        assert_ne!(rolled, level, "a barrel roll must change the drawn matrix");
+
+        let forward = ship.physics.body.forward();
+        let a = rolled.transform_vector3(forward);
+        let b = level.transform_vector3(forward);
+        assert!(
+            (a - b).length() < 1e-4,
+            "the forward axis must not move: {a} vs {b}"
+        );
+    }
 }
