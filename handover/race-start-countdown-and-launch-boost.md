@@ -428,6 +428,46 @@ including the `0/-z` derivation and the dialect table, in
   makes it the more promising of the two to try first once the false-lead pattern
   from `Race_CreateModeObject` above is worked out on Pulse.
 
+## `Cockpit321Go` is gated, but not on the camera view - refuted 2026-09-06
+
+The maintainer reported that the countdown belongs **on the gantry, not the
+HUD**, and a coordinator hypothesis followed from the widget's name: that
+`Cockpit321Go` draws only in the cockpit camera view, which would explain it
+landing on the player craft's nose in external-camera screenshots.
+
+**That hypothesis is refuted.** Read off `psp-pulse-usa` directly:
+
+- `Hud_UpdateCountdownFade` (`0x0881f624`) hides both widgets unless a byte at
+  `+0x6f` is set **or** `hud->0x284 == 6`.
+- That `+0x6f` byte is populated in `Hud_Update` (`0x0881bf50`) from a
+  **settings lookup**, not a camera state: the option named `"Dynamic HUD"`
+  (`0x08a79d9c`), compared against `"FE_OFF"`, `"FE_DEFAULT"` and `"FE_FLAT"`.
+  A graphics-quality toggle, not External/Internal/Cockpit.
+- `hud->0x284` is written **once**, at widget-bind time inside
+  `Hud_BindWidgets`'s `+0x169` latch, so it cannot track a view the player
+  cycles mid-race. And `== 6` is already identified at confidence 84 in
+  [zone-mode.md](../docs/ghidra/functions/psp-pulse-usa/zone-mode.md) as the
+  race mode being **Zone**, not a camera value.
+- The camera-view enum is the separate, already-documented `camera+0x1dc`
+  ([camera.md](../docs/ghidra/functions/psp-pulse-usa/camera.md), confidence 90),
+  which carries its own "do not confuse the two" note.
+
+**What this raises instead, unresolved.** The gate reads: hide unless
+("Dynamic HUD" resolves to a non-`FE_OFF` state) **or** (the race is Zone). This
+project models no "Dynamic HUD" setting anywhere, so there is no way yet to say
+whether a default profile would draw this overlay at all in an Arcade race. It
+is therefore possible the maintainer's "no countdown on screen" is not only a
+scale/position problem - the original may not draw this widget in a default
+profile either, with the gantry or a `Pulse_Ready_Go.vex` fallback showing
+instead. **Raised as a possibility on this evidence, not a settled conclusion**;
+what "Dynamic HUD" defaults to, and what draws when it is off, were not chased.
+
+**The `0x08a7a1e8` table is confirmed a dead end for a third time.** A pass
+mid-session misread it as corroboration before finding this thread's own Next
+Steps already naming it a false lead - a text-position formatter inside
+`Race_CreateModeObject`, not the mode-object switch. Retracted there and
+recorded here so a fourth reader does not spend the same time.
+
 ## Next Steps
 
 **Display/logic, current focus:**
