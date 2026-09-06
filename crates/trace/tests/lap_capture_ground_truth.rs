@@ -49,18 +49,47 @@ fn workspace(relative: &str) -> std::path::PathBuf {
         .join(relative)
 }
 
-/// The course and the capture, or `None` when this checkout has neither.
+/// A capture under `data/traces/`, tracked in git per
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md).
+///
+/// Its absence is never a legitimate reason to skip: a tracked file missing
+/// from the working tree means the checkout is broken, not that this test
+/// does not apply. Panics unconditionally, independent of
+/// `OAG_REQUIRE_GAME_DATA` - that variable escalates *optional* inputs (a
+/// disc image under `data/images/`), and a tracked trace is not optional. See
+/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md` for why
+/// this used to return `None` instead.
+fn require_capture(relative: &str) -> std::path::PathBuf {
+    let path = workspace(relative);
+    assert!(
+        path.exists(),
+        "{} is missing, but it is tracked in git per ADR-0046 - the checkout \
+         is broken, not merely missing optional data.",
+        path.display()
+    );
+    path
+}
+
+/// The course and the capture, or `None` when this checkout has no disc image.
+///
+/// The disc image is an optional input - `OAG_REQUIRE_GAME_DATA=1` escalates
+/// its absence to a hard error, otherwise it is a quiet skip. The capture
+/// itself is not optional: `CAPTURE` is tracked in git per
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md),
+/// so its absence means the checkout is broken and panics unconditionally -
+/// see `require_capture`.
 fn load() -> Option<(Course, Trace)> {
     let image = workspace(IMAGE);
-    let capture = workspace(CAPTURE);
-    if !image.exists() || !capture.exists() {
-        println!(
-            "skipping: {} or {} is missing",
-            image.display(),
-            capture.display()
+    if !image.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            image.display()
         );
+        println!("skipping: {} is missing", image.display());
         return None;
     }
+    let capture = require_capture(CAPTURE);
 
     let mut archives = oag_pulse::open(image.to_str().expect("utf-8 path")).expect("the image");
     let blob = archives.read_name(TRACK).expect("the track");
