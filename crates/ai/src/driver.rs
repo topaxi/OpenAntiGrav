@@ -782,11 +782,40 @@ impl Steer {
 /// The fastest the corner ahead can be taken, or infinity where there is no
 /// corner.
 ///
-/// `sqrt(lateral_accel / curvature)` is the ordinary cornering limit.
-/// [`Personality::commitment`] scales the grip a driver assumes it has, so the
-/// eight targets are eight different numbers and the field does not lift off
-/// and brake in unison. It is under the square root, so a spread of a few per
-/// cent in commitment is half that in speed.
+/// **Two limits, and the smaller of them binds.**
+///
+/// `sqrt(lateral_accel / curvature)` is the ordinary cornering limit - how fast
+/// the craft can go round before it slides. [`Personality::commitment`] scales
+/// the grip a driver assumes it has, so the eight targets are eight different
+/// numbers and the field does not lift off and brake in unison. It is under the
+/// square root, so a spread of a few per cent in commitment is half that in
+/// speed.
+///
+/// `max_turn_rate / curvature` is the other one, and it is **kinematics rather
+/// than a tuned constant**: a craft at speed `v` on a line of curvature `k` has
+/// to yaw at `v * k` to stay on it, so a hull that cannot rotate faster than
+/// `w` cannot hold that line above `w / k` however much grip it has. Nothing to
+/// do with sliding - the craft leaves the line pointing the wrong way, with slip
+/// flat and every wheel on the ground.
+///
+/// # Why the second one was missing, and what it cost
+///
+/// `07_Track`'s tightest arc has curvature 0.047 - radius 21 - which admits
+/// **33 units/s**. The hull's ceiling is `steer * Turning.amount / (5 * I_yy)` =
+/// `100 * 1.68 / 108` = 1.556 rad/s, within a few per cent of the 1.42-1.51 that
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures on the original. The
+/// grip limit alone said 74 and the craft arrived at 94, left the line, and shed
+/// **34-35 shield a lap** grinding down the outside wall.
+///
+/// The grip term cannot reach that corner from either end: dropping
+/// [`Tuning::lateral_accel`] from 260 to 90 moved the loss from 24.08 to 24.11,
+/// because `sqrt(90 / 0.047)` is still 43.8 against a yaw limit of 33.
+///
+/// Board-wide this is worth **51 shield across the twelve circuits** for 1.2 s
+/// of mean clean lap, measured by `sweep_curvature_span` in
+/// `race_ground_truth.rs`. It binds above `k = max_turn_rate^2 / lateral_accel`,
+/// about 0.0125 at the defaults, which is 20 per cent of `07`'s samples and 26
+/// per cent of `06`'s.
 ///
 /// Infinity rather than an option, because every caller wants "is this speed
 /// allowed", and `speed <= f32::INFINITY` is the right answer for a straight
@@ -795,7 +824,9 @@ fn corner_target(curvature: f32, tuning: &Tuning, personality: &Personality) -> 
     if curvature <= f32::EPSILON {
         return f32::INFINITY;
     }
-    (tuning.lateral_accel * personality.commitment / curvature).sqrt()
+    let grip = (tuning.lateral_accel * personality.commitment / curvature).sqrt();
+    let yaw = tuning.max_turn_rate / curvature;
+    grip.min(yaw)
 }
 
 /// Thrust, and the brake held on **both** sides, from the speed the corner
