@@ -388,6 +388,14 @@ pub struct Setup {
     /// the choice of which alternate sounds all live in
     /// [`crate::audio::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
     pub sounds: crate::audio::sfx::Banks,
+    /// The circuit's **own** authored sound emitters, the ambience that belongs
+    /// to the track rather than to any craft.
+    ///
+    /// Beside [`Self::sounds`] for the same reason it is here: decoded data
+    /// with nothing device-shaped in it. Empty on a Zone circuit, which authors
+    /// none of the three `.vex` audio classes at all, and on any title whose
+    /// circuits have never been swept for them.
+    pub track_emitters: crate::audio::sfx::TrackEmitters,
     /// Zone mode's milestone announcer, decoded from this title's own
     /// `oag_title::ZoneAnnouncer` when it has one.
     ///

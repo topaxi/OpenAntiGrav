@@ -87,10 +87,12 @@ use super::{Audio, TICK_HZ};
 mod announcer;
 mod banks;
 mod engine;
+mod track;
 pub use announcer::{Announcer, ClassAnnouncer};
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
 pub use engine::Engine;
+pub use track::TrackEmitters;
 
 /// The seed the effects generator starts from.
 ///
@@ -795,7 +797,11 @@ impl Cue {
 /// from the audio side. Inverting `Race::view` recovers both halves at once:
 /// the camera's world matrix, whose translation is the eye and whose first
 /// column is the right axis the pan projects onto.
-fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
+///
+/// `pub` because a circuit's own emitters are placed against the same ears the
+/// craft cues are, and the two must not be allowed to disagree about where the
+/// listener is - see [`TrackEmitters`].
+pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
     let camera = race.view().inverse();
     oag_audio::Listener {
         position: camera.w_axis.truncate().to_array(),
