@@ -531,6 +531,63 @@ to measure: **controller stability, not the speed target**. The speed target is
 a real-data question and `the_ai_drives_the_field_along_the_track` is where it
 is answered. `the_default_tuning_is_not_this_ones` pins the split.
 
+### The correction converges too slowly across a wide S-bend, and it is `Tuning::look_speed`
+
+`13_Track` lost 88.48 of its 95.00-shield pool across 18,000 ticks to four
+recurring wall sites, every lap, on a circuit with no corner its yaw-rate or
+grip limits ever bind on - `head_err` stayed 4-20 degrees and `grounded` was
+`1.00` throughout, ruling both out the same way they were ruled out on `07`.
+Widening the trace 150-200 samples ahead of each site (rather than only
+through the contact) showed the same shape at all four: the craft's own
+lateral offset from the line swings 25-30 units across a wide S-bend, its own
+AI corridor goes negative 23-57 samples *before* wall contact, and the aim
+point the driver's own steering was chasing stayed centred and legal
+throughout - `racing_line` reads `0.00` at every sampled index in all four
+windows, and the craft's actual offset already exceeds the largest offset
+`Frame::clamp` would ever let `Driver::drift` request. So this is not a
+line-selection fault: it is the *response* that lags, not the target.
+
+**`Tuning::rate_gain` was swept first, on the strength of its own doc comment
+naming it the likeliest lever, and a direct probe ruled it out before the
+sweep even ran.** Reconstructing `Driver::steering`'s own arithmetic
+(`wanted`, `actual`, and the implied `rate_gain * rate_error` before its
+`-1..=1` clamp) against the real simulated state through all four widened
+windows shows the command is **already at full lock** for roughly half of
+every window and for the samples nearest every contact - there is no headroom
+left for a larger gain to spend. The sweep confirms it the expensive way:
+`rate_gain` at `10.0` and `20.0` both raise `13`'s own end shield, but both
+also break the field - `opponent_weapons_ground_truth`'s own floors (mean
+0.70, worst 0.45) fail at `10.0` (worst opponent shield `0.00`, a craft
+destroyed) and fail harder at `20.0`, which also drops a lapped opponent from
+seven of seven to six.
+
+**`Tuning::look_speed` is the lever that was left**, and the mechanism is
+geometric rather than a raw gain: pure pursuit's correction is
+`curvature = 2 * offset / distance^2`, and `distance` grows with the
+lookahead - so a longer lookahead answers the same lateral offset with a
+*gentler* request, exactly backwards from what a craft already outside its
+corridor needs during a fast transition. Lowered from `0.35` to **`0.30`**,
+swept the same way `Tuning::curvature_span` was - a lone Ace, twelve forward
+circuits, 18,000 ticks, against the two committed field fixtures so a value
+clean on all twelve *lone* circuits cannot hide a craft wedged in traffic.
+`Tuning::look_speed`'s own doc comment carries the full table; the summary is
+that `13`'s end-of-run shield rises from `6.52` to `39.07`, the twelve-circuit
+solo total rises from `705.68` to `863.10`, and the field floors - which fail
+outright at `0.22` and `0.20`, two adjacent points further down the same
+slope - **improve** over the old default at `0.30` rather than merely holding,
+which is why `0.30` was chosen over the lower values that scored higher on
+`13` alone.
+
+**`07_Track` is unchanged by this**, at `0.00` end shield in every row swept.
+Its per-lap loss falls (28-30 down to 22-25 at `0.30`) but the craft still
+ends the run destroyed, exactly as it did before. That is `07`'s own
+wall-response question - whether contact damage should charge every tick of a
+sustained low-speed graze at all - and it is untouched here: `CONTACT_DAMAGE_SCALE`
+is confidence 94, measured live against the running original at `0.035000`
+on 25 of 25 calls, and nothing in this section's evidence bears on whether
+that scale is right for a *sustained* graze rather than for the discrete
+impacts it was measured against. Left open.
+
 ### Airbrakes, and what a differential one actually does
 
 Reading the force law before designing against it changed what the feature is.
