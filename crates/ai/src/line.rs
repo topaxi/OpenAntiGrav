@@ -296,11 +296,33 @@ impl Line {
         if self.points.len() < 3 {
             return 0.0;
         }
-        let (first, a, _) = self.ahead(index, span);
-        let (second, b, _) = self.ahead(first, span);
-        let (_, c, _) = self.ahead(second, span);
+        // **All three walks run from `index`, not from each other's landing
+        // index.** [`Self::ahead`] returns an interpolated point but the index
+        // of the *segment* it landed in, and chaining the walk off that index
+        // restarts it from the segment's own start rather than from the point
+        // just returned. Where a segment is longer than `span`, all three walks
+        // land inside that one segment and return the same index, so the second
+        // and third points coincide, the outgoing chord is the zero vector, and
+        // the guard below is all that stands between that and `acos(0)` being
+        // charged as a right-angle turn over a fraction of a unit. Measured on
+        // `06_Track`, whose racing line has one 14.78-unit segment where two
+        // authored paths meet: the old chaining read that dead-straight seam as
+        // a curvature of **25.9 radians per unit** - a radius of three
+        // centimetres - and an AI braking against it held 1.2 units/s and never
+        // recovered, because slowing shrinks the span that produced the reading.
+        // Pinned by `a_long_segment_is_still_straight`.
+        let (_, a, _) = self.ahead(index, span);
+        let (_, b, _) = self.ahead(index, span * 2.0);
+        let (_, c, _) = self.ahead(index, span * 3.0);
         let into = b - a;
         let out_of = c - b;
+        // A chord of no length carries no direction, and `normalize_or_zero`
+        // would hand `acos` a dot of zero - which is `PI / 2`, a right angle
+        // invented out of nothing. Two coincident samples are enough to produce
+        // one, and every circuit on the disc has a pair 0.11 units apart.
+        if into.length() <= f32::EPSILON || out_of.length() <= f32::EPSILON {
+            return 0.0;
+        }
         // **The turn happens over the distance between the two chords' midpoints,
         // which is half their total length, not all of it.** Dividing by the
         // whole travelled distance reads a circle as half as curved as it is,
@@ -334,9 +356,11 @@ impl Line {
         if self.points.len() < 3 {
             return 0.0;
         }
-        let (first, a, _) = self.ahead(index, span);
-        let (second, b, _) = self.ahead(first, span);
-        let (_, c, _) = self.ahead(second, span);
+        // PROBE C: all three walks from the same origin, so the chords are
+        // actually `span` apart even where one segment is longer than `span`.
+        let (_, a, _) = self.ahead(index, span);
+        let (_, b, _) = self.ahead(index, span * 2.0);
+        let (_, c, _) = self.ahead(index, span * 3.0);
         let into = (b - a).normalize_or_zero();
         let out_of = (c - b).normalize_or_zero();
         (out_of - into).dot(lateral)
@@ -344,164 +368,4 @@ impl Line {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A unit-ish circle, counter-clockwise in the XZ plane.
-    fn circle(radius: f32, points: usize) -> Line {
-        Line::new(
-            (0..points)
-                .map(|step| {
-                    let angle = std::f32::consts::TAU * step as f32 / points as f32;
-                    Vec3::new(radius * angle.cos(), 0.0, radius * angle.sin())
-                })
-                .collect(),
-        )
-    }
-
-    #[test]
-    fn an_empty_line_answers_everything_with_the_origin() {
-        let line = Line::default();
-        assert!(line.is_empty());
-        assert_eq!(line.point(7), Vec3::ZERO);
-        assert_eq!(line.nearest(Vec3::ONE, 3, 20), 0);
-        assert_eq!(line.ahead(0, 50.0), (0, Vec3::ZERO, 0.0));
-        assert_eq!(line.curvature(0, 10.0), 0.0);
-    }
-
-    #[test]
-    fn indices_wrap() {
-        let line = circle(10.0, 8);
-        assert_eq!(line.point(0), line.point(8));
-        assert_eq!(line.point(3), line.point(11));
-    }
-
-    #[test]
-    fn nearest_finds_the_point_under_a_position() {
-        let line = circle(100.0, 64);
-        let target = line.point(20);
-        assert_eq!(line.nearest(target, 18, 16), 20);
-    }
-
-    /// The window is the whole point: a position on the far side of the ring is
-    /// *not* found from here, and that is what stops a progress index jumping
-    /// across a track that passes near itself.
-    #[test]
-    fn nearest_does_not_look_across_the_ring() {
-        let line = circle(100.0, 64);
-        let opposite = line.point(40);
-        assert_ne!(line.nearest(opposite, 0, 8), 40);
-    }
-
-    #[test]
-    fn ahead_walks_the_requested_distance() {
-        let line = Line::new(vec![
-            Vec3::ZERO,
-            Vec3::new(0.0, 0.0, 10.0),
-            Vec3::new(0.0, 0.0, 20.0),
-            Vec3::new(0.0, 0.0, 30.0),
-        ]);
-        // Interpolated: 15 units along is halfway between points 1 and 2.
-        let (index, point, travelled) = line.ahead(0, 15.0);
-        assert_eq!(index, 1);
-        assert!((point.z - 15.0).abs() < 1e-4, "point {point:?}");
-        assert!((travelled - 15.0).abs() < 1e-4, "travelled {travelled}");
-        assert_eq!(line.ahead(0, 0.0).0, 0);
-    }
-
-    /// A tighter circle bends harder. The absolute value depends on the sampling,
-    /// so the ordering is what is asserted.
-    #[test]
-    fn a_tighter_circle_reads_as_more_curved() {
-        let tight = circle(50.0, 64);
-        let wide = circle(400.0, 64);
-        assert!(tight.curvature(0, 10.0) > wide.curvature(0, 10.0));
-    }
-
-    /// Four points a fixed distance apart, with a corridor that widens along
-    /// them, so an interpolated bound is distinguishable from a snapped one.
-    fn widening() -> Line {
-        let points: Vec<Vec3> = (0..4)
-            .map(|step| Vec3::new(0.0, 0.0, 10.0 * step as f32))
-            .collect();
-        let corridor = (0..4)
-            .map(|step| Frame {
-                lateral: Vec3::X,
-                left: -(step as f32),
-                right: 1.0 * step as f32,
-            })
-            .collect();
-        Line::with_corridor(points, corridor)
-    }
-
-    #[test]
-    fn a_line_can_have_no_corridor() {
-        let line = Line::new(vec![Vec3::ZERO, Vec3::X]);
-        assert!(!line.has_corridor());
-        assert_eq!(line.aim(0, 0.5).corridor, None);
-    }
-
-    /// A corridor that does not match the points is dropped rather than
-    /// half-used: a truncated one would silently give the back of the track no
-    /// room, and that reads as a driver bug rather than as the wiring mistake
-    /// it is.
-    #[test]
-    fn a_mismatched_corridor_is_dropped() {
-        let line = Line::with_corridor(
-            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
-            vec![Frame::default(), Frame::default()],
-        );
-        assert!(!line.has_corridor());
-    }
-
-    /// **The bound is interpolated onto the same segment fraction the aim point
-    /// is**, not snapped to the sample. Snapped, it steps by a whole sample's
-    /// worth every time the walk crosses one, and a driver that clamps its
-    /// drift against a stepping bound puts that step into the commanded turn
-    /// rate.
-    #[test]
-    fn the_corridor_is_interpolated_rather_than_snapped() {
-        let line = widening();
-        let frame = line.aim(0, 15.0).corridor.expect("a corridor");
-        assert!((frame.right - 1.5).abs() < 1e-4, "right {}", frame.right);
-        assert!((frame.left + 1.5).abs() < 1e-4, "left {}", frame.left);
-        assert!((frame.lateral - Vec3::X).length() < 1e-4);
-    }
-
-    #[test]
-    fn a_frame_measures_the_room_on_the_side_being_asked_about() {
-        let frame = Frame {
-            lateral: Vec3::X,
-            left: -2.0,
-            right: 6.0,
-        };
-        assert_eq!(frame.room(1.0), 6.0);
-        assert_eq!(frame.room(-1.0), 2.0);
-        assert_eq!(frame.clamp(9.0), 6.0);
-        assert_eq!(frame.clamp(-9.0), -2.0);
-        assert_eq!(frame.clamp(3.0), 3.0);
-    }
-
-    #[test]
-    fn a_straight_line_has_no_curvature() {
-        let line = Line::new(
-            (0..16)
-                .map(|step| Vec3::new(0.0, 0.0, 10.0 * step as f32))
-                .collect(),
-        );
-        assert!(line.curvature(0, 10.0).abs() < 1e-6);
-    }
-
-    /// A circle's curvature is `1 / radius`, and this estimator should land near
-    /// it - it is a speed target's input, so being wrong by a factor would be
-    /// wrong by a factor everywhere downstream.
-    #[test]
-    fn curvature_approximates_one_over_the_radius() {
-        let line = circle(100.0, 128);
-        let measured = line.curvature(0, 20.0);
-        assert!(
-            (measured - 0.01).abs() < 0.002,
-            "measured {measured}, expected about 0.01"
-        );
-    }
-}
+mod tests;

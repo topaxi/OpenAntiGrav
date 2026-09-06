@@ -123,9 +123,11 @@ Fraction of each circuit yaw-limited (`k > 1.55^2 / 260`), worst sample:
 Full evidence, tables, per-tick dumps and the two probes below:
 `~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/steering-saturation.md`.
 
-## The fix is a design call, probed and deliberately not taken
+## Step 3 is done: probe B's regression was a latent estimator bug, and it is fixed
 
 Two probes, each measured on the whole twelve-circuit board, then reverted.
+**Both were measured on the pre-fix tree**, so the 06 row below is the
+symptom this section goes on to explain, not a property of the probe.
 
 - **A: the yaw-rate term alone.** `corner_target` returns
   `min(sqrt(lateral_accel * commitment / k), max_turn_rate / k)` - kinematics,
@@ -140,36 +142,56 @@ Two probes, each measured on the whole twelve-circuit board, then reverted.
   takes three respawns. `min(10.0)` is a number chosen to make 07 behave, which
   is exactly the invisible damage the thread's own rule forbids.
 
-**B's damage is two *located* events, not conservative cornering**, and the
-obvious reading - "B corners slowly and 06 has the tightest corner" - is wrong.
-Shield by 50-index bucket, per lap:
+**B's damage was two *located* events, and as of 2026-09-06 both are
+explained. Neither is probe B's.**
 
-- **06, indices 1,200-1,249: nothing at all in baseline, 34.72 on lap 1 under
-  B** with three respawns, then 4.43 and 3.45. That bucket holds 06's worst
-  corner, `k` 0.0547 at index **1204**, `v_yaw` **28 units/s** - the tightest
-  sample on the disc. Every other bucket on 06 improved. So B is doing something
-  specific at 06:1204, most likely wedging a craft it has slowed to a crawl.
-  **Cause not established.**
-- **14, indices 750-799: nothing in baseline, 7.60 on lap 3 under B** and
-  nothing on laps 1-2. `crates/game/tests/race_ground_truth.rs` already records
-  14 as having **82 racing-line samples with nothing under them at 684-765**,
-  which that bucket overlaps - a craft slowed over an unsupported stretch is a
-  different failure from one that flies it. 14 is a large net win under B all
-  the same: 29.09 total against baseline's 53.59, its worst bucket (2800-2849,
-  at its tightest corner, index 2785) falling from ~6 a lap to under 1.
+- **06's 34.72 was a bug in `Line::curvature`, now fixed.** The estimator
+  chained its three walks off each other's landing *index*, and `Line::ahead`
+  returns an interpolated point but the index of the *segment* it landed in.
+  Where one segment is longer than `span`, all three walks land inside it and
+  return the same index, the outgoing chord is the zero vector, and `acos(0)`
+  is charged as a right-angle turn over a fraction of a unit. **Every circuit
+  on the disc has two path seams of the shape `0.30, 0.11, ~7.0` units, and
+  06's is the only jump longer than ten - 14.78 - which is the whole of why B
+  broke 06 and nothing else.** B pinned `span` at 10, so the phantom fired at
+  every speed: the craft was told to hold 1.2 units/s, held it, crawled into
+  the seam's own unsupported stub at 1196-1199 and ground there at 0.01-0.08
+  shield a tick until the rescue took it. Fixed in
+  `crates/ai/src/line.rs`, pinned by `a_long_segment_is_still_straight`.
+  **With it fixed, 06 under B is 69.27 shield and zero respawns** - 11 better
+  than baseline.
+- **14's is a marginal one-tick contact, not the unsupported line.** The
+  hypothesis below was wrong in its mechanism. 14 has no seam over 10 units and
+  no curvature spike anywhere, so B's cap cannot fire on it; the craft passes
+  index 751 at **134 units/s under B and 132-134 in baseline**, and the 7.60 is
+  a single tick on a single lap at a speed the other three laps take without a
+  scratch. The line there does run 9-24 units above the floor (the recorded
+  684-765 run), but nothing is slowed over it. It belongs to the wall-response
+  item in `## Open`, not to the span.
 
-So the fix wants its own thread: it is a change to which limit law the AI uses
-and at what resolution it reads the line, it moves every circuit, the span has
-no measured value yet, and **the one measurement that would anchor a sweep -
-06's shield - is dominated by a located event nobody has looked at.**
+The estimator fix landed on its own, ahead of any of this: it is a bug with a
+disc-free reproduction, and its board movement is 0.5-2.7 shield either way with
+no lap or respawn change anywhere. It moved `oag-ai`'s committed driver
+reference - the chord spacing changes every reading the estimator takes, not
+only the seam - and that move is in its own commit with the isolation recorded
+in `crates/ai/tests/determinism.rs`'s own History. `oag-core`, `oag-physics` and
+`oag-gameplay`'s gates did not move. Baseline lap times shifted by up to a tick
+or two with it: **07 is 49.8s where it was 49.9, 06 37.8 where it was 38.1**, all
+twelve still lap clean and 01 keeps its single respawn.
+
+What still wants its own thread is A and the span: a change to which limit law
+the AI uses, moving every circuit, with the span's value still unmeasured. What
+has changed is that the sweep is no longer anchored on a cause nobody had looked
+at.
 
 ## Open
 
-- **The AI's cornering model has no yaw-rate term and its curvature estimator
-  cannot resolve a corner shorter than its own span.** Both established above.
-  The fix is A plus a *measured* span rule, swept the way `lateral_accel` was
-  (`sweep_grip` in `race_ground_truth.rs` is the harness shape), with 06 as the
-  circuit that discriminates rather than 07.
+- **The AI's cornering model has no yaw-rate term.** Established above, and
+  probe A is the shape of the fix. The estimator's resolution is no longer the
+  second half of that sentence: `Line::curvature` is fixed, and a 10-unit span
+  now costs nothing anywhere on the board. **The span sweep is unblocked** -
+  what is left is choosing the number, which is still a number and still wants
+  measuring rather than picking.
 
 - **Whether the wall response should stop a craft dead.** 101.0 to 2.7 units/s
   in 18 ticks with one contact resolved a tick, against the 3.5 per cent
@@ -205,21 +227,21 @@ no measured value yet, and **the one measurement that would anchor a sweep -
 
 ## Next Steps
 
-1. **Find out what probe B does at 06:1204 before sweeping anything.** 34.72
-   shield and three respawns, one bucket on one lap, at a place baseline never
-   loses anything: that is a located failure, not conservative cornering, and a
-   span sweep anchored on 06's shield would be optimising against a cause nobody
-   has looked at.
-2. Then sweep the curvature estimator's span the way `lateral_accel` was swept,
-   with probe A's yaw-rate term in place. A span chosen against 07 alone is a
-   span fitted to one circuit.
-3. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
+1. **Sweep the curvature estimator's span with probe A's yaw-rate term in
+   place**, the way `lateral_accel` was swept (`sweep_grip` in
+   `race_ground_truth.rs` is the harness shape). This is now a straight
+   measurement: the thing that was dominating 06's shield is fixed, so 06 can
+   be the circuit that discriminates. Measured on the fixed tree, A + a
+   10-unit cap gives 06 **69.27**/0 respawns, 14 **79.45**, 16 71.90, 09 84.45,
+   05 73.62, 04 59.68, 02 86.93, 03 95.00, 10 58.56, 13 8.08, 01 38.96/1
+   respawn, and 07 reaches **lap 4** instead of dying on lap 3. Nothing
+   regresses. That is one point on the sweep, not the answer.
+2. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
    grazing a flat wall at 28 degrees, one contact a tick, and compare the
-   tangential bleed against the recovered 0.035. Independent of step 1 and
-   downstream of it - the craft reaches that wall at 101 because it was never
-   slowed for a corner that admits 33, so a cheaper scrape would hide the cause
-   rather than fix it.
-4. Do **not** trim `07_Track` out of the test's known-good list: it has always
+   tangential bleed against the recovered 0.035. **14's 7.60 at index 751 is
+   the cheapest case to start from** - one tick, one index, one lap in four, at
+   a steady 134 units/s, and it flips on a sub-unit positional difference.
+3. Do **not** trim `07_Track` out of the test's known-good list: it has always
    passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
    or `grip_air` - the first cannot reach this corner and the last two are
    authored per-craft data that the `grounded == 1.00` measurement clears.
