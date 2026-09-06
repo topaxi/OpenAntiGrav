@@ -138,6 +138,10 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
             Cue::Collision,
             Cue::Absorb,
             Cue::ShieldActive,
+            // `oag-wad sounds ...:PSP_GAME/USRDIR/Data.wad --cue MINELAUNCH`
+            // reports one waveform, no loop bit - see `mine.md`'s 2026-09-06
+            // section.
+            Cue::MineLaunch,
         ] {
             for _ in 0..64 {
                 let (_, loops) = banks.pick(cue, &mut rng).expect("cue");
@@ -168,9 +172,18 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// `waveforms.is_empty()` check entirely and did not even reach this list.
 /// Its presence here is the not-PS-ADPCM path's clearest end-to-end proof:
 /// a cue that could not have loaded any other way.
+///
+/// **`MINELAUNCH` is the newest addition, and it resolves on HD's disc with no
+/// per-title work at all - `weapons.bnk` carries it, 88 waveforms.** That is
+/// bank presence, not a confirmed HD trigger: `Cue::MineLaunch`'s own doc
+/// comment cites only `psp-pulse-usa`'s `Mine_Init`, and `crates/game/src/audio/sfx.rs`'s
+/// module doc already states the confidence-50 bet this rides on - a title in
+/// the same series with the same cue names is likely to fire them at the same
+/// moments, and nothing here has looked at HD's own weapon-fire dispatch to
+/// check.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not() {
+fn wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -218,6 +231,7 @@ fn wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not() {
             "disengaging",
             "~BLOWUP",
             "~ROCKLOCK",
+            "MINELAUNCH",
         ],
         "HD's loadable cue set changed"
     );
@@ -249,11 +263,17 @@ fn wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not() {
         says(r"~ROCKLOCK -> 2 waveform(s) from Data\Sound\weapons.bnk"),
         "the all-PCM cue did not load"
     );
+    // `MINELAUNCH` is bank presence, not a confirmed HD trigger - see this
+    // test's own doc comment - but the bank read itself is checkable, the
+    // same way every cue above is.
+    assert!(says(
+        r"MINELAUNCH -> 88 waveform(s) from Data\Sound\weapons.bnk"
+    ));
 }
 
 /// Structural checks - the bank names these cues, in this order, at these
 /// indices - are `hd_title_ground_truth.rs`'s job. This is the layer above,
-/// on the same terms as [`wipeout_hd_loads_the_eight_cues_it_has_and_reports_the_one_it_does_not`]:
+/// on the same terms as [`wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not`]:
 /// that a cue reported as loaded actually decodes to a waveform, not a report
 /// line that reads well and a silent voice.
 #[test]
