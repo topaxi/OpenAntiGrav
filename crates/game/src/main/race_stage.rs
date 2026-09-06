@@ -17,6 +17,10 @@ pub(crate) struct RaceStage {
     /// there may be none, where this needs only a font and
     /// `oag_game::font::Atlas::build` always answers with the built-in 5x7 set.
     pub(crate) scoreboard: oag_game::scoreboard::Overlay,
+    /// The start-line countdown's own `<Mode3D>` model, or `None` when this
+    /// mode's layout carries no `Cockpit321Go` widget to place it by - see
+    /// `oag_game::hud::countdown`.
+    pub(crate) countdown: Option<oag_game::hud::Countdown>,
 }
 
 impl RaceStage {
@@ -137,6 +141,28 @@ impl RaceStage {
                         .scene
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
                     hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
+                    // The countdown, for exactly the measured start-line gate's
+                    // span and no other window - see `oag_game::hud::countdown`
+                    // and `oag_race::RaceState::thrust_gated`, whose own doc
+                    // names the three live captures behind the 272-tick figure.
+                    // Not gated further by mode: the capture that measured it
+                    // was Time Trial alone, and `thrust_gated` already applies
+                    // it to every mode on the same reasoning
+                    // `RaceState::eliminate` uses, so this follows it rather
+                    // than adding a second, narrower guess on top.
+                    if let Some(countdown) = &mut self.countdown
+                        && oag_race::RaceState::thrust_gated(readout.race_ticks)
+                    {
+                        countdown.draw(
+                            &gpu.device,
+                            &gpu.queue,
+                            encoder,
+                            view,
+                            readout.race_ticks as f32 / 60.0,
+                            viewport,
+                            (gpu.config.width, gpu.config.height),
+                        );
+                    }
                 }
             }
         }

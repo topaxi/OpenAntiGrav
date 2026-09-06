@@ -112,6 +112,39 @@ pub fn write_uniforms(
     Mat4::from_cols_array_2d(&uniforms.view_projection)
 }
 
+/// [`write_uniforms`], for a caller that already has both matrices rather than
+/// an [`Orbit`] to frame one from.
+///
+/// [`matrices`] always derives its camera from a model's own bounding sphere,
+/// which is right for the asset viewer and wrong for a HUD overlay: a
+/// `<Mode3D><Model>` widget is placed in the layout's own pixel space, not
+/// framed to fill the screen. This is the same uniform layout with that
+/// assumption removed - a raw view-projection and model matrix, written
+/// verbatim.
+///
+/// `prev_mvp` is set equal to the current frame's, the same choice
+/// [`matrices`] makes for the viewer: there is no previous tick to compare
+/// against and every pipeline built with [`crate::mesh_render::Velocity::None`]
+/// never reads it anyway.
+pub fn write_uniforms_raw(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    view_projection: Mat4,
+    model: Mat4,
+) {
+    let mvp = view_projection * model;
+    let uniforms = Uniforms {
+        view_projection: view_projection.to_cols_array_2d(),
+        model: model.to_cols_array_2d(),
+        _unused: 0.0,
+        _pad0: 0.0,
+        _pad1: 0.0,
+        _pad2: 0.0,
+        prev_mvp: mvp.to_cols_array_2d(),
+    };
+    queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
+}
+
 /// Size, in bytes, of the uniform buffer `write_uniforms` expects.
 pub const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
 

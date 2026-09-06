@@ -516,6 +516,11 @@ pub struct Loaded {
     /// `Data\Weapons`. `None` on a source that does not carry it, on the same
     /// terms as [`Self::rocket_model`].
     pub shield_cockpit: Option<Model>,
+    /// The countdown's own `<Mode3D><Model>` mesh, `Data\HUD\Cockpit_321GO.vex` -
+    /// see `crate::hud::countdown`. `None` on the same terms as
+    /// [`Self::rocket_model`], and also whenever this mode's own layout carries
+    /// no `Cockpit321Go` widget to place it by (Pure's, and any other title's).
+    pub countdown_model: Option<(Model, crate::hud::Model)>,
     pub liveries: Vec<Livery>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,

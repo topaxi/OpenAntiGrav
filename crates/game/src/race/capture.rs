@@ -264,6 +264,7 @@ pub fn capture(
         mine_model,
         bomb_model,
         shield_cockpit,
+        countdown_model,
         fog_volumes,
         light,
         authored_fog,
@@ -714,7 +715,30 @@ pub fn capture(
                     &hud_view,
                     &readout,
                     hud_viewport,
-                )
+                );
+                // The countdown, on the same terms `RaceStage::draw_hud` draws
+                // it on - see `oag_game::hud::countdown` and
+                // `oag_race::RaceState::thrust_gated`.
+                if let (Some((model, widget)), true) =
+                    (countdown_model, RaceState::thrust_gated(readout.race_ticks))
+                {
+                    match crate::hud::Countdown::new(&device, &queue, format, model, &widget) {
+                        Ok(mut countdown) => countdown.draw(
+                            &device,
+                            &queue,
+                            &mut encoder,
+                            &hud_view,
+                            readout.race_ticks as f32 / 60.0,
+                            hud_viewport,
+                            (width, height),
+                        ),
+                        Err(why) => {
+                            warn!(
+                                "the countdown overlay did not build ({why}); capturing without one"
+                            );
+                        }
+                    }
+                }
             }
             Ok(None) => warn!("no HUD layout: capturing without one"),
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),

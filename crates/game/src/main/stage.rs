@@ -369,6 +369,7 @@ impl Stage {
             mine_model,
             bomb_model,
             shield_cockpit,
+            countdown_model,
             fog_volumes,
             light,
             authored_fog,
@@ -428,6 +429,21 @@ impl Stage {
         let scoreboard =
             oag_game::scoreboard::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
                 .context("building the scoreboard overlay")?;
+        // The countdown's own `<Mode3D>` model, when this mode's layout carries
+        // one - see `oag_game::hud::countdown`. Built the same way `overlay`
+        // just was, against the same surface format.
+        let countdown = countdown_model
+            .map(|(model, widget)| {
+                oag_game::hud::Countdown::new(
+                    &gpu.device,
+                    &gpu.queue,
+                    gpu.config.format,
+                    model,
+                    &widget,
+                )
+            })
+            .transpose()
+            .context("building the countdown overlay")?;
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -447,6 +463,7 @@ impl Stage {
             race,
             hud: overlay,
             scoreboard,
+            countdown,
         }))
     }
 }
