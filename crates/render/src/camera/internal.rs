@@ -117,13 +117,22 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// `target.up` is the up vector, so the horizon rolls with the ship - which for
 /// an in-cockpit view is not a choice at all, since the cockpit is bolted to the
 /// hull.
+///
+/// `roll_phase` - `oag_physics::ShipState::roll_phase`, taken as a plain
+/// `f32` for the reason [`Target`] already is one - rolls that up vector
+/// further, about the view axis: `FUN_088455ec`'s own last step before
+/// `Tripod_LookAt_q` is `up = Rot(craft[0x880] * 6.28) * up`, applied to the
+/// same up vector `<InternalCamera headtilt>` would lean, and *alongside* it
+/// rather than instead of it - see the module documentation for why
+/// `headtilt` itself still is not applied. Only the eye's own basis is
+/// rolled; [`eye`] and [`look_at_point`] read `target.up` unrolled, matching
+/// the original, whose `row1` offsets both before this rotation is taken.
+/// See `oag_render::roll` and
+/// `handover/the-barrel-roll-has-a-drawing-job.md`.
 #[must_use]
-pub fn view(target: Target, params: &InternalParams) -> Mat4 {
-    camera::look_at(
-        eye(target, params),
-        look_at_point(target, params),
-        target.up,
-    )
+pub fn view(target: Target, params: &InternalParams, roll_phase: f32) -> Mat4 {
+    let up = crate::roll::rotation(target.forward, roll_phase) * target.up;
+    camera::look_at(eye(target, params), look_at_point(target, params), up)
 }
 
 #[cfg(test)]
@@ -211,7 +220,7 @@ mod tests {
     fn the_view_matrix_looks_from_the_eye_at_the_aim_point() {
         let params = params();
         let target = target();
-        let matrix = view(target, &params);
+        let matrix = view(target, &params, 0.0);
 
         let at_eye = matrix.transform_point3(eye(target, &params));
         assert!(at_eye.length() < 1e-5, "{at_eye}");
@@ -231,6 +240,61 @@ mod tests {
             headtilt: Some(45.0),
             ..flat
         };
-        assert_eq!(view(target, &tilted), view(target, &flat));
+        assert_eq!(view(target, &tilted, 0.0), view(target, &flat, 0.0));
+    }
+
+    /// A zero roll phase changes nothing, so a race that never rolls draws
+    /// exactly what it drew before this landed: `ease(0.0)` is exactly `0.0`
+    /// and rotating by an angle of exactly `0.0` is the identity.
+    #[test]
+    fn a_level_roll_phase_changes_nothing() {
+        let target = target();
+        let params = params();
+        assert_eq!(
+            view(target, &params, 0.0),
+            camera::look_at(
+                eye(target, &params),
+                look_at_point(target, &params),
+                target.up
+            )
+        );
+    }
+
+    /// The roll moves the eye and the aim point nowhere - only the final up
+    /// vector - which is what makes it a camera roll and not a
+    /// repositioning. Matches the original: `row1`, the unrolled up axis, is
+    /// what `eye` and `look_at_point` are built from, and the rotation is
+    /// taken after, so a rolled view still puts the eye at view space's
+    /// origin and the aim point the same distance down `-Z`.
+    #[test]
+    fn the_roll_moves_neither_the_eye_nor_the_aim_point() {
+        let target = target();
+        let params = params();
+        let matrix = view(target, &params, 0.4);
+
+        let at_eye = matrix.transform_point3(eye(target, &params));
+        assert!(at_eye.length() < 1e-4, "{at_eye}");
+
+        let at_aim = matrix.transform_point3(look_at_point(target, &params));
+        let unrolled_aim =
+            view(target, &params, 0.0).transform_point3(look_at_point(target, &params));
+        assert!(
+            (at_aim.length() - unrolled_aim.length()).abs() < 1e-4,
+            "at_aim = {at_aim}, unrolled_aim = {unrolled_aim}"
+        );
+    }
+
+    /// Rolling by a full turn's worth of phase in each direction produces
+    /// opposite views - sign-agnostic on purpose, the same reasoning
+    /// `oag_render::roll::ROLL_DIRECTION`'s own test gives.
+    #[test]
+    fn opposite_roll_phases_produce_different_and_symmetric_views() {
+        let target = target();
+        let params = params();
+        let level = view(target, &params, 0.0);
+        let rolled_one_way = view(target, &params, 0.5);
+        let rolled_the_other_way = view(target, &params, -0.5);
+        assert_ne!(level, rolled_one_way);
+        assert_ne!(rolled_one_way, rolled_the_other_way);
     }
 }
