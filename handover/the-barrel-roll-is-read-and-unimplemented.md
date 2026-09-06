@@ -143,14 +143,24 @@ See the module's own doc comment if a future trace contradicts it.
   and pays out on the next landing. Whether the original refuses to arm on
   the ground was never traced - `advance_gesture` is where that gate goes if
   a trace ever shows one. Untested against the original either way.
-- **AI craft can now arm rolls off their own cornering**, which is new as of
-  2026-09-06 and was not designed for: `oag_ai::Driver` emits
+- **AI craft can now arm rolls off their own cornering, and how often was
+  measured rather than guessed.** `oag_ai::Driver` emits
   `ShipControls::steer_x` at full deflection and the axis leg has no
-  human-only gate, unlike the novice flick's `shift_modifier`. Three
-  alternating full-lock corrections inside 0.6 s arm a roll and charge the
-  opponent 8% of its shield. The original's AI does barrel roll, so this may
-  well be right; it is recorded because it was not the point of the change
-  and nothing measures it.
+  human-only gate, unlike the novice flick's `shift_modifier`. Eight seeded
+  drivers, 3,600 ticks each, against `oag-ai`'s own closed-loop fixtures on
+  2026-09-06: **zero** arms on the ordinary oval, **three across the eight**
+  on `oval_of(60.0, 300.0)`, the pathological corner
+  `a_differential_holds_a_corner_the_steering_alone_cannot` keeps precisely
+  because the craft cannot make it on the stick alone and sits on the
+  steering stop for 300+ ticks. So this is not a live shield drain on every
+  opponent; it is a driver missing a corner badly throwing a roll about once
+  a minute, at 8% of shield. Left ungated deliberately - the original's
+  gesture reads whatever is in the craft's input block, and a "human only"
+  flag would be inventing a mechanism nothing was traced to - but **whether
+  the original's AI reaches its gesture by this path at all is untraced**,
+  and that is the open question, not the rate. Not pinned by a test: the
+  number moves with any controller tuning, the same reason `closed_loop.rs`
+  keeps its own bounds loose.
 - Nothing draws the roll. **No render-side consumer of `entity+0x87c` has been
   searched for**, so whether the visual is an angle derived from the phase or a
   canned animation is unknown. The `0x400` flag is *not* how it gets there -

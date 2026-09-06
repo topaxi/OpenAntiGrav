@@ -239,6 +239,28 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// means the two schemes never enter into it - the barrel roll is not a
 /// scheme-dependent gesture, unlike the sideshift.
 ///
+/// # An AI craft can arm one, and that is measured rather than assumed
+///
+/// This crate does not know whether a craft is flown by a pilot or by
+/// `oag_ai::Driver` - both arrive as [`ShipControls`] - and the axis leg has
+/// no human-only gate the way the novice flick's
+/// [`ShipControls::shift_modifier`] effectively is. So an opponent's own
+/// steering can complete the alternation. **Deliberately left that way**: the
+/// original's gesture reads whatever is in the craft's input block, and adding
+/// a "human only" flag would be inventing a mechanism nothing was traced to.
+///
+/// How often it actually happens was measured against `oag-ai`'s own closed-loop
+/// fixtures on 2026-09-06, eight seeded drivers for 3,600 ticks each:
+/// **zero** arms on the ordinary oval, and **three arms across the eight** on
+/// `oval_of(60.0, 300.0)` - the deliberately pathological corner
+/// `a_differential_holds_a_corner_the_steering_alone_cannot` keeps because a
+/// craft "genuinely cannot make it on the stick alone" and sits on the steering
+/// stop for 300+ ticks. So ordinary AI cornering does not arm rolls; a driver
+/// missing a corner badly enough can arm one about once a minute, at
+/// `roll_cost` percent of its shield. Not pinned by a test on purpose - the
+/// number moves with any controller tuning, which is the same reason
+/// `closed_loop.rs` keeps its own bounds loose.
+///
 /// # No airborne gate
 ///
 /// Nothing here checks that the craft is off the ground, because nothing in the
