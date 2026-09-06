@@ -82,6 +82,8 @@ mod launcher_stage;
 mod loading_stage;
 #[path = "main/menu_stage.rs"]
 mod menu_stage;
+#[path = "main/overlay.rs"]
+mod overlay;
 #[path = "main/pose.rs"]
 mod pose;
 #[path = "main/prepare.rs"]
@@ -94,6 +96,8 @@ mod rebind;
 mod session;
 #[path = "main/stage.rs"]
 mod stage;
+#[path = "main/typing.rs"]
+mod typing;
 #[path = "main/window.rs"]
 mod window;
 

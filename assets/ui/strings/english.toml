@@ -9,11 +9,67 @@
 #   - giving a translatable home to text this project invented, once
 #     `assets/ui/menu.toml`'s `string_id`, `oag_race::Mode::fallback_label`,
 #     `crates/game/src/loading/wording.rs` and `crates/game/src/main/hints.rs`
-#     are wired to look one up instead of holding a literal `&str`. None of
-#     the four is wired yet - see
-#     `handover/invented-ui-text-has-no-translation-and-the.md`.
+#     are wired to look one up instead of holding a literal `&str`.
 #
-# Empty until the second kind of entry gets a caller: an id with no reader
-# would be a promise this file cannot keep.
+# **The first of those four now has a caller.** The pilot editor's own CRUD
+# rows and the on-screen keyboard it opens are the first screen in this build
+# whose text is looked up by id rather than written into the widget - the
+# `OAG_PILOT_*` and `OAG_KEYBOARD_*` entries below. Everything else is still
+# a literal `&str` at the site that draws it; see
+# `handover/invented-ui-text-has-no-translation-and-the.md`, which this does
+# not close.
+#
+# **These ids are ours, not the disc's.** The `OAG_` prefix is what keeps them
+# from ever colliding with an idstring off a real string table, since this file
+# shares one id space with the disc's own by design.
+#
+# A row falls back to its literal `label` when its id is missing here, so a
+# language with no file yet reads English rather than reading nothing - which
+# is why adding an id is safe on its own and removing one is not.
 
 [strings]
+
+# The AI PILOTS page's own rows. `PILOT`, `AXIS`, `LOW` and `HIGH` are not
+# here yet: this change wired the three that were touched, and doing the rest
+# of the tree is the separate, larger step the handover thread describes.
+OAG_PILOT_NEW = "NEW FROM PILOT"
+OAG_PILOT_RENAME = "RENAME"
+OAG_PILOT_DELETE = "DELETE"
+
+# The on-screen keyboard. Unlike the rows above, these are read by Rust rather
+# than by a `string_id` in `menu.toml` - `crate::prompt` holds no string table
+# of its own and takes every label already resolved, so the lookup happens
+# where the prompt is opened.
+#
+# The key glyphs themselves are deliberately not here: `a`-`z`, `0`-`9`, `-`
+# and `_` are the characters a pilot name may contain, which is a filename
+# rule rather than language.
+OAG_KEYBOARD_DELETE = "DEL"
+OAG_KEYBOARD_ACCEPT = "OK"
+
+# One line under the grid. Names abstract buttons, the same vocabulary the
+# CONTROLS page and `docs/architecture/menus.md` use, rather than this
+# machine's current bindings: a pad and a keyboard both reach the same four,
+# and a line naming keys would be wrong on a pad.
+OAG_KEYBOARD_HINT = "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL"
+
+# `%s` is the pilot's own name, substituted where the entry is read. A string
+# table is edited by translators and the disc's own tables already spell a
+# substitution that way; Rust's `{}` would make an accidental brace in a
+# translation a formatting error rather than a brace.
+
+# Renaming a pilot. The last two are shown live under what has been typed,
+# every keystroke, because finding out a name is refused only after typing it
+# on a grid is what makes an on-screen keyboard unbearable.
+OAG_PILOT_RENAME_TITLE = "RENAME PILOT"
+OAG_PILOT_NAME_TAKEN = "THERE IS ALREADY A PILOT CALLED %s"
+OAG_PILOT_RENAME_SHADOWS = "%s IS BUILT IN: A FILE OF THAT NAME REPLACES IT"
+
+# Deleting one. `OAG_PILOT_DELETE_BUILT_IN` is the whole reason this asks at
+# all: a file named after one of the four built-ins was *replacing* it, so
+# removing the file restores the built-in rather than removing a pilot.
+OAG_PILOT_DELETE_TITLE = "DELETE PILOT"
+OAG_PILOT_DELETE_ASK = "DELETE %s? THIS CANNOT BE UNDONE."
+OAG_PILOT_DELETE_BUILT_IN = "%s IS BUILT IN AND YOUR FILE REPLACES IT. DELETING THE FILE RESTORES THE BUILT-IN INSTEAD OF REMOVING %s."
+OAG_PILOT_DELETE_YES = "DELETE"
+OAG_PILOT_DELETE_NO = "KEEP"

@@ -506,6 +506,23 @@ impl ApplicationHandler for App {
                     session.escape();
                     return;
                 }
+                // An on-screen keyboard is open, and this key is one it
+                // understands. **Diverted rather than shared**: a letter that
+                // is also bound to a game button would otherwise type itself
+                // *and* press the grid's selected key. Anything the prompt
+                // does not understand - the arrows above all - falls through
+                // below, which is what leaves the grid navigable from the
+                // same keyboard that is typing into it.
+                if session.typing_is_open() {
+                    let typed = crate::typing::decide(
+                        &event.logical_key,
+                        event.state == ElementState::Pressed,
+                        event.repeat,
+                    );
+                    if session.typed(typed) {
+                        return;
+                    }
+                }
                 session
                     .controls
                     .set_key(&event.logical_key, event.state == ElementState::Pressed);

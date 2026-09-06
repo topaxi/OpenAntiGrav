@@ -385,6 +385,24 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "0..1")]
     pub(crate) menu_anim_phase: Option<f32>,
 
+    /// With `--menu-page`, draw a modal prompt over it: `rename`,
+    /// `rename-note`, `delete` or `delete-built-in`.
+    ///
+    /// The same argument `--menu-anim-phase` makes, one step stronger. A
+    /// prompt is on screen because a row was **activated**, and this path runs
+    /// no state machine and calls no `Menu::update` - so the on-screen
+    /// keyboard can never appear here on its own, and without this flag its
+    /// layout is reviewable only by playing the game on a machine that has a
+    /// display. The models drawn are the live ones (`oag_game::prompt`) and
+    /// the labels come out of the same string table `session::pilot_editor`
+    /// resolves, so this is the real screen rather than a mock-up of it.
+    ///
+    /// `rename-note` and `delete-built-in` are the two worst cases for the
+    /// layout: the live note under the buffer, and the longest message
+    /// anything asks a player to read.
+    #[arg(long, value_name = "PROMPT", requires = "menu_page")]
+    pub(crate) menu_prompt: Option<String>,
+
     /// Show the language picker even when a language is already chosen.
     ///
     /// Without this the picker is skipped once `settings.toml` names a

@@ -1,5 +1,47 @@
 # Players should be able to build pilots in game, and a naive editor would eat their comments
 
+## Landed 2026-09-07: rename and delete, and the text entry they needed
+
+The two operations the first cut deferred are in, and so is the thing that
+was blocking them - **this project had no way to accept typed text at all**.
+
+- **`crate::prompt`** is that missing piece, and it is deliberately about
+  text entry rather than about pilots: `Keyboard` knows nothing of what the
+  string it builds is for. A grid of 40 cells stepped with the d-pad, typed
+  with Cross, deleted with Square or its own DEL key, accepted with Start or
+  its own OK key, cancelled with Circle. `Confirm` rides along because
+  delete needs one. Both consume edges through `Input::take`, which is what
+  stops the Cross that *opened* a prompt from also accepting it.
+- **The character set is exactly what `pilots::check_name` allows**, checked
+  in both directions by a test: a grid offering a slash would build a name
+  refused only at the end, and a grid missing `_` would show a player a file
+  they cannot type back in.
+- **A desk keyboard types into it too**, through `main/typing.rs` -
+  `rebind.rs`'s sibling, and split out for the same reason. Diverted rather
+  than shared, or a letter also bound to a game button would type itself and
+  press the grid's selected key at once.
+- **`rename_pilot` is a move**, so the file arrives at its new name byte for
+  byte - the strongest form of the promise `set_axis` makes more carefully,
+  and free. Check-then-move, because `std::fs::rename` silently overwrites
+  on Unix. Refused for a pilot with no file, gated on `Entry::from_file`
+  rather than on the four built-in *names*: once a player saves an edit to
+  `aggressive` a file exists and renaming it is legitimate.
+- **Delete asks, and what it asks is the point.** For a file named after a
+  built-in the confirm says, by name, that deleting it restores the built-in
+  rather than removing a pilot. A `warn_when` on the row could not have said
+  it: the loader requires two conditions by design and there is one fact.
+- **First caller of `assets/ui/strings/english.toml`'s project-owned ids.**
+  Which immediately found a real bug: `menu::definition::resolve` fell back
+  to the *id* when a `string_id` missed, so on the EU disc a French player
+  read `OAG_PILOT_RENAME` off a row whose label says `RENAME`. It now falls
+  back to the row's own `label`.
+- **`--menu-prompt`** draws either prompt over `--menu-page`, because that
+  path runs no `Menu::update` and a prompt can otherwise never appear
+  headlessly. Four layout defects were found by looking at what it produced
+  and none by arithmetic: a hint line drawn below the panel, a note drawn
+  through the grid, DEL and OK running together, and the confirm's answers
+  drawn on top of its own longest message.
+
 ## Landed 2026-09-06: list, edit, save, create-from-template
 
 The maintainer's scope call was **list -> edit axis ranges -> save ->
@@ -171,11 +213,23 @@ maintainer call, not one to make here.
 
 ## Open
 
-- **Delete and rename**, deliberately deferred - rename needs the on-screen
-  keyboard this project does not have yet, and deleting a built-in-named
-  file restores the built-in rather than removing a pilot, which needs its
-  own wording once it is in scope (the list already marks a built-in, so it
-  does not currently imply otherwise).
+- **The keyboard's layout is ours: chosen, not measured.** Pulse authors no
+  keyboard and does not call `sceUtilityOsk` - it has a `<TagInput>` cell
+  scroller instead, whose 70-character alphabet cannot spell a filename.
+  That is a recorded result rather than an assumption; see
+  [pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md](pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md),
+  which is the thread for building the disc's own widget for the screens it
+  really is the idiom for.
+- **The keyboard offers no uppercase and no space**, because a pilot name
+  becomes a filename. The moment a second caller wants a *display* name
+  rather than a filename, `KEYS` has to become a parameter rather than a
+  `const` - it is one field, and guessing at it now would be worse.
+- **`Confirm` cannot measure its own wrapped message.** The answers are
+  anchored to the panel's bottom so nothing overlaps whatever the message
+  turns out to be, which is correct rather than merely safe - but a
+  translation long enough to fill the whole panel would still run into
+  them. `menu::draw_list` already threads a `measure` closure through for
+  the strip; the same could be done here if it ever matters.
 - Whether a player can see what a pilot actually does without racing it. A
   preview - "this pilot brakes late and defends hard" derived from its axes -
   would make experimentation much cheaper, and is entirely invented UI.
@@ -186,10 +240,13 @@ maintainer call, not one to make here.
 
 ## Next Steps
 
-1. Decide whether delete is worth shipping given the built-in-restoration
-   wording it needs, or waits until rename (and therefore text entry) makes
-   the CRUD set feel worth completing together.
-2. Build the on-screen keyboard, if and when it is picked up as its own
-   thread, and revisit rename here once it exists.
-3. Consider the axis preview above - it needs no new mechanism, only reading
-   `Pilot`'s own numbers into a sentence.
+1. The axis preview above - it needs no new mechanism, only reading
+   `Pilot`'s own numbers into a sentence, and it is what makes
+   experimenting cheap rather than blind.
+2. Give the rest of `assets/ui/menu.toml`'s rows a `string_id`. Three of
+   them have one now and the mechanism is proven end to end, including its
+   fallback; the remaining hundred-odd are bookkeeping rather than design.
+3. Reuse `crate::prompt::Keyboard` for the next thing that needs a name -
+   a profile, a replay, a saved setup. It was built to be reused and
+   nothing about it knows what a pilot is; the only thing to decide is
+   whether that caller wants a wider character set.

@@ -50,6 +50,13 @@
 //! out that were on the table - the other two were an editor confined to
 //! files it created itself, and a save-as that kept the original untouched
 //! and multiplied files; neither was taken.
+//!
+//! [`rename_pilot`] keeps the same promise for free and more strongly: it is
+//! a **move**, so the file arrives at its new name byte for byte because
+//! nothing ever read it. [`delete_pilot`] is the one operation here that is
+//! not about text at all - and the one whose *meaning* is not what its name
+//! suggests, because a file named after a built-in was replacing it and
+//! removing the file puts the built-in back. See [`is_built_in_name`].
 
 use std::path::{Path, PathBuf};
 
@@ -64,6 +71,121 @@ use serde::Deserialize;
 #[must_use]
 pub fn directory() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join("oag").join("pilots"))
+}
+
+/// The longest a pilot name may be, in characters.
+///
+/// **Chosen, not measured.** Nothing on any disc authors a pilot name - the
+/// whole concept is this project's - so there is no original to read a limit
+/// off. Twenty-four is what fits the `PILOT` row's own value column at the
+/// measured 480x272 row scale without the marquee having to scroll it, which
+/// is a presentation argument rather than a filesystem one; every filesystem
+/// this build runs on allows far more.
+pub const MAX_NAME: usize = 24;
+
+/// Whether `name` is one of the four pilots the binary itself ships.
+///
+/// **The question the delete and rename wording turns on.** A file called
+/// `aggressive.toml` does not *add* a pilot, it **replaces** the built-in of
+/// that name for as long as it exists - so deleting it restores the built-in
+/// rather than removing a pilot, and renaming some other file *onto* that
+/// name silently takes the built-in's place. Both are surprising unless the
+/// menu says so, which is what this is for. See [`Pilot::BUILT_IN`].
+#[must_use]
+pub fn is_built_in_name(name: &str) -> bool {
+    Pilot::BUILT_IN
+        .iter()
+        .any(|(built_in, _)| *built_in == name)
+}
+
+/// Checks a name a player typed, **before** it is ever joined onto a path.
+///
+/// [`write_pilot`], [`rename_pilot`] and [`delete_pilot`] all build a path
+/// with `dir.join(format!("{name}.toml"))`, and every one of them is public.
+/// So the invariant lives here rather than in whichever on-screen keyboard
+/// happens to be offering the characters: a charset the keyboard cannot type
+/// is one caller's guard, not a guarantee about the argument.
+///
+/// The character set is deliberately narrow - **lowercase** ASCII letters,
+/// digits, `-` and `_`. That rules out a path separator, a `..`, a leading
+/// dot (`.toml` is a hidden file with an empty stem, which [`load_from`]
+/// skips and a player would never see again) and a name whose spelling only
+/// differs by case, which is two distinct pilots on Linux and one file
+/// clobbering another on macOS or Windows. Excluding uppercase is **chosen,
+/// not measured**, on the same footing as [`MAX_NAME`].
+///
+/// # Errors
+///
+/// With a sentence naming what is wrong, meant to be shown to the player
+/// rather than only logged - a rename that silently does nothing is the
+/// failure this whole error path exists to avoid.
+pub fn check_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("a pilot needs a name");
+    }
+    if name.chars().count() > MAX_NAME {
+        bail!("a pilot name is at most {MAX_NAME} characters");
+    }
+    if let Some(bad) = name
+        .chars()
+        .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_'))
+    {
+        bail!("{bad:?} cannot be used in a pilot name: only a-z, 0-9, - and _");
+    }
+    Ok(())
+}
+
+/// Renames one pilot's file, **keeping every byte of it**.
+///
+/// A move, not a read-parse-write: the file arrives at its new name with its
+/// comments, its blank lines, its key order and its exact number spellings
+/// untouched, because nothing ever looked at them. That is the strongest form
+/// of the promise [`set_axis`] makes more carefully for an edit, and it is
+/// free here.
+///
+/// # Errors
+///
+/// If `to` is not a name [`check_name`] allows; if `from` has no file (an
+/// untouched built-in lives in the binary and there is nothing on disk to
+/// move - the caller should refuse before reaching this); or if `to` is
+/// already taken. The last one is the reason this is a check-then-move rather
+/// than a bare `std::fs::rename`, which **silently overwrites** the
+/// destination on Unix and would lose a file the player still wanted.
+pub fn rename_pilot(dir: &Path, from: &str, to: &str) -> Result<()> {
+    check_name(to)?;
+    if from == to {
+        return Ok(());
+    }
+    let source = dir.join(format!("{from}.toml"));
+    if !source.is_file() {
+        bail!("{from} has no file of its own to rename");
+    }
+    let destination = dir.join(format!("{to}.toml"));
+    if destination.exists() {
+        bail!("there is already a pilot called {to}");
+    }
+    std::fs::rename(&source, &destination)
+        .with_context(|| format!("renaming {} to {}", source.display(), destination.display()))
+}
+
+/// Deletes one pilot's file.
+///
+/// **This does not always delete a pilot.** For a file whose name is one
+/// [`is_built_in_name`] answers yes to, the file was *replacing* the built-in
+/// of that name, so removing it puts the built-in back - the pilot goes on
+/// existing, with the numbers the binary ships. Whoever calls this owes the
+/// player that sentence; this function cannot say it.
+///
+/// # Errors
+///
+/// If `name` has no file - an untouched built-in, or a pilot the list has got
+/// out of step with - or if the file cannot be removed.
+pub fn delete_pilot(dir: &Path, name: &str) -> Result<()> {
+    let path = dir.join(format!("{name}.toml"));
+    if !path.is_file() {
+        bail!("{name} has no file of its own to delete");
+    }
+    std::fs::remove_file(&path).with_context(|| format!("deleting {}", path.display()))
 }
 
 /// One pilot as a file spells it, before any of it has been checked.

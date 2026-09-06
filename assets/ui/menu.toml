@@ -11,7 +11,7 @@
 #
 #   - every `target` names a page in this file;
 #   - every `action` is one the game handles: launch_race, launch_remix, quit,
-#     save_pilot, new_pilot;
+#     save_pilot, new_pilot, rename_pilot, delete_pilot;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #
@@ -1083,13 +1083,46 @@ kind = "action"
 label = "SAVE"
 action = "save_pilot"
 
-# Auto-named (`pilot-1`, `pilot-2`, ...) rather than asking for a name: there
-# is no text entry anywhere in this project yet, and this is what keeps that
-# out of scope for this cut. Copies whichever pilot PILOT currently holds.
+# Auto-named (`pilot-1`, `pilot-2`, ...) rather than asking for a name.
+# **Kept now that RENAME exists**, not superseded by it: copying a pilot to
+# tinker with is one press this way and a name typed on a grid the other, and
+# the fast path is the one somebody experimenting uses twenty times an hour.
+# Copies whichever pilot PILOT currently holds.
 [[page.entry]]
 kind = "action"
 label = "NEW FROM PILOT"
+string_id = "OAG_PILOT_NEW"
 action = "new_pilot"
+
+# Opens the on-screen keyboard (`crate::prompt::Keyboard`) on PILOT's current
+# name and, on accept, **moves** the file - so every comment, blank line and
+# number spelling in it survives, by never having been read. See
+# `crate::pilots::rename_pilot`.
+#
+# Refused for a pilot with no file of its own: an untouched built-in lives in
+# the binary and there is nothing on disk to move. That gate is in Rust off
+# `pilots::Entry::from_file` and deliberately **not** a `disabled_by` on the
+# four built-in names - the moment a player saves an edit to `aggressive` a
+# file exists, and renaming that file is perfectly legitimate.
+[[page.entry]]
+kind = "action"
+label = "RENAME"
+string_id = "OAG_PILOT_RENAME"
+action = "rename_pilot"
+
+# Asks first (`crate::prompt::Confirm`), because this destroys a file - and
+# because for a file named after one of the four built-ins, "delete" is not
+# what happens. `aggressive.toml` *replaces* the built-in of that name rather
+# than adding a pilot, so removing it **restores** the built-in and
+# `aggressive` goes on existing with the numbers the binary ships. The confirm
+# says that, naming the pilot, which is the only place it can be said with the
+# name in hand: a `warn_when` here would need two conditions by design (see
+# `menu/definition.rs`) and there is only one fact to test.
+[[page.entry]]
+kind = "action"
+label = "DELETE"
+string_id = "OAG_PILOT_DELETE"
+action = "delete_pilot"
 
 [[page.entry]]
 kind = "back"
