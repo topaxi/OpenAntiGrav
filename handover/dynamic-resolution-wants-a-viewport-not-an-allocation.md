@@ -50,16 +50,29 @@ are closed.
   ([ADR-0042](../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
   through
   [ADR-0045](../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md),
-  all landed 2026-09-03/04, after this thread's last touch.** `hd_bloom` and
-  `motion_blur` are timed and in `drs::Cost::scalable` today; the plain,
-  recovered PSP/Pure `bloom` composite
-  (`oag_render::post::bloom::Bloom::render`, called from
-  `race/scene/frame.rs` between the scene pass's `drop(pass)` and the
-  motion-blur chain) is the one pass still running outside every timer -
-  the scene-pass timestamp closes before it runs and it is neither `blur`
-  nor `hd_bloom`, so its cost still hides inside `RESIDUAL_SHARE`. Timing it
-  the same way ADR-0043 timed `hd_bloom` is what closes this, not tuning the
-  constant.
+  all landed 2026-09-03/04, after this thread's last touch.** `hd_bloom`
+  (ADR-0043) and `motion_blur` (ADR-0042) are timed and in
+  `drs::Cost::scalable` today. Plain `bloom` was considered in the same
+  commit as ADR-0043 (`277915c4`) and **deliberately left out** -
+  `docs/rendering/dynamic-resolution.md:215` states why: its bright pass and
+  both blurs draw at a fixed 240x136 regardless of render scale, so unlike
+  `hd_bloom`'s ladder "it does not belong in `scalable` even once it is
+  timed". This is a documented decision, not staleness - do not fold it into
+  `scalable` on a re-read of this thread; that was tried and reverted
+  2026-09-06 once this doc line was found.
+  - **One thing that line's own reasoning glosses over, worth a second look
+    without implementing anything from it**: three of the chain's four
+    passes (`bloom bright`, `bloom blur x`, `bloom blur y` in
+    `crates/render/src/post/bloom.rs`) do target the fixed 240x136 scratch
+    buffers, but the fourth, `bloom composite` (the same file's last
+    `pass(...)` call), targets the caller's `scene` view at `viewport` -
+    which *does* fall with the render extent. Whether that pass alone is
+    material enough to warrant an ADR-0045-style split (a fixed-cost pair
+    for the first three passes, a scalable one for the composite alone) is
+    unmeasured - no windowed run was available to check it, and every
+    capture path deliberately never constructs a `drs::Controller` (see
+    "Traps that still bind" above), so there is nothing to measure it
+    against here. Left as a question, not a next step.
 - **FSR 3.1 will want a moving jitter phase count.** `jitter::PHASES` is a
   fixed sixteen, deliberately: deriving it from the presentation-to-render
   ratio is the FSR 3.1 port's decision, not this thread's. A moving scale means
@@ -74,10 +87,11 @@ are closed.
 
 ## Next Steps
 
-1. ~~Time `bloom`, `hd_bloom` and `motion_blur` into the budget.~~ `hd_bloom`
-   and `motion_blur` are done (ADR-0043, ADR-0042). What is left: time the
-   plain `bloom` composite the same way and fold it into
-   `drs::Cost::scalable`.
+1. ~~Time `bloom`, `hd_bloom` and `motion_blur` into the budget.~~ Closed.
+   `hd_bloom` and `motion_blur` are done (ADR-0043, ADR-0042); plain `bloom`
+   was deliberately left untimed in the residual, for the reason recorded
+   under `## Open` above. Nothing left to implement here unless the
+   composite-pass question above is measured and argues otherwise.
 2. Take the Steam Deck memory reading, or say out loud that nobody will.
 3. Ask a player whether the stepping is visible at 49 changes a minute, before
    tuning `RISE_PATIENCE` on a hunch.
