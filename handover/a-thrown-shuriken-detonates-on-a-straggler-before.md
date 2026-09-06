@@ -41,27 +41,82 @@ asserts; the blade genuinely dies immediately.
 
 ## Open
 
-- **What moved ship 7 into the blade's path is unknown.** The last known-good touch of
-  this test is `b4c45477` (2026-09-02), so something between there and `d11c5fb7`
-  changed the grid's spacing, the straggler's pace, or the throw geometry.
+- **What moved ship 7 into the blade's path: found.** `cc395862` ("hold AI opponents at
+  the line through the start countdown") is the exact commit - see "Bisect result"
+  below. The lateral/heading readout there also answers *how*: it is not a track-side
+  bug, it is the field staying grid-tight because the countdown hold now genuinely
+  works, and this test throws only 120 ticks (2 seconds) after release.
 - **Whether `hull_radius`'s lateral width is over-wide** for a 20-degrees-off-nose
-  throw. The module docs mark that width **"ours, not recovered"** - so this may not be
-  a regression in our code at all, but an invented number finally colliding with a
-  case that exposes it.
+  throw, **still open**. The module docs mark that width **"ours, not recovered"**, and
+  clearing the AI-timing question above does not clear this one - a grid-tight field at
+  throw time is now confirmed *plausible*, not confirmed *correctly sized*. This is a
+  `crates/physics` question and out of this session's lane.
+- **Whether the test's own premise is still right** given a grid-tight field is now the
+  true post-countdown picture: throwing 120 ticks after release may simply be too early
+  in a real race for "the blade clears the whole field" to be a fair assertion at all.
+  Unresolved - needs the play/PPSSPP read in Next Step 2 below.
+
+## Bisect result (Next Step 1 - done)
+
+Two-sided adjacent-commit check, not a full `git bisect` sweep (the pair already gives
+stronger attribution than a sweep would): built and ran
+`a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse` against
+`data/images/pulse-psp-usa.chd` at each commit, twice each for determinism.
+
+- **`9785a177`** (parent of `cc395862`): **PASS**, twice.
+- **`cc395862`** itself: **FAIL**, twice, panicking at the identical
+  `shuriken_ground_truth.rs:201` `one press threw 0 blades` assertion that `d11c5fb7`
+  and current `main` also panic on - i.e. this is the same failure the thread opened
+  with, not a different one along the way.
+
+`cc395862` is `fix(game): hold AI opponents at the line through the start countdown` -
+`Race::step_opponents` gained the same `RaceState::thrust_gated` zero-thrust gate the
+player already had (`crates/game/src/race/field.rs`). Before it, every opponent drove
+at full throttle from tick 0 while the player sat out the measured 272-tick countdown;
+by the time this test's `WARM_UP_TICKS` (`COUNTDOWN_TICKS + 120`) throws its blade, the
+opponents already had a 272-tick unearned head start.
+
+### Discriminating check: which mechanism moved ship 7
+
+Two mechanisms fit the same bisect and point opposite ways for Next Step 2, so this was
+checked directly rather than assumed:
+
+- **(a) Field still in grid order** - everyone releases together now, so 120 ticks
+  later the straggler is legitimately still beside you. Fix is right; the test throws
+  too early relative to a synchronized start.
+- **(b) The gate is incomplete** - the diff zeroes only `controls.thrust`; steering
+  stays live through the hold (deliberately, for the player too - see the comment at
+  `crates/game/src/race/tick.rs:29-34`, "only thrust was held and recorded"). If yaw
+  displaces a parked opponent laterally, that is a `field.rs` bug in this thread's own
+  lane, not a test or `hull_radius` question.
+
+Checked with a temporary diagnostic (`along`/`lateral`/heading-dot-forward per opponent,
+printed right before the throw, reverted before committing - never landed):
+
+| commit | slot 7 along | slot 7 lateral | slot 7 dist | heading·fwd range (all 7) |
+| --- | --- | --- | --- | --- |
+| `9785a177` (pre-fix) | 536.3 | 143.0 | 555.3 | 0.10 - 0.73 |
+| `cc395862` (post-fix) | 13.3 | -7.8 | 15.4 | 0.9971 - 1.0000 |
+
+Post-fix headings are all ~1.0 (parallel to the player, no rotation), and the whole
+field sits 15-136 units out in grid order rather than 536-681 units out on a since-
+curved line. That is **mechanism (a)**: no lateral-displacement artifact from the
+steering-stays-live design, just a field that has not had time to spread out yet. The
+fix in `cc395862` is not implicated as a bug in its own right.
 
 ## Next Steps
 
-1. **Bisect `b4c45477`..`d11c5fb7`** against this test to find what moved ship 7. That
-   range is the whole remaining search space and the test runs in seconds by name -
-   this is the cheapest path to an answer and should be done first.
-2. **Then decide which side is wrong.** If the bisect lands on a deliberate change to
-   grid spacing or opponent pacing, the blade hitting a straggler may be *correct* and
-   the test's premise is what needs revisiting. If it lands on nothing plausible,
-   `hull_radius`'s unrecovered lateral width is the next suspect.
-3. **A from-play or PPSSPP read would settle the second question directly**: does a
-   Shuriken thrown just off the nose in a real race clip the craft beside you? The
-   maintainer's play observations have been a reliable oracle; this is a good question
-   to ask before more static work.
+1. ~~Bisect `b4c45477`..`d11c5fb7`~~ - done above; `cc395862`, mechanism (a).
+2. **A from-play or PPSSPP read settles what's left**: does a Shuriken thrown just off
+   the nose, seconds after a real race's start-line release, clip the craft beside you?
+   If yes, the test's premise needs revisiting (it is asserting something that does not
+   happen this early in a real race). If no, `hull_radius`'s unrecovered lateral width
+   is the next suspect, in `crates/physics` - out of this session's lane.
+3. Separately: `cc395862` updated the three synthetic `oag-race`/`oag-game` tests its
+   own gate broke, but this `#[ignore]`d disc-backed test - invisible to CI - broke too
+   and landed green anyway. Worth a `HANDOVER.md` "traps that are live" line: a
+   start-gate or grid-timing change can only be caught by `just test-data`, not `just
+   test`.
 
 ## Notes
 
