@@ -738,6 +738,21 @@ impl Framebuffer {
         &self.output.view
     }
 
+    /// How big [`Framebuffer::output`] actually is.
+    ///
+    /// **Not always `Gpu::size`, which is what a caller wanting a depth or
+    /// other size-matched attachment for it must not assume instead.**
+    /// [`Framebuffer::resize_output`] keeps the previous, smaller target in
+    /// place on an allocation failure rather than reporting the size it was
+    /// asked for, so the two can disagree for the life of that target - the
+    /// same size-matched-attachment mistake `RaceStage::draw_hud`'s countdown
+    /// pass made against the *scene* target before it read
+    /// [`Framebuffer::allocation`] instead of `Gpu::size`.
+    #[must_use]
+    pub fn output_size(&self) -> (u32, u32) {
+        self.output.size
+    }
+
     /// Puts the presentation target on the surface, graded.
     ///
     /// The other half of [`Framebuffer::resolve_scene`], and the pass that has
