@@ -302,43 +302,72 @@ sequence at a diagnostic screen-centre position (ticks 47/92/137/210, matching e
 glyph's own predicted peak-alpha tick): a clean `3`, `2`, `1`, `GO` in order, culling and
 orientation both correct.
 
-**What ships instead draws a clipped sliver at the screen's left edge**, because the
+**What shipped instead drew a clipped sliver at the screen's left edge**, because the
 widget's own authored position is `x="0.0" y="0.0"` and the one validated placement
-convention this codebase has (`model_draw`, ground-truth tested against Pure's pickup
-icons, which author `x="240" y="250"` - dead centre, near the bottom) reads coordinates
-verbatim. An `x` of exactly `0.0` on a widget whose siblings all carry real screen
-coordinates most likely means the same thing `widget.rs`'s own doc already says of the
-nine sight-bracket widgets: placeholder, overwritten by code at runtime. No such override
-has been found for the countdown the way `crate::race::sight` supplies one for the
-sights - see `## Open` below. The code draws the literal disc position rather than a
-guessed centre; see `crates/game/src/hud/countdown.rs`'s own module doc for the full
-account, including why `z="-70.0"` and the block's `OriginX`/`OriginY` are handled the
-way they are.
+convention this codebase had (`model_draw`, ground-truth tested against Pure's pickup
+icons, which author `x="240" y="250"` - dead centre, near the bottom) read coordinates
+verbatim. **Fixed the same day, third pass**: the convention itself only holds for one
+of two disc-verified `<Mode3D>` dialects, and the countdown lives in the other one - see
+below.
+
+2026-09-06, third pass: **the countdown is now visible and legible, and the "invisible
+glyph" symptom the second pass's screenshots showed is the same bug, not a second one.**
+The second pass's `(0, 35)` was right about the *value* on the disc and wrong about what
+it *means*. Every `<Mode3D>` block on both Pulse and Pure, checked across all four
+layouts that carry one, is exactly one of two shapes: `mode="orthographic"` on the
+block's own `<Values>`, with real screen pixels on every child `x`/`y` (the sights,
+Pure's weapon icons and bars - `model_draw`'s convention was measured against this one
+and only this one); or `FirstPass="yes" OriginX="..." OriginY="..."` with no `mode` at
+all, and `x="0.0" y="0.0"` on every `ReadyGo`/`Cockpit321Go` checked. `model_draw`'s
+"literal HUD pixels" reading was applied to the second dialect too, and that - not the
+runtime-placement question the second pass closed - was the actual defect. `x=0, y=0`
+in the non-orthographic dialect is where a symmetric perspective camera along `-z`
+always projects the optical axis, for **any** FOV, near, far and any `z != 0` (the
+horizontal/vertical projection term is `(coordinate / -z) * scale`, and `0 / -z` is `0`
+regardless of `scale`) - centred, not a placeholder. That is derivable without
+reconstructing the original's actual camera, which is why no projection matrix needed
+to be built: a guessed FOV would still contribute nothing to `x=y=0` and would only
+risk misplacing a future nonzero-authored widget in this dialect.
+`oag_game::hud::Layout::collect` now parses `mode`/`OriginX`/`OriginY` per `<Mode3D>`
+block (new `hud::Model::orthographic`/`::origin` fields, threaded down `collect`'s
+recursion the same way `<Item>`'s offset already is), and
+`crates/game/src/hud/countdown.rs` derives the screen position as
+`(240, 136) + (OriginX, OriginY) = (240, 171)` for the zero case every layout actually
+ships, erroring rather than guessing if a future widget in this dialect ever authors a
+nonzero `x`/`y`. Screenshots at ticks 47/92/137/210 (matching each glyph's predicted
+peak-alpha tick) show a clean `3`, `2`, `1`, `GO` in sequence, centred - the second
+pass's own diagnostic centred capture already proved the render pipeline was correct
+once fed a sane position, and this closes the gap between that and what the disc's own
+layout actually produces. `pickup_icon_ground_truth`, `hud_layout_ground_truth`,
+`lock_sight_ground_truth`, `hd_hud_ground_truth` and `missile_ground_truth` all still
+pass (41/41 against real disc images) - the orthographic dialect's own consumers read
+`mode="orthographic"` on every block they touch and are unaffected. Full account,
+including the `0/-z` derivation and the dialect table, in
+[hud.md](../docs/ui/hud.md#two-mode3d-dialects-distinguished-by-modeorthographic) and
+`countdown.rs`'s own module doc.
 
 ## Open
 
-- **What places the countdown's `Cockpit321Go` widget is now answered, and the answer
-  is negative** (2026-09-06, second pass). `Hud_BindWidgets` (`0x0881fbec`) resolves
+- ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
+  both stand.** (2026-09-06, second pass) `Hud_BindWidgets` (`0x0881fbec`) resolves
   `"HUD->ReadyGo"`/`"HUD->Cockpit321Go"` the same `"HUD->"`-lookup way `HudSight_Bind`
   resolves the sights, but the only other consumer of those two slots,
   `Hud_UpdateCountdownFade` (`0x0881f624`), drives a fade timer and a visibility bit
-  and never writes a screen position - no `HudSight_Update` counterpart exists.
-  Separately, `Cockpit_321GO.vex`'s four glyph nodes resolve to a baked translation of
-  `(≈0, ≈0)` and vertex bounds symmetric about their own local origin, so the mesh
-  supplies no absolute placement either. Full evidence, both `jal`-xref-complete
+  and never writes a screen position - no `HudSight_Update` counterpart exists, and the
+  mesh bakes no absolute placement either. Full evidence, both `jal`-xref-complete
   searches and the vertex-bounds check, in
-  [countdown-widgets.md](../docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md).
-  Confidence 75: on this title's own binary and asset, `x="0.0" y="0.0"` (composed with
-  the block's `OriginX="0.0" OriginY="35.0"`) is what the disc means, not a
-  placeholder waiting on code found elsewhere - `crates/game/src/hud/countdown.rs`
-  keeps drawing the literal, clipped position rather than a guessed centre. A related
-  finding fell out of the same pass: HD/Fury's own copy of this widget
-  (`hud_ready_go.xml`) is `<aMode3D>`/`<aModel>` - disabled by the same tag-rename
-  convention `hd-hud.md` already documents, not repositioned - so it was never a second
-  data point on placement to begin with. This closes the placement question as far as
-  Ghidra and the disc's own assets can answer it; a mechanism this pass didn't search
-  for (a different HUD subsystem entirely) can't be ruled out at 100, but nothing found
-  points at one.
+  [countdown-widgets.md](../docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md),
+  confidence 75. **That remains correct: there genuinely is no runtime position
+  writer.** What was wrong is a second, separate claim layered on top of it - that
+  `x="0.0" y="0.0"` therefore means the same *screen pixel* it would for the sights.
+  (2026-09-06, third pass) it does not: the countdown's `<Mode3D>` block is a
+  different, disc-verified dialect (no `mode="orthographic"`), and `(0, 0)` there is
+  screen-centre under any symmetric perspective camera, not a pixel coordinate - see
+  the third-pass account above. A related finding from the second pass also stands
+  unchanged: HD/Fury's own copy of this widget (`hud_ready_go.xml`) is
+  `<aMode3D>`/`<aModel>` - disabled by the same tag-rename convention `hd-hud.md`
+  already documents, not repositioned - so it was never a second data point on
+  placement to begin with.
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
   (same 40-tick cue, same two-part gate) or differs is the single most direct
   open question for the display/logic focus. One attempt this session to reach it
