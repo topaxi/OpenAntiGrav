@@ -23,6 +23,14 @@
 //!   same place in the stream. An axis inserted in the middle would silently
 //!   re-roll every axis after it, for every pilot.
 //!
+//! The three roll axes ([`Pilot::roll_chance`], [`Pilot::roll_floor`],
+//! [`Pilot::roll_airtime`]) are draws 17, 18 and 19, appended in that order on
+//! 2026-09-06 and fixed there. `every_built_in_pilot_still_draws_what_it_drew_
+//! before_the_roll_axes_were_appended` is the claim that appending them moved
+//! no earlier axis of any pilot, against a table of literals captured from the
+//! tree before the change - the same guard
+//! [`Pilot::BALANCED`]'s own golden table is, one level up.
+//!
 //! An axis a pilot wants to hold fixed uses [`Span::fixed`], which still draws
 //! and throws the value away, and a pilot that wants a side uses [`Lean`],
 //! which does the same. Skipping the draw would make the sequence depend on
@@ -180,6 +188,35 @@ pub struct Pilot {
     /// *expected delay* to fire after a target enters the cone rather than a
     /// probability of firing at all - see `Driver::wants_to_fire`.
     pub trigger: Span,
+    /// How readily this pilot commits to a barrel roll, **per airborne
+    /// window**. Draw 17.
+    ///
+    /// A true probability and not a rate, unlike [`Self::trigger`]: the driver
+    /// makes exactly one decision per flight, on the first tick past
+    /// [`Self::roll_airtime`], and lives with it until it lands. See
+    /// `Driver::wants_to_roll`.
+    ///
+    /// **Invented, and the whole axis is a deliberate deviation** - the
+    /// original's opponents never barrel-roll at all. See that method.
+    pub roll_chance: Span,
+    /// The fraction of its shield pool this pilot keeps back rather than
+    /// spending on a barrel roll. Draw 18.
+    ///
+    /// The energy budget the maintainer's directive is phrased against: an
+    /// `Ace` rolls "as long as there's energy budget", and this is the budget.
+    /// Carried to `oag_physics` on `ShipControls::roll_shield_floor`, which is
+    /// where it is enforced - a human's pad leaves that field at `0.0` and gets
+    /// the recovered behaviour exactly.
+    pub roll_floor: Span,
+    /// How long a flight has to have lasted, **in seconds**, before this pilot
+    /// thinks it is worth rolling. Draw 19.
+    ///
+    /// Seconds rather than ticks, unlike [`Self::wander_period`] and
+    /// [`Self::provocation_ticks`], because what it is compared against is
+    /// `ShipState::time_airborne`, which is seconds. A roll that does not
+    /// complete before touchdown is shield spent for nothing, so this is the
+    /// axis that keeps a pilot from paying for a hop.
+    pub roll_airtime: Span,
 }
 
 impl Pilot {
@@ -206,6 +243,11 @@ impl Pilot {
         ram: Span::new(0.05, 0.20),
         provocation_ticks: Span::new(120.0, 300.0),
         trigger: Span::new(0.4, 0.8),
+        // Rolls about half the flights that last long enough, and keeps back
+        // the fifth of the pool `oag_physics` used to hold as a bare constant.
+        roll_chance: Span::new(0.30, 0.55),
+        roll_floor: Span::new(0.20, 0.35),
+        roll_airtime: Span::new(0.45, 0.70),
     };
 
     /// Brakes late, commits hard, holds a tight inside line and rotates the
@@ -229,6 +271,11 @@ impl Pilot {
         ram: Span::new(0.55, 0.95),
         provocation_ticks: Span::new(300.0, 600.0),
         trigger: Span::new(0.8, 1.0),
+        // Rolls off almost anything and off the lowest floor of the four: the
+        // aggressive pilot buys the payout and worries about the pool later.
+        roll_chance: Span::new(0.65, 0.95),
+        roll_floor: Span::new(0.15, 0.25),
+        roll_airtime: Span::new(0.35, 0.55),
     };
 
     /// Looks further ahead, brakes earlier, gives up corner speed for a tidy
@@ -250,6 +297,11 @@ impl Pilot {
         ram: Span::new(0.0, 0.05),
         provocation_ticks: Span::new(60.0, 180.0),
         trigger: Span::new(0.2, 0.5),
+        // Rarely, and only with plenty in hand: this one wants the tidy line
+        // more than it wants the payout.
+        roll_chance: Span::new(0.10, 0.25),
+        roll_floor: Span::new(0.40, 0.60),
+        roll_airtime: Span::new(0.65, 0.95),
     };
 
     /// Runs wide, brakes earliest, and stays out of everyone's way.
@@ -274,6 +326,11 @@ impl Pilot {
         ram: Span::new(0.0, 0.0),
         provocation_ticks: Span::new(30.0, 120.0),
         trigger: Span::new(0.05, 0.3),
+        // The most reluctant of the four, off the highest floor. A shy pilot
+        // that has spent its pool on showing off is a contradiction.
+        roll_chance: Span::new(0.05, 0.15),
+        roll_floor: Span::new(0.50, 0.70),
+        roll_airtime: Span::new(0.75, 1.10),
     };
 
     /// The four, with the names a config file and a menu spell them by.
@@ -326,7 +383,7 @@ impl Pilot {
 
     /// Every span, in draw order. `lean` is not one - it is not a range.
     #[must_use]
-    pub fn spans(&self) -> [Span; 15] {
+    pub fn spans(&self) -> [Span; 18] {
         [
             self.line_bias,
             self.wander,
@@ -343,6 +400,9 @@ impl Pilot {
             self.ram,
             self.provocation_ticks,
             self.trigger,
+            self.roll_chance,
+            self.roll_floor,
+            self.roll_airtime,
         ]
     }
 }
