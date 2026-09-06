@@ -507,7 +507,21 @@ impl Session {
         // this target already did, above - **except the menus**, which draw
         // here instead. See the block below.
         if let Stage::Race(stage) = &mut self.stage {
-            stage.draw_hud(&self.gpu, &mut encoder, self.framebuffer.output(), rect);
+            // `Framebuffer::output_size`, not `self.gpu.size()`: the two
+            // usually agree, since `resize_output` above just asked for
+            // exactly that, but not always - a failed reallocation there
+            // keeps the previous, smaller target and only warns, so reading
+            // the size back off the framebuffer is what stays correct on
+            // that path too. `RaceStage::draw_hud`'s `target_size` has to be
+            // `view`'s real size rather than assumed from `gpu.config`
+            // internally - see its own doc.
+            stage.draw_hud(
+                &self.gpu,
+                &mut encoder,
+                self.framebuffer.output(),
+                rect,
+                self.framebuffer.output_size(),
+            );
         }
 
         // **The menus draw here, after the resolve, rather than in the match

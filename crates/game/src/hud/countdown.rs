@@ -421,3 +421,6 @@ impl Countdown {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
