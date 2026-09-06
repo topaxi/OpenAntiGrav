@@ -629,7 +629,13 @@ it - the roll does not start or stop with a jerk.
 binary. The `field` scan returns 14 sites at that offset; nine are stack slots
 (`r29` base), two are a byte access (`sb`/`lbu`) on an unrelated structure and two
 are `lw` on another; the three float accesses on a craft base are the write above
-and the two reads below. The `addiu`/VFPU sweep adds nothing on a craft base.
+and the two reads below. The `addiu`/VFPU sweep returns 29 further sites, 22 of
+them `sp`-relative VFPU spills; **the exclusion criterion for the remaining seven
+is the identity of the containing function, not its base register's provenance** -
+all seven sit outside the craft-update code cluster (`0x0883e...`-`0x0884d...`),
+in functions that handle no craft, so none of them adds a consumer. `field 0x87c`
+is on the stronger footing: its two sweep hits are one `sp`-relative and one in
+`FUN_088ed9ec`, on an unrelated structure.
 
 #### Stage 2a: the ship's own display matrix, `0x08842140` - `0x08842264`
 
@@ -703,11 +709,40 @@ base implementation from the `0x08944xxx` run and two, this one among them, are
 overrides. `FUN_088418e0` is reached through that pointer, which is why no `jal`
 names it.
 
-The reachability is then closed from the runtime side. `FUN_088455ec` has exactly
-one caller in the binary - the `jal` at `0x08841b6c`, *inside* `FUN_088418e0` -
-and camera.md settled `fov = 60 + 0.075 * dot(fwd, vel)` on the running game at
-confidence 94, a law whose only store site is at the top of `FUN_088455ec`. A
-function that produced a measured runtime value ran; its only caller ran with it.
+**That the vtable is installed, and that this slot is the one that gets called,
+are both established from the binary alone.** The table's base is loaded by a
+`lui`/`addiu` pair at two sites and **stored into `object+0x38`** at both -
+`sw a0, 0x38(s0)` at `0x0883d6a0` and `sw a1, 0x38(s0)` at `0x08840d80`, the
+constructor pattern. And `FUN_088418e0` **itself** dispatches through the same
+slot, on a sub-object, at `0x088427cc`-`0x088427f4`:
+
+```
+lw    a0, 0x78(s2)        ; child = craft->0x78, skipped if null
+lwc1  f12, 0x344(sp)      ; dt
+lw    a1, 0x38(a0)        ; vtbl = child->0x38
+addiu a1, a1, 0x20
+lh    a2, 0x0(a1)         ; this-adjustment,  vtbl + 0x20
+lw    a1, 0x4(a1)         ; function pointer, vtbl + 0x24
+jalr  a1
+addu  a0, a0, a2          ; this += adjustment
+```
+
+`0x08aca0e0 + 0x24` is `0x08aca104`, this function's own slot, and the
+`{lh adjust, lw fnptr}` pair at `+0x20`/`+0x24` is exactly the 8-byte entry layout
+the table dump shows. So slot `+0x24` is a virtual per-frame update taking `dt` in
+`f12`, `FUN_088418e0` is a class's override of it, and the function's own
+signature (`float, int`) matches the call it makes. Nothing about that argument
+routes through another page.
+
+A weaker second line of evidence exists and is recorded with its own caveat rather
+than leaned on: `FUN_088455ec` has exactly one caller in the binary - the `jal` at
+`0x08841b6c`, inside `FUN_088418e0` - and [camera.md](camera.md) settled
+`fov = 60 + 0.075 * dot(fwd, vel)` live at confidence 94, a law whose arithmetic
+matches `FUN_088455ec`'s `craft+0x790` store. **That is not proof**: camera.md's
+own correction section leaves open whether the internal rig's update runs while an
+external view is selected, and `g_camera_fov_degrees` (`0x08b34310`) is a global
+that page treats as distinct from `craft+0x790`. The vtable argument above does
+not depend on either point.
 
 #### The other writers of `+0x87c`, for completeness
 
