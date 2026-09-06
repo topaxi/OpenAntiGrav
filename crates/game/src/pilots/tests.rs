@@ -296,3 +296,154 @@ fn writing_a_pilot_creates_the_directory_if_it_is_missing() {
         "look = [0.9, 1.0]\n"
     );
 }
+
+/// A hand-authored file that exercises everything a rename must not touch:
+/// a comment above a key, a blank line, a key order that is not [`AXES`]'s,
+/// an inline comment, and a number spelling (`1.05`) an `f32`-as-`f64` round
+/// trip would vandalise.
+const HAND_WRITTEN: &str = "\
+# Winston brakes late and never yields.
+commitment = [0.95, 1.05]  # right at the cap
+
+# Wanders more than anybody sensible would.
+wander = [0.3, 0.6]
+";
+
+/// The whole point of a rename being a *move*: not one byte changes, so
+/// every comment, blank line, key order and number spelling survives by
+/// construction rather than by care. Byte-for-byte, deliberately - a
+/// `contains("# Winston")` would pass on a file that had lost the rest.
+#[test]
+fn renaming_a_pilot_keeps_the_file_byte_for_byte() {
+    let scratch = Scratch::with(&[("winston.toml", HAND_WRITTEN)]);
+    rename_pilot(&scratch.0, "winston", "gerald").expect("a plain rename");
+
+    assert!(
+        !scratch.0.join("winston.toml").exists(),
+        "the old name is still there"
+    );
+    assert_eq!(
+        std::fs::read_to_string(scratch.0.join("gerald.toml")).expect("the renamed file"),
+        HAND_WRITTEN
+    );
+}
+
+/// `std::fs::rename` overwrites the destination silently on Unix, which would
+/// destroy a pilot the player still wanted. Check-then-move, so it does not.
+#[test]
+fn renaming_onto_a_name_that_is_taken_is_refused_rather_than_overwriting_it() {
+    let scratch = Scratch::with(&[
+        ("winston.toml", HAND_WRITTEN),
+        ("gerald.toml", "look = [0.9, 1.0]\n"),
+    ]);
+    let error = rename_pilot(&scratch.0, "winston", "gerald").expect_err("must be refused");
+    assert!(format!("{error:#}").contains("gerald"), "{error:#}");
+    // Both files are exactly as they were.
+    assert_eq!(
+        std::fs::read_to_string(scratch.0.join("gerald.toml")).expect("still there"),
+        "look = [0.9, 1.0]\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(scratch.0.join("winston.toml")).expect("still there"),
+        HAND_WRITTEN
+    );
+}
+
+/// An untouched built-in lives in the binary, so there is nothing on disk to
+/// move and renaming it would silently do nothing at all.
+#[test]
+fn renaming_a_pilot_with_no_file_of_its_own_is_an_error() {
+    let scratch = Scratch::with(&[]);
+    let error = rename_pilot(&scratch.0, "aggressive", "bruiser").expect_err("nothing to move");
+    assert!(format!("{error:#}").contains("aggressive"), "{error:#}");
+}
+
+/// Every one of these would become a path the caller did not intend once
+/// `dir.join(format!("{name}.toml"))` got hold of it, or a file the player
+/// could never see again.
+#[test]
+fn a_name_that_could_escape_the_pilot_directory_is_refused() {
+    for bad in [
+        "",
+        "..",
+        "../escape",
+        "sub/pilot",
+        "sub\\pilot",
+        ".hidden",
+        "with space",
+        "Winston",
+        "wînston",
+    ] {
+        assert!(
+            check_name(bad).is_err(),
+            "{bad:?} should not be an allowed pilot name"
+        );
+    }
+    for good in ["winston", "pilot-1", "my_pilot_2", "a"] {
+        check_name(good).unwrap_or_else(|e| panic!("{good:?} should be allowed: {e:#}"));
+    }
+    // Length is a limit, not a suggestion.
+    assert!(check_name(&"a".repeat(MAX_NAME)).is_ok());
+    assert!(check_name(&"a".repeat(MAX_NAME + 1)).is_err());
+}
+
+/// The trap this whole feature walks into: deleting `aggressive.toml` does
+/// not remove a pilot called `aggressive`, it puts the built-in back. The
+/// roster proves it rather than the wording claiming it.
+#[test]
+fn deleting_a_built_in_named_file_restores_the_built_in_rather_than_removing_it() {
+    let scratch = Scratch::with(&[("aggressive.toml", "commitment = [0.5, 0.6]\n")]);
+
+    let before = load_from(&scratch.0).expect("a readable directory");
+    let replaced = before
+        .entries()
+        .iter()
+        .find(|entry| entry.name == "aggressive")
+        .expect("the file replaces the built-in");
+    assert!(replaced.from_file, "the file should have won");
+    assert_ne!(replaced.pilot, Pilot::AGGRESSIVE);
+
+    delete_pilot(&scratch.0, "aggressive").expect("the file is there to delete");
+
+    let after = load_from(&scratch.0).expect("a readable directory");
+    let restored = after
+        .entries()
+        .iter()
+        .find(|entry| entry.name == "aggressive")
+        .expect("the built-in is back, not gone");
+    assert!(!restored.from_file);
+    assert_eq!(restored.pilot, Pilot::AGGRESSIVE);
+    assert!(is_built_in_name("aggressive"));
+    assert!(!is_built_in_name("winston"));
+}
+
+/// A pilot with no file of its own has nothing to delete, and saying so is
+/// what stops the menu reporting a success that removed nothing.
+#[test]
+fn deleting_a_pilot_with_no_file_is_an_error_not_a_silent_success() {
+    let scratch = Scratch::with(&[]);
+    assert!(delete_pilot(&scratch.0, "passive").is_err());
+}
+
+/// An ordinary file deletion really does remove the pilot - the other half of
+/// the built-in test above, so "delete restores it" cannot be read as "delete
+/// never removes anything".
+#[test]
+fn deleting_a_pilot_that_is_not_a_built_in_removes_it_from_the_roster() {
+    let scratch = Scratch::with(&[("winston.toml", HAND_WRITTEN)]);
+    assert!(
+        load_from(&scratch.0)
+            .expect("readable")
+            .entries()
+            .iter()
+            .any(|entry| entry.name == "winston")
+    );
+    delete_pilot(&scratch.0, "winston").expect("the file is there");
+    assert!(
+        !load_from(&scratch.0)
+            .expect("readable")
+            .entries()
+            .iter()
+            .any(|entry| entry.name == "winston")
+    );
+}
