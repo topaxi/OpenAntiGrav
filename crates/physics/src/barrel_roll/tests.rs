@@ -249,8 +249,8 @@ fn armable() -> (ShipState, Dimensions) {
     (state, dimensions)
 }
 
-/// One tick of [`advance_gesture`] at a fixed 60 Hz, with the axis where the
-/// caller put it and the d-pad where the caller put it.
+/// One tick of [`advance_gesture`] at a fixed 60 Hz, **airborne**, with the
+/// axis where the caller put it and the d-pad where the caller put it.
 fn gesture_tick(
     state: &mut ShipState,
     dimensions: &Dimensions,
@@ -263,7 +263,7 @@ fn gesture_tick(
         roll_tap_right: dpad == Some(TapDirection::Right),
         ..ShipControls::default()
     };
-    advance_gesture(state, &input, dimensions, 8.0, 1.0 / 60.0)
+    advance_gesture(state, &input, dimensions, 8.0, false, 1.0 / 60.0)
 }
 
 #[test]
@@ -364,4 +364,90 @@ fn a_flat_shield_refuses_the_arm_but_still_clears_the_history() {
     assert_eq!(state.roll_target, 0.0, "nothing armed");
     assert_eq!(state.shield, 1.0, "and nothing was charged");
     assert_eq!(state.roll_taps, [0, 0, 0], "the gesture still completed");
+}
+
+/// One tick of [`advance_gesture`] with the contact bit set.
+fn grounded_tick(
+    state: &mut ShipState,
+    dimensions: &Dimensions,
+    dpad: Option<TapDirection>,
+) -> bool {
+    let input = ShipControls {
+        roll_tap_left: dpad == Some(TapDirection::Left),
+        roll_tap_right: dpad == Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    advance_gesture(state, &input, dimensions, 8.0, true, 1.0 / 60.0)
+}
+
+/// The gate that makes an AI craft affordable: a craft on the ground cannot
+/// arm, and pays nothing for trying.
+///
+/// The original zeroes the whole tap history every grounded tick rather than
+/// refusing at the arm - see [`advance_gesture`].
+#[test]
+fn a_grounded_craft_cannot_arm_and_is_not_charged() {
+    let (mut state, dimensions) = armable();
+    for dir in [TapDirection::Right, TapDirection::Left, TapDirection::Right] {
+        assert!(!grounded_tick(&mut state, &dimensions, Some(dir)));
+    }
+    assert_eq!(state.roll_target, 0.0);
+    assert_eq!(state.shield, 100.0, "a grounded craft paid for a roll");
+    assert_eq!(
+        state.roll_taps,
+        [0, 0, 0],
+        "the history survived the ground"
+    );
+}
+
+/// And the history is cleared rather than merely ignored, so a gesture cannot
+/// span a takeoff: two taps on the ground plus one in the air is not a roll.
+#[test]
+fn a_gesture_cannot_span_a_takeoff() {
+    let (mut state, dimensions) = armable();
+    grounded_tick(&mut state, &dimensions, Some(TapDirection::Right));
+    grounded_tick(&mut state, &dimensions, Some(TapDirection::Left));
+    assert!(!gesture_tick(
+        &mut state,
+        &dimensions,
+        0.0,
+        Some(TapDirection::Right)
+    ));
+    assert_eq!(state.roll_target, 0.0);
+    assert_eq!(state.shield, 100.0);
+}
+
+/// The same three taps in the air do arm, so the test above is measuring the
+/// gate and not a broken fixture.
+#[test]
+fn the_same_three_taps_in_the_air_still_arm() {
+    let (mut state, dimensions) = armable();
+    gesture_tick(&mut state, &dimensions, 0.0, Some(TapDirection::Right));
+    gesture_tick(&mut state, &dimensions, 0.0, Some(TapDirection::Left));
+    assert!(gesture_tick(
+        &mut state,
+        &dimensions,
+        0.0,
+        Some(TapDirection::Right)
+    ));
+    assert_eq!(state.roll_target, 1.0);
+}
+
+/// A completed pattern levels the phase whether or not the shield could pay -
+/// the original's `swc1 f22, 0x87c` sits outside the `cost < shield` test.
+#[test]
+fn a_completed_pattern_levels_the_phase_even_when_the_arm_is_refused() {
+    let (mut state, dimensions) = armable();
+    state.shield = 0.0;
+    state.roll_phase = 0.4;
+    gesture_tick(&mut state, &dimensions, 0.0, Some(TapDirection::Right));
+    gesture_tick(&mut state, &dimensions, 0.0, Some(TapDirection::Left));
+    assert!(!gesture_tick(
+        &mut state,
+        &dimensions,
+        0.0,
+        Some(TapDirection::Right)
+    ));
+    assert_eq!(state.roll_phase, 0.0);
+    assert_eq!(state.roll_target, 0.0);
 }
