@@ -18,7 +18,7 @@ use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
     DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowReceiver, UNIFORMS_SIZE, Zone,
-    write_uniforms,
+    write_uniforms, write_uniforms_raw,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
