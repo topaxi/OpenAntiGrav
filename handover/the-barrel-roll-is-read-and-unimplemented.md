@@ -191,8 +191,31 @@ See the module's own doc comment if a future trace contradicts it.
   **This project keeps them able to, deliberately.** Maintainer's ruling,
   2026-09-06: "AI may barrel roll, if they have enough shield energy." What
   makes that affordable is the grounded gate in the bullet above, which is a
-  port; the AI's access to the gesture is a documented deviation, and no
-  AI-only constant was invented for it.
+  port; the AI's access to the gesture is a documented deviation.
+- **`oag_physics::barrel_roll::AI_ROLL_SHIELD_FLOOR` is invented, and it is the
+  first invented number this mechanic carries.** An AI craft below 20% of its
+  shield pool does not arm a roll; a pad on the same shield does. The value was
+  chosen by the maintainer on 2026-09-06, who said plainly that what the
+  original does here is unknown, and it deliberately has **no confidence
+  score** - a score would let a later reader cite a choice as evidence. It sits
+  on top of the recovered `cost < shield` gate rather than replacing it, and
+  `ShipControls::computer_driven` is the flag that keeps it off the human path.
+  If the original's own AI gate is ever recovered, this constant is *replaced*
+  by it, not reconciled with it. Changing the value is a one-line edit.
+
+  **Measured on the disc, it fires zero times.** With the floor at `0.20` and
+  at `0.00`, all twelve forward circuits report identical arms, shield spent and
+  finishing shield. The grounded gate accounts for the whole of the `07_Track`
+  regression on its own, so the floor is a dormant safety net rather than a live
+  rule - worth knowing before anyone tunes it.
+- **A completed roll used to draw two rotations, and now draws one.** Reported
+  from play 2026-09-06. `release` leaves `roll_target` at `+-1.0` and the phase
+  parks there, which is level on screen; the next roll the *other* way then
+  travelled `+1.0 -> -1.0`, twice a turn. Fixed by the original's own phase
+  levelling on any completed alternation, and pinned by
+  `barrel_roll::tests::a_second_roll_the_other_way_travels_one_turn_and_not_two`,
+  which asserts the **traversal** rather than the endpoint - the endpoint was
+  always right, which is why no existing test could see it.
 - ~~Nothing draws the roll and no render-side consumer of `entity+0x87c` has been
   searched for.~~ **Closed 2026-09-06**: there is one, the visual is a rotation
   derived from the phase and not a canned animation, and it moved to its own
