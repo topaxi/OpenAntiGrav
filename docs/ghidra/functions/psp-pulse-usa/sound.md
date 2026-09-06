@@ -96,10 +96,12 @@ for a keyed volume pair - and that guess turned out backwards.
 
 ### Correction, 2026-09-06: the guess was backwards, and `+0x40` is the per-voice volume
 
-Read at the call site rather than guessed at: `FUN_08a2ae08` (bit `0x0f`)
-decompiles to a direct call through `func_0x00272c24`, which is
-`0x08804000 + 0x00272c24 = 0x08a76c24` - **`__sceSasSetVolume`**, already named
-in the Ghidra project from its one other call site
+Read at the call site rather than guessed at: `FUN_08a2ae08` has no function
+object in the Ghidra project (Ghidra reports "no function found" for it), so
+this is read from raw disassembly rather than a decompile - `jal 0x00272c24`
+at `0x08a2ae50`, which is `0x08804000 + 0x00272c24 = 0x08a76c24` -
+**`__sceSasSetVolume`**, already named in the Ghidra project from its one
+other call site
 ([`audio-levels.md`](audio-levels.md)'s `Sas_Init`, which the same page's
 "not recovered" section believed was the *only* call). It is not: this is a
 second, and it is per-voice, per-frame. Its four fields
@@ -119,22 +121,29 @@ The other two call targets resolve the same way, against Ghidra's own already-na
 enable, not a volume. Bit `0x80`'s two fields are not a "keyed volume pair"
 either: `FUN_089961e4` decodes `+0x64`/`+0x68`'s bitfields into curve-mode and
 rate arguments and calls `func_0x00226f64` (`0x08a2af64`) with mask `0xf` -
-Ghidra does not resolve that inner call to a function, but a sibling wrapper
-two bits over, `FUN_08a2b03c`, calls `func_0x00272c34` = `0x08a76c34` =
-**`__sceSasSetSL`** (sustain level) the same guarded way. Bit `0x80` is ADSR
-rate/curve configuration, the thing bit `0x0f` was wrongly guessed to be.
+Ghidra does not resolve that inner call to a function, so what it ultimately
+reaches is not confirmed by name. What corroborates the ADSR reading instead:
+`FUN_08a2b03c`, itself called from inside `FUN_089961e4`'s own body (not a
+separate dirty-bit handler), calls `func_0x00272c34` = `0x08a76c34` =
+**`__sceSasSetSL`** (sustain level) the same guarded way `Sas_SetVoice` calls
+`__sceSasSetVoice`. Bit `0x80` is ADSR rate/curve configuration, the thing
+bit `0x0f` was wrongly guessed to be.
 
-Confidence **90** on each resolved call target: every one decompiles to a
-direct `jal` through the same `(0x53ba8, voice, ...)` guarded dispatch already
-read for `Sas_SetVoice`, landing on an import stub Ghidra has independently
-named from its own symbol table - not an inference from argument count. Not
-renamed here and no `names.tsv` row added: `FUN_08a2ae08`, `FUN_08a2ae6c`,
-`FUN_08a2af18`, `FUN_089961e4` and `FUN_08a2b03c` are thin guarded wrappers
-around those imports rather than the imports themselves, and this page has
-not yet worked out this project's naming convention for "guarded call to a
-named import" (`Sas_SetVoice` already occupies that shape for
-`__sceSasSetVoice` alone) - a naming pass, not a re-read, and left for
-whoever picks this up next.
+Confidence **90** on `0x0f`/`0x10`/`0x40`'s three resolved call targets: each
+is a direct `jal` through the same `(0x53ba8, voice, ...)` guarded dispatch
+already read for `Sas_SetVoice`, landing on an import stub Ghidra has
+independently named from its own symbol table - not an inference from
+argument count. Confidence **80** on `0x80`'s ADSR reading: `__sceSasSetSL`
+is confirmed the same way, but it is reached one call deeper
+(`FUN_089961e4` -> `FUN_08a2b03c` -> `__sceSasSetSL`) rather than directly
+from the dirty-bit dispatch, and the unresolved `func_0x00226f64` call
+alongside it is not independently confirmed. Not renamed here and no
+`names.tsv` row added: `FUN_08a2ae08`, `FUN_08a2ae6c`, `FUN_08a2af18`,
+`FUN_089961e4` and `FUN_08a2b03c` are thin guarded wrappers around those
+imports rather than the imports themselves, and this page has not yet worked
+out this project's naming convention for "guarded call to a named import"
+(`Sas_SetVoice` already occupies that shape for `__sceSasSetVoice` alone) - a
+naming pass, not a re-read, and left for whoever picks this up next.
 
 **What this settles for [audio-levels.md](audio-levels.md#what-is-not-recovered-and-why-it-is-the-next-thing-to-read):**
 the per-voice SAS volume is written every frame through `+0x40`/`+0x44` (dry
