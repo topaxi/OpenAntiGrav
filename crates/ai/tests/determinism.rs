@@ -105,24 +105,46 @@ use oag_ai::probe::{self, Scenario};
 ///   names - the synthetic scenarios never produce a zero chord - and the
 ///   chord spacing is the whole of the movement. `oag-core`, `oag-physics` and
 ///   `oag-gameplay`'s gates all still pass unchanged.
+/// - **All three rows regenerated again 2026-09-06**, later the same day, for
+///   [`oag_ai::Tuning::curvature_span`] - a **ceiling on the chord** rather
+///   than a change to how the three walks are spaced. The span used to be half
+///   the driver's own lookahead, so it grew with speed; capping it at ten units
+///   changes what the estimator measures over on every reading above a
+///   standstill, and therefore every speed target on both scenarios. Same class
+///   of cause as the item above, different cause: **do not read this entry as
+///   that one.**
+///
+///   **Isolated before regenerating.** The same change also adds the yaw-rate
+///   term to `driver::pace::corner_target`, and that half was applied *alone*:
+///   all three rows reproduced bit for bit, because the term binds above
+///   `k = max_turn_rate^2 / lateral_accel` (about 0.0125) and with the uncapped
+///   span the driver's own readings on these fixtures stay under it. Then, with
+///   the yaw term in place, setting `curvature_span` back to `None` reproduced
+///   all three rows bit for bit again - so **the ceiling is the whole of the
+///   movement** and the yaw term contributes none of it. `oag-core`,
+///   `oag-physics` and `oag-gameplay`'s gates all still pass unchanged; the
+///   scenario's own curvature spread is untouched (0.000255..0.020490 and
+///   0.000036..0.026295, exactly as before), because
+///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures the
+///   line rather than what a driver read off it.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0x97c4_ca8b_5fe5_d5bf,
-        0xecac_6673_29ca_a1e0,
+        0x94d4_044f_929d_0433,
+        0x2f75_b2f6_0391_9f35,
     ),
     (
         600,
         Scenario::Field,
-        0x8d30_b677_11bf_3dfc,
-        0x999e_bb23_475b_ae46,
+        0x3d35_8d7e_4634_7981,
+        0x42a0_34a3_9314_ab40,
     ),
     (
         1_800,
         Scenario::Field,
-        0xa50a_d4d9_556c_3992,
-        0x30bf_cc62_6468_dbaa,
+        0x1ed4_e76a_2a73_6e99,
+        0x579d_9ea1_9e7c_29f4,
     ),
 ];
 
