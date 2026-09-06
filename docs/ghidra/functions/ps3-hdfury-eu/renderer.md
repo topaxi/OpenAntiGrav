@@ -1733,13 +1733,37 @@ the scene; before that clamp its gate was being handed arguments around
    and does not discriminate**: the reference frame's mean luma is 0.585
    gamma / 0.42 linearised, and both are far above the `0.15` where
    `4 - min(20 * adapted, 3)` stops varying.
-2. **Per-texture sRGB/`GAMMA` decode is still unestablished** (confidence 0,
-   no claim made): the texture method headers `0x1a00 + unit * 0x20` are
-   computed at runtime, so no constant exists for a header scan. The emitters
-   are at `0x5bf288`, `0x5bf328`, `0x5c653c`, `0x5c6644`, `0x640d20` and
-   `0x64ad9c`; reading their fill of the format word (`+0x1a04`) and
-   `CONTROL1` (`+0x1a10`) for the `CELL_GCM_TEXTURE_GAMMA_*` bits is the next
-   step, and it is what would settle question 1 as well.
+2. **Per-texture sRGB/`GAMMA` decode: settled negative, 2026-09-06, confidence
+   90.** The six addresses named in the previous version of this entry
+   (`0x5bf288`, `0x5bf328`, `0x5c653c`, `0x5c6644`, `0x640d20`, `0x64ad9c`) are
+   not where the format/`CONTROL1`/`FILTER` words are computed - each is a
+   dumb word-by-word copy from a precomputed 14-word struct into the push
+   buffer at `0x1a00 + unit * 0x20`; nothing there reads a texture's own
+   fields. The struct is built once, by
+   [`Texture_BuildGcmRegisters`](../../../formats/gtf.md#remap-is-a-per-channel-source-and-force-table-and-it-is-read-now)
+   (`0x005a9998`), which [`gtf.md`](../../../formats/gtf.md) already reads for
+   `FORMAT` and `CONTROL1`. The one field that page does not cover is
+   `FILTER`'s top nibble: `rlwimi r12, r24, 0x8, 0x0, 0x3` (identical at
+   `0x5a9ad8`, `0x5a9b4c` and `0x5a9cfc`, all three of the function's format
+   branches), where `r24` is the packed `(format << 16) | remap` argument.
+   Rotate-left-8 then keep IBM bits 0-3 selects IBM bits 8-11 of the
+   unrotated word, which are bits `0x80`/`0x40`/`0x20`/`0x10` of the *format
+   byte itself* - exactly the bits [gtf.md's layout table](../../../formats/gtf.md#layout)
+   already names (the format enum's own top bit, `UN` at `0x40`, `LN` at
+   `0x20`) plus the always-set `0x80` high bit every `CELL_GCM_TEXTURE_*`
+   constant carries. Checked against all ten format bytes on the disc
+   (`0x88, 0x86, 0x87, 0xa5, 0x85, 0x81, 0x9e, 0xa8, 0xa6, 0xa7`): the nibble
+   is `0x8` for every one with neither flag, `0xa` for the four with `LN`
+   set, and `0x9` for `0x9e` (`A8B8G8R8`, whose own enum value already has
+   bit `0x10` set) - fully explained by fields already documented, no residual
+   bit. **No texture on this disc carries a distinct gamma/sRGB-decode
+   control anywhere in its per-unit register set**, so if HD ever gamma-
+   decodes a sampled texture it is not a per-texture choice the engine
+   makes at load. **This does not settle question 1**, contrary to what the
+   previous version of this entry claimed: a texture's *input* decode and
+   the scene surface's *output* encoding are different ends of the pipe, and
+   a negative result on one says nothing about the other. Question 1 stays
+   open at confidence 70.
 
 ### The chain runner, and every engine-fed parameter (2026-08-19)
 
@@ -2093,11 +2117,31 @@ light is per-program and has to be read per material rather than assumed.
 here. Confidence 82 on the `bluemetal` reading, which is a second-hand
 measurement recorded rather than re-derived.
 
-Two things this leaves open. **Whether `0x1aaf7631` and `colorSet1` are one
-attribute is an inference**, not a read - 297 + 54 is exactly the 351 chunks
-with a colour set, and neither is ever declared alongside a `lightmapUV`, but
-nothing seen ties the hashes together. And **what the fourth byte gates is
-unread**, so nothing consumes it.
+One of these is now settled, one is not. **`0x1aaf7631` and `colorSet1` are
+not one attribute - refuted, 2026-09-06, confidence 78.** The 297 + 54 = 351
+count only ever showed they are *complementary*: a chunk carries one or the
+other, never both, and neither sits beside a `lightmapUV`. That is exactly
+what "a chunk authors one colour set or the other" predicts and says nothing
+about whether the two hash to the same underlying attribute. [The four-byte
+census](../../../formats/rcsmodel.md#the-four-byte-attributes-are-three-different-things-and-one-is-vertex-colour)
+already on this disc gives them different fourth-byte distributions over a
+combined 4,939,968 vertices: `colorSet1`'s fourth byte is **255 on all
+682,796** of them, and `0x1aaf7631`'s is **23 % at 255, 66 % at 0** over its
+4,257,172. One hash is a constant alpha of one; the other is a two-valued
+mask on two-thirds of its vertices. Two attributes with the same identity
+would carry the same fourth byte on every vertex that has one, and these do
+not, so the two are distinct attributes that happen to occupy the same
+structural role (a per-chunk choice of colour set) rather than one attribute
+under two names. `0x1aaf7631` itself stays unnamed - this rules out one
+candidate identity, it does not supply another, and [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)'s
+confidence-50 floor for a rename applies to a data attribute the same as a
+function.
+
+**What the fourth byte gates is still unread**, so nothing consumes it here.
+`0x1aaf7631` is declared by no `SHO` shader block (the taxonomy sweep already
+recorded above), so the only place left to look is per-material microcode via
+`scripts/ps3-microcode.py` - a fresh sweep, not a re-read of what is already
+here.
 
 `0x005c6c5c` writes `0x00041ea4` with the payload `(arg3 << 4) | arg2`, and
 three inlined copies of the same emission sit at `0x005bf578`, `0x00642b50`
