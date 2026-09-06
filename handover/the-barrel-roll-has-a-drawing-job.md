@@ -70,15 +70,16 @@ value the simulation already publishes.
 
 ## Open
 
-- **The sign of the roll is not determined, and applying it wrong is worse than
-  not applying it.** The VFPU register-name row/column ambiguity reaches exactly
-  the `sin`/`-sin` placement and nothing else - the *axis* survives it, because
-  both literal `1.0`s sit on the diagonal, which is transpose-invariant. So
-  "about the nose" is measured and "clockwise or anticlockwise for a
-  left-right-left gesture" is not. camera.md already declined to apply
-  `headtilt` on exactly this reasoning ("a lean applied with the wrong sign
-  leans the horizon the wrong way through every corner, which is worse than a
-  horizon that does not lean"); the same bar applies here.
+- **The sign of the roll is not determined, and it now ships as a chosen
+  value rather than a measured one.** The VFPU register-name row/column
+  ambiguity reaches exactly the `sin`/`-sin` placement and nothing else - the
+  *axis* survives it, because both literal `1.0`s sit on the diagonal, which
+  is transpose-invariant. So "about the nose" is measured and "clockwise or
+  anticlockwise for a left-right-left gesture" is not. `headtilt`'s own
+  unresolved sign made the same case for holding back entirely; this one
+  shipped anyway, deliberately, because a wrong roll direction is a one-line
+  fix in a single named constant and the maintainer chose to play-test it
+  live rather than wait on a capture. See Next Steps.
 - **`craft+0x854 * 0.5`, the angle's other term, must not be transcribed.** It
   is `FUN_0883fab4`'s steering lean, which camera.md scores at confidence **0**
   for what it physically means. The roll term stands alone and is complete
@@ -97,19 +98,44 @@ value the simulation already publishes.
 
 ## Next Steps
 
-1. **Settle the sign with one capture.** `scripts/psp-drive.py` can already
-   script the d-pad alternation, and the mechanic's own thread wants a capture
-   for an unrelated reason (whether the original arms on the ground) - so one
-   run serves both. Watch the ship roll and write down which way. Until this
-   lands, step 2 has a coin-flip in it.
-2. **Port the ease as a pure function in `oag-render`**, off
-   `ShipState::roll_phase`, with a unit test pinning `ease(0) = 0`,
-   `ease(+/-0.5) = +/-0.5`, `ease(+/-1) = +/-1` and the odd symmetry. This part
-   has no sign ambiguity in it at all and can land before step 1.
-3. **Apply the rotation to the ship's transform** about its forward axis, by
-   `eased * 6.28` radians, once step 1 has settled the sign.
-4. **Roll the internal camera's up vector by the same angle**, alongside
-   `<InternalCamera headtilt>` rather than instead of it - they are two terms on
-   one vector and the original applies both.
-5. Identify `[0x002ace1c]` and `vmmul.q`'s order if either turns out to matter
-   once the picture is on screen; neither blocks steps 1-4.
+**Steps 2-4 landed 2026-09-06.** The drawing half of this thread is done and on
+screen; only the sign remains open, and it is now a play-test-and-flip loop
+rather than a blocker.
+
+1. **Settle the sign with a memory-read capture, not "watch the ship roll".**
+   The original plan was to eyeball a scripted `scripts/psp-drive.py` d-pad
+   alternation; the better version reads the display matrix straight out of
+   PPSSPP's memory during that same scripted roll, the way the sideshift
+   capture in `docs/reverse-engineering/ppsspp-debugger.md` did - headless,
+   no pixels needed, and it settles the sign outright rather than by eye. This
+   is queued separately and does not block anything below; whichever way it
+   comes back, flipping the answer costs one line (see step 2).
+2. ~~Port the ease as a pure function in `oag-render`~~ **Done**:
+   `oag_render::roll::ease` in `crates/render/src/roll.rs`, with the pinned
+   unit tests plus a continuity check at the `+/-0.5` seam.
+3. ~~Apply the rotation to the ship's transform~~ **Done**:
+   `model_matrix_of` in `crates/game/src/race/drawable.rs` composes it into
+   `body.orientation`, about the local `-Z` axis `oag_physics::ship::Body::
+   forward` already uses.
+4. ~~Roll the internal camera's up vector~~ **Done**, alongside
+   `<InternalCamera headtilt>` rather than instead of it:
+   `oag_render::camera::internal::view` in `crates/render/src/camera/
+   internal.rs` takes `roll_phase` and rotates the up vector about the view's
+   forward axis before the look-at is built.
+5. **The sign is chosen, not measured, and lives in exactly one place:**
+   `ROLL_DIRECTION` in `crates/render/src/roll.rs`. It is set to `1.0` so
+   that a `[1, 2, 1]` gesture (tap LEFT first, which ramps `roll_phase`
+   toward `-1.0`) drops the left wing - the mapping a player's own gesture
+   would suggest, and the reasoning is written on the constant itself. If a
+   play-test or the capture in step 1 says it reads backwards, flip that one
+   constant to `-1.0` and nothing else changes: both call sites read it
+   through `oag_render::roll::angle`, and
+   `roll::tests::opposite_phases_rotate_oppositely_by_equal_magnitude` and
+   `camera::internal::tests::opposite_roll_phases_produce_different_and_symmetric_views`
+   are sign-agnostic, so neither test needs touching either.
+6. Identify `[0x002ace1c]` and `vmmul.q`'s order if either turns out to matter
+   once the picture is on screen; neither blocked steps 2-4. `vmmul.q`'s
+   ambiguity in particular does not reach this port: `model_matrix_of`
+   composes the roll into `body.orientation` (a local-space rotation about an
+   orthonormal quaternion) before the scale is applied, which is the case the
+   thread's own "Open" section already says the two operand orders agree on.
