@@ -140,13 +140,24 @@ capture falls back to a single engine and stops clipping entirely.
 **The per-voice SAS volume.** `Sas_Init` (`0x08a2ac90`) opens all 32 voices at
 `sceSasSetVolume(core, v, 0, 0, 0, 0)` - silence - alongside
 `sceSasSetPitch(core, v, 0x1000)` and `sceSasSetSimpleADSR(core, v, 0xf,
-0x5fc0)`, and that is the **only** call to `__sceSasSetVolume` (`0x08a76c24`)
-anywhere in the binary. So a sounding voice's level is written through
-something else, and until that path is read there is no way to say whether the
-original's eight engines reach the mix bus at the same level this port gives
-them. [sound.md](sound.md) already flags the suspects: the four wrappers
-around `Sas_QueueSetVoice` whose calls are not `sceSasSetVoice`, "two for a
-keyed volume pair" on an argument count that is not evidence.
+0x5fc0)`. This page originally read that as the **only** call to
+`__sceSasSetVolume` (`0x08a76c24`) anywhere in the binary - **wrong**, corrected
+2026-09-06: [sound.md](sound.md#correction-2026-09-06-the-guess-was-backwards-and-0x40-is-the-per-voice-volume)
+found a second, per-voice, per-frame call through `Sas_CommitVoices`'s bit
+`0x0f` dispatch, previously misread as an argument-count guess at "four for
+ADSR". So a sounding voice's level *is* written every frame through
+`__sceSasSetVolume`, from the voice record's `+0x40`/`+0x44` (dry L/R) and
+`+0x48`/`+0x4c` (effect-send L/R) - that part of "something else" is now
+found.
+
+**What is still not recovered is what value lands in those four fields.**
+Nothing read yet traces `+0x40` back to a writer: `sound.md`'s correction
+names `SoundInstance_UpdateSpatial` (`0x08939e58`, this page's own
+`positional-audio.md` cross-reference) as the only known producer of a
+comparable volume pair, but it writes into a SCREAM software instance through
+its own fade/ramp engine (`func_0x0898d614`), not into the SAS voice record
+`Sas_CommitVoices` walks - and nothing read connects the two. **That link is
+the next thing to read**, not the four wrappers, which are now resolved.
 
 Until that lands, "our race mix is louder than the console's" is a hypothesis
 with no measurement behind it, and the honest port is the one that reproduces

@@ -90,10 +90,65 @@ byte count into `+0x58`. Confidence **88** on the three field meanings, which
 follows from the wrapper above; **85** on the table's shape and base address,
 from the loop's stride, its bound, and the `0x6c` increment.
 
-The four bits whose calls are *not* `sceSasSetVoice` are deliberately not named.
-Their argument counts fit the obvious guesses - four for ADSR, one for pitch,
-two for a keyed volume pair - but an argument count is not evidence, and this
-project does not dress a guess as a name.
+The four bits whose calls are *not* `sceSasSetVoice` were originally left
+unnamed on an argument-count guess alone - four for ADSR, one for pitch, two
+for a keyed volume pair - and that guess turned out backwards.
+
+### Correction, 2026-09-06: the guess was backwards, and `+0x40` is the per-voice volume
+
+Read at the call site rather than guessed at: `FUN_08a2ae08` (bit `0x0f`)
+decompiles to a direct call through `func_0x00272c24`, which is
+`0x08804000 + 0x00272c24 = 0x08a76c24` - **`__sceSasSetVolume`**, already named
+in the Ghidra project from its one other call site
+([`audio-levels.md`](audio-levels.md)'s `Sas_Init`, which the same page's
+"not recovered" section believed was the *only* call). It is not: this is a
+second, and it is per-voice, per-frame. Its four fields
+(`+0x40`, `+0x44`, `+0x48`, `+0x4c`) land exactly on `sceSasSetVolume`'s real
+signature past `(core, voice)` - `volumeL, volumeR, volumeEffectL,
+volumeEffectR` - four fields, not an ADSR curve's four fields as guessed.
+
+The other two call targets resolve the same way, against Ghidra's own already-named import stubs:
+
+| Bit | Wrapper | Resolves to | Address |
+| --- | --- | --- | --- |
+| `0x0f` | `FUN_08a2ae08` | `__sceSasSetVolume` | `0x08a76c24` |
+| `0x10` | `FUN_08a2ae6c` | `__sceSasSetPitch` | `0x08a76c7c` |
+| `0x40` | `FUN_08a2af18` | `__sceSasSetNoise` | `0x08a76c84` |
+
+`0x10`'s guess ("pitch") was right; `0x40` was left unguessed and is a noise-generator
+enable, not a volume. Bit `0x80`'s two fields are not a "keyed volume pair"
+either: `FUN_089961e4` decodes `+0x64`/`+0x68`'s bitfields into curve-mode and
+rate arguments and calls `func_0x00226f64` (`0x08a2af64`) with mask `0xf` -
+Ghidra does not resolve that inner call to a function, but a sibling wrapper
+two bits over, `FUN_08a2b03c`, calls `func_0x00272c34` = `0x08a76c34` =
+**`__sceSasSetSL`** (sustain level) the same guarded way. Bit `0x80` is ADSR
+rate/curve configuration, the thing bit `0x0f` was wrongly guessed to be.
+
+Confidence **90** on each resolved call target: every one decompiles to a
+direct `jal` through the same `(0x53ba8, voice, ...)` guarded dispatch already
+read for `Sas_SetVoice`, landing on an import stub Ghidra has independently
+named from its own symbol table - not an inference from argument count. Not
+renamed here and no `names.tsv` row added: `FUN_08a2ae08`, `FUN_08a2ae6c`,
+`FUN_08a2af18`, `FUN_089961e4` and `FUN_08a2b03c` are thin guarded wrappers
+around those imports rather than the imports themselves, and this page has
+not yet worked out this project's naming convention for "guarded call to a
+named import" (`Sas_SetVoice` already occupies that shape for
+`__sceSasSetVoice` alone) - a naming pass, not a re-read, and left for
+whoever picks this up next.
+
+**What this settles for [audio-levels.md](audio-levels.md#what-is-not-recovered-and-why-it-is-the-next-thing-to-read):**
+the per-voice SAS volume is written every frame through `+0x40`/`+0x44` (dry
+L/R) and `+0x48`/`+0x4c` (effect-send L/R) of the voice record, via a second,
+previously-missed call to `__sceSasSetVolume`. **What is still not settled**
+is what numeric value lands there: nothing above traces `+0x40` back to a
+writer. `SoundInstance_UpdateSpatial` (`0x08939e58`,
+[positional-audio.md](positional-audio.md)) is the only known producer of a
+comparable pair - it calls `func_0x00189614` (`0x0898d614`) with the
+`SoundEmitter_ComputeVolumeAndAngle` volume - but that function is SCREAM's
+own software fade/ramp engine over a *SCREAM instance*, not the SAS voice
+record `Sas_CommitVoices` walks, and nothing read here connects the two.
+That link, not this one, is the next thing to read before "does the original
+reserve headroom per voice" has an answer instead of a guess.
 
 The `0x80` branch choosing between `FUN_08a2b088` and `FUN_089961e4` on
 `DAT_08ac3224` is the same flag that gates `FUN_089960e0` at the top of the

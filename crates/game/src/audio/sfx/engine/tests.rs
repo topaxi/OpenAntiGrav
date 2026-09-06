@@ -8,12 +8,14 @@ use crate::audio::sfx::Loaded;
 use oag_audio::Sound;
 use std::sync::Arc;
 
-/// A placement that changes nothing: the craft on top of the listener, so the
-/// law under test is the only thing moving the gain.
-const HEARD: Option<oag_audio::Placed> = Some(oag_audio::Placed {
-    gain: 1.0,
-    pan: 0.0,
-});
+/// A listener at the origin, and a craft position that changes nothing: the
+/// craft is on top of the listener, so the law under test is the only thing
+/// moving the gain (`atten` is `1.0` within the near-field ball either way).
+const LISTENER: oag_audio::Listener = oag_audio::Listener {
+    position: [0.0; 3],
+    right: [1.0, 0.0, 0.0],
+};
+const HEARD: [f32; 3] = [0.0; 3];
 
 /// A `Loaded` holding `count` distinguishable one-frame sounds.
 fn loaded(count: usize, looping: bool) -> Loaded {
@@ -70,6 +72,7 @@ fn the_engine_snaps_on_its_first_tick_and_lags_after() {
         100.0,
         true,
         HEARD,
+        &LISTENER,
         false,
         1.0 / 60.0,
     );
@@ -85,6 +88,7 @@ fn the_engine_snaps_on_its_first_tick_and_lags_after() {
         300.0,
         true,
         HEARD,
+        &LISTENER,
         false,
         1.0 / 60.0,
     );
@@ -109,6 +113,7 @@ fn the_engine_holds_one_voice_across_ticks() {
             200.0,
             true,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -138,6 +143,7 @@ fn a_non_looping_engine_bank_is_refused_rather_than_retriggered() {
             200.0,
             true,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -159,6 +165,7 @@ fn intensity_rises_to_full_and_stops_there() {
             200.0,
             true,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -180,6 +187,7 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
             250.0,
             true,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -200,6 +208,7 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
             250.0,
             false,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -235,6 +244,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             250.0,
             true,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -251,6 +261,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             250.0,
             false,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
@@ -267,6 +278,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             250.0,
             false,
             HEARD,
+            &LISTENER,
             false,
             1.0 / 60.0,
         );
