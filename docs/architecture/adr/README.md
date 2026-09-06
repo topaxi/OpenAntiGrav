@@ -56,6 +56,7 @@ out to be wrong.
 | [0043](0043-hd-bloom-joins-the-scalable-budget.md) | `hd_bloom` joins the scalable budget | Accepted; extends ADR-0042 |
 | [0044](0044-the-residual-is-a-learned-upper-bound.md) | The residual is a learned upper bound, not a constant | Accepted; extends ADR-0042 and ADR-0043 |
 | [0045](0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md) | FSR 3.1 is timed in two halves, and only one of them is fixed | Accepted; extends ADR-0042 |
+| [0046](0046-test-referenced-traces-are-tracked-in-git.md) | A trace a test names is tracked in git | Accepted; narrows ADR-0006 for one file class |
 
 ## Format
 

@@ -9,6 +9,23 @@
 !/data/README.md
 !/data/**/README.md
 
+# Trace captures a ground-truth test names, per ADR-0046. The directory has to
+# be re-included first and its contents re-excluded, for the same reason line 8
+# uses `/data/*`: git will not descend into an excluded directory, so a `!` on a
+# file inside one never fires. Then each capture is named individually - never a
+# glob: a new capture stays untracked until someone adds its name here, in the
+# same change that adds the test naming it. Every other capture (the exploratory
+# hd-trail-* sets, and anything taken to answer a question rather than to pin a
+# test) stays excluded by the `/data/traces/*` line below.
+!/data/traces/
+/data/traces/*
+!/data/traces/pad0-boost.csv
+!/data/traces/talons-junction-pitch-both-ways.csv
+!/data/traces/talons-junction-standing-start.csv
+!/data/traces/talons-junction-time-trial-lap.csv
+!/data/traces/talons-junction-time-trial-lap-omega.csv
+!/data/traces/venom-straight.csv
+
 # Belt-and-braces: even outside /data/, no game content may ever be committed.
 # These patterns exist so a stray copy in the wrong directory still gets caught.
 *.chd
