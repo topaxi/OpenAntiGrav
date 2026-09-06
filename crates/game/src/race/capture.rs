@@ -260,6 +260,7 @@ pub fn capture(
         sky_model,
         pad_model,
         weapon_pad_model,
+        gantry,
         rocket_model,
         mine_model,
         bomb_model,
@@ -363,6 +364,7 @@ pub fn capture(
         sky_model,
         pad_model,
         weapon_pad_model,
+        gantry,
         mode,
         rocket_model,
         mine_model,
@@ -717,11 +719,14 @@ pub fn capture(
                     hud_viewport,
                 );
                 // The countdown, on the same terms `RaceStage::draw_hud` draws
-                // it on - see `oag_game::hud::countdown` and
-                // `oag_race::RaceState::thrust_gated`.
-                if let (Some((model, widget)), true) =
-                    (countdown_model, RaceState::thrust_gated(readout.race_ticks))
-                {
+                // it on - see `oag_game::hud::countdown`,
+                // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
+                // which stands this overlay down where the circuit's own gantry
+                // is already showing the count.
+                if let (Some((model, widget)), true) = (
+                    countdown_model,
+                    RaceState::thrust_gated(readout.race_ticks) && !scene.draws_gantry(),
+                ) {
                     match crate::hud::Countdown::new(&device, &queue, format, model, &widget) {
                         Ok(mut countdown) => countdown.draw(
                             &device,

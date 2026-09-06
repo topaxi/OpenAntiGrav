@@ -38,6 +38,7 @@ pub mod camera;
 pub mod capture;
 pub mod collision;
 pub mod exhaust;
+pub mod gantry;
 pub mod jitter;
 pub mod loading;
 pub mod mesh;

@@ -122,6 +122,7 @@ mod drawable;
 mod effect_names;
 mod effects;
 mod field;
+pub mod gantry;
 mod hash;
 mod held_buttons;
 mod hud;

@@ -11,11 +11,13 @@ use log::warn;
 mod frame;
 mod motion;
 mod queries;
+mod scratch;
 mod weapon_models;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
 pub use motion::TemporalFrame;
+pub(super) use scratch::Scratch;
 
 /// The track and the ship on the GPU, drawn from a chase camera.
 #[derive(Debug)]
@@ -69,6 +71,10 @@ pub struct Scene {
     pads: Option<Drawable>,
     /// The track's `Weapon Pad` geometry, drawn beside [`Self::pads`].
     weapon_pads: Option<Drawable>,
+    /// The start gantry, standing on the mount this circuit's own track
+    /// geometry authors - see `race::gantry`. `None` on a circuit that
+    /// authors no mount, which draws no gantry rather than a placed guess.
+    gantry: Option<gantry::Gantry>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` for a track with no `section` nodes - every Pure track - and the
@@ -303,53 +309,6 @@ pub struct Scene {
     far: f32,
 }
 
-/// The per-frame vertex lists [`Scene`] hands to its two effect pipelines.
-///
-/// One owner rather than four locals, so the buffers survive the frame that
-/// filled them - see [`Scene::scratch`].
-#[derive(Debug, Default)]
-pub(super) struct Scratch {
-    /// Engine flares, HD sprite quads and projectile billboards: the
-    /// `exhaust::Pipeline`'s sprite buffer.
-    pub(super) vertices: Vec<oag_render::mesh::GpuVertex>,
-    /// The engine ribbons, the same pipeline's second buffer.
-    pub(super) trail: Vec<oag_render::mesh::GpuVertex>,
-    /// The particle pipeline's two blend classes.
-    pub(super) additive: Vec<oag_render::mesh::GpuVertex>,
-    pub(super) alpha: Vec<oag_render::mesh::GpuVertex>,
-    /// Which weapon pads currently hand out a pickup, one per pad node.
-    pub(super) pads_ready: Vec<bool>,
-    /// The span of vertices whichever recolour or reshape is running has just
-    /// built, on its way to a `write_buffer`.
-    ///
-    /// **One buffer for all five of them** - the airbrake flaps, the shield
-    /// shell, the cockpit sphere, each weapon pad and each speed pad -
-    /// because [`Scene::render`] runs them one after another and none of
-    /// them reads what the last one wrote. Five buffers would be five
-    /// high-water marks kept alive to save nothing.
-    ///
-    /// Each of the five cleared and refilled it every frame before this
-    /// existed: 85 KiB a frame for the pads alone on Talon's Junction, plus a
-    /// pair of flap writes on every frame of every race and a whole shell's
-    /// vertices for every craft with its shield up.
-    ///
-    /// Each caller clears it itself rather than trusting the state it is
-    /// handed, so a span is never written from another mesh's leftovers.
-    pub(super) recoloured: Vec<oag_render::mesh::GpuVertex>,
-}
-
-impl Scratch {
-    /// Empties every list while keeping what they have already grown to.
-    pub(super) fn clear(&mut self) {
-        self.vertices.clear();
-        self.trail.clear();
-        self.additive.clear();
-        self.alpha.clear();
-        self.pads_ready.clear();
-        self.recoloured.clear();
-    }
-}
-
 impl Scene {
     /// Builds both pipelines and a depth buffer for a viewport of `size`.
     ///
@@ -369,6 +328,7 @@ impl Scene {
         sky_model: Option<Model>,
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
+        gantry: Option<gantry::Placed>,
         mode: Mode,
         rocket_model: Option<Model>,
         mine_model: Option<Model>,
@@ -576,6 +536,20 @@ impl Scene {
         } else {
             None
         };
+        // The start gantry, already measured onto its mount by `race::gantry`.
+        let gantry = gantry
+            .map(|placed| {
+                gantry::Gantry::new(
+                    device,
+                    queue,
+                    placed,
+                    format,
+                    anisotropy,
+                    sample_count,
+                    &shadow_map,
+                )
+            })
+            .transpose()?;
         // The boost plume, drawn additively. It is real geometry (a `.vex`
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
@@ -978,6 +952,7 @@ impl Scene {
             sky,
             pads,
             weapon_pads,
+            gantry,
             fog_volumes,
             light,
             authored_fog,

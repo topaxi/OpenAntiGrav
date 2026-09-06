@@ -8,11 +8,21 @@
 //! per-material `TEXOFFSET` alpha sweep - real animation, not a fixed
 //! picture - so it is drawn through the same mesh pipeline the race scene
 //! uses, with its own small orthographic pass rather than a baked sprite.
-//! See `handover/race-start-countdown-and-launch-boost.md` and
-//! `docs/rendering/start-gantry.md` for the sibling asset (the track-side
-//! gantry) this is not - that one remains unplaced because slot 8's world
-//! transform is unrecovered; this one is a HUD widget with an authored
-//! screen position and does not have that problem.
+//! See `docs/rendering/start-gantry.md` for the sibling asset (the track-side
+//! gantry) this is not.
+//!
+//! # This overlay is now the *fallback*, not the countdown
+//!
+//! **The gantry is placed and drawn** - `oag_render::gantry` measures the
+//! mounting surface each circuit's own track model authors and
+//! `crate::race::gantry` stands `321Go_StartFinish.vex` on it, so twelve of
+//! Pulse's circuits show the `3`, `2`, `1`, `GO` on the object over the start
+//! line, which is where the project owner's own account of the original puts
+//! it. So this widget is drawn **only where no gantry is** -
+//! `race::Scene::draws_gantry` gates both of its call sites
+//! (`main::race_stage` and `race::capture`) - rather than as a second
+//! countdown beside one. It is not deleted: a circuit that authors no mount,
+//! and every title whose gantry has not been placed, still needs it.
 //!
 //! # What is drawn, and what is not
 //!
