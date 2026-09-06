@@ -360,6 +360,19 @@ even the physical countdown Pure's players see is itself unmeasured, since
 be conflated the way this project's own notes once did for one session before
 catching it (see `ui/hud.md`'s own warning).
 
+**Pulse's own on-screen `ReadyGo` widget, measured 2026-09-06, is the same
+shape family, not a digit display either.** `Data\HUD\Pulse_Ready_Go.vex`'s
+one mesh (`thingieShape`, 285 vertices) renders, standalone off the disc, as
+a nested ring/swoosh - the same "loop, not glyph" reading as Pure's three
+nodes above - and its own material `TEXOFFSET` track is a 2-key, 0.983 s
+loop, the identical period to Pure's. Pulse still ships the literal digits
+too, on the *other* `<Mode3D>` model in the same widget pair
+(`Data\HUD\Cockpit_321GO.vex`, four glyph nodes, see `ui/hud.md`) - so on
+Pulse the two mechanisms sit side by side in one HUD block rather than one
+title using one and another using the other. What blocks drawing the ring is
+not its shape but its envelope: see
+[`countdown-widgets.md`](../ghidra/functions/psp-pulse-usa/countdown-widgets.md#readygos-gate-not-a-digit-sync-problem-but-a-genuinely-unrecovered-one).
+
 ## Wipeout HD/Fury: four files, one mechanism concept, two encodings
 
 **Read on `hdfury-ps3-eu-dec.iso`.** HD is the interesting case the Pulse and

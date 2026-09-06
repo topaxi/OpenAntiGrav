@@ -399,6 +399,45 @@ In short:
   (a fixed, non-circuit-specific local offset), so a clean capture would confirm rather
   than resolve the open question.
 
+2026-09-06, a sixth pass, targeted squarely at `ReadyGo`'s own recorded blocker (the
+`Pulse_Ready_Go.vex` widget `countdown.rs`'s module doc named "no recovered gate" for):
+**closed with a negative result, and the reason changes.** Full account in
+[countdown-widgets.md](../docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md#readygos-gate-not-a-digit-sync-problem-but-a-genuinely-unrecovered-one).
+In short:
+
+- **`Pulse_Ready_Go.vex` is not a digit display.** Rendered standalone off the disc
+  (`oag-view --mesh 'Data\HUD\Pulse_Ready_Go.vex' --screenshot`), its one mesh
+  (`thingieShape`, 285 vertices) is a nested ring/swoosh - the same shape family
+  `start-gantry.md` already measured for Pure's `Ready_GO.vex`. This retires the
+  original worry (looping every 0.983 s would "blink it roughly 4.6 times through" the
+  272-tick countdown) as aimed at the wrong problem - there are no digit states for a
+  free-running loop to misalign against. Confidence 90.
+- **What actually blocks it: `Hud_UpdateCountdownFade` (`0x0881f624`) gives this widget
+  a real, code-supplied envelope, not a free pass the way `Cockpit321Go` gets one.**
+  Direct decompile (not the summary this page already had): with a timer at `hud+0x16c`
+  gated by a byte pair at `hud->view+0x58`/`+0x59` (the same largely-unidentified struct
+  `lock-sight.md` already reads at `+0x48`/`+0xe4`), `ReadyGo`'s colour is
+  `(alpha<<24)|0x050517` with `alpha` a cubic ease from 255 down to 0 by the timer's own
+  halfway point - a fade-*out*, confirmed, not a fade-in. `Cockpit321Go` gets flat
+  `0xffffffff` from the same call, so the timer contributes nothing to it; that
+  asymmetry is why `Cockpit321Go` can be drawn opaque for the whole measured span while
+  `ReadyGo` cannot be drawn at all without inventing what its brief flash is supposed to
+  look like. Confidence 85 on the envelope math.
+- **No writer of the gate byte was found.** One candidate was checked and probably
+  ruled out: a global at `0x08ab2120`, cleared at `+0x58` on local-player ship death
+  (`Ship_SetState` case 4, already in `zone-mode.md`) - but `InGame_Update` allocates
+  that object at exactly `0x68` bytes, too small to also be `hud->view`, which needs at
+  least `0xe8` to hold the `+0xe4` field `lock-sight.md` reads on it. That argument
+  leans on `lock-sight.md`'s own confidence-50 read and nothing here confirms what
+  writes `hud->0x3c` in the first place (`Hud_BindWidgets`, checked directly, neither
+  reads nor writes it) - so recorded at **confidence 60, "probably a different
+  object," not a confirmed dead end** the way `0x08a7a1e8` is elsewhere in this thread.
+- **Not wired.** Per this project's rule against inventing a gate: drawing the mesh
+  without its envelope would show a near-opaque ring for the model's entire visible
+  window instead of the original's brief eased flash - a plausible-looking stand-in,
+  not a recovery. `countdown.rs`'s module doc and `countdown-widgets.md` both carry the
+  precise reason now instead of the old, imprecise "would blink funny" one.
+
 ## Open
 
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
@@ -421,6 +460,18 @@ In short:
   `<aMode3D>`/`<aModel>` - disabled by the same tag-rename convention `hd-hud.md`
   already documents, not repositioned - so it was never a second data point on
   placement to begin with.
+- ~~Whether `Pulse_Ready_Go.vex`'s 0.983 s material loop needs a gate before it can be
+  drawn~~ **Answered 2026-09-06, sixth pass, with a negative: it is not a digit
+  display (settled, confidence 90), but its actual envelope is code-supplied and
+  that code's own trigger - a byte pair at `hud->view+0x58`/`+0x59` - has no
+  recovered writer.** See the sixth-pass account above and
+  [countdown-widgets.md](../docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md#readygos-gate-not-a-digit-sync-problem-but-a-genuinely-unrecovered-one).
+  **What would close this for good, if anyone returns to it**: find the `sw` that
+  writes `hud+0x3c` (`hud->view`) in the first place - `Hud_BindWidgets` was checked
+  directly and does neither - which would both identify the struct `lock-sight.md`
+  has carried at confidence 50 for its own reasons and settle whether `0x08ab2120` is
+  or is not the same object, on hard evidence rather than the size argument this pass
+  used.
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
   (same 40-tick cue, same two-part gate) or differs is the single most direct
   open question for the display/logic focus. One attempt this session to reach it
