@@ -286,6 +286,36 @@ fn a_straight_has_no_speed_limit() {
     assert_eq!(throttle(500.0, target, &tuning), (1.0, 0.0));
 }
 
+/// A corner tight enough that the hull cannot rotate through it is limited by
+/// the rotation, not by the grip.
+///
+/// `07_Track`'s tightest arc, curvature 0.047: the grip term says
+/// `sqrt(260 / 0.047)` = 74.4 and the yaw term says `1.8 / 0.047` = 38.3. A
+/// craft that took the first shed 34-35 shield a lap on the wall outside it.
+#[test]
+fn a_corner_tighter_than_the_hull_can_rotate_is_limited_by_the_yaw_rate() {
+    let tuning = Tuning::default();
+    let target = corner_target(0.047, &tuning, &Personality::NEUTRAL);
+    let grip = (tuning.lateral_accel / 0.047f32).sqrt();
+    let yaw = tuning.max_turn_rate / 0.047;
+    assert!(
+        target < grip,
+        "{target} should be under the grip limit {grip}"
+    );
+    assert!((target - yaw).abs() < 1.0e-3, "{target} against {yaw}");
+}
+
+/// And an open corner is still limited by the grip, so the term added above is
+/// a second ceiling rather than a replacement for the first.
+#[test]
+fn an_open_corner_is_still_limited_by_the_grip() {
+    let tuning = Tuning::default();
+    // Under `max_turn_rate^2 / lateral_accel`, which is where the two cross.
+    let target = corner_target(0.008, &tuning, &Personality::NEUTRAL);
+    let grip = (tuning.lateral_accel / 0.008f32).sqrt();
+    assert!((target - grip).abs() < 1.0e-2, "{target} against {grip}");
+}
+
 #[test]
 fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
     let tuning = Tuning::default();

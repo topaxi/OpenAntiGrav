@@ -184,14 +184,85 @@ the AI uses, moving every circuit, with the span's value still unmeasured. What
 has changed is that the sweep is no longer anchored on a cause nobody had looked
 at.
 
+## Step 4 is done: A and the span both landed, and the span was swept twice
+
+Measured 2026-09-06 on the fixed tree. `sweep_curvature_span` in the new
+`crates/game/tests/ai_span_sweep.rs` is the harness, `OAG_SWEEP_SPAN` taking a
+comma-separated list of caps with `none` for the uncapped row. **The `none` row
+without A is bit-identical to `main`** and reproduces every baseline figure this
+thread quotes, and **A plus a 10-unit cap reproduces the known point to the
+digit** - which settles what the prose left open: "capping the span" means
+capping all three `Line::max_curvature` call sites, not the braking window
+alone.
+
+Solo columns are one lone Ace over twelve circuits for 18,000 ticks. Field
+columns are the two committed field ground-truth fixtures set up exactly as they
+set themselves up, reporting the quantities they assert on: `untimed` is
+opponents past lap 2 with no lap time (**must be 0**), `mean`/`worst` are
+opponent shield as a fraction of the pool after a minute (**floors 0.70 and
+0.45**).
+
+| span | solo total | resp | clean | mean lap | 07 laps | 13 end | untimed | field mean | field worst |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| (no A, none) | 562.04 | 1 | 12 | 41.0s | 3 | 2.90 | - | - | - |
+| 4 | 689.31 | 3 | 11 | 43.6s | 4 | 13.91 | - | - | - |
+| 5 | 738.77 | 1 | 12 | 43.3s | 4 | 14.82 | 0 | 0.90 | 0.63 |
+| 6 | 726.01 | 1 | 12 | 42.8s | 4 | 13.41 | 0 | 0.78 | **0.29** |
+| 7 | 715.32 | 1 | 12 | 42.7s | 4 | 9.18 | 0 | 0.78 | **0.25** |
+| 8 | 709.29 | 7 | 11 | 43.5s | 4 | 9.89 | **1** | 0.91 | 0.78 |
+| 9 | 709.51 | 1 | 12 | 42.7s | 4 | 7.89 | 0 | 0.83 | **0.35** |
+| 10 | 725.91 | 1 | 12 | 42.8s | 4 | 8.08 | **1** | 0.84 | **0.41** |
+| **11** | **705.68** | 1 | 12 | 42.7s | 4 | 6.52 | 0 | 0.88 | 0.64 |
+| 12 | 704.18 | 1 | 12 | 42.6s | 4 | 5.34 | 0 | 0.90 | 0.63 |
+| 13 | 675.59 | 1 | 12 | 42.5s | 4 | 7.31 | **1** | 0.91 | 0.81 |
+| 14 | 688.94 | 1 | 12 | 42.4s | 4 | 4.36 | 0 | 0.83 | 0.45 |
+| 15 | 683.72 | 1 | 12 | 42.4s | 3 | 4.28 | 0 | 0.87 | 0.69 |
+| 16 | 669.70 | 1 | 12 | 42.2s | 3 | 7.97 | 0 | 0.84 | 0.57 |
+| 18 | 649.39 | 1 | 12 | 42.2s | 3 | 4.17 | 0 | 0.93 | 0.78 |
+| 20 | 660.42 | 1 | 12 | 42.2s | 3 | 6.16 | 0 | 0.88 | 0.77 |
+| 25 | 620.39 | 1 | 12 | 42.0s | 3 | 3.13 | 0 | 0.86 | 0.76 |
+| 32 | 620.28 | 1 | 12 | 42.2s | 3 | 2.16 | - | - | - |
+| none | 613.52 | 1 | 12 | 42.2s | 3 | 2.90 | 0 | 0.83 | 0.50 |
+
+**The two effects separate cleanly.** A alone is worth 51 shield (562.04 to
+613.52) and reaches `07` not at all - 33.68/34.84 and still dead on lap 3,
+because it caps against a curvature the estimator understates. The span is
+worth another 92 and is the half that reaches `07`.
+
+**A span of 10 was chosen first, on the solo board alone, and it turns two
+committed disc-backed tests red** -
+`lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` and
+`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`.
+One craft in a grid of eight wedges near the start and never completes a timed
+lap; another is ground to 0.41 of its pool against a 0.45 floor. **Twelve
+lone-craft circuits cannot see that, and `just` does not run the disc-backed
+suite at all**, so the whole ordinary gate was green on it. The field columns
+above exist because of that, and they are the durable half of this table.
+
+**Eleven landed.** Criterion, stated so it can be disagreed with rather than
+re-run: hard gates first (twelve clean laps, solo respawns not over the
+baseline's 1, `13` not below its 2.90, both field tests green), then a band from
+the line's own geometry - above the ~7-unit path-segment scale, below the ~15 at
+which `3 * span` stops resolving `07`'s ~50-unit arc - then the solo maximum
+inside it, which picks 11 over 12 by 1.5 shield on a board of twelve. **Read
+that last step as a tie-break and nothing more**: 11 and 12 pass the field gate
+because a craft happened not to wedge, and 10 and 13 fail it for the same reason
+in reverse. The field worst does cluster (`{6,7}` 0.25-0.29, `{9,10}`
+0.35-0.41, `{5,11,12}` 0.63-0.64), so it is one craft switching between basins
+rather than a coin flip - but which basin a span lands in is not a property of
+the span.
+
+`07` after: **28.19 / 29.08 / 29.69** a lap and reaching lap 4, from 33.46/35.11
+and destroyed on lap 3. Full table, criterion and reproduction:
+`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/curvature-sweep.md`.
+
 ## Open
 
-- **The AI's cornering model has no yaw-rate term.** Established above, and
-  probe A is the shape of the fix. The estimator's resolution is no longer the
-  second half of that sentence: `Line::curvature` is fixed, and a 10-unit span
-  now costs nothing anywhere on the board. **The span sweep is unblocked** -
-  what is left is choosing the number, which is still a number and still wants
-  measuring rather than picking.
+- **The span is a chosen number sitting on an unfixed bug.** 11 is green and 10
+  is red on the field board, and nothing about the estimator explains that
+  ordering - both failure modes are the wall-wedging and traffic-grinding items
+  below. **Re-sweep the span once the wall response lands**; the table above is
+  the harness and the field columns are the part to keep.
 
 - **Whether the wall response should stop a craft dead.** 101.0 to 2.7 units/s
   in 18 ticks with one contact resolved a tick, against the 3.5 per cent
@@ -227,21 +298,19 @@ at.
 
 ## Next Steps
 
-1. **Sweep the curvature estimator's span with probe A's yaw-rate term in
-   place**, the way `lateral_accel` was swept (`sweep_grip` in
-   `race_ground_truth.rs` is the harness shape). This is now a straight
-   measurement: the thing that was dominating 06's shield is fixed, so 06 can
-   be the circuit that discriminates. Measured on the fixed tree, A + a
-   10-unit cap gives 06 **69.27**/0 respawns, 14 **79.45**, 16 71.90, 09 84.45,
-   05 73.62, 04 59.68, 02 86.93, 03 95.00, 10 58.56, 13 8.08, 01 38.96/1
-   respawn, and 07 reaches **lap 4** instead of dying on lap 3. Nothing
-   regresses. That is one point on the sweep, not the answer.
-2. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
+1. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
    grazing a flat wall at 28 degrees, one contact a tick, and compare the
    tangential bleed against the recovered 0.035. **14's 7.60 at index 751 is
    the cheapest case to start from** - one tick, one index, one lap in four, at
    a steady 134 units/s, and it flips on a sub-unit positional difference.
+2. **Re-sweep `Tuning::curvature_span` once step 1 lands.** The table in step 4
+   is the harness and the field columns are the part that matters; 11 is green
+   and 10 is red for reasons step 1 owns, not reasons the estimator owns.
 3. Do **not** trim `07_Track` out of the test's known-good list: it has always
    passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
    or `grip_air` - the first cannot reach this corner and the last two are
    authored per-craft data that the `grounded == 1.00` measurement clears.
+4. **Do not judge an AI tuning change on `just` alone.** It does not run the
+   disc-backed suite, and the two tests a span of 10 broke are both in it. Run
+   `just test-data`; only `shuriken_ground_truth` and `stall_rescue_ground_truth`
+   should be red.

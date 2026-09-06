@@ -105,24 +105,52 @@ use oag_ai::probe::{self, Scenario};
 ///   names - the synthetic scenarios never produce a zero chord - and the
 ///   chord spacing is the whole of the movement. `oag-core`, `oag-physics` and
 ///   `oag-gameplay`'s gates all still pass unchanged.
+/// - **All three rows regenerated again 2026-09-06**, later the same day, for
+///   [`oag_ai::Tuning::curvature_span`] - a **ceiling on the chord** rather
+///   than a change to how the three walks are spaced. The span used to be half
+///   the driver's own lookahead, so it grew with speed; capping it at eleven
+///   units changes what the estimator measures over on every reading above a
+///   standstill, and therefore every speed target on both scenarios. Same class
+///   of cause as the item above, different cause: **do not read this entry as
+///   that one.**
+///
+///   **Isolated before regenerating.** The same change also adds the yaw-rate
+///   term to `driver::pace::corner_target`, and that half was applied *alone*:
+///   all three rows reproduced bit for bit, because the term binds above
+///   `k = max_turn_rate^2 / lateral_accel` (about 0.0125) and with the uncapped
+///   span the driver's own readings on these fixtures stay under it. Then, with
+///   the yaw term in place, setting `curvature_span` back to `None` reproduced
+///   all three rows bit for bit again - so **the ceiling is the whole of the
+///   movement** and the yaw term contributes none of it. `oag-core`,
+///   `oag-physics` and `oag-gameplay`'s gates all still pass unchanged; the
+///   scenario's own curvature spread is untouched (0.000255..0.020490 and
+///   0.000036..0.026295, exactly as before), because
+///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures the
+///   line rather than what a driver read off it.
+///
+///   **Recorded twice on the day**, because the first value the sweep chose was
+///   ten and it turned two disc-backed field tests red - see
+///   [`oag_ai::Tuning::curvature_span`]. These are the eleven-unit hashes. A
+///   reference that still read `0x94d4_044f...` on the `Solo` row would be the
+///   rejected value's.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0x97c4_ca8b_5fe5_d5bf,
-        0xecac_6673_29ca_a1e0,
+        0xfabb_7df2_6449_2d9a,
+        0xeb60_e4c7_f939_904a,
     ),
     (
         600,
         Scenario::Field,
-        0x8d30_b677_11bf_3dfc,
-        0x999e_bb23_475b_ae46,
+        0xe263_3129_f879_858e,
+        0xb6e5_6b61_9209_5cc5,
     ),
     (
         1_800,
         Scenario::Field,
-        0xa50a_d4d9_556c_3992,
-        0x30bf_cc62_6468_dbaa,
+        0xf1c5_37b9_2567_6813,
+        0x19e7_a7ad_5508_f183,
     ),
 ];
 

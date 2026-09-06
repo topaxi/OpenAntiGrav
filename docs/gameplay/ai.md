@@ -430,9 +430,60 @@ damping the plant needs. Three things fell out of the same fix:
   with cornering on steering and a conservative speed target - and is **not**
   evidence for it.
 
-The speed target is `sqrt(lateral_accel / curvature)`, the ordinary cornering
-limit, taken over the **sharpest** bend within a braking window rather than at
-one point ahead - a corner has to be seen before it is entered.
+The speed target is the **smaller of two limits**, taken over the **sharpest**
+bend within a braking window rather than at one point ahead - a corner has to be
+seen before it is entered.
+
+1. `sqrt(lateral_accel / curvature)`, the ordinary cornering limit: how fast the
+   craft can go round before it slides.
+2. `max_turn_rate / curvature`, the **kinematic** one, added 2026-09-06. A craft
+   at speed `v` on a line of curvature `k` has to yaw at `v * k` to stay on it,
+   so a hull that cannot rotate faster than `w` cannot hold that line above
+   `w / k` whatever grip it has. It binds above
+   `k = max_turn_rate^2 / lateral_accel`, about 0.0125 at the current defaults -
+   20 per cent of `07_Track`'s samples and 26 per cent of `06_Track`'s.
+
+**The second was missing and it cost a circuit.** `07_Track`'s tightest arc has
+curvature 0.047, radius 21, admitting 33 units/s; the grip term alone said 74 and
+the craft arrived at 94. It left the line pointing up to 26 degrees wrong with
+slip flat at -8.4 degrees and `grounded` at 1.00 on every tick - so not a slide -
+and shed **34-35 shield a lap** grinding down the wall outside it, destroyed on
+lap 3 while still banking a clean 49.8s lap. `lateral_accel` cannot reach that
+corner from either end: dropping it from 260 to 90 moved the loss from 24.08 to
+24.11.
+
+### The estimator has a resolution, and it is `Tuning::curvature_span`
+
+Curvature is measured over a chord triple, and every caller used to pass **half
+its own lookahead** as the chord - so the span grew with speed, and at 80
+units/s the triple covered ~72 units of track. A corner shorter than that is
+averaged with the straights either side of it. `07`'s ~50-unit arc read
+**0.0155-0.0186** where its local value is 0.047, understating it 2.5-3x and
+putting its own peak thirty samples early, so the yaw limit above was being
+applied to a curvature the driver could not see.
+
+`Tuning::curvature_span` caps the chord at **11 units**, measured by
+`sweep_curvature_span` in `crates/game/tests/ai_span_sweep.rs`; the field's own
+docs carry the table and the criterion. Shield retained is the metric rather
+than lap time, because the failure is a craft that laps cleanly *while*
+grinding down a wall.
+
+Together the two changes take the twelve-circuit board from **562.04 to 705.68**
+shield retained (summed end-of-run, lone Ace, 18,000 ticks) for 1.7s of mean
+clean lap, with no circuit losing a clean lap and no respawn added. `07` sheds
+28-30 a lap instead of 33-35 and reaches lap 4 instead of being destroyed on lap
+3. **The corner is still untakeable at the speed the driver picks** - what is
+left is the wall response and the sustained-contact charge, neither of which is
+the AI's.
+
+**The span was swept twice, and the first sweep picked a number that broke two
+tests.** A cap of 10 is the best solo row inside the geometric band and it turns
+`lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` and
+`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`
+red - a single craft wedging in traffic, which twelve *lone*-craft circuits
+cannot see and which `just` does not run. The sweep now reports a field board
+beside the solo one, and the trap is worth stating on its own: **a green `just`
+says nothing about the disc-backed suite.**
 
 **The angle that curvature is built from goes through `oag_core::math::acos`,
 not `f32::acos`** (2026-08-15). `Line::curvature` called the platform's own from

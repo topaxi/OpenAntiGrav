@@ -109,7 +109,8 @@ impl Driver {
         if target.cos_bearing < WEAPON_CONE {
             return None;
         }
-        let span = (ctx.tuning.look_min + ctx.tuning.look_speed * target.range) * 0.5;
+        let look = ctx.tuning.look_min + ctx.tuning.look_speed * target.range;
+        let span = super::curvature_span(ctx.tuning, look);
         if ctx
             .line
             .max_curvature(self.index as usize, target.range, span)
