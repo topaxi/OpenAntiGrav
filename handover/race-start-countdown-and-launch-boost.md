@@ -276,6 +276,58 @@ titles in the lineage.
 **The asset's `GO` lands ~1.5 s / 90 ticks before the 272-tick gate this thread measured**,
 and nothing measures the gap - so nothing was wired to `COUNTDOWN_TICKS`.
 
+2026-09-06, a pass targeted squarely at the gantry-placement blocker (the transform
+question above, named the highest-priority open item across two prior passes): **still not
+recovered, but a real error in the existing account is corrected, two leads are ruled out,
+and the open question is reframed onto a cheaper next static step.** Full account in
+[billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md#the-two-constructors-and-the-shared-object-builder).
+In short:
+
+- **`start_grid.vex` is ruled out as a placement source.** `oag-view --nodes` against
+  `16_Track`'s copy shows 4 nodes total - `World`, a camera-rig `Anim Transform` pair, one
+  `gridCamera` leaf - a Maya camera scene, nothing billboard-shaped.
+- **The "literal identity matrix" claim this thread and `billboards.md` both carried is
+  corrected, not merely restated.** Re-disassembling `Billboard_ConstructResource_q`
+  (`0x08900220`) directly (not the decompiler summary) shows the fourth transform row is
+  loaded whole via one VFPU `lv.q`, then its second word is separately overwritten with
+  `0xc1200000` (-10.0f) via a scalar `swc1` - so the row that lands is `(x, -10.0, z, w)`,
+  not `(0,0,0,1)`. The write is "identity rotation, fixed non-zero translation.y", not
+  fully identity. This does **not** reopen circuit-specific placement - -10.0f is the same
+  constant on every call regardless of circuit - but it is a genuine correction, and the
+  underlying trap (a VFPU quadword transfer decompiling as four separate scalar loads with
+  no marker that they are one unit) is now recorded in
+  [`workflow.md`](../docs/ghidra/workflow.md) since it will bite again on any other matrix
+  write in this binary. `crates/formats/src/trackstartup.rs:173` carries the same stale
+  wording and is outside this pass's lane (`crates/formats`) - flagged, not edited.
+- **Two structural negatives, checked directly rather than assumed**:
+  `Billboard_ConstructResource_q`'s own `param_3` is declared and never read in its body,
+  so the outer caller's own (discarded) `param_1` cannot be a parent/locator reference
+  reaching construction; and the alloc/`func_0x00140bd4` parent chain (billboard object ->
+  a per-track container -> `_DAT_002ae2b4`) reads as an ownership/lifetime tree for
+  cleanup, not the renderer's spatial transform-composition chain.
+- **Reframed the next step**: `Billboard_ConstructResource_q` also stores a second object at
+  `param_1+0x40` (via `func_0x000fc0f8`, real address `0x089000f8` after the
+  `+0x08804000` `jal`-target correction), found by an RTTI-style type match against a type
+  descriptor from `func_0x00267b30()`. This is a more promising placement-hook candidate
+  than `param_1` itself (structurally matching the world-transform-composer traffic
+  `billboards.md`'s own live capture already found on a `+0x40`-shaped object) - resolving
+  what that type descriptor names is the cheapest next static step, cheaper than another
+  live-capture pass.
+- **A live PPSSPP capture was attempted and did not complete** - four tries, two harness
+  paths (`PPSSPPHeadless`, then SDL+Xvfb per this project's own documented preference).
+  `PPSSPPHeadless` died with `memory.read: CPU not started` right at the race-load
+  transition, twice. The SDL+Xvfb attempts never got past first-boot dialogs a second
+  time, and the actual cause was found afterward: `timeout 90 uv run --with
+  websocket-client python3 <script>` does not kill the `python3` grandchild `uv run`
+  execs into, so a timed-out reader survives its own timeout, the parent capture script
+  hangs in `wait`, and the still-alive `PPSSPPSDL`/`Xvfb` from one attempt squats the
+  debugger port and `:98` for the next - `Failed to bind to port 47860` in the new
+  instance's log was the tell. Every process this pass spawned was found and killed by
+  exact PID afterward; nothing was left running for the next session. Not retried a fifth
+  time: the static reading above already explains what the read would have checked
+  (a fixed, non-circuit-specific local offset), so a clean capture would confirm rather
+  than resolve the open question.
+
 ## Open
 
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
@@ -320,6 +372,16 @@ and nothing measures the gap - so nothing was wired to `COUNTDOWN_TICKS`.
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
+- **Slot 8's own world transform - the gantry-placement blocker - is still not
+  recovered**, after a fifth pass (2026-09-06, above) aimed squarely at it. What that
+  pass adds: a corrected static reading of the one transform construction does write
+  (fixed local offset, not identity), two ruled-out leads (`start_grid.vex`, the
+  parent/ownership alloc chain), and a reframed, cheaper next step (resolve
+  `func_0x00267b30()`'s type descriptor for the object at `param_1+0x40`) - all in
+  [billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md). A live PPSSPP
+  capture was attempted to settle it directly and did not complete in four tries; see
+  that page's own account of why, including a `timeout`/`uv run` trap worth avoiding
+  next time.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered

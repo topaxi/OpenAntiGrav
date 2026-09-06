@@ -396,6 +396,20 @@ one. Two habits keep this useful:
   numbers. Always compare a fresh Pulse import's count against the reference
   figure before treating it as complete or as evidence of a bad import - a
   ~2,700-function gap here is the current known baseline, not a new failure.
+- **A VFPU `lv.q`/`sv.q` quadword transfer decompiles as four separate scalar
+  assignments, with nothing marking that they came from one 16-byte move.**
+  `decompile_function` on `Billboard_ConstructResource_q`
+  (`psp-pulse-usa`, `0x08900220`) rendered a matrix write as "sixteen literal
+  loads from consecutive addresses" and that summary was read as "the literal
+  identity matrix" for two passes - true for fifteen of the sixteen floats,
+  false for the sixteenth, which a same-block scalar `swc1` overwrites right
+  after the `sv.q` that placed it. The decompiler gives no visual cue that a
+  later scalar store lands inside the block a `lv.q`/`sv.q` pair just moved as
+  a unit. Confirm a transform/matrix write's row boundaries with
+  `disassemble_function`, not `decompile_function`'s summary, before calling
+  any part of it "identity" or "unused" - see
+  [`billboards.md`](functions/psp-pulse-usa/billboards.md#construction-writes-no-transform---true-for-placement-not-true-for-identity)
+  for the full correction.
 
 ### The database can disagree with `names.tsv`, and the docs win
 

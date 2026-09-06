@@ -130,19 +130,60 @@ Both call `Billboard_ConstructResource_q` (`0x08900220`):
 `param_1+0x50/+0x60/+0x70/+0x80`** (four consecutive 16-byte rows), sourced
 from a fixed global block, `_DAT_0028c7a0` through `_DAT_0028c7dc` (sixteen
 consecutive words - confirmed in the decompiler as sixteen literal loads
-from consecutive addresses, not sixteen separate computed values). **Read
-live, those sixteen floats are the literal 4x4 identity matrix**
+from consecutive addresses, not sixteen separate computed values). Fifteen
+of those sixteen floats are the 4x4 identity matrix
 (`[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]`), the same for every billboard
-regardless of `num`. `param_1+0x88` is separately set to the bit pattern
-`0xc1200000` (-10.0f), also a fixed constant.
+regardless of `num`; `param_1+0x88` is separately set to the bit pattern
+`0xc1200000` (-10.0f), also a fixed constant. **Both halves of that were
+already recorded on this page** - the finding below is not a new write, it
+is that they were described as two independent facts ("the matrix is
+identity" and, separately, "`+0x88` is -10.0f") when `+0x88` is actually
+*inside* the matrix, which makes the two statements contradict each other
+rather than coexist.
 
-## Construction writes no transform - true, but the conclusion drawn from it was wrong
+**Precision correction, from the raw disassembly rather than the
+decompiler's summary (2026-09-06, confidence 92 - read directly off MIPS/VFPU
+instructions, not inferred):** `param_1+0x88` is the fourth row's
+(`+0x80..+0x8f`) second word - the row's `y` component, not a field outside
+the matrix. The disassembly loads all four floats of that row from
+`_DAT_0028c7d0` with one `lv.q` (a VFPU quadword load/store - see the trap
+below) and stores them to `param_1+0x80`, then immediately overwrites just
+`+0x88` with `0xc1200000` via a separate scalar `swc1`. So the row that
+lands is `(row3.x, -10.0, row3.z, row3.w)`, not `(0, 0, 0, 1)` - **the
+constructed object's translation is not the origin, and the matrix this
+function writes is not fully identity; call it "identity rotation, non-zero
+translation.y" rather than "identity."** This does not reopen the placement
+question in the maintainer's favour: `-10.0f` is a fixed constant, the same
+on every call regardless of `num`, `location` or which circuit is loading,
+so it cannot by itself carry a given circuit's own start-line coordinates.
+Read as a **local** offset - lowering the model's pivot 10 units on whatever
+axis row 3 carries translation - it is consistent with (not proof of) the
+object needing a *parent* transform to reach its circuit's actual gantry;
+see "What is still open" below for why that reframes the question rather
+than closing it.
+
+**A decompiler trap, generalisable beyond this one function**: a VFPU
+`lv.q`/`sv.q` quadword load/store moves four floats in one instruction, and
+Ghidra's decompiler
+renders it as four separate scalar assignments with no visual marker that
+they came from a single 16-byte transfer. Summarising "sixteen consecutive
+scalar loads from consecutive addresses" as "the identity matrix" is exactly
+how a same-block, later scalar overwrite (the `+0x88` `swc1` here) reads as
+an unrelated, separate fact instead of a partial override of the block just
+loaded. Any future read of a transform/matrix write in this binary should
+confirm row boundaries with `disassemble_function`, not stop at
+`decompile_function`'s summary - this page did, for two passes.
+
+## Construction writes no transform - true for placement, not true for "identity"
 
 `num` (1-8) is used purely as a **resource-slot index** into a 9-entry array
 and as the seed for three derived resource-tag IDs at construction time. It
-is never used there to select or compute a position, rotation or scale, and
-the one transform `Billboard_ConstructResource_q` writes is a hardcoded
-identity matrix, identical for every billboard. All of that still stands.
+is never used there to select or compute a position, rotation or scale.
+What construction writes is **not** a hardcoded identity matrix - see the
+correction above - but it is still a fixed constant, identical for every
+billboard regardless of circuit, so "construction carries no per-circuit
+placement" still stands even though "construction writes identity" does
+not.
 
 **What did not stand: reading "construction places nothing" as "nothing
 overrides what the track mesh already shows".** That was this page's own
@@ -284,8 +325,9 @@ non-halting watchpoint instead.
 
 ## Verdict
 
-Construction-time placement is absent (confirmed: identity matrix,
-resource-tag derivation) - but that is not "nothing overrides the disc's
+Construction-time placement is absent (confirmed: a fixed local transform -
+identity rotation, translation `(x, -10.0, z, w)`, see the correction above -
+plus resource-tag derivation) - but that is not "nothing overrides the disc's
 static content", which is false. The registration instantiates a real,
 separate, live-updated mesh (`321Go_StartFinish.vex`, matching
 `TrackStartup.xml`'s own `location`), read constantly during exactly the
@@ -293,16 +335,37 @@ window the original shows "GO" instead of a digit. What is still missing
 is the transform that would place that mesh at each circuit's own gantry
 rather than at the world origin - without it, "instantiated" is settled and
 "drawn where the player sees it" is strong inference, not proof.
-[`crates/formats/src/trackstartup.rs`](../../../../crates/formats/src/trackstartup.rs)
-carries the corrected implication.
+[`crates/formats/src/trackstartup.rs:173`](../../../../crates/formats/src/trackstartup.rs)
+carries the same "literal identity matrix" wording this page used to (not
+edited here - out of this lane's scope - flagged for whoever owns that
+crate).
 
 ## What is still open
 
 - **No transform writer has been found** that would move
   `321Go_StartFinish`'s instantiated object off the world origin to a given
-  circuit's own gantry. Highest priority: the identity-write and
-  shared-across-16-circuits facts are in direct tension with "drawn at the
-  gantry" until something resolves it.
+  circuit's own gantry. Highest priority: the fixed local transform
+  (identity rotation, constant translation) and shared-across-16-circuits
+  facts are in direct tension with "drawn at the gantry" until something
+  resolves it. **The most promising next static step, found this pass**: the
+  object `Billboard_ConstructResource_q` stores at `param_1+0x40`
+  (`func_0x000fc0f8`, real address `0x089000f8` after the `+0x08804000`
+  `jal`-target correction) is found by an RTTI-style type match - a type
+  descriptor built from `func_0x00267b30()` is compared against a child's own
+  type at `func_0x089000f8`'s `+4` offset, walking a child list until one
+  matches. This is a plausible spatial-scene-graph entry point (structurally
+  matching the world-transform-composer traffic this page's live capture
+  already found on a `+0x40`-shaped object), and resolving what
+  `func_0x00267b30()`'s type descriptor actually names is cheaper than
+  another live-capture pass - it is one more decompile plus a look at what
+  else compares against the same type. Two things checked and ruled out this
+  pass, so as not to repeat them: `Billboard_ConstructResource_q`'s own
+  `param_3` is declared and never referenced in its body, so the outer
+  caller's discarded `param_1` cannot be a parent/locator reference reaching
+  construction; and the alloc/`func_0x00140bd4` chain (billboard object ->
+  a per-track container -> `_DAT_002ae2b4`) is an ownership/lifetime tree for
+  cleanup, with nothing shown to give it a spatial transform of its own -
+  it is not the renderer's transform-composition chain.
 - **The final texture bind is untraced.** Nobody has caught a
   `Gfx_BindTexture` call for the gantry's screen position and confirmed it
   reads from the instantiated object - see the halting-function trap above
@@ -322,3 +385,30 @@ carries the corrected implication.
   instance of the same registry-and-resolve pattern, for colour slots.
 - The `func_0x00XXXXXX` / `+0x08804000` relocation gap above is its own
   open item, tracked separately.
+- **`Data\Environments\<circuit>\start_grid.vex` is ruled out as a placement
+  source, checked this pass.** `oag-view --nodes` against `16_Track`'s copy
+  (real disc, `oag-tools`/`oag-view`'s own `--nodes` flag, no modification)
+  shows exactly 4 nodes: `World`, two `Anim Transform` (a camera rig group)
+  and one `gridCamera` leaf - a Maya camera scene, not a billboard-shaped
+  locator or any spatial content beyond it. Whatever supplies slot 8's
+  per-circuit transform, it is not hiding in this file.
+- **A live PPSSPP capture was attempted this pass and did not complete.**
+  The plan (no breakpoint needed): read `*(u32*)(0x00058c28 + 8*4)` for
+  slot 8's constructed object pointer, then 64 bytes at `ptr+0x50` across a
+  countdown, to see whether anything besides construction ever writes a
+  non-constant value there. `PPSSPPHeadless` reached Main Menu, set TIME
+  TRIAL/VENOM and then died with `memory.read: CPU not started` right at the
+  race-load transition (`expect(dbg, IN_GAME, ...)`), twice. The SDL+Xvfb
+  path (this project's own recommended default for anything beyond a
+  trivial read) never got past re-answering first-boot dialogs, twice - the
+  actual cause, found afterward: `timeout 90 uv run --with websocket-client
+  python3 <script>` does not kill the `python3` grandchild `uv run` execs
+  into, so a timed-out reader survives its own timeout, its parent capture
+  script hangs in `wait`, and the still-alive `PPSSPPSDL`/`Xvfb` from the
+  previous attempt squats the debugger port and `:98` for the next one -
+  `Failed to bind to port 47860` in the new instance's own log was the tell,
+  found only after cleaning up by exact PID and re-reading it. Every
+  process this pass spawned was identified and killed by PID before
+  stopping; nothing was left running. Given the static reading above
+  already explains the write this read would have checked, this was not
+  retried a fifth time - see the Verdict.
