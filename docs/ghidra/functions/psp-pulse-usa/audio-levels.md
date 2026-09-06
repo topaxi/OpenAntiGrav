@@ -163,6 +163,145 @@ Until that lands, "our race mix is louder than the console's" is a hypothesis
 with no measurement behind it, and the honest port is the one that reproduces
 the recovered law and saturates where the hardware saturates.
 
+**Recovered, live, 2026-09-06 - see the next section.** The section above is
+kept as written because it is what motivated the capture; the value itself
+is below.
+
+## The per-voice SAS volume, measured live (2026-09-06)
+
+A running `pulse-psp-usa` (PPSSPP v1.20.4 under Xvfb, disc booted from the
+cached ISO, [`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)'s
+recipe) was driven into a **Single Race** (`psp-drive.py menu --single-race`,
+the only reachable race type with a full eight-craft grid), then broken on
+`Sas_CommitVoices` (`0x0898c7e8`) for several hundred consecutive hits with
+thrust held, reading the whole 32-record voice table (`g_sas_voices`,
+`0x08b893d0`, `0x6c`-byte stride) in one `memory.read` per hit and decoding
+`+0x40`/`+0x44`/`+0x48`/`+0x4c` as the four `int32` fields
+`__sceSasSetVolume` takes past `(core, voice)` - dry L/R and effect-send L/R.
+
+**Confirmed independently at the same time, from the running binary rather
+than from Ghidra's decompilation, and twice over.** `memory.disasm` at
+`0x08a2ae08` (the wrapper `Sas_CommitVoices` calls for bit `0x0f`, now named
+`Sas_SetVolume`; the one `sound.md`'s correction could not get a decompile
+for - "no function found") shows real code there, ending in
+`jal zz___sceSasSetVolume` at `0x08a2ae50`, guarded by the same
+`DAT_08b2d300`-style "is SAS initialised" check `Sas_SetVoice` uses. Ghidra's
+own `get_function_by_address` still resolves `0x08a2ae08` to the *interior*
+of an unrelated neighbouring function (`FUN_08a2ade0`, a generic
+table-dispatch helper with nothing to do with SAS) - a Ghidra
+function-boundary defect around this one address, not a wrong reading of
+what the disc runs. Separately, `memory.disasm` at `Sas_CommitVoices`'s own
+entry (`0x0898c7e8`) shows `jal z_un_08a2ae08` at `0x0898c868` with the
+loop's record pointer loaded four instructions earlier from
+**`li s1,0x08B893D0`** - a plain 32-bit immediate, read directly off the
+executing binary, that is `g_sas_voices`'s documented address exactly. That
+retires a mismatch an earlier draft of this page raised (the decompiled loop
+shows this base as the bare literal `0xafc38`, which is neither this address
+nor this address under the usual image-base-offset convention): the live
+immediate is the ground truth, and `0xafc38` is a decompiler artifact on
+this one literal, not evidence of a second, different table.
+
+**The value varies by voice, and within a voice over time - it is not a
+constant and not a stand-in.** Three captures (90, 200 and 300 hits, all
+during the same single race, both stationary on the grid and moving) each
+recorded every voice's four fields on every hit, whether or not that voice
+committed that frame - so a slot's leftover value from a sound that finished
+playing minutes earlier reads identically to a live one until the two are
+told apart. **Every reading below is filtered to voice/tick pairs where the
+dirty-flag word's `0x0f` bit was actually observed set at that hit** -
+meaning `Sas_CommitVoices` really did call `Sas_SetVolume` for that voice on
+that frame - which is what distinguishes a driven engine from a stale
+record sitting in a freed slot. All three captures carry at least one such
+stale slot (values that never change and whose dirty bit is never seen),
+excluded below:
+
+- **Different voices carry different, unrelated magnitudes at the same
+  instant**: one 90-hit window held voice 0 committing at
+  `(1125,1125,1125,1125)`, voice 1 at `(324,324,324,324)`, voice 4 at
+  `(214,214,0,0)` and voice 8 at `(545,545,0,0)`, all in the same tick.
+- **A newly-sounding voice ramps rather than jumps.** Voice 3 stepped
+  `(0,0,0,0) -> (20,16,0,0) -> (40,33,0,0) -> (61,50,0,0)` across consecutive
+  *committing* hits in one capture, and voices 6, 8 and 10 show the same
+  smooth, many-step climb from zero elsewhere. That is a fade-in, and it is
+  a live sighting of the missing link `sound.md` flagged: something reaching
+  the SAS voice record gradually rather than in one write, consistent with
+  `SoundInstance_UpdateSpatial`'s own software fade/ramp engine
+  (`func_0x0898d614`) - though nothing here re-derives the exact function
+  that bridges the two, so that specific connection is still not nailed
+  down to an address.
+- **Dry L and dry R usually differ, and by a consistent ratio while a voice
+  holds one heading** - e.g. voice 5's committed readings climb from
+  `(1080,770,0,0)` to `(1398,840,0,0)` across nineteen distinct samples with
+  L consistently above R throughout. That is stereo pan, not noise: a
+  craft's engine sound panned by its position relative to the listener,
+  exactly as `positional-audio.md` already describes for the pre-SAS gain.
+- **The effect-send pair (`fx_l`/`fx_r`) is usually `(0,0)`** on a genuinely
+  committing voice, and only matches the dry pair exactly
+  (`vol_l==fx_l`, `vol_r==fx_r`) on a handful of them - a different category
+  of sound (plausibly one with reverb send enabled) from the dry-only
+  majority.
+- **The highest value seen among genuinely-committing voice/ticks across
+  three independent captures (590 total commit-loop hits) is `3155`**, on
+  voice 7 in one capture, at a tick where its dirty bit was observed firing -
+  a real, driven value rather than a leftover. A commonly-cited figure for
+  `sceSasSetVolume`'s own range is `0`-`0x1000` (4096), which would put this
+  at 77 % - **background only, not part of this page's confidence score**:
+  nothing read here derives that ceiling from this binary (`Sas_Init`'s own
+  use of `0x1000` is for the *pitch* argument, a different parameter with
+  its own scale, and the one bounds check found nearby, in the unrelated
+  `FUN_08a2ade0`, rejects values above `0x8000`, not `0x1000`). Treat the
+  4096 figure as unverified recall, not a measurement.
+
+**A scale-free check that does not need that ceiling: how much do
+simultaneously-committing voices sum to, against the loudest one of them
+alone?** For each tick, summing dry L across every voice that committed at
+least once somewhere in that capture (so a leftover stale slot is excluded
+throughout, not just at the tick it happened to be read) and comparing
+against that tick's own loudest single voice:
+
+| Capture | Voices committing at once (max seen) | Sum | Loudest single voice | Sum / loudest |
+| --- | ---: | ---: | ---: | ---: |
+| 1 (90 hits) | 8 | 2305 | 1125 | 2.05x |
+| 2 (200 hits) | 13 | 6639 | 1125 | 5.90x |
+| 2, late in the same capture | 12 | 10084 | 3155 | 3.20x |
+| 3 (300 hits) | 10 | 3483 | 614 | 5.67x |
+
+Every one of these is measured well after the capture begins, not only at
+the very first tick, so this is not an artefact of every voice
+initialising at once when the race starts - a busy multi-craft race keeps
+several voices committing together throughout. **A sum two to six times a
+single voice's own value, sustained rather than momentary, is enough on its
+own to push a mix that has no reserved headroom past full scale** - this is
+the mechanism, read directly off the recovered per-voice values themselves,
+with no assumed absolute ceiling required to interpret it.
+
+**Confidence 90.** Runtime trace (per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md), capped
+at 94 short of a second binary) against three independent captures that
+agree with each other and with the call signature `sound.md` already derived
+from the decompilation; not corroborated against `psp-pulse-eu`.
+
+### Does this explain the 2.78 % clipping? No, and here is why
+
+**The per-voice SAS volume is not itself the saturating value, and no
+single voice is set wrong.** Nothing recorded repeats a clamped-at-maximum
+plateau, and every committing voice ramps in smoothly rather than jumping
+to a rail - the opposite of what a mis-set individual voice would look
+like. What the samples show instead is **several independently reasonable
+per-voice volumes summing to two-to-six times what any one of them carries
+alone**, sustained across a capture rather than momentary - which is
+exactly the mechanism this page's own earlier measurement already
+established from the DAC/group-volume side ("the original's level chain is
+unity end to end", "no headroom reserved"): eight craft's engines, each
+honestly attenuated and panned on its own terms, overload the mix once
+several sum, not because any one of them is set wrong.
+
+So the number this page named as "the next thing to read" has been read,
+and it **narrows rather than reopens** the earlier finding: the saturation
+is not a bug in what any single voice is told to be, and no attenuation is
+invented here either, per the same rule that applied before this
+measurement existed.
+
 ## One more thing on this page's own subject
 
 `Audio_UpdateGroupVolumes` (`0x0893ac70`, confidence 82) is called once a frame

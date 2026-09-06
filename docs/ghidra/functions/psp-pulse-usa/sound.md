@@ -87,8 +87,12 @@ voice + 0x5c   loop mode
 **That is the field the `.bnk` question has to resolve to.** Whatever decodes a
 bank's per-sound directory ultimately writes a byte offset into `+0x54` and a
 byte count into `+0x58`. Confidence **88** on the three field meanings, which
-follows from the wrapper above; **85** on the table's shape and base address,
-from the loop's stride, its bound, and the `0x6c` increment.
+follows from the wrapper above; the table's base address is now confidence
+**92** rather than the 85 this was first read at - `memory.disasm` against a
+running `pulse-psp-usa` (2026-09-06, see the corroboration section below)
+shows `Sas_CommitVoices` loading it as a plain immediate, `li s1,0x08B893D0`,
+matching the address this page already used exactly, rather than only
+the loop's stride/bound/increment this was inferred from originally.
 
 The four bits whose calls are *not* `sceSasSetVoice` were originally left
 unnamed on an argument-count guess alone - four for ADSR, one for pitch, two
@@ -138,12 +142,15 @@ is confirmed the same way, but it is reached one call deeper
 (`FUN_089961e4` -> `FUN_08a2b03c` -> `__sceSasSetSL`) rather than directly
 from the dirty-bit dispatch, and the unresolved `func_0x00226f64` call
 alongside it is not independently confirmed. Not renamed here and no
-`names.tsv` row added: `FUN_08a2ae08`, `FUN_08a2ae6c`, `FUN_08a2af18`,
-`FUN_089961e4` and `FUN_08a2b03c` are thin guarded wrappers around those
-imports rather than the imports themselves, and this page has not yet worked
-out this project's naming convention for "guarded call to a named import"
-(`Sas_SetVoice` already occupies that shape for `__sceSasSetVoice` alone) - a
-naming pass, not a re-read, and left for whoever picks this up next.
+`names.tsv` row added: `FUN_08a2ae6c`, `FUN_08a2af18`, `FUN_089961e4` and
+`FUN_08a2b03c` are thin guarded wrappers around those imports rather than
+the imports themselves, and this page has not yet worked out this
+project's naming convention for "guarded call to a named import" for the
+remaining three - `FUN_08a2ae08` is now named below (`Sas_SetVolume`,
+confidence 92, live-confirmed), following the one precedent that already
+existed for this exact shape (`Sas_SetVoice` for `__sceSasSetVoice`). The
+other three are a naming pass, not a re-read, and left for whoever picks
+this up next.
 
 **What this settles for [audio-levels.md](audio-levels.md#what-is-not-recovered-and-why-it-is-the-next-thing-to-read):**
 the per-voice SAS volume is written every frame through `+0x40`/`+0x44` (dry
@@ -163,6 +170,60 @@ The `0x80` branch choosing between `FUN_08a2b088` and `FUN_089961e4` on
 `DAT_08ac3224` is the same flag that gates `FUN_089960e0` at the top of the
 loop, so there are two output paths and one of them is selected globally. Not
 investigated.
+
+### Corroboration, 2026-09-06: `Sas_SetVolume` confirmed live, and the value it carries measured
+
+This correction's own reading of `FUN_08a2ae08` was raw disassembly against
+Ghidra's static database, with no function object to decompile. A running
+`pulse-psp-usa` (PPSSPP v1.20.4, see
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md))
+settles it independently, twice over, across two separate boots:
+
+- `memory.disasm` at `0x08a2ae08`, live, shows the same code this page
+  already read - ending in `jal zz___sceSasSetVolume` at `0x08a2ae50`,
+  PPSSPP's own debugger naming the import stub itself, no manual image-base
+  arithmetic needed - guarded by a `DAT_08b2d300`-style "is SAS initialised"
+  check, the same shape `Sas_SetVoice` uses. Ghidra's own
+  `get_function_by_address` still resolves `0x08a2ae08` to the *interior* of
+  the unrelated neighbour `FUN_08a2ade0` (a generic table-dispatch helper
+  with nothing to do with SAS) - a Ghidra function-boundary defect around
+  this address, not a wrong reading of what the disc actually runs.
+- `memory.disasm` at `Sas_CommitVoices`'s own entry (`0x0898c7e8`) shows the
+  call site directly: `jal z_un_08a2ae08` at `0x0898c868`, with `s2` (the
+  loop's per-voice record pointer) loaded four instructions earlier from
+  `li s1,0x08B893D0` - the table base this page already names
+  `g_sas_voices`, as a plain 32-bit immediate rather than anything needing
+  an image-base correction. That resolves a mismatch the first version of
+  this corroboration flagged (the decompiled loop showed the base as the
+  bare literal `0xafc38`, which is neither this address nor that address
+  under the usual `+0x08804000` convention): the live disassembly shows the
+  true immediate directly, and `0xafc38` was the decompiler's own artifact
+  on this literal, not evidence of a different real base.
+
+**This wrapper is named here: `Sas_SetVolume`, confidence 92.** The same
+guarded-call shape `Sas_SetVoice` already carries for `__sceSasSetVoice`
+(confidence 95), now confirmed for `__sceSasSetVolume` the same way - a
+direct `jal` to an already-Ghidra-named import stub, read live from the
+executing binary rather than inferred - one point short of `Sas_SetVoice`'s
+because this reading additionally depends on `Sas_CommitVoices`'s own
+disassembly for the call site (`Sas_SetVoice`'s single call site needed no
+second read). Not applied to the Ghidra project itself: its function
+boundary is broken at this address (above), so a rename would first need a
+`create_function` split off `FUN_08a2ade0`, which risks the shared
+project's other work more than a docs-only pass should. The row is in
+`names.tsv` regardless, per project convention - the database can catch up
+whenever someone next has the project open for a reason that already
+touches this region.
+
+**The same live session captured the four fields this wrapper reads
+(`+0x40`/`+0x44`/`+0x48`/`+0x4c`) during an actual race**, filtered to the
+voice/tick pairs where the record's dirty flag genuinely fired (a stale,
+never-committing voice slot can hold a leftover nonzero value indefinitely
+and is not evidence of anything - three captures each carry at least one).
+See
+[audio-levels.md](audio-levels.md#the-per-voice-sas-volume-measured-live-2026-09-06)
+for the value, its variability across voices, and whether it explains the
+race mix's saturation (it does not, and that page says why).
 
 ## The record is also a free-list node
 

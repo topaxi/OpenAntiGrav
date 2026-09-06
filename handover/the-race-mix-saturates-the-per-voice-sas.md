@@ -2,12 +2,9 @@
 
 2026-08-24. Numbers, chain and next step: [audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md). Two things not on it: `audio/sfx.rs:271` applies the engine law *after* the volume curve, against `spatial.rs`'s contract (fixing it makes the engine louder, so it waits); and `race::capture` never called `Audio::race_tick`, so race captures before this date dumped music alone.
 
-**2026-09-06**: both items landed or narrowed. The ordering fix is in
-(`crates/game/src/audio/sfx/engine.rs`, not `crates/audio` - the thread's own
-path was one crate off); `race::capture` already called `Audio::race_tick`
-as of `d55b0ffc` (2026-08-25), one commit after this thread opened, so that
-half was stale. The per-voice SAS volume question is genuinely narrower now,
-not closed - see below.
+**2026-09-06**: both items landed or narrowed, and the per-voice SAS volume
+question is now closed - live-measured, see below, in the same day's second
+pass over this thread.
 
 ## Resolved
 
@@ -31,39 +28,56 @@ not closed - see below.
 - **`race::capture` already calls `Audio::race_tick`** (`crates/game/src/race/capture.rs:856`,
   landed in `d55b0ffc`, 2026-08-25). Nothing to fix there; the bullet was
   stale from before that commit.
+- **The per-voice SAS volume is recovered, live, and it does not explain the
+  saturation.** A running `pulse-psp-usa` under PPSSPP (see
+  [`ppsspp-debugger.md`](../docs/reverse-engineering/ppsspp-debugger.md)),
+  driven into a full-grid Single Race and broken on `Sas_CommitVoices` for
+  590 hits across three captures, shows the four fields
+  (`+0x40`/`+0x44`/`+0x48`/`+0x4c`) varying per voice, panned L-vs-R, ramping
+  in smoothly on a new sound rather than jumping - filtered to voice/tick
+  pairs where the dirty flag actually fired, since a leftover stale slot
+  reads as a nonzero value forever and is not a driven engine. **The
+  decisive check needs no assumed ceiling**: summed across every
+  simultaneously-committing voice, dry L reaches two to six times what the
+  loudest single voice among them carries, sustained through a capture
+  rather than only at the first tick - enough on its own to overload a mix
+  with no reserved headroom. That is consistent with several
+  honestly-scaled voices summing past full scale, which `audio-levels.md`
+  had already established from the DAC/group-volume side; it is not
+  consistent with any one voice being set wrong. See
+  [audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#the-per-voice-sas-volume-measured-live-2026-09-06)
+  for the full capture data and the sum/loudest table, and
+  [sound.md](../docs/ghidra/functions/psp-pulse-usa/sound.md#corroboration-2026-09-06-sas_setvolume-confirmed-live-and-the-value-it-carries-measured)
+  for the live confirmation that this wrapper (now named `Sas_SetVolume`)
+  really does end in `jal zz___sceSasSetVolume`, and that `g_sas_voices`'s
+  base address is a directly-read immediate (`li s1,0x08B893D0`) rather
+  than an inference from loop shape. Confidence 90: runtime trace, three
+  agreeing captures, not corroborated against `psp-pulse-eu`. **No
+  attenuation is ported** - the recovered values are not maxed or clamped,
+  so there is nothing here to trim, and the mix is expected to saturate the
+  same way the console's does.
 
 ## Open
 
-- **What value lands in the SAS voice record's `+0x40`/`+0x44`/`+0x48`/`+0x4c`
-  is still not recovered**, and per-voice SAS volume is still the only
-  candidate lever for the saturation that has not been ruled out.
-  [sound.md's 2026-09-06 correction](../docs/ghidra/functions/psp-pulse-usa/sound.md#correction-2026-09-06-the-guess-was-backwards-and-0x40-is-the-per-voice-volume)
-  found that `Sas_CommitVoices`'s bit `0x0f` dispatch **does** call
-  `__sceSasSetVolume` a second time, per voice, per frame - the thing
-  `audio-levels.md` had read as called only once, from `Sas_Init` - but
-  nothing read yet traces those four fields back to a writer.
-  `SoundInstance_UpdateSpatial` is the only known producer of a comparable
-  volume pair and it writes into a SCREAM software instance's own fade
-  engine, not into the SAS voice record; the bridge between the two is
-  unread. Until it is, the honest port is the one that reproduces the
-  recovered law and saturates where the hardware saturates - no attenuation
-  has been added, because none has been measured, and CLAUDE.md's rule
-  against inventing what the assets already author applies to a volume
-  number exactly as it does to a particle effect.
-- **Four `Sas_CommitVoices` wrapper functions are still unnamed**, though
-  their call targets are now resolved with confidence 90 each
-  (`FUN_08a2ae08` -> `__sceSasSetVolume`, `FUN_08a2ae6c` -> `__sceSasSetPitch`,
-  `FUN_08a2af18` -> `__sceSasSetNoise`, `FUN_08a2b03c` -> `__sceSasSetSL`).
-  Not renamed: this project has no established naming convention yet for "a
-  thin guarded wrapper around a named import" beyond `Sas_SetVoice`'s own
-  one-off shape, and inventing one wasn't this thread's job.
+- **Three `Sas_CommitVoices` wrapper functions are still unnamed** -
+  `FUN_08a2ae6c` (`__sceSasSetPitch`), `FUN_08a2af18` (`__sceSasSetNoise`)
+  and `FUN_08a2b03c` (`__sceSasSetSL`), all resolved with confidence 90 -
+  though the fourth, `FUN_08a2ae08` (`__sceSasSetVolume`), now is: named
+  `Sas_SetVolume` as of 2026-09-06, confidence 92, following the
+  `Sas_SetVoice` precedent for this exact "guarded call to a named import"
+  shape. Not applied to the Ghidra project itself, since its function
+  boundary is broken at that address (merged into an unrelated neighbour) -
+  the `names.tsv` row is in regardless, per project convention, and the
+  database can catch up whenever someone next has the project open for a
+  reason that already touches this region.
 
 ## Next Steps
 
-- Trace `SoundInstance_UpdateSpatial`'s SCREAM-instance write forward (or the
-  SAS voice record's `+0x40` backward) until they meet, the way `sound.md`
-  walked `Sas_CommitVoices` back to `Sas_SetVoice`. That is what would turn
-  "no attenuation has been measured" into an actual number, one way or the
-  other.
-- Decide and apply a naming convention for the four resolved wrapper
-  functions, then add their `names.tsv` rows.
+- Decide and apply a naming convention for the remaining three wrapper
+  functions, then add their `names.tsv` rows. Optional and separate from the
+  volume question: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance
+  write forward (or the SAS voice record's `+0x40` backward) until they meet
+  would name the exact function that ramps a fading-in voice, which the
+  2026-09-06 live capture saw happen but did not localise to an address -
+  worth doing for the name, not because the saturation question is still
+  open.
