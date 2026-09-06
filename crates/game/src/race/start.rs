@@ -285,6 +285,8 @@ impl Race {
             respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
             respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
             respawns: [0; oag_gameplay::MAX_SHIPS],
+            rolls_armed: [0; oag_gameplay::MAX_SHIPS],
+            rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
             lost_ticks: [0; oag_gameplay::MAX_SHIPS],
             stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
             rescue_distance,

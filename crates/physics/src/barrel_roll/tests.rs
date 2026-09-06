@@ -323,14 +323,20 @@ fn the_invented_floor_refuses_where_a_pad_arms() {
 fn the_floor_is_measured_after_the_cost_not_before_it() {
     // Exactly on the floor before the cost, and a whole cost under it after.
     let (on_the_floor, state) = three_taps(0.20, 20.0);
-    assert!(!on_the_floor, "spending it would have left 12 against a 20 floor");
+    assert!(
+        !on_the_floor,
+        "spending it would have left 12 against a 20 floor"
+    );
     assert_eq!(state.shield, 20.0);
 
     // And a shield the cost clears the floor from arms, so this is measuring
     // the arithmetic rather than a floor that never lets anything through.
     let (clears, state) = three_taps(0.20, 28.0);
     assert!(clears);
-    assert_eq!(state.shield, 20.0, "left exactly on the floor, not under it");
+    assert_eq!(
+        state.shield, 20.0,
+        "left exactly on the floor, not under it"
+    );
 }
 
 /// Above the budget the floored craft arms exactly as an unfloored one does, so

@@ -243,10 +243,10 @@ impl Pilot {
         ram: Span::new(0.05, 0.20),
         provocation_ticks: Span::new(120.0, 300.0),
         trigger: Span::new(0.4, 0.8),
-        // Rolls about half the flights that last long enough, and keeps back
-        // the fifth of the pool `oag_physics` used to hold as a bare constant.
+        // Rolls about half the flights that last long enough, off a floor that
+        // leaves it a third of the pool whatever happens.
         roll_chance: Span::new(0.30, 0.55),
-        roll_floor: Span::new(0.20, 0.35),
+        roll_floor: Span::new(0.35, 0.50),
         roll_airtime: Span::new(0.45, 0.70),
     };
 
@@ -271,11 +271,13 @@ impl Pilot {
         ram: Span::new(0.55, 0.95),
         provocation_ticks: Span::new(300.0, 600.0),
         trigger: Span::new(0.8, 1.0),
-        // Rolls off almost anything and off the lowest floor of the four: the
-        // aggressive pilot buys the payout and worries about the pool later.
+        // Rolls off almost anything and off the lowest floor of the four,
+        // whose bottom is the `0.20` `oag_physics` used to hold as a bare
+        // constant for every AI craft: the value that was once everybody's
+        // budget is now the most reckless pilot's.
         roll_chance: Span::new(0.65, 0.95),
-        roll_floor: Span::new(0.15, 0.25),
-        roll_airtime: Span::new(0.35, 0.55),
+        roll_floor: Span::new(0.30, 0.42),
+        roll_airtime: Span::new(0.40, 0.60),
     };
 
     /// Looks further ahead, brakes earlier, gives up corner speed for a tidy
@@ -298,10 +300,12 @@ impl Pilot {
         provocation_ticks: Span::new(60.0, 180.0),
         trigger: Span::new(0.2, 0.5),
         // Rarely, and only with plenty in hand: this one wants the tidy line
-        // more than it wants the payout.
-        roll_chance: Span::new(0.10, 0.25),
-        roll_floor: Span::new(0.40, 0.60),
-        roll_airtime: Span::new(0.65, 0.95),
+        // more than it wants the payout. Measured at about one roll a race
+        // across the disc's twelve circuits, against the aggressive pilot's
+        // four a race - see `crates/game/tests/ai_roll_ground_truth.rs`.
+        roll_chance: Span::new(0.15, 0.30),
+        roll_floor: Span::new(0.45, 0.62),
+        roll_airtime: Span::new(0.60, 0.85),
     };
 
     /// Runs wide, brakes earliest, and stays out of everyone's way.
@@ -327,10 +331,12 @@ impl Pilot {
         provocation_ticks: Span::new(30.0, 120.0),
         trigger: Span::new(0.05, 0.3),
         // The most reluctant of the four, off the highest floor. A shy pilot
-        // that has spent its pool on showing off is a contradiction.
-        roll_chance: Span::new(0.05, 0.15),
-        roll_floor: Span::new(0.50, 0.70),
-        roll_airtime: Span::new(0.75, 1.10),
+        // that has spent its pool on showing off is a contradiction - but never
+        // rolling at all is the original's behaviour rather than this one's, so
+        // it is rare and not zero.
+        roll_chance: Span::new(0.10, 0.22),
+        roll_floor: Span::new(0.55, 0.75),
+        roll_airtime: Span::new(0.60, 0.90),
     };
 
     /// The four, with the names a config file and a menu spell them by.

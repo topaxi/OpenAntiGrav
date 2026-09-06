@@ -32,6 +32,26 @@ impl Race {
         self.ai_tuning = tuning;
     }
 
+    /// Replaces the character one slot is flying, mid-race.
+    ///
+    /// **For measurement, exactly as [`Self::set_ai_tuning`] is**, and it exists
+    /// because a lone-craft benchmark measures whichever pilot
+    /// `oag_ai::pilot_for_slot` happened to hand slot 1 - the same one on every
+    /// circuit, since the choice is a function of the race seed and the slot.
+    /// A sweep that wanted to see what a *shy* pilot costs against an
+    /// *aggressive* one therefore had no way to ask, and would have read one
+    /// character's numbers as the field's.
+    ///
+    /// The pilot is taken as given: [`Self::start`] has already run the level's
+    /// `Difficulty::temper` over the roster, so a caller sweeping tiers has to
+    /// temper it too. It is not a difficulty setting and nothing in the game
+    /// calls it.
+    pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
+        if let Some(entry) = self.ai_pilots.get_mut(slot) {
+            *entry = pilot;
+        }
+    }
+
     /// Hands the player's craft to an opponent's driver, or takes it back.
     ///
     /// **A verification aid, and the same kind of thing `Options::opponents`
@@ -334,6 +354,16 @@ impl Race {
             // below records - so `ABSORB`'s branch is unreachable here rather
             // than suppressed.
             self.raise_contact_cue(slot, evaluated.wall.impact, false);
+            // Bookkeeping for the deviation, not state the race reads back: our
+            // opponents barrel-roll and the original's never do, so what an
+            // opponent spends on them has to be countable on the disc's own
+            // circuits. `arm` charges `roll_cost` percent of the pool, which is
+            // what makes the cost derivable rather than measured off a shield
+            // that a wall may also have moved this tick.
+            if evaluated.roll_armed {
+                self.rolls_armed[slot] += 1;
+                self.rolls_spent[slot] += handling.roll_cost * 0.01 * handling.dimensions.shield;
+            }
             // The same shell bulge slot 0 gets in `tick`. Nothing hands an
             // opponent a Shield yet - the AI has no fire decision for one - so
             // this is unreachable today and is here because the alternative is a

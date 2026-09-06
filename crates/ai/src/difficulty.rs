@@ -254,8 +254,12 @@ impl Difficulty {
         let appetite = self.roll_appetite();
         let caution = self.roll_caution();
         let dimmed = |span: Span| Span::new(span.low * appetite, span.high * appetite);
-        let raised =
-            |span: Span| Span::new((span.low * caution).min(1.0), (span.high * caution).min(1.0));
+        let raised = |span: Span| {
+            Span::new(
+                (span.low * caution).min(1.0),
+                (span.high * caution).min(1.0),
+            )
+        };
         let delayed = |span: Span| Span::new(span.low * caution, span.high * caution);
         Pilot {
             trigger: scaled(pilot.trigger),
