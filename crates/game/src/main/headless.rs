@@ -166,6 +166,7 @@ pub(crate) fn run_windowless(
                 screen: cli.screen.clone(),
                 menu_page: cli.menu_page.clone(),
                 menu_anim_phase: cli.menu_anim_phase,
+                menu_prompt: cli.menu_prompt.clone(),
                 presented: cli.presented,
                 // The clone is overridden rather than `settings` itself, so
                 // `--camera-view` reaches the race this capture may hand over to

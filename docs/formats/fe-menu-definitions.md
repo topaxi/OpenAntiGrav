@@ -14,18 +14,28 @@ values live in attributes only.
 ## Where they are
 
 `Data\Plugins\PI001\GUI\Skin.xml` - **in `Data.wad`, not in `FE.wad` or
-`FEData.wad`** - carries a `LoadXML` list of 22 further files, each naming both
-a full path and a `SrcRel` basename. Seventeen of them resolve in `Data.wad`:
+`FEData.wad`** - carries a `LoadXML` list of **23** further files, each naming
+both a full path and a `SrcRel` basename. Seventeen of them resolve in
+`Data.wad`:
 
 `StartProfile_Definition`, `BootScreensNoHeaderBar`, `ShowUnlocks_Definition`,
 `MainMenu_Definition`, `RaceBox_Definition`, `CellMode_Definition`,
 `Additional_Definition`, `Selection_Definition`, `Multiplayer_Definition`,
 `RecordGrid_Definition`, `Stats_Definition`, `Network_Definition`,
-`Online_Definition`, `Manual_Definition`, `Demo_Definition`.
+`Online_Definition`, `Manual_Definition`, `Demo_Definition`,
+`GriefReport_Definition`, `EndRace_Definition`, `InGame_Definition`.
 
 Five do not, and where they live is unread: `Controls_Definition`,
 `Credits_Definition`, `Debug_Screens`, `MemoryStickBootScreens`,
 `MemoryStickScreens`.
+
+**This said 22 and listed 15 until 2026-09-06**, when the list was re-derived
+off the disc rather than trusted: `Skin.xml` hashes to `1f38aacf` = `Data.wad`
+entry #1105, 12,389 bytes, and extracting `j="..."` off its `<e>`/`LoadXML`
+elements gives 23. `GriefReport_Definition`, `EndRace_Definition` and
+`InGame_Definition` were the three the count had lost. Nothing here is a
+keyboard or a text-entry screen; text entry is a `TagInput` widget inside
+`StartProfile_Definition.xml`, which is on the list.
 
 ## The main menu is a list, and `Grid Selection` is the hex grid
 

@@ -25,15 +25,37 @@
 //!   into an [`Edit`] and is deliberately a separate, testable decision from
 //!   this model, the same way `rebind` is separate from the CONTROLS page.
 //!
-//! # Nothing here is recovered, and that is checked rather than assumed
+//! # Nothing here is recovered, and that was checked rather than assumed
 //!
 //! **The layout below is ours: chosen, not measured, and carries no
-//! confidence score.** The PSP does not let a game author one - text entry on
-//! that machine is the *firmware* `sceUtilityOsk` dialog, drawn by the system
-//! rather than by the title - so there is no keyboard on the disc to recover
-//! and no key glyph to draw with. That is a recorded negative result rather
-//! than an unchecked assumption; see
-//! `handover/players-should-be-able-to-edit-pilots-in-game.md`.
+//! confidence score.** What the disc was searched for, and what turned up,
+//! matters more than the conclusion:
+//!
+//! - **No keyboard layout and no key glyphs, anywhere on Pulse.** Nothing to
+//!   recover, so nothing was.
+//! - **The `sceUtilityOsk` hypothesis is refuted, not confirmed.** All four
+//!   of the firmware on-screen keyboard's NIDs are *absent* from both Pulse
+//!   executables, while `MsgDialog`, `Savedata` and `Netconf` are present -
+//!   so Pulse does not hand text entry to the system either. (Wipeout Pure is
+//!   the opposite and does link it.)
+//! - **Pulse authors its own text-entry screen, and it is not a keyboard.**
+//!   A `<TagInput>` widget: a row of character cells the player scrolls one
+//!   glyph at a time, with an alphabet held in the executable.
+//!
+//! So why is this a grid rather than that? **Because the authored alphabet
+//! cannot spell a pilot name.** It is 70 characters -
+//! `ABC…XYZabc…xyz 0123456789!-+@:?*` - and a name may hold none of the
+//! uppercase, the space or the punctuation (`crate::pilots::check_name`).
+//! Playing the disc's data here is not an option that exists: any use of that
+//! widget for this screen would re-author a 38-character subset of its
+//! alphabet, which is invention either way, and would adopt PSP-authored cell
+//! coordinates for a page no PSP has - where deriving from the live
+//! [`Skin`] instead is what lets an HD skin get an HD-sized panel.
+//!
+//! The `<TagInput>` is still worth having for the screens it *is* the idiom
+//! for; that is its own thread, with the entry index and the alphabet's
+//! address in it. See
+//! `handover/pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md`.
 //!
 //! # Every label is passed in, already resolved
 //!
@@ -299,7 +321,7 @@ impl Keyboard {
             out.push(Draw::Text {
                 x: panel.text_x,
                 y,
-                scale: panel.scale * 0.8,
+                scale: panel.scale * NOTE_SCALE,
                 color: NOTE,
                 border: None,
                 align: Align::Left,
@@ -307,10 +329,16 @@ impl Keyboard {
                 wrap_width: Some(panel.text_width),
             });
         }
-        y += line;
+        // **Advanced whether or not a note was drawn, and by enough for two
+        // wrapped lines of one.** The first version advanced by a single
+        // `line` and the shipped built-in-replaces note wraps to two, so its
+        // second line landed *through* the grid's top-left key. The gap is
+        // reserved unconditionally so the grid does not jump when a note
+        // appears mid-typing, which it does on every keystroke.
+        y += line * NOTE_ROOM;
 
         let cell_w = panel.text_width / COLUMNS as f32;
-        let cell_h = line * 0.95;
+        let cell_h = line * 0.78;
         for index in 0..CELLS {
             let (row, column) = (index / COLUMNS, index % COLUMNS);
             let x = panel.text_x + column as f32 * cell_w;
@@ -337,8 +365,12 @@ impl Keyboard {
             };
             out.push(Draw::Text {
                 x: x + cell_w * 0.5,
-                y: top + cell_h * 0.15,
-                scale: panel.scale,
+                y: top + cell_h * 0.1,
+                // Under a row's own scale, unlike everything else here: the
+                // two special keys are three and two glyphs wide in a cell
+                // sized for one, and at full scale `DEL` and `OK` ran into
+                // each other in the bottom-right corner.
+                scale: panel.scale * 0.85,
                 color: if selected {
                     skin.selected()
                 } else {
@@ -352,10 +384,16 @@ impl Keyboard {
         }
 
         if !self.labels.hint.is_empty() {
+            // **Small enough to stay on one line, and pinned to the panel's
+            // own bottom rather than to the grid's.** The first version put
+            // it a third of a line under the last row at 0.8 scale, and the
+            // shipped English hint wrapped to two - the second of which drew
+            // *below the panel*, over the front end's own footer chrome.
+            // Caught by looking at a capture; the arithmetic had looked fine.
             out.push(Draw::Text {
                 x: panel.text_x,
-                y: y + GRID_ROWS as f32 * cell_h + line * 0.3,
-                scale: panel.scale * 0.8,
+                y: panel.bottom() - line * 1.4,
+                scale: panel.scale * 0.6,
                 color: skin.normal(),
                 border: None,
                 align: Align::Left,
@@ -459,12 +497,16 @@ impl Confirm {
             text: self.labels.message.clone(),
             wrap_width: Some(panel.text_width),
         });
-        // Under the message rather than under a fixed number of its lines: the
-        // wrap is the renderer's, so this module cannot know how tall the
-        // message came out. Parked at a height that clears the longest message
-        // anything currently asks - the built-in-restore sentence - which is a
-        // limitation worth naming rather than hiding. See this module's doc.
-        let y = panel.body_y + panel.line * 4.0;
+        // **Anchored to the panel's own bottom, not to the message.** The
+        // wrap is the renderer's, so this module cannot know how many lines
+        // the message came out as - and parking the answers a fixed four
+        // lines under it put them *on top of* the built-in-restore sentence,
+        // which wraps to five. Caught in a `--menu-page --menu-prompt`
+        // capture; the arithmetic had looked fine. Anchoring here gives the
+        // message the whole panel to wrap into and puts the answers in the
+        // same place on every question, which is better to use as well as
+        // being correct.
+        let y = panel.bottom() - panel.line * 2.0;
         for (index, (label, is_yes)) in [(&self.labels.no, false), (&self.labels.yes, true)]
             .into_iter()
             .enumerate()
@@ -472,8 +514,14 @@ impl Confirm {
             let x = panel.text_x + index as f32 * panel.text_width * 0.5;
             let selected = is_yes == self.yes;
             if selected {
+                // Sized off the label's character count rather than measured:
+                // this module has no font, and `menu::draw_list`'s own
+                // `measure` closure is threaded in for a *layout* that
+                // overlaps when it is wrong. A highlight box a few pixels
+                // wide of its word does not. Approximate, deliberately.
+                let width = label.chars().count() as f32 * panel.line * 0.6 + panel.line * 0.4;
                 out.push(Draw::Fill {
-                    rect: [x - 4.0, y, panel.text_width * 0.4, panel.line],
+                    rect: [x - 4.0, y, width, panel.line],
                     color: CURSOR,
                 });
             }
@@ -506,7 +554,7 @@ impl Confirm {
 const SCRIM: [f32; 4] = [0.0, 0.0, 0.0, 0.72];
 
 /// The panel's own fill. Ours; see [`SCRIM`].
-const PANEL: [f32; 4] = [0.04, 0.06, 0.09, 0.94];
+const PANEL: [f32; 4] = [0.04, 0.06, 0.09, 0.985];
 
 /// The box behind the cell or answer the cursor is on. Ours; see
 /// [`Keyboard::draw`] for why this exists at all when a menu row has none.
@@ -516,6 +564,18 @@ const CURSOR: [f32; 4] = [0.20, 0.42, 0.62, 0.85];
 /// `menu::rows`' own `WARNING` uses, and for the same reason: the other
 /// colours already mean selected, normal and inert.
 const NOTE: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
+
+/// How small a note is drawn, as a multiple of a row's own scale.
+const NOTE_SCALE: f32 = 0.66;
+
+/// How many lines of pitch the note is given, wrapped or not.
+///
+/// **Two lines' worth, always.** The longest note anything currently sets -
+/// "%s IS BUILT IN: A FILE OF THAT NAME REPLACES IT" - wraps to two at
+/// [`NOTE_SCALE`] on a 480-wide screen, and the gap is reserved whether or
+/// not a note is showing so the grid does not jump on the keystroke that
+/// makes one appear.
+const NOTE_ROOM: f32 = 1.45;
 
 /// The box both prompts are drawn in, and where their text goes inside it.
 ///
@@ -537,11 +597,18 @@ struct Panel {
 }
 
 impl Panel {
+    /// The panel's own bottom edge, which is what anything drawn last has to
+    /// stay above - see [`Keyboard::draw`]'s hint line for the frame this got
+    /// wrong.
+    fn bottom(&self) -> f32 {
+        self.y + self.height
+    }
+
     fn new(skin: &Skin) -> Self {
         let (screen_w, screen_h) = skin.space().size;
         let line = skin.row_pitch();
-        let (x, y) = (screen_w * 0.08, screen_h * 0.07);
-        let (width, height) = (screen_w * 0.84, screen_h * 0.86);
+        let (x, y) = (screen_w * 0.08, screen_h * 0.055);
+        let (width, height) = (screen_w * 0.84, screen_h * 0.90);
         let pad = screen_w * 0.04;
         Self {
             x,
@@ -550,7 +617,7 @@ impl Panel {
             height,
             text_x: x + pad,
             text_width: width - pad * 2.0,
-            body_y: y + line * 1.4,
+            body_y: y + line * 1.3,
             line,
             scale: skin.row_scale(),
         }

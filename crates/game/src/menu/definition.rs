@@ -334,16 +334,29 @@ fn resolve(
     index: &HashMap<String, usize>,
     strings: &StringTable,
 ) -> Result<Entry, Error> {
-    // A row with no `string_id` keeps its literal label untouched - the
-    // common case today, since nothing in `assets/ui/menu.toml` names one
-    // yet. One that does gets `strings`' answer even when that answer is the
-    // id itself (`StringTable::get_or_id`'s own fallback): once a row opts
-    // in, showing the id it named beats silently ignoring the id and drawing
-    // the literal it moved away from.
-    let label = entry.string_id.as_deref().map_or_else(
-        || entry.label.clone(),
-        |id| strings.get_or_id(id).to_string(),
-    );
+    // A row with no `string_id` keeps its literal label untouched. One that
+    // names an id gets the table's answer, and **falls back to its own
+    // `label` when the table has nothing** - not to the id.
+    //
+    // **This used to fall back to the id** (`StringTable::get_or_id`), on the
+    // argument that the id space is the disc's own, so showing the id beat
+    // silently drawing a literal the row had moved away from. That argument
+    // held while nothing in `assets/ui/menu.toml` named an id. It stopped
+    // holding on 2026-09-06, when the pilot editor's rows became the first
+    // that do: those ids are **ours**, `assets/ui/strings/english.toml` is
+    // the only file that carries them, and every other language overlays
+    // nothing - so a French player was shown `OAG_PILOT_RENAME` where the row
+    // says `RENAME`. Caught in a `--menu-page` capture on the EU disc, which
+    // is exactly the machine a developer working in English would not have.
+    //
+    // A `label` is required on every entry the loader accepts, so there is
+    // always one to fall back to, and for a project-owned id it *is* the
+    // English source text rather than a guess at the disc's.
+    let label = entry
+        .string_id
+        .as_deref()
+        .and_then(|id| strings.get(id))
+        .map_or_else(|| entry.label.clone(), ToString::to_string);
     let missing = |field: &str| Error::BadEntry {
         context: context.to_string(),
         problem: format!("a {:?} entry needs {field}", entry.kind),

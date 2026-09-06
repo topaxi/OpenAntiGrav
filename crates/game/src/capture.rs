@@ -106,6 +106,15 @@ pub struct Options {
     ///
     /// See the CLI flag's own docs for why a still needs this at all.
     pub menu_anim_phase: Option<f32>,
+    /// Which modal prompt to draw over that page: `rename`, `rename-note`,
+    /// `delete` or `delete-built-in`.
+    ///
+    /// The same argument [`Self::menu_anim_phase`] makes, one step stronger. A
+    /// prompt exists because a row was *activated*, and this path runs no
+    /// state machine and calls no `Menu::update` - so the on-screen keyboard
+    /// can never appear here on its own, and without this its layout is
+    /// reviewable only by playing the game on a machine with a display.
+    pub menu_prompt: Option<String>,
     /// The persisted settings, so `--menu-page` draws the rows a player would
     /// see rather than each list's first entry.
     pub settings: crate::settings::Settings,
@@ -442,6 +451,7 @@ pub fn run(
                 &|text| crate::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                 &menu_frame,
                 options.menu_anim_phase,
+                options.menu_prompt.as_deref(),
             )?;
             (backdrop, format, list, space)
         }

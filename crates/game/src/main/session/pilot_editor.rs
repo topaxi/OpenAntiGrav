@@ -378,8 +378,8 @@ impl Session {
             say_of(
                 self.table(),
                 "OAG_PILOT_DELETE_BUILT_IN",
-                "%s IS ONE OF THE FOUR BUILT-IN PILOTS AND YOUR FILE REPLACES IT. \
-                 DELETING THE FILE DOES NOT REMOVE %s - IT RESTORES THE BUILT-IN.",
+                "%s IS BUILT IN AND YOUR FILE REPLACES IT. \
+                 DELETING THE FILE RESTORES THE BUILT-IN INSTEAD OF REMOVING %s.",
                 &name,
             )
         } else {
@@ -703,129 +703,5 @@ fn resupply_bounds(model: &mut menu::Menu, roster: &pilots::Roster) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A menu with just the four rows this file cares about, so a test can
-    /// exercise the free functions above without a real window, GPU or disc.
-    fn fixture_menu() -> menu::Menu {
-        let text = "\
-version = 1
-root = \"pilots\"
-[[page]]
-id = \"pilots\"
-[[page.entry]]
-kind = \"choice\"
-label = \"PILOT\"
-setting = \"pilot.selected\"
-values_from = \"pilots\"
-[[page.entry]]
-kind = \"choice\"
-label = \"AXIS\"
-setting = \"pilot.axis\"
-values_from = \"pilot_axes\"
-[[page.entry]]
-kind = \"choice\"
-label = \"LOW\"
-setting = \"pilot.low\"
-values_from = \"pilot_axis_low\"
-[[page.entry]]
-kind = \"choice\"
-label = \"HIGH\"
-setting = \"pilot.high\"
-values_from = \"pilot_axis_high\"
-";
-        let strings = oag_game::language::StringTable::default();
-        let definition = menu::Definition::parse(text, &strings).expect("a tiny valid definition");
-        menu::Menu::new(definition)
-    }
-
-    /// A directory holding one pilot file, cleaned up on drop - the same
-    /// idiom `pilots`' own tests use, kept local rather than shared so this
-    /// file does not reach into `oag_game::pilots`' private test helpers.
-    struct Scratch(std::path::PathBuf);
-
-    impl Scratch {
-        fn with(name: &str, body: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!(
-                "oag-pilot-editor-{}-{:p}",
-                std::process::id(),
-                name.as_ptr()
-            ));
-            std::fs::create_dir_all(&dir).expect("a scratch directory");
-            std::fs::write(dir.join(format!("{name}.toml")), body).expect("a scratch pilot");
-            Self(dir)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    /// Lands PILOT on `name` and AXIS on `axis`, the way opening the real
-    /// page does through [`Session::supply_pilot_menu`] - reproduced here
-    /// with the two free functions directly, since there is no [`Session`]
-    /// in this test.
-    fn land_on(model: &mut menu::Menu, roster: &pilots::Roster, name: &str, axis: &str) {
-        supply_pilot_choices(model, roster, Some(name));
-        model.supply(menu::ValueSource::PilotAxes, &[menu::Choice::plain(axis)]);
-        model.seed("pilot.axis", &Value::Text(axis.to_string()));
-        resupply_bounds(model, roster);
-    }
-
-    /// The generated steps must never carry float noise into a saved file -
-    /// see [`quantize`]'s own doc for the `0.17250001` this exists to catch.
-    #[test]
-    fn quantized_steps_never_print_more_than_a_handful_of_decimals() {
-        for choice in axis_choices(0.1, 3.0, 1.7) {
-            assert!(
-                choice.value.len() <= 7,
-                "{:?} looks like float noise, not a step",
-                choice.value
-            );
-        }
-    }
-
-    /// The exact current value is always offered, even when it is not one
-    /// of the round steps - a hand-authored `0.427` must still seed exactly.
-    #[test]
-    fn the_pilots_own_exact_value_is_always_one_of_the_choices() {
-        let choices = axis_choices(0.1, 3.0, 0.427);
-        assert!(choices.iter().any(|choice| choice.value == "0.427"));
-    }
-
-    /// SAVE writes AXIS's own axis alone. Pinned here: an edit to a
-    /// *different* axis, left untouched when AXIS moves on to another one,
-    /// is discarded without a word - see this file's own module doc.
-    #[test]
-    fn moving_axis_discards_an_untouched_low_edit_without_saving() {
-        let scratch = Scratch::with("winston", "commitment = [0.90, 1.00]\n");
-        let roster = pilots::load_from(&scratch.0).expect("a readable directory");
-        let mut model = fixture_menu();
-        land_on(&mut model, &roster, "winston", "commitment");
-        assert_eq!(held_text(&model, "pilot.low"), Some("0.9".to_string()));
-
-        // The player nudges LOW - "0.5" is `commitment`'s own floor, always
-        // one of `axis_choices`' round steps, so it is on the list without
-        // depending on how the steps are spread.
-        model.seed("pilot.low", &Value::Text("0.5".to_string()));
-        assert_eq!(
-            held_text(&model, "pilot.low"),
-            Some("0.5".to_string()),
-            "the seed above did not land - this test is not exercising what it claims to"
-        );
-
-        // AXIS moves - to the same axis is enough, since `resupply_bounds`
-        // does not know or care that it "moved"; it only re-derives from the
-        // roster's own stored span, which is the whole of the behaviour
-        // being pinned.
-        land_on(&mut model, &roster, "winston", "commitment");
-        assert_eq!(
-            held_text(&model, "pilot.low"),
-            Some("0.9".to_string()),
-            "the untouched-file value should have won back over the discarded edit"
-        );
-    }
-}
+#[path = "pilot_editor/tests.rs"]
+mod tests;

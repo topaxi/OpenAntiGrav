@@ -26,11 +26,15 @@ fn the_shipped_definition_is_internally_consistent() {
     }
 }
 
-/// A row that names a `string_id` gets whatever `strings` answers for it,
-/// literal `label` and all: the id space is the disc's own, so a table with
-/// nothing under that id still has to fall back to the id itself rather than
-/// silently keeping the label the row moved away from - see
-/// `StringTable::get_or_id`.
+/// A row that names a `string_id` gets the table's answer, and its own
+/// `label` when the table has nothing.
+///
+/// **The second half of this used to assert the opposite** - that a missing
+/// id showed the *id* - on the argument that the id space is the disc's own.
+/// The pilot editor's rows are the first in this build to name an id, those
+/// ids are ours, and only `english.toml` carries them: under that rule a
+/// French player read `OAG_PILOT_RENAME` off a row whose `label` says
+/// `RENAME`. See `resolve`'s own comment for the whole reversal.
 #[test]
 fn a_string_id_is_resolved_against_the_table_parse_is_given() {
     let text = r#"
@@ -53,8 +57,10 @@ string_id = "MENU_BACK"
     let definition = Definition::parse(text, &absent).expect("parse");
     assert_eq!(
         definition.pages[0].entries[0].label(),
-        "MENU_BACK",
-        "no table has this id, so the id itself is what a player sees"
+        "IGNORED",
+        "no table has this id, so the row's own label is what a player sees - \
+         showing the id would put OAG_PILOT_RENAME on screen in every language \
+         but English"
     );
 }
 
