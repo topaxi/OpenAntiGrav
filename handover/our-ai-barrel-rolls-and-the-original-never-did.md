@@ -52,24 +52,79 @@ weakened** - the deviation goes on top of them, never through them:
 `oag_ai::Difficulty` is `Novice`, `Skilled`, `Elite`, `Ace`
 (`crates/ai/src/difficulty.rs:42`).
 
+## Decided 2026-09-06 by the maintainer
+
+**All three mechanisms, and all three configurable from the pilot TOML.**
+Verbatim: *"each of these variables sound good to me, let's go with
+probability, raised shield floor and minimum airborne time, make them
+configurable via our AI racer toml files as well."*
+
+So three new pilot axes, alongside `commitment`, `patience`, `trigger` and the
+rest in `assets/ai/example-pilot.toml`:
+
+| Axis | What it does |
+| --- | --- |
+| a roll **probability** | how readily it commits, per airborne window |
+| a roll **shield floor** | the energy budget below which it will not spend |
+| a **minimum airborne time** | how long a jump has to be before it is worth it |
+
+### Two constraints that will each cause a subtle bug if missed
+
+**1. A new pilot axis appends to the END of the draw order, for ever - it never
+goes between.** [`docs/gameplay/ai.md`](../docs/gameplay/ai.md) is explicit
+(around line 652): every pilot consumes the same draws in the same order, so
+inserting an axis re-rolls every later axis for every existing pilot. Three new
+axes means three new draws, appended, in a fixed order chosen once. Getting this
+wrong silently changes the character of every pilot already written, including
+the four built-ins.
+
+**2. Difficulty degrades; it never boosts.** `crates/ai/src/difficulty.rs`'s own
+module doc: the top level is the measured tuning and *every level below takes
+something away*, because "a baseline tuned for a novice and then multiplied
+upward has no measurement behind its top end, so the hardest setting is the
+least tested one, which is exactly backwards." So **Ace is the pilot's value
+unmodified**, and `Elite`/`Skilled`/`Novice` degrade it - lower probability,
+*raised* floor, *longer* minimum airborne time. Never the reverse.
+
+That composes cleanly with the maintainer's directive, which already says Ace
+rolls whenever the budget allows and lower tiers roll less.
+
+### Following the file's existing conventions
+
+`assets/ai/example-pilot.toml` sets rules the new axes inherit for free, and
+each is worth honouring rather than reinventing:
+
+- **Every axis is a range `[low, high]`**, and each craft draws its own value
+  inside it - four craft on one pilot are four drivers, not one driver four
+  times.
+- **Anything omitted falls back to `balanced`**, so a pilot that says nothing
+  about rolling still gets sensible behaviour.
+- **Anything misspelled is an error naming the key**, never a setting that
+  silently does nothing.
+- None of these numbers is the game's - they are this project's own, per
+  [ADR-0006](../docs/architecture/adr/0006-no-copyrighted-content.md). That is
+  already true of the whole file and is doubly true here, where the behaviour
+  itself is invented.
+
+`AI_ROLL_SHIELD_FLOOR`'s existing `0.20` is the natural default for the floor
+axis, which retires it as a bare constant.
+
 ## Open
 
-- **How a lower tier "does less" is undecided, and the choice matters.** A
-  probability per airborne window, a raised shield floor per tier, a cooldown
-  between rolls, or a minimum airborne duration before it will commit - these
-  feel different in play and only the maintainer can pick. Not guessed here.
-- **Whether the AI should call `arm` directly or synthesise tap input.** Direct
-  is honest about being a decision; synthesising taps would route an invented
+- **Whether the AI calls `arm` directly or synthesises tap input.** Direct is
+  honest about being a decision; synthesising taps would route an invented
   intent through a recovered input path and make the two hard to tell apart
-  later. Direct is the recommendation, not a ruling.
+  later. Direct is the recommendation, still not a ruling.
 - Whether a rolling AI should also get the landing payout's turbo. It falls out
   of the existing mechanism for free if `arm` is reached the normal way, and
-  nothing suggests it should be suppressed - but it has not been thought about.
+  nothing suggests suppressing it - but it has not been thought about.
+- The three axes' default ranges are unchosen. They are play-feel numbers and
+  want a play-test, not a derivation.
 
 ## Next Steps
 
-1. Decide the "does less" mechanism with the maintainer before implementing -
-   it is the one part a play-test will judge immediately.
+1. ~~Decide the "does less" mechanism with the maintainer.~~ **Done
+   2026-09-06** - all three, configurable per pilot. See above.
 2. Implement behind the four gates above, drawing any randomness from
    `oag_core::Rng` at a fixed sequence of draws, the way `crates/ai`'s existing
    personality already does (`crates/ai/src/lib.rs:71`). Never OS entropy.
