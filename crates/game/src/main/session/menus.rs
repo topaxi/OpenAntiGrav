@@ -364,6 +364,10 @@ impl Session {
             remix_menu::settle(&mut self.settings.remix.variant, &variants);
             model.supply(menu::ValueSource::RemixVariant, &variants);
         }
+        // Ours, and settings-backed like everything above it - except PILOT
+        // and AXIS, which nothing persists, so this both supplies and seeds
+        // LOW/HIGH in one call. See `super::pilot_editor`.
+        self.supply_pilot_menu(&mut model);
         self.seed_menu(&mut model, shell.title.name);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
@@ -753,6 +757,9 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::Quit) => {
                 self.quit = true;
             }
+            // The AI PILOTS page's own two actions - see `super::pilot_editor`.
+            menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
+            menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
             // Backing out of the root page used to always mean the same thing
             // as QUIT: there was nothing behind the menus to go back to. Now
             // there can be - a race `escape` parked rather than discarded -

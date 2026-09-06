@@ -530,6 +530,17 @@ impl Session {
             }
             "remix.variant" => self.settings.remix.variant = text,
             "language" => self.settings.language = Some(text),
+            // The AI PILOTS page's own four rows - see `super::pilot_editor`.
+            // None of the four is part of `self.settings`: which pilot and
+            // which axis are on screen is not persisted, so both return
+            // before the save below rather than writing an unrelated file on
+            // every LOW/HIGH nudge. PILOT and AXIS additionally re-supply
+            // LOW/HIGH for whatever they just moved onto.
+            "pilot.selected" | "pilot.axis" => {
+                self.resupply_pilot_bounds();
+                return;
+            }
+            "pilot.low" | "pilot.high" => return,
             other => {
                 warn!("nothing applies {other}");
                 return;

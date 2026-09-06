@@ -10,7 +10,8 @@
 # row that does nothing when pressed:
 #
 #   - every `target` names a page in this file;
-#   - every `action` is one the game handles: launch_race, launch_remix, quit;
+#   - every `action` is one the game handles: launch_race, launch_remix, quit,
+#     save_pilot, new_pilot;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #
@@ -277,6 +278,13 @@ target = "audio"
 kind = "submenu"
 label = "CONTROLS"
 target = "controls"
+
+# Ours - no disc has ever shipped a pilot editor, because pilots are this
+# project's own invention. See `crates/game/src/pilots.rs`.
+[[page.entry]]
+kind = "submenu"
+label = "AI PILOTS"
+target = "pilots"
 
 # Also read from the source. Changing it takes effect on the **next launch**:
 # the string table is loaded once at boot, and reloading it under a front end
@@ -1013,6 +1021,75 @@ kind = "choice"
 label = "TRIGGER SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "pilots"
+title = "AI PILOTS"
+
+# Ours, start to finish - see `crates/game/src/pilots.rs`'s own module doc.
+# No disc's front end has anything like it: pilots are ranges this project
+# draws opponents from, not something either original game's data authors.
+#
+# PILOT first, because it decides what AXIS below is even editing - the same
+# order TRACK TITLE puts ahead of TRACK on RACE REMIX. **A name with no `*`
+# after it is a built-in.** Editing one and saving does not touch the four
+# built into the binary - it writes a same-named file that *replaces* the
+# built-in the next time pilots are loaded, which is why SAVE always works
+# here even on `balanced`, `aggressive`, `passive` or `shy`.
+[[page.entry]]
+kind = "choice"
+label = "PILOT"
+setting = "pilot.selected"
+values_from = "pilots"
+
+# Every axis this format understands, in `crate::pilots::AXES`'s own draw
+# order - the same order the file format documents them in.
+[[page.entry]]
+kind = "choice"
+label = "AXIS"
+setting = "pilot.axis"
+values_from = "pilot_axes"
+
+# The two ends of the range PILOT draws AXIS from. Two rows and not one two-
+# handle control, because nothing in this menu format has a control with two
+# handles - see `crate::pilots.rs`'s own doc on why a range and not a value is
+# the format's whole point. Resupplied whenever PILOT or AXIS moves, and
+# whichever number the file already held is always one of the options, so
+# moving straight to SAVE without touching either changes nothing.
+[[page.entry]]
+kind = "choice"
+label = "LOW"
+setting = "pilot.low"
+values_from = "pilot_axis_low"
+
+[[page.entry]]
+kind = "choice"
+label = "HIGH"
+setting = "pilot.high"
+values_from = "pilot_axis_high"
+
+# Writes PILOT's file with AXIS set to [LOW, HIGH] and nothing else touched -
+# every other axis, and every comment a player wrote by hand, survives. See
+# `crate::pilots::set_axis`.
+#
+# Only AXIS's own axis - moving AXIS before pressing this discards an edit
+# to the one just left, silently. See `session::pilot_editor`'s module doc.
+[[page.entry]]
+kind = "action"
+label = "SAVE"
+action = "save_pilot"
+
+# Auto-named (`pilot-1`, `pilot-2`, ...) rather than asking for a name: there
+# is no text entry anywhere in this project yet, and this is what keeps that
+# out of scope for this cut. Copies whichever pilot PILOT currently holds.
+[[page.entry]]
+kind = "action"
+label = "NEW FROM PILOT"
+action = "new_pilot"
 
 [[page.entry]]
 kind = "back"

@@ -2,6 +2,10 @@
 # `~/.config/oag/pilots/`) under whatever name you like and edit it - no
 # rebuild, and the file is small enough to paste into a forum post.
 #
+# Or skip the text editor: OPTIONS > AI PILOTS, in game, lists and edits
+# these too, one axis at a time, and saves through the same file - it will
+# not touch a comment you write here by hand.
+#
 # EVERY `.toml` FILE IN THAT DIRECTORY IS LOADED, and the filename becomes the
 # pilot's name: `winston.toml` is a pilot called `winston`. There is no list to
 # register it in and no limit on how many you keep.

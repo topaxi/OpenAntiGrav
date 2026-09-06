@@ -1,5 +1,52 @@
 # Players should be able to build pilots in game, and a naive editor would eat their comments
 
+## Landed 2026-09-06: list, edit, save, create-from-template
+
+The maintainer's scope call was **list -> edit axis ranges -> save ->
+create-from-template**, with delete and rename explicitly out of this cut
+(rename needs text entry, which is its own screen and its own thread). All
+four landed:
+
+- An **AI PILOTS** page in `assets/ui/menu.toml`, reachable from OPTIONS.
+  `PILOT` and `AXIS` choice rows pick what to edit; built-ins are marked
+  `(built-in)` in the list, so it does not imply deleting a same-named file
+  would remove one - it restores the built-in, per the trap below.
+- `LOW`/`HIGH` choice rows are the two-handle control this menu format can
+  offer: each is a discretized set of steps across `crate::pilots::limit`'s
+  range for the axis, **plus the pilot's own exact value**, so a
+  hand-authored number that is not on a round step still seeds correctly
+  and SAVE without touching either changes nothing.
+- **`toml_edit`, not `toml::to_string_pretty`.** This was the strategy
+  decision this thread flagged as blocking, and it is the one taken:
+  `crate::pilots::set_axis` reads the document, mutates only the array the
+  edited axis names, and writes the rest back byte for byte.
+  `pilots.rs`'s module doc now records the choice beside the "nothing is
+  rewritten on load" sentence, and
+  `editing_an_axis_keeps_the_hand_written_comment_above_it` is the test
+  that proves a hand-written comment survives a save - along with a
+  separate test that the saved number is `f32::to_string`'s own text
+  (`1.05`), never an `f32`-as-`f64` expansion (`1.0499999523162842`).
+- **First edit of an untouched built-in starts from `crate::pilots::template`
+  of its own resolved numbers**, not an empty document - writing only the
+  one edited axis would otherwise leave every other axis silently pulled
+  from `balanced` the moment the new file replaced the built-in.
+  `a_template_names_every_axis_explicitly` is the test.
+- Create-from-template (`NEW FROM PILOT`) copies whichever pilot is
+  currently selected, auto-named `pilot-1`, `pilot-2`, ... - no text entry
+  needed.
+- Session wiring lives in `crates/game/src/main/session/pilot_editor.rs`
+  (new file, kept out of `session/menus.rs` and `session/apply.rs`, both
+  close to the 1,000-line ceiling) plus one line in each of those two and
+  in `session.rs`/`app.rs` for the roster field. `PILOT`/`AXIS`/`LOW`/`HIGH`
+  are read live off the menu's own rows (`Entry::chosen`) at save time -
+  nothing is cached as "the pending edit".
+- Pilot spans still only reach a race through `race::start`'s own
+  `pilots::load()`, called fresh at race start and never cached on
+  `Session` - the editor's own `Session::pilot_roster` is a separate copy,
+  purely for the page to list and edit, so a save mid-race cannot change
+  the race in progress.
+
+
 **Requested by the maintainer 2026-09-06**: an in-game menu offering classic
 CRUD over the pilot `.toml` files, so a player can build and experiment with
 their own AI definitions without leaving the game or opening an editor.
@@ -62,21 +109,22 @@ Whichever is chosen, **the choice must be recorded in `pilots.rs`'s own module
 doc**, beside the sentence quoted above, because that sentence will otherwise
 read as still-true and it will not be.
 
-## Nothing in this project can accept typed text - which bounds the first cut rather than blocking it
+## The blocking gap: nothing in this project can accept typed text
 
 Checked 2026-09-06: there is **no text entry of any kind** - no text field, no
 on-screen keyboard, nothing in `crates/game/src/` or `crates/input/src/` that
 turns keystrokes into a string. The whole menu layer is rows and abstract
 buttons.
 
-Renaming a pilot needs a name, so **renaming waits for text entry** - and that
-is its own screen and its own thread: an on-screen keyboard driven by abstract
-buttons, since the input layer is built around a pad rather than a keyboard.
+Creating or renaming a pilot needs a name. So **text entry is a prerequisite,
+not a detail of this feature**, and it is the single largest piece of work here.
+It also has to work on a pad, not only a keyboard, since the input layer is
+built around abstract buttons - which usually means an on-screen keyboard, and
+that is its own screen with its own layout.
 
-**It does not block the first cut**, per the maintainer's decision below.
-Editing an existing pilot's axes and saving needs no keyboard, and
-create-from-template can auto-name (`pilot-1`, `pilot-2`). So the largest piece
-of work in this feature is deferred rather than done first.
+A create-only-from-template flow that auto-names (`pilot-1`, `pilot-2`) would
+dodge it for a first cut. Whether that is worth shipping without renaming is a
+maintainer call, not one to make here.
 
 ## Details that will each cost time if they are discovered late
 
@@ -105,11 +153,11 @@ of work in this feature is deferred rather than done first.
   progress; resolve pilots at race start and leave the running race alone, the
   way the control scheme already resolves once at startup
   ([sideshift-has-no-runtime-leg.md](sideshift-has-no-runtime-leg.md)).
-- **A new axis appends to the end of the draw order, for ever.** The AI
-  barrel-roll axes landed on 2026-09-06 and are draws 17-19
-  ([ai.md](../docs/gameplay/ai.md)); the ordering rule there binds an editor
-  too, and one that writes keys in its own order must not imply the *draw*
-  order changed.
+- **A new axis appends to the end of the draw order, for ever.** If the editor
+  ships alongside the AI barrel-roll axes
+  ([our-ai-barrel-rolls-and-the-original-never-did.md](our-ai-barrel-rolls-and-the-original-never-did.md)),
+  the ordering rule in `docs/gameplay/ai.md` binds both, and an editor that
+  writes keys in its own order must not imply the *draw* order changed.
 - **New menu actions are validated at startup.** `menu/definition.rs:415` parses
   every `action` against `Action::all()` and fails naming the unknown one, so the
   CRUD actions must be added there - a page referencing an action that does not
@@ -121,68 +169,27 @@ of work in this feature is deferred rather than done first.
   [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md);
   at minimum, do not make that thread's problem bigger without noting it.
 
-## Decided 2026-09-06 by the maintainer: the first cut saves
-
-Verbatim: *"First cut shall already save toml files."* So writing is in scope
-from the start, and the comment-preservation question above stops being a
-deferred choice - it is the first thing to settle.
-
-**Decided 2026-09-06: use `toml_edit`.** The maintainer approved it directly
-("Fair, use it"), so the comment-preservation question is closed and the two
-fallbacks below - editor-owned-files-only, and save-as - are recorded for
-context rather than as live options. `toml::to_string_pretty` remains out for
-pilot files whatever else changes.
-
-The dependency
-position, measured rather than assumed:
-
-- `toml_edit` **is already in `Cargo.lock`** (v0.25.13), so it is resolved and
-  vendored in this workspace already.
-- It is **not in the normal build graph**: `cargo tree -i toml_edit -e normal`
-  prints nothing. `crates/game/Cargo.toml:71` declares `toml = "1"`, which
-  reaches `toml_datetime`/`toml_parser`/`toml_writer` and not `toml_edit`.
-
-So adding it is a real addition to what compiles, not a free one - but it is a
-crate this workspace has already resolved, and it is the only option that
-honours `pilots.rs`'s own stated reason for never rewriting these files. If the
-maintainer would rather not carry it, **editor-owned-files-only** is the
-fallback and the feature ships smaller rather than hostile. Do not reach for
-`toml::to_string_pretty` in either case.
-
-**Text entry is still not required for this cut.** Saving does not imply naming:
-editing an existing pilot's axes and saving needs no keyboard, and
-create-from-template can auto-name (`pilot-1`, `pilot-2`). Renaming is what
-needs the on-screen keyboard, and it can wait. That keeps the prerequisite
-screen out of the first cut without cutting the maintainer's directive.
-
-Revised first cut, then: **list, edit axis ranges, save, create-from-template.**
-Delete and rename come after.
-
 ## Open
 
-- Which of the three comment-preservation strategies to take, and whether
-  `toml_edit` is an acceptable dependency.
-- Whether the editor should offer the four built-ins as **templates** to copy -
-  which is the natural "create" flow and needs no text entry to be useful.
+- **Delete and rename**, deliberately deferred - rename needs the on-screen
+  keyboard this project does not have yet, and deleting a built-in-named
+  file restores the built-in rather than removing a pilot, which needs its
+  own wording once it is in scope (the list already marks a built-in, so it
+  does not currently imply otherwise).
 - Whether a player can see what a pilot actually does without racing it. A
   preview - "this pilot brakes late and defends hard" derived from its axes -
   would make experimentation much cheaper, and is entirely invented UI.
+  Untouched by this cut.
+- Labels on the new AI PILOTS page do not use `string_id`, the same gap
+  every other row in `assets/ui/menu.toml` has - see
+  [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md).
 
 ## Next Steps
 
-1. ~~Confirm `toml_edit` is acceptable.~~ **Approved 2026-09-06.** Add it to
-   `crates/game/Cargo.toml`; it is already resolved in `Cargo.lock` at 0.25.13
-   but is not yet in the build graph. Record the choice in `pilots.rs`'s module
-   doc beside the "nothing is rewritten on load" sentence, which will otherwise
-   read as still-true once the editor can write.
-2. ~~Settle whether text entry is in scope for the first cut.~~ **Not needed** -
-   editing and template-creation need no keyboard; renaming does, and waits.
-3. Build **read** first: a page listing pilots from `pilots::directory()`, with
-   the four built-ins marked as such. It needs no writing, no text entry, and it
-   proves the menu wiring end to end.
-4. Then **create-from-template** and **update**, behind whichever strategy step 1
-   picked, with clamping at the point of edit.
-5. **Delete** last, with the built-in-restoration wording resolved.
-6. Record the strategy in `pilots.rs`'s module doc, and update
-   `assets/ai/example-pilot.toml`'s header if hand-editing and in-game editing
-   can now disagree about a file.
+1. Decide whether delete is worth shipping given the built-in-restoration
+   wording it needs, or waits until rename (and therefore text entry) makes
+   the CRUD set feel worth completing together.
+2. Build the on-screen keyboard, if and when it is picked up as its own
+   thread, and revisit rename here once it exists.
+3. Consider the axis preview above - it needs no new mechanism, only reading
+   `Pilot`'s own numbers into a sentence.

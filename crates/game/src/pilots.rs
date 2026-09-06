@@ -31,6 +31,25 @@
 //! - **Nothing is rewritten on load.** `settings.rs` rewrites its file every run
 //!   so every key is discoverable; these are hand-authored files with the
 //!   author's own comments in them, and clobbering those would be hostile.
+//!
+//! # Nothing is rewritten on *save*, either - the in-game editor included
+//!
+//! `settings.rs` saves with `toml::to_string_pretty`
+//! ([`crate::settings::save`]), which serialises a struct and emits canonical
+//! TOML: every comment, every blank line, every hand-chosen key order, gone.
+//! That is fine for a settings file this build owns end to end and rewrites on
+//! every launch anyway - it is not fine for a pilot file, which is meant to be
+//! read and edited by a person, and which the in-game editor
+//! ([`set_axis`]) now also writes to.
+//!
+//! **`set_axis` goes through `toml_edit`, never `toml::to_string_pretty`, and
+//! must not start doing the latter.** It reads the document, mutates only the
+//! array the edited axis names, and writes the rest of the file back byte for
+//! byte - a hand-authored comment above `commitment` survives a player nudging
+//! that same row in the menu. This is the maintainer's pick of the three ways
+//! out that were on the table - the other two were an editor confined to
+//! files it created itself, and a save-as that kept the original untouched
+//! and multiplied files; neither was taken.
 
 use std::path::{Path, PathBuf};
 
@@ -79,7 +98,7 @@ struct PilotFile {
 /// that corners faster than the physics allows, which is not a faster driver -
 /// it is a driver in the wall, on someone else's machine, in a race they did
 /// not author. See [`Pilot::MAX_COMMITMENT`].
-fn limit(axis: &str) -> (f32, f32) {
+pub fn limit(axis: &str) -> (f32, f32) {
     match axis {
         "commitment" => (0.5, Pilot::MAX_COMMITMENT),
         // A bias is a fraction of the corridor, and the corridor's own edge is
@@ -134,6 +153,190 @@ fn span(axis: &str, given: Option<[f32; 2]>, fallback: Span) -> Result<Span> {
         bail!("`{axis}` is [{low}, {high}], outside the allowed [{min}, {max}]");
     }
     Ok(Span::new(low, high))
+}
+
+/// Every axis this format understands, in the frozen draw order
+/// [`Pilot::spans`] uses, paired with the accessor that reads it off a
+/// resolved [`Pilot`].
+///
+/// **The one list an axis is added to.** The in-game editor's `AXIS` row and
+/// [`template`] both walk this rather than repeating the names by hand, so
+/// there is one place - not three - that falls out of step with
+/// [`Pilot::spans`] when a new axis lands. `axis_names_cover_every_draw`
+/// checks the count against it directly, which is what turns a landed axis
+/// nobody wired here into a failing test instead of a silent gap.
+pub type Axis = (&'static str, fn(&Pilot) -> Span);
+
+/// See [`Axis`].
+pub const AXES: &[Axis] = &[
+    ("line_bias", |p| p.line_bias),
+    ("wander", |p| p.wander),
+    ("wander_period", |p| p.wander_period),
+    ("look", |p| p.look),
+    ("commitment", |p| p.commitment),
+    ("patience", |p| p.patience),
+    ("trail", |p| p.trail),
+    ("width", |p| p.width),
+    ("inside", |p| p.inside),
+    ("courtesy", |p| p.courtesy),
+    ("defence", |p| p.defence),
+    ("caution", |p| p.caution),
+    ("ram", |p| p.ram),
+    ("provocation_ticks", |p| p.provocation_ticks),
+    ("trigger", |p| p.trigger),
+    // Draws 17, 18 and 19, appended after `trigger` in that order when the
+    // AI barrel roll landed. This list is display order, not draw order -
+    // but keeping the two agreeing costs nothing and makes a future
+    // append obviously correct. See `crates/ai/src/pilot.rs`.
+    ("roll_chance", |p| p.roll_chance),
+    ("roll_floor", |p| p.roll_floor),
+    ("roll_airtime", |p| p.roll_airtime),
+];
+
+/// The accessor for one axis, or `None` if `axis` is not one [`AXES`] names.
+///
+/// Distinct from calling [`limit`] directly: `limit` has a catch-all fallback
+/// range for the multiplier axes, so it cannot by itself tell a real axis from
+/// a typo - this can, and every write path below checks it first.
+#[must_use]
+pub fn axis_accessor(axis: &str) -> Option<fn(&Pilot) -> Span> {
+    AXES.iter()
+        .find(|(name, _)| *name == axis)
+        .map(|(_, accessor)| *accessor)
+}
+
+/// Edits one axis of a pilot file **without disturbing anything else in it**.
+///
+/// Reads `text` as a document rather than through [`parse`], mutates only the
+/// array `axis` names, and writes the rest back byte for byte through
+/// `toml_edit` - see this module's own doc for why that is not negotiable.
+/// A `low`/`high` given backwards is reordered and both ends are clamped into
+/// [`limit`]'s range for `axis` **here**, at the point of editing, rather than
+/// by writing a file [`parse`] would reject on the next launch.
+///
+/// The written number is `low`/`high`'s own `f32::to_string` - the shortest
+/// text that reads back to the same bits - never a `f32`-to-`f64` conversion:
+/// `1.05_f32 as f64` is `1.0499999523162842`, and writing that would vandalise
+/// a hand-authored `1.05` one axis over from the comment this function exists
+/// to keep.
+///
+/// # Errors
+///
+/// If `axis` is not one of [`AXES`] - a typo would otherwise silently clamp
+/// against [`limit`]'s fallback range rather than failing - or if `text` does
+/// not parse as TOML.
+pub fn set_axis(text: &str, axis: &str, low: f32, high: f32) -> Result<String> {
+    if axis_accessor(axis).is_none() {
+        bail!("{axis:?} is not a pilot axis");
+    }
+    let (min, max) = limit(axis);
+    let mut low = low.clamp(min, max);
+    let mut high = high.clamp(min, max);
+    if low > high {
+        std::mem::swap(&mut low, &mut high);
+    }
+
+    let mut doc: toml_edit::DocumentMut = text.parse().context("parsing pilot file")?;
+    let low_value: toml_edit::Value = format!("{low}")
+        .parse()
+        .expect("a formatted f32 is a valid TOML float");
+    let high_value: toml_edit::Value = format!("{high}")
+        .parse()
+        .expect("a formatted f32 is a valid TOML float");
+
+    let existing = doc
+        .get_mut(axis)
+        .and_then(toml_edit::Item::as_array_mut)
+        .filter(|array| array.len() == 2);
+    match existing {
+        // Replaced in place, which keeps the array's own decor - the comma
+        // and space between the two numbers, and any comment sharing the
+        // line - and touches only the two numbers themselves.
+        Some(array) => {
+            array.replace(0, low_value);
+            array.replace(1, high_value);
+        }
+        // No existing array to preserve the shape of: this axis was not in
+        // the file at all, or was malformed enough not to look like one.
+        // Either way a fresh two-element array, in this format's own default
+        // style, is the honest thing to write.
+        None => {
+            let mut array = toml_edit::Array::new();
+            array.push_formatted(low_value);
+            array.push_formatted(high_value);
+            array.fmt();
+            doc[axis] = toml_edit::Item::Value(toml_edit::Value::Array(array));
+        }
+    }
+
+    Ok(doc.to_string())
+}
+
+/// A brand-new pilot file, spelling out every axis [`AXES`] names off `pilot`
+/// explicitly.
+///
+/// **Every axis, not just the ones that differ from `balanced`.** A file that
+/// left the rest out would parse fine on its own - [`parse`]'s whole point is
+/// that an absent axis falls back to `balanced` - but that is exactly wrong
+/// for a file created from an existing pilot: writing only the one axis a
+/// player just edited on, say, `aggressive` would leave every *other* axis
+/// silently pulled from `balanced` instead of kept at what `aggressive` itself
+/// flies. So this is what [`set_axis`] starts from the first time a pilot with
+/// no file yet is saved, not an empty document.
+///
+/// Used for both halves of the editor: retuning a built-in for the first time,
+/// and create-from-template.
+#[must_use]
+pub fn template(pilot: &Pilot) -> String {
+    let mut out = String::from(
+        "# Written by the in-game pilot editor. Every axis is a range, [low, high];\n\
+         # each craft flying this pilot draws its own value inside it.\n\n",
+    );
+    let lean = match pilot.lean {
+        Lean::Either => "either",
+        Lean::Left => "left",
+        Lean::Right => "right",
+    };
+    out.push_str(&format!("lean = {lean:?}\n"));
+    for (name, accessor) in AXES {
+        let span = accessor(pilot);
+        out.push_str(&format!("{name} = [{}, {}]\n", span.low, span.high));
+    }
+    out
+}
+
+/// Reads one pilot's raw text, for the editor to hand to [`set_axis`].
+///
+/// **No filesystem beyond the one read.** Distinct from [`load_from`], which
+/// parses every file in a directory into a checked [`Entry`]: the editor wants
+/// the bytes as written, comments included, not what they resolve to.
+///
+/// # Errors
+///
+/// If the file cannot be read - including "does not exist yet", which is the
+/// ordinary case for a built-in with no file: the caller falls back to
+/// [`template`] rather than treating this as fatal.
+pub fn read_pilot_text(dir: &Path, name: &str) -> Result<String> {
+    let path = dir.join(format!("{name}.toml"));
+    std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
+}
+
+/// Writes one pilot's text to disk, creating `dir` if this is the first pilot
+/// saved on this machine.
+///
+/// **Never panics on a write failure.** A missing config directory is not the
+/// only way this can fail - the directory can exist and not be writable,
+/// which [`directory`] cannot see coming - so both are an [`Err`] the caller
+/// must show the player, the same way a race that fails to load is reported
+/// rather than unwound.
+///
+/// # Errors
+///
+/// If `dir` cannot be created, or the file cannot be written.
+pub fn write_pilot(dir: &Path, name: &str, text: &str) -> Result<()> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = dir.join(format!("{name}.toml"));
+    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 /// One entry the grid may draw from.
@@ -359,181 +562,8 @@ pub fn load() -> Result<Roster> {
     }
 }
 
+// Moved to its own file under the 200-line cap on an inline `#[cfg(test)]`
+// module (`scripts/check-file-size.py`) once the editor's own tests joined
+// these - `use super::*;` still reaches every private item.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_pilot_file_round_trips_into_the_ranges_it_declares() {
-        let entry = parse("winston", "commitment = [0.95, 1.02]\nram = [0.1, 0.4]\n")
-            .expect("a well-formed pilot");
-        assert_eq!(entry.name, "winston");
-        assert_eq!(entry.pilot.commitment, Span::new(0.95, 1.02));
-        assert_eq!(entry.pilot.ram, Span::new(0.1, 0.4));
-        // Everything unstated comes from balanced.
-        assert_eq!(entry.pilot.look, Pilot::BALANCED.look);
-    }
-
-    #[test]
-    fn an_empty_pilot_file_is_the_balanced_pilot() {
-        let entry = parse("plain", "").expect("an empty pilot");
-        assert_eq!(entry.pilot, Pilot::BALANCED);
-    }
-
-    /// The number that stops a file making an opponent faster than the physics.
-    #[test]
-    fn a_pilot_with_a_commitment_no_hull_can_hold_is_rejected_by_name() {
-        let error = parse("cheat", "commitment = [1.0, 5.0]\n").expect_err("must be rejected");
-        let message = format!("{error:#}");
-        assert!(message.contains("commitment"), "{message}");
-        assert!(message.contains("cheat"), "{message}");
-    }
-
-    #[test]
-    fn a_pilot_whose_range_runs_backwards_is_rejected() {
-        let error = parse("backwards", "look = [1.2, 0.8]\n").expect_err("must be rejected");
-        assert!(format!("{error:#}").contains("backwards"), "{error:#}");
-    }
-
-    /// A typo'd axis that silently did nothing is the frustration this feature
-    /// exists to remove.
-    #[test]
-    fn an_unknown_key_in_a_pilot_file_is_an_error_and_names_itself() {
-        let error = parse("typo", "comittment = [1.0, 1.0]\n").expect_err("must be rejected");
-        assert!(format!("{error:#}").contains("comittment"), "{error:#}");
-    }
-
-    #[test]
-    fn a_malformed_pilot_file_names_the_pilot_it_came_from() {
-        let error = parse("broken", "look = [").expect_err("must be rejected");
-        assert!(format!("{error:#}").contains("broken"), "{error:#}");
-    }
-
-    #[test]
-    fn a_lean_that_is_not_a_side_is_rejected() {
-        let error = parse("sideways", r#"lean = "sideways""#).expect_err("must be rejected");
-        assert!(format!("{error:#}").contains("lean"), "{error:#}");
-        assert_eq!(
-            parse("port", "lean = \"left\"")
-                .expect("left is a side")
-                .pilot
-                .lean,
-            Lean::Left
-        );
-    }
-
-    #[test]
-    fn two_pilots_that_differ_in_one_number_digest_differently() {
-        let a = parse("a", "look = [0.9, 1.1]\n").expect("valid");
-        let b = parse("b", "look = [0.9, 1.2]\n").expect("valid");
-        assert_ne!(a.digest, b.digest);
-        // And the name is not part of it: two files saying the same thing agree.
-        let c = parse("c", "look = [0.9, 1.1]\n").expect("valid");
-        assert_eq!(a.digest, c.digest);
-    }
-
-    /// `Driver::default` carries `0`, and a plain line-follower has to stay
-    /// distinguishable from a craft flying a real pilot.
-    #[test]
-    fn no_built_in_pilot_digests_to_zero() {
-        for entry in Roster::built_in().entries() {
-            assert_ne!(entry.digest, 0, "{} digests to zero", entry.name);
-        }
-    }
-
-    /// A directory of pilots, cleaned up afterwards.
-    ///
-    /// **Never [`directory`].** Every test in this module goes through
-    /// [`parse`] or [`load_from`] with a path it made itself, so the suite
-    /// cannot read the developer's own pilots and pass on one machine only.
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn with(files: &[(&str, &str)]) -> Self {
-            let dir = std::env::temp_dir().join(format!(
-                "oag-pilots-{}-{:p}",
-                std::process::id(),
-                files as *const _
-            ));
-            std::fs::create_dir_all(&dir).expect("a scratch directory");
-            for (name, body) in files {
-                std::fs::write(dir.join(name), body).expect("a scratch pilot");
-            }
-            Self(dir)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    /// `read_dir` yields in the filesystem's own order, which differs between
-    /// machines - and that order would reach simulation state through
-    /// `oag_ai::pilot_for_slot`.
-    #[test]
-    fn the_roster_is_sorted_by_name_and_not_by_the_filesystem() {
-        let scratch = Scratch::with(&[
-            ("zara.toml", "look = [0.9, 1.0]\n"),
-            ("adrian.toml", "look = [0.9, 1.0]\n"),
-            ("winston.toml", "look = [0.9, 1.0]\n"),
-        ]);
-        let roster = load_from(&scratch.0).expect("a readable directory");
-        let names: Vec<&str> = roster
-            .entries()
-            .iter()
-            .map(|entry| entry.name.as_str())
-            .collect();
-        // Built-ins first, in their own declared order, then the files sorted.
-        assert_eq!(
-            names,
-            [
-                "balanced",
-                "aggressive",
-                "passive",
-                "shy",
-                "adrian",
-                "winston",
-                "zara"
-            ]
-        );
-    }
-
-    /// How a player retunes `aggressive` without editing the tree.
-    #[test]
-    fn a_file_may_replace_a_built_in_by_taking_its_name() {
-        let scratch = Scratch::with(&[("aggressive.toml", "commitment = [0.9, 0.91]\n")]);
-        let roster = load_from(&scratch.0).expect("a readable directory");
-        assert_eq!(roster.len(), 4, "a replacement must not also be appended");
-        let replaced = roster
-            .entries()
-            .iter()
-            .find(|entry| entry.name == "aggressive")
-            .expect("still there");
-        assert_eq!(replaced.pilot.commitment, Span::new(0.9, 0.91));
-        assert_ne!(replaced.digest, digest(&Pilot::AGGRESSIVE));
-    }
-
-    #[test]
-    fn a_file_that_is_not_toml_is_ignored_rather_than_parsed() {
-        let scratch = Scratch::with(&[("notes.txt", "this is not a pilot")]);
-        assert_eq!(load_from(&scratch.0).expect("readable").len(), 4);
-    }
-
-    #[test]
-    fn a_broken_pilot_file_names_the_path_it_came_from() {
-        let scratch = Scratch::with(&[("bent.toml", "look = [1.5, 0.5]\n")]);
-        let error = load_from(&scratch.0).expect_err("must be rejected");
-        let message = format!("{error:#}");
-        assert!(message.contains("bent.toml"), "{message}");
-    }
-
-    #[test]
-    fn an_absent_pilot_directory_yields_exactly_the_four_built_ins() {
-        let roster =
-            load_from(Path::new("/nonexistent/oag/pilots")).expect("absent is not an error");
-        assert_eq!(roster.len(), 4);
-        assert_eq!(roster.entries()[0].name, "balanced");
-    }
-}
+mod tests;
