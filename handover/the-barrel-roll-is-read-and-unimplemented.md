@@ -1,4 +1,4 @@
-# The barrel roll's mechanics are implemented; nothing feeds it a tap yet
+# The barrel roll is playable; nothing draws it
 
 A headline Pulse mechanic this project did not have. Every number it needs is
 **authored data on the disc**, so nothing here required inventing a constant.
@@ -8,12 +8,16 @@ and the subsection immediately after it, which supersedes that section's three
 open questions. This thread is the implementation half, deliberately split off
 because the RE half was its own session.
 
-**As of 2026-09-05, the state machine, the shield-gated arm, the phase ramp
-and all three landing-payout consumers are implemented and unit-tested in
-`oag-physics`** - see "Implemented" below. **What is not done is wiring a
-real tap into it**: `ShipControls` has no `LEFT`/`RIGHT` event, so nothing in
-a live race can reach `barrel_roll::record_tap` or `arm` yet. That is the
-thread's remaining next step.
+**As of 2026-09-06 the mechanic is reachable end to end.** The state
+machine, the shield-gated arm, the phase ramp and all three landing-payout
+consumers landed on 2026-09-05; the gesture that reaches them landed the day
+after - see "Implemented" below. A real `InputSnapshot` now arms a roll,
+from the d-pad or from the stick alone, and
+`crates/gameplay/tests/barrel_roll.rs` proves it through
+`oag_gameplay::controls::ship_controls` and `oag_physics::step`, the two
+calls the race loop itself makes. **What is left is the visual**: nothing
+draws the roll, and no render-side consumer of `entity+0x87c` has been
+searched for.
 
 ## What the original does
 
@@ -63,9 +67,10 @@ sideshift's own port found. `oag-physics` is determinism-bound (`f32`, no
 `mul_add`, no reassociating, `TickClock` only).
 
 The four tunables come through `oag_formats::handling::global::Special`, which
-today parses **only** `speedpad_jump` and says so in its own doc comment. Adding
-`roll_cost`, `roll_speed` and `roll_turbotime` there is the first step, and its
-ground-truth test asserts against the disc rather than a literal.
+parsed **only** `speedpad_jump` when this thread opened. Adding `roll_cost`,
+`roll_speed` and `roll_turbotime` there was the first step, and its
+ground-truth test asserts against the disc rather than a literal - done, see
+"Implemented" below.
 
 ## Implemented, as of 2026-09-05
 
@@ -81,13 +86,47 @@ Both crates' committed determinism hashes moved twice, isolated and
 recorded in each file's own History note per the reasoning
 `crates/physics/tests/determinism.rs` asks for.
 
-**Not reachable in a live race.** Nothing produces a tap event yet:
-`ShipControls` carries no `LEFT`/`RIGHT` d-pad press or steering-axis-crossing
-field, so `crate::forces::evaluate` never calls `barrel_roll::record_tap` or
-`arm`. Every unit test drives `ShipState` directly; the one integration test
-(`a_completed_roll_arms_the_payout_and_the_payout_drives_both_consumers`)
-still starts from `arm` rather than from an input snapshot. Wiring the real
-gesture is what remains - see Next Steps below.
+## The gesture, as of 2026-09-06
+
+Both of the original's tap sources are wired, and the mapping decision the
+previous session left open was resolved by following the sideshift's own
+split rather than inventing a second shape:
+
+- **The d-pad leg is two edge fields on `ShipControls`** -
+  `roll_tap_left`/`roll_tap_right` - filled in
+  `oag_gameplay::controls::ship_controls` off the *pressed* mask, the same
+  way the veteran airbrake taps are, so a held direction is one tap and not
+  one a tick. Filled for **both** control schemes: the roll is not a
+  scheme-dependent gesture, and neither scheme spends the d-pad on anything
+  else.
+- **The axis leg stays in `oag-physics`.** `barrel_roll::advance_gesture`
+  reads `ShipControls::steer_x` against `AXIS_TAP_THRESHOLD` (`0.9`, the
+  original's `+-90` on the `0..=100` internal scale), and the previous
+  tick's side of that threshold is latched in the new
+  `ShipState::roll_axis_zone`. A crossing is an edge and needs last tick's
+  axis, which is per-craft state - the same division `shift_armed` already
+  makes for the novice flick. It is the **raw** axis, not the ramped
+  `ShipState::steer`, because the original reads it out of the same input
+  block it reads the d-pad bits from.
+
+**The two legs are ORed into one tap and never recorded twice.** That `or`
+is the original's own and it is load-bearing here rather than incidental:
+this project's input layer drives the analog axis from the d-pad as well
+(`oag_input::pad::larger`), so a real d-pad press arrives as a button edge
+*and* an axis crossing on the same tick. Recording both would shift the
+history twice and leave a doubled direction in it that can never match an
+alternation - which would have made the d-pad leg silently unreachable while
+every test still passed.
+
+`advance_gesture` advances the inter-tap timer itself and **replaced**
+`forces::evaluate`'s bare `advance_tap_timer` call rather than joining it;
+calling both would halve the 0.6 s timeout with nothing to catch it.
+
+Both crates' determinism hashes moved a third time, isolated the same way
+and recorded in each file's History note: the movement is entirely the one
+`u8` per craft per tick that `roll_axis_zone` adds to the stream. Neither
+gate's scenario arms a roll - `probe::controls` holds `steer_x` at `+-0.8`,
+inside the threshold, and the race-level scenario flies no craft at all.
 
 **This crate's own resolution, not a traced fact**: `barrel_roll::release`
 is called on the airborne-to-grounded transition because that is the only
@@ -97,13 +136,21 @@ See the module's own doc comment if a future trace contradicts it.
 
 ## Open
 
-- **The input mapping is the next real gap.** `ShipControls` needs a way to
-  carry the `LEFT`/`RIGHT` tap event - the d-pad bit or the steering axis
-  crossing `+/-90` - so `crate::forces::evaluate` (or `oag_gameplay::
-  controls`) can call `barrel_roll::record_tap` and `arm`. The thread's own
-  RE names both sources but not how `oag_gameplay`'s existing button/axis
-  layer should expose them; that mapping decision is left to whoever takes
-  this, rather than guessed here.
+- **Nothing gates the arm on being airborne, because nothing in the
+  recovered chain does.** The gesture arms wherever it completes and it is
+  the *payout* that requires the airborne-to-grounded transition, so a roll
+  tapped out on the ground costs shield and ramps the phase like any other,
+  and pays out on the next landing. Whether the original refuses to arm on
+  the ground was never traced - `advance_gesture` is where that gate goes if
+  a trace ever shows one. Untested against the original either way.
+- **AI craft can now arm rolls off their own cornering**, which is new as of
+  2026-09-06 and was not designed for: `oag_ai::Driver` emits
+  `ShipControls::steer_x` at full deflection and the axis leg has no
+  human-only gate, unlike the novice flick's `shift_modifier`. Three
+  alternating full-lock corrections inside 0.6 s arm a roll and charge the
+  opponent 8% of its shield. The original's AI does barrel roll, so this may
+  well be right; it is recorded because it was not the point of the change
+  and nothing measures it.
 - Nothing draws the roll. **No render-side consumer of `entity+0x87c` has been
   searched for**, so whether the visual is an angle derived from the phase or a
   canned animation is unknown. The `0x400` flag is *not* how it gets there -
@@ -122,18 +169,17 @@ See the module's own doc comment if a future trace contradicts it.
 
 ## Next Steps
 
-1. Give `ShipControls` a `LEFT`/`RIGHT` tap event (or expose the steering-axis
-   crossing another way) and wire it through `crate::forces::evaluate` into
-   `barrel_roll::advance_tap_timer`/`record_tap`/`arm`, so a real input
-   snapshot can actually arm a roll - closing the reachability gap this
-   thread's implementation half left open.
-2. Once reachable, search for a render-side consumer of `entity+0x87c` (or
-   decide there is none and the roll is handling-only) before drawing
-   anything - per this project's "parse it and play it, or draw nothing"
-   rule.
+1. Search for a render-side consumer of `entity+0x87c` (or establish there is
+   none and the roll is handling-only) before drawing anything - per this
+   project's "parse it and play it, or draw nothing" rule. This is now the
+   only thing between the mechanic and being visible: the phase is live on
+   `ShipState::roll_phase`, ramping every tick a pilot rolls, and nothing
+   reads it outside `oag-physics`.
+2. Confirm the gesture off the original with a capture, the way the
+   sideshift's veteran double-tap was confirmed in
+   `docs/reverse-engineering/ppsspp-debugger.md` - the whole chain here is
+   still a static read. A capture would settle the two Open bullets above at
+   once: whether the original arms on the ground, and what its own AI craft
+   do. `scripts/psp-drive.py` can already script a d-pad alternation.
 3. Read `<Special turbo_jump>`'s consumer, if one exists, and `settings+0x238`'s
    reader, and check the gesture on PS2.
-4. Expect the committed state hash in `crates/physics/tests/determinism.rs`
-   and `crates/gameplay/tests/determinism.rs` to move again once a race can
-   actually reach `barrel_roll::arm`. **Explain the movement; never edit the
-   constants to make the test pass.**
