@@ -658,6 +658,21 @@ this function, confidence **85**:
    of `+/-90` was I on last tick" for eight craft at once, so at most one craft
    ever runs this leg.
 
+**A complete scan for arm sites finds no third one.** Every `sw rX, 0x860(rY)`
+in `.text` whose stored register is written by an `ori rX, ?, 0x80` or
+`ori rX, ?, 0x100` within the preceding eight instructions, over the relocated
+image:
+
+| Site | What it is |
+| --- | --- |
+| `0x08846d94` (`ori 0x100` at `0x08846d8c`) | the `2,1,2` arm, in the tap block above |
+| `0x08846eb8` (`ori 0x80` at `0x08846eb0`) | the `1,2,1` arm, in the tap block above |
+| `0x0883d580` / `0x0883d59c` | a **remote** applier: `lbu a3, 0x4(a2)` picks the direction out of an 8-byte packet and `table[id]` picks the craft - the same 8-byte packet `Ship_UpdateSideshiftInput_q` *sends* at `0x08846ddc`/`0x08846f04` when the local craft arms, gated on `DAT_088357f8+0xb8 > 0xd` |
+| `0x088442bc` / `0x088442e0` | **dead**, and they look live: each is `li a0, 0` then `beql a0, zero`, always taken, so the `ori 0x80`/`ori 0x100` sitting in the fall-through is never reached and what actually runs is the `andi ~0x80`/`~0x100` clear these two pages already record at `0x088442e8` |
+
+So the only thing that arms a barrel roll on this disc is a human tapping it
+out, or a network peer reporting that one did.
+
 Neither leg is a live read of `ship+0x78` on an opponent, which is what would
 take this past 90; both were produced with `scripts/psp-relocate.py`
 (`callers`, `resolve`, `xrefs`, `field`) and `search`-style operand scans, never
