@@ -119,7 +119,7 @@ what it can be given next, so it is simulation state.
 **Three things about the port are ours, and each is labelled where it lives.**
 The *sequence* still cannot match the original, for the reason the next paragraph
 gives. The retry behind the no-repeat rule is **bounded** where the original's
-loop is not: `IMPLEMENTED` holds seven weapons, so a table weighting only one of
+loop is not: `IMPLEMENTED` holds nine weapons, so a table weighting only one of
 them would spin for ever, and after `pickup::REDRAW_ATTEMPTS` a repeat is
 accepted - about one grant in twenty thousand on the shipped odds. And an
 *unplaced* craft spends the `human` column alone, because the original always has
@@ -383,7 +383,9 @@ the first time this build has drawn any part of Pure's pickup on screen.
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
 **Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma and Shuriken**
-(2026-09-02).
+(2026-09-02). **Being on this list is necessary but not sufficient** - see
+"Shuriken and Repulser are gated by mode, not by the pool" below for the two
+weapons the *pool* would hand out and the authored *odds* never do.
 
 - ~~**Missile** needs the lock distances its own `<Stats>` authors, and a target
   worth locking - which needs the AI.~~ **Built 2026-08-17**, and what unblocked
@@ -427,10 +429,66 @@ the first time this build has drawn any part of Pure's pickup on screen.
   work.
 
 **This is a departure and a deliberate one.** The authored table weights
-thirteen weapons and the draw sees seven of them, so what a player gets is the
+thirteen weapons and the draw sees nine of them, so what a player gets is the
 authored distribution *conditioned on* the implemented set. It narrows to
 nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
 - and it beats handing out a mine that cannot be dropped.
+
+### Shuriken and Repulser are gated by mode, not by the pool
+
+**Recovered, confidence 84.** `Data\XML\WeaponStats_Race.xml`'s four
+`<Pickupodds class="...">` blocks - `Venom`, `Flash`, `Rapier` and `Phantom`,
+checked all four - author `ai="0" back="0" front="0" human="0"` for both
+`Shuriken` and `Repulser`. `Data\XML\WeaponStats_Elimination.xml` authors the
+same two weapons nonzero instead - `Shuriken` at `ai="10" human="10"`,
+`Repulser` at `ai="4" human="8"` - and it is a mode split rather than a
+per-class one for a stronger reason than "checked all four and they match":
+**diffing the four `<Pickupodds>` blocks against each other, block by block,
+inside either file, shows the *entire* block is byte-identical across
+`Venom`/`Flash`/`Rapier`/`Phantom` bar the `class` attribute itself** - not
+only these two weapons, all thirteen. Neither shipped PSP table varies its
+pickup odds by speed class at all today; the `ai`/`human`/`front`/`back` split
+is the only one doing any work, and it does the same work under every class
+name. (The Shuriken/Repulser gate also runs in reverse, which is worth having
+in one place: `Autopilot`, `Shield` and `Turbo` are the ones zeroed in
+`WeaponStats_Elimination.xml` instead, so the split is not one-directional
+toward Eliminator.)
+
+Measured directly off both files on `pulse-psp-usa.chd`; `pulse-psp-eu.chd`
+carries byte-identical copies of both files end to end, which is this
+reading's corroboration - not yet checked against the PS2 disc or Wipeout
+HD's own copy. Held at the rubric's data-read ceiling rather than the
+schema's own 92 (`<Pickupodds>` in [weapon-stats.md](../formats/weapon-stats.md)):
+two regions agreeing is one title's authoring pass confirmed twice, not an
+arithmetic invariant across many independent files, and this is a values
+read rather than a traced call site.
+
+**The code does not need a fix for this - it already reads correctly.**
+`pickup::draw_once` skips any weapon whose weight is `<= 0.0`, and
+`oag_formats::weapons::{RACE_ENTRY, ELIMINATION_ENTRY}` already name both
+files. What needs saying is that `IMPLEMENTED`'s list is misleading read
+alone: `Shuriken` is on it, and `SingleRace` - the only mode with weapon pads
+armed at all, per the table above - loads `RACE_ENTRY`, where `Shuriken`'s
+weight is zero in every class. So a `SingleRace` inventory slot can hold a
+Shuriken (it can be thrown once granted by a test or a script setting it
+directly - see `crates/game/tests/shuriken_ground_truth.rs`) but a weapon pad
+in this build can never *hand out* one: not because the pool excludes it, but
+because the odds do. **`Shuriken`'s presence in `IMPLEMENTED` is
+correct-but-unreachable rather than wrong** - it is built and ready for a mode
+that does not exist in this engine yet. `Repulser` is unreachable twice over:
+it is also absent from `IMPLEMENTED` itself (see the list above), for its own,
+independent reason - no craft-state field a weapon can attach to yet.
+
+**Eliminator is not a mode this engine drives, which is why nothing dispatches
+on it.** `oag_race::Mode::ALL` holds exactly four variants - `TimeTrial`,
+`SpeedLap`, `Zone`, `SingleRace` - and no fifth. `oag_title::weapons::Weapons`
+does carry the axis (`race` and an optional `elimination` entry, Pulse's and
+HD's both `Some`, Pure's `None`), but `oag_game::race::load_weapons` opens only
+`title.weapons.race`, unconditionally, by its own doc comment. That is a
+correct absence of dispatch rather than a bug: there is no second mode to
+dispatch by yet. It becomes a real gap in the read - one this project should
+close - only on the day a `Mode::Eliminator` lands and still reaches for
+`race` regardless of mode.
 
 ## What a fired Turbo does
 

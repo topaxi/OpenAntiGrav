@@ -24,8 +24,17 @@ records **attribute names and structure only**. The values are the game's tuning
 data; read them off your own disc with:
 
 ```sh
-just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Race.xml'
+cargo run -q -p oag-tools --bin oag-wad -- cat --expand \
+  <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Race.xml'
 ```
+
+**Call the binary directly, not through `just wad`.** `just`'s recipe body
+passes `{{ARGS}}` through the shell unquoted, which swallows the backslashes
+in the entry name before `oag-wad` ever sees them - `just wad cat --expand
+<image>:...Data.wad 'Data\XML\WeaponStats_Race.xml'` fails with `no entry
+named DataXMLWeaponStats_Race.xml`, not a missing-file error, which reads like
+the wrong path rather than a quoting trap. Confirmed directly: `cargo run`
+against the same string finds the entry every time.
 
 ## Two files, one schema
 
@@ -36,6 +45,15 @@ just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Rac
 
 Both are read by the same parser - `WeaponStats_Parse` (`0x0880db7c`) - so a mode
 swaps the whole weapon table rather than patching it. The two path strings sit at `0x08a78cf8` and `0x08a78d18`.
+
+**The swap is not only in the numbers - it zeroes some weapons out of one table
+entirely.** Two weapons author `<Pickupodds>` of nothing but zero in every
+speed class of `WeaponStats_Race.xml`, and three others author nothing but
+zero in `WeaponStats_Elimination.xml` instead - so a race mode and Eliminator
+each have weapons the other's pad can never hand out at all, per-mode gating
+rather than a per-mode reweighting. See
+[pickups.md](../gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)
+for which weapons and the measured odds.
 
 ## Structure
 
