@@ -611,6 +611,10 @@ pub struct Race {
     /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
     /// device - the mixer and the held voices are [`crate::audio::Audio`]'s.
     sounds: crate::audio::sfx::Banks,
+    /// The circuit's own authored emitters, straight out of
+    /// [`Setup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
+    /// the held voices they open live in [`crate::audio::Audio`].
+    track_emitters: crate::audio::sfx::TrackEmitters,
     /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
     announcer: crate::audio::sfx::Announcer,
     /// Zone mode's speed-class announcer, straight out of

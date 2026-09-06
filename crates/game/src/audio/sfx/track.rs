@@ -315,5 +315,118 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     Some(format!("{directory}{separator}{file}"))
 }
 
+/// The held voices a circuit's ambience owns, one slot per authored emitter.
+///
+/// Held rather than fired, because these cues loop and the original opens each
+/// of them once, at load. See this module's own header.
+#[derive(Debug, Default)]
+pub struct Ambience {
+    /// Index-parallel to [`TrackEmitters::omni`]; [`None`] where the emitter is
+    /// out of range and so has no voice at all.
+    voices: Vec<Option<oag_audio::VoiceId>>,
+}
+
+impl Ambience {
+    /// How many of the circuit's emitters are sounding right now.
+    #[must_use]
+    pub fn playing(&self) -> usize {
+        self.voices.iter().flatten().count()
+    }
+
+    /// Opens, moves and closes each emitter's voice for this tick.
+    ///
+    /// # The one place this knowingly differs from the original
+    ///
+    /// `SoundEmitter_ServiceRequests` (`0x089394dc`) leaves a latched request
+    /// **completely untouched** - not updated and, per `positional-audio.md`,
+    /// "not even reaped". So the original's voice keeps playing at whatever
+    /// gain the last in-range frame gave it, which is near zero because the
+    /// linear falloff reaches zero exactly at the radius. What reclaims that
+    /// voice is a path this project has not read.
+    ///
+    /// **This stops the voice instead**, which is the same reading [`super`]
+    /// already applies to the other half of the latch: `Sound_Play` refuses to
+    /// *start* a cue on a latched emitter, so a rival's scrape on the far side
+    /// of the circuit is not started rather than started silent. Holding 97
+    /// silent loops open against a 32-voice pool would starve the race's own
+    /// cues to reproduce something inaudible either way. The gap is the unread
+    /// reclamation path, and it is written down here rather than made to look
+    /// like a decision.
+    pub fn tick(
+        &mut self,
+        mixer: &mut oag_audio::Mixer,
+        emitters: &TrackEmitters,
+        listener: &oag_audio::Listener,
+        frame: f32,
+        rng: &mut oag_core::Rng,
+    ) {
+        self.voices.resize(emitters.omni.len(), None);
+        for (node, held) in emitters.omni.iter().zip(&mut self.voices) {
+            let placed = oag_audio::Emitter {
+                position: node.emitter.position(),
+                radius: node.emitter.sample_radius(frame),
+            }
+            .place(listener, 1.0);
+            match (placed, *held) {
+                // In range with a voice open: this is the per-frame
+                // `SoundInstance_UpdateSpatial`, minus the doppler term. An
+                // authored emitter does not move, so the only distance change
+                // is the listener's own, which the original gates on the
+                // camera-cut guard at `mgr+0x8d` rather than reading here.
+                (Some(placed), Some(id)) if mixer.is_playing(id) => {
+                    mixer.set_gain(id, placed.gain);
+                    mixer.set_pan(id, Some(placed.pan));
+                }
+                // In range with nothing playing: open one. A voice the pool
+                // refuses is already counted by `Mixer::starved`, and an
+                // emitter whose cue never resolved holds `None` forever.
+                (Some(placed), _) => {
+                    *held = node.sound.as_ref().and_then(|loaded| {
+                        let (sound, looping) = pick(loaded, rng)?;
+                        let play = if looping {
+                            oag_audio::Play::looping(sound, oag_audio::Bus::Sfx)
+                        } else {
+                            oag_audio::Play::once(sound, oag_audio::Bus::Sfx)
+                        };
+                        mixer.play(oag_audio::Play {
+                            gain: placed.gain,
+                            pan: Some(placed.pan),
+                            ..play
+                        })
+                    });
+                }
+                (None, Some(id)) => {
+                    mixer.stop(id);
+                    *held = None;
+                }
+                (None, None) => {}
+            }
+        }
+    }
+
+    /// Releases every voice this holds, which is what leaving a race does.
+    pub fn stop(&mut self, mixer: &mut oag_audio::Mixer) {
+        for id in self.voices.drain(..).flatten() {
+            mixer.stop(id);
+        }
+    }
+}
+
+/// Which of a cue's waveforms an emitter opens.
+///
+/// A uniform draw, the same rule [`super::Banks::pick`] reads off opcode
+/// `0x19`, minus its no-repeat cache: that cache matters for a one-shot fired
+/// over and over, where this is opened once and then loops for the whole race.
+fn pick(
+    loaded: &Loaded,
+    rng: &mut oag_core::Rng,
+) -> Option<(std::sync::Arc<oag_audio::Sound>, bool)> {
+    let at = match u32::try_from(loaded.waveforms.len()) {
+        Ok(len) if len > 1 => rng.below(len) as usize,
+        _ => 0,
+    };
+    loaded.waveforms.get(at).cloned()
+}
+
 #[cfg(test)]
 mod tests;

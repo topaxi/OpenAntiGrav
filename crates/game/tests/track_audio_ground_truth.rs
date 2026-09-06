@@ -252,3 +252,104 @@ fn the_loader_names_its_banks_and_every_dangling_reference() {
         println!("{track}: {playing} of {} play", loaded.omni.len());
     }
 }
+
+/// A headless lap opens the circuit's voices, moves them and writes a WAV.
+///
+/// **This is the strongest evidence available here.** There is no windowed
+/// session and nobody to listen, so `--dump-audio`'s own writer is what turns
+/// "it should play" into a file: a real lap of a real circuit, rendered through
+/// the real mixer with the null backend, out to 16-bit PCM. See
+/// `oag_audio::wav`.
+///
+/// The dump is the whole race mix - the ambience is on `Bus::Sfx` beside the
+/// engine, so it cannot be separated at the bus - which is why the voice count
+/// is asserted as well as the samples: a WAV that was only the player's engine
+/// would still be loud.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let Some((mut race, emitters)) = lap(&path, TRACK) else {
+        return;
+    };
+    let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/shots")
+        .join("track-ambience-01_track.wav");
+    // `Some(dump)` forces the null backend, which is what makes this runnable
+    // on a machine with no sound card - see `Audio::open`.
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(wav.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+
+    // Half a minute of racing: long enough for the autopilot to leave the grid
+    // and pass several of the circuit's emitters, short enough that the WAV is
+    // a few megabytes rather than tens.
+    const TICKS: usize = 30 * 60;
+    let mut peak_voices = 0;
+    let mut ever_moved = false;
+    let mut last = None;
+    for _ in 0..TICKS {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        audio.race_tick(&mut race);
+        audio.tick();
+        let live = audio.ambient_voices();
+        peak_voices = peak_voices.max(live);
+        // A held voice whose gain follows the listener is the thing under test;
+        // a count that never changes would also be produced by opening every
+        // voice once and never touching it again.
+        if last.is_some_and(|was| was != live) {
+            ever_moved = true;
+        }
+        last = Some(live);
+    }
+    // Printed, not asserted, and worth watching. The mix already clipped
+    // before this landed - 7,932 samples over the same 30 seconds with the
+    // ambience switched off - and the circuit's own voices take it to 23,540,
+    // about 0.8% of a 2.88M-sample render. Every emitter plays at the volume
+    // `VexSound_Init` passes (`1.0`), so the headroom question is the sum's,
+    // not this module's, and inventing a gain here to hide it would be exactly
+    // the kind of plausible stand-in `CLAUDE.md` forbids. `starved` stays at
+    // zero: the pool is never the constraint.
+    let (clipped, starved) = audio
+        .output()
+        .with_mixer(|mixer| (mixer.clipped(), mixer.starved()));
+    println!("clipped {clipped} sample(s), starved {starved} voice(s)");
+    assert_eq!(
+        starved, 0,
+        "the voice pool ran out on one circuit's ambience"
+    );
+    audio.finish().expect("writing the dump");
+
+    assert!(
+        peak_voices > 0,
+        "half a minute of Vineta K and not one of its {} emitters ever opened a voice",
+        emitters.omni.len()
+    );
+    assert!(
+        ever_moved,
+        "the same {peak_voices} voice(s) for the whole run: the in-range latch never moved"
+    );
+
+    let file = std::fs::read(&wav).expect("the dump");
+    let pcm = &file[44..];
+    let peak = pcm
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| i16::from_le_bytes(*c).unsigned_abs())
+        .max()
+        .expect("samples");
+    assert!(peak > 0, "the dump is {} bytes of silence", pcm.len());
+    println!(
+        "wrote {} - {} frames, peak sample {peak}, up to {peak_voices} of the circuit's own \
+         voices open at once",
+        wav.display(),
+        pcm.len() / 4
+    );
+}
