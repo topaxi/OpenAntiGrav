@@ -596,11 +596,24 @@ fn every_settings_row_is_one_the_game_seeds() {
     .map(|(setting, _)| setting)
     .collect();
 
+    // The AI PILOTS page's own four rows are not settings at all - which
+    // pilot and which axis are on screen is not persisted, so nothing in
+    // `settings::menu_seeds` could know them (see `crate::pilots`'s own
+    // module doc on why a pilot file is not a setting). They are supplied
+    // and seeded by `Session::supply_pilot_menu`/`resupply_pilot_bounds`
+    // instead. Exempted by name rather than by page, so an ordinary setting
+    // later added to this same page still has to earn its place here.
+    const PILOT_EDITOR_ROWS: [&str; 4] =
+        ["pilot.selected", "pilot.axis", "pilot.low", "pilot.high"];
+
     for page in &definition.pages {
         for entry in &page.entries {
             let Some(setting) = entry.setting() else {
                 continue;
             };
+            if PILOT_EDITOR_ROWS.contains(&setting) {
+                continue;
+            }
             assert!(
                 seeded.contains(&setting),
                 "{setting} is on the {} page and is not seeded",

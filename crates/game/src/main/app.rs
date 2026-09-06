@@ -9,8 +9,8 @@ use oag_core::{TickClock, TickRate};
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, boot, display, launcher, loading, perf, prefetch, race, settings, source, strings,
-    upscale,
+    audio, boot, display, launcher, loading, perf, pilots, prefetch, race, settings, source,
+    strings, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -383,6 +383,16 @@ impl App {
             race_ready_at: None,
             suspended_race: None,
             awaiting_binding: None,
+            // A load failure here is not fatal - it is the same "corrupt
+            // file" case `pilots::load_from` always could hit, just reached
+            // from the composition root instead of `race::start` - so this
+            // falls back to the built-ins alone and logs, rather than
+            // failing the whole boot over a pilot file the AI PILOTS page
+            // will let the player see and fix.
+            pilot_roster: pilots::load().unwrap_or_else(|e| {
+                error!("could not load pilots: {e:#}");
+                pilots::Roster::built_in()
+            }),
         }))
     }
 

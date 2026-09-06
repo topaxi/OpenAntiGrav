@@ -9,7 +9,7 @@ use oag_core::TickClock;
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, catalogue, drs, loading, menu, movie, perf, prefetch, race, settings, upscale,
+    audio, catalogue, drs, loading, menu, movie, perf, pilots, prefetch, race, settings, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -29,6 +29,11 @@ mod frame;
 mod load;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
+// Named `pilot_editor`, not `pilots` - `oag_game::pilots` is already imported
+// unaliased above, and a sibling module of the same name would shadow it,
+// the same reason `remix_menu` below is not called `remix`.
+#[path = "session/pilot_editor.rs"]
+mod pilot_editor;
 #[path = "session/placeholder.rs"]
 mod placeholder;
 #[path = "session/timing.rs"]
@@ -431,6 +436,16 @@ pub(crate) struct Session {
     /// keyboard event away from `Controls::set_key` until [`crate::rebind::decide`]
     /// resolves it one way or the other.
     pub(crate) awaiting_binding: Option<oag_gameplay::input::Button>,
+    /// The in-game pilot editor's own roster: the four built-ins, then
+    /// whatever `pilots::directory` holds - see [`pilot_editor`].
+    ///
+    /// **Not what a race resolves pilots from.** `race::start` calls
+    /// `pilots::load` fresh every time a race launches, deliberately never
+    /// caching it - a race already in progress must not change out from under
+    /// itself because a player saved an edit mid-race. This copy is purely
+    /// for the AI PILOTS page to list and edit; the next race to launch reads
+    /// the file, not this field.
+    pub(crate) pilot_roster: pilots::Roster,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.
