@@ -377,6 +377,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         roll_phase,
         roll_target,
         roll_payout_timer,
+        roll_axis_zone,
         time_since_landing,
         time_airborne,
         mag_lock_blend,
@@ -418,9 +419,13 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_u8(u8::from(shift_armed));
     hasher.write_f32(shift_lockout);
     // The barrel roll's own gesture state. None of the probe scripts taps out
-    // a roll, so these five contribute a fixed run of bytes per tick today -
+    // a roll, so these six contribute a fixed run of bytes per tick today -
     // the same shape `pad_timer` had before a scenario crossed a pad - and the
-    // first scenario that does one will see all five move together.
+    // first scenario that does one will see all six move together. The axis
+    // leg is the reason "none of them taps one out" needs checking rather than
+    // assuming: `controls`'s slalom holds `steer_x` at `+-0.8`, inside
+    // `crate::barrel_roll::AXIS_TAP_THRESHOLD`, so no crossing is ever
+    // recorded. A script that pushed the axis past `0.9` would arm rolls.
     hasher.write_u8(roll_taps[0]);
     hasher.write_u8(roll_taps[1]);
     hasher.write_u8(roll_taps[2]);
@@ -428,6 +433,12 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(roll_phase);
     hasher.write_f32(roll_target);
     hasher.write_f32(roll_payout_timer);
+    // `None` is `0`, and the two sides are the original's own `1`/`2`, the same
+    // encoding `roll_taps` above carries.
+    hasher.write_u8(match roll_axis_zone {
+        None => 0,
+        Some(direction) => direction as u8,
+    });
     hasher.write_f32(time_since_landing);
     hasher.write_f32(time_airborne);
     hasher.write_f32(mag_lock_blend);

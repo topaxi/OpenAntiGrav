@@ -221,6 +221,24 @@ pub struct ShipControls {
     /// The veteran scheme's right airbrake (`OPT_CTRL_RAB`, action 6) was
     /// pressed this tick.
     pub shift_tap_right: bool,
+    /// The `LEFT` d-pad was **pressed** this tick - an edge, not a level.
+    ///
+    /// One of the barrel roll's two tap sources, and the only one that is a
+    /// button: the original writes `1` into its tap history "when the `LEFT`
+    /// d-pad bit is pressed *or* the steering axis crosses below `-90`", and
+    /// the axis leg is read off [`Self::steer_x`] inside
+    /// [`crate::barrel_roll::advance_gesture`] rather than here, because
+    /// detecting a *crossing* needs the previous tick's axis and that is
+    /// per-craft state. See
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    ///
+    /// Not scheme-dependent, unlike the sideshift's fields: the tap history is
+    /// fed by the d-pad in both schemes, which spend `L` and `R` and never the
+    /// d-pad.
+    pub roll_tap_left: bool,
+    /// The `RIGHT` d-pad was pressed this tick, the `2` half of
+    /// [`Self::roll_tap_left`]'s encoding.
+    pub roll_tap_right: bool,
 }
 
 /// Which way a one-shot sideshift goes, if any.
@@ -422,6 +440,21 @@ pub struct ShipState {
     /// [`Self::turbo_timer`] grants for a Turbo pickup. See
     /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub roll_payout_timer: f32,
+    /// Which side of [`crate::barrel_roll::AXIS_TAP_THRESHOLD`] the steering
+    /// axis sat on at the end of last tick, or `None` for neither.
+    ///
+    /// **This crate's own resolution, not a traced field.** The original feeds
+    /// its tap history from "the steering axis crossing below `-90`" / "above
+    /// `+90`", and a crossing is an edge: it needs last tick's side of the
+    /// threshold to be distinguishable from this tick's. Where the original
+    /// keeps that was not traced, so it is kept here, with the rest of the
+    /// gesture's per-craft state, rather than in the input layer - the same
+    /// division [`Self::shift_armed`] already makes for the novice flick.
+    ///
+    /// A tap fires whenever this changes *into* a side, so a thumb rolled
+    /// straight from `LEFT` to `RIGHT` with no neutral tick between them is one
+    /// tap and not none. See [`crate::barrel_roll::advance_gesture`].
+    pub roll_axis_zone: Option<crate::barrel_roll::TapDirection>,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -638,6 +671,7 @@ impl Default for ShipState {
             roll_phase: 0.0,
             roll_target: 0.0,
             roll_payout_timer: 0.0,
+            roll_axis_zone: None,
             // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
             // recovered, replacing an invented `1.0` that was chosen for the
             // same reason the original's value serves: a freshly spawned ship

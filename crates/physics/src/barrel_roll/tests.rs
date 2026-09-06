@@ -235,3 +235,133 @@ fn a_completed_roll_arms_the_payout_and_the_payout_drives_both_consumers() {
         ordinary.x * crate::airbrake::ROLL_GRIP_MULTIPLIER
     );
 }
+
+/// A ship with a shield large enough for several rolls.
+fn armable() -> (ShipState, Dimensions) {
+    let dimensions = Dimensions {
+        shield: 100.0,
+        ..Dimensions::default()
+    };
+    let state = ShipState {
+        shield: 100.0,
+        ..ShipState::default()
+    };
+    (state, dimensions)
+}
+
+/// One tick of [`advance_gesture`] at a fixed 60 Hz, with the axis where the
+/// caller put it and the d-pad where the caller put it.
+fn gesture_tick(
+    state: &mut ShipState,
+    dimensions: &Dimensions,
+    steer_x: f32,
+    dpad: Option<TapDirection>,
+) -> bool {
+    let input = ShipControls {
+        steer_x,
+        roll_tap_left: dpad == Some(TapDirection::Left),
+        roll_tap_right: dpad == Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    advance_gesture(state, &input, dimensions, 8.0, 1.0 / 60.0)
+}
+
+#[test]
+fn three_d_pad_taps_arm_a_roll() {
+    let (mut state, dimensions) = armable();
+    for (i, dir) in [TapDirection::Left, TapDirection::Right, TapDirection::Left]
+        .into_iter()
+        .enumerate()
+    {
+        let armed = gesture_tick(&mut state, &dimensions, 0.0, Some(dir));
+        assert_eq!(armed, i == 2, "only the third tap completes the pattern");
+    }
+    assert_eq!(state.roll_target, -1.0, "left-right-left rolls to -1");
+    assert_eq!(state.shield, 92.0, "8% of a 100 shield pool");
+}
+
+#[test]
+fn three_axis_crossings_arm_a_roll_with_no_button_at_all() {
+    let (mut state, dimensions) = armable();
+    // Back to centre between each push, so each one is a fresh crossing.
+    let mut armed = false;
+    for push in [1.0, -1.0, 1.0] {
+        armed = gesture_tick(&mut state, &dimensions, push, None);
+        gesture_tick(&mut state, &dimensions, 0.0, None);
+    }
+    assert!(armed, "right-left-right arms on the third crossing");
+    assert_eq!(state.roll_target, 1.0);
+}
+
+/// The d-pad and the axis are one signal, not two.
+///
+/// This project's input layer drives the analog axis from the d-pad as well
+/// (`oag_input::pad::larger`), so a real d-pad press arrives as a button edge
+/// *and* an axis crossing on the same tick. Recording both would shift the
+/// history twice and leave a doubled direction in it that can never match an
+/// alternation - which would make the d-pad leg silently unreachable.
+#[test]
+fn a_press_that_is_also_a_crossing_records_one_tap() {
+    let (mut state, dimensions) = armable();
+    gesture_tick(&mut state, &dimensions, -1.0, Some(TapDirection::Left));
+    assert_eq!(state.roll_taps, [0, 0, 1], "one entry, not two");
+}
+
+/// A thumb rolled straight from one side to the other has no neutral tick.
+#[test]
+fn a_direct_side_to_side_flip_is_a_tap() {
+    let (mut state, dimensions) = armable();
+    gesture_tick(&mut state, &dimensions, -1.0, None);
+    gesture_tick(&mut state, &dimensions, 1.0, None);
+    assert_eq!(state.roll_taps, [0, 1, 2]);
+}
+
+/// Holding the axis over is one tap, the way holding the d-pad is.
+#[test]
+fn a_held_axis_does_not_repeat() {
+    let (mut state, dimensions) = armable();
+    for _ in 0..10 {
+        gesture_tick(&mut state, &dimensions, 1.0, None);
+    }
+    assert_eq!(state.roll_taps, [0, 0, 2], "one entry for ten held ticks");
+}
+
+/// Ordinary cornering is under the threshold and records nothing.
+///
+/// [`crate::probe`]'s slalom holds the axis at `+-0.8` for exactly this reason,
+/// which is what keeps the committed determinism hashes free of armed rolls.
+#[test]
+fn steering_short_of_the_threshold_is_not_a_tap() {
+    let (mut state, dimensions) = armable();
+    for push in [0.8, -0.8, 0.8, -0.8] {
+        gesture_tick(&mut state, &dimensions, push, None);
+        gesture_tick(&mut state, &dimensions, 0.0, None);
+    }
+    assert_eq!(state.roll_taps, [0, 0, 0]);
+    assert_eq!(state.shield, 100.0, "and so nothing was ever charged");
+}
+
+/// The gesture advances the inter-tap timer exactly once a tick.
+///
+/// Calling [`advance_tap_timer`] beside [`advance_gesture`] would double it and
+/// halve [`INTER_TAP_TIMEOUT`] without failing anything else.
+#[test]
+fn the_gesture_advances_the_tap_timer_once_per_tick() {
+    let (mut state, dimensions) = armable();
+    state.roll_tap_timer = 0.0;
+    gesture_tick(&mut state, &dimensions, 0.0, None);
+    assert_eq!(state.roll_tap_timer, 1.0 / 60.0);
+}
+
+/// An empty shield completes the gesture and arms nothing.
+#[test]
+fn a_flat_shield_refuses_the_arm_but_still_clears_the_history() {
+    let (mut state, dimensions) = armable();
+    state.shield = 1.0;
+    for dir in [TapDirection::Right, TapDirection::Left, TapDirection::Right] {
+        assert!(!gesture_tick(&mut state, &dimensions, 0.0, Some(dir)));
+    }
+    assert_eq!(state.roll_target, 0.0, "nothing armed");
+    assert_eq!(state.shield, 1.0, "and nothing was charged");
+    assert_eq!(state.roll_taps, [0, 0, 0], "the gesture still completed");
+}

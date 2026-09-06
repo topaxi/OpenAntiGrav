@@ -147,6 +147,16 @@ pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipCon
         // a held airbrake must not repeat-fire a shift.
         shift_tap_left: !novice && snapshot.buttons.is_pressed(Button::L),
         shift_tap_right: !novice && snapshot.buttons.is_pressed(Button::R),
+        // The barrel roll's d-pad leg, on the *pressed* mask for the same
+        // reason the airbrake taps are: a held direction is one tap, not one a
+        // tick. Filled for both schemes, because the roll is not a
+        // scheme-dependent gesture - neither scheme spends the d-pad on
+        // anything else. The gesture's other leg, the steering axis crossing
+        // `+-90`, is read off `ShipControls::steer_x` inside
+        // `oag_physics::barrel_roll::advance_gesture`, which is also where the
+        // two are ORed into one tap; see that function for why they must be.
+        roll_tap_left: snapshot.buttons.is_pressed(Button::Left),
+        roll_tap_right: snapshot.buttons.is_pressed(Button::Right),
     }
 }
 
