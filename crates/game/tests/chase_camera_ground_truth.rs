@@ -83,22 +83,29 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Reads a path, or `None` when it is not in the tree - the shape every
-/// ground-truth test in this workspace uses, so `just test` skips and
-/// `just test-data` does not.
-fn optional(path: &Path) -> Option<String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => Some(text),
-        Err(_) => {
-            assert!(
-                std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-                "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-                path.display()
-            );
-            println!("skipping: {} not present", path.display());
-            None
-        }
-    }
+/// Reads a capture that is **tracked in git**, and panics if it is not there.
+///
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md)
+/// puts `pad0-boost.csv` in `.gitignore`'s re-inclusion list, and this checkout
+/// has it committed - `git ls-files data/traces/` lists it. So its absence
+/// means the working tree is broken, not that this test does not apply, and
+/// the answer is a hard failure rather than a skip.
+///
+/// **Unconditional, and deliberately not gated on `OAG_REQUIRE_GAME_DATA`.**
+/// That variable escalates *optional* inputs - a disc image nobody is obliged
+/// to have - and a tracked file is not optional. Gating it there is precisely
+/// how five of the six reference captures went missing for weeks without a red
+/// build; see `5e940717`, which did this for the two `oag-trace` tests in the
+/// same lane, and
+/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md`.
+fn require_capture(path: &Path) -> String {
+    std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!(
+            "{} is tracked in git per ADR-0046 and could not be read ({e}) - the \
+             checkout is broken, not merely missing optional data.",
+            path.display()
+        )
+    })
 }
 
 /// The ship's `<ExternalCameraClose>` block, off the user's own disc and through
@@ -129,9 +136,7 @@ fn close_params() -> Option<oag_render::camera::chase::ChaseParams> {
 #[ignore = "needs a disc image in data/images/ and a capture in data/traces/"]
 fn the_chase_camera_reproduces_the_originals_eye_over_a_whole_capture() {
     let path = repo().join("data/traces/pad0-boost.csv");
-    let Some(text) = optional(&path) else {
-        return;
-    };
+    let text = require_capture(&path);
     let Some(params) = close_params() else {
         return;
     };
@@ -214,9 +219,7 @@ fn the_chase_camera_reproduces_the_originals_eye_over_a_whole_capture() {
 #[ignore = "needs a capture in data/traces/"]
 fn the_originals_own_camera_holds_a_constant_distance_from_the_craft() {
     let path = repo().join("data/traces/pad0-boost.csv");
-    let Some(text) = optional(&path) else {
-        return;
-    };
+    let text = require_capture(&path);
     let trace = oag_trace::Trace::parse(&text).expect("pad0-boost.csv is a trace");
 
     let mut min = f32::MAX;
@@ -265,9 +268,7 @@ fn the_originals_own_camera_holds_a_constant_distance_from_the_craft() {
 #[ignore = "needs a disc image in data/images/ and a capture in data/traces/"]
 fn the_captures_first_tick_agrees_with_the_discs_own_close_block() {
     let path = repo().join("data/traces/pad0-boost.csv");
-    let Some(text) = optional(&path) else {
-        return;
-    };
+    let text = require_capture(&path);
     let Some(params) = close_params() else {
         return;
     };

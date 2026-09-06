@@ -739,14 +739,27 @@ timing section asks; nothing measures it yet.
 
 **Display/logic, current focus:**
 
-0. **Close the `GO`-to-green gap.** Now that the gantry draws, this is the one
-   remaining defect a player sees on the start line: the board finishes its
-   count about a second before `oag_race::COUNTDOWN_TICKS` releases thrust.
-   Either the asset's clock does not start at tick zero in the original, or the
-   engine drives the `TEXOFFSET` itself rather than playing the authored track -
-   `docs/rendering/start-gantry.md`'s "What is not proven" section already names
-   the gated per-frame accumulator at `0x0890cf34` as the live candidate, and it
-   is a live-debugger question rather than a static one.
+0. ~~Close the `GO`-to-green gap~~ **Answered, and the answer is that there is
+   no gap to close - confidence 82.** The asset's clock and the thrust gate
+   share a zero. `g_ingame->0x40` is the one clock every in-race animation path
+   reads (`anim-transform.md`, 85), and it is **not** free-running across a
+   session the way this thread and `start-gantry.md` both had it: it is zeroed
+   once per race in `InGame_Construct` (`mtc1 zero,f20` at `0x08812d98`,
+   `swc1 f20,0x40(s0)` at `0x08813090`) and advanced by `InGame_Update` from
+   three frames later. The 272 ticks are counted from the first frame the front
+   end reports `InGame` - the same instant. So the original itself lights `GO`
+   about 0.93 s before the craft can move and holds it lit for 1.4 s after, and
+   the render reproduces that rather than suffering from it. The strobing `GO`
+   column (33 of 47 samples lit across its window) says the same thing
+   independently: it is an announcement spanning the release, not a starting
+   pistol. See `docs/rendering/start-gantry.md`, "The gap is not a pre-roll".
+
+   **The one thing that would take this from 82 to settled** is not a debugger
+   session: it is the project owner playing the original and saying whether `GO`
+   appears as the craft becomes drivable or about a second before. Nothing has
+   watched slot 8's own node read that clock during a countdown, which is why
+   the gated accumulator at `0x0890cf34` stays on the page as an unresolved
+   alternative.
 1. **The 18-entry table at `0x08a7a1e8` is a dead end for this, confirmed rather
    than just suspected** - both entries checked land on genuine mid-function
    re-entry points inside one HUD-text formatter (`0x0881d458`, raw

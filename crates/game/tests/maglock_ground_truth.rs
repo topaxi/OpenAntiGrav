@@ -140,18 +140,56 @@ impl Row {
     }
 }
 
-/// Reads the capture, or `None` when it is not in the tree.
+/// The capture this file reads, and the one reference trace in the workspace
+/// that **no checkout has**.
+const CAPTURE: &str = "talons-junction-time-trial-lap-omega.csv";
+
+/// Reads the capture, or `None` - and this is the one place in the workspace
+/// where `None` is still the honest answer.
+///
+/// # Why this is not `require_capture`
+///
+/// The sibling ground-truth tests were changed - `5e940717` for `oag-trace`'s
+/// two, `chase_camera_ground_truth.rs` for this crate's other one - so that a
+/// missing reference **panics unconditionally**: those files are in git's index,
+/// so absence means a broken working tree.
+///
+/// This one is different, and the difference is not a matter of taste.
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md)
+/// puts `CAPTURE` on `.gitignore`'s re-inclusion list, but **it was never
+/// committed**, because it was already gone when the ADR was written - its own
+/// table lists it `missing`, and its Consequences section says so outright:
+/// "the five missing captures are not recovered by this." `git ls-files
+/// data/traces/` confirms it: four names, not six. So there is nothing for a
+/// panic to point at. A hard failure here would make `just test-data` red
+/// forever on a file that no checkout, no branch and no reflog contains, and a
+/// permanently red suite is a suite nobody reads.
+///
+/// **It is also not gated on `OAG_REQUIRE_GAME_DATA`**, which it used to be.
+/// That variable means "the optional inputs I do have must be found" - it
+/// escalates a *disc image*, which a contributor can supply. This capture
+/// cannot be supplied; it has to be re-recorded to the recipe in
+/// `docs/reverse-engineering/ppsspp-debugger.md`. Escalating it made
+/// `OAG_REQUIRE_GAME_DATA=1 just test-data` fail on the one thing in the run
+/// that no one could act on, which buries the failures that can be acted on.
+///
+/// What keeps the gap from going quiet again is [`the_capture_is_still_on_the_allowlist`]:
+/// the moment someone decides this trace is not a reference after all and drops
+/// it from `.gitignore`, that test fails and this comment has to be rewritten.
+/// And the moment the file *arrives*, this returns `Some` and the measurement
+/// below runs - there is no path where a present capture is skipped.
 fn rows() -> Option<Vec<Row>> {
-    let path = repo().join("data/traces/talons-junction-time-trial-lap-omega.csv");
+    let path = repo().join("data/traces").join(CAPTURE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(_) => {
-            assert!(
-                std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-                "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            println!(
+                "skipping: {} is absent from every known checkout - ADR-0046 allowlists \
+                 it but it was never committed, so it comes back only by re-recording \
+                 to docs/reverse-engineering/ppsspp-debugger.md. This is the one \
+                 reference trace whose absence is not a broken checkout.",
                 path.display()
             );
-            println!("skipping: {} not present", path.display());
             return None;
         }
     };
@@ -377,5 +415,32 @@ fn the_hold_reproduces_the_rotation_the_momentum_column_does_not() {
         "the hold explains {:.1} % of the rotation the momentum column does not, \
          which is too little to claim it is the mechanism",
         100.0 * explained
+    );
+}
+
+/// The allowlist in `.gitignore` is the only register of what counts as a
+/// reference trace - ADR-0046 says so in as many words: "the list is the
+/// allowlist in `.gitignore` and nothing else. There is no second register to
+/// drift out of sync with it."
+///
+/// So this is not a second register either; it reads the same one. It exists
+/// because [`rows`] skips rather than panics, and a skip is exactly how the
+/// five missing captures went unnoticed for weeks. If someone concludes this
+/// trace is not worth re-recording and drops its name, that decision has to
+/// come with rewriting `rows`' comment and the docs that cite the capture
+/// (`docs/physics/cornering-ground-truth.md`,
+/// `docs/physics/angular-velocity-column.md`) - and this is what makes it.
+///
+/// Not `#[ignore]`d: it reads one tracked file in the repository and needs no
+/// disc, no capture and no GPU, so it runs in `just test` where it is useful.
+#[test]
+fn the_capture_is_still_on_the_allowlist() {
+    let gitignore = std::fs::read_to_string(repo().join(".gitignore")).expect(".gitignore");
+    let line = format!("!/data/traces/{CAPTURE}");
+    assert!(
+        gitignore.lines().any(|l| l.trim() == line),
+        "{CAPTURE} is no longer re-included in .gitignore, so it is no longer a \
+         reference trace by ADR-0046's own definition - but maglock_ground_truth \
+         still names it and skips when it is absent. Settle one or the other."
     );
 }

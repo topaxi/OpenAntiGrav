@@ -165,3 +165,42 @@ fn clipping_everything_clips_nothing() {
     assert_eq!(clip_to_panel(&mut model, 22.75, 0.0), 0);
     assert_eq!(model.transparent_draws.len(), 2);
 }
+
+#[test]
+fn the_placement_matrix_never_mirrors_the_glyphs() {
+    // **The question this answers, and why it is an assertion rather than a
+    // screenshot.** Pulse's digits are squared-off enough that a `3` renders as
+    // three bars on a spine and reads, to some eyes, like a mirrored one - so
+    // "are the countdown glyphs flipped?" is a fair thing to ask of a frame and
+    // an expensive thing to guess at. It is not a question about the texture:
+    // the glyphs are **geometry**, four groups of triangles in one mesh, and
+    // `321go_NOMIP.tga` is a 16x32 colour palette with no letterforms in it at
+    // all. So there is no U coordinate whose sign could flip a letter.
+    //
+    // What *could* flip them is this matrix. A basis with a negative
+    // determinant mirrors the mesh - and it would mirror the whole board, so
+    // the four glyphs would come out in the order `GO`, `1`, `2`, `3` across
+    // the panel and each shape reversed with them. A positive determinant
+    // rules out both at once, for every mount, which one frame cannot.
+    //
+    // Confirmed in a race as well: at 5.90 s the board reads `GO`, G left and O
+    // right, and at 2.60 s the lit glyph is the rightmost - which is where
+    // `321Go_StartFinish.vex` puts its `1` (model x 5.72..16.87) and the
+    // opposite of where a mirror would put it.
+    for forward in [Vec3::Z, -Vec3::Z, Vec3::X, Vec3::new(0.3, 0.0, -0.95)] {
+        let mount = plane(None, &panel(Vec3::new(4.0, -3.0, 9.0), 45.5, 10.4))
+            .expect("a panel has a plane");
+        let matrix = mount.matrix(forward, Vec3::Z, 1.0);
+        let basis = Mat3::from_cols(
+            matrix.x_axis.truncate(),
+            matrix.y_axis.truncate(),
+            matrix.z_axis.truncate(),
+        );
+        assert!(
+            basis.determinant() > 0.9,
+            "facing {forward:?}: determinant {} - a negative one mirrors every glyph \
+             on the board",
+            basis.determinant(),
+        );
+    }
+}
