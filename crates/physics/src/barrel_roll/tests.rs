@@ -257,13 +257,72 @@ fn gesture_tick(
     steer_x: f32,
     dpad: Option<TapDirection>,
 ) -> bool {
+    airborne_tick(state, dimensions, steer_x, dpad, false)
+}
+
+/// The same, with [`ShipControls::computer_driven`] under the caller's control.
+fn airborne_tick(
+    state: &mut ShipState,
+    dimensions: &Dimensions,
+    steer_x: f32,
+    dpad: Option<TapDirection>,
+    computer_driven: bool,
+) -> bool {
     let input = ShipControls {
         steer_x,
         roll_tap_left: dpad == Some(TapDirection::Left),
         roll_tap_right: dpad == Some(TapDirection::Right),
+        computer_driven,
         ..ShipControls::default()
     };
     advance_gesture(state, &input, dimensions, 8.0, false, 1.0 / 60.0)
+}
+
+/// Three airborne taps from one driver kind, and whether they armed.
+fn three_taps(computer_driven: bool, shield: f32) -> (bool, ShipState) {
+    let (mut state, dimensions) = armable();
+    state.shield = shield;
+    let mut armed = false;
+    for dir in [TapDirection::Right, TapDirection::Left, TapDirection::Right] {
+        armed = airborne_tick(&mut state, &dimensions, 0.0, Some(dir), computer_driven);
+    }
+    (armed, state)
+}
+
+/// The invented AI-only floor: an AI craft under
+/// [`AI_ROLL_SHIELD_FLOOR`] of its pool does not arm, and a human on the same
+/// shield does.
+///
+/// **This pins a choice, not a finding** - see the constant's own doc comment.
+/// The asymmetry is the whole point of the test: if a change ever makes the
+/// floor apply to a pad as well, the second half fails.
+#[test]
+fn the_ai_floor_refuses_an_ai_and_not_a_pad() {
+    // The pool is 100.0 in `armable`, so the floor is 20.0 and the recovered
+    // `cost < shield` gate would still allow this at 8.0.
+    let under = AI_ROLL_SHIELD_FLOOR * 100.0 - 1.0;
+
+    let (ai, state) = three_taps(true, under);
+    assert!(!ai, "an AI armed a roll below the floor");
+    assert_eq!(state.roll_target, 0.0);
+    assert_eq!(state.shield, under, "and it was not charged");
+
+    let (pad, state) = three_taps(false, under);
+    assert!(pad, "the floor reached the human path");
+    assert_eq!(state.roll_target, 1.0);
+    assert!(state.shield < under, "and the pad paid the recovered cost");
+}
+
+/// And above the floor an AI arms exactly as a pad does, so the test above is
+/// measuring the floor rather than a driver kind that can never roll.
+#[test]
+fn an_ai_above_the_floor_arms_like_a_pad() {
+    let over = AI_ROLL_SHIELD_FLOOR * 100.0 + 1.0;
+    let (ai, ai_state) = three_taps(true, over);
+    let (pad, pad_state) = three_taps(false, over);
+    assert!(ai && pad);
+    assert_eq!(ai_state.roll_target, pad_state.roll_target);
+    assert_eq!(ai_state.shield, pad_state.shield);
 }
 
 #[test]
@@ -451,3 +510,4 @@ fn a_completed_pattern_levels_the_phase_even_when_the_arm_is_refused() {
     assert_eq!(state.roll_phase, 0.0);
     assert_eq!(state.roll_target, 0.0);
 }
+

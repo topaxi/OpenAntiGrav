@@ -239,6 +239,17 @@ pub struct ShipControls {
     /// The `RIGHT` d-pad was pressed this tick, the `2` half of
     /// [`Self::roll_tap_left`]'s encoding.
     pub roll_tap_right: bool,
+    /// This input block came from `oag_ai::Driver` rather than from a pad.
+    ///
+    /// **The only field on this struct that is not a control**, and the only
+    /// one the original has no counterpart for. It exists for exactly one
+    /// consumer, [`crate::barrel_roll::AI_ROLL_SHIELD_FLOOR`], which is an
+    /// invented AI-quality rule rather than a recovered behaviour - read that
+    /// constant's doc comment before adding a second consumer here.
+    ///
+    /// Defaults to `false`, so every existing caller, every test and the human
+    /// player all keep the recovered behaviour and nothing else has to change.
+    pub computer_driven: bool,
 }
 
 /// Which way a one-shot sideshift goes, if any.

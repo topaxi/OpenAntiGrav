@@ -41,6 +41,35 @@ pub const INTER_TAP_TIMEOUT: f32 = 0.6;
 /// out of the XML. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const COMPLETION_SPLIT: f32 = 0.5;
 
+/// The fraction of the shield pool an **AI** driver keeps back rather than
+/// spending on a barrel roll.
+///
+/// # This number is invented, and it is the only invented number this mechanic
+/// carries
+///
+/// Nothing on the disc authors it and nothing in the recovered chain gates on
+/// it. It was chosen by the maintainer on 2026-09-06, in those terms - "I think
+/// AI should still avoid barrel rolls if they are low on energy, like below 20%
+/// or something, unsure what the original does here, but I'd be good with
+/// inventing a value here too" - and it is recorded here as a design decision,
+/// **not** as a finding. It deliberately carries no confidence score: a score
+/// would let a later reader cite a choice as evidence.
+///
+/// It sits *on top of* the original's own gate, which is [`arm`]'s
+/// `cost < shield` and is recovered at confidence 90. An AI craft therefore
+/// needs both; a human craft needs only the recovered one, and
+/// [`ShipControls::computer_driven`] is what tells the two apart. **That
+/// asymmetry is the deviation.** It is an AI-quality choice - an opponent that
+/// spends its last energy on a manoeuvre and is then destroyed by one wall is
+/// a worse opponent - and it is not a claim about how the original's craft
+/// behave.
+///
+/// If the original's own AI gate is ever recovered, this constant is
+/// **replaced** by it rather than reconciled with it, and this whole doc
+/// comment goes with it. Changing the value meanwhile is a one-line edit here
+/// and nowhere else.
+pub const AI_ROLL_SHIELD_FLOOR: f32 = 0.20;
+
 /// How far the steering axis has to be pushed for a tap, normalised.
 ///
 /// The original's tap history takes an entry when the axis "crosses below
@@ -264,6 +293,11 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// deviation**, recorded so the next reader does not mistake it for a finding;
 /// what makes it affordable is the grounded gate below, which is a port.
 ///
+/// The second half of that ruling is [`AI_ROLL_SHIELD_FLOOR`], an **invented**
+/// AI-only shield floor that the human player's path does not carry. It is the
+/// only invented number in this module, it has no confidence score on purpose,
+/// and its own doc comment is where the reasoning lives.
+///
 /// # The grounded gate
 ///
 /// The original **cannot arm a roll while the craft is in contact with the
@@ -336,8 +370,13 @@ pub fn advance_gesture(
     let Some(sign) = record_tap(state, direction) else {
         return false;
     };
-    let armed = arm(state, dimensions, roll_cost, sign);
+    // The invented AI-only floor sits *outside* `arm`, which holds the
+    // original's own `cost < shield` and nothing else. See
+    // [`AI_ROLL_SHIELD_FLOOR`].
+    let floored = input.computer_driven && state.shield < AI_ROLL_SHIELD_FLOOR * dimensions.shield;
+    let armed = !floored && arm(state, dimensions, roll_cost, sign);
     // Levelled whether or not the shield could pay - see the section above.
+    // The floor refuses the same way a flat shield does, so it levels too.
     state.roll_phase = 0.0;
     armed
 }
