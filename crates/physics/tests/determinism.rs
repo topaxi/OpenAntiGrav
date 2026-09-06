@@ -276,24 +276,44 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   the payout countdown, and the landing-transition arm in
 ///   `crate::forces::evaluate` - left in place, the three constants from
 ///   earlier the same day (the four-field entry above) reproduce bit for bit.
+/// - **Regenerated 2026-09-06, and this one needed checking rather than
+///   assuming.** The barrel roll became *reachable*: `ShipControls` gained the
+///   d-pad tap edges, `crate::barrel_roll::advance_gesture` reads them and the
+///   steering axis, and `ShipState` gained `roll_axis_zone` - the latch that
+///   makes an axis *crossing* distinguishable from a held axis. So for the
+///   first time a probe script could arm a roll, and the two entries above
+///   cannot lean on "nothing calls `record_tap`" any more.
+///
+///   **It still does not, and that is a fact about the scripts.**
+///   `crate::probe::controls` holds `steer_x` at `+-0.8` through its slalom and
+///   at `+-0.6` through its two wall runs, inside
+///   `crate::barrel_roll::AXIS_TAP_THRESHOLD` (`0.9`), and it sets neither
+///   `roll_tap_left` nor `roll_tap_right`. So no crossing is ever recorded, all
+///   six roll fields hold their defaults for every tick of every run, and the
+///   whole movement is the one extra `u8` per tick that `roll_axis_zone` adds
+///   to the stream. Checked the same way as every entry above: with that single
+///   `hash_state` write alone removed and every other change - the gesture, the
+///   d-pad fields, the input mapping - left in place, the three constants from
+///   2026-09-05 reproduce bit for bit. A script that pushed the axis past `0.9`
+///   in an alternation would move these for a real reason, and should.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xed82_f552_02bb_8fc7,
-        0xbe94_acee_140a_bd4c,
+        0x7e0e_8ab7_7ca6_7b3b,
+        0x67fa_c2e0_9bb5_db28,
     ),
     (
         3_600,
         Script::Corridor,
-        0xe41e_11c5_4cb4_9c56,
-        0x5c51_d236_218a_bc68,
+        0x15b0_cbc2_4a2f_2a10,
+        0x4d12_c724_8429_0628,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xbaa2_3831_9d13_185f,
-        0xb91b_fab9_2c59_3d70,
+        0x117e_e9f0_1891_e853,
+        0xec97_f321_86e5_2cde,
     ),
 ];
 

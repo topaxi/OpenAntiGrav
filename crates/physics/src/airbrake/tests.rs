@@ -650,6 +650,8 @@ fn a_zero_handling_ship_gets_nothing_from_the_airbrake_path() {
         shift_modifier: true,
         shift_tap_left: true,
         shift_tap_right: true,
+        roll_tap_left: true,
+        roll_tap_right: true,
     };
     let forces = evaluate(&state, &input, &Handling::ZERO, 40.0);
     assert_eq!(forces.world_force, Vec3::ZERO);

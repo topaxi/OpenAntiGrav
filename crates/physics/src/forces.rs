@@ -576,13 +576,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let sideshift = airbrake::sideshift_force(state, handling, control_grounded);
     acc.world_force += sideshift;
 
-    // The barrel roll's own timers. Nothing here yet turns a real d-pad press
-    // or a steering-axis crossing into [`barrel_roll::record_tap`]/[`barrel_roll::arm`]
-    // calls - `ShipControls` carries no such event - so [`ShipState::roll_taps`]
-    // never advances past `[0, 0, 0]` today. The ramp and the payout countdown
-    // still run every tick, so a caller that does start recording taps needs no
-    // further change here. See `crate::barrel_roll`.
-    barrel_roll::advance_tap_timer(state, dt);
+    // The barrel roll's gesture, then its ramp and its payout countdown. The
+    // gesture reads the d-pad edges and the steering axis off the same
+    // `ShipControls` every other term reads, so a real input snapshot arms a
+    // roll here and nowhere else; `advance_gesture` advances the inter-tap
+    // timer itself, which is why nothing calls `advance_tap_timer` beside it.
+    // Whether it armed is deliberately dropped: the original plays a cue on the
+    // *payout*, not on the arm, and this crate emits no cues at all. See
+    // `crate::barrel_roll`.
+    barrel_roll::advance_gesture(state, input, &handling.dimensions, handling.roll_cost, dt);
     barrel_roll::advance_phase(state, handling.roll_speed, dt);
     state.roll_payout_timer = (state.roll_payout_timer - dt).max(0.0);
 

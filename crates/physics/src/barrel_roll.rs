@@ -22,7 +22,7 @@
 //! transition), [`release`] is what moves.
 
 use crate::params::Dimensions;
-use crate::ship::ShipState;
+use crate::ship::{ShipControls, ShipState};
 
 /// How long a tap stays a candidate for extending the gesture, in seconds.
 ///
@@ -39,6 +39,17 @@ pub const INTER_TAP_TIMEOUT: f32 = 0.6;
 /// literal the original's own comparison uses, read off the disassembly, not
 /// out of the XML. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const COMPLETION_SPLIT: f32 = 0.5;
+
+/// How far the steering axis has to be pushed for a tap, normalised.
+///
+/// The original's tap history takes an entry when the axis "crosses below
+/// `-90`" or "above `+90`", on the internal `0..=100` scale
+/// [`crate::controls::CONTROL_RANGE`] documents; `0.9` is that threshold on the
+/// `-1..=1` scale [`ShipControls`] carries. It is compared against the **raw
+/// axis** on [`ShipControls::steer_x`] and not against the ramped
+/// [`ShipState::steer`], because the original reads it out of the same input
+/// block it reads the d-pad bits from, in the same function.
+pub const AXIS_TAP_THRESHOLD: f32 = 90.0 / crate::controls::CONTROL_RANGE;
 
 /// One directional tap: the `LEFT` d-pad bit or the steering axis crossing
 /// below `-90`, or `RIGHT`/crossing above `+90`. Written as `1`/`2` into
@@ -183,6 +194,113 @@ pub fn rebound_override(state: &ShipState, ordinary: f32) -> f32 {
     } else {
         ordinary
     }
+}
+
+/// Which side of [`AXIS_TAP_THRESHOLD`] an axis reading sits on, if either.
+#[must_use]
+fn axis_zone(steer_x: f32) -> Option<TapDirection> {
+    if steer_x > AXIS_TAP_THRESHOLD {
+        Some(TapDirection::Right)
+    } else if steer_x < -AXIS_TAP_THRESHOLD {
+        Some(TapDirection::Left)
+    } else {
+        None
+    }
+}
+
+/// Runs the whole gesture for one tick: the timer, both tap sources, the
+/// history and the shield-gated arm. Reports whether a roll was armed.
+///
+/// This is the reachable half of the mechanic and the only thing
+/// [`crate::forces::evaluate`] needs to call - [`advance_tap_timer`],
+/// [`record_tap`] and [`arm`] stay public because they are what the unit tests
+/// pin one at a time, not because a caller should sequence them itself. Calling
+/// this *and* [`advance_tap_timer`] in the same tick would advance the timer
+/// twice and halve [`INTER_TAP_TIMEOUT`].
+///
+/// # The two sources are one signal
+///
+/// The original writes `1` "when the `LEFT` d-pad bit is pressed **or** the
+/// steering axis crosses below `-90`" - one history entry either way, never
+/// two. That `or` is load-bearing here rather than incidental: this project's
+/// input layer maps the d-pad onto the analog axis as well
+/// (`oag_input::pad::larger`), so a d-pad press and an axis crossing land on the
+/// *same* tick, and recording both would shift the history twice and leave it
+/// holding a doubled direction that can never match an alternation.
+///
+/// `LEFT` is tested first when both directions somehow arrive at once, matching
+/// the order the two fields are declared in - the same tie-break
+/// [`crate::airbrake::sideshift_force`] takes.
+///
+/// # Why the axis leg is here and not in the input layer
+///
+/// A crossing is an edge and needs last tick's side of the threshold, which is
+/// per-craft state: see [`ShipState::roll_axis_zone`]. Putting it here also
+/// means the two schemes never enter into it - the barrel roll is not a
+/// scheme-dependent gesture, unlike the sideshift.
+///
+/// # An AI craft can arm one, and that is measured rather than assumed
+///
+/// This crate does not know whether a craft is flown by a pilot or by
+/// `oag_ai::Driver` - both arrive as [`ShipControls`] - and the axis leg has
+/// no human-only gate the way the novice flick's
+/// [`ShipControls::shift_modifier`] effectively is. So an opponent's own
+/// steering can complete the alternation. **Deliberately left that way**: the
+/// original's gesture reads whatever is in the craft's input block, and adding
+/// a "human only" flag would be inventing a mechanism nothing was traced to.
+///
+/// How often it actually happens was measured against `oag-ai`'s own closed-loop
+/// fixtures on 2026-09-06, eight seeded drivers for 3,600 ticks each:
+/// **zero** arms on the ordinary oval, and **three arms across the eight** on
+/// `oval_of(60.0, 300.0)` - the deliberately pathological corner
+/// `a_differential_holds_a_corner_the_steering_alone_cannot` keeps because a
+/// craft "genuinely cannot make it on the stick alone" and sits on the steering
+/// stop for 300+ ticks. So ordinary AI cornering does not arm rolls; a driver
+/// missing a corner badly enough can arm one about once a minute, at
+/// `roll_cost` percent of its shield. Not pinned by a test on purpose - the
+/// number moves with any controller tuning, which is the same reason
+/// `closed_loop.rs` keeps its own bounds loose.
+///
+/// # No airborne gate
+///
+/// Nothing here checks that the craft is off the ground, because nothing in the
+/// recovered chain does either: the gesture arms whenever it completes and it
+/// is the *payout* that requires the airborne-to-grounded transition. A roll
+/// armed on the ground therefore costs shield and ramps [`ShipState::roll_phase`]
+/// like any other. If a trace ever shows the original refusing to arm on the
+/// ground, this is where that gate goes.
+pub fn advance_gesture(
+    state: &mut ShipState,
+    input: &ShipControls,
+    dimensions: &Dimensions,
+    roll_cost: f32,
+    dt: f32,
+) -> bool {
+    advance_tap_timer(state, dt);
+
+    let zone = axis_zone(input.steer_x);
+    let crossed = if zone == state.roll_axis_zone {
+        None
+    } else {
+        zone
+    };
+    state.roll_axis_zone = zone;
+
+    let direction = if input.roll_tap_left || crossed == Some(TapDirection::Left) {
+        Some(TapDirection::Left)
+    } else if input.roll_tap_right || crossed == Some(TapDirection::Right) {
+        Some(TapDirection::Right)
+    } else {
+        None
+    };
+
+    let Some(direction) = direction else {
+        return false;
+    };
+    let Some(sign) = record_tap(state, direction) else {
+        return false;
+    };
+    arm(state, dimensions, roll_cost, sign)
 }
 
 #[cfg(test)]

@@ -413,6 +413,25 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x2e8b_8631_f20f_99d1` / `0xfb92_8769_d310_f9eb` at 60 ticks and
 ///   `0xf9b1_492d_6749_a348` / `0x46e3_c9f5_b867_ef0a` at 600.
 ///
+/// - **Moved 2026-09-06**, when the barrel roll became reachable:
+///   `oag_physics::ShipControls` gained the d-pad tap edges, this crate's
+///   `controls::ship_controls` fills them, and `oag_physics::ShipState` gained
+///   `roll_axis_zone` - the latch that makes a steering-axis *crossing*
+///   distinguishable from a held axis. Inherited through the same
+///   `hash_world` call, and isolated in
+///   `crates/physics/tests/determinism.rs` rather than twice.
+///
+///   **Reachable is not reached, here.** No craft in this scenario is flown at
+///   all - `run` steps a world whose drivers never run, and the entry above
+///   already records that every reflex channel reads `Reflex::IDLE`
+///   throughout - so `ShipControls::steer_x` is `0.0` on every tick and no
+///   crossing is ever recorded. The whole movement is the one extra `u8` per
+///   craft per tick that `roll_axis_zone` adds to the stream; with that single
+///   write removed and the gesture left in place, the constants from
+///   2026-09-05 reproduce bit for bit. Replaces `0xc2cd_afd3_1c1f_7e01` /
+///   `0x4bf6_9ad5_c266_27db` at 60 ticks and `0x7713_5775_9662_2238` /
+///   `0xe413_77c8_89ff_33ba` at 600.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -420,8 +439,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xc2cd_afd3_1c1f_7e01, 0x4bf6_9ad5_c266_27db),
-    (600, 0x7713_5775_9662_2238, 0xe413_77c8_89ff_33ba),
+    (60, 0x3259_455a_d157_329f, 0x6351_a74b_9671_1835),
+    (600, 0xe010_a59d_c8a2_8cc6, 0x4634_1855_0c96_d234),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -543,11 +562,16 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0xdfed_3982_a8f4_7a18` at 60 ticks and `0x5a0b_3d23_e346_8677` /
 ///   `0x7311_e129_616d_bc8e` at 600.
 ///
+/// - **Moved 2026-09-06**, the same `roll_axis_zone` addition [`REFERENCE`]'s
+///   own history records, inherited the same way. Replaces
+///   `0x0549_867b_d291_294c` / `0x1f6d_7622_eb31_7338` at 60 ticks and
+///   `0x626e_0aee_2d8b_48f7` / `0x78f9_263c_8a07_97ee` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x0549_867b_d291_294c, 0x1f6d_7622_eb31_7338),
-    (600, 0x626e_0aee_2d8b_48f7, 0x78f9_263c_8a07_97ee),
+    (60, 0x84fa_0540_953f_7dbc, 0x5544_ea00_8147_b29c),
+    (600, 0x71c8_e66d_871f_8f3b, 0x9c54_22cf_8958_48ea),
 ];
 
 #[test]
