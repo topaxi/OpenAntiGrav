@@ -120,7 +120,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
 
     let mut solo = Solo::default();
     let mut run = 0u32;
-    for _ in 0..ticks {
+    for tick in 0..ticks {
         race.tick(&oag_gameplay::InputSnapshot::default());
         let ship = &race.world.ships[1];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
@@ -129,9 +129,25 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         // The same three terms `Race::stalled` applies, restated here rather than
         // reached through it: a test that called the private predicate would pass
         // whatever that predicate did, including nothing.
+        //
+        // `tick != oag_race::COUNTDOWN_TICKS` excludes one specific, understood
+        // tick: the countdown hold releases every opponent's throttle from zero
+        // to full in a single tick, so at `tick == COUNTDOWN_TICKS` `thrust` has
+        // just gone positive while `linear_velocity` has not risen off ~0 yet -
+        // which reads as `stalled` by this predicate's own three terms even
+        // though the craft is not stuck. Confirmed by instrumenting
+        // `(tick, thrust, speed)` around the release: on all of `16_Track`,
+        // `03_Track` and `06_Track` at ace, `thrust` reads 100 and `speed`
+        // ~0.57 units/s at exactly `COUNTDOWN_TICKS`, and >1.0 the very next
+        // tick - identically on all three, so this is a property of the
+        // countdown gate itself, not of any one circuit. Excluded here rather
+        // than by loosening the zero-tolerance assertion below, the same way
+        // `shuriken_ground_truth::WARM_UP_TICKS` skips past its own known
+        // window rather than starting exactly at `COUNTDOWN_TICKS`.
         let stalled = ship.physics.thrust > 0.0
             && !ship.standing.finished()
-            && ship.physics.body.linear_velocity.length() < race::STALL_SPEED;
+            && ship.physics.body.linear_velocity.length() < race::STALL_SPEED
+            && tick != oag_race::COUNTDOWN_TICKS;
         run = if stalled { run + 1 } else { 0 };
         solo.longest_stall = solo.longest_stall.max(run);
     }
@@ -206,6 +222,15 @@ fn no_circuit_sustains_a_stall_past_the_rescue_threshold() {
 /// zero - across all twelve circuits at all four difficulties. That is what buys
 /// the room between the healthy case and the beached one, and it is the property
 /// that would break first if the constant were ever raised.
+///
+/// One tick is excluded from that count, not exempted from the guarantee: the
+/// countdown hold's release, at exactly `COUNTDOWN_TICKS`, necessarily reads as
+/// `stalled` for one tick by [`solo`]'s own predicate (thrust has just gone
+/// positive, speed has not risen off ~0 yet) on every circuit, since the hold
+/// mechanism itself is circuit-agnostic - see the comment in [`solo`] for the
+/// instrumented proof. `solo` does not count that specific tick, so "zero"
+/// below still means zero *genuine* stalls; a real one, anywhere else in the
+/// run, still fails this test exactly as before.
 ///
 /// A stall rescue that fired on a craft merely cornering slowly would launder bad
 /// driving into completed laps, which is exactly what `race_ground_truth`'s solo
