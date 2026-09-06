@@ -7,19 +7,20 @@
 //! pressings. See [`ShipState::roll_taps`] and its neighbours for the state
 //! this module advances.
 //!
-//! # What is this crate's own resolution, not a traced read
+//! # The release event is now read, and it is the landing
 //!
 //! The original arms a roll by setting one of two bits
 //! (`entity+0x860 & 0x100`/`& 0x80`) that ramp [`ShipState::roll_phase`] toward
-//! `+1.0`/`-1.0`, and "when they clear ... it continues to the nearer end" -
-//! but **what clears them was not traced**. This module ties that release to
-//! the airborne-to-grounded transition, because the *only* other traced fact
-//! about the phase is that the landing payout reads `|entity+0x87c| > 0.5` at
-//! exactly that transition - so one event explaining both the phase's release
-//! rule and the payout's gate is the simplest reading consistent with what was
-//! measured, not a second independent finding. If a future trace shows the
-//! bits clearing on some other event (a timeout, a second gesture, a menu
-//! transition), [`release`] is what moves.
+//! `+1.0`/`-1.0`. What clears them was this module's own guess until
+//! 2026-09-06, when `Ship_UpdateSideshiftInput_q` (`0x08846a54`) was read
+//! whole: the clear sits in the **airborne-to-grounded** branch
+//! (`craft+0x1c0 & 1` set this tick, `craft+0x860 & 0x200` clear, meaning it
+//! was not set last tick), in the same `if` that arms the payout off
+//! `|entity+0x87c| > 0.5`. So [`release`]'s event was the right guess and is
+//! now a reading. A second clear runs on the opposite, grounded-to-airborne
+//! transition (`0x08846ab4`-`0x08846ac8`); this port has no equivalent because
+//! the grounded gate in [`advance_gesture`] makes an armed roll on the ground
+//! unreachable in the first place.
 
 use crate::params::Dimensions;
 use crate::ship::{ShipControls, ShipState};
@@ -39,6 +40,35 @@ pub const INTER_TAP_TIMEOUT: f32 = 0.6;
 /// literal the original's own comparison uses, read off the disassembly, not
 /// out of the XML. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const COMPLETION_SPLIT: f32 = 0.5;
+
+/// The fraction of the shield pool an **AI** driver keeps back rather than
+/// spending on a barrel roll.
+///
+/// # This number is invented, and it is the only invented number this mechanic
+/// carries
+///
+/// Nothing on the disc authors it and nothing in the recovered chain gates on
+/// it. It was chosen by the maintainer on 2026-09-06, in those terms - "I think
+/// AI should still avoid barrel rolls if they are low on energy, like below 20%
+/// or something, unsure what the original does here, but I'd be good with
+/// inventing a value here too" - and it is recorded here as a design decision,
+/// **not** as a finding. It deliberately carries no confidence score: a score
+/// would let a later reader cite a choice as evidence.
+///
+/// It sits *on top of* the original's own gate, which is [`arm`]'s
+/// `cost < shield` and is recovered at confidence 90. An AI craft therefore
+/// needs both; a human craft needs only the recovered one, and
+/// [`ShipControls::computer_driven`] is what tells the two apart. **That
+/// asymmetry is the deviation.** It is an AI-quality choice - an opponent that
+/// spends its last energy on a manoeuvre and is then destroyed by one wall is
+/// a worse opponent - and it is not a claim about how the original's craft
+/// behave.
+///
+/// If the original's own AI gate is ever recovered, this constant is
+/// **replaced** by it rather than reconciled with it, and this whole doc
+/// comment goes with it. Changing the value meanwhile is a one-line edit here
+/// and nowhere else.
+pub const AI_ROLL_SHIELD_FLOOR: f32 = 0.20;
 
 /// How far the steering axis has to be pushed for a tap, normalised.
 ///
@@ -239,57 +269,84 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// means the two schemes never enter into it - the barrel roll is not a
 /// scheme-dependent gesture, unlike the sideshift.
 ///
-/// # An AI craft can arm one, and that is measured rather than assumed
+/// # An AI craft can arm one, and the original's opponents almost certainly cannot
 ///
 /// This crate does not know whether a craft is flown by a pilot or by
 /// `oag_ai::Driver` - both arrive as [`ShipControls`] - and the axis leg has
 /// no human-only gate the way the novice flick's
 /// [`ShipControls::shift_modifier`] effectively is. So an opponent's own
-/// steering can complete the alternation. **Deliberately left that way**: the
-/// original's gesture reads whatever is in the craft's input block, and adding
-/// a "human only" flag would be inventing a mechanism nothing was traced to.
+/// steering can complete the alternation, and on the disc's own circuits it
+/// routinely does.
 ///
-/// How often it actually happens was measured against `oag-ai`'s own closed-loop
-/// fixtures on 2026-09-06, eight seeded drivers for 3,600 ticks each:
-/// **zero** arms on the ordinary oval, and **three arms across the eight** on
-/// `oval_of(60.0, 300.0)` - the deliberately pathological corner
-/// `a_differential_holds_a_corner_the_steering_alone_cannot` keeps because a
-/// craft "genuinely cannot make it on the stick alone" and sits on the steering
-/// stop for 300+ ticks. Not pinned by a test on purpose - the number moves
-/// with any controller tuning, which is the same reason `closed_loop.rs` keeps
-/// its own bounds loose.
+/// **The original reads this gesture out of the human player's pad block and
+/// nothing else**, recovered 2026-09-06 at confidence 85 - see
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, "The tap history is
+/// the player's pad, and it is cleared on the ground". Two legs: the whole tap
+/// leg early-outs on `ship+0x78 == 0` (`0x08846be0`), and the axis edge
+/// detector's previous-sample store is a **single global** at `0x08ae4cf0`,
+/// referenced from this one function and nowhere else - a per-process scalar
+/// cannot serve eight craft at once.
 ///
-/// **The synthetic ovals understate it by an order of magnitude, and the disc
-/// says so.** Re-measured on 2026-09-06 against the real circuits - one lone
-/// Ace craft, `Mode::SingleRace`, 18,000 ticks, every forward circuit - an
-/// opponent arms **four to eight rolls in a three-lap race on ten of the
-/// twelve**, spending **30 to 54 of its 95 shield**. On `07_Track` and
-/// `16_Track` it never leaves the ground for a single tick, so [`release`] is
-/// never called, [`ShipState::roll_payout_timer`] is never armed, and every
-/// one of those charges buys nothing. On `07_Track` that is fatal: the craft
-/// is destroyed on lap 2 where it used to bank a clean lap first, which is
-/// what `crates/game/tests/race_ground_truth.rs`'s
-/// `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` caught. So
-/// ordinary AI cornering *does* arm rolls, routinely. The gesture is left
-/// ungated all the same, for the reason above - what is missing is a trace,
-/// not a rule invented to fit this measurement.
+/// This project keeps the gesture reachable by every craft all the same, on a
+/// maintainer's ruling of 2026-09-06 ("AI may barrel roll, if they have enough
+/// shield energy") rather than as a port of the original. It is a **deliberate
+/// deviation**, recorded so the next reader does not mistake it for a finding;
+/// what makes it affordable is the grounded gate below, which is a port.
 ///
-/// # No airborne gate
+/// The second half of that ruling is [`AI_ROLL_SHIELD_FLOOR`], an **invented**
+/// AI-only shield floor that the human player's path does not carry. It is the
+/// only invented number in this module, it has no confidence score on purpose,
+/// and its own doc comment is where the reasoning lives.
 ///
-/// Nothing here checks that the craft is off the ground, because nothing in the
-/// recovered chain does either: the gesture arms whenever it completes and it
-/// is the *payout* that requires the airborne-to-grounded transition. A roll
-/// armed on the ground therefore costs shield and ramps [`ShipState::roll_phase`]
-/// like any other. If a trace ever shows the original refusing to arm on the
-/// ground, this is where that gate goes.
+/// # The grounded gate
+///
+/// The original **cannot arm a roll while the craft is in contact with the
+/// track**, and it enforces that by zeroing the whole three-slot tap history
+/// every tick the contact bit is set rather than by refusing at the arm:
+/// `0x08846bd0` branches past all tap handling when `craft+0x1c0 & 1` is set
+/// and `0x08847018`-`0x08847030` write zero to `+0x88c`/`+0x890`/`+0x894`.
+/// So a gesture cannot even span a takeoff, let alone complete on the ground.
+/// Confidence 88; same evidence page.
+///
+/// `contact` is **last** frame's groundedness, because that is what the
+/// original reads: this function runs before `Ship_UpdateHover` rebuilds the
+/// bit, the same ordering [`crate::forces::evaluate`] keeps and the same value
+/// `crate::airbrake::sideshift_force` is handed.
+///
+/// This is the fix for the regression `crates/game/tests/race_ground_truth.rs`'s
+/// `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` caught on
+/// 2026-09-06: an Ace opponent was arming four to eight rolls a race on ten of
+/// the twelve circuits and spending 30 to 54 of its 95 shield, and on
+/// `07_Track` and `16_Track` - which it never leaves the ground on - every one
+/// of those charges bought nothing, because [`release`] never ran. With the
+/// gate, a craft that never flies never pays.
+///
+/// # A completed pattern levels the phase
+///
+/// The original writes `0.0` to `+0x87c` on **any** completed alternation
+/// (`0x08846e5c`, `0x08846f54`), on the far side of the `cost < shield` test,
+/// so a refused gesture levels the ship just as an accepted one does and a new
+/// roll always starts from level rather than from a previous roll's residue.
 pub fn advance_gesture(
     state: &mut ShipState,
     input: &ShipControls,
     dimensions: &Dimensions,
     roll_cost: f32,
+    contact: bool,
     dt: f32,
 ) -> bool {
     advance_tap_timer(state, dt);
+
+    if contact {
+        state.roll_taps = [0, 0, 0];
+        // [`ShipState::roll_axis_zone`] is deliberately *not* refreshed here.
+        // The original's edge detector sits inside the airborne branch, so its
+        // previous sample goes stale across a grounded stretch and the first
+        // airborne tick compares against whichever side the axis was on before
+        // touchdown. Refreshing it would be the tidier reading and a different
+        // one.
+        return false;
+    }
 
     let zone = axis_zone(input.steer_x);
     let crossed = if zone == state.roll_axis_zone {
@@ -313,7 +370,15 @@ pub fn advance_gesture(
     let Some(sign) = record_tap(state, direction) else {
         return false;
     };
-    arm(state, dimensions, roll_cost, sign)
+    // The invented AI-only floor sits *outside* `arm`, which holds the
+    // original's own `cost < shield` and nothing else. See
+    // [`AI_ROLL_SHIELD_FLOOR`].
+    let floored = input.computer_driven && state.shield < AI_ROLL_SHIELD_FLOOR * dimensions.shield;
+    let armed = !floored && arm(state, dimensions, roll_cost, sign);
+    // Levelled whether or not the shield could pay - see the section above.
+    // The floor refuses the same way a flat shield does, so it levels too.
+    state.roll_phase = 0.0;
+    armed
 }
 
 #[cfg(test)]

@@ -590,6 +590,101 @@ simply is not how it gets there. **The subsection below answers that**: `+0x87c`
 is eased into a second field and that field rotates the ship's own display
 matrix about its nose.
 
+### The tap history is the player's pad, and it is cleared on the ground
+
+Read 2026-09-06, whole-function, because a port that let AI craft reach this
+gesture was destroying an opponent on `07_Track`. Two findings, one of which is
+the missing gate the section above says "nothing here checks".
+
+**The whole tap leg is skipped while the craft is in contact with the track.**
+`craft+0x1c0 & 1` is the contact bit ([engine.md](engine.md), which reads it as
+"no probe touched anything this tick" at `0x0884870c`). At `0x08846bd0`:
+
+```text
+08846bc4  lw    a1, 0x1c0(a0)          ; a0 = craft+0x94, the ship struct
+08846bc8  andi  a1, a1, 0x1            ; the contact bit
+08846bcc  andi  a1, a1, 0xff
+08846bd0  bne   a1, zero, 0x08847018   ; in contact -> jump past every tap
+```
+
+and the landing site zeroes the history outright:
+
+```text
+08847018  sw    zero, 0x88c(s0)        ; the three tap slots
+0884701c  sw    zero, 0x890(s0)
+08847030  sw    zero, 0x894(s0)        ; (delay slot)
+```
+
+So a grounded craft does not merely fail to arm - it **cannot hold a partial
+gesture at all**, and an alternation cannot span a takeoff. The inter-tap timer
+`+0x884` is advanced before the branch (`0x08846bbc`) and so keeps running
+either way. Confidence **88**: the branch and the three stores are unambiguous,
+the contact bit's identity is already established on `engine.md` from a
+different function, and what is missing is only a runtime leg.
+
+The other side of the same `if` is the release event that
+`crates/physics/src/barrel_roll.rs` had until now recorded as its own guess:
+
+| Transition | Test | What runs |
+| --- | --- | --- |
+| grounded -> airborne | `!(craft+0x1c0 & 1)` and `craft+0x860 & 0x200` | `0x08846ab4`-`0x08846ac8` clear both arm bits `0x80`/`0x100` |
+| airborne -> grounded | `craft+0x1c0 & 1` and `!(craft+0x860 & 0x200)` | if armed and `|craft+0x87c| > 0.5`, set the payout timer `+0x898`; then clear both arm bits |
+
+`craft+0x860 & 0x200` is this function's own copy of last call's contact bit,
+written at `0x08847220`-`0x08847240` at the tail. So the release is the
+**landing**, which is what the port already had, and it now rests on a reading
+rather than on the payout's gate being the simplest explanation.
+
+One more difference the port did not have: `swc1 f22, 0x87c(s0)` at `0x08846e5c`
+and `0x08846f54` writes `0.0` to the roll phase on **any** completed
+alternation, on the far side of the `cost < shield` test, so a refused gesture
+levels the ship exactly as an accepted one does.
+
+**And the gesture is the human player's alone.** Two independent legs, both from
+this function, confidence **85**:
+
+1. **The tap leg early-outs on a null pointer.** `0x08846be0` is
+   `beq a3, zero, 0x08846c94` on `ship+0x78`, which skips both d-pad reads, both
+   axis comparisons and the previous-sample store. The same block's button bits
+   are read at `ship+0x78 + 0x20`/`+0x24` and indexed by
+   [`Options_ButtonForAction`](#options_buttonforaction-0x088366bc) - the
+   *player's* configured mapping - so `+0x78` is a pad block and there is one
+   set of bindings, not eight.
+2. **The axis edge detector's previous sample is a single global.** The `lui`
+   at `0x08846c08` plus the `lwc1`/`swc1` at `-0x4aa8` resolve to
+   **`0x08ae4cf0`**, in segment 1 (`.data`/`.bss`, which loads at `0x08ad9798`),
+   and `scripts/psp-relocate.py xrefs 0x08ae4cf0` returns exactly the two
+   references inside this function. A per-process scalar cannot hold "which side
+   of `+/-90` was I on last tick" for eight craft at once, so at most one craft
+   ever runs this leg.
+
+**A complete scan for arm sites finds no third one.** Every `sw rX, 0x860(rY)`
+in `.text` whose stored register is written by an `ori rX, ?, 0x80` or
+`ori rX, ?, 0x100` within the preceding eight instructions, over the relocated
+image:
+
+| Site | What it is |
+| --- | --- |
+| `0x08846d94` (`ori 0x100` at `0x08846d8c`) | the `2,1,2` arm, in the tap block above |
+| `0x08846eb8` (`ori 0x80` at `0x08846eb0`) | the `1,2,1` arm, in the tap block above |
+| `0x0883d580` / `0x0883d59c` | a **remote** applier: `lbu a3, 0x4(a2)` picks the direction out of an 8-byte packet and `table[id]` picks the craft - the same 8-byte packet `Ship_UpdateSideshiftInput_q` *sends* at `0x08846ddc`/`0x08846f04` when the local craft arms, gated on `DAT_088357f8+0xb8 > 0xd` |
+| `0x088442bc` / `0x088442e0` | **dead**, and they look live: each is `li a0, 0` then `beql a0, zero`, always taken, so the `ori 0x80`/`ori 0x100` sitting in the fall-through is never reached and what actually runs is the `andi ~0x80`/`~0x100` clear these two pages already record at `0x088442e8` |
+
+So the only thing that arms a barrel roll on this disc is a human tapping it
+out, or a network peer reporting that one did.
+
+Neither leg is a live read of `ship+0x78` on an opponent, which is what would
+take this past 90; both were produced with `scripts/psp-relocate.py`
+(`callers`, `resolve`, `xrefs`, `field`) and `search`-style operand scans, never
+with `get_xrefs_to`, which returns nothing on any PSP database here
+([workflow.md](../../workflow.md)).
+
+**This project deviates from leg 2 deliberately.** On a maintainer's ruling of
+2026-09-06 - "AI may barrel roll, if they have enough shield energy" - the port
+leaves the gesture reachable by every craft rather than gating it on a pad. The
+grounded gate above is what makes that affordable, and it is a port; the AI's
+access to the gesture is not.
+
 ### The roll is drawn: `+0x87c` eases into `+0x880`, which rolls the ship about its nose
 
 Searched 2026-09-06, and the answer is **yes, there is a render consumer** - two

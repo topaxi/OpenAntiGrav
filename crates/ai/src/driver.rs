@@ -335,6 +335,9 @@ impl Driver {
             airbrake_left,
             airbrake_right,
             sideshift: self.ram(state, ctx, &personality),
+            // Not a control: the one flag `oag-physics` uses to apply an
+            // AI-only rule, `barrel_roll::AI_ROLL_SHIELD_FLOOR`. See there.
+            computer_driven: true,
             ..ShipControls::default()
         }
     }

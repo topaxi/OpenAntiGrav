@@ -652,6 +652,9 @@ fn a_zero_handling_ship_gets_nothing_from_the_airbrake_path() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
+        // Not a control - the AI-only shield floor's flag. On, so this
+        // covers that path too.
+        computer_driven: true,
     };
     let forces = evaluate(&state, &input, &Handling::ZERO, 40.0);
     assert_eq!(forces.world_force, Vec3::ZERO);

@@ -396,9 +396,8 @@ fn a_ship_pressed_into_the_floor_never_ends_up_below_it() {
     }
 }
 
-/// With every tunable zeroed there is no gravity, no suspension - `ride_height`
-/// is zero, so the probes have no length and cannot find the floor - and no
-/// airbrake response. A ship at rest stays put, whatever the pilot does.
+/// With every tunable zeroed there is no gravity, no suspension (`ride_height`
+/// is zero, so the probes have no length) and no airbrake response either.
 #[test]
 fn a_zero_parameter_ship_at_rest_never_accelerates() {
     let world = flat_floor(Surface::Floor);
@@ -419,6 +418,7 @@ fn a_zero_parameter_ship_at_rest_never_accelerates() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
+        computer_driven: true,
     };
 
     for _ in 0..600 {

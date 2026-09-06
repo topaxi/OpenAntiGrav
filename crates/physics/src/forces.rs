@@ -584,7 +584,18 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // Whether it armed is deliberately dropped: the original plays a cue on the
     // *payout*, not on the arm, and this crate emits no cues at all. See
     // `crate::barrel_roll`.
-    barrel_roll::advance_gesture(state, input, &handling.dimensions, handling.roll_cost, dt);
+    //
+    // `control_contact` and not `contact_grounded`: the original's own read of
+    // `craft+0x1c0 & 1` here is last frame's, because this runs before hover
+    // rebuilds the bit. Same value the sideshift above is handed.
+    barrel_roll::advance_gesture(
+        state,
+        input,
+        &handling.dimensions,
+        handling.roll_cost,
+        control_contact,
+        dt,
+    );
     barrel_roll::advance_phase(state, handling.roll_speed, dt);
     state.roll_payout_timer = (state.roll_payout_timer - dt).max(0.0);
 

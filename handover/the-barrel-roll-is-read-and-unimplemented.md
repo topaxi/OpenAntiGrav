@@ -143,13 +143,20 @@ See the module's own doc comment if a future trace contradicts it.
 
 ## Open
 
-- **Nothing gates the arm on being airborne, because nothing in the
-  recovered chain does.** The gesture arms wherever it completes and it is
-  the *payout* that requires the airborne-to-grounded transition, so a roll
-  tapped out on the ground costs shield and ramps the phase like any other,
-  and pays out on the next landing. Whether the original refuses to arm on
-  the ground was never traced - `advance_gesture` is where that gate goes if
-  a trace ever shows one. Untested against the original either way.
+- ~~**Nothing gates the arm on being airborne, because nothing in the
+  recovered chain does.**~~ **Closed 2026-09-06, and the answer was yes.**
+  `Ship_UpdateSideshiftInput_q` branches past every tap when the contact bit
+  `craft+0x1c0 & 1` is set (`0x08846bd0`) and **zeroes the three-slot tap
+  history outright** (`0x08847018`-`0x08847030`), so a grounded craft cannot
+  hold a partial gesture, let alone complete one, and an alternation cannot
+  span a takeoff. Confidence 88; evidence in
+  [input-bindings.md](../docs/ghidra/functions/psp-pulse-usa/input-bindings.md)'s
+  "The tap history is the player's pad, and it is cleared on the ground", and
+  ported as `advance_gesture`'s `contact` argument. The same read also turned
+  the release event from this port's own guess into a reading (it is the
+  airborne-to-grounded transition, as guessed) and found a third behaviour the
+  port was missing: a completed alternation writes `0.0` to the phase whether
+  or not the shield could pay for it.
 - **AI craft can now arm rolls off their own cornering, and how often was
   measured rather than guessed.** `oag_ai::Driver` emits
   `ShipControls::steer_x` at full deflection and the axis leg has no
@@ -168,6 +175,47 @@ See the module's own doc comment if a future trace contradicts it.
   and that is the open question, not the rate. Not pinned by a test: the
   number moves with any controller tuning, the same reason `closed_loop.rs`
   keeps its own bounds loose.
+
+  **Two corrections, both 2026-09-06.** The rate above was measured on
+  `oag-ai`'s synthetic ovals and understates the disc by an order of
+  magnitude: on the real circuits an Ace opponent armed four to eight rolls a
+  race on ten of the twelve and spent 30-54 of its 95 shield, which destroyed
+  it on `07_Track`. And the untraced half is now traced, against this port:
+  the original's tap leg early-outs on a null `ship+0x78` (`0x08846be0`,
+  the *player's* pad block, its buttons indexed by `Options_ButtonForAction`)
+  and its axis edge detector keeps its previous sample in a **single global**
+  at `0x08ae4cf0`, referenced only from that one function - a per-process
+  scalar cannot serve eight craft, so the original's opponents almost
+  certainly never arm a roll at all. Confidence 85.
+
+  **This project keeps them able to, deliberately.** Maintainer's ruling,
+  2026-09-06: "AI may barrel roll, if they have enough shield energy." What
+  makes that affordable is the grounded gate in the bullet above, which is a
+  port; the AI's access to the gesture is a documented deviation.
+- **`oag_physics::barrel_roll::AI_ROLL_SHIELD_FLOOR` is invented, and it is the
+  first invented number this mechanic carries.** An AI craft below 20% of its
+  shield pool does not arm a roll; a pad on the same shield does. The value was
+  chosen by the maintainer on 2026-09-06, who said plainly that what the
+  original does here is unknown, and it deliberately has **no confidence
+  score** - a score would let a later reader cite a choice as evidence. It sits
+  on top of the recovered `cost < shield` gate rather than replacing it, and
+  `ShipControls::computer_driven` is the flag that keeps it off the human path.
+  If the original's own AI gate is ever recovered, this constant is *replaced*
+  by it, not reconciled with it. Changing the value is a one-line edit.
+
+  **Measured on the disc, it fires zero times.** With the floor at `0.20` and
+  at `0.00`, all twelve forward circuits report identical arms, shield spent and
+  finishing shield. The grounded gate accounts for the whole of the `07_Track`
+  regression on its own, so the floor is a dormant safety net rather than a live
+  rule - worth knowing before anyone tunes it.
+- **A completed roll used to draw two rotations, and now draws one.** Reported
+  from play 2026-09-06. `release` leaves `roll_target` at `+-1.0` and the phase
+  parks there, which is level on screen; the next roll the *other* way then
+  travelled `+1.0 -> -1.0`, twice a turn. Fixed by the original's own phase
+  levelling on any completed alternation, and pinned by
+  `barrel_roll::tests::a_second_roll_the_other_way_travels_one_turn_and_not_two`,
+  which asserts the **traversal** rather than the endpoint - the endpoint was
+  always right, which is why no existing test could see it.
 - ~~Nothing draws the roll and no render-side consumer of `entity+0x87c` has been
   searched for.~~ **Closed 2026-09-06**: there is one, the visual is a rotation
   derived from the phase and not a canned animation, and it moved to its own
@@ -190,9 +238,10 @@ See the module's own doc comment if a future trace contradicts it.
 1. Confirm the gesture off the original with a capture, the way the
    sideshift's veteran double-tap was confirmed in
    `docs/reverse-engineering/ppsspp-debugger.md` - the whole chain here is
-   still a static read. A capture would settle the two Open bullets above at
-   once: whether the original arms on the ground, and what its own AI craft
-   do. `scripts/psp-drive.py` can already script a d-pad alternation. **The
+   still a static read. Both questions the capture was owed are now answered
+   statically, so what it would add is the runtime leg that takes the grounded
+   gate past 88 and `ship+0x78 == 0` on an opponent past 85; read `ship+0x78`
+   for an AI craft and watch `craft+0x88c` on a grounded player. `scripts/psp-drive.py` can already script a d-pad alternation. **The
    same capture also settles the one thing the render read could not** - which
    way the ship rolls - so running it once serves both threads; see
    [the-barrel-roll-has-a-drawing-job.md](the-barrel-roll-has-a-drawing-job.md).
