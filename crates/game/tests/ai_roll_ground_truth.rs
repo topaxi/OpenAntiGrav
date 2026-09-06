@@ -253,7 +253,10 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str) -> Option<Vec<Rolls>> {
 /// `Difficulty::temper` actually touches. A craft named `Novice` here is a
 /// full-speed driver with a novice's *temperament*, not a slow one; that is
 /// the whole of what "propensity" can mean without a per-slot `Tuning`.
-fn grid_rolls_mixed_on(track: &str, tiers: &[oag_ai::Difficulty]) -> Option<Vec<(oag_ai::Difficulty, Rolls)>> {
+fn grid_rolls_mixed_on(
+    track: &str,
+    tiers: &[oag_ai::Difficulty],
+) -> Option<Vec<(oag_ai::Difficulty, Rolls)>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
