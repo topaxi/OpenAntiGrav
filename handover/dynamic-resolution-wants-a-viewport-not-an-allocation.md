@@ -45,12 +45,21 @@ are closed.
   which [goals.md](../docs/overview/goals.md) names in the first tier. It is
   the one number ADR-0037 states as unmeasured, and the answer could argue for
   a per-title *ceiling* rather than a per-title floor.
-- **`SCENE_SHARE` is 0.45 and is a choice, not a reading.** The budget is the
-  `race` pass alone. `bloom`, `hd_bloom` and `motion_blur` draw at scene
-  resolution and belong in it, and they take a viewport now - so the reason
-  they are out is no longer structural, it is three more timestamp claims a
-  frame. Timing them is what shrinks the guess, and is worth more than tuning
-  the constant.
+- **~~`SCENE_SHARE` is 0.45 and is a choice, not a reading.~~ `SCENE_SHARE`
+  does not exist any more - superseded by `RESIDUAL_SHARE = 0.20`
+  ([ADR-0042](../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md)
+  through
+  [ADR-0045](../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md),
+  all landed 2026-09-03/04, after this thread's last touch.** `hd_bloom` and
+  `motion_blur` are timed and in `drs::Cost::scalable` today; the plain,
+  recovered PSP/Pure `bloom` composite
+  (`oag_render::post::bloom::Bloom::render`, called from
+  `race/scene/frame.rs` between the scene pass's `drop(pass)` and the
+  motion-blur chain) is the one pass still running outside every timer -
+  the scene-pass timestamp closes before it runs and it is neither `blur`
+  nor `hd_bloom`, so its cost still hides inside `RESIDUAL_SHARE`. Timing it
+  the same way ADR-0043 timed `hd_bloom` is what closes this, not tuning the
+  constant.
 - **FSR 3.1 will want a moving jitter phase count.** `jitter::PHASES` is a
   fixed sixteen, deliberately: deriving it from the presentation-to-render
   ratio is the FSR 3.1 port's decision, not this thread's. A moving scale means
@@ -65,8 +74,10 @@ are closed.
 
 ## Next Steps
 
-1. Time `bloom`, `hd_bloom` and `motion_blur` into the budget - the cheapest
-   way to make `SCENE_SHARE` less of a guess.
+1. ~~Time `bloom`, `hd_bloom` and `motion_blur` into the budget.~~ `hd_bloom`
+   and `motion_blur` are done (ADR-0043, ADR-0042). What is left: time the
+   plain `bloom` composite the same way and fold it into
+   `drs::Cost::scalable`.
 2. Take the Steam Deck memory reading, or say out loud that nobody will.
 3. Ask a player whether the stepping is visible at 49 changes a minute, before
    tuning `RISE_PATIENCE` on a hunch.
