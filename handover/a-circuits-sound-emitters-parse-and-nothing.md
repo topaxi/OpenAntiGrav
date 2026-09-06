@@ -35,23 +35,23 @@ taste, and are the reason it is worth doing properly rather than quickly:**
 
 ## Open
 
-- **At least one waveform-binding opcode is undecoded, and 38 nodes are silent
-  because of it.** Playing the emitters found a failure the name-table sweep
-  could not: a cue that *is* in the bank and whose command run binds no
-  waveform, because every command is an opcode `oag_formats::sblk` does not
-  read. Eight circuits, 38 nodes, tabulated on
+- **Opcode `0x14` is undecoded and nine authored emitters are silent because
+  of it.** Playing the emitters found a failure the name-table sweep could not:
+  a cue that *is* in the bank and whose command run binds no waveform. 38 nodes
+  across eight circuits, and the opcodes split them cleanly - `0x1e` on every
+  `~SetReg*` cue and nothing else, `0x14` on `moather~birds`, `dekonst~CRANE`
+  and, beside its `0x1e`, on both of `talonsj`'s. `0x1e` reads as a register
+  set that plausibly emits nothing; **`0x14` is the one to decode**, and the
+  `talonsj` cues carrying both is what rules out "these are all just
+  registers". Table and confidence on
   [track-sound-emitters.md](../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md).
-  Most are spelled `~SetReg*` and may genuinely emit nothing, but
-  `moather~birds` (5 nodes) and `dekonst~CRANE` are named after sounds, and Moa
-  Therma having five silent bird emitters is not a plausible reading.
-  **`moather~birds` is the cue to point a re-read of the command decoder at.**
 - **What a latched voice should do.** `SoundEmitter_ServiceRequests` leaves a
   latched request untouched - "not even reaped" - so the original's voice keeps
   playing at the last in-range gain, which is near zero. `Ambience::tick` stops
   it instead and says so in its own doc comment. What reclaims the original's
   voice is unread, and that is the gap.
 - **The mix clips.** 7,932 samples over 30 s of `01_Track` before the ambience
-  landed, 23,540 after - about 0.8% of the render. Every emitter plays at the
+  landed, 22,473 after - about 0.8% of the render. Every emitter plays at the
   `1.0` `VexSound_Init` passes and `Mixer::starved` stays at zero, so this is
   the sum's headroom rather than a voice budget. Nothing here invents a gain to
   hide it.
@@ -73,11 +73,12 @@ taste, and are the reason it is worth doing properly rather than quickly:**
 
 ## Next Steps
 
-1. **Re-read `sblk`'s command decoder against `moather~birds`.** One cue, one
-   command, and it is the difference between five silent bird emitters and Moa
-   Therma sounding like Moa Therma. `crates/game/tests/track_audio_ground_truth.rs`
-   already names every one of the 38 nodes and its cue, so the check is a
-   before/after on that test's own output.
+1. **Decode opcode `0x14`.** Find its handler in `Scream_StepCommandList`'s
+   dispatch; `moather~birds` is the cue to point it at, one command long. It is
+   the difference between five silent bird emitters and Moa Therma sounding
+   like Moa Therma. `crates/game/tests/track_audio_ground_truth.rs` already
+   prints every one of the 38 nodes with its cue and its opcodes, so the check
+   is a before/after on that test's own output.
 2. **Sweep `pure-psp-usa` and `pulse-ps2-eu` for the three classes** - one
    `--nodes --class` run each. If Pure authors them, finding where its circuit
    banks live is the follow-on, because it ships no `trackstartup.xml`.

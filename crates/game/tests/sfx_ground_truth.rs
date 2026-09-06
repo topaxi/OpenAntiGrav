@@ -620,7 +620,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // its radius (`oag_game::audio::sfx::TrackEmitters`), and those are not
     // engines. Counting them here would make this assertion a function of
     // which circuit the default happens to be.
-    let voices = audio.output().with_mixer(|mixer| mixer.active_voices()) - audio.ambient_voices();
+    let voices = audio
+        .output()
+        .with_mixer(|mixer| mixer.active_voices())
+        .saturating_sub(audio.ambient_voices());
     assert_eq!(
         voices,
         race.ship_count() as usize,

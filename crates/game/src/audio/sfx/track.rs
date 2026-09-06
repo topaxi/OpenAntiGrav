@@ -12,12 +12,18 @@
 //! # Every emitter is live from construction
 //!
 //! `VexSound_Init` (`0x089259a4`) allocates the emitter and calls `Sound_Play`
-//! on the spot, so a circuit does not start its ambience when the player comes
-//! near it - it starts all of it at load, and the out-of-range latch in
-//! `SoundEmitter_ServiceRequests` (`0x089394dc`) is what keeps a distant one
-//! silent. That distinction is not cosmetic: a design that started a cue on
-//! approach would fade one in every time the player rounded a corner, and this
-//! one does not.
+//! on the spot, so the original does not start a circuit's ambience when the
+//! player comes near it: it starts all of it at load, and the out-of-range
+//! latch in `SoundEmitter_ServiceRequests` (`0x089394dc`) is what keeps a
+//! distant one silent.
+//!
+//! **This does start a cue on approach, and that is the port's one knowing
+//! deviation** - because it also *stops* one on departure, where the original
+//! leaves a latched request untouched. The two go together and neither is
+//! free-standing: [`Ambience::tick`] has the reasoning and what is unread
+//! behind it. The audible consequence is that a looping emitter restarts from
+//! sample zero on each pass rather than being sampled mid-loop, which is worth
+//! knowing before anyone compares a capture against the original.
 //!
 //! # The cone is deliberately absent
 //!
@@ -54,12 +60,13 @@ pub struct Authored {
     ///    `track-sound-emitters.md` - and whether the original silently drops
     ///    one or falls back to a bank-index lookup is unread:
     ///    `Scream_FindSoundInBank`'s name comparison has not been decompiled.
-    /// 2. **The cue binds no waveform.** `14_Track`'s `~SETREG_01` and
-    ///    `~SETREG_02` are in `fortcle` and each runs a single command that is
-    ///    not one of the opcodes `oag_formats::sblk` reads. Six nodes ask for
-    ///    them. That is this port's gap rather than the disc's, and it is not
-    ///    on `track-sound-emitters.md`'s dangling list because that sweep
-    ///    checked the name table and not the command run.
+    /// 2. **The cue binds no waveform**, because its whole command run is
+    ///    opcodes `oag_formats::sblk` does not read. 38 nodes across eight
+    ///    circuits, and the report names the opcodes: `0x1e` on every
+    ///    `~SetReg*` cue, `0x14` on `moather~birds`, `dekonst~CRANE` and both
+    ///    of `talonsj`'s. This port's gap rather than the disc's, and not on
+    ///    `track-sound-emitters.md`'s dangling list, because that sweep checked
+    ///    the name table and not the command run.
     /// 3. **No loaded bank carries that label**, which is what a title with no
     ///    shared track bank gets for every `gentrak` node.
     ///
@@ -328,9 +335,18 @@ pub struct Ambience {
 
 impl Ambience {
     /// How many of the circuit's emitters are sounding right now.
+    ///
+    /// Asked of the mixer rather than counted off the slots, because a slot
+    /// holds a [`oag_audio::VoiceId`] for as long as its emitter is in range
+    /// and a one-shot alternate will have ended inside that window - see
+    /// [`Self::tick`]'s finished-cue arm.
     #[must_use]
-    pub fn playing(&self) -> usize {
-        self.voices.iter().flatten().count()
+    pub fn playing(&self, mixer: &oag_audio::Mixer) -> usize {
+        self.voices
+            .iter()
+            .flatten()
+            .filter(|id| mixer.is_playing(**id))
+            .count()
     }
 
     /// Opens, moves and closes each emitter's voice for this tick.
@@ -377,10 +393,20 @@ impl Ambience {
                     mixer.set_gain(id, placed.gain);
                     mixer.set_pan(id, Some(placed.pan));
                 }
-                // In range with nothing playing: open one. A voice the pool
+                // **In range, opened once, and finished: leave it alone.**
+                // Not every alternate loops - `platinu~BIRDS` binds sixteen
+                // waveforms and only some of them do, and five cues across the
+                // disc are mixed like that - so a cue can end while its
+                // emitter is still in range. The original runs `Sound_Play`
+                // once, at construction, and nothing re-runs it while the
+                // latch is clear; restarting here would machine-gun a one-shot
+                // at 60 Hz, which sounds like a broken sample rather than like
+                // an absence and so would survive listening to it.
+                (Some(_), Some(_)) => {}
+                // In range with nothing open: open one. A voice the pool
                 // refuses is already counted by `Mixer::starved`, and an
                 // emitter whose cue never resolved holds `None` forever.
-                (Some(placed), _) => {
+                (Some(placed), None) => {
                     *held = node.sound.as_ref().and_then(|loaded| {
                         let (sound, looping) = pick(loaded, rng)?;
                         let play = if looping {

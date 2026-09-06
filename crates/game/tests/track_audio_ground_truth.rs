@@ -310,7 +310,7 @@ fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
     }
     // Printed, not asserted, and worth watching. The mix already clipped
     // before this landed - 7,932 samples over the same 30 seconds with the
-    // ambience switched off - and the circuit's own voices take it to 23,540,
+    // ambience switched off - and the circuit's own voices take it to 22,473,
     // about 0.8% of a 2.88M-sample render. Every emitter plays at the volume
     // `VexSound_Init` passes (`1.0`), so the headroom question is the sum's,
     // not this module's, and inventing a gain here to hide it would be exactly

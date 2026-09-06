@@ -424,9 +424,10 @@ impl Audio {
     /// silent-ambience regression would break without changing any other count.
     #[must_use]
     pub fn ambient_voices(&self) -> usize {
-        self.sfx
-            .as_ref()
-            .map_or(0, |voices| voices.ambience.playing())
+        self.sfx.as_ref().map_or(0, |voices| {
+            self.output
+                .with_mixer(|mixer| voices.ambience.playing(mixer))
+        })
     }
 
     /// Releases the held race voices, which is what leaving a race does.

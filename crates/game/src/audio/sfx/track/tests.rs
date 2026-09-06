@@ -117,3 +117,93 @@ fn a_cone_is_counted_and_never_placed() {
     assert_eq!(emitters.cones, 1);
     assert!(cone.cone.is_some());
 }
+
+/// One decoded waveform, `frames` long, with the loop flag the caller wants.
+fn cue(frames: usize, looping: bool) -> Loaded {
+    let sound = oag_audio::Sound::new(vec![8000; frames], 1, 8_000).expect("a sound");
+    Loaded {
+        waveforms: vec![(std::sync::Arc::new(sound), looping)],
+    }
+}
+
+/// A one-shot alternate is played once and **not** restarted while in range.
+///
+/// The bug this exists for is silent to every other check here: a cue re-opened
+/// every tick still counts as one voice, still renders samples and still stops
+/// when the emitter goes out of range. It just sounds like the first few
+/// milliseconds of a sample sixty times a second. Not hypothetical -
+/// `platinu~BIRDS` binds sixteen waveforms and only some of them loop, and five
+/// cues across the Pulse disc are mixed like that, so the uniform draw in
+/// [`super::pick`] does reach a non-looping one.
+#[test]
+fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
+    let mut emitters = TrackEmitters {
+        omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
+        cones: 0,
+        report: Vec::new(),
+    };
+    emitters.omni[0].sound = Some(cue(64, false));
+
+    let mut mixer = oag_audio::Mixer::new(8_000);
+    let mut ambience = Ambience::default();
+    let listener = oag_audio::Listener::at_origin();
+    let mut rng = oag_core::Rng::new(1);
+    let mut out = vec![0.0; 2 * 256];
+
+    ambience.tick(&mut mixer, &emitters, &listener, 0.0, &mut rng);
+    assert_eq!(mixer.active_voices(), 1, "the cue never opened a voice");
+
+    // Long enough to run the 64-frame sample out several times over.
+    for tick in 1..10 {
+        mixer.render(&mut out);
+        #[expect(clippy::cast_precision_loss, reason = "a tick count")]
+        let frame = tick as f32;
+        ambience.tick(&mut mixer, &emitters, &listener, frame, &mut rng);
+    }
+    assert_eq!(
+        mixer.active_voices(),
+        0,
+        "a one-shot is being re-opened every tick while its emitter is in range"
+    );
+    assert_eq!(
+        ambience.playing(&mixer),
+        0,
+        "the count follows the slot rather than the mixer"
+    );
+}
+
+/// A looping cue keeps the voice it opened, and the latch closes and reopens it.
+#[test]
+fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
+    let mut emitters = TrackEmitters {
+        omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
+        cones: 0,
+        report: Vec::new(),
+    };
+    emitters.omni[0].sound = Some(cue(64, true));
+
+    let mut mixer = oag_audio::Mixer::new(8_000);
+    let mut ambience = Ambience::default();
+    let listener = oag_audio::Listener::at_origin();
+    let mut rng = oag_core::Rng::new(1);
+    let mut out = vec![0.0; 2 * 256];
+
+    for tick in 0..10 {
+        #[expect(clippy::cast_precision_loss, reason = "a tick count")]
+        let frame = tick as f32;
+        ambience.tick(&mut mixer, &emitters, &listener, frame, &mut rng);
+        mixer.render(&mut out);
+    }
+    assert_eq!(mixer.active_voices(), 1, "the loop stopped or was doubled");
+    assert_eq!(ambience.playing(&mixer), 1);
+
+    // Out of range: stopped, and the slot cleared so a return can re-open it.
+    let far = oag_audio::Listener {
+        position: [1000.0, 0.0, 0.0],
+        right: [1.0, 0.0, 0.0],
+    };
+    ambience.tick(&mut mixer, &emitters, &far, 10.0, &mut rng);
+    assert_eq!(ambience.playing(&mixer), 0, "the latch did not close it");
+    ambience.tick(&mut mixer, &emitters, &listener, 11.0, &mut rng);
+    assert_eq!(ambience.playing(&mixer), 1, "coming back opened nothing");
+}

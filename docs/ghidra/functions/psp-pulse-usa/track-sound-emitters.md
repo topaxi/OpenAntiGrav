@@ -238,32 +238,43 @@ all**, because every one of its commands is an opcode
 by `crates/game/tests/track_audio_ground_truth.rs`, which loads all twelve
 circuits' banks and reports each miss with its reason:
 
-| Circuit | Cue | Nodes | Commands |
-| --- | --- | --: | --: |
-| `03_Track` | `moather~birds` | 5 | 1 |
-| `04_Track` | `techder~SetReg`, `~SetReg_2` | 2, 2 | 1 |
-| `05_Track` | `dekonst~CRANE` | 1 | 1 |
-| `06_Track` | `vertica~SetReg_01`, `~SetReg_02` | 2, 2 | 1 |
-| `09_Track` | `amphise~SetReg_01`, `~SetReg_02` | 4, 6 | 1 |
-| `13_Track` | `platinu~SetReg`, `~SetReg_2` | 2, 3 | 1 |
-| `14_Track` | `fortcle~SETREG_01`, `~SETREG_02` | 2, 4 | 1 |
-| `16_Track` | `talonsj~SETREG_01`, `~SETREG_02` | 1, 2 | 2 |
+| Circuit | Cue | Nodes | Opcodes its commands run |
+| --- | --- | --: | --- |
+| `03_Track` | `moather~birds` | 5 | **`0x14`** |
+| `04_Track` | `techder~SetReg`, `~SetReg_2` | 2, 2 | `0x1e` |
+| `05_Track` | `dekonst~CRANE` | 1 | **`0x14`** |
+| `06_Track` | `vertica~SetReg_01`, `~SetReg_02` | 2, 2 | `0x1e` |
+| `09_Track` | `amphise~SetReg_01`, `~SetReg_02` | 4, 6 | `0x1e` |
+| `13_Track` | `platinu~SetReg`, `~SetReg_2` | 2, 3 | `0x1e` |
+| `14_Track` | `fortcle~SETREG_01`, `~SETREG_02` | 2, 4 | `0x1e` |
+| `16_Track` | `talonsj~SETREG_01`, `~SETREG_02` | 1, 2 | **`0x14`**, `0x1e` |
 
-**Two of these are not like the others, and they are the interesting ones.**
-`~SetReg` is spelled three different ways across seven circuits and reads as
-"set register" - a control cue that may genuinely emit no sample, in which case
-27 of the 38 nodes are correctly silent and the artists placed them as markers.
-But `moather~birds` and `dekonst~CRANE` are named after sounds, and Moa Therma
-having five bird emitters that make no noise is not a plausible reading of the
-data. So **at least one waveform-binding opcode is undecoded**, and the count of
-authored emitters that this port can play is 38 lower than the name tables
-suggest.
+**The opcodes are read, and they split the set cleanly in two.** `0x1e` is in
+every `~SetReg*` cue and in nothing else; the name reads as "set register" and
+a control cue that emits no sample is a coherent explanation for all 29 of
+those nodes. `0x14` is in `moather~birds` and `dekonst~CRANE` - both named
+after sounds - and, decisively, in `talonsj~SETREG_01`/`_02` **beside** their
+`0x1e`, which is a cue that both sets a register and does something else.
 
-Confidence **85** that these are undecoded rather than empty: the split is
-measured across eight circuits with no exception, and what is *not* established
-is which opcode - `sblk`'s command decoder has not been re-read against one of
-these runs. That is the next step, and `moather~birds` is the cue to point it
-at.
+So `0x14` is the opcode worth decoding, and 9 of the 38 nodes are waiting on
+it: Moa Therma's five birds, De Konstruct's crane, and Talon's Junction's
+three. It is one of the 41 command opcodes
+[`psp-audio.md`](../../../formats/psp-audio.md) lists as unread, and its likely
+shapes are "bind a waveform another way" or "play a cue in another bank" -
+`oag_formats::sblk::child` already handles the second for HD's `0x0f`-style
+indirection and finds nothing here.
+
+Confidence **88** that `0x14` binds something audible: the two-opcode split is
+exact across eight circuits with no exception, and the `talonsj` cues carrying
+both is what rules out "these cues are all just registers". What is **not**
+established is what `0x14` does - the handler has not been found in
+`Scream_StepCommandList`'s dispatch, and no waveform has been recovered through
+it.
+
+Reproduce the table with
+`crates/game/tests/track_audio_ground_truth.rs`'s
+`every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label`,
+which prints every unplayed reference with its reason.
 
 ## Census
 
