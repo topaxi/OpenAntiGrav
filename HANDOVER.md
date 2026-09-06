@@ -604,6 +604,13 @@ agent's**, which is why it is flagged rather than done. Git history retains
 everything regardless, so a sweep would clean the distributable snapshot, not
 the past.
 
+**A second instance was resolved the same way, 2026-09-06.** The Shuriken's and
+Repulser's `<Pickupodds>` weights, recovered while establishing that both are
+Eliminator-only (`docs/gameplay/pickups.md`), are the same kind of shipped
+tuning data. Asked directly, the maintainer chose to commit them: eight values
+for two weapons, load-bearing for the claim, rather than the full thirteen-by-four
+table. The historical sweep above stays open and undecided.
+
 **One new instance was resolved by the maintainer rather than flagged,
 2026-08-17.** The `Weapon Pad` ready-state colour cycle - a 6-entry `[r,g,b]`
 keyframe table recovered from `WeaponPad_UpdateRefreshTimer`
