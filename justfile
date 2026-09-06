@@ -25,11 +25,18 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-handover
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-handover check-link-data
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
     python3 scripts/check-doc-links.py
+
+# Proves scripts/link-worktree-data.sh's own guarantees (never clobber a real
+# file or directory, still reach an untracked entry beside a tracked one)
+# against a throwaway temp directory - no worktree or real data/ needed, so
+# this runs anywhere, including the main checkout.
+check-link-data:
+    bash scripts/link-worktree-data.sh --self-check
 
 # HANDOVER.md must stay under 256 KiB - the Read tool's own ceiling, not a style preference
 check-handover:
@@ -60,7 +67,9 @@ test-data:
 # Symlinks the main checkout's data/ subdirectories into this worktree.
 # `data/` is gitignored, so it does not travel into a `git worktree add` and
 # every disc-backed test skips here until this is run. No-op in the main
-# checkout, and it never replaces a real directory.
+# checkout, and it never replaces a real file or directory - a directory
+# that is only partly tracked (data/traces, data/keys) is descended into
+# rather than skipped whole, so its untracked entries still get linked.
 link-data:
     bash scripts/link-worktree-data.sh
 
