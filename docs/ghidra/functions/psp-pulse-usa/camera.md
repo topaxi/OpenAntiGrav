@@ -903,6 +903,13 @@ So:
   look-around offset added to the aim point, and `craft+0x880`, a roll about the
   view axis. Neither moves where the cockpit is.
 
+  **`craft+0x880` is identified, 2026-09-06: it is the barrel roll.** It is the
+  eased form of the roll phase `craft+0x87c`, written at `0x08841f88` in
+  `FUN_088418e0`, and the same `* 6.28` also rotates the *ship's* display matrix
+  about its nose in that function. So this line is the cockpit view rolling with
+  the manoeuvre, not a standalone camera effect - see
+  [input-bindings.md](input-bindings.md#the-roll-is-drawn-0x87c-eases-into-0x880-which-rolls-the-ship-about-its-nose).
+
 **Applied 2026-08-08** as `oag_render::camera::internal`, with `pitch` implemented
 as the rise it is and `headtilt` **parsed, carried and deliberately not applied** -
 a lean applied with the wrong sign leans the horizon the wrong way through every
@@ -1071,6 +1078,16 @@ follower at rate `5.0` and `craft+0x854` smoothed at `3.0` - from a richer input
 `craft[0x860] & 0x1000`). **`craft+0x854` is not a camera value**: its only
 consumer outside this function is `FUN_088418e0`, the contact-reaction function.
 That is why nothing here is renamed - see below.
+
+**Qualified 2026-09-06.** "Not a camera value" holds, but `craft+0x854` is not
+off the display path either: `FUN_088418e0` reads it at `0x08842148` as
+`craft[0x854] * 0.5`, one of the two terms of the roll angle it applies to the
+*ship's own* transform (the other being the barrel roll's eased phase). So it is
+a **lean the model is drawn with**, on a matrix the camera then follows. That
+does not raise its confidence 0 - what the quantity means physically is still
+unidentified, and it must not be transcribed - but a reimplementation that treats
+it as inert is dropping a visible term. See
+[input-bindings.md](input-bindings.md#stage-2a-the-ships-own-display-matrix-0x08842140---0x08842264).
 
 **Confidence 80** for the arithmetic, read end to end at instruction level, with
 the reader and writer sets established by an operand scan over all 635,908
