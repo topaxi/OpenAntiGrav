@@ -155,7 +155,7 @@ maintainer call, not one to make here.
   ([sideshift-has-no-runtime-leg.md](sideshift-has-no-runtime-leg.md)).
 - **A new axis appends to the end of the draw order, for ever.** If the editor
   ships alongside the AI barrel-roll axes
-  ([our-ai-barrel-rolls-and-the-original-never-did.md](our-ai-barrel-rolls-and-the-original-never-did.md)),
+  ([ai.md](../docs/gameplay/ai.md), which absorbed that thread when the work landed),
   the ordering rule in `docs/gameplay/ai.md` binds both, and an editor that
   writes keys in its own order must not imply the *draw* order changed.
 - **New menu actions are validated at startup.** `menu/definition.rs:415` parses
