@@ -274,6 +274,61 @@ fn lateral_grip_is_suppressed_while_the_slowdown_timer_runs() {
     assert_eq!(held.lateral_grip, Vec3::ZERO);
 }
 
+/// The slowdown timer decays inside the force evaluation, and **lands negative
+/// rather than at zero** on the tick it expires.
+///
+/// The original is `if (t > 0.0f) t -= dt;` with no clamp, so the field freezes
+/// one `dt` below zero and stays there. That residue is not cosmetic:
+/// `crate::slowdown::add` adds into this field before clamping, so the next hit
+/// a craft takes is worth exactly that much less. `airbrake::advance_sideshift`
+/// clamps its own equivalents *because* nothing reads them arithmetically -
+/// see the comment beside the decrement in [`super::evaluate`].
+#[test]
+fn the_slowdown_timer_decays_past_zero_and_freezes_there() {
+    let handling = test_handling();
+    let world = flat_floor();
+    let dt = 1.0 / 60.0;
+
+    let mut ship = ship_at(4.0);
+    ship.slowdown_timer = dt * 1.5;
+
+    evaluate(
+        &mut ship,
+        &ShipControls::default(),
+        &handling,
+        &Environment::default(),
+        &world,
+        dt,
+    );
+    assert_eq!(ship.slowdown_timer, dt * 1.5 - dt);
+
+    // The tick that crosses zero: gated, so it goes negative exactly once.
+    evaluate(
+        &mut ship,
+        &ShipControls::default(),
+        &handling,
+        &Environment::default(),
+        &world,
+        dt,
+    );
+    let expired = ship.slowdown_timer;
+    assert!(expired < 0.0, "expected a negative residue, got {expired}");
+
+    // And freezes: an ungated `t -= dt` would drift without bound, which would
+    // make an arbitrarily old craft immune to the next hit it takes.
+    for _ in 0..600 {
+        evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            dt,
+        );
+    }
+    assert_eq!(ship.slowdown_timer, expired);
+}
+
 /// The collision stun suppresses lateral grip too, and is what counts itself
 /// down - `Ship_ApplyLateralGrip` owns the decrement.
 #[test]
