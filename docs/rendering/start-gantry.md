@@ -214,14 +214,57 @@ The numbers, without a reconciliation:
 - The countdown panel **exits at frame 360/361 = 6.000 s**, 2.97 s after `GO`,
   precisely as the 6.000 s texture loop closes.
 
-That leaves roughly **1.5 s, or 90 ticks, of unexplained pre-roll** between the
-asset's `GO` and the measured green. Nothing measures it, and no wiring should
-assume it. The gated accumulator above is where the alignment has to live: the
-clock the renderer plays `Anim Transform` from today is `g_ingame->0x40`
-([`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md#what-advances-g_ingame-0x40)),
-a free-running global advanced by `InGame_Update`, and a free-running clock
-cannot drive a countdown - which is a second, independent reason a per-object
-gate must exist.
+### The gap is not a pre-roll: the two share a zero, and the original has it too
+
+**Confidence 82, and it retires this section's own standing hypothesis.** This
+used to read that the ~1 s between the asset's `GO` and the measured green was
+"unexplained pre-roll", and that a per-object gate had to exist because
+`g_ingame->0x40` is "a free-running global" and "a free-running clock cannot
+drive a countdown". **The second half of that is wrong, and it is what made the
+first half look like a mystery.**
+
+`g_ingame->0x40` is not free-running across a session. It is **zeroed once per
+race, in `InGame_Construct`**:
+
+```text
+08812d98: mtc1 zero,f20        ; f20 = 0.0, the function's only mtc1
+   ...
+08813090: swc1 f20,0x40(s0)    ; g_ingame->0x40 = 0.0
+```
+
+and `InGame_Update` (`0x08813328`) then advances it by `dt` once its own frame
+counter `this->0x3c` reaches 3 - so it starts three frames after construction
+and counts race seconds from there. Both functions were already named and are
+already in `names.tsv`; what is new here is the zeroing pair, read off the
+disassembly this pass. `anim-transform.md` establishes at confidence 85 that
+this one field is the clock **every** in-race animation path reads - the
+`Anim Transform` tree walk and the texture-transform path alike, with no
+per-model rule.
+
+Now put that against the countdown measurement. The 272 ticks are counted from
+**the first frame the front end reports `InGame`**
+([`gameplay/race-modes.md`](../gameplay/race-modes.md#the-countdown-is-measured):
+`InGameTrackDescriptionScreen` for ticks 0-60, `InGame` from tick 61, green at
+tick 333). That is the same instant `InGame_Construct` runs.
+
+**So the asset's clock and the thrust gate share a zero, to within three
+frames.** There is no pre-roll to find, and nothing to offset. The original
+itself lights `GO` about 0.93 s before the craft can move, and holds it lit for
+1.4 s after - the `GO` state spans the release rather than marking it.
+
+The asset agrees with that reading independently: `GO`'s palette column
+alternates opaque and transparent row by row, so the word **strobes** across its
+whole 3.6-5.97 s window rather than switching on once (33 of 47 samples lit, 14
+dark). A launch cue would be a single clean transition. A flashing banner that
+spans the release is an announcement, not a starting pistol.
+
+**What this does not settle.** Nothing has watched slot 8's own node read
+`g_ingame->0x40` during a countdown - this is a static argument from the clock's
+writers and readers, which is why it is 82 and not higher, and why the gated
+accumulator at `0x0890cf34` stays recorded above as an unresolved alternative
+rather than deleted. The one cheap check that would settle it outright is
+someone playing the original and reporting whether `GO` appears as the craft
+becomes drivable or about a second before.
 
 ## One asset, the whole race
 
