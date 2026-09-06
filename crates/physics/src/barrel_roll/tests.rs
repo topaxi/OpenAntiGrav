@@ -511,3 +511,64 @@ fn a_completed_pattern_levels_the_phase_even_when_the_arm_is_refused() {
     assert_eq!(state.roll_target, 0.0);
 }
 
+/// **Two rolls in opposite directions are two rotations, not one and then
+/// two.**
+///
+/// The bug this pins was reported from play on 2026-09-06 - "the roll rotates
+/// twice where the original rotates once" - and it was invisible to every
+/// other test here, because the phase is correct at every single tick in
+/// isolation. [`release`] leaves [`ShipState::roll_target`] at `+-1.0` on a
+/// completed roll and [`advance_phase`] parks the phase there, which is level
+/// on screen (`ease(1.0) = 1.0`, and one turn is one turn). The next roll the
+/// *other* way then ramps `+1.0 -> -1.0`, a traversal of `2.0` and so two full
+/// turns.
+///
+/// What fixes it is the original's own `swc1 f22, 0x87c` at `0x08846e5c` /
+/// `0x08846f54`: a completed alternation levels the phase before the ramp
+/// starts. So the assertion is on the *traversal*, which is what a viewer
+/// sees, rather than on the endpoint, which was always right.
+#[test]
+fn a_second_roll_the_other_way_travels_one_turn_and_not_two() {
+    let (mut state, dimensions) = armable();
+
+    for dir in [TapDirection::Right, TapDirection::Left, TapDirection::Right] {
+        gesture_tick(&mut state, &dimensions, 0.0, Some(dir));
+    }
+    assert_eq!(state.roll_target, 1.0);
+    // Fly it out to the stop, the way a completed roll ends up.
+    for _ in 0..120 {
+        advance_phase(&mut state, 1.5, 1.0 / 60.0);
+    }
+    assert_eq!(state.roll_phase, 1.0, "the first roll finished");
+
+    // Land it: past the split, so `release` completes rather than cancels and
+    // leaves the target where it is - which is the state the bug needs.
+    assert!(release(&mut state));
+    assert_eq!(state.roll_target, 1.0);
+    assert_eq!(state.roll_phase, 1.0);
+
+    // Now the opposite gesture.
+    for dir in [TapDirection::Left, TapDirection::Right, TapDirection::Left] {
+        gesture_tick(&mut state, &dimensions, 0.0, Some(dir));
+    }
+    assert_eq!(state.roll_target, -1.0, "it armed the other way");
+    assert!(
+        state.roll_phase <= 0.0,
+        "the second roll started from level and not from +1.0, which would \
+         draw two turns: {}",
+        state.roll_phase
+    );
+
+    let mut travelled = 0.0f32;
+    let mut previous = state.roll_phase;
+    for _ in 0..120 {
+        advance_phase(&mut state, 1.5, 1.0 / 60.0);
+        travelled += (state.roll_phase - previous).abs();
+        previous = state.roll_phase;
+    }
+    assert_eq!(state.roll_phase, -1.0, "the second roll finished");
+    assert!(
+        travelled <= 1.0,
+        "the second roll travelled {travelled} of phase, and one turn is 1.0"
+    );
+}
