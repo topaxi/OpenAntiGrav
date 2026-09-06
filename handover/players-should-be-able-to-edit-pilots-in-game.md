@@ -122,12 +122,41 @@ maintainer call, not one to make here.
   [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md);
   at minimum, do not make that thread's problem bigger without noting it.
 
+## Decided 2026-09-06 by the maintainer: the first cut saves
+
+Verbatim: *"First cut shall already save toml files."* So writing is in scope
+from the start, and the comment-preservation question above stops being a
+deferred choice - it is the first thing to settle.
+
+**Recommendation: format-preserving edit via `toml_edit`.** The dependency
+position, measured rather than assumed:
+
+- `toml_edit` **is already in `Cargo.lock`** (v0.25.13), so it is resolved and
+  vendored in this workspace already.
+- It is **not in the normal build graph**: `cargo tree -i toml_edit -e normal`
+  prints nothing. `crates/game/Cargo.toml:71` declares `toml = "1"`, which
+  reaches `toml_datetime`/`toml_parser`/`toml_writer` and not `toml_edit`.
+
+So adding it is a real addition to what compiles, not a free one - but it is a
+crate this workspace has already resolved, and it is the only option that
+honours `pilots.rs`'s own stated reason for never rewriting these files. If the
+maintainer would rather not carry it, **editor-owned-files-only** is the
+fallback and the feature ships smaller rather than hostile. Do not reach for
+`toml::to_string_pretty` in either case.
+
+**Text entry is still not required for this cut.** Saving does not imply naming:
+editing an existing pilot's axes and saving needs no keyboard, and
+create-from-template can auto-name (`pilot-1`, `pilot-2`). Renaming is what
+needs the on-screen keyboard, and it can wait. That keeps the prerequisite
+screen out of the first cut without cutting the maintainer's directive.
+
+Revised first cut, then: **list, edit axis ranges, save, create-from-template.**
+Delete and rename come after.
+
 ## Open
 
 - Which of the three comment-preservation strategies to take, and whether
   `toml_edit` is an acceptable dependency.
-- Whether a first cut ships without text entry (auto-named pilots, no rename),
-  or waits for an on-screen keyboard.
 - Whether the editor should offer the four built-ins as **templates** to copy -
   which is the natural "create" flow and needs no text entry to be useful.
 - Whether a player can see what a pilot actually does without racing it. A
@@ -136,12 +165,11 @@ maintainer call, not one to make here.
 
 ## Next Steps
 
-1. **Decide the comment-preservation strategy first.** It determines the shape
+1. **Confirm `toml_edit` is acceptable** (see above) - it determines the shape
    of the write path and therefore most of the rest; deciding it late means
    rewriting the save code.
-2. Settle whether text entry is in scope for the first cut. If it is, it is its
-   own thread and its own screen - an on-screen keyboard driven by abstract
-   buttons - and this feature waits on it.
+2. ~~Settle whether text entry is in scope for the first cut.~~ **Not needed** -
+   editing and template-creation need no keyboard; renaming does, and waits.
 3. Build **read** first: a page listing pilots from `pilots::directory()`, with
    the four built-ins marked as such. It needs no writing, no text entry, and it
    proves the menu wiring end to end.
