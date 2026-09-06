@@ -89,6 +89,29 @@ pub struct Ship {
     /// Hashed all the same: a craft being driven for is a different race from
     /// one being driven, and a replay that lost this would diverge.
     pub autopilot_timer: f32,
+    /// Seconds of weapon slowdown owed to this craft but not yet applied.
+    ///
+    /// The original's `entity+0x130`. A weapon impact adds its
+    /// `<Stats slowdown_time>` here - nine writers, all in the weapon
+    /// subsystems - and exactly one consumer drains it, once a tick, into
+    /// [`oag_physics::ShipState::slowdown_timer`]. That is
+    /// [`crate::slowdown::drain`], and it carries the shield gate: a shielded
+    /// craft takes no slowdown, **and this slot is cleared anyway** rather than
+    /// banked, so a hit landed one tick before a shield expires is simply lost.
+    ///
+    /// **Here rather than on [`oag_physics::ShipState`]**, for the reason
+    /// [`Self::pickup`] and [`Self::autopilot_timer`] both give about
+    /// themselves: what fills it is a figure out of `<WeaponStats>`, and
+    /// `oag-physics` depends on `oag-core` and nothing else. It is also where
+    /// the original puts it - on the *entity*, not on the craft, which is the
+    /// one field of this mechanic that is not a `craft+` offset.
+    ///
+    /// Hashed: a craft owing slowdown is about to be a craft that has lost its
+    /// engine, and a replay that dropped this would diverge one tick later.
+    ///
+    /// See `oag_physics::slowdown` for the whole law and
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md` for the evidence.
+    pub pending_slowdown: f32,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -103,6 +126,7 @@ impl Default for Ship {
             driver: oag_ai::Driver::default(),
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
+            pending_slowdown: 0.0,
             active: false,
         }
     }

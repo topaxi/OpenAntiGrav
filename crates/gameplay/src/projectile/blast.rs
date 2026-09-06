@@ -13,7 +13,34 @@
 use oag_core::math::Vec3;
 use oag_formats::weapons::Weapon;
 
-/// One weapon's `blastradius`, `damage` and `blastforce`, or `None`.
+/// What one weapon's blast is worth, read off the table the player's disc
+/// authors.
+///
+/// A struct rather than the tuple this was until 2026-09-06, for two reasons
+/// that arrived together: `slowdown_time` made it a fourth field, and passing
+/// four loose `f32`s on into [`blast`] would have put that function at eight
+/// arguments and past `clippy::too_many_arguments`. Naming them also removes
+/// the one way a tuple of same-typed numbers goes wrong.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BlastStats {
+    /// `<Stats blastradius>`: how far the blast reaches.
+    pub radius: f32,
+    /// `<Stats damage>`: what it costs a craft's energy, with no falloff.
+    pub damage: f32,
+    /// `<Stats blastforce>`: the impulse at the centre, falling off linearly.
+    pub force: f32,
+    /// `<Stats slowdown_time>`: the seconds of slowdown it credits to a
+    /// victim's pending slot.
+    ///
+    /// **Not a blast term the way the other three are.** It is spent on the
+    /// victim's timer rather than on its body, it is credited whether or not a
+    /// shield is up (the gate is at the drain), and the whole law is in
+    /// `oag_physics::slowdown`. Decoded on all six blocks and authored on all
+    /// four shipped PSP tables - see `oag_formats::weapons`.
+    pub slowdown_time: f32,
+}
+
+/// One weapon's [`BlastStats`], or `None`.
 ///
 /// `None` for a table that did not load, for a weapon it does not author, and for
 /// a weapon whose block this crate does not decode - all three are the same
@@ -23,47 +50,70 @@ use oag_formats::weapons::Weapon;
 pub(super) fn blast_stats(
     weapons: Option<&oag_formats::weapons::WeaponStats>,
     kind: Weapon,
-) -> Option<(f32, f32, f32)> {
+) -> Option<BlastStats> {
     let weapons = weapons?;
     match kind {
-        Weapon::Rocket => weapons
-            .rocket()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
-        Weapon::Missile => weapons
-            .missile()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
-        Weapon::Plasma => weapons
-            .plasma()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        Weapon::Rocket => weapons.rocket().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.damage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
+        Weapon::Missile => weapons.missile().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.damage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
+        Weapon::Plasma => weapons.plasma().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.damage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
         // **`blastdamage` and `blastForce`, not the ricochet pair.** The
         // Shuriken is the only weapon authoring a second damage and a second
         // force, and nothing read says when those are spent - see
         // `oag_formats::weapons::ShurikenStats`, which leaves both undecoded
         // rather than picking one.
-        Weapon::Shuriken => weapons
-            .shuriken()
-            .map(|s| (s.blastradius, s.blastdamage, s.blastforce)),
-        Weapon::Mine => weapons
-            .mine()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        Weapon::Shuriken => weapons.shuriken().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.blastdamage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
+        Weapon::Mine => weapons.mine().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.damage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
         // **`blastradius`, not `damageradius`.** The Bomb is the only weapon
         // that authors a second radius and the only blast path read at
         // instruction level spends `blastradius` for both halves; see
         // `oag_formats::weapons::BombStats`, which is explicit about the one
         // authored attribute this engine leaves unspent.
-        Weapon::Bomb => weapons
-            .bomb()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        Weapon::Bomb => weapons.bomb().map(|s| BlastStats {
+            radius: s.blastradius,
+            damage: s.damage,
+            force: s.blastforce,
+            slowdown_time: s.slowdown_time,
+        }),
         _ => None,
     }
 }
 
 /// Spends one blast against every craft inside its radius.
 ///
-/// Full `damage` and a `force` impulse directed away from `point` and **scaled
-/// linearly by distance**, with the firing craft included - the split
-/// [`Impact`] records and defends. Damage goes through [`oag_physics::damage::apply_weapon`], so
-/// the state gate, the weapons-off halving and the clamp are the recovered ones.
+/// Full [`BlastStats::damage`] and a [`BlastStats::force`] impulse directed away
+/// from `point` and **scaled linearly by distance**, with the firing craft
+/// included - the split [`Impact`] records and defends. Damage goes through
+/// [`oag_physics::damage::apply_weapon`], so the state gate, the weapons-off
+/// halving and the clamp are the recovered ones.
+///
+/// Every craft it reaches is also credited [`BlastStats::slowdown_time`] on
+/// [`crate::world::Ship::pending_slowdown`], which is what makes a craft hit by
+/// a rocket lose its engine - see [`crate::slowdown`].
 ///
 /// Returns how many craft it reached, which is what a caller asserting "the
 /// blast did something" wants and what a test asserting "and nothing outside the
@@ -86,12 +136,11 @@ pub(super) fn blast_stats(
 pub fn blast(
     ships: &mut [crate::world::Ship],
     point: Vec3,
-    radius: f32,
-    damage: f32,
-    force: f32,
+    stats: &BlastStats,
     rules: oag_physics::DamageRules,
     absorbed: &mut [bool],
 ) -> usize {
+    let radius = stats.radius;
     let mut reached = 0;
     for (slot, ship) in ships.iter_mut().enumerate() {
         if !ship.active {
@@ -104,9 +153,24 @@ pub fn blast(
         }
         reached += 1;
 
+        // **The slowdown credit, and it is not gated on the shield here.** Every
+        // one of the original's nine writers of `entity+0x130` simply adds to
+        // it; the shield gate lives at the *drain*, in `crate::slowdown`, and it
+        // discards the pending figure rather than banking it. Splitting the two
+        // that way is what makes a hit landed one tick before a shield expires
+        // simply lost, which is the recovered behaviour. See
+        // `oag_physics::slowdown` for the whole law.
+        //
+        // Full `slowdown_time` everywhere inside the radius, with no falloff -
+        // the same shape as the damage below and unlike the impulse. Nothing
+        // read suggests otherwise: the writers add the block's figure straight
+        // in, three instructions from the `Ship_Damage` call that spends
+        // `damage`.
+        ship.pending_slowdown += stats.slowdown_time;
+
         let dimensions = ship.handling.dimensions;
         let report =
-            oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, damage, rules);
+            oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
         // `|=` rather than `=`: two blasts in one tick against one shielded
         // craft are two absorbs, and the second must not clear the first.
         if let Some(flag) = absorbed.get_mut(slot) {
@@ -138,7 +202,7 @@ pub fn blast(
         };
         ship.physics
             .body
-            .apply_impulse(direction * (falloff * force));
+            .apply_impulse(direction * (falloff * stats.force));
     }
     reached
 }

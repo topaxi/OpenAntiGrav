@@ -453,6 +453,9 @@ pub fn replay<R: Raycaster + ?Sized>(
         // that a pickup reaching a replay is a compile error to think about
         // rather than a silent empty slot.
         pickup: oag_gameplay::Held::empty(),
+        // And no weapon either, so nothing ever credits this. Named for the
+        // same reason the pickup above is.
+        pending_slowdown: 0.0,
         active: true,
     };
     world.ship_count = 1;
@@ -656,6 +659,9 @@ where
         // that a pickup reaching a replay is a compile error to think about
         // rather than a silent empty slot.
         pickup: oag_gameplay::Held::empty(),
+        // And no weapon either, so nothing ever credits this. Named for the
+        // same reason the pickup above is.
+        pending_slowdown: 0.0,
         active: true,
     };
     world.ship_count = 1;

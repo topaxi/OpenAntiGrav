@@ -36,6 +36,19 @@ impl Race {
             controls.thrust = 0.0;
         }
 
+        // **Before every craft is stepped, and over the whole field at once.**
+        // The weapon slowdown a blast credited last tick becomes a running timer
+        // here, so this tick's engine, hover and grip all see it - the original
+        // drains the same slot from the craft's entity update, ahead of
+        // `Ship_UpdateCraft`. One call for all eight slots rather than one
+        // beside each step, so the drain cannot depend on whether a craft is
+        // flown by slot 0's branch or the field's. See
+        // `oag_gameplay::slowdown::drain`.
+        oag_gameplay::slowdown::drain(
+            &mut self.world,
+            self.weapons.as_ref().map(|table| table.slowdown_limit),
+        );
+
         // Before the force law, so a Turbo fired this tick boosts this tick.
         self.spend_pickup(snapshot);
         // After it, so a pickup armed this tick gets its whole duration rather
