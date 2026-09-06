@@ -14,6 +14,18 @@
 //! currently set to" - see `oag_game::menu::Entry::chosen` - so there is no
 //! second copy of "the pending edit" to keep in step with the rows a player
 //! is looking at.
+//!
+//! **A consequence of that: SAVE writes the one axis AXIS currently names,
+//! and moving AXIS before pressing it discards an edit to the axis just left,
+//! silently.** [`Session::resupply_pilot_bounds`] re-derives LOW/HIGH from
+//! [`Session::pilot_roster`]'s own stored span the moment AXIS (or PILOT)
+//! moves, because that is the only value there is to derive them from - there
+//! is nowhere an in-progress, not-yet-saved edit to a *different* axis could
+//! live without becoming the second copy the paragraph above deliberately
+//! avoids. One axis at a time is a defensible first cut; the silence is
+//! pinned as chosen rather than accidental by
+//! `moving_axis_discards_an_untouched_low_edit_without_saving` below, not
+//! merely left undocumented.
 
 use log::{error, info};
 
@@ -52,19 +64,41 @@ fn held_text(model: &menu::Menu, setting: &str) -> Option<String> {
         })
 }
 
+/// Rounds a generated step to a sensible number of decimal places for its own
+/// magnitude, so spreading `STEPS` evenly across a range never surfaces as
+/// float noise in a saved file.
+///
+/// **Never applied to a pilot's own current value** - only to the round
+/// steps [`axis_choices`] manufactures around it. `min + span * i / STEPS` is
+/// three `f32` operations, and landing one ULP off a tidy decimal turns
+/// `0.1725` into `0.17250001`; that string is both what the row shows and
+/// what a SAVE with nothing else touched writes to the file, which is
+/// exactly the tidiness this feature exists to protect.
+fn quantize(value: f32) -> f32 {
+    let decimals = if value.abs() >= 100.0 {
+        1
+    } else if value.abs() >= 10.0 {
+        2
+    } else {
+        4
+    };
+    let scale = 10f32.powi(decimals);
+    (value * scale).round() / scale
+}
+
 /// A discretized, sorted, deduplicated set of numbers `LOW`/`HIGH` may be set
 /// to: [`STEPS`] steps evenly spread across `[min, max]`, plus `current`
 /// itself.
 ///
-/// **`current` is always in the list**, which is what lets
-/// [`menu::Menu::seed`] land the row on the exact value the file already
-/// held - a hand-authored `0.427` is not one of the round steps, and losing
-/// it the moment the row is drawn would mean SAVE without touching LOW at
-/// all still moved the number.
+/// **`current` is always in the list, and never [`quantize`]d.** This is
+/// what lets [`menu::Menu::seed`] land the row on the exact value the file
+/// already held - a hand-authored `0.427` is not one of the round steps, and
+/// losing it the moment the row is drawn would mean SAVE without touching
+/// LOW at all still moved the number.
 fn axis_choices(min: f32, max: f32, current: f32) -> Vec<menu::Choice> {
     let span = (max - min).max(f32::EPSILON);
     let mut values: Vec<f32> = (0..=STEPS)
-        .map(|i| min + span * (i as f32) / (STEPS as f32))
+        .map(|i| quantize(min + span * (i as f32) / (STEPS as f32)))
         .collect();
     values.push(current.clamp(min, max));
     values.sort_by(f32::total_cmp);
@@ -189,7 +223,12 @@ impl Session {
             return;
         }
         info!("saved {name}");
-        self.reload_pilot_roster();
+        // No `select`: PILOT is already on `name`, and `Menu::supply`'s own
+        // "keep the value it was already on" rule leaves it there. What
+        // does change is the row's label, if this was a built-in's first
+        // save - `pilot_choice` reads the reloaded roster's `from_file`,
+        // which just flipped.
+        self.reload_pilot_roster(None);
     }
 
     /// Creates a new pilot file from whichever one PILOT currently holds,
@@ -233,30 +272,48 @@ impl Session {
             return;
         }
         info!("created {name} from {source_name}");
-        self.reload_pilot_roster();
+        // `Some(&name)`, unlike `save_pilot`: PILOT was on `source_name`,
+        // which is still in the reloaded list, so without this the row
+        // would stay put and the only sign a new pilot exists at all would
+        // be the console line above.
+        self.reload_pilot_roster(Some(&name));
     }
 
     /// Re-reads [`Session::pilot_roster`] off disk and re-supplies the AI
     /// PILOTS page from it, so a save or a create-from-template shows up on
     /// screen without the player having to leave and reopen the page.
-    fn reload_pilot_roster(&mut self) {
+    ///
+    /// `select`, when given, moves the PILOT row onto that name - see
+    /// [`supply_pilot_choices`] for why [`Session::new_pilot`] needs this and
+    /// [`Session::save_pilot`] does not.
+    fn reload_pilot_roster(&mut self, select: Option<&str>) {
         match pilots::load() {
             Ok(roster) => self.pilot_roster = roster,
             Err(e) => error!("could not reload pilots after saving: {e:#}"),
         }
         let roster = self.pilot_roster.clone();
         if let Stage::Menu(stage) = &mut self.stage {
-            supply_pilot_choices(&mut stage.menu, &roster);
+            supply_pilot_choices(&mut stage.menu, &roster, select);
         }
     }
 }
 
-/// The PILOT/AXIS supply [`Session::supply_pilot_menu`] does, without needing
+/// The PILOT supply [`Session::supply_pilot_menu`] does, without needing
 /// `&mut Session` - shared with [`Session::reload_pilot_roster`], which
 /// already holds a disjoint borrow of `self.stage` by the time it needs this.
-fn supply_pilot_choices(model: &mut menu::Menu, roster: &pilots::Roster) {
+///
+/// `select`, when given, moves PILOT onto that name **after** the list is
+/// supplied and **before** LOW/HIGH are resupplied - `create-from-template`
+/// is why this exists: without it, `Menu::supply`'s own "keep the value it
+/// was already on" rule leaves PILOT exactly where it was, so a fresh
+/// `pilot-1` exists on disk and in the list with nothing on screen saying
+/// so.
+fn supply_pilot_choices(model: &mut menu::Menu, roster: &pilots::Roster, select: Option<&str>) {
     let pilots: Vec<menu::Choice> = roster.entries().iter().map(pilot_choice).collect();
     model.supply(menu::ValueSource::Pilots, &pilots);
+    if let Some(name) = select {
+        model.seed("pilot.selected", &Value::Text(name.to_string()));
+    }
     resupply_bounds(model, roster);
 }
 
@@ -298,4 +355,132 @@ fn resupply_bounds(model: &mut menu::Menu, roster: &pilots::Roster) {
     );
     model.seed("pilot.low", &Value::Text(format!("{}", span.low)));
     model.seed("pilot.high", &Value::Text(format!("{}", span.high)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A menu with just the four rows this file cares about, so a test can
+    /// exercise the free functions above without a real window, GPU or disc.
+    fn fixture_menu() -> menu::Menu {
+        let text = "\
+version = 1
+root = \"pilots\"
+[[page]]
+id = \"pilots\"
+[[page.entry]]
+kind = \"choice\"
+label = \"PILOT\"
+setting = \"pilot.selected\"
+values_from = \"pilots\"
+[[page.entry]]
+kind = \"choice\"
+label = \"AXIS\"
+setting = \"pilot.axis\"
+values_from = \"pilot_axes\"
+[[page.entry]]
+kind = \"choice\"
+label = \"LOW\"
+setting = \"pilot.low\"
+values_from = \"pilot_axis_low\"
+[[page.entry]]
+kind = \"choice\"
+label = \"HIGH\"
+setting = \"pilot.high\"
+values_from = \"pilot_axis_high\"
+";
+        let strings = oag_game::language::StringTable::default();
+        let definition = menu::Definition::parse(text, &strings).expect("a tiny valid definition");
+        menu::Menu::new(definition)
+    }
+
+    /// A directory holding one pilot file, cleaned up on drop - the same
+    /// idiom `pilots`' own tests use, kept local rather than shared so this
+    /// file does not reach into `oag_game::pilots`' private test helpers.
+    struct Scratch(std::path::PathBuf);
+
+    impl Scratch {
+        fn with(name: &str, body: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "oag-pilot-editor-{}-{:p}",
+                std::process::id(),
+                name.as_ptr()
+            ));
+            std::fs::create_dir_all(&dir).expect("a scratch directory");
+            std::fs::write(dir.join(format!("{name}.toml")), body).expect("a scratch pilot");
+            Self(dir)
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Lands PILOT on `name` and AXIS on `axis`, the way opening the real
+    /// page does through [`Session::supply_pilot_menu`] - reproduced here
+    /// with the two free functions directly, since there is no [`Session`]
+    /// in this test.
+    fn land_on(model: &mut menu::Menu, roster: &pilots::Roster, name: &str, axis: &str) {
+        supply_pilot_choices(model, roster, Some(name));
+        model.supply(menu::ValueSource::PilotAxes, &[menu::Choice::plain(axis)]);
+        model.seed("pilot.axis", &Value::Text(axis.to_string()));
+        resupply_bounds(model, roster);
+    }
+
+    /// The generated steps must never carry float noise into a saved file -
+    /// see [`quantize`]'s own doc for the `0.17250001` this exists to catch.
+    #[test]
+    fn quantized_steps_never_print_more_than_a_handful_of_decimals() {
+        for choice in axis_choices(0.1, 3.0, 1.7) {
+            assert!(
+                choice.value.len() <= 7,
+                "{:?} looks like float noise, not a step",
+                choice.value
+            );
+        }
+    }
+
+    /// The exact current value is always offered, even when it is not one
+    /// of the round steps - a hand-authored `0.427` must still seed exactly.
+    #[test]
+    fn the_pilots_own_exact_value_is_always_one_of_the_choices() {
+        let choices = axis_choices(0.1, 3.0, 0.427);
+        assert!(choices.iter().any(|choice| choice.value == "0.427"));
+    }
+
+    /// SAVE writes AXIS's own axis alone. Pinned here: an edit to a
+    /// *different* axis, left untouched when AXIS moves on to another one,
+    /// is discarded without a word - see this file's own module doc.
+    #[test]
+    fn moving_axis_discards_an_untouched_low_edit_without_saving() {
+        let scratch = Scratch::with("winston", "commitment = [0.90, 1.00]\n");
+        let roster = pilots::load_from(&scratch.0).expect("a readable directory");
+        let mut model = fixture_menu();
+        land_on(&mut model, &roster, "winston", "commitment");
+        assert_eq!(held_text(&model, "pilot.low"), Some("0.9".to_string()));
+
+        // The player nudges LOW - "0.5" is `commitment`'s own floor, always
+        // one of `axis_choices`' round steps, so it is on the list without
+        // depending on how the steps are spread.
+        model.seed("pilot.low", &Value::Text("0.5".to_string()));
+        assert_eq!(
+            held_text(&model, "pilot.low"),
+            Some("0.5".to_string()),
+            "the seed above did not land - this test is not exercising what it claims to"
+        );
+
+        // AXIS moves - to the same axis is enough, since `resupply_bounds`
+        // does not know or care that it "moved"; it only re-derives from the
+        // roster's own stored span, which is the whole of the behaviour
+        // being pinned.
+        land_on(&mut model, &roster, "winston", "commitment");
+        assert_eq!(
+            held_text(&model, "pilot.low"),
+            Some("0.9".to_string()),
+            "the untouched-file value should have won back over the discarded edit"
+        );
+    }
 }
