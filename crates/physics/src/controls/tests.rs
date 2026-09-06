@@ -158,21 +158,21 @@ fn the_airbrake_states_saturate_at_the_control_range() {
     assert_eq!(state.airbrake_right, CONTROL_RANGE * 0.5);
 }
 
+/// The weapon slowdown timer is **not** one of the ramps this function owns.
+///
+/// It was, while the field was believed to be a leap timer. Its decay is the
+/// original's `0x08849a24`, at the end of the craft update rather than the
+/// start, and it lives in `crate::forces::evaluate` now.
 #[test]
-fn the_leap_timer_counts_down_and_stops_at_zero() {
+fn the_slowdown_timer_is_not_touched_here() {
     let handling = test_handling();
     let mut state = ShipState {
-        leap_timer: 0.1,
+        slowdown_timer: 0.1,
         ..ShipState::default()
     };
 
     update(&mut state, &ShipControls::default(), &handling, 0.0625);
-    assert_eq!(state.leap_timer, 0.1 - 0.0625);
-
-    for _ in 0..10 {
-        update(&mut state, &ShipControls::default(), &handling, 0.0625);
-    }
-    assert_eq!(state.leap_timer, 0.0);
+    assert_eq!(state.slowdown_timer, 0.1);
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn a_zero_delta_leaves_every_ramped_state_where_it_was() {
         airbrake_right: 70.0,
         brake: 25.0,
         steer: -40.0,
-        leap_timer: 2.0,
+        slowdown_timer: 2.0,
         ..ShipState::default()
     };
     let before = state;
@@ -204,5 +204,5 @@ fn a_zero_delta_leaves_every_ramped_state_where_it_was() {
     assert_eq!(state.airbrake_right, before.airbrake_right);
     assert_eq!(state.brake, before.brake);
     assert_eq!(state.steer, before.steer);
-    assert_eq!(state.leap_timer, before.leap_timer);
+    assert_eq!(state.slowdown_timer, before.slowdown_timer);
 }

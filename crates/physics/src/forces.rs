@@ -634,7 +634,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     //    `Ship_UpdateCraft` from the previous frame's blend and both consumers read
     //    that one value. Recomputing it after the ramp would give the reposition a
     //    target the spring never saw.
-    let target_height = hover::target_height(handling, state.mag_lock_blend, state.leap_timer);
+    let target_height = hover::target_height(handling, state.mag_lock_blend, state.slowdown_timer);
     let hover = hover::evaluate(state, handling, env, raycaster, target_height);
     for probe in &hover.probes {
         if probe.contact {
@@ -690,8 +690,33 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let mag_contact = maglock::probe(state, env, raycaster);
     let mag_lock = maglock::update(state, env, mag_contact, target_height);
 
+    // The weapon slowdown timer's decay, at `0x08849a24` - **after** the hover
+    // target above has been computed from it and **before** the lateral-grip
+    // test below, which is the original's own order. So a hit costs its full
+    // first tick of engine and of hover sink, and the grip test sees the
+    // post-decrement value. It lived in `controls::update` while this field was
+    // believed to be a leap timer, which decayed it before every one of its own
+    // readers; nothing observed the difference, because nothing armed it.
+    //
+    // **Gated rather than clamped, and deliberately unlike
+    // `airbrake::advance_sideshift`.** The original is `if (t > 0.0f) t -= dt;`
+    // for both, so both land one `dt` negative on the tick they expire and
+    // freeze there. `advance_sideshift` clamps to `0.0` anyway and justifies it
+    // with "every reader of these fields gates on `> 0.0`/`<= 0.0`, so the
+    // residue changes nothing observable". **That premise is false here**:
+    // `crate::slowdown::add` reads this field *arithmetically* - `timer +=
+    // seconds` before its clamp - so the residue is observable through the next
+    // hit a craft takes. Same principle, opposite outcome.
+    //
+    // Outside the branch chain below, not inside it: a craft that is both
+    // stunned and weapon-slowed still counts this timer down while the stun
+    // branch owns the grip.
+    if state.slowdown_timer > 0.0 {
+        state.slowdown_timer -= dt;
+    }
+
     // 9. Lateral grip, into the *local* force accumulator, and only once both the
-    //    collision stun and the leap timer have expired.
+    //    collision stun and the weapon slowdown timer have expired.
     //
     //    `Ship_ApplyLateralGrip` opens with `if (craft+0x290 > 0) { craft+0x290 -=
     //    dt; return; }`, so the stun both suppresses the grip and is what counts it
@@ -701,7 +726,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let lateral_grip = if state.stun_timer > 0.0 {
         state.stun_timer = (state.stun_timer - dt).max(0.0);
         Vec3::ZERO
-    } else if state.leap_timer > 0.0 {
+    } else if state.slowdown_timer > 0.0 {
         Vec3::ZERO
     } else {
         airbrake::lateral_grip(state, handling, contact_grounded)

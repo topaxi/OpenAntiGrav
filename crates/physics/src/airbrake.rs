@@ -280,7 +280,7 @@ pub fn evaluate(
 ///   one, which is the only reason we know that accumulator's `.x` is the right axis.
 /// - It runs **after** hover, so `grounded` here is **this** frame's contact
 ///   fraction, unlike the engine, the brakes, drag, gravity and pitch. The caller also
-///   gates it on the leap timer having expired.
+///   gates it on the weapon slowdown timer having expired.
 ///
 /// While [`ShipState::roll_payout_timer`] is running, both `grip_ground` and
 /// `grip_air` are scaled by [`ROLL_GRIP_MULTIPLIER`] - one of the three

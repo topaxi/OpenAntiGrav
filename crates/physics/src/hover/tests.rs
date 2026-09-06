@@ -648,7 +648,7 @@ fn the_hover_target_is_built_from_ride_height() {
 /// field and a target beyond the reach has no fixed point: every height a probe can
 /// report is below the target, so the spring only ever pushes up.
 ///
-/// Asserted across the leap timer, which is the only other term that moves the
+/// Asserted across the slowdown timer, the only other term that moves the
 /// target while a ship is under ordinary suspension.
 ///
 /// **Not asserted across `mag_lock_blend`**, and the exception is the interesting
@@ -675,15 +675,15 @@ fn the_hover_target_never_exceeds_the_probes_reach() {
         let target = target_height(&handling, 0.0, timer);
         assert!(
             target <= handling.antigrav.ride_height,
-            "target {target} exceeded the reach at leap timer {timer}"
+            "target {target} exceeded the reach at slowdown timer {timer}"
         );
     }
 }
 
-/// A magstrip lock raises the target by a fifth, and the leap timer lowers it by up
+/// A magstrip lock raises the target by a fifth, and the slowdown timer lowers it by up
 /// to four units while it runs.
 #[test]
-fn the_hover_target_responds_to_the_magstrip_blend_and_the_leap_timer() {
+fn the_hover_target_responds_to_the_magstrip_blend_and_the_slowdown_timer() {
     let handling = Handling {
         antigrav: crate::params::Antigrav {
             ride_height: 10.0,

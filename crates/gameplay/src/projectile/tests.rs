@@ -358,9 +358,12 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
     let reached = blast(
         &mut grid,
         Vec3::ZERO,
-        10.0,
-        30.0,
-        100.0,
+        &BlastStats {
+            radius: 10.0,
+            damage: 30.0,
+            force: 100.0,
+            slowdown_time: 0.0,
+        },
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -419,13 +422,20 @@ fn a_shielded_craft_keeps_its_energy_and_still_gets_shoved() {
     blast(
         &mut grid,
         Vec3::ZERO,
-        10.0,
-        30.0,
-        10.0,
+        &BlastStats {
+            radius: 10.0,
+            damage: 30.0,
+            force: 10.0,
+            slowdown_time: 1.0,
+        },
         oag_physics::DamageRules::default(),
         &mut [],
     );
     assert_eq!(grid[0].physics.shield, 100.0, "the shield let damage in");
+    // **The slowdown credit is not gated here.** A shielded craft is credited
+    // like any other and the gate is at the drain, which discards it - see
+    // `crate::slowdown::drain`, which asserts the other half.
+    assert_eq!(grid[0].pending_slowdown, 1.0);
     assert!(
         grid[0].physics.body.linear_velocity.length() > 0.0,
         "the shield also stopped the shove, which it should not"

@@ -77,8 +77,8 @@ pub mod plasma;
 mod rocket;
 pub mod shuriken;
 
-pub use blast::blast;
 use blast::blast_stats;
+pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
@@ -832,15 +832,13 @@ pub fn step<R: Raycaster + ?Sized>(
         if !impact.blast {
             continue;
         }
-        let Some((radius, damage, force)) = blast_stats(weapons, impact.kind) else {
+        let Some(stats) = blast_stats(weapons, impact.kind) else {
             continue;
         };
         blast(
             &mut world.ships[..count],
             impact.point,
-            radius,
-            damage,
-            force,
+            &stats,
             rules,
             absorbed,
         );

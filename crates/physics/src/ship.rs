@@ -391,13 +391,32 @@ pub struct ShipState {
     /// no-op until a producer is wired to something, the same shape as
     /// [`Self::pad_direction`] before a probe script crosses a pad.
     pub pending_impulse: Vec3,
-    /// Seconds left on the timer at `craft+0x2e0`.
+    /// Seconds left on the **weapon slowdown timer** at `craft+0x2e0`.
     ///
-    /// While it runs, the hover target height is reduced by `min(timer, 4.0)` and
-    /// lateral grip is suppressed entirely. **What arms it is not known** - a leap,
-    /// a respawn and a race start are all plausible - so nothing in this crate sets
-    /// it and a caller may. It counts down by `dt` and stops at zero.
-    pub leap_timer: f32,
+    /// While it runs the victim gets no engine thrust and a zeroed throttle
+    /// state ([`crate::engine::engine`]), no lateral grip
+    /// ([`crate::forces::evaluate`]), and a hover target lowered by
+    /// `min(timer, 4.0)` ([`crate::hover::target_height`]). It is the reason a
+    /// craft hit by a rocket coasts, slides and sinks.
+    ///
+    /// **What arms it was unknown until 2026-09-06** and this field's doc said
+    /// so - "a leap, a respawn and a race start are all plausible". It is now
+    /// recovered end to end: a weapon impact credits the victim's pending slot
+    /// (`entity+0x130`) with the weapon's `slowdown_time`, and once a tick the
+    /// craft update drains that slot into this timer through `Ship_AddSlowdown`
+    /// (`0x08848690`), clamping the sum to `<Global slowdown_limit>`. See
+    /// [`crate::slowdown`] for the whole law and
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The slowdown mechanic,
+    /// recovered end to end"; confidence 85-92 per claim, all static.
+    ///
+    /// Armed here by [`crate::slowdown::add`]; the pending slot itself lives in
+    /// `oag-gameplay`, because it is credited from a weapon table this crate
+    /// cannot see.
+    ///
+    /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero** -
+    /// see [`crate::slowdown`] for why this timer differs from the sideshift
+    /// ones in that.
+    pub slowdown_timer: f32,
     /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}` - the count of
     /// probes in contact, over two.
     pub grounded: f32,
@@ -694,7 +713,7 @@ impl Default for ShipState {
             stun_timer: 0.0,
             wall_contact_prev: false,
             pending_impulse: Vec3::ZERO,
-            leap_timer: 0.0,
+            slowdown_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,
             sideshift_timers: [0.0, 0.0],

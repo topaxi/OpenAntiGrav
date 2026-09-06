@@ -233,9 +233,9 @@ fn braking_does_nothing_in_the_air() {
     assert!(grounded_eval.brakes.z > 0.0);
 }
 
-/// The leap timer suppresses lateral grip entirely while it runs.
+/// The weapon slowdown timer suppresses lateral grip entirely while it runs.
 #[test]
-fn lateral_grip_is_suppressed_while_the_leap_timer_runs() {
+fn lateral_grip_is_suppressed_while_the_slowdown_timer_runs() {
     let handling = Handling {
         antigrav: Antigrav {
             grip_ground: 2.0,
@@ -259,12 +259,12 @@ fn lateral_grip_is_suppressed_while_the_leap_timer_runs() {
     );
     assert_ne!(free.lateral_grip, Vec3::ZERO);
 
-    let mut leaping = ship_at(4.0);
-    leaping.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
-    leaping.grounded = 1.0;
-    leaping.leap_timer = 1.0;
+    let mut slowed = ship_at(4.0);
+    slowed.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
+    slowed.grounded = 1.0;
+    slowed.slowdown_timer = 1.0;
     let held = evaluate(
-        &mut leaping,
+        &mut slowed,
         &ShipControls::default(),
         &handling,
         &Environment::default(),
@@ -272,6 +272,61 @@ fn lateral_grip_is_suppressed_while_the_leap_timer_runs() {
         1.0 / 60.0,
     );
     assert_eq!(held.lateral_grip, Vec3::ZERO);
+}
+
+/// The slowdown timer decays inside the force evaluation, and **lands negative
+/// rather than at zero** on the tick it expires.
+///
+/// The original is `if (t > 0.0f) t -= dt;` with no clamp, so the field freezes
+/// one `dt` below zero and stays there. That residue is not cosmetic:
+/// `crate::slowdown::add` adds into this field before clamping, so the next hit
+/// a craft takes is worth exactly that much less. `airbrake::advance_sideshift`
+/// clamps its own equivalents *because* nothing reads them arithmetically -
+/// see the comment beside the decrement in [`super::evaluate`].
+#[test]
+fn the_slowdown_timer_decays_past_zero_and_freezes_there() {
+    let handling = test_handling();
+    let world = flat_floor();
+    let dt = 1.0 / 60.0;
+
+    let mut ship = ship_at(4.0);
+    ship.slowdown_timer = dt * 1.5;
+
+    evaluate(
+        &mut ship,
+        &ShipControls::default(),
+        &handling,
+        &Environment::default(),
+        &world,
+        dt,
+    );
+    assert_eq!(ship.slowdown_timer, dt * 1.5 - dt);
+
+    // The tick that crosses zero: gated, so it goes negative exactly once.
+    evaluate(
+        &mut ship,
+        &ShipControls::default(),
+        &handling,
+        &Environment::default(),
+        &world,
+        dt,
+    );
+    let expired = ship.slowdown_timer;
+    assert!(expired < 0.0, "expected a negative residue, got {expired}");
+
+    // And freezes: an ungated `t -= dt` would drift without bound, which would
+    // make an arbitrarily old craft immune to the next hit it takes.
+    for _ in 0..600 {
+        evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            dt,
+        );
+    }
+    assert_eq!(ship.slowdown_timer, expired);
 }
 
 /// The collision stun suppresses lateral grip too, and is what counts itself

@@ -40,7 +40,7 @@ use crate::ship::ShipState;
 /// to touching the track. The gate it feeds is real and stays
 /// ([`ShipState::stun_timer`] still cuts thrust and lateral grip); the arming
 /// site is simply not in this crate yet, the same way nothing arms
-/// [`ShipState::leap_timer`].
+/// [`ShipState::slowdown_timer`].
 ///
 /// **What that mistake cost, so nobody re-derives it**: with the old
 /// single-deepest-probe contact model it fired rarely enough to look harmless.

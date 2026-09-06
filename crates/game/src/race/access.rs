@@ -283,6 +283,19 @@ impl Race {
             .and_then(oag_formats::weapons::WeaponStats::plasma)
     }
 
+    /// `<Weapon type="Global"><Stats slowdown_limit>`, or `None` when the table
+    /// did not load.
+    ///
+    /// The ceiling on **seconds of weapon slowdown outstanding** that
+    /// [`oag_gameplay::slowdown::drain`] is handed every tick. An accessor for
+    /// [`Self::missile_stats`]'s reason, and the one figure of the mechanic a
+    /// test can reach without reproducing an authored number: it is what a
+    /// craft's timer is asserted *against* rather than a value to assert.
+    #[must_use]
+    pub fn slowdown_limit(&self) -> Option<f32> {
+        self.weapons.as_ref().map(|table| table.slowdown_limit)
+    }
+
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Bomb.
     #[must_use]

@@ -20,6 +20,7 @@ pub mod hash;
 pub mod input;
 pub mod pickup;
 pub mod projectile;
+pub mod slowdown;
 pub mod spawn;
 pub mod world;
 

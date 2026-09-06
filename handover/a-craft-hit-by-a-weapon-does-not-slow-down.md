@@ -1,18 +1,52 @@
-# A craft hit by a weapon does not slow down; the law is recovered, the physics half is not written
+# A craft hit by a weapon slows down; the port is in, the runtime check is not
 
-2026-09-06. Reported from play: a craft hit by a mine, rocket or missile does not
-slow down. It is **missing, not mistuned** - the whole slowdown mechanic is
-unimplemented in this engine. Both halves of the data have always been on the
-disc (`slowdown_time` per weapon, one `<Global slowdown_limit>`), and what was
-missing until now was the *law*. The law is recovered end to end and written up
-on
+2026-09-06. Reported from play: a craft hit by a mine, rocket or missile did not
+slow down. It was **missing, not mistuned** - nothing armed the timer. The law
+is recovered end to end and written up on
 [engine.md](../docs/ghidra/functions/psp-pulse-usa/engine.md); `oag_formats::weapons`
 decodes `slowdown_time` on all six decoded blocks as of the same day, with a
 ground-truth test that asserts every weapon's figure sits at or under the global
-cap on both shipped tables. **This row is the implementation half, deliberately
-not written in the session that recovered it**: `crates/physics` was occupied by
-another thread, and the RE/implementation split is what the project's workflow
-asks for.
+cap on both shipped tables.
+
+**Steps 1-4 landed the same day.** A Plasma off the disc now slows a craft for
+79 ticks on Talon's Junction in Venom, to 58.6 units/s against an identically
+seeded control run's 122.4, and it climbs back to 104.1 once the timer expires.
+What is left open is step 5 - the PPSSPP capture - and the RE loose ends below,
+none of which the port depends on.
+
+## What the port turned out to be, and the correction that matters
+
+**Three of the four effects were already implemented**, under the name
+`ShipState::leap_timer`. That field *is* `craft+0x2e0`: the engine's early
+return, the lateral-grip skip and the hover target's `min(timer, 4.0)`
+subtraction were all written against it long before anyone knew what armed it,
+and its own doc admitted the guess ("a leap, a respawn and a race start are all
+plausible"). So this thread's original "nothing is implemented, `crates/physics`
+and `crates/gameplay` are untouched" was wrong in the more useful direction:
+the port was a rename plus the two ends nobody had, not four effects from
+scratch. Anyone reading a similar row should check for an existing field under a
+hypothesised name before writing a second one - two gates on one original field
+is the failure that was one commit away here.
+
+What was genuinely missing, and is now in:
+
+| Piece | Where |
+| --- | --- |
+| `Ship_AddSlowdown` (`0x08848690`), the clamp | `oag_physics::slowdown::add` |
+| The timer, renamed off its hypothesis | `ShipState::slowdown_timer` |
+| The decay, moved and unclamped | `oag_physics::forces::evaluate` |
+| The pending slot (`entity+0x130`) | `oag_gameplay::world::Ship::pending_slowdown` |
+| The credit | `oag_gameplay::projectile::blast` |
+| The drain and its shield gate | `oag_gameplay::slowdown::drain` |
+| The once-a-tick call | `oag_game::race::Race::tick` |
+
+**The decay is deliberately not clamped to zero**, unlike
+`airbrake::advance_sideshift`'s three timers. That function justifies its clamp
+with "every reader gates on `> 0.0`, so the residue changes nothing
+observable"; the premise is false here, because `Ship_AddSlowdown` adds into the
+field *before* clamping, so the one-`dt` residue is worth exactly that much less
+slowdown on the next hit. It is gated rather than merely unclamped - an ungated
+`t -= dt` would drift without bound and make an old craft immune.
 
 ## The law, in the shape a port needs
 
@@ -63,27 +97,42 @@ second one inside the window adds nothing.
    (`craft+0x290`) already causes, and `oag_physics` models that one -
    whatever wires this should share that path rather than add a second gate.
 
-## Where it goes
+## Where it went
 
-- **`oag_gameplay`** owns the pending slot. It is per-craft state, written by an
-  impact and drained by the tick - `World`'s plain-data rule, one `f32` per
-  craft, no queue.
-- **`oag_physics`** owns the timer and its three effects. The engine early
-  return and the lateral-grip skip both already exist for `craft+0x290`; this is
-  a second timer feeding the same two gates plus the hover-target subtraction.
-- **`oag_formats`** is done. `WeaponStats::slowdown_limit` and each decoded
-  block's `slowdown_time` are read off the disc and need nothing further.
+- **`oag_gameplay`** owns the pending slot, `Ship::pending_slowdown` - one `f32`
+  per craft, no queue - and `slowdown::drain`, the single consumer with the
+  shield gate on it.
+- **`oag_physics`** owns the timer and its four effects.
+  `slowdown::add` is the clamp; the engine early return, the lateral-grip skip
+  and the hover subtraction were already there against the same field under its
+  old name, and the decay now runs where `Ship_UpdateCraft` runs it.
+- **`oag_formats`** was already done. `WeaponStats::slowdown_limit` and each
+  decoded block's `slowdown_time` are read off the disc and needed nothing.
+- **`oag_game`** calls the drain once a tick from `Race::tick`, over the whole
+  field, ahead of every craft step.
 
 ## Open
 
-- **Nothing is implemented.** `crates/physics` and `crates/gameplay` are
-  untouched by this work; the mechanic is inert.
+- **No runtime capture, and this is the one that is still worth doing.** Every
+  claim on `engine.md` is static; nothing has been watched in PPSSPP with a
+  craft actually taking a hit. What the port now gives that it did not before
+  is something to compare *against*: a trace column on `craft+0x2e0` through a
+  real impact would confirm the decay rate and the saturation behaviour in one
+  run, and `scripts/psp-trace.py` already carries the field as `timer_2e0`.
+  See Next Steps.
+- **The credit is wired to the blast and to nothing else.** Every weapon that
+  reaches `projectile::blast` credits its `slowdown_time` - Rocket, Missile,
+  Plasma, Mine, Bomb, Shuriken - which is the six blocks this engine decodes.
+  The original has nine writers of `entity+0x130`; the other three are on paths
+  this engine does not have (the Quake wave among them). Nothing is missing
+  that has a Rust caller to be missing from.
 - **The `4.0` clamp on the hover-target subtraction is unreachable on the
-  shipped disc**, because the only writer clamps to `slowdown_limit` first and
-  the shipped limit is far below it. Port it anyway - it is what the executable
-  does - but a test that exercises it is testing nothing the disc can reach.
-  Whether it is dead code, a guard against a limit a later title raises, or the
-  fossil of a second writer is not determined.
+  shipped disc** and is ported anyway, in `hover::SLOWDOWN_ADJUST_MAX` - the
+  only writer clamps to `slowdown_limit` first and the shipped limit is far
+  below it, so `min(timer, 4.0)` is the identity for every value the field can
+  hold. A test that exercises it would be testing nothing the disc can reach,
+  so there is none. Whether it is dead code, a guard against a limit a later
+  title raises, or the fossil of a second writer is not determined.
 - **The hover-target subtraction takes seconds off a height with no conversion.**
   Recorded verbatim on `engine.md` rather than reconciled. It is the one part of
   the law that reads like a bug in the original, and it should be ported as
@@ -103,10 +152,6 @@ second one inside the window adds nothing.
   changes which weapons visibly slow a victim once the mechanic is wired.
 - **The Quake's own path also charges damage**, from the same `<WeaponStats>`
   block, so wiring the Quake means wiring both together. No Quake exists here.
-- **No runtime capture.** Every claim on `engine.md` is static; nothing has been
-  watched in PPSSPP with a craft actually taking a hit. A trace column on
-  `craft+0x2e0` would confirm the decay rate and the saturation behaviour in one
-  run, and `scripts/psp-trace.py` already carries the field as `timer_2e0`.
 - **A contradiction this work reopened and did not settle.**
   [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) reads the pointer
   table at `0x0885bff0` as one entry per weapon type; `Ship_Damage`
@@ -127,20 +172,19 @@ second one inside the window adds nothing.
 
 ## Next Steps
 
-1. Add the pending slot to `World` in `crates/gameplay` and credit it from the
-   existing blast/impact paths in `oag_gameplay::projectile` - one `f32` add per
-   hit, using the `slowdown_time` the parser now returns.
-2. Add the timer to `crates/physics` beside the collision-stun timer, drain the
-   pending slot into it once a tick with the shield gate and the clamp to
-   `WeaponStats::slowdown_limit`, and decay it by `dt` at the end of the step.
-3. Wire the three effects onto the timer: the engine early return and the
-   lateral-grip skip through the same gates `craft+0x290` already uses, and the
-   hover-target subtraction as written, `4.0` clamp included.
-4. Test it against the disc, not against a literal: fire a Plasma (the weapon
-   that saturates the cap) at a craft and assert the victim's speed falls and
-   recovers, and that a second hit inside the window does not extend the timer
-   past the cap. `crates/game/tests` is where a whole-race assertion of that
-   shape belongs.
-5. Only then consider a PPSSPP capture of `timer_2e0` through a real hit, to
-   confirm the decay rate against the port rather than against the disassembly
-   alone.
+Steps 1-4 landed on 2026-09-06. What is left:
+
+1. **Capture `timer_2e0` in PPSSPP through a real hit** and compare it against
+   the port rather than against the disassembly alone. `scripts/psp-trace.py`
+   already carries the field. Two things the capture settles that nothing else
+   can: the decay really is `dt` per craft update rather than per anything else,
+   and the saturation behaviour on a second hit inside the window. Both are
+   currently 90-confidence readings of fifteen and four instructions
+   respectively, and `crates/game/tests/weapon_slowdown_ground_truth.rs` asserts
+   only that the port agrees with *itself*.
+2. Settle `entity+0x138` and the five unidentified `+0x130` writers if a HUD or
+   a kill-attribution feature ever needs them. Nothing in the law does.
+3. Settle the `0x0885bff0` contradiction, which `Weapon_PostBlastImpulse`'s
+   stats identification - and so the Mine's whole blast - does rest on.
+4. Read the PS2 build's table, if anything ever calls the parser with a PS2
+   blob.

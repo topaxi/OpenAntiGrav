@@ -54,7 +54,7 @@ impl Race {
             let ride = oag_physics::hover::target_height(
                 &ship.handling,
                 ship.physics.mag_lock_blend,
-                ship.physics.leap_timer,
+                ship.physics.slowdown_timer,
             );
             // Cast past the hover reach, because the shadow outlives contact:
             // a craft off a jump is well above anything the spring still

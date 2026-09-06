@@ -407,7 +407,7 @@ fn every_hashed_field_reaches_the_hash() {
         ("stun_timer", |s| s.stun_timer = 1.0),
         ("wall_contact_prev", |s| s.wall_contact_prev = true),
         ("pending_impulse", |s| s.pending_impulse.z = 1.0),
-        ("leap_timer", |s| s.leap_timer = 1.0),
+        ("slowdown_timer", |s| s.slowdown_timer = 1.0),
         ("grounded", |s| s.grounded = 1.0),
         ("grounded_prev", |s| s.grounded_prev = 1.0),
         ("sideshift_timers[0]", |s| s.sideshift_timers[0] = 1.0),
