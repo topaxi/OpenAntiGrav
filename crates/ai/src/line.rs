@@ -296,11 +296,33 @@ impl Line {
         if self.points.len() < 3 {
             return 0.0;
         }
-        let (first, a, _) = self.ahead(index, span);
-        let (second, b, _) = self.ahead(first, span);
-        let (_, c, _) = self.ahead(second, span);
+        // **All three walks run from `index`, not from each other's landing
+        // index.** [`Self::ahead`] returns an interpolated point but the index
+        // of the *segment* it landed in, and chaining the walk off that index
+        // restarts it from the segment's own start rather than from the point
+        // just returned. Where a segment is longer than `span`, all three walks
+        // land inside that one segment and return the same index, so the second
+        // and third points coincide, the outgoing chord is the zero vector, and
+        // the guard below is all that stands between that and `acos(0)` being
+        // charged as a right-angle turn over a fraction of a unit. Measured on
+        // `06_Track`, whose racing line has one 14.78-unit segment where two
+        // authored paths meet: the old chaining read that dead-straight seam as
+        // a curvature of **25.9 radians per unit** - a radius of three
+        // centimetres - and an AI braking against it held 1.2 units/s and never
+        // recovered, because slowing shrinks the span that produced the reading.
+        // Pinned by `a_long_segment_is_still_straight`.
+        let (_, a, _) = self.ahead(index, span);
+        let (_, b, _) = self.ahead(index, span * 2.0);
+        let (_, c, _) = self.ahead(index, span * 3.0);
         let into = b - a;
         let out_of = c - b;
+        // A chord of no length carries no direction, and `normalize_or_zero`
+        // would hand `acos` a dot of zero - which is `PI / 2`, a right angle
+        // invented out of nothing. Two coincident samples are enough to produce
+        // one, and every circuit on the disc has a pair 0.11 units apart.
+        if into.length() <= f32::EPSILON || out_of.length() <= f32::EPSILON {
+            return 0.0;
+        }
         // **The turn happens over the distance between the two chords' midpoints,
         // which is half their total length, not all of it.** Dividing by the
         // whole travelled distance reads a circle as half as curved as it is,
@@ -334,9 +356,11 @@ impl Line {
         if self.points.len() < 3 {
             return 0.0;
         }
-        let (first, a, _) = self.ahead(index, span);
-        let (second, b, _) = self.ahead(first, span);
-        let (_, c, _) = self.ahead(second, span);
+        // PROBE C: all three walks from the same origin, so the chords are
+        // actually `span` apart even where one segment is longer than `span`.
+        let (_, a, _) = self.ahead(index, span);
+        let (_, b, _) = self.ahead(index, span * 2.0);
+        let (_, c, _) = self.ahead(index, span * 3.0);
         let into = (b - a).normalize_or_zero();
         let out_of = (c - b).normalize_or_zero();
         (out_of - into).dot(lateral)
@@ -490,6 +514,45 @@ mod tests {
                 .collect(),
         );
         assert!(line.curvature(0, 10.0).abs() < 1e-6);
+    }
+
+    /// A straight line stays straight even where one of its segments is longer
+    /// than the span being asked for.
+    ///
+    /// **This failed at 28.6 radians per unit before the walk was rooted at
+    /// `index`**, and the shape is the one every circuit on the disc ships: two
+    /// authored paths meet, the samples bunch to a tenth of a unit, and one
+    /// segment jumps the gap. `06_Track`'s jump is 14.78 units and is the only
+    /// one on the disc longer than ten, which is why it was the only circuit an
+    /// AI could be parked on by a corner that is not there.
+    #[test]
+    fn a_long_segment_is_still_straight() {
+        let mut points = Vec::new();
+        let mut x = 0.0f32;
+        // Long enough that three spans past the last index tested still land
+        // well short of the wrap - a `Line` is closed, and the join of an open
+        // run of points is a genuine 180-degree turn that would mask this.
+        for step in 0..140 {
+            points.push(Vec3::new(x, 0.0, 0.0));
+            // Two samples a tenth of a unit apart, then the jump: the seam.
+            x += if step == 40 {
+                0.1
+            } else if step == 41 {
+                14.78
+            } else {
+                1.5
+            };
+        }
+        let line = Line::new(points);
+        for span in [4.0f32, 8.0, 10.0, 14.0, 24.0] {
+            for index in 36..46 {
+                let measured = line.curvature(index, span);
+                assert!(
+                    measured < 1e-3,
+                    "span {span} at index {index} measured {measured} on a straight line"
+                );
+            }
+        }
     }
 
     /// A circle's curvature is `1 / radius`, and this estimator should land near
