@@ -8,7 +8,10 @@
 transfers in *method*, not in *result*: the sights get a per-frame position
 writer because they track a moving 3D target; the countdown widgets do not,
 and no analogous writer exists for them anywhere reachable from their two
-known consumers.
+known consumers. **`ReadyGo`'s own drawing question is closed too, also with
+a negative result** - see "`ReadyGo`'s gate" below: it is confirmed not to be
+a digit display (a render off the disc settles that), but its entire visible
+envelope is code-supplied and that code's trigger was not found.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
@@ -77,14 +80,75 @@ unrelated stack slot or an unrelated struct at the same offset in a
 different function). Full decompile in the plate comment at its address;
 summarised:
 
-- A timer at `hud+0x16c` ramps 0..1 while a gate byte
-  (`*(hud->0x3c)+0x58`/`+0x59`) is clear, reset to `0` otherwise.
-- Below `1.0` it eases an alpha byte through `func_0x0010e2b4` - a colour-set
-  call, `(alpha<<24)|0x050517` for ReadyGo, flat `0xffffffff` for
-  Cockpit321Go - and clears a "hidden" bit (`+0x2c` bit `0x4`) on each
-  widget's own `+0x94` node.
+- A timer at `hud+0x16c` accumulates `dt` (the function's own `param_1`)
+  while a gate byte pair (`*(hud->0x3c)+0x58`/`+0x59`, on the same
+  largely-unidentified `hud->view` struct [lock-sight.md](lock-sight.md)
+  already reads at `+0x48`/`+0xe4`) is set, and is reset to `0` and both
+  widgets hidden while it is clear.
+- **Below `1.0`, both widgets are shown, but their colour differs, confirmed
+  by direct decompile 2026-09-06.** With `t = timer * 2`, `Cockpit321Go`
+  always gets flat `0xffffffff` from `func_0x0010e2b4` - the fade timer
+  contributes nothing to it, only the hidden bit does. `ReadyGo` gets
+  `(alpha << 24) | 0x050517` where `alpha = clamp(0, 255, (1 - t*t*t) * 255)`
+  - a cubic ease that starts fully opaque at `timer = 0` and reaches `0` by
+    `timer = 0.5`, then stays clamped at `0` (still "shown", just invisible)
+    until `timer` passes `1.0`. **This is a fade-*out*, not a fade-in**, and
+  it is `ReadyGo`'s entire visible envelope - it has no baked animation of
+  its own beyond the continuous 0.983 s material loop below. Confidence 85 -
+  the constants and the branch structure are read directly off the
+  decompile, not inferred; what dt's real units are (and so what real-time
+  span `timer: 0->1` actually spans) is not traced further, since nothing
+  needed it to answer the drawing question this page exists for.
 - Past `1.0`, or while a second, separate gate (mode `!= 6` and a global
-  byte) fails, it sets the hidden bit instead.
+  byte) fails, it sets the hidden bit instead - for both widgets, regardless
+  of the fade timer's own state.
+
+### `ReadyGo`'s gate: not a digit-sync problem, but a genuinely unrecovered one
+
+2026-09-06: whether `Pulse_Ready_Go.vex`'s own 0.983 s material loop needs some
+sync to the countdown's length before it can be drawn.
+
+**Rendered standalone off the disc** (`oag-view --mesh
+'Data\HUD\Pulse_Ready_Go.vex' --screenshot`), the model's one mesh
+(`thingieShape`, 285 vertices, radius 16 units) is a **nested ring/swoosh
+shape, not digit glyphs** - two open bracket-like loops, the same family
+`start-gantry.md` already documents for Pure's own `Ready_GO.vex` ("nested
+ring/loop shapes, not digit outlines"). Confidence 90 - a render off the
+disc, the same class of evidence this project's `321go_zone.vex` comparison
+used. This retires the original worry (that looping every 0.983 s would
+"blink it roughly 4.6 times through" the 272-tick countdown) as aimed at the
+wrong problem: there are no digit states for a free-running loop to
+misalign against. The loop's own authored period is also short relative to
+`Cockpit_321GO.vex`'s four tracks (each a one-shot burst dressed in a
+600-6000 s nominal loop that never wraps in any real race), which is
+consistent with `ReadyGo`'s loop being an intentionally-repeating ambient
+shimmer rather than an unfinished digit animation.
+
+**What still blocks drawing it: the fade-out envelope above *is* the
+widget's whole visible shape, and its trigger is unrecovered.** Unlike
+`Cockpit321Go` (flat colour, fade contributes nothing), `ReadyGo`'s only
+source of on-screen alpha is the cubic ease driven by the `hud->view+0x58`/
+`+0x59` gate byte pair. No writer of that byte was found this session. One
+candidate was checked and probably ruled out: a global at `0x08ab2120`,
+cleared to `0` at `+0x58` on local-player ship death (`Ship_SetState` case
+4, [zone-mode.md](zone-mode.md#not-determined)) - but that object is
+allocated at exactly `0x68` (104) bytes in `InGame_Update`
+(`search_instructions` on the `0x1ee0` operand pair that both references
+share, five hits total), too small to also be `hud->view`, which needs at
+least `0xe8` bytes to hold the `+0xe4` field [lock-sight.md](lock-sight.md)
+already reads on it. That argument rests on `lock-sight.md`'s own `+0xe4`
+read, itself confidence 50, and nothing here confirms what writes
+`hud->0x3c` in the first place (checked `Hud_BindWidgets` directly; it reads
+`hud+0x3c` nowhere and writes it nowhere) - so call this **confidence 60,
+"probably a different object," not a confirmed dead end** the way
+`0x08a7a1e8` is elsewhere in this thread.
+
+**Net result: `ReadyGo`'s gate is not recovered.** Drawing the mesh without
+its envelope would show a near-opaque shape for the model's entire visible
+window rather than the original's brief eased flash - the kind of
+plausible-looking stand-in this project's own rule against inventing a
+gate exists to prevent. The widget stays loaded and undrawn.
+`crates/game/src/hud/countdown.rs`'s module doc carries the same account.
 
 **No store to a screen-position field appears anywhere in this function.**
 Contrast `HudSight_Update` (`0x0881dbcc`, see `lock-sight.md`), which writes

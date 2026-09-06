@@ -17,10 +17,37 @@
 //! # What is drawn, and what is not
 //!
 //! Only `Cockpit_321GO.vex`. `Pulse_Ready_Go.vex`, the widget's other model,
-//! loads the same way and is not drawn: its own material track repeats every
-//! 0.983 s with no recovered gate, so playing it against the race clock would
-//! blink it roughly 4.6 times through a 272-tick countdown - a duration this
-//! project has not measured, not one it is free to invent. See
+//! loads the same way and is not drawn - but not for the reason this comment
+//! used to give. **Rendered standalone off the disc, `Pulse_Ready_Go.vex`'s
+//! one mesh (`thingieShape`) is a nested ring/swoosh shape, not digits** -
+//! confidence 90, the same class of evidence as this project's rendered
+//! `321go_zone.vex` comparison. So the old worry - that its 0.983 s material
+//! loop would "blink 4.6 times through a 272-tick countdown" - was aimed at
+//! the wrong problem: there are no digit states for a loop to misalign
+//! against, and the loop's own short authored period (unlike
+//! `Cockpit_321GO.vex`'s four tracks, each a one-shot burst dressed in an
+//! oversized 600-6000 s nominal loop that never actually wraps in a race) is
+//! consistent with an intentionally-repeating ambient shimmer.
+//!
+//! **What actually blocks it: the widget's entire visible envelope is
+//! code-supplied, and its trigger is unrecovered.** `Hud_UpdateCountdownFade`
+//! (`0x0881f624`) eases this widget's alpha through `(1 - (2t)^3) * 255`,
+//! clamped, then tints it `(alpha << 24) | 0x050517` - confirmed by direct
+//! decompile, confidence 85. `Cockpit_321GO.vex` gets a flat `0xffffffff`
+//! from the same function, so the fade contributes nothing to it and drawing
+//! it unconditionally for the measured countdown span (below) reproduces the
+//! disc faithfully. `Pulse_Ready_Go.vex` has no such free pass: `t` comes
+//! from a timer gated on a byte pair at `hud->view + 0x58`/`+0x59` (an
+//! already-known but still largely unidentified struct, see
+//! [lock-sight.md](../../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md)),
+//! and no writer of that byte was found - one candidate (a global at
+//! `0x08ab2120`, cleared on ship death) was checked and probably ruled out on
+//! a struct-size mismatch against `hud->view`'s own known `+0xe4` field, but
+//! at confidence 60, not a confirmed dead end. Drawing this model without its
+//! envelope would show a near-opaque shape for the model's entire visible
+//! window instead of the original's brief eased flash - exactly the kind of
+//! plausible-looking stand-in `CLAUDE.md` asks not to ship. See
+//! `docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md` and
 //! `docs/rendering/start-gantry.md`'s timing section.
 //!
 //! # Where the screen position comes from: a second `<Mode3D>` dialect, not `model_draw`'s
