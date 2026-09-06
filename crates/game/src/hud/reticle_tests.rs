@@ -39,6 +39,64 @@ const SIGHTS: &str = r#"
 </Screen>
 "#;
 
+/// `mode="orthographic"` on `SIGHTS`'s own block parses to the dialect
+/// `bracket_draws`/`model_draw` assume - real HUD pixels, not the countdown's
+/// perspective-centred `(0, 0)`. See `docs/ui/hud.md`'s "Two `<Mode3D>`
+/// dialects" section.
+#[test]
+fn the_sight_bracket_dialect_reads_as_orthographic() {
+    let layout = Layout::from_xml(SIGHTS);
+    assert_eq!(layout.models.len(), 5);
+    for model in &layout.models {
+        assert!(model.orthographic, "{model:?}");
+    }
+}
+
+/// A `<Model>` with no enclosing `<Mode3D>` at all - unreachable on any
+/// shipped layout, where every `<Model>` lives inside one, but
+/// `Layout::from_tree`'s own doc comment claims a specific fallback for it
+/// rather than leaving the claim unchecked.
+#[test]
+fn a_model_outside_any_mode3d_takes_the_orthographic_default() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Model name="Stray"><Values Src="Data\HUD\Stray.vex" x="1" y="2"/></Model></Screen>"#,
+    );
+    assert_eq!(layout.models.len(), 1);
+    assert!(layout.models[0].orthographic);
+    assert_eq!(layout.models[0].origin, [0.0, 0.0]);
+}
+
+/// The countdown's own block, verbatim off `Arcade_HUD.xml`: no `mode`
+/// attribute at all, `FirstPass`/`OriginX`/`OriginY` instead - the opposite
+/// end of the fork from [`SIGHTS`].
+#[test]
+fn the_countdown_dialect_reads_as_not_orthographic() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Mode3D>
+           <Values FirstPass="yes" OriginX="0.0" OriginY="35.0"></Values>
+           <Model name="Cockpit321Go"><Values Src="Data\HUD\Cockpit_321GO.vex" x="0.0" y="0.0" z="-70.0"/></Model>
+           </Mode3D></Screen>"#,
+    );
+    assert_eq!(layout.models.len(), 1);
+    assert!(!layout.models[0].orthographic);
+    assert_eq!(layout.models[0].origin, [0.0, 35.0]);
+}
+
+/// Pure's weapon-icon block also declares `mode="orthographic"` on the real
+/// disc - `model_draw`'s dialect, not the countdown's, despite being a
+/// per-title `<Model>` extension the sights don't use.
+#[test]
+fn pures_weapon_icon_dialect_reads_as_orthographic_too() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Mode3D>
+           <Values mode="orthographic"></Values>
+           <Model name="TURBO_icon"><Values Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" x="240" y="250" z="-10"/></Model>
+           </Mode3D></Screen>"#,
+    );
+    assert_eq!(layout.models.len(), 1);
+    assert!(layout.models[0].orthographic);
+}
+
 /// A sheet holding the two sight models' art, the way the loader packs it.
 fn sheet() -> crate::sprite::Sheet {
     let mut report = Vec::new();

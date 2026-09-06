@@ -23,63 +23,67 @@
 //! project has not measured, not one it is free to invent. See
 //! `docs/rendering/start-gantry.md`'s timing section.
 //!
-//! # Where the screen position comes from
+//! # Where the screen position comes from: a second `<Mode3D>` dialect, not `model_draw`'s
 //!
-//! `model_draw`'s own convention - reused here rather than reinvented -
-//! reads a `<Mode3D><Model>`'s authored `x`/`y` as top-left HUD pixels
-//! (480x272, [`crate::frontend::SCREEN`]) verbatim; that is what Pure's
-//! pickup icons ship and what `hud_layout_ground_truth.rs` checks. Both
-//! Pulse's `Cockpit321Go` and `ReadyGo` widgets author `x="0.0" y="0.0"
-//! z="-70.0"`, so [`Countdown::new`] takes the widget's own position rather
-//! than hardcoding it.
+//! **This widget's `<Mode3D>` block is not the one `model_draw`'s convention was
+//! measured against, and treating it as one was the actual bug.** Two dialects
+//! ship on both Pulse and Pure, distinguished by one attribute on the block's own
+//! `<Values>` carrier:
 //!
-//! **The enclosing `<Mode3D><Values OriginX="0.0" OriginY="35.0">` is not
-//! parsed anywhere in this tree** - `docs/ui/hud.md` lists `OriginX/Y` under
-//! "attributes not acted on", deferred along with `ztest`, `Delay` and
-//! `mode="orthographic"` itself. [`ORIGIN_Y`] below is this file's own
-//! reading of that one number, applied as a plain HUD-pixel offset added to
-//! the widget's `y` - the literal meaning of "origin" for a screen-space
-//! anchor, and the simplest reading consistent with `model_draw`'s existing
-//! convention, but **not itself parsed generically or cross-checked against
-//! a render of the original**, so treat the resulting screen position as this
-//! file's own placement rather than a second disc-measured fact alongside the
-//! widget's `x`/`y`.
+//! | | sights, Pure's icons/bars | `ReadyGo`/`Cockpit321Go` |
+//! | --- | --- | --- |
+//! | `<Values>` carries | `mode="orthographic"` | `FirstPass="yes" OriginX="0.0" OriginY="35.0"` |
+//! | `x`/`y` on every checked layout | real screen pixels (`240,250`; `-240,136`; `394,20`) | always `0.0, 0.0` |
+//! | `z` | `0`, `-1` or `-10` - never used for depth | `-70.0` |
 //!
-//! `z="-70.0"` is not used: the projection below is orthographic over HUD
-//! pixel space, which by construction discards view-space depth. Recorded so
-//! a reader does not go looking for where it went.
+//! `docs/ui/hud.md`'s "attributes not acted on" list used to lump
+//! `mode="orthographic"` and `OriginX/Y` together as one deferred `<Mode3D>`
+//! feature; they are opposite ends of the same fork instead. Every layout on
+//! both PSP titles checked (`Arcade`, `TimeTrial`, `Elimination`, `Zone` -
+//! `oag-wad cat --expand` against `Data.wad`) agrees: the ground-truth-tested
+//! block always says `mode="orthographic"` and this one never does. `x=0, y=0`
+//! is not this dialect's placeholder-for-runtime-code value the way it would be
+//! read under `model_draw`'s convention (see [`super::Model::orthographic`]) -
+//! it is the one screen position a perspective camera puts there **regardless
+//! of the camera's own FOV, near or far plane**: for a symmetric frustum along
+//! `-z`, a point at `x=0, y=0` projects to the exact centre of the viewport for
+//! any `z != 0`, because the horizontal and vertical projection terms are both
+//! `(coordinate / -z) * scale`, and `0 / -z` is `0` no matter what `scale` is.
+//! `z="-70.0"` is the tell this project didn't need to invent a camera to read:
+//! a widget authored at real depth, in the one `<Mode3D>` dialect where depth
+//! is not vestigial.
 //!
-//! # `x="0.0"` most likely means "runtime-placed", the same as the sights
+//! **This resolves without needing the actual camera the original code used.**
+//! No projection matrix is built below - constructing one from a guessed FOV
+//! would still contribute nothing to a widget authored at `(0, 0)` (the
+//! `0 / -z` term above is `0` for every choice), and would silently misplace a
+//! future non-orthographic widget authored at a nonzero `x`/`y` under a wrong
+//! guess. [`Countdown::new`] instead takes the screen centre directly - the one
+//! answer that holds under every symmetric projection - and adds
+//! [`super::Model::origin`], the block's own `OriginX`/`OriginY`, which is now
+//! read the same way [`super::Layout::collect`] reads it for every widget in
+//! this dialect rather than as this file's own private constant. `(0, 35)`
+//! read as a screen pixel put the widget in the top-left corner; `(240, 136) +
+//! (0, 35) = (240, 171)` puts it centred horizontally and a third of the way up
+//! from the bottom - a sensible HUD countdown position, not a coincidence
+//! dressed up to look like one.
 //!
-//! **Now settled, with a negative result, rather than merely unsearched.**
-//! Rendered at its literal authored position, the widget sits mostly off the
-//! left edge of a 480x272 frame - `model_draw`'s own convention is
-//! trustworthy (Pure's pickup icons author `x="240" y="250"`, dead centre and
-//! near the bottom, exactly where an icon belongs), so an `x` of exactly
-//! `0.0` on a widget whose siblings all carry real coordinates reads the same
-//! way [`super::Model`]'s own doc already reads the nine sight brackets: "all
-//! at the same placeholder position, which the runtime overwrites every
-//! frame". Two independent checks, written up in full in
-//! `docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md`, say that
-//! reading does not hold here the way it does for the sights:
+//! A `<Model>` in this dialect authored at a **nonzero** `x`/`y` would need the
+//! real perspective transform recovered before it could be placed - the `0/-z`
+//! argument above only eliminates the unknown for the zero case every layout
+//! actually ships. [`Countdown::new`] errors rather than guesses if that ever
+//! changes; see [`Countdown::screen_position`]'s own doc.
 //!
-//! - **No runtime position writer exists.** `Hud_BindWidgets` resolves this
-//!   widget the same way `HudSight_Bind` resolves the sights, but the only
-//!   other function touching its HUD-object slot (`Hud_UpdateCountdownFade`)
-//!   drives a fade timer and a visibility bit, never a screen position - no
-//!   `HudSight_Update` counterpart exists for it.
-//! - **The mesh bakes no absolute placement either.** `Cockpit_321GO.vex`'s
-//!   four glyph nodes resolve to a translation of `(≈0, ≈0)` and vertex
-//!   bounds symmetric about their own local origin, the same "centred quad,
-//!   externally placed" convention the sight models use - so the geometry
-//!   does not supply the missing coordinate the way it would if the widget's
-//!   `x`/`y` were merely a redundant zero on top of an already-centred mesh.
-//!
-//! So this file draws the literal `(0, 35)` rather than a guessed centre - a
-//! clipped sliver is the honest picture of what the disc says today, and
-//! nothing found says otherwise. Not a bug being papered over: there is
-//! currently nowhere else on this title's own binary or asset for a real
-//! coordinate to come from.
+//! **Position at `(0, 0)` is FOV-independent; apparent size is not, and only
+//! the first is derived above.** [`Countdown::draw`]'s own orthographic pass
+//! still treats one model unit as one HUD pixel - `model_draw`'s convention,
+//! reused for scale rather than reinvented - instead of foreshortening the
+//! mesh by `z="-70.0"` through a real perspective camera, which would need
+//! the original's actual FOV the same way a nonzero position would. The
+//! glyph's on-screen size comes entirely from `Cockpit_321GO.vex`'s own mesh
+//! extents and its authored `Anim Transform` scale-burst, not from a
+//! projection - recorded so fixing the position is not mistaken for having
+//! also derived the scale.
 
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_render::mesh::Model;
@@ -90,11 +94,6 @@ use oag_render::mesh_render::{
 
 use crate::frontend::SCREEN;
 
-/// This file's own reading of the `<Mode3D>` block's `OriginY` - see the
-/// module doc's "Where the screen position comes from" section for why this
-/// is a placement choice and not a parsed value.
-const ORIGIN_Y: f32 = 35.0;
-
 /// The GPU half of the countdown overlay: one model, one small pass with its
 /// own depth buffer, drawn after the HUD's ordinary sprite pass.
 pub struct Countdown {
@@ -102,8 +101,8 @@ pub struct Countdown {
     built: Built,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    /// Screen position in HUD pixels - the widget's own `x`/`y` plus
-    /// [`ORIGIN_Y`]. See the module doc.
+    /// Screen position in HUD pixels. See [`Countdown::new`] for how this is
+    /// derived and the module doc for why.
     position: [f32; 2],
     /// This pass's own depth attachment, sized to the last viewport drawn -
     /// recreated on resize rather than shared with the scene's, since this
@@ -128,7 +127,9 @@ impl Countdown {
     ///
     /// # Errors
     ///
-    /// Propagates pipeline creation, the same as [`super::Overlay::new`].
+    /// Propagates pipeline creation, the same as [`super::Overlay::new`], and
+    /// [`Self::screen_position`]'s own error for a widget this file cannot
+    /// yet place.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -169,15 +170,48 @@ impl Countdown {
             }],
         });
 
-        let [x, y, _z] = widget.position;
         Ok(Self {
             model,
             built,
             uniform_buffer,
             bind_group,
-            position: [x, y + ORIGIN_Y],
+            position: Self::screen_position(widget)?,
             depth: None,
         })
+    }
+
+    /// The widget's screen position, from its own `<Mode3D>` dialect.
+    ///
+    /// See the module doc for the derivation. Two branches, keyed on
+    /// [`super::Model::orthographic`]:
+    ///
+    /// - **Orthographic** (never true for this widget on any layout read, but
+    ///   handled rather than assumed away - the same defensiveness
+    ///   [`super::draw::model_draw`] gets for its own consumers): `x`/`y` are
+    ///   literal HUD pixels, `model_draw`'s own convention.
+    /// - **Not orthographic** (every `Cockpit321Go`/`ReadyGo` on both PSP
+    ///   titles): only `x=0, y=0` is derivable without the real perspective
+    ///   camera this project has not recovered - see the module doc for why
+    ///   that is not a gap for *this* value. The screen centre plus the
+    ///   block's own [`super::Model::origin`] is the answer for that case;
+    ///   a nonzero `x`/`y` here is a widget this file cannot yet place, and
+    ///   errors rather than guesses one - the same "draw nothing and say so"
+    ///   rule this project's `CLAUDE.md` states for an asset it cannot play.
+    fn screen_position(widget: &super::Model) -> anyhow::Result<[f32; 2]> {
+        let [x, y, _z] = widget.position;
+        if widget.orthographic {
+            return Ok([x, y]);
+        }
+        anyhow::ensure!(
+            x == 0.0 && y == 0.0,
+            "countdown widget {:?} authors a nonzero position ({x}, {y}) in the \
+             non-orthographic <Mode3D> dialect - only (0, 0) is derivable \
+             without the real perspective camera this project has not \
+             recovered, see crate::hud::countdown's module doc",
+            widget.name,
+        );
+        let [origin_x, origin_y] = widget.origin;
+        Ok([SCREEN.0 * 0.5 + origin_x, SCREEN.1 * 0.5 + origin_y])
     }
 
     /// (Re)builds the depth attachment if the viewport has changed size since

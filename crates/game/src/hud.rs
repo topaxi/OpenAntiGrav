@@ -158,7 +158,11 @@ impl Layout {
         // Constants first: a widget's colour can reference one declared anywhere
         // in the file, including after the widget itself.
         collect_constants(root, &mut out.constants);
-        out.collect(root, 0.0, 0.0);
+        // The default outside any `<Mode3D>` matches the orthographic
+        // dialect's own defaults - unreachable in shipped data (every
+        // `<Model>` lives inside a `<Mode3D>`), kept as the safe fallback
+        // rather than an invented one.
+        out.collect(root, 0.0, 0.0, true, [0.0, 0.0]);
         out
     }
 
@@ -193,7 +197,19 @@ impl Layout {
     /// if the element's `x`/`y` and its children's are read in the *same*
     /// translated space - which is to say an element's own offset applies to
     /// itself too, not only to what it contains.
-    fn collect(&mut self, node: &Node, offset_x: f32, offset_y: f32) {
+    ///
+    /// `orthographic`/`origin` carry the enclosing `<Mode3D>` block's own
+    /// dialect the same way `offset_x`/`offset_y` carry `<Item>`'s - see
+    /// [`Model::orthographic`]'s doc for what the two dialects are and why a
+    /// `<Model>` needs to know which one it was authored in.
+    fn collect(
+        &mut self,
+        node: &Node,
+        offset_x: f32,
+        offset_y: f32,
+        orthographic: bool,
+        origin: [f32; 2],
+    ) {
         for child in &node.children {
             let name = child.name.as_str();
 
@@ -204,8 +220,27 @@ impl Layout {
             let x = offset_x + number(&self.constants, child.attr("OffsetX")).unwrap_or(0.0);
             let y = offset_y + number(&self.constants, child.attr("OffsetY")).unwrap_or(0.0);
 
+            if name.eq_ignore_ascii_case("Mode3D") {
+                // `mode`/`OriginX`/`OriginY` live on this element's own
+                // `<Values>` carrier - `Node::value` reaches through to it,
+                // `Node::attr` would not. Every shipped block is exactly one
+                // of two shapes: `mode="orthographic"` with real screen
+                // pixels on every child `x`/`y`, or `FirstPass`/`OriginX`/
+                // `OriginY` with `x="0" y="0"` on every child - never both,
+                // never neither.
+                let mode_orthographic = child
+                    .value("mode")
+                    .is_some_and(|m| m.eq_ignore_ascii_case("orthographic"));
+                let mode_origin = [
+                    number(&self.constants, child.value("OriginX")).unwrap_or(0.0),
+                    number(&self.constants, child.value("OriginY")).unwrap_or(0.0),
+                ];
+                self.collect(child, x, y, mode_orthographic, mode_origin);
+                continue;
+            }
+
             if name.eq_ignore_ascii_case("Item") {
-                self.collect(child, x, y);
+                self.collect(child, x, y, orthographic, origin);
                 continue;
             }
 
@@ -213,7 +248,7 @@ impl Layout {
                 if let Some(sprite) = self.sprite_from(child, x, y) {
                     self.sprites.push(sprite);
                 }
-                self.collect(child, x, y);
+                self.collect(child, x, y, orthographic, origin);
                 continue;
             }
 
@@ -221,21 +256,21 @@ impl Layout {
                 if let Some(label) = self.label_from(child, x, y) {
                     self.labels.push(label);
                 }
-                self.collect(child, x, y);
+                self.collect(child, x, y, orthographic, origin);
                 continue;
             }
 
             if name.eq_ignore_ascii_case("Model") {
-                if let Some(model) = self.model_from(child) {
+                if let Some(model) = self.model_from(child, orthographic, origin) {
                     self.models.push(model);
                 }
                 continue;
             }
 
-            // `Screen`, `Mode3D`, `Variable` and `Values` are containers or
+            // `Screen`, `Variable` and `Values` are containers or
             // already-handled carriers; everything else is walked into so a
             // widget nested somewhere unexpected is still found.
-            self.collect(child, x, y);
+            self.collect(child, x, y, orthographic, origin);
         }
     }
 
@@ -312,7 +347,7 @@ impl Layout {
         })
     }
 
-    fn model_from(&mut self, node: &Node) -> Option<Model> {
+    fn model_from(&mut self, node: &Node, orthographic: bool, origin: [f32; 2]) -> Option<Model> {
         let name = node.attr("name").unwrap_or("").to_string();
         let Some(src) = node.value("Src").map(str::to_string) else {
             self.skipped.push(format!("<Model {name}> has no Src"));
@@ -334,6 +369,8 @@ impl Layout {
                 .and_then(|v| resolve(&self.constants, v))
                 .and_then(parse_argb)
                 .map(argb_to_rgba),
+            orthographic,
+            origin,
         })
     }
 

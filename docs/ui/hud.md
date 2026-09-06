@@ -56,8 +56,10 @@ rounded to an integer; 22 are not**. This paragraph said 121 and 20 until
 2026-09-05 - the earlier count used a weaker key and, in one case, paired
 `TimeDiffIcon`'s `y` with a value that actually belongs to
 `RearWarningMissileIcon`. Of the 22: **18 are the nine `<Mode3D><Model>`
-placements**, sitting at the PSP's own `x="-240" y="136"` unchanged in an
-`orthographic` mode this codebase does not drive; **4 are small integer
+placements**, sitting at the PSP's own `x="-240" y="136"` unchanged - a
+placeholder overwritten every frame by `HudSight_Update` (see
+[`lock-sight.md`](../ghidra/functions/psp-pulse-usa/lock-sight.md)), so an
+unscaled copy costs nothing; **4 are small integer
 nudges** (`LapTxt`'s `y`, `RearWarningMissileIcon`'s and
 `RearWarningRocketIcon`'s `y`, and most of `TimeDiffIcon`'s `x`) that stay
 byte-identical across consoles while the `<Item>` enclosing every one of them
@@ -151,7 +153,10 @@ Small and closed: 8 element names and 33 attributes across all five files. No
 
 ### Attributes that carry geometry
 
-- `x`, `y`, `width`, `height` - destination, in the PSP's 480x272 space.
+- `x`, `y`, `width`, `height` - destination, in the PSP's 480x272 space. True
+  of every `<Image>`/`<Text>` and of a `<Mode3D><Model>` whose enclosing block
+  authors `mode="orthographic"`. **A `<Model>` in the other `<Mode3D>` dialect
+  reads `x`/`y` differently** - see "Two `<Mode3D>` dialects" below.
 - `U`, `V`, `TxtrWidth`, `TxtrHeight` - **source** rectangle in atlas pixels.
   Genuinely differs from the destination: `TimeDiffIcon` samples 28x23 and draws
   it at 14x12.
@@ -187,8 +192,80 @@ Small and closed: 8 element names and 33 attributes across all five files. No
 - `BorderColor` - parsed and carried, **not drawn**: the renderer has no outline
   pass, and faking one with four offset copies would quadruple the glyph count
   for something never compared against the original.
-- `ztest`, `Delay`, `Enabletransition`, `cached`, `FirstPass`, `OriginX/Y`,
-  `mode="orthographic"` - all on the `<Mode3D>` layer, which is deferred.
+- `ztest`, `Delay`, `Enabletransition`, `cached`, `FirstPass` - all on the
+  `<Mode3D>` layer, still deferred. `mode` and `OriginX/Y` are **no longer** on
+  this list - see below.
+
+### Two `<Mode3D>` dialects, distinguished by `mode="orthographic"`
+
+**Previously lumped together as one deferred `<Mode3D>` feature; they are
+opposite ends of the same fork.** Every `<Mode3D>` block on both Pulse and
+Pure, checked across all four layouts that carry one (`Arcade`, `TimeTrial`,
+`Elimination`, `Zone`), is exactly one of two shapes and never a mix:
+
+| | sights, Pure's weapon icons/bars | `ReadyGo`/`Cockpit321Go` (the countdown) |
+| --- | --- | --- |
+| `<Values>` carries | `mode="orthographic"` | `FirstPass="yes" OriginX="0.0" OriginY="35.0"` |
+| `x`/`y`, every layout | real screen pixels (`240,250`; `-240,136`; `394,20`) | always `0.0, 0.0` |
+| `z` | `0`, `-1` or `-10` - never used for depth | `-70.0` |
+
+The orthographic dialect is the one `model_draw`'s convention was measured
+against (`pickup_icon_ground_truth.rs`, `lock_sight_ground_truth.rs`): `x`/`y`
+are literal HUD pixels. The countdown's own block never authors
+`mode="orthographic"`, and reading its `x=0, y=0` the same way put the widget
+off the left edge of the screen - the actual defect behind the countdown being
+undrawable in practice, not the runtime-placement question
+[countdown-widgets.md](../ghidra/functions/psp-pulse-usa/countdown-widgets.md)
+settled separately (there is no runtime writer, and there does not need to be
+one). `x=0, y=0` is where a symmetric perspective camera along `-z` always
+projects the optical axis, for any FOV and any `z != 0` - so it reads as
+screen-centre in this dialect, not a placeholder. `oag_game::hud::Layout::collect`
+now parses `mode` and `OriginX`/`OriginY` per `<Mode3D>` block (`super::Model::orthographic`/`::origin`),
+and [`countdown.rs`](../../crates/game/src/hud/countdown.rs)'s own module doc
+has the full derivation, including why no projection matrix needs to be built
+for the `(0, 0)` case every shipped layout actually authors, and why a future
+widget authored at a nonzero `x`/`y` in this dialect is a documented gap
+rather than a guess.
+
+**`OriginX`/`OriginY` reads as a screen-space translation added to the
+projected result, not as the projected result itself, and `OriginX="0.0"`
+is the reason to believe that rather than the other way round.** The
+alternative reading - "`OriginX`/`OriginY` *is* the final screen pixel,
+full stop" - would put the countdown right back on the left edge it was
+just taken off (`OriginX="0.0"` read as a literal pixel is column zero),
+the exact failure this page exists to record. "No horizontal nudge" is
+what an author who wants a centred widget actually writes; "column zero"
+is not a coordinate anyone authors on purpose next to a `z="-70.0"` that
+places the same widget in front of a camera. HD/Fury's own copy of this
+element (`hud_ready_go.xml`'s `<aMode3D><Values OriginX="0.0" OriginY="140.0">`,
+disabled by the tag-rename convention `hd-hud.md` documents, not
+repositioned) is consistent either way and settles nothing on its own - see
+[countdown-widgets.md](../ghidra/functions/psp-pulse-usa/countdown-widgets.md)'s
+own section on it. The `OriginX="1220" OriginY="412"` data point on HD's
+`Team Selection`'s `ShipModel` and `OriginX="960" OriginY="540"` on its
+`<BackgroundAnim>` (`docs/formats/race-setup.md`, `docs/formats/hd-frontend.md`)
+look like they support "`OriginX`/`OriginY` is the literal screen pixel"
+instead, since `960,540` is exactly the centre of a 1920x1080 screen with no
+further offset needed - but both carry `nearZ` and sit directly on a
+`<Model>`/`<BackgroundAnim>` **widget**, a different XML dialect from
+Pulse's and HD's own `<Mode3D><Values OriginX/OriginY>` **container**
+attribute. The two attribute sets are disjoint - no Pulse or Pure `<Mode3D>`
+block ever carries `nearZ`, and no HD `<aMode3D>`/`<Mode3D>` container ever
+carries it either - which is what licenses reading them as two different
+attributes that happen to share a name, not one attribute with two
+data points pulling in opposite directions.
+
+**Position at `x=0, y=0` is FOV-independent; apparent size is not, and only
+the first was derivable here.** `countdown.rs` keeps the same "one model
+unit is one HUD pixel" orthographic draw `model_draw` uses for its own
+scale, rather than computing a foreshortened size from `z="-70.0"` and a
+real perspective camera - correctly, since recovering a size that way needs
+the original's actual FOV, which nothing recovered states, and guessing one
+is exactly what this page's own derivation avoided doing for position. The
+glyph's on-screen size today comes entirely from `Cockpit_321GO.vex`'s own
+mesh extents and its authored `Anim Transform` scale-burst (rest ~3.5x,
+peaking ~8x), not from a projection - recorded so a reader does not read the
+position fix as having also derived the scale.
 
 ## Two properties of the data that a first reading gets wrong
 
