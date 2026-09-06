@@ -2051,6 +2051,7 @@ dependencies = [
  "symphonia",
  "thiserror 2.0.19",
  "toml",
+ "toml_edit",
  "wgpu",
  "winit",
  "zip",
@@ -3532,6 +3533,7 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 

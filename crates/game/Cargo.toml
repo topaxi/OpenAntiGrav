@@ -69,6 +69,13 @@ winit = "0.30"
 resvg = { version = "0.48", default-features = false }
 pollster = "0.4"
 toml = "1"
+# Only for `crate::pilots`' save path. `toml` above parses a pilot file into a
+# struct and throws the document away, which is exactly what must NOT happen
+# on write: these are hand-authored files with the author's own comments in
+# them. `toml_edit` reads the document, mutates only the value an edit
+# touched and writes the rest back byte-for-byte - see `crate::pilots`' module
+# doc.
+toml_edit = "0.25"
 dirs = "6"
 serde = { version = "1", features = ["derive"] }
 thiserror.workspace = true
