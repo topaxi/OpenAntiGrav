@@ -137,13 +137,31 @@ Two probes, each measured on the whole twelve-circuit board, then reverted.
   50-unit corner. This is the one that reaches 07 - 27.4/26.4/28.0 a lap, and
   the craft survives to lap 4 - and it transforms half the board (16 71.69,
   09 84.54, 05 73.09, 14 65.91). **It breaks 06**, which loses its clean lap and
-  takes three respawns; 06 is the one circuit with a *tighter* worst corner than
-  07. `min(10.0)` is a number chosen to make 07 behave, which is exactly the
-  invisible damage the thread's own rule forbids.
+  takes three respawns. `min(10.0)` is a number chosen to make 07 behave, which
+  is exactly the invisible damage the thread's own rule forbids.
+
+**B's damage is two *located* events, not conservative cornering**, and the
+obvious reading - "B corners slowly and 06 has the tightest corner" - is wrong.
+Shield by 50-index bucket, per lap:
+
+- **06, indices 1,200-1,249: nothing at all in baseline, 34.72 on lap 1 under
+  B** with three respawns, then 4.43 and 3.45. That bucket holds 06's worst
+  corner, `k` 0.0547 at index **1204**, `v_yaw` **28 units/s** - the tightest
+  sample on the disc. Every other bucket on 06 improved. So B is doing something
+  specific at 06:1204, most likely wedging a craft it has slowed to a crawl.
+  **Cause not established.**
+- **14, indices 750-799: nothing in baseline, 7.60 on lap 3 under B** and
+  nothing on laps 1-2. `crates/game/tests/race_ground_truth.rs` already records
+  14 as having **82 racing-line samples with nothing under them at 684-765**,
+  which that bucket overlaps - a craft slowed over an unsupported stretch is a
+  different failure from one that flies it. 14 is a large net win under B all
+  the same: 29.09 total against baseline's 53.59, its worst bucket (2800-2849,
+  at its tightest corner, index 2785) falling from ~6 a lap to under 1.
 
 So the fix wants its own thread: it is a change to which limit law the AI uses
-and at what resolution it reads the line, it moves every circuit, and the span
-has no measured value yet.
+and at what resolution it reads the line, it moves every circuit, the span has
+no measured value yet, and **the one measurement that would anchor a sweep -
+06's shield - is dominated by a located event nobody has looked at.**
 
 ## Open
 
@@ -187,17 +205,21 @@ has no measured value yet.
 
 ## Next Steps
 
-1. Sweep the curvature estimator's span the way `lateral_accel` was swept, with
-   probe A's yaw-rate term in place, and let **06** pick the value - it is the
-   circuit with the tightest corner on the disc and the one probe B broke. A
-   span chosen against 07 is a span fitted to one circuit.
-2. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
+1. **Find out what probe B does at 06:1204 before sweeping anything.** 34.72
+   shield and three respawns, one bucket on one lap, at a place baseline never
+   loses anything: that is a located failure, not conservative cornering, and a
+   span sweep anchored on 06's shield would be optimising against a cause nobody
+   has looked at.
+2. Then sweep the curvature estimator's span the way `lateral_accel` was swept,
+   with probe A's yaw-rate term in place. A span chosen against 07 alone is a
+   span fitted to one circuit.
+3. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
    grazing a flat wall at 28 degrees, one contact a tick, and compare the
    tangential bleed against the recovered 0.035. Independent of step 1 and
    downstream of it - the craft reaches that wall at 101 because it was never
    slowed for a corner that admits 33, so a cheaper scrape would hide the cause
    rather than fix it.
-3. Do **not** trim `07_Track` out of the test's known-good list: it has always
+4. Do **not** trim `07_Track` out of the test's known-good list: it has always
    passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
    or `grip_air` - the first cannot reach this corner and the last two are
    authored per-craft data that the `grounded == 1.00` measurement clears.
