@@ -10,7 +10,7 @@ rather than fails.
 | `talons-junction-time-trial-lap.csv` | present, tracked |
 | `pad0-boost.csv` | **recovered from `vimes`**, tracked |
 | `talons-junction-standing-start.csv` | **recovered from `vimes`**, tracked |
-| `talons-junction-pitch-both-ways.csv` | still missing - **recapturable**, see below |
+| `talons-junction-pitch-both-ways.csv` | **recaptured live, 2026-09-06**, tracked |
 | `talons-junction-time-trial-lap-omega.csv` | still missing |
 | `venom-straight.csv` | still missing |
 
@@ -73,6 +73,38 @@ beside the test.
 recipe survived even though the capture did not - which is worth noting as the
 thing that *did* work. No matching `.inputs` was found for `venom-straight` or
 the `-omega` lap.
+
+**Recaptured, live off `pulse-psp-usa.chd`**, following
+`docs/reverse-engineering/ppsspp-debugger.md`'s recipe exactly (`PPSSPPSDL`
+under a fresh `Xvfb`, `psp-drive.py preflight` -> `menu` -> `restart`, then
+`psp-trace.py --script verification/scenarios/pitch-both-ways.inputs
+--script-lead 2`): 360 ticks, `speed/|velocity| == 1.0000` on every tick as
+the scenario's own header predicts, craft never leaving Talon's Junction's
+start line. Committed at `data/traces/talons-junction-pitch-both-ways.csv`.
+
+**This is the one capture in the table of six that no live Rust test actually
+names**, which narrows this thread's opening claim ("six trace captures ...
+are named by ground-truth tests") for this one file specifically -
+`crates/physics/src/forces.rs` and `crates/physics/src/engine.rs` cite it only
+in doc comments as evidence for constants already baked in
+(`PITCH_INVERSE_INERTIA`, `ROLL_INVERSE_INERTIA`, the pitch-torque gate), and
+`cargo nextest list --workspace --run-ignored all` has nothing pitch-shaped
+that opens a `data/traces/` path (checked directly, including the
+`format!("data/traces/talons-junction-{name}.csv")` pattern
+`yaw_authority_ground_truth.rs` uses for `steer-left`/`-right`, in case a test
+built its path that way). So there is no ground-truth test to newly pass or
+fail here - the closest thing to one, `scripts/trace-pitch-response.py` and
+`scripts/trace-angular-fit.py --joint`, both ran clean against the new
+capture: the independently-read `avel_x`/`omega_x` pair (`+0x160`/`+0x150`,
+never derived from each other) ratios to a median of `15.6001` across the
+capture and a per-axis fit of `-15.619` on `x`, against
+`PITCH_INVERSE_INERTIA`'s `15.6` - matching the `-15.620` `forces.rs` already
+documented from the original, lost capture to within noise. `cargo run -p
+oag-trace -- run ... --script pitch-both-ways.inputs` against it also ran
+clean (no panic, no schema mismatch), with the same open hover/contact-gap
+divergences past tick ~300 that `docs/physics/angular-velocity-column.md`
+already documents elsewhere - not a regression, and not this scenario's
+subject (it never leaves the start line).
 
 ## Open
 
