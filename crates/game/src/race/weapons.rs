@@ -434,6 +434,17 @@ impl Race {
             self.world
                 .projectiles
                 .lay(weapon, point, slot as u8, drop.fuse);
+            // **The Mine only.** `Weapon_DropMines` calls `Mine_Init`, which
+            // plays `MINELAUNCH`, once per charge; `Weapon_FireBomb` never
+            // calls the play function at all - see `Cue::MineLaunch`'s own
+            // doc comment. Both weapons share this loop because they are one
+            // mechanism in this engine, but the cue is the Mine's alone.
+            if weapon == oag_formats::weapons::Weapon::Mine {
+                self.cues.push(crate::audio::sfx::CueEvent::new(
+                    crate::audio::sfx::Cue::MineLaunch,
+                    slot,
+                ));
+            }
         }
     }
 

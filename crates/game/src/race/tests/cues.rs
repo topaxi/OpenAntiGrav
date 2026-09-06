@@ -130,6 +130,7 @@ fn every_cue_has_something_that_raises_it() {
     );
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
+    setup.weapons = Some(one_mine_table());
     let mut race = Race::start(setup);
 
     let mut raised = std::collections::BTreeSet::new();
@@ -145,6 +146,17 @@ fn every_cue_has_something_that_raises_it() {
         // above is: this is a fixture reaching an edge, not a pickup grant.
         if tick == 0 {
             race.world.ships[0].autopilot_timer = 2.0;
+        }
+        // A Mine, dropped once - after the wall business above has already
+        // had its first pass, so the impulse this leaves on `physics.shield`
+        // is not mistaken for the wall's own. Its own held-weapon slot, not
+        // the pickup path, for the same reason the shield and Autopilot above
+        // are set directly.
+        if tick == 200 {
+            race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Mine);
+            race.world.ships[0]
+                .pickup
+                .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
         }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
@@ -174,6 +186,7 @@ fn every_cue_has_something_that_raises_it() {
         Cue::Absorb,
         Cue::ShieldActive,
         Cue::Disengaging,
+        Cue::MineLaunch,
     ] {
         assert!(raised.contains(&cue), "{} was never raised", cue.name());
     }
@@ -269,6 +282,73 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
     assert!(
         raised.is_empty(),
         "no ladder, no stage, nothing to announce: {raised:?}"
+    );
+}
+
+/// One `MINELAUNCH` per mine that leaves the back of the craft, on the same
+/// tick each one does - not one per press, and not one for the Bomb.
+///
+/// `oag_gameplay::pickup::Held::begin_drop` fires the first charge on the very
+/// tick it is called, so the count landed by the end of the run is exactly
+/// [`oag_gameplay::projectile::mine::CLUSTER`] rather than one short.
+#[test]
+fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
+    let mut race = race_with_a_grid();
+    race.weapons = Some(one_mine_table());
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Mine);
+    race.world.ships[0]
+        .pickup
+        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+
+    let mut launches = 0;
+    // Comfortably past the whole cluster: `DROP_INTERVAL` is a tenth of a
+    // second, so `CLUSTER` charges take under a second at 60 Hz.
+    for _ in 0..120 {
+        race.tick(&InputSnapshot::default());
+        launches += race
+            .drain_cues()
+            .iter()
+            .filter(|e| e.cue == Cue::MineLaunch)
+            .count();
+    }
+    assert_eq!(
+        launches,
+        usize::from(oag_gameplay::projectile::mine::CLUSTER),
+        "one MINELAUNCH per mine in the cluster, not more and not fewer"
+    );
+}
+
+/// The Bomb shares the Mine's drop loop in this engine, and must not borrow
+/// its cue: `Weapon_FireBomb` never calls the play function `Mine_Init` does,
+/// so this port raises nothing for it either. See `Cue::MineLaunch`'s own doc
+/// comment and `mine.md`'s 2026-09-06 section.
+#[test]
+fn dropping_a_bomb_raises_no_mine_launch_cue() {
+    let mut race = race_with_a_grid();
+    race.weapons = Some(
+        oag_formats::weapons::parse(
+            r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Bomb"><Stats absorb="30" blastforce="31" blastradius="32"
+               damage="33" timetodie="6" trigger_radius="3"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Bomb"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+        )
+        .expect("the fixture table must parse"),
+    );
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Bomb);
+    race.world.ships[0].pickup.begin_drop(1);
+
+    let mut raised = Vec::new();
+    for _ in 0..30 {
+        race.tick(&InputSnapshot::default());
+        raised.extend(race.drain_cues());
+    }
+    assert!(
+        !raised.iter().any(|e| e.cue == Cue::MineLaunch),
+        "the Bomb borrowed the Mine's launch cue: {raised:?}"
     );
 }
 

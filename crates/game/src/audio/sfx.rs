@@ -680,11 +680,33 @@ pub enum Cue {
     /// helper. `docs/ghidra/functions/psp-pure-usa/lockon-sound.md`,
     /// confidence 82.
     LockOn,
+    /// A mine leaving the back of a craft, one per charge of a cluster.
+    ///
+    /// `Weapon_DropMines` (`0x088675cc`) calls `Mine_Init` (`0x08859ac8`) once
+    /// per charge; `Mine_Init` ends with two cue plays, and the first is
+    /// `MINELAUNCH`. Both call sites were decompiled directly: the emitter
+    /// argument `Weapon_DropMines` hands `Mine_Init` traces, through two
+    /// pointer hops off the subsystem's per-craft slot, to `+0x50` - the same
+    /// offset [`Self::Collision`] and [`Self::Shield`] read as the firing
+    /// craft's own emitter. See
+    /// [mine.md](../../../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-06-minelaunch-is-a-plain-positional-craft-emitter-cue---mineradar-is-not),
+    /// confidence 78 (two hops of indirection, short of the single-hop reads'
+    /// 82-85).
+    ///
+    /// **`MINERADAR`, the second cue of the same pair, is deliberately not
+    /// here.** It anchors to a *new emitter `Mine_Init` allocates for the mine
+    /// entity itself*, a held, per-projectile voice - a shape nothing in
+    /// [`CueEvent`] or [`SfxVoices`] can address, since every held voice this
+    /// engine plays is keyed by grid slot. `BOMBLAUNCH`/`~BOMBRADAR` also stay
+    /// unwired: `Weapon_FireBomb` (`0x08863a20`) was decompiled end to end and
+    /// never calls the play function at all. See `mine.md`'s own section for
+    /// both.
+    MineLaunch,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -694,6 +716,7 @@ impl Cue {
         Self::Disengaging,
         Self::Blowup,
         Self::LockOn,
+        Self::MineLaunch,
     ];
 
     /// The bank the cue is looked up in.
@@ -702,7 +725,7 @@ impl Cue {
         match self {
             Self::SpeedupPad | Self::Blowup | Self::LockOn => BankName::Hud,
             Self::Collision | Self::Engine => BankName::Ship,
-            Self::Absorb | Self::Shield => BankName::Weapons,
+            Self::Absorb | Self::Shield | Self::MineLaunch => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
         }
     }
@@ -765,6 +788,7 @@ impl Cue {
             Self::Disengaging => "disengaging",
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
+            Self::MineLaunch => "MINELAUNCH",
         }
     }
 
@@ -828,6 +852,9 @@ impl Cue {
             // it is a HUD sound about the player's own reticle rather than a
             // thing happening somewhere in the world.
             Self::LockOn => Placement::Unplaced,
+            // Traces to the firing craft's own `+0x50` - see this variant's
+            // own doc comment - so it rides the craft, not the mine.
+            Self::MineLaunch => Placement::Craft,
         }
     }
 }

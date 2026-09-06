@@ -444,6 +444,22 @@ fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
+/// The Mine's own fixture, for the tests about the drop path and its cue.
+/// Invented numbers, all distinct from the Rocket fixture's.
+fn one_mine_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
+               damage="20" timetodie="3" trigger_radius="2"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
 /// The Plasma's own fixture: the Rocket's schema with `spread` swapped for
 /// `charge_time`, which is what both shipped tables author. Invented numbers,
 /// all distinct from the Rocket fixture's, and the four class speeds ascending

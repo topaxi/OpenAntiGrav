@@ -408,21 +408,43 @@ detonating projectile rather than reading which file each weapon authors.
   billboard fallback on one `bool` for every kind, so a live Missile,
   Plasma or Shuriken drew nothing at all (no mesh, and no billboard either)
   whenever `Rocket.vex` had loaded. Both fixed, both with a regression test.
-- **Their own cues are still unwired, and are a separate, larger piece of
-  work than the model was.** `MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/
-  `~BOMBRADAR` and `BOMBEXPL`/`BOMBEXPL_PC` are all six located (`mine.md`),
-  but nothing in this engine fires a weapon-launch sound for *any* weapon
-  yet - `crate::audio::sfx::Cue`'s nine variants (`Cue::ALL`,
-  `crates/game/src/audio/sfx.rs`) are all HUD, collision, shield and speech
-  cues, none of them a weapon fire or detonation. Wiring the Mine's and the
-  Bomb's needs: new `Cue` variants, a `BankName::Weapons` mapping (already
-  the category `Absorb`/`Shield` use), and - for `MINERADAR` specifically -
-  a *held, positionally-tracked* voice the way `Cue::Engine`/`Cue::Shield`
-  are, but anchored to a projectile slot rather than a craft, which nothing
-  in the existing `CueEvent` plumbing does today. Scoped out of the model
-  work deliberately rather than bolted on at the end of it - RE and
-  implementation for a new cue subsystem is its own unit of work per this
-  project's own workflow, not a tail on a model-drawing change.
+- ~~**Their own cues are still unwired**~~ **One of six landed, 2026-09-06;
+  five stay open and here is exactly why.** `Cue::MineLaunch` now fires
+  `MINELAUNCH` off the firing craft's own emitter (`Placement::Craft`) every
+  time `Race::lay_mines` lays a charge whose weapon is `Weapon::Mine` -
+  `crates/game/src/audio/sfx.rs`, wired from `crates/game/src/race/weapons.rs`.
+  Both `Mine_Init` (`0x08859ac8`) and its only caller, `Weapon_DropMines`
+  (`0x088675cc`), were decompiled directly this session to settle *how* the
+  cue plays, not only *that* it does: the emitter argument traces, through two
+  pointer hops, to `craft+0x50` - the same offset `Collision` and `Shield`
+  already read. Confidence 78 on that reading; see `mine.md`'s 2026-09-06
+  section for the instruction-level evidence and `oag-wad sounds` output
+  confirming all six cues live in `weapons.bnk`. A WAV of a real cluster
+  drop, real disc, real mixer: `data/shots/mine-launch.wav`
+  (`crates/game/tests/mine_launch_audio_ground_truth.rs`).
+  **The other five stay silent, each for a distinct, checked reason:**
+  - **`MINERADAR`** (the Mine's own second cue) anchors to a *new emitter
+    `Mine_Init` allocates for the mine entity itself*, not the craft - a
+    held, per-projectile voice. Nothing in `CueEvent` or `SfxVoices` can
+    address that today; every held voice this engine plays (`Engine`,
+    `Shield`, `Blowup`) is keyed by grid slot, and building a projectile-slot
+    equivalent is real work of its own. Its single waveform also carries no
+    loop bit (`oag-wad sounds ... --cue MINERADAR` says "0 looping"), so even
+    what the held handle is *for* - a recurring ping, a one-shot the original
+    can cancel, something else - is unread, not merely unimplemented.
+  - **`BOMBLAUNCH`/`~BOMBRADAR`** do not have a recovered trigger at all.
+    `Weapon_FireBomb` (`0x08863a20`) was decompiled end to end this session
+    and it never calls the play function `Mine_Init` does - so unlike the
+    Mine's pairing, which a direct decompile confirmed, the Bomb's cues are
+    only known to sit in the same `.rodata` group as its model string. The
+    call site is either inside `func_0x0005f188` (the spawn helper
+    `contact-response.md` already records as unresolved past its prologue -
+    two callers jump directly into it, past its real entry point) or is not
+    on the fire path at all.
+  - **`BOMBEXPL`/`BOMBEXPL_PC`** were already an open item before this
+    session (see the Bomb's own explosion note above) and remain so: the
+    Bomb's teardown function is a distinct one from `Mine_SpawnExplosion`'s
+    and has not been read.
 - ~~**Give the Missile its own detonation and bounce effects.**~~ **Done
   2026-08-26.** `Race::blast_for` now takes `kind` and maps `Missile` to
   `MISSILE_EXPLO_EFFECT` (`WO_MISSILE_EXPLO`, one file whatever it hit -
