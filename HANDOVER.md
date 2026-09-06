@@ -206,13 +206,19 @@ file does not need to carry its own.
     [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md)
     (one press throws zero blades - **not** `0c78c477`, that attribution is
     refuted; bisected to `cc395862`, the countdown-hold fix, which correctly
-    leaves the field grid-tight at throw time and a blade clips a grid-mate)
+    leaves the field grid-tight at throw time and a blade clips a grid-mate -
+    **deferred 2026-09-06**: the Shuriken's race-table odds are zero in every
+    class, so this scenario - a blade thrown off a standing start in a single
+    race - is one no implemented mode can produce a weapon pad for; it needs
+    `Mode::Eliminator`, which does not exist yet, so chasing `hull_radius`
+    further is parked rather than a next step)
     and
     [`stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md)
     (a healthy craft blips stalled for exactly one tick on `16_Track` Ace,
     likely the countdown-hold fix `cc395862` releasing opponent thrust one
-    tick before velocity rises off zero). Both have handover threads with the
-    evidence trail and a concrete, cheap next step.
+    tick before velocity rises off zero). The second still has a concrete,
+    cheap next step; the first's thread carries the evidence trail but is
+    parked, not actionable, until Eliminator mode lands.
   - `ps2_source_ground_truth`'s transcode test - historically flaky under load
     per the entries below - **passed cleanly in both runs today**, including
     at load 22-29 (298s), the same contention level the older flake reports
@@ -578,7 +584,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
-- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. **Bisected and confirmed**: `cc395862` (hold AI opponents at the line through the start countdown) is the exact commit - `9785a177` (its parent) passes twice, `cc395862` fails twice with the identical panic `d11c5fb7`/`main` also show. A diagnostic readout (headings ~1.0, field 15-136 units out in grid order post-fix vs 536-681 units out on a since-curved line pre-fix) confirms this is a grid-tight field at throw time, not a steering-displacement bug in the gate itself - `cc395862`'s own fix is not implicated. Still open: whether `hull_radius`'s lateral width - marked "ours, not recovered" - is over-wide for a 20-degree off-nose throw this early in a race, and whether the test's premise (throwing 120 ticks after release) is even fair; a from-play or PPSSPP read is the next step, and both are outside `crates/core`/`crates/game`
+- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - **deferred by maintainer decision, 2026-09-06**, not blocked and not resolved. `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. **Bisected and confirmed**: `cc395862` (hold AI opponents at the line through the start countdown) is the exact commit - `9785a177` (its parent) passes twice, `cc395862` fails twice with the identical panic `d11c5fb7`/`main` also show. A diagnostic readout (headings ~1.0, field 15-136 units out in grid order post-fix vs 536-681 units out on a since-curved line pre-fix) confirms this is a grid-tight field at throw time, not a steering-displacement bug in the gate itself - `cc395862`'s own fix is not implicated. **Deferred rather than chased further**: the test sets the pickup directly to get a thrown blade off a standing start at all - `WeaponStats_Race.xml` zeroes the Shuriken's odds in every class (see [pickups.md](docs/gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)), so a weapon pad in any implemented mode can never produce this scenario; it is Eliminator's alone, and `Mode::Eliminator` does not exist in this engine yet. The bisect and the open `hull_radius` question stand as written for whoever picks this up once Eliminator lands; this thread has already been misattributed to two different commits (`0c78c477`, then `cc395862`, both cleared above), which is itself a reason to stop guessing rather than open a third
 - [A healthy AI craft blips stalled for one tick off the line](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md) - `stall_rescue_ground_truth`'s zero-tolerance test reads a one-tick stall on `16_Track` at Ace; leading hypothesis is an unavoidable transition tick where the countdown-hold fix (`cc395862`) releases opponent thrust before velocity has risen off zero, not a physics or AI bug.
 
 ## Pending maintainer decision: shipped design data in tracked docs
