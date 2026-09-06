@@ -18,6 +18,23 @@ because **our music bus alone, on its own, already measures louder than the
 original's entire race mix, engines included.** The problem has relocated
 to the music path. Open and Next Steps are rewritten below to match.
 
+**2026-09-07, second pass the same day: the named candidate (`Audio_UpdateGroupVolumes`'s
+per-frame fade) is read mid-race now, and it is ruled out too - on two grounds
+at once.** Read live during a race for the first time (six samples, 4 s apart,
+24 s window, thrust held): every one of the sixteen `g_audio_group_volumes`
+entries reads `1024` throughout, not just at rest. That alone would close the
+"Open" item below. But tracing the actual call chain (`scripts/psp-relocate.py
+callers`/`xrefs`, since `get_xrefs_to` is empty for every address involved)
+found something the "Open" item did not know to ask: **none of the nine groups
+`Audio_UpdateGroupVolumes` writes is music at all.** The SFX Volume slider
+drives that whole mechanism, including group `0`'s duck; the Music Volume
+slider writes to a second, previously-undocumented object
+(`g_music_player_ptr`, `0x08ac1dd8`) that has nothing to do with
+`Audio_SetGroupVolume`, `mgr`, or this fade. Both sliders read at their own
+ceiling live, mid-race, under a stock profile. See
+[audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#music-does-not-go-through-this-chain---it-has-its-own-volume-measured-live-2026-09-07)
+for the full call chain, the live table and the new next candidate.
+
 ## Resolved
 
 - **The ordering fix landed.** `Engine::tick` (`crates/game/src/audio/sfx/engine.rs`)
@@ -124,20 +141,20 @@ to the music path. Open and Next Steps are rewritten below to match.
 ## Open
 
 - **The music path attenuates on the original during a race and does not on
-  ours - mechanism unlocated.** `audio-levels.md`'s own `Audio_UpdateGroupVolumes`
-  (`0x0893ac70`, confidence 82, already documented before this thread's
-  2026-09-07 entry) runs **once a frame** and writes nine of the sixteen
-  groups (`0, 2, 3, 4, 5, 0xa, 0xc, 0xd, 0xe`) from a per-frame fade scalar,
-  not from `Audio_Init`'s one-time ceiling - so even the *baseline* these
-  groups carry is not pinned at `1024` the way the idle Main-Menu read above
-  found it. Group `0` additionally carries a second multiplier that ramps
-  toward `1.0` or retreats toward a lower value on a flag, previously read
-  only as "almost certainly music under speech" and left unchased since its
-  trigger was unrecovered. This thread's 2026-09-07 measurement gives that
-  mechanism a second, independent reason to be worth reading: whichever
-  group turns out to be music, something needs to attenuate it *during a
-  race* for the original's numbers above to make sense, and nothing yet
-  measures what these groups do while racing rather than idle.
+  ours - mechanism unlocated, and it is confirmed now to be entirely
+  outside the SAS group-volume chain.** Closed as far as
+  `Audio_UpdateGroupVolumes` goes (see the 2026-09-07 second-pass entry
+  above and `audio-levels.md`): read live, mid-race, all sixteen groups sit
+  at `1024`, the SFX Volume slider is the only thing that ever moves them
+  (including group `0`'s duck, whose trigger is now also recovered - a
+  race/game-state flag, not speech), and the Music Volume slider was found
+  to write to a completely different, previously-undocumented object
+  (`g_music_player_ptr`) that this mechanism never touches. **The gap is
+  real, still unlocated, and now known to live somewhere between
+  `g_music_player_ptr+0x40`/`+0x44` (confirmed live at their own ceiling,
+  `100`/`100`) and the DAC** - most plausibly wherever the decoded
+  `sceAtrac3plus`/`sceMp3` stream picks up a gain, which no pass so far has
+  found.
 - **Three `Sas_CommitVoices` wrapper functions are still unnamed** -
   `FUN_08a2ae6c` (`__sceSasSetPitch`), `FUN_08a2af18` (`__sceSasSetNoise`)
   and `FUN_08a2b03c` (`__sceSasSetSL`), all resolved with confidence 90 -
@@ -152,14 +169,15 @@ to the music path. Open and Next Steps are rewritten below to match.
 
 ## Next Steps
 
-- **Read the group-volume table mid-race, not at rest.** The 2026-09-07
-  read found all 15 groups at `1024` while sitting idle at the Main Menu;
-  it was not re-read during the race capture itself (a `memory.read` while
-  the CPU is running costs ~520 ms per `ppsspp-debugger.md`, which would
-  have stalled the tick-bracketed timing that capture needed). Reading the
-  same table live, mid-race, on `pulse-psp-usa`, is the direct test of
-  `Audio_UpdateGroupVolumes`'s per-frame fade scalar and is the most
-  promising single next step for the music-path question above.
+- **Find where `g_music_player_ptr+0x40`/`+0x44` reach the decoded audio.**
+  This is now the whole open question: the setting is traced end to end
+  from the options menu to the music player object and confirmed live at
+  its own unattenuated default, but nothing yet shows where those two
+  `0`-`100` fields turn into an actual gain on the `sceAtrac3plus`/`sceMp3`
+  stream, or whether they do at all before the DAC. `imports.md` and
+  `frontend-video.md` both point at `sceAtrac3plus` as music's own decode
+  path (distinct from the movie player's `sceMpegAtracDecode`), which is
+  where to start looking.
 - Decide and apply a naming convention for the remaining three wrapper
   functions, then add their `names.tsv` rows. Optional and separate from the
   volume question: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance

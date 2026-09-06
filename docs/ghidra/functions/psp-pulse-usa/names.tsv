@@ -668,3 +668,6 @@
 0x08901850	function	Camera_AttachChild	60	billboards.md
 0x08902324	function	Camera_RegisterClass	80	billboards.md
 0x08908aec	function	GridCamera_RegisterClass	85	billboards.md
+0x08ac1dd8	data	g_music_player_ptr	85	audio-levels.md
+0x0893a938	function	Audio_SetSfxFadeTarget	85	audio-levels.md
+0x08938428	function	MusicPlayer_Init	75	audio-levels.md

@@ -454,3 +454,178 @@ So whether group `0` (or whichever group turns out to be music) reads below
 `1024` while actually racing is still an open, direct measurement - and per
 Measurement 2 above, something has to be attenuating the music bus during a
 race for the original's numbers to make sense at all.
+
+**Corrected below (2026-09-07): read mid-race, the duck's trigger is now
+recovered, it is not speech, and none of these nine groups is music at all.**
+Read on.
+
+## Music does not go through this chain - it has its own volume, measured live (2026-09-07)
+
+The prior section's "almost certainly music under speech" was a guess dressed
+in plausible language, and this pass is what the confidence rubric means by
+"below 50, do not rename, write the hypothesis down instead" done right the
+first time. It should have stayed a hypothesis rather than "almost certainly."
+Corrected now with the actual call chain, decompiled and cross-checked live.
+
+**`get_xrefs_to` and `get_function_callers` are both empty for
+`Audio_UpdateGroupVolumes`** - the relocation defect the rest of this project's
+docs already warn about. `scripts/psp-relocate.py callers 0x0893ac70` finds the
+one real call site instead: `0x0893a2e4`, inside `SoundManager_Update` itself,
+matching what this page already said. The same tool is what unravelled
+everything below; `get_xrefs_to`'s emptiness on every address in this section
+is expected, not a dead end.
+
+### The two options-menu sliders write to two entirely different structures
+
+`FUN_08809bc8` (confidence 82, not renamed - see below) is reached from the
+settings-apply path and reads exactly the two option strings
+[ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md) already
+named: `"Music Volume"` (`0x08a78658`) and `"SFX Volume"` (`0x08a78668`).
+Decompiled:
+
+```c
+uVar1 = func_0x000046b8(param_1,0x274658);       // read "Music Volume", 0-100
+*(undefined4 *)(_DAT_002bddd8 + 0x40) = uVar1;   // -> the music player, +0x40
+*(undefined4 *)(_DAT_002bddd8 + 0x44) = uVar1;   // -> the music player, +0x44
+iVar2 = func_0x000046b8(param_1,0x274668);       // read "SFX Volume", 0-100
+func_0x00136938((float)iVar2 * 0.01,_DAT_002bde10);  // -> Audio_SetSfxFadeTarget(fraction, mgr)
+*(float *)(_DAT_002bde10 + 0xd0) = (float)iVar2 * 0.01;  // belt-and-suspenders on the same field
+```
+
+**`_DAT_002bde10` is the sound-manager pointer
+[positional-audio.md](positional-audio.md) already resolved** to
+`0x08ac1e10` (dereference for `mgr`) - the *same* `mgr` `Audio_UpdateGroupVolumes`
+takes as `param_2`. **`_DAT_002bddd8` is a second, previously undocumented
+global pointer at `0x08ac1dd8`**, to a wholly different object this page did
+not know existed until this pass: named `g_music_player_ptr` below.
+
+So: **the SFX Volume slider is one of several things that drive
+`Audio_UpdateGroupVolumes`'s fade** (`mgr+0x90` current, `mgr+0xd0` target,
+`func_0x00136938` = `Audio_SetSfxFadeTarget` (`0x0893a938`), confidence 85 -
+decompiles unambiguously to exactly those two writes: `mgr+0x90 = param_1`
+always, `mgr+0xd0 = param_1` only when `param_1 > 0`). **Nine call sites**
+(`scripts/psp-relocate.py callers 0x0893a938`, not the one this page first
+assumed), spot-checked at two of them: the sound manager's own constructor
+(`FUN_08939fe0`, an initial snap to full) and a reset/reinit step
+(`FUN_0893aba4`) that reads five bank-name hashes and re-arms the duck
+constants (`+0xc0=0`, `+0xc4≈0.6`, `+0xc8≈0.4`, `+0xcc=1.0` - matching the
+live-read defaults below exactly) before re-snapping the fade. Neither
+caller, nor the options-menu one this page already had, touches anything
+music-shaped - all three read or reset SFX-side state. **What this actually
+establishes, precisely**: the Music Volume slider does not write to
+`Audio_SetGroupVolume`, `Audio_UpdateGroupVolumes`, `mgr`, or
+`Audio_SetSfxFadeTarget` at all - it writes straight into `g_music_player_ptr`'s
+own `+0x40`/`+0x44`, a `0`-`100` field on an entirely separate object, in the
+same statement that handles the SFX slider. That is not the same claim as "no
+SAS voice is ever assigned to one of these nine groups" - group membership for
+a *voice* was not read this pass, only the *group's own volume knob*. If a
+music voice ever does sit in a SAS group, the six groups
+`Audio_UpdateGroupVolumes` never touches (`1, 6, 7, 8, 9, 0xb`) are where to
+look next - though all sixteen read `1024` live below regardless, so it would
+not change this page's conclusion either way.
+
+### The music player, briefly
+
+`0x08938428` (confidence 75, named `MusicPlayer_Init` below - a constructor:
+publishes itself as `g_music_player_ptr`, then sets `+0x40`/`+0x44` to `100`
+each - the same default `"Music Volume"` opens at - `+0x48` to `-1`, and four
+floats at `+0xa4..+0xb0` (`0.35`, `2.5`, `1.0`, `1.0`) shaped like a crossfade
+duration and two blend factors, unread by anything traced so far). **This is
+as far as this pass chased it.** Where `+0x40`/`+0x44` actually reach the
+decoded ATRAC/`sceMp3` stream - the step that would show whether they are a
+linear gain, a `0x400`-style fixed-point scale, or something else entirely -
+is not found. That is the next thing to read, not this pass's own claim.
+
+### Group `0`'s duck: recovered, and it is not speech
+
+The trigger `mgr+0xc0` field search (`scripts/psp-relocate.py field 0xc0`,
+filtered to non-stack `sb` writes) finds exactly one write to it anywhere in
+the binary outside `Audio_UpdateGroupVolumes`'s own read/clear of it: inside
+a large, **not renamed** function at `0x08829778` (confidence too mixed across
+the whole function to name it - it also handles camera/doppler-shaped work
+this pass did not chase), one line reads
+
+```c
+if (*(int *)(param_2 + 0x7c8) == 4) {
+  *(undefined1 *)(_DAT_002bde10 + 0xc0) = 1;
+}
+```
+
+`_DAT_002bde10` is `mgr` again - so **this is the one and only trigger for the
+group-`0` duck in the whole binary**, gated on some other object's `+0x7c8`
+field equalling `4` (a race/game-state enum value, meaning not identified).
+Confidence in the trigger address and its target is 80 (unambiguous
+decompilation, single call site found by exhaustive field search); confidence
+in what state `4` *means* is 0 - not claimed, not named. Either way: **whatever
+this ducks, it is not music** - group `0` is one of the nine SFX-side groups
+`Audio_UpdateGroupVolumes` writes, and music was already shown above to never
+reach that function's `mgr` argument at all. "Almost certainly music under
+speech" is retracted.
+
+### Read live, mid-race: everything above sits at its own ceiling
+
+PPSSPP under Xvfb (own display, own websocket port `47833`, the machine's
+shared PPSSPP profile since this session's sandbox disallows overriding
+`HOME`/`XDG_CONFIG_HOME`), `pulse-psp-usa.chd`, `scripts/psp-drive.py --port
+47833 menu --single-race --any-track` into a live eight-craft grid, then
+`cross` held for 24 s while free-running (no breakpoints - see
+`ppsspp-debugger.md`'s cost table for why: 520 ms per read while running is
+fine for six spaced samples, not for a per-tick capture). Six reads, 4 s apart,
+covering `t=4s` through `t=24s` mid-race:
+
+| Field | Value, every sample |
+| --- | --- |
+| All 16 entries of `g_audio_group_volumes` (`0x08ac3910`) | `1024` |
+| `mgr+0x90` (SFX fade, current) | `1.0` |
+| `mgr+0xd0` (SFX fade, target) | `1.0` |
+| `mgr+0xc0` (group-`0` duck flag) | `0` at each sample |
+| `mgr+0xcc` (group-`0` duck multiplier) | `1.0` at each sample |
+| `g_music_player_ptr+0x40`, `+0x44` (Music Volume, `0`-`100`) | `100`, `100` |
+
+**`mgr+0xc0` reading `0` at each 4 s-spaced sample does not by itself show the
+duck never fired** - `Audio_UpdateGroupVolumes` clears that flag itself every
+frame once handled (`*(undefined1 *)(param_2 + 0xc0) = 0;` in its own body,
+quoted above), so a one-shot trigger between two samples would already read
+`0` again by the next one. **`mgr+0xcc` is the field that actually shows the
+duck was inactive throughout**: it is the persistent multiplier the duck ramps
+away from `1.0` and back, and it held exactly `1.0` - untouched - at all six
+samples. Taken together with `mgr+0xc0` never being caught in the `1` state
+either, the more precise statement is: the duck did not fire in any of the six
+instants sampled, and did not leave the multiplier anywhere off its rest value
+in between them.
+
+**Nothing here is below ceiling, on either path, at any of the six samples.**
+This is the direct answer to the open question this page left in the section
+above: the group volumes do *not* drop mid-race under a stock, unmodified
+settings profile - not because the mechanism is idle by construction, but
+because the SFX Volume slider (which is all this mechanism is) sits at its own
+default, `100`, the same as the music player's own slider. **Confidence 88**
+on the read itself (runtime trace, single binary, six independent samples
+across a live race all agreeing with the static reading and with each other).
+
+**This retires the group-volume/fade mechanism as an explanation for the music
+loudness gap a second time, on stronger grounds than before**: not only does
+it never drop below ceiling during a race, it was never wired to music in the
+first place. "Measurement 2" above (our music bus alone, `-11.53` dBFS, already
+louder than the original's *entire* race mix, `-15.27` dBFS) still has no
+located cause.
+
+### What is not recovered, and is the next thing to read
+
+**Where `g_music_player_ptr+0x40`/`+0x44` reach the actual decoded audio.**
+This pass traced the *setting* of the music volume all the way from the
+options-menu string to its resting place on the music player object and
+confirmed live that it sits at the same unattenuated default the settings
+screen opens with - but never found where those two fields are read back out
+and turned into a gain applied to the `sceAtrac3plus`/`sceMp3`-decoded stream
+(`imports.md`'s "PCM output and streamed music" row, and `frontend-video.md`'s
+note that the one `sceAtracSetDataAndGetID` cross-reference "belongs to the
+separate music path", not the movie player). Whatever happens between that
+decode and the DAC is where the missing ~4 dB most plausibly still lives -
+this page has now ruled out every other stage of the chain the DAC end
+(`Audio_OutputThread`'s `master << 5`) and the group-volume end
+(`Audio_UpdateGroupVolumes`, above) both cover, and the per-voice SAS side is
+separately ruled out in [sound.md](sound.md). **No number is ported from this
+pass** - nothing here was found to be anything other than unity, so there is
+nothing measured to apply, and inventing one now would be exactly the
+plausible-looking stand-in `CLAUDE.md` forbids.
