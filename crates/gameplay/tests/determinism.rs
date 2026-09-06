@@ -454,7 +454,6 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x4bf6_9ad5_c266_27db` at 60 ticks and `0x7713_5775_9662_2238` /
 ///   `0xe413_77c8_89ff_33ba` at 600.
 ///
-///
 /// - **Moved again 2026-09-06, by a merge rather than by one change.** The AI
 ///   barrel-roll axes and the weapon-slowdown port each moved these constants on
 ///   their own branch, and neither branch's value survives their merge: the
@@ -463,6 +462,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   **measured from the merged tree**, not chosen from either side - both
 ///   causes are already isolated and explained in their own entries above, so
 ///   what is new here is only their composition.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -604,7 +604,6 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0x84fa_0540_953f_7dbc` / `0x5544_ea00_8147_b29c` at 60 ticks and
 ///   `0x71c8_e66d_871f_8f3b` / `0x9c54_22cf_8958_48ea` at 600.
 ///
-///
 /// - **Moved again 2026-09-06, by a merge rather than by one change.** The AI
 ///   barrel-roll axes and the weapon-slowdown port each moved these constants on
 ///   their own branch, and neither branch's value survives their merge: the
@@ -613,6 +612,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   **measured from the merged tree**, not chosen from either side - both
 ///   causes are already isolated and explained in their own entries above, so
 ///   what is new here is only their composition.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
