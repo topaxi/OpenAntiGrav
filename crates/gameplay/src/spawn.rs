@@ -223,6 +223,17 @@ impl Ship {
         self.physics.body.mass = mass;
         self.physics.body.inertia = inertia;
         self.physics.shield = shield;
+        // **And the weapon slowdown a hit still owes this craft**, which is the
+        // one piece of the force law that does not live on `physics` and so is
+        // not cleared by the assignment above. Whether the original's own reset
+        // path zeroes `entity+0x130` is **not read** - `Ship_SetState`'s state-3
+        // branch was followed for the energy charge and not for this - so this
+        // is chosen rather than recovered, on the narrow ground that the line
+        // above already clears `slowdown_timer`: leaving the *refill* behind
+        // would put a craft back on the racing line and take its engine away on
+        // its first tick there, from a hit it took before the teleport. Half a
+        // mechanic surviving a reset is the shape to distrust.
+        self.pending_slowdown = 0.0;
     }
 }
 
@@ -525,11 +536,20 @@ mod tests {
         ship.physics.body.linear_velocity = Vec3::new(100.0, 0.0, 0.0);
         ship.physics.body.mass = 3.0;
         ship.physics.grounded = 1.0;
+        ship.physics.slowdown_timer = 1.0;
+        ship.pending_slowdown = 1.0;
 
         ship.place_at(Pose::from_sample(&level_sample(), 0.0, 2.0));
 
         assert_eq!(ship.physics.body.linear_velocity, Vec3::ZERO);
         assert_eq!(ship.physics.grounded, 0.0);
+        // **Both halves of the weapon slowdown**, and the second is the one that
+        // needs asserting: `pending_slowdown` is not on `physics`, so it does
+        // not fall out of the state reset the way the timer does, and a craft
+        // put back with a live credit would lose its engine on its first tick
+        // on the racing line.
+        assert_eq!(ship.physics.slowdown_timer, 0.0);
+        assert_eq!(ship.pending_slowdown, 0.0);
         assert_eq!(ship.physics.body.position, Vec3::new(0.0, 2.0, 0.0));
         assert_eq!(ship.physics.body.mass, 3.0, "mass is not motion");
         assert!(ship.active, "respawning is not despawning");
