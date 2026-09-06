@@ -200,8 +200,11 @@ pub mod ships {
 
     /// The Phantom-class hull, `%s\Phantom.vex` at `0x08a7a5e4`.
     ///
-    /// **A model swapped in for one speed class**, which no other title in this
-    /// lineage does. The identification of *what* `Phantom` is rests on the
+    /// **A model swapped in for one speed class**, which **Pulse** does not do -
+    /// its own recovered template set is mode-keyed (`Ship`/`Zone`/`shipboost`/
+    /// `Zoneboost`/`shipshield`), not class-keyed. **HD and 2048 were not
+    /// checked**, so this is a two-title comparison and not a lineage claim.
+    /// The identification of *what* `Phantom` is rests on the
     /// title's own vocabulary and not on the word alone: `PHANTOM` is the top
     /// rung of the five [`DEFAULTS`] carries, the executable names
     /// `Unlock Phantom Class` (`0x08a7c848`) and `PhantomStats` (`0x08a79afc`),
@@ -242,15 +245,21 @@ pub mod ships {
 
     /// `%s\VR\Phantom.vex` at `0x08a7cb64`.
     ///
-    /// **Named in the executable and resolving nowhere.** The template is in a
-    /// different `.rodata` block from the five above, beside a second copy of
-    /// `%s\Phantom.vex` at `0x08a7cb54`, and the composed name hash-resolves
-    /// against none of the eleven declared locations on either pressing.
+    /// **Named in the executable and resolving nowhere** - under the same `%s`
+    /// the five templates above take. The composed name hash-matches nothing in
+    /// `Data.wad`, `FE.wad` or `FEData.wad`, on either pressing.
     ///
-    /// Kept here because the absence is the point: a VR Phantom hull was
-    /// authored for and cut from the shipped disc, and someone re-probing this
-    /// name later should find the answer written down instead of re-deriving
-    /// it. Nothing reads this constant, and nothing should try to load it.
+    /// **The name reads that absence as "authored and cut", and that is one of
+    /// two readings.** This template is in a *different* `.rodata` block from
+    /// the five above (`0x08a7cb54`/`0x08a7cb64`, beside `Unlock Phantom
+    /// Class`), and the five are known to take a `<PI_Team>` location as their
+    /// `%s` only *because they resolve*. Whether this block's `%s` is a team
+    /// location at all is unread, so "composed with the wrong argument" is not
+    /// excluded.
+    ///
+    /// Kept either way, because someone re-probing this name later should find
+    /// the answer written down instead of re-deriving it. Nothing reads this
+    /// constant, and nothing should try to load it.
     pub const VR_PHANTOM_HULL_UNSHIPPED: &str = r"VR\Phantom";
 }
 

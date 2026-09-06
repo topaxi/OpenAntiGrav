@@ -486,9 +486,11 @@ every composed name hash-resolves on both pressings, and each blob carries its
 rather than by itself. Pinned by
 [`crates/pure/tests/ship_models_ground_truth.rs`](../../crates/pure/tests/ship_models_ground_truth.rs).
 
-**`Phantom` is the top speed-class rung getting its own model**, which nothing
-else in this lineage does - see the ladder below and `Unlock Phantom Class`
-(`0x08a7c848`). What *selects* it is unread. `VR` names a whole alternate
+**`Phantom` is the top speed-class rung getting its own model**, which **Pulse**
+does not do - its recovered template set is mode-keyed, not class-keyed. **HD
+and 2048 were not checked**, so that is a two-title comparison rather than a
+lineage claim. See the ladder below and `Unlock Phantom Class` (`0x08a7c848`).
+What *selects* it is unread. `VR` names a whole alternate
 presentation set across the disc (`vr_bomb.vex`, `vr_env.tga`,
 `vr_engine_noise.mip`); what mode uses it is also unread.
 

@@ -96,6 +96,11 @@ mis-split template would not survive that.
 ### `Phantom` is the speed class, and what selects the model is unread
 
 **Confidence 90 for the identification, and the trigger is not determined.**
+A per-class model is something **Pulse** does not author - its own recovered
+template set is mode-keyed (`Ship`/`Zone`/`shipboost`/`Zoneboost`/`shipshield`)
+rather than class-keyed. **HD and 2048 were not checked for one**, so that
+contrast is between two titles and is not a claim about the lineage.
+
 `PHANTOM` is the top rung of the five-rung ladder Pure's `handlingstats.xml`
 files author (`docs/formats/pure-status.md`), and the executable carries
 `PhantomStats` (`0x08a79afc`), `PhantomTweak` (`0x08a56a7c`) and
@@ -117,13 +122,23 @@ Pulse carries exactly one member of that set (`%s\vr_shield_cockpit.vex`) and no
 `VR\` craft directory at all. The name is recovered; **what mode uses it is
 not**, and no path that selects it has been read.
 
-### `%s\VR\Phantom.vex` (`0x08a7cb64`) is authored and unshipped
+### `%s\VR\Phantom.vex` (`0x08a7cb64`) resolves nowhere, and there are two readings
 
-The template is in the binary and the composed name hashes to nothing, against
-`Data.wad`, `FE.wad` and `FEData.wad`, on both pressings. Recorded rather than
-dropped so the next probe of that name finds the answer instead of re-deriving
-it. `crates/pure/src/race::ships::VR_PHANTOM_HULL_UNSHIPPED` carries the same
-note; nothing reads it.
+The template is in the binary, and composed with a `<PI_Team>` `location` - the
+argument the five above are known to take - it hashes to nothing, against
+`Data.wad`, `FE.wad` and `FEData.wad`, on both pressings.
+
+**"Authored and cut from the shipped disc" is one reading, and it is not the
+only one.** This template sits in a *different* `.rodata` block from the five -
+`0x08a7cb54`/`0x08a7cb64`, beside `Unlock Phantom Class` (`0x08a7c848`) - and
+the five are known to take a team location only *because they resolve*.
+**Whether this block's `%s` is a team location at all is unread**, so "composed
+with the wrong argument here" is not excluded. `search_instructions` for the
+`lui`/`addiu` pair building `0x08a7cb64` would settle it and has not been run.
+
+Recorded either way, so the next probe of that name finds the answer instead of
+re-deriving it. `crates/pure/src/race::ships::VR_PHANTOM_HULL_UNSHIPPED` carries
+the same caveat; nothing reads it.
 
 ## Pure ships no boost-plume asset
 
@@ -138,6 +153,13 @@ measurement.
 | Any `boost` string at all | several, including the template | **two**, neither a path: `HUD_Perfect Boost!` (`0x08a46398`) and `StartBoostSpeed` (`0x08a79bc8`) |
 | Archive entry | `Data\Ships\Assegai\shipboost.vex` resolves | `<location>\shipboost.vex` resolves for none of the eleven, either pressing |
 | Anchor node in the hull | `Data\Ships\Feisar\Ship.vex` carries `boost_flare` and `boost_flare1` ([exhaust.md](../psp-pulse-usa/exhaust.md)) | no Pure hull carries a node naming `boost`; the flare anchor is `engine_flare` and there is one |
+
+**The DLC packs do not weaken the archive row, because the executable row makes
+them moot.** Pure ships seven decrypted PSN packs (`docs/formats/dlc-pack.md`)
+and `Data\Ships\Vanuber\Ship.vex` does resolve inside one, so "not in `Data.wad`"
+would be an incomplete argument on its own. It is not the argument: with no
+template of that shape in the binary there is **no code path to compose a plume
+name at all**, whatever a pack happens to carry.
 
 `StartBoostSpeed` sits in the AI tuning-key block, between `Zone`/`Position`/
 `SpeedPercent` and `LeadZone` (`0x08a79bfc`), `TailZone`, `AIThrust`,
