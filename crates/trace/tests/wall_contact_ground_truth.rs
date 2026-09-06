@@ -99,27 +99,28 @@ fn workspace(relative: &str) -> std::path::PathBuf {
         .join(relative)
 }
 
-/// A capture under `data/traces/`, or `None` on a checkout that lacks it.
+/// A capture under `data/traces/`, tracked in git per
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md).
 ///
-/// `data/traces/` is *derived* evidence, not durable the way `data/images/`
-/// is - see `HANDOVER.md`, "derived evidence under `data/` is not durable".
-/// The committed `verification/scenarios/*.inputs` are what regenerate it,
-/// named in `regenerate` so a skip points at the fix rather than a dead end.
-fn capture(relative: &str, regenerate: &str) -> Option<std::path::PathBuf> {
+/// Its absence is never a legitimate reason to skip: a tracked file missing
+/// from the working tree means the checkout is broken, not that this test
+/// does not apply. This used to return `None` and let the caller skip
+/// quietly, which is exactly how five of these six captures went missing for
+/// weeks without a single red build - see
+/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md`. It now
+/// panics unconditionally, independent of `OAG_REQUIRE_GAME_DATA`: that
+/// variable escalates *optional* inputs (a disc image under `data/images/`),
+/// and a tracked trace is not optional.
+fn require_capture(relative: &str, regenerate: &str) -> std::path::PathBuf {
     let path = workspace(relative);
-    if path.exists() {
-        return Some(path);
-    }
     assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.exists(),
+        "{} is missing, but it is tracked in git per ADR-0046 - the checkout \
+         is broken, not merely missing optional data. If it is genuinely gone, \
+         regenerate with `{regenerate}` and commit the result.",
         path.display()
     );
-    eprintln!(
-        "skipping: {} is not present; regenerate with `{regenerate}`",
-        path.display()
-    );
-    None
+    path
 }
 
 /// The tick the **original** first loses speed, and so first meets the wall.
@@ -141,12 +142,12 @@ const RECORDED_WALL_TICK: usize = 187;
 /// signs. Kept at the largest measurement plus one.
 const ALLOWED_TICK_GAP: usize = 6;
 
-fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
-    let capture_path = capture(
+fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
+    let capture_path = require_capture(
         CAPTURE,
         "just scripted-emu verification/scenarios/standing-start.inputs \
          data/traces/talons-junction-standing-start.csv",
-    )?;
+    );
 
     let mut archives = pulse::open(
         workspace(IMAGE)
@@ -175,7 +176,11 @@ fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
     let text = std::fs::read_to_string(capture_path).expect("reading the capture");
     let trace = Trace::parse(&text).expect("parsing the capture");
 
-    Some((handling?, collision, trace))
+    (
+        handling.expect("this team's file authors the class under test"),
+        collision,
+        trace,
+    )
 }
 
 /// The first recorded tick at which our hull reports a respondable contact.
@@ -262,9 +267,7 @@ fn firing_probe_index(
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn the_capture_still_dates_its_own_wall_the_way_this_test_assumes() {
-    let Some((_, _, trace)) = load() else {
-        return;
-    };
+    let (_, _, trace) = load();
     // A real deceleration, not the sub-tick jitter a craft at rest shows: the
     // capture's `speed` reads 0.021 at tick 0 and 0.015 at tick 1, which is a
     // stationary ship and not a wall. The impact itself is 4.38 units/s in one
@@ -287,9 +290,7 @@ fn the_capture_still_dates_its_own_wall_the_way_this_test_assumes() {
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
-    let Some((handling, collision, trace)) = load() else {
-        return;
-    };
+    let (handling, collision, trace) = load();
     let ours = first_contact_on_the_recorded_line(&handling, &collision, &trace)
         .expect("our hull never finds the wall on a line that ends up scraping one");
     let probe = firing_probe_index(&handling, &collision, ours, &trace);
@@ -352,15 +353,11 @@ fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn the_same_gap_shows_on_the_lap_capture_and_the_same_probe_finds_it() {
-    let Some((handling, collision, _)) = load() else {
-        return;
-    };
-    let Some(lap_path) = capture(
+    let (handling, collision, _) = load();
+    let lap_path = require_capture(
         LAP_CAPTURE,
         "see docs/tools/oag-trace.md#a-whole-lap-and-where-it-came-from",
-    ) else {
-        return;
-    };
+    );
     let text = std::fs::read_to_string(lap_path).expect("reading the lap capture");
     let trace = Trace::parse(&text).expect("parsing the lap capture");
 
