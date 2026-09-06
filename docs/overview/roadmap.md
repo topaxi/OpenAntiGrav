@@ -608,9 +608,10 @@ seen from the authoring side.
       [pickups.md](../gameplay/pickups.md) had recorded as not existing.
       **Nine weapons still hand out nothing**: Quake needs track deformation,
       LeachBeam a beam, and most of the rest the slowdown mechanic behind
-      `<Global slowdown_limit>` - whose consumer is now *known* (a missile impact
-      accumulates it into the victim's `weapon_record+0x130`) even though nothing
-      spends it. Autopilot is the AI's own controller taking over and belongs
+      `<Global slowdown_limit>` - **whose whole law is recovered as of
+      2026-09-06** and whose `slowdown_time` is decoded, though the physics half
+      is still unbuilt: see
+      [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). Autopilot is the AI's own controller taking over and belongs
       with the AI; it is weapon id 6, fire-request bit `0x1000`.
       **A rocket now has something to hit**: the AI landed the same day and
       `Mode::SingleRace::has_opponents()` returns `true`, so a single race

@@ -168,6 +168,7 @@
 0x0884d4c8	function	Body_AddForceWorld	82	engine.md
 0x08839c68	function	HandlingXml_ParseAirbrakeGraphics	80	engine.md
 0x08848b78	function	Ship_ApplyLateralGrip	80	engine.md
+0x08848690	function	Ship_AddSlowdown	90	engine.md
 0x08848e28	function	Ship_ApplyQuadraticDrag	80	engine.md
 0x08848ed0	function	Ship_ApplyAngularDamping	80	engine.md
 0x08848f4c	function	Ship_ApplyRollingResistance	76	engine.md

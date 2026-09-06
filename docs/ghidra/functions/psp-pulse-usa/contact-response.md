@@ -946,9 +946,12 @@ Two consequences:
   into. See [mine.md](mine.md). `FUN_08867370` is **still not renamed** - see
   that page for the one measurement that resists it.
 
-Raised to **82** on that basis. What holds it off 84 is unchanged and is listed
-under "what is not verified": `stats->0x368`'s tri-state, and what `T->0x120`,
-`T->0x124` and `T->0x130` are consumed by.
+Raised to **82** on that basis. What holds it off 84 is listed under "what is
+not verified": `stats->0x368`'s tri-state, and what `T->0x120` and `T->0x124`
+are consumed by. **`T->0x130`'s consumer is no longer open** - recovered
+2026-09-06, it is drained once a tick into the victim's slowdown timer and
+clamped there to `<Global slowdown_limit>` by `Ship_AddSlowdown`
+(`0x08848690`); see [engine.md](engine.md).
 
 **Full instruction-level re-read, 2026-08-19** (`disassemble_bytes` over
 `0x0886794c`-`0x08867b4f`, the whole function body), corrects and extends the

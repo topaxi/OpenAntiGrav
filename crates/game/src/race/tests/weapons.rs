@@ -817,8 +817,8 @@ fn rear_and_forward_table() -> oag_formats::weapons::WeaponStats {
     oag_formats::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
-             <Weapon type="Rocket"><Stats absorb="23" blastforce="3" blastradius="4" damage="5" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.1"/></Weapon>
-             <Weapon type="Mine"><Stats absorb="24" blastforce="5" blastradius="6" damage="7" timetodie="8" trigger_radius="2"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="23" blastforce="3" blastradius="4" damage="5" slowdown_time="0.5" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.1"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="24" blastforce="5" blastradius="6" damage="7" slowdown_time="0.5" timetodie="8" trigger_radius="2"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>

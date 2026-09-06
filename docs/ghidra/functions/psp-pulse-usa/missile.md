@@ -273,7 +273,10 @@ ported; `oag_gameplay::projectile::missile::lock` says so at its definition.
 
 **That function is also the consumer `<Global slowdown_limit>` has been missing.**
 `docs/gameplay/pickups.md` records the slowdown mechanic as having none;
-`+0x130` is where `slowdown_time` accumulates. Not chased further here.
+`+0x130` is where `slowdown_time` accumulates. **Chased to the end on
+2026-09-06** - `+0x130` is drained once a tick into a timer at `craft+0x2e0`,
+clamped there to `slowdown_limit`, and that timer costs the victim its thrust,
+its throttle and its lateral grip. See [engine.md](engine.md).
 
 ## The guidance law
 

@@ -342,7 +342,7 @@ fn one_missile_table() -> oag_formats::weapons::WeaponStats {
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="23" blastforce="10"
-                blastradius="8" damage="12" launchSpeed="200"
+                blastradius="8" damage="12" slowdown_time="0.5" launchSpeed="200"
                 lock_min_dist="10" lock_max_dist="400" venomspeed="800"
                 flashspeed="800" rapierspeed="800" phantomspeed="800"/></Weapon>
              <Pickupodds class="Venom">
@@ -451,7 +451,8 @@ fn one_mine_table() -> oag_formats::weapons::WeaponStats {
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
-               damage="20" timetodie="3" trigger_radius="2"/></Weapon>
+               damage="20" slowdown_time="0.5" timetodie="3"
+               trigger_radius="2"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>

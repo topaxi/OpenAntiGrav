@@ -491,8 +491,11 @@ second page would be nine tenths this one.
   reaches `Mine_SpawnExplosion` too (the same `WO_MINE_EXPLO`, larger) or its
   own equivalent is unchased - see the note at the end of the section above.
 - **The `+10.0` fuse branch**, above.
-- **`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
-  mechanic's fate on every other weapon.
+- ~~**`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
+  mechanic's fate on every other weapon.~~ **Recovered 2026-09-06**: the
+  mechanic's law is on [engine.md](engine.md), `Ship_AddSlowdown`
+  (`0x08848690`) is its clamp, and `oag_formats::weapons` decodes the
+  attribute.
 
 ## 2026-09-06: `MINELAUNCH` is a plain, positional, craft-emitter cue - `MINERADAR` is not
 

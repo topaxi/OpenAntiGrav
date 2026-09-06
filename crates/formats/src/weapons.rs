@@ -56,9 +56,16 @@
 //! Everything else - the other eight weapons' blocks and the seven disturber
 //! effects - is named on `docs/formats/weapon-stats.md` and left undecoded,
 //! because a field decoded with no consumer is a field nobody has checked.
-//! `slowdown_time` stays out on all four decoded weapons for exactly that
-//! reason, and so does the Bomb's second radius - see [`BombStats`], which is
-//! explicit about it because that one is easy to mistake for an oversight.
+//! The Bomb's second radius stays out for exactly that reason - see
+//! [`BombStats`], which is explicit about it because that one is easy to
+//! mistake for an oversight.
+//!
+//! **`slowdown_time` came in on 2026-09-06 and is now on all six decoded
+//! blocks.** It was the module's longest-standing "named but not read" field.
+//! What changed is not the file, which always authored it, but the *law*: the
+//! slowdown mechanic was traced out of the PSP executable end to end, so the
+//! attribute has a consumer to be decoded for. See
+//! [`RocketStats::slowdown_time`].
 //!
 //! # Nothing here defaults
 //!
@@ -243,6 +250,15 @@ impl PickupTable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WeaponStats {
     /// `<Weapon type="Global"><Stats slowdown_limit/>`.
+    ///
+    /// **A ceiling on seconds of slowdown outstanding, not a speed floor.**
+    /// `Ship_AddSlowdown` (`0x08848690`) adds a hit's
+    /// [`RocketStats::slowdown_time`] to the victim's slowdown timer and clamps
+    /// the sum to this figure, read off `+0x00` of the same `<WeaponStats>`
+    /// block `WeaponStats_ParseGlobal` (`0x0880dab0`) writes it to. So a craft
+    /// under sustained fire is slowed no longer than this at any moment, however
+    /// many weapons land. See
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     pub slowdown_limit: f32,
     /// Turbo, Shield and Autopilot, in that order, as the file authors them.
     ///
@@ -498,6 +514,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 blastforce: number(block, "Stats", "blastforce")?,
                 blastradius: number(block, "Stats", "blastradius")?,
                 damage: number(block, "Stats", "damage")?,
+                slowdown_time: number(block, "Stats", "slowdown_time")?,
                 // Camel-cased in the document while every other attribute here
                 // is lower-cased. The file's spelling, kept verbatim, because
                 // this is the string a lookup is matched against.
@@ -515,6 +532,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 blastforce: number(block, "Stats", "blastforce")?,
                 blastradius: number(block, "Stats", "blastradius")?,
                 damage: number(block, "Stats", "damage")?,
+                slowdown_time: number(block, "Stats", "slowdown_time")?,
                 launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                 lock_min_dist: number(block, "Stats", "lock_min_dist")?,
                 lock_max_dist: number(block, "Stats", "lock_max_dist")?,
@@ -540,6 +558,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastforce: number(block, "Stats", "blastforce")?,
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
                     launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                     speeds,
                     class_independent,
@@ -548,9 +567,9 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             continue;
         }
         if weapon_kind == Weapon::Shuriken {
-            // Optional for the Bomb's reason. **Three of the thirteen authored
-            // attributes are deliberately absent** - `rhicochetdamage`,
-            // `rhicochetForce` and `slowdown_time` - see `ShurikenStats`.
+            // Optional for the Bomb's reason. **Two of the thirteen authored
+            // attributes are deliberately absent** - `rhicochetdamage` and
+            // `rhicochetForce` - see `ShurikenStats`.
             shuriken = optional_block(&mut skipped, weapon_kind, || {
                 let (speeds, class_independent) = class_speeds(block)?;
                 Ok(ShurikenStats {
@@ -560,6 +579,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastforce: number(block, "Stats", "blastForce")?,
                     blastradius: number(block, "Stats", "blastradius")?,
                     blastdamage: number(block, "Stats", "blastdamage")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
                     launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                     fuse: number(block, "Stats", "fuse")?,
                     speeds,
@@ -585,6 +605,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastforce: number(block, "Stats", "blastforce")?,
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
                     timetodie: number(block, "Stats", "timetodie")?,
                     trigger_radius: number(block, "Stats", "trigger_radius")?,
                 })
@@ -598,6 +619,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastforce: number(block, "Stats", "blastforce")?,
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
                     timetodie: number(block, "Stats", "timetodie")?,
                     trigger_radius: number(block, "Stats", "trigger_radius")?,
                 })

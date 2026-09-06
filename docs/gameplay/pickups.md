@@ -671,8 +671,16 @@ with the volley's lateral components measured symmetric on the disc's own
 
 ### What is not built
 
-`slowdown_time` and `<Global slowdown_limit>` are the slowdown mechanic and have
-no consumer, so they stay decoded-in-name-only. `Ship_Damage`'s `weapon_kind`
+**The slowdown mechanic is recovered but not built.** Its law came out of the
+PSP executable on 2026-09-06 - `Ship_AddSlowdown` (`0x08848690`) adds a hit's
+`slowdown_time` to a timer at `craft+0x2e0` and clamps the running total to
+`<Global slowdown_limit>`, which is therefore a **ceiling on seconds of slowdown
+outstanding**, not a speed floor; while that timer runs the victim gets no
+engine thrust, a zeroed throttle and no lateral grip, and its hover target
+height is lowered. `oag_formats::weapons` decodes `slowdown_time` on all six
+decoded blocks as of the same day. What is *not* built is the physics half - a
+craft hit by a mine, rocket or missile does not slow down yet. See
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md). `Ship_Damage`'s `weapon_kind`
 sub-bucket - nine cases - is unmapped, and the absorb-spark effect its
 `source == 2` branch triggers is not reproduced. The visual is a placeholder: an
 additive billboard per rocket and a fading one where it goes off, in the engine
