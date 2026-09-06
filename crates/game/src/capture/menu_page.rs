@@ -332,3 +332,45 @@ fn prompt_draws(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every other closed vocabulary in this crate is checked at load -
+    /// `menu::Action::parse` against `Action::all()`, `ValueSource::parse`,
+    /// `Definition::check`. This one is a runtime string match, so it gets the
+    /// equivalent here rather than being the one that can only be found by
+    /// running the flag and reading the error.
+    #[test]
+    fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
+        let skin =
+            crate::menu::Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0);
+        let strings = crate::language::StringTable::default();
+        for kind in ["rename", "rename-note", "delete", "delete-built-in"] {
+            let list = prompt_draws(kind, "winston", &strings, &skin)
+                .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
+            assert!(!list.is_empty(), "{kind:?} drew nothing");
+            // The pilot's name reaches every one of them, which is the whole
+            // reason the substitution exists - a confirm that asked about `%s`
+            // would be worse than one that asked about nothing.
+            assert!(
+                list.iter().any(
+                    |draw| matches!(draw, crate::frontend::Draw::Text { text, .. }
+                        if text.contains("winston"))
+                ),
+                "{kind:?} does not name the pilot"
+            );
+            assert!(
+                !list.iter().any(
+                    |draw| matches!(draw, crate::frontend::Draw::Text { text, .. }
+                        if text.contains("%s"))
+                ),
+                "{kind:?} left a %s unsubstituted"
+            );
+        }
+        let error = prompt_draws("qwerty", "winston", &strings, &skin)
+            .expect_err("an unknown prompt has to be an error, not an empty picture");
+        assert!(format!("{error:#}").contains("qwerty"));
+    }
+}
