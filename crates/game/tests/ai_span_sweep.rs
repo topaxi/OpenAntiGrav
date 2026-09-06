@@ -166,6 +166,117 @@ fn circuits() -> Vec<(String, String)> {
         .collect()
 }
 
+/// What a full grid did, on the fixture the two field ground-truth tests use.
+#[derive(Debug, Default, Clone, Copy)]
+struct FieldRun {
+    /// How many of the seven opponents completed a **timed** lap - the thing
+    /// `lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time`
+    /// asserts. A craft that crosses the line once and then wedges reaches
+    /// `lap >= 2` with no time against it, which is exactly what that test
+    /// catches.
+    lapped: usize,
+    /// And how many of those have **no time** against them, which is the exact
+    /// thing that test panics on: a craft that crosses the line once and then
+    /// wedges reaches `lap >= 2` with nothing recorded. Anything but zero here
+    /// is that test red.
+    untimed: usize,
+    /// The mean opponent shield after a minute, and the **worst** one, as
+    /// fractions of the pool. `opponent_weapons_ground_truth`'s floors are 0.70
+    /// on the mean and 0.45 on the worst, and it is the worst that moves: blind
+    /// to mines the mean sat at 0.80 while one craft was ground to 0.36.
+    mean: f32,
+    worst: f32,
+}
+
+/// A full grid, on **the two committed field fixtures exactly as they are set
+/// up**, not on a third one of this file's own.
+///
+/// **The half of the board the per-circuit sweep above cannot see, and it is
+/// not optional.** Every row of that table is one craft alone. A span that
+/// reads well there can still wedge a craft that is being shoved, and a span
+/// whose solo board was clean on all twelve turned both of these red. Judging a
+/// span without this is how a number chosen on twelve clean rows becomes
+/// invisible damage in a race.
+///
+/// Two fixtures because the two tests use two, and copying either one onto the
+/// other is how a sweep stops predicting the thing it is meant to gate:
+///
+/// - `lap_times_ground_truth::clocks` - `16_Track`, **Ace**, 9,000 ticks.
+/// - `opponent_weapons_ground_truth::single_race` - the **default** circuit and
+///   the **default** difficulty, 3,600 ticks.
+///
+/// And the tuning goes through [`oag_ai::Difficulty::tune`] rather than being
+/// set raw, because that is what `Race::start` does. Setting a bare
+/// `Tuning::default()` here would also wipe the difficulty's own grip belief,
+/// mistake rate and reaction delay, and the row would be measuring those
+/// instead of the span. (The solo rows above set it raw on purpose: that is
+/// what `race_ground_truth.rs`'s own sweeps do, so the two tables compare.)
+fn field_run(cap: Option<f32>) -> Option<FieldRun> {
+    let image = image()?;
+    let tuned = |level: oag_ai::Difficulty| {
+        level.tune(&oag_ai::Tuning {
+            curvature_span: cap,
+            ..oag_ai::Tuning::default()
+        })
+    };
+
+    let lap_times = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some("Data\\Environments\\16_Track\\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .ok()?;
+    let mut race = race::Race::start(lap_times.setup);
+    race.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
+    for _ in 0..9_000 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
+        .filter(|&slot| race.world.ships[slot].standing.lap >= 2)
+        .collect();
+    let untimed = lapped
+        .iter()
+        .filter(|&&slot| race.world.ships[slot].standing.best_lap_ticks.is_none())
+        .count();
+    let lapped = lapped.len();
+
+    let options = race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    };
+    let level = options.difficulty;
+    let mines = race::load(&options).ok()?;
+    let mut race = race::Race::start(mines.setup);
+    race.set_ai_tuning(tuned(level));
+    let opponents = 1..usize::from(race.ship_count());
+    let full = race.world.ships[1].handling.dimensions.shield;
+    for _ in 0..3_600 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let mean = opponents
+        .clone()
+        .map(|slot| race.world.ships[slot].physics.shield)
+        .sum::<f32>()
+        / opponents.len() as f32
+        / full;
+    let worst = opponents
+        .map(|slot| race.world.ships[slot].physics.shield)
+        .fold(f32::INFINITY, f32::min)
+        / full;
+
+    Some(FieldRun {
+        lapped,
+        untimed,
+        mean,
+        worst,
+    })
+}
+
 /// The sweep itself. `OAG_SWEEP_SPAN` takes a comma-separated list of caps in
 /// units, with `none` for the uncapped row.
 ///
@@ -232,6 +343,13 @@ fn sweep_curvature_span() {
             laps.iter().map(|(_, solo)| solo.respawns).sum::<u32>(),
             clean.len(),
         ));
+        if let Some(field) = field_run(cap) {
+            report.push_str(&format!(
+                "FIELD      lapped {}/7  untimed {} (must be 0)  mean {:.2} (floor 0.70)  \
+                 worst {:.2} (floor 0.45)\n",
+                field.lapped, field.untimed, field.mean, field.worst,
+            ));
+        }
         println!("{report}");
     }
 }

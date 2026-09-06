@@ -462,19 +462,28 @@ averaged with the straights either side of it. `07`'s ~50-unit arc read
 putting its own peak thirty samples early, so the yaw limit above was being
 applied to a curvature the driver could not see.
 
-`Tuning::curvature_span` caps the chord at **10 units**, measured by
-`sweep_curvature_span` in `crates/game/tests/race_ground_truth.rs` across all
-twelve circuits; the field's own docs carry the table and the criterion. Shield
-retained is the metric rather than lap time, because the failure is a craft that
-laps cleanly *while* grinding down a wall.
+`Tuning::curvature_span` caps the chord at **11 units**, measured by
+`sweep_curvature_span` in `crates/game/tests/ai_span_sweep.rs`; the field's own
+docs carry the table and the criterion. Shield retained is the metric rather
+than lap time, because the failure is a craft that laps cleanly *while*
+grinding down a wall.
 
-Together the two changes take the twelve-circuit board from **562.04 to 725.91**
-shield retained (summed end-of-run, lone Ace, 18,000 ticks) for 1.8s of mean
+Together the two changes take the twelve-circuit board from **562.04 to 705.68**
+shield retained (summed end-of-run, lone Ace, 18,000 ticks) for 1.7s of mean
 clean lap, with no circuit losing a clean lap and no respawn added. `07` sheds
-27-29 a lap instead of 33-35 and reaches lap 4 instead of being destroyed on lap
+28-30 a lap instead of 33-35 and reaches lap 4 instead of being destroyed on lap
 3. **The corner is still untakeable at the speed the driver picks** - what is
 left is the wall response and the sustained-contact charge, neither of which is
 the AI's.
+
+**The span was swept twice, and the first sweep picked a number that broke two
+tests.** A cap of 10 is the best solo row inside the geometric band and it turns
+`lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` and
+`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`
+red - a single craft wedging in traffic, which twelve *lone*-craft circuits
+cannot see and which `just` does not run. The sweep now reports a field board
+beside the solo one, and the trap is worth stating on its own: **a green `just`
+says nothing about the disc-backed suite.**
 
 **The angle that curvature is built from goes through `oag_core::math::acos`,
 not `f32::acos`** (2026-08-15). `Line::curvature` called the platform's own from

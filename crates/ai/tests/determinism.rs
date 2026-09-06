@@ -108,8 +108,8 @@ use oag_ai::probe::{self, Scenario};
 /// - **All three rows regenerated again 2026-09-06**, later the same day, for
 ///   [`oag_ai::Tuning::curvature_span`] - a **ceiling on the chord** rather
 ///   than a change to how the three walks are spaced. The span used to be half
-///   the driver's own lookahead, so it grew with speed; capping it at ten units
-///   changes what the estimator measures over on every reading above a
+///   the driver's own lookahead, so it grew with speed; capping it at eleven
+///   units changes what the estimator measures over on every reading above a
 ///   standstill, and therefore every speed target on both scenarios. Same class
 ///   of cause as the item above, different cause: **do not read this entry as
 ///   that one.**
@@ -127,24 +127,30 @@ use oag_ai::probe::{self, Scenario};
 ///   0.000036..0.026295, exactly as before), because
 ///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures the
 ///   line rather than what a driver read off it.
+///
+///   **Recorded twice on the day**, because the first value the sweep chose was
+///   ten and it turned two disc-backed field tests red - see
+///   [`oag_ai::Tuning::curvature_span`]. These are the eleven-unit hashes. A
+///   reference that still read `0x94d4_044f...` on the `Solo` row would be the
+///   rejected value's.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0x94d4_044f_929d_0433,
-        0x2f75_b2f6_0391_9f35,
+        0xfabb_7df2_6449_2d9a,
+        0xeb60_e4c7_f939_904a,
     ),
     (
         600,
         Scenario::Field,
-        0x3d35_8d7e_4634_7981,
-        0x42a0_34a3_9314_ab40,
+        0xe263_3129_f879_858e,
+        0xb6e5_6b61_9209_5cc5,
     ),
     (
         1_800,
         Scenario::Field,
-        0x1ed4_e76a_2a73_6e99,
-        0x579d_9ea1_9e7c_29f4,
+        0xf1c5_37b9_2567_6813,
+        0x19e7_a7ad_5508_f183,
     ),
 ];
 
