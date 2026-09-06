@@ -89,24 +89,40 @@ use oag_ai::probe::{self, Scenario};
 ///   which is the check that says each change is confined to the path it claims:
 ///   a craft with nobody alongside never reaches the gate. `oag_gameplay`'s own
 ///   gate did not move either - its scenario flies no pilot.
+/// - **All three rows regenerated 2026-09-06**, for the chord spacing in
+///   [`oag_ai::Line::curvature`]. The three walks used to chain off each
+///   other's landing *index* rather than run from `index`, so the chords were
+///   never quite `span` apart - by under a sample on a well-formed line, and by
+///   the whole segment where one is longer than `span`. Rooting all three at
+///   `index` moves the angle everywhere by that sub-sample amount, which is why
+///   `Solo` moved this time when it did not on 2026-08-24: this is not a path a
+///   craft has to reach, it is every curvature reading the estimator takes.
+///
+///   **Isolated before regenerating**, the way item 2 below asks for. The same
+///   commit also returns zero on a chord of no length, and that half was
+///   applied *alone*, with the old chaining left in place: all three rows
+///   reproduced bit for bit. So the guard is confined to the degenerate case it
+///   names - the synthetic scenarios never produce a zero chord - and the
+///   chord spacing is the whole of the movement. `oag-core`, `oag-physics` and
+///   `oag-gameplay`'s gates all still pass unchanged.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0xbc45_ae58_f85f_88c3,
-        0x1a5a_8c0e_3aa8_a36d,
+        0x97c4_ca8b_5fe5_d5bf,
+        0xecac_6673_29ca_a1e0,
     ),
     (
         600,
         Scenario::Field,
-        0x7ee7_ebe8_a4e7_0eb4,
-        0x4ff0_3247_e0d1_5638,
+        0x8d30_b677_11bf_3dfc,
+        0x999e_bb23_475b_ae46,
     ),
     (
         1_800,
         Scenario::Field,
-        0xe491_376f_2f5a_ab08,
-        0xfd6f_2537_4bac_a80d,
+        0xa50a_d4d9_556c_3992,
+        0x30bf_cc62_6468_dbaa,
     ),
 ];
 
