@@ -30,6 +30,9 @@
 //! - [`loading`] is the loading screen's procedural heartbeat wave, recovered
 //!   rather than authored: there is no loading movie in either build. It is the
 //!   crate's one 2D overlay pipeline - no camera, no depth.
+//! - [`roll`] is the barrel roll's shared drawing angle: the ease off
+//!   `ShipState::roll_phase` and the rotation built from it, read by both the
+//!   ship's own transform and the internal camera's up vector.
 
 pub mod camera;
 pub mod capture;
@@ -43,6 +46,7 @@ pub mod perfprobe;
 pub mod post;
 pub mod psys;
 pub mod pvs;
+pub mod roll;
 pub mod shadow;
 pub mod shield;
 pub mod sparks;
