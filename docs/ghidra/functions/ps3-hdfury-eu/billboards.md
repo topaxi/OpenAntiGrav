@@ -43,6 +43,8 @@ which is enough to identify the parser without reading the other.
 | `0x0029af88` | function | `Billboard_CreateFromColour_q` | 62 |
 | `0x0029a6a8` | function | `Billboard_ConstructResource_q` | 62 |
 | `0x003a4b70` | function | `GetBillboardMeshIdFromName` | 90 |
+| `0x003a4da0` | function | `Billboard_LoadModelAndBind` | 80 |
+| `0x008b6f38` | data | `g_BillboardSlots` | 84 |
 
 The last row is a gift, not a reading: the name is the function's own debug
 string (`"GetBillboardMeshIdFromName: No model loaded for billboard %i\n"`,
@@ -272,7 +274,7 @@ way.
 `TimeTrial_HUD.xml`-shaped strings) with logic this session did not work
 through. But its tail loop **inlines `GetBillboardMeshIdFromName`'s exact
 write**, against a lookup of the same stride and offset:
-`*(int*)(PTR_s_WIP3OUT_008a704c + index*0x100 + 0x10)`, where
+`*(int*)(g_BillboardSlots + index*0x100 + 0x10)`, where
 `GetBillboardMeshIdFromName` uses `param_3` unadjusted and `0x003a4da0` uses
 `num-1`. **This is now settled, not an open discrepancy - conditional on
 `0x003a4da0` itself indexing correctly**, which the rest of this page cannot
@@ -281,7 +283,7 @@ this same subsystem.
 `Billboard_CreateFromLocation_q`'s own decompile confirms the raw, 1-based
 `Num` (the same value that indexes the manager's occupancy array) is what
 reaches `0x003a4da0`'s `param_1` unchanged, which then 0-based-adjusts it
-before indexing `PTR_s_WIP3OUT_008a704c`. **`PTR_s_WIP3OUT_008a704c` does not
+before indexing `g_BillboardSlots`. **`g_BillboardSlots` does not
 waste index 0 the way the manager array does**: `0x003a4da0`'s own
 `iVar38 = param_1 - 1` is unguarded down to 0, and `Num == 1` (`iVar38 == 0`)
 takes the identical write branch as any other slot whenever `HUD_Style` is
@@ -301,10 +303,14 @@ chain passes no position, only `num`, a location string and two pointers.
 logic, not about this shared write, which is confirmed by direct control-flow
 tracing the same way the rest of this page is.
 
-**Why `0x003a4da0` stays unnamed**: it is reached correctly from a billboard
-call site, but path-building code referencing HUD XML strings suggests it may
-be a generic per-resource loader shared across subsystems rather than
-billboard-specific - below the 70 needed to commit to either reading.
+**Why `0x003a4da0` stayed unnamed, and why it no longer does** (updated
+2026-09-06): the worry was that path-building code referencing HUD XML strings
+made it a generic per-resource loader shared across subsystems rather than
+billboard-specific. Resolving its TOC displacements settles that against the
+generic reading - it loads into a resource group literally named `billboards`,
+builds the lookup key `"billboard" + num`, and owns both
+`GetBillboardMeshIdFromName` printf strings. Named `Billboard_LoadModelAndBind`
+at confidence 80; see the 2026-09-06 section below.
 
 ## What is still open
 
@@ -336,3 +342,160 @@ billboard-specific - below the 70 needed to commit to either reading.
   comparably stuck leads, are the likely next step.
 - **`type`'s consumer**, if it has one - unread by this function despite being
   authored on every slot.
+
+## 2026-09-06: the transform question is answered, and the answer is "the track supplies it"
+
+This page's "What is still open" list opens with **The transform** - "nothing in
+`TrackStartup_Load`, its two constructors, or either traced write into the
+per-slot table reads a position, rotation or scale." That observation is
+correct and this section does not overturn it. What it adds is *why*: there is
+no position to read on this path because the billboard system never places
+anything. It binds to geometry the **track model** already authors.
+
+Three things landed together, in order of how much they change.
+
+### 1. The four vectors really are an identity matrix - the operand permutation, worked through
+
+This page has carried "still not confirmed as identity; the operand permutation
+was not worked through, on either copy of the write" since it was written. Now
+confirmed, from `disassemble_function` on `GetBillboardMeshIdFromName`
+(`0x003a4b70`) and **not** from a decompile summary - the PowerPC vector-store
+analogue of the VFPU quadword hazard [workflow.md](../../workflow.md) records:
+
+```
+003a4c2c: vspltisw v1,0x1         ; v1  = (1,1,1,1), words
+003a4c30: vxor     v0,v0,v0       ; v0  = 0
+003a4c40: vsldoi   v13,v1,v0,0xc  ; v13 = (1,0,0,0)
+003a4c44: vsldoi   v1,v0,v1,0x4   ; v1  = (0,0,0,1)
+003a4c50: vsldoi   v12,v0,v13,0x8 ; v12 = (0,0,1,0)
+003a4c58: vsldoi   v0,v0,v13,0xc  ; v0  = (0,1,0,0)
+          vcfsx    <each>,0       ; int -> float, scale 0
+003a4c60: stw      r4,0x70(r11)   ; +0x70 <- the resource
+003a4c74: stvx     v13,0,r11      ; +0x00 <- (1,0,0,0)
+003a4c84: stvx     v0,r11,r9      ; +0x10 <- (0,1,0,0)   (r9 = 0x10)
+003a4c78: stvx     v12,r11,r0     ; +0x20 <- (0,0,1,0)   (r0 = 0x20)
+003a4c6c: stvx     v1,r11,r0      ; +0x30 <- (0,0,0,1)   (r0 = 0x30)
+```
+
+A literal 4x4 identity, row by row, written before the resource pointer at
+`+0x70`. The same idiom occurs twice more inside `0x003a4da0`. **Confidence 88.**
+
+### 2. `Billboard_LoadModelAndBind` (`0x003a4da0`) is the loader, and it binds by material name
+
+Decompiled in full and every TOC displacement resolved through
+`scripts/ps3-toc.py resolve 0x003a4da0 <disp>`:
+
+| disp | address | contents |
+| --- | --- | --- |
+| `-0x648c` | `0x008b6f38` | -> `0x00c48180`, the per-slot table base |
+| `-0x6470` | `0x008b6f54` | `'.vex'` |
+| `-0x646c` | `0x008b6f58` | `'.rcsmodel'` |
+| `-0x6464` | `0x008b6f60` | `'billboards'` |
+| `-0x6450` | `0x008b6f74` | `'uvOffset'` |
+| `-0x644c` | `0x008b6f78` | `'uvScale'` |
+| `-0x6444` | `0x008b6f80` | `'billboard'` |
+| `-0x647c` | `0x008b6f48` | `'GetBillboardMeshIdFromName: No model loaded for billboard %i\n'` |
+| `-0x6478` | `0x008b6f4c` | `"GetBillboardMeshIdFromName: Couldn't find name %x\n"` |
+
+In order, the function:
+
+1. Takes the manifest's `location=`, **swaps `.vex` for `.rcsmodel`** and loads
+   that into a resource group named `billboards`. The `.vex` is the scene
+   description; the `.rcsmodel` beside it on the disc is the geometry.
+2. Allocates one `0x90`-byte instance block per sub-mesh; initialises each to
+   identity at `+0x00..+0x3f`, `+0x70 = 0`, `+0x50 = (0,0,0,0)`,
+   `+0x60 = (1,1,1,1)`.
+3. **Binds `+0x50`/`+0x60` as the shader constants `uvOffset`/`uvScale`**,
+   matched by `Crc32_HashString`. A per-instance UV offset and scale, authored
+   as named shader parameters - the same knob Pulse's gantry drives through its
+   material's own offset track (see
+   [`docs/rendering/start-gantry.md`](../../../rendering/start-gantry.md)).
+4. Walks **the billboard's own `.vex`** scene graph (`param_4`, children at
+   `+0x14`, siblings at `+0x10`) and writes `instance+0x70 = <the node>`,
+   linking each `.rcsmodel` sub-mesh to its node *inside that model*. This is
+   the model's internal layout, **not** per-circuit world placement - a
+   distinction worth stating because the two are easy to fuse.
+5. Walks the track's material set for materials flagged `0x8000`, builds the
+   string **`"billboard" + num`** from the manifest's own `Num`, and rebinds
+   the matching material's texture. **This is the only place the whole
+   billboard path touches the track.**
+
+**Confidence 84** - this page's static ceiling. The string resolutions
+themselves are 95: file bytes through a validated resolver.
+
+**A correction to this page's own "fixed array, not a name lookup" claim.** That
+sentence says "nothing here looks up a node by a name the engine builds." The
+*node* half stands - `amphiseum`'s `track.vex` has 838 nodes and not one named
+`billboard` or `advert`, so the two stray `Billboard<digits>` nodes really are
+debris. But the engine **does** build a name and look something up with it; the
+lookup is keyed on a **material/texture** name, not a node name.
+
+### 3. The disc confirms it independently
+
+`billboard<num>` is not an inference about naming. The placeholder textures ship
+in every circuit's own texture set:
+
+```
+billboard8.gtf  17 occurrences    billboard4.gtf  6
+billboard7.gtf  17                billboard1.gtf  5
+billboard5.gtf   7                billboard6.gtf  3
+billboard3.gtf   7
+billboard2.gtf   7
+```
+
+**`billboard7.gtf` and `billboard8.gtf` are present in all 17 environments** -
+exactly the two slots the trackstartup survey found authored identically on
+every circuit (`fx350.vex` and `321Go_StartFinish.vex`). In `amphiseum`'s
+compiled `track.rcsmodel` they sit immediately after the material that binds
+them:
+
+```
+444067  .../materials/billboarddiffuse.rcsmaterial
+444134  .../textures/dds/billboard8.gtf
+444190  .../textures/dds/billboard7.gtf
+```
+
+So the artist modelled the billboard's mounting surface into the track, textured
+it `billboard<num>`, and the engine swaps the texture at load. **The placement
+is authored per circuit, in world space, in the track model.** Confidence 90 -
+straight off the disc, no decompilation.
+
+### The slot-8 asymmetry, and what is still not established
+
+`0x003a4da0`'s tail carries a special case for slot 8 alone:
+
+```c
+if (num - 1 == 7) { *(table_base + 0x834) = <that material's texture bind slot>; }
+```
+
+Slot 8 is `321Go_StartFinish.vex` on every circuit of both HD and Pulse. Caching
+its texture binding slot in a global is the shape of "so something else can swap
+this texture every frame," which is what a countdown needs. **No reader of
+`table_base + 0x834` was found.** `search_instructions lwz 0x834(` returns 14
+matches program-wide; the three in `FUN_000654e0` were decompiled and are a
+different base entirely (a `RaceManager` sub-object at `+0x6ff0`, read as a
+four-word cursor at `+0x830/834/838/83c`). The rest are unexamined. **Recorded
+as not established**, at no confidence.
+
+Two more things deliberately left as hypotheses rather than findings:
+
+- **Render-to-texture.** `FUN_005e5858(<table base>, &piVar29[0x3d])` fills the
+  texture that step 5 binds, and `FUN_005ea2d0(<table base>, <64 B>, <16 B>,
+  <64 B>, <16 B>, 0xffffffff)` runs alongside it - two 4x4 matrices and two
+  vec4s next to a texture handoff reads as an offscreen render, which would also
+  explain why a 19-node model can be bound to a flat track surface. **Neither
+  callee was opened. Confidence 55.**
+- Whether the arch geometry itself is drawn in the world in addition to the
+  bound texture. Nothing here settles it.
+
+### The name of the table base was wrong on this page
+
+Ghidra labelled the per-slot table base `PTR_s_WIP3OUT_008a704c` and this page
+repeated it. **The real address is `0x008b6f38`** (holding `0x00c48180`);
+`0x008a704c` is a wrong-TOC alias, `0xFEEC` low. Verified three ways: the
+instruction is `lwz r30,-0x648c(r2)`; `ps3-toc.py resolve 0x003a4380 -0x648c`
+gives `0x008b6f38`; and `get_xrefs_to 0x008b6f38` returns nothing while
+`get_xrefs_to 0x008a704c` returns the read. Renamed to `g_BillboardSlots` in the
+text above. Every *conclusion* this page draws about the table - stride `0x100`,
+indexed by `Num`, nine words zeroed by the destructor - is unaffected. The
+underlying tooling defect is written up in [workflow.md](../../workflow.md).

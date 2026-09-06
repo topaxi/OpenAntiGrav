@@ -488,6 +488,61 @@ In short:
   `0x08944bd4`, confirmed by direct disassembly this pass) during an actual track load,
   watching what gets parented to `321Go_StartFinish`'s root or to the registry objects -
   nothing static-only remains untried after three passes at this specific blocker.
+  **Superseded the same day by the eighth pass below**, which found the untried
+  static route: the premise that the billboard system places the gantry was
+  itself wrong, and the placement is authored in the track model.
+
+2026-09-06, an eighth pass, and the first to leave Pulse for the question:
+**the gantry-placement blocker is reframed off a wrong premise, and no live
+emulator work is needed.** The premise six passes shared was that the billboard
+system places the gantry. Read on HD/Fury - where Ghidra's call xrefs actually
+work - it provably does not, on either title. Full account in
+[start-gantry.md](../docs/rendering/start-gantry.md#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse)
+and [ps3-hdfury-eu/billboards.md](../docs/ghidra/functions/ps3-hdfury-eu/billboards.md#2026-09-06-the-transform-question-is-answered-and-the-answer-is-the-track-supplies-it).
+In short:
+
+- **`get_xrefs_to` works on `ps3-hdfury-eu` for code, and does NOT for data.**
+  20 call sites for `RaceManager_GetInstance`; but a data xref reported against
+  `0x008a704c` is really a read of `0x008b6f38`, `0xFEEC` away - the reference
+  table was built with the wrong TOC and never recomputed, while the decompiler
+  uses the right one. Both halves written up in
+  [workflow.md](../docs/ghidra/workflow.md). This matters well past this thread:
+  the PSP relocation defect does not carry over to the PS3 database for calls.
+- **HD's billboard transform is a literal 4x4 identity**, confirmed from raw
+  disassembly with every `vsldoi` shift worked through (88) - the PowerPC
+  analogue of the VFPU hazard, and the reason `billboards.md` had left it open.
+- **`Billboard_LoadModelAndBind` (`0x003a4da0`, named this pass at 80) touches
+  the track in exactly one place**: it builds `"billboard" + num` and rebinds
+  that material's texture (84). The disc agrees independently - `billboard7.gtf`
+  and `billboard8.gtf` ship in all 17 HD environments (90). **The placement is
+  authored per circuit in the track model.**
+- **Pulse authors the identical convention**: `billboard8.tga` and
+  `321backplate.tga` are in `01/02/03/05/16_Track`'s own `track.vex`. This
+  overturns `docs/formats/README.md`'s standing rejection of the route, whose
+  count-mismatch argument refutes "every slot binds" but not "binding is by
+  name" - HD's `amphiseum` ships 3 placeholders for 8 slots and the executable
+  does the lookup anyway. Flagged, not edited (`docs/formats/` out of lane).
+- **The placement is recovered, in coordinates, on two circuits (85).**
+  `oag-view --draws` does run headlessly - the first two attempts were killed by
+  their own timeout, not by a missing GPU. On `16_Track`, **mesh node 74** draws
+  `billboard8.tga` (an **8x8 stub**) and `321backplate.tga` from one node at
+  `(34, -36, -185)`; on `05_Track`, node 19 does the same at `(-37, -2, -219)`.
+  Its parent is a zero-byte `Transform` under the `World`, so no `Anim
+  Transform` anchoring applies and the composed centres are track-space
+  (confirmed by their range, x `-1273..952`). On both circuits the mount sits
+  ~10-15 units above the road, inside the `startline_*` cluster's own z band,
+  and **~165 units from the `Start Position` node - repeating to within 2 units
+  across two unrelated circuits.**
+- **Still open**: the mount's orientation and scale (a centroid is not a basis),
+  which of the two co-located surfaces the arch attaches to, and Pulse's own
+  binding path - `psp-pulse-usa` ships no lowercase `billboard` base string, so
+  it does not use HD's exact name concatenation. The Zone negative control did
+  not run: `26_Track` is not in `Data.wad` under that name, so that check is
+  **untested, not passed**.
+- **Nothing was drawn and nothing was synthesised.** No gantry was rendered in a
+  race this pass, so no countdown is on screen yet - but for the first time
+  there is a position to draw it at, obtained statically, with no live PPSSPP
+  breakpoint on `func_0x00140bd4` and no emulator session at all.
 
 ## Open
 

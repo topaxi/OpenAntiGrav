@@ -18,12 +18,18 @@ left open gets an answer; 2048 ships those same four plus four of its own
 (three real glyph files and one empty stub), and turns out to author a third
 countdown mechanism entirely - a manifest reaches only two of the eight.
 
-> **Nothing on this page places the gantry.** Where slot 8's transform comes
-> from is still unrecovered - see
-> [`ghidra/functions/psp-pulse-usa/billboards.md`](../ghidra/functions/psp-pulse-usa/billboards.md),
-> whose highest-priority open item it remains. The model is loaded by nothing
-> and the load report names the file it wanted instead. What is recovered here
-> is what the model *does* once something draws it.
+> **Nothing on this page places the gantry**, and no numeric transform has been
+> read on any title. What changed on 2026-09-06 is *where to look*: HD/Fury's
+> equivalent code path was read end to end and provably reads no position
+> either - it reaches the world only by binding to geometry the **track model**
+> authors, keyed by the name `billboard<num>`. So the transform was never going
+> to be found in the billboard system on Pulse either. See
+> [the placement section below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse)
+> and
+> [`ghidra/functions/ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
+> The model is still loaded by nothing and the load report still names the file
+> it wanted instead. What is recovered here is what the model *does* once
+> something draws it.
 
 ## The asset
 
@@ -930,3 +936,172 @@ look for the state-selection mechanism with no assumption about its shape at
 all - a shared atlas, an offset track, a static parameter and a set of
 separate sliding nodes are the four this sequence has found, and a fifth
 title is not obliged to pick from that list.
+
+## Where the placement actually comes from: HD/Fury answers it for Pulse
+
+2026-09-06. Six passes on Pulse had failed to find what writes slot 8's world
+transform, and the last one concluded that nothing static-only remained untried
+and that a live PPSSPP breakpoint during a track load was required. **That
+conclusion rested on a wrong premise: that the billboard system places the
+gantry at all.** Reading the same subsystem on a *different title* - where
+Ghidra's call xrefs actually work - shows it does not, on either title.
+
+### What HD does, and why it settles the shape of the question
+
+Full account in
+[`ghidra/functions/ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
+The short form:
+
+- The billboard object's transform is written **once, to a literal 4x4
+  identity**, confirmed from raw disassembly with every `vsldoi` shift worked
+  through (confidence 88). Nothing in the subsystem ever writes anything else
+  into it.
+- The loader (`0x003a4da0`) touches the *track* in exactly one place: it builds
+  the string `"billboard" + num` from the manifest's own `Num` and rebinds the
+  matching material's texture (confidence 84).
+- The disc corroborates the convention independently: `billboard7.gtf` and
+  `billboard8.gtf` are present in **all 17** HD environments' own texture sets,
+  bound through `billboarddiffuse.rcsmaterial` (confidence 90).
+
+So on HD the artist models the billboard's mounting surface into the track, at
+the right place, per circuit, and the engine swaps its texture. **The placement
+lives in the track model, not in billboard-system state.**
+
+### Pulse authors the identical convention
+
+`oag-view --nodes` against `pulse-psp-usa.chd`'s `Data.wad` finds the same
+placeholder family inside Pulse's own track scenes, under
+`Data\Environments\GenericTrackTextures\`:
+
+| circuit | `billboard8.tga` | `321backplate.tga` |
+| --- | --- | --- |
+| `01_Track` | yes | yes |
+| `02_Track` | yes | yes |
+| `03_Track` | yes | yes |
+| `05_Track` | yes (with `billboard1`-`billboard7` too) | yes |
+| `16_Track` | yes | yes |
+
+**This overturns a standing rejection.**
+[`docs/formats/README.md`](../formats/README.md)'s "Track startup" row currently
+dismisses this route: "a tempting shortcut - bind a slot to the like-numbered
+`billboardN.tga` placeholder quad already baked into the track mesh - fails its
+own disc: `16_Track` authors all eight slots but only five numbers have a
+matching placeholder texture." **That argument does not hold, and HD's
+executable is the counter-example.** `amphiseum` authors eight slots and ships
+only `billboard3/7/8.gtf`, and `0x003a4da0` performs the name lookup anyway - a
+slot with no matching placeholder simply binds nothing. The count mismatch
+refutes "every slot binds"; it does not refute "binding is by name." That row's
+stronger claim is untouched and is the load-bearing one: slot 8 is
+`321Go_StartFinish.vex` on every circuit of both titles that authors a slot 8.
+*(Flagged rather than edited - `docs/formats/` was outside this pass's lane.)*
+
+### The placement, recovered: `16_Track`'s mesh node 74
+
+`oag-view --draws` does run headlessly - the earlier "it needs a GPU" reading was
+wrong, it is simply slow on a 603-mesh track and two runs were killed by their
+own timeout. Given long enough it resolves the whole chain, and the answer is one
+node:
+
+```
+$ oag-view "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
+      --mesh 'Data\Environments\16_Track\track.vex' --draws
+  ...
+  opaque node   74   290 tri  tex 41: factory_floor_01_rp.tga 64x64  centre 34,-42,-185
+  opaque node   74   176 tri  tex 41: factory_floor_01_rp.tga 64x64  centre 34,-42,-185
+  opaque node   74    36 tri  tex 40: billboard8.tga         8x8     centre 34,-36,-185
+  blend  node   74    57 tri  tex 42: 321backplate.tga      64x64    centre 35,-36,-185
+```
+
+**One mesh node carries all three materials**: a factory floor, a 36-triangle
+`billboard8.tga` quad and a 57-triangle alpha-blended `321backplate.tga` panel,
+the last two at the same centre. So both textures are *bound by real draws*, not
+unused entries in the file's texture palette - which is what the previous
+revision of this section could not yet say.
+
+**`billboard8.tga` is 8x8.** Every other texture on this node is 64x64. An 8x8
+texture is a stub, which is exactly what a surface whose texture is replaced at
+runtime looks like - the same role HD's `billboard8.gtf` plays there.
+
+### The coordinates, and why they are usable as they stand
+
+Node 74's parent is node 34, a `Transform` with a **zero-byte payload** - a pure
+grouping node with no matrix - whose own parent is the `World`. No `Anim
+Transform` is anywhere in the chain, so [`mesh`](../../crates/render/src/mesh.rs)'s
+"anchored, not absolute" caveat does not apply here and the composed centres are
+in the track's own space. That the numbers are track-space and not node-local is
+confirmed by their range across the file: **x `-1273..952`, z `-1817..683`** over
+2,079 draws.
+
+Against that, three positions that agree with each other:
+
+| what | position |
+| --- | --- |
+| **slot 8's mount surface** (node 74, `billboard8` + `321backplate`) | `(34, -36, -185)` |
+| the `Start Position` node (`0x3bc`, the file's only one) | `(-131.8, -50.9, -173.6)` |
+| all 55 `startline_*`-textured draws | two clusters, x ~ `-147` and x ~ `22..24`, z `-160..-211` |
+
+The mount sits at the `+x` end of the same start-line structure the grid sits
+inside, **about 15 units above the road plane** (`y = -36` against the
+surrounding road's `y ~ -51`) - over the track, not on it. That is where a gantry
+stands.
+
+**Confidence 85** that this is the gantry's placement on `16_Track`. It is read
+straight off the disc by this project's own parser, so it is not capped by the
+static-Ghidra ceiling; it is held below 90 because `centre` is a per-draw
+centroid rather than the node's transform origin, and because nothing has yet
+drawn `321Go_StartFinish.vex` at this position to confirm it looks right.
+
+### The same signature on a second circuit
+
+Repeated on `05_Track`, which authors all eight slots rather than `16_Track`'s
+subset, and the shape is identical - **one node, both textures, an 8x8
+`billboard8` stub**:
+
+```
+  opaque node   19    57 tri  tex 22: billboard8.tga    8x8    centre -37,-2,-219
+  blend  node   19    36 tri  tex 21: 321backplate.tga 64x64   centre -38,-2,-219
+```
+
+Against `05_Track`'s own reference points:
+
+| what | `16_Track` | `05_Track` |
+| --- | --- | --- |
+| slot 8's mount | `(34, -36, -185)` | `(-37, -2, -219)` |
+| `Start Position` | `(-131.8, -50.9, -173.6)` | `(21.3, -16.4, -66.3)` |
+| `startline_*` draws, z | `-160 .. -211` | `-217 .. -218` |
+| mount height above the road plane | ~15 | ~10 |
+| distance from the grid to the mount | ~166 | ~164 |
+
+Four independent agreements across two circuits: the two textures always share
+one node, `billboard8` is always the 8x8 stub, the mount always sits ~10-15
+units above the road, and it always stands ~165 units from the grid. **That last
+number repeating to within 2 units on two unrelated circuits is the strongest
+single signal here** - it is what a fixed authoring convention looks like, and it
+is not something a coincidence of unrelated geometry would produce.
+
+### What is still open
+
+- **The gantry model's own orientation and scale at that mount.** A centroid
+  gives a position, not a basis. Reading node 74's own vertex bounds (rather
+  than the centroid) would give the surface's plane and therefore the yaw.
+- **Which of the two surfaces the arch actually attaches to.** `321backplate.tga`
+  is the better fit - `321Go_StartFinish.vex`'s own six textures are
+  `321go_NOMIP.tga`, `Fx400_nomip.tga`, `Honey_LightBlue.tga`, `Honey3.tga`,
+  `Checkered.tga` and `Honey2_KEY.tga`, and **`billboard8.tga` is not among
+  them**, so the 8x8 stub is the advert-panel slot and the backplate is the
+  countdown board's backing. But they are 1 unit apart on one node, so this is a
+  distinction to settle by rendering, not by argument.
+- **Pulse's own binding path.** `search_strings billboard` on
+  `/psp-pulse-usa/BOOT.BIN` returns only `Billboard` (the XML element),
+  `PI_BILLBOARD` and `PI_Billboard` - **no lowercase `billboard` base string for
+  a `billboard%d` build**, so Pulse does not obviously use HD's exact name
+  concatenation. The geometry is now located either way; how the engine finds it
+  is not.
+- **The Zone negative control did not run.** `Data\Environments\26_Track\track.vex`
+  does not exist in `Data.wad` under that name, so the check that a
+  manifest-less circuit also lacks this surface is **untested**, not passed.
+
+**No live emulator work was needed for any of this.** That is the substantive
+change this pass makes to the blocker: the six-pass conclusion that unblocking
+required a PPSSPP breakpoint on `func_0x00140bd4` during a track load rested on
+the premise that the billboard system places the gantry, and it does not.
