@@ -51,18 +51,35 @@
 //!
 //! # `x="0.0"` most likely means "runtime-placed", the same as the sights
 //!
-//! **This is not settled, and it changes what "done" means here.** Rendered
-//! at its literal authored position, the widget sits mostly off the left
-//! edge of a 480x272 frame - `model_draw`'s own convention is trustworthy
-//! (Pure's pickup icons author `x="240" y="250"`, dead centre and near the
-//! bottom, exactly where an icon belongs), so an `x` of exactly `0.0` on a
-//! widget whose siblings all carry real coordinates reads the same way
-//! [`super::Model`]'s own doc already reads the nine sight brackets: "all at
-//! the same placeholder position, which the runtime overwrites every
-//! frame". No runtime override has been found for the countdown the way one
-//! exists for the sights (`crate::race::sight`), so this file draws the
-//! literal `(0, 35)` rather than a guessed centre - a clipped sliver is the
-//! honest picture of what the disc says today, not a bug being papered over.
+//! **Now settled, with a negative result, rather than merely unsearched.**
+//! Rendered at its literal authored position, the widget sits mostly off the
+//! left edge of a 480x272 frame - `model_draw`'s own convention is
+//! trustworthy (Pure's pickup icons author `x="240" y="250"`, dead centre and
+//! near the bottom, exactly where an icon belongs), so an `x` of exactly
+//! `0.0` on a widget whose siblings all carry real coordinates reads the same
+//! way [`super::Model`]'s own doc already reads the nine sight brackets: "all
+//! at the same placeholder position, which the runtime overwrites every
+//! frame". Two independent checks, written up in full in
+//! `docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md`, say that
+//! reading does not hold here the way it does for the sights:
+//!
+//! - **No runtime position writer exists.** `Hud_BindWidgets` resolves this
+//!   widget the same way `HudSight_Bind` resolves the sights, but the only
+//!   other function touching its HUD-object slot (`Hud_UpdateCountdownFade`)
+//!   drives a fade timer and a visibility bit, never a screen position - no
+//!   `HudSight_Update` counterpart exists for it.
+//! - **The mesh bakes no absolute placement either.** `Cockpit_321GO.vex`'s
+//!   four glyph nodes resolve to a translation of `(≈0, ≈0)` and vertex
+//!   bounds symmetric about their own local origin, the same "centred quad,
+//!   externally placed" convention the sight models use - so the geometry
+//!   does not supply the missing coordinate the way it would if the widget's
+//!   `x`/`y` were merely a redundant zero on top of an already-centred mesh.
+//!
+//! So this file draws the literal `(0, 35)` rather than a guessed centre - a
+//! clipped sliver is the honest picture of what the disc says today, and
+//! nothing found says otherwise. Not a bug being papered over: there is
+//! currently nowhere else on this title's own binary or asset for a real
+//! coordinate to come from.
 
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_render::mesh::Model;

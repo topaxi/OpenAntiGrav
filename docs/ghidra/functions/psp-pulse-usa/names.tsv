@@ -659,3 +659,5 @@
 0x08b36bf0	data	g_roll_speed	90	input-bindings.md
 0x08b36bf4	data	g_roll_cost	90	input-bindings.md
 0x08b36bf8	data	g_roll_turbotime	88	input-bindings.md
+0x0881fbec	function	Hud_BindWidgets	80	countdown-widgets.md
+0x0881f624	function	Hud_UpdateCountdownFade	70	countdown-widgets.md
