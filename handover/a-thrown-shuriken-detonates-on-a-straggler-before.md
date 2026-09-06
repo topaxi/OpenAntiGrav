@@ -6,6 +6,16 @@ runs on 2026-09-05 (contended at load 22-29, quiet, and plain), and it is one of
 **two** tests red under the plain documented command. Not a flake, not an environment
 gap: the test needs only a disc image, which is present.
 
+**Deferred by maintainer decision, 2026-09-06.** Not blocked, not resolved -
+parked. The bisect below is solid and the `hull_radius` question is real, but
+chasing either further is not worth a session until `Mode::Eliminator` exists;
+see the last `## Open` bullet for why the scenario itself may be moot before
+then, and see `docs/gameplay/pickups.md`'s "Shuriken and Repulser are gated by
+mode, not by the pool" for the finding that raised the question. This thread
+has also been misattributed to two different commits now (`0c78c477`, refuted
+above, then `cc395862`, cleared below) - a second reason to stop rather than
+open a third guess.
+
 ## The first attribution was wrong, and the refutation is the finding
 
 This thread was opened as *"...after the vector class refactor"*, blaming commit
@@ -55,6 +65,23 @@ asserts; the blade genuinely dies immediately.
   true post-countdown picture: throwing 120 ticks after release may simply be too early
   in a real race for "the blade clears the whole field" to be a fair assertion at all.
   Unresolved - needs the play/PPSSPP read in Next Step 2 below.
+- **A grid-tight field at throw time may not be the whole story - the scenario itself
+  may be one the original cannot produce.** `WeaponStats_Race.xml` authors
+  `<Pickupodds>` of `ai="0" back="0" front="0" human="0"` for `Shuriken`, in every
+  speed class, and `oag_gameplay::pickup::draw_once` already skips a weapon whose
+  weight is `<= 0.0` - so a `SingleRace` weapon pad, the only implemented mode with
+  pads armed, can never actually hand out a Shuriken. This test sets the pickup
+  directly (`pickup::table_for` is not exercised, per the note above), which is the
+  only way to get a thrown blade at all off a standing start in a single race. The
+  weapon's own odds are nonzero only in `WeaponStats_Elimination.xml`
+  (`ai="10" human="10"`, every class), where the field is not grid-tight - Eliminator
+  hands weapons out mid-race into an already-spread field, per its own order-of-
+  magnitude-shorter `elimination_refresh_time`. `Mode::Eliminator` does not exist in
+  this engine (`oag_race::Mode::ALL` is `TimeTrial`, `SpeedLap`, `Zone`, `SingleRace`),
+  so there is no way to test the throw in the situation the original actually creates
+  it in. **This is a question about the test's scenario, not a decision to change or
+  delete it** - whether a grid-tight standing-start throw is even a fair proxy for
+  "clears the field" is the maintainer's call, not this thread's.
 
 ## Bisect result (Next Step 1 - done)
 
