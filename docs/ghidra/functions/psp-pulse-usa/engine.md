@@ -1206,6 +1206,212 @@ sign. It is worth re-confirming directly off the capture before anyone changes a
 coefficient, because if the sign is positive the diagnosis flips to the **mass**,
 which cancels out of an equilibrium but sets the entire timescale of a transient.
 
+### The slowdown mechanic, recovered end to end: `craft+0x2e0` is the weapon slowdown timer
+
+**2026-09-06.** The early return above knows `craft+0x2e0 > 0` means no thrust
+and calls it `timer_2e0`, unidentified. It is **the weapon slowdown timer**, and
+this section closes the mechanic behind `<Global slowdown_limit>` that
+[weapon-stats.md](../../../formats/weapon-stats.md) and
+[pickups.md](../../../gameplay/pickups.md) both recorded as having no consumer.
+
+The chain, in the order a hit walks it:
+
+```text
+weapon impact         entity+0x130 += stats->slowdown_time     (9 sites)
+   |
+craft update tick     Ship_AddSlowdown(entity+0x130, craft)     (0x08842104)
+   |                  entity+0x130 = 0
+   v
+Ship_AddSlowdown      craft+0x2e0 = min(craft+0x2e0 + t, slowdown_limit)
+   |
+   +--> Ship_UpdateEngine   craft+0x2e0 > 0  ->  no thrust, throttleState = 0
+   +--> Ship_UpdateCraft    craft+0x2f0 -= min(craft+0x2e0, 4.0)   (hover target)
+   +--> Ship_UpdateCraft    craft+0x2e0 > 0  ->  Ship_ApplyLateralGrip skipped
+   +--> Ship_UpdateCraft    craft+0x2e0 -= dt
+```
+
+#### `Ship_AddSlowdown` (`0x08848690`), confidence 90
+
+Fifteen instructions, no branches but one clamp, **one caller**. Not a defined
+function in the database - `decompile_function` refuses it - so it was
+disassembled directly and read instruction by instruction:
+
+```text
+08848690: lwc1   f13,0x2e0(a0)      ; a0 = craft, f12 = the seconds argument
+08848694: lui    a1,0x6
+08848698: add.s  f13,f13,f12        ; timer += t
+0884869c: addiu  a1,a1,-0x7378      ; a1 = &DAT_08b32420, the WeaponStats pair
+088486a0: swc1   f13,0x2e0(a0)
+088486a4: lw     a2,0x8(a1)         ; DAT_08b32428, the race/elimination selector
+088486a8: sll    a2,a2,0x2
+088486ac: addu   a1,a2,a1
+088486b0: lw     a1,0x0(a1)         ; the active <WeaponStats> block
+088486b4: lwc1   f12,0x0(a1)        ; block+0x00 == <Global> slowdown_limit
+088486b8: c.le.s f13,f12
+088486c0: bc1t   0x088486cc         ; timer <= limit -> keep it
+088486c8: swc1   f12,0x2e0(a0)      ; else clamp to the limit
+088486cc: jr     ra
+```
+
+That is, in full:
+
+```c
+void Ship_AddSlowdown(float seconds, Craft *craft) {
+    craft->timer_2e0 += seconds;
+    float limit = ActiveWeaponStats()->slowdown_limit;   // block + 0x00
+    if (craft->timer_2e0 > limit) craft->timer_2e0 = limit;
+}
+```
+
+**So `slowdown_limit` is a ceiling on *seconds of slowdown outstanding*.** Not a
+speed floor, not a cap on how much a single weapon may take off, and not a
+maximum duration counted from the first hit - a craft under sustained fire is
+never slowed for longer than `slowdown_limit` *at any moment*, but each new
+impact refills the timer up to that ceiling again.
+
+**The identification of `block+0x00` as `slowdown_limit` rests on three offsets
+off one pointer, not on one.** `*(&DAT_08b32420 + DAT_08b32428 * 4)` is the
+active `<WeaponStats>` block - already measured on
+[missile.md](missile.md), where `DAT_08b32428` is the race / Eliminator file
+selector. Three functions read three different offsets off that same
+expression, and each lands exactly where an independently-decompiled parser
+stores it:
+
+| Offset | Read by | Parser that writes it |
+| --- | --- | --- |
+| `+0x00` | `Ship_AddSlowdown`, as the clamp | `WeaponStats_ParseGlobal` (`0x0880dab0`), `slowdown_limit` |
+| `+0x30` / `+0x5c` | `0x08869054`, the missile's impact bookkeeping | `WeaponStats_ParseMissile`, `damage` / `slowdown_time` |
+| `+0x60` / `+0x68` | `FUN_088418e0`'s wave branch | `WeaponStats_ParseQuake` (`0x0880c60c`), `damage` / `slowdown_time` |
+
+The middle and bottom rows are the load-bearing ones: in both, the `damage`
+offset is passed to `Ship_Damage` (`0x088439ac`) as its damage argument and the
+`slowdown_time` offset is added to `victim+0x130`, three instructions apart. A
+misidentified block would have to get *both* roles right by accident, twice.
+`WeaponStats_ParseGlobal` writes `slowdown_limit` to `*param_1` with `param_1`
+passed through from `WeaponStats_Parse` unmodified, so the Global's one
+attribute is the block's first word.
+
+#### The three effects, from `Ship_UpdateCraft` (`0x08849618`)
+
+`f20` is `dt`: the prologue does `mov.s f20,f12` at `0x08849628` and hands `f20`
+straight on as the first float argument to `Ship_UpdateHover` and
+`Ship_ApplyLateralGrip`, both of which take `dt` there.
+
+**1. The hover target height is lowered while the timer runs.** At
+`0x08849980`, with the branch-likely delay slots resolved:
+
+```c
+craft+0x2f0 = ride_height + craft+0x74;
+if (craft+0x2e0 > 0.0)
+    craft+0x2f0 -= (craft+0x2e0 <= 4.0) ? craft+0x2e0 : 4.0;
+craft+0x2f0 = craft+0x2f0 * (1.0 + 0.2 * craft+0x280) * K2;
+```
+
+This is the `leapAdjust` term the
+[contradictions section](#contradictions-with-docsphysicsreadmemd) already wrote
+down without knowing what fed it. Confidence **90** on the arithmetic; the
+`bc1tl` at `0x088499ac` is the only subtle part and both arms are read.
+
+**Two oddities, recorded rather than smoothed over.** The subtraction takes
+*seconds* off a *height*, with no conversion - the timer's numeric value doubles
+as the sink depth. And the `4.0` clamp is **unreachable on the shipped disc**:
+the only writer that ever raises `craft+0x2e0` clamps it to `slowdown_limit`
+first, and the shipped limit is far below `4.0`, so `min(timer, 4.0)` is the
+identity for every value the field can hold. Whether the `4.0` is dead code, a
+guard against a limit a later title raises, or evidence the field once had a
+second writer is **not determined**.
+
+**2. No lateral grip.** At `0x08849bdc`:
+
+```text
+08849bdc: lwc1   f12,0x2e0(s0)
+08849be4: c.le.s f12,f13            ; f13 = 0.0
+08849bec: bc1f   0x08849c00         ; timer > 0 -> skip the call
+08849bf8: jal    Ship_ApplyLateralGrip     (f12 = dt)
+```
+
+so a slowed craft slides, exactly as one inside the collision-stun window does.
+This is the "step 9 only runs when the timer at `craft+0x2e0` has expired" line
+in [the frame section](#the-frame-ship_updatecraft), now with a name for the
+timer. Confidence **92** - four instructions.
+
+**3. The timer decays linearly.** At `0x08849a24`, after the hover target is
+written:
+
+```c
+if (craft+0x2e0 > 0.0) craft+0x2e0 -= dt;
+```
+
+**No clamp to zero**, so the field lands slightly negative on the tick it
+expires and stays there until the next hit; nothing reads it below zero.
+Confidence **92**.
+
+**4. And the engine produces nothing.** That is
+[the early return](#the-engine-has-an-early-return-that-produces-no-thrust-at-all)
+already on this page: `craft+0x2e0 > 0` with flag `0x10` of `craft+0x1c0` clear
+means `throttleState = 0` and an immediate return, no thrust and no lift. It is
+the *speed* half of the mechanic, and it is why a hit craft slows rather than
+merely sinking.
+
+#### The pending slot and its one consumer
+
+`entity+0x130` is the per-victim accumulator. A `field 0x130` sweep with
+`scripts/psp-relocate.py` over the whole image finds **nine load/store pairs on
+a non-stack base**, all in the weapon subsystems - `Weapon_PostBlastImpulse`
+(`0x08867b14`, the Mine and Bomb blast), `Rocket_HitCraft_q` (`0x0886eca4`), the
+missile's `0x088690d4`, and six more - against exactly **one** consumer, in
+`FUN_088418e0` at `0x088420cc`-`0x08842110`:
+
+```c
+if (entity+0x4c != 0 && *(float *)(*(int *)(entity + 0x4c) + 0x130) > 0.0) {
+    if ((entity->0x1b8 & 0x10) == 0)
+        Ship_AddSlowdown(entity->0x130, craft);
+    entity->0x130 = 0.0;
+}
+```
+
+**A shielded craft takes no slowdown at all, and the pending slot is cleared
+anyway.** `entity+0x1b8 & 0x10` is the pickup/shield word, not the dynamics flag
+word at `craft+0x1c0` that the engine's early return tests - two different
+`& 0x10`s that must not be merged. See
+[shield-pickup.md](shield-pickup.md), which reads the same bit at four sites in
+this function. Confidence **88** for the drain, **85** for the shield gate.
+
+`FUN_088418e0` stays unnamed, for [input-bindings.md](input-bindings.md)'s
+reason.
+
+#### Technique, and why there are no xrefs here
+
+Ghidra applies no PSP relocation, so `get_xrefs_to` is empty on this database
+whatever actually references a target - see [workflow.md](../../workflow.md).
+Everything above was found with `search_instructions` over mnemonic plus operand
+displacement (`lwc1`/`swc1` against `0x2e0(` and `0x130(`),
+`scripts/psp-relocate.py resolve` for the two `lui`/`addiu` pairs that build
+`&DAT_08b32420`, and `psp-relocate.py field` for the exhaustive `+0x130` sweep.
+**`search_instructions` only sees bytes Ghidra has already disassembled** - the
+missile's writer at `0x088690dc` was invisible to it until `disassemble_bytes`
+was run over that range, and `psp-relocate.py field` found it off the raw bytes
+without that step. Prefer the script for a completeness claim.
+
+#### What this does not establish
+
+- **What `entity+0x138` holds.** It is set alongside every `+0x130` credit -
+  `1` by the missile's bookkeeping, `5` by the wave branch - and `Ship_Damage`
+  compares it against `7`. A weapon-type id is the obvious reading and it does
+  not match the class-name pool's order, so it is **not named**.
+- **Whether the `4.0` in effect 1 is reachable in any title.** See above.
+- **Which of the nine `+0x130` writers is which weapon.** Four are identified
+  (Mine/Bomb blast, Rocket, Missile, Quake); the other five were not chased,
+  because the law does not depend on the roster.
+- **A contradiction this section deliberately does not resolve.**
+  [mine.md](mine.md) reads the pointer table at `0x0885bff0` as "one per weapon
+  type"; `Ship_Damage` indexes that same table with `entity+0x13c` (which the
+  missile's bookkeeping fills with an attacker index) and reads `+0x364` and
+  `+0x8d8` off the result, which are craft fields -
+  [contact-response.md](contact-response.md) already floated "keyed by craft".
+  **Nothing above rests on it**: this section's table is `0x08b32420`, a
+  different one, and its identity is measured three ways.
+
 ### Engine `gain` and `falloff` are dead
 
 The function computes a per-second ramp of the throttle state toward the input,
@@ -2382,6 +2588,7 @@ stored**. Same conclusion, now with the location.
 | `0x0884d4c8` | `Body_AddForceWorld` | 82 |
 | `0x08839c68` | `HandlingXml_ParseAirbrakeGraphics` | 80 |
 | `0x08848b78` | `Ship_ApplyLateralGrip` | 80 |
+| `0x08848690` | `Ship_AddSlowdown` | 90 |
 | `0x08848e28` | `Ship_ApplyQuadraticDrag` | 80 |
 | `0x08848ed0` | `Ship_ApplyAngularDamping` | 80 |
 | `0x08848f4c` | `Ship_ApplyRollingResistance` | 76 |

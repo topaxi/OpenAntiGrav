@@ -90,9 +90,9 @@ a union:
 | `type` | Parser | `<Stats>` attributes |
 | --- | --- | --- |
 | `Global` | `0x0880dab0` | `slowdown_limit` |
-| **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage venomspeed flashspeed rapierspeed phantomspeed launchSpeed spread`**, plus `slowdown_time` |
+| **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage slowdown_time venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `spread` |
 | **`Missile`** | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` - **decoded**, offsets and all, on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
-| `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` |
+| `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) |
 | `Cannon` | `0x0880c774` | `absorb rounds rate damage_per_bullet slowdown_time` |
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |
 | **`Shield`** | **`0x0880ca2c`** | **`absorb time`** |
@@ -108,14 +108,23 @@ a union:
 read no further, because [nothing consumes them](../gameplay/pickups.md) and a
 field decoded with no consumer is a field nobody has checked. The Rocket is
 partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
-eleven attributes, and the two left plain are `slowdown_time` - half of the
-slowdown mechanic, whose other half is `<Global slowdown_limit>` and which has
-no consumer - and `spread`.
+eleven attributes, and the one left plain is `spread`.
+
+**`slowdown_time` moved out of that list on 2026-09-06** and is decoded on all
+six decoded blocks. It stayed out for a year because the slowdown mechanic had
+no consumer; the mechanic's law is now recovered end to end -
+`Ship_AddSlowdown` (`0x08848690`) adds a hit's `slowdown_time` to a timer and
+clamps the total to `<Global slowdown_limit>`, so the global is a **ceiling on
+seconds of slowdown outstanding**, not a speed floor. See
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md). The Quake's `+0x60`
+and `+0x68` are measured there too, from that mechanic's own consumer, so the
+Quake's four are no longer unchecked.
 
 **The Shuriken's block is measured at `+0x144`..`+0x174`**, thirteen slots, and
 the Repulser's seven are confirmed at `+0x128` from a consumer rather than a
-parser - so the run `mine.md` derived from attribute counts alone now has five
-measured anchors and only the Quake's four (`+0x60`) and the Cannon's five
+parser - so the run `mine.md` derived from attribute counts alone now has six
+measured anchors (the Quake's four at `+0x60` were read off
+`WeaponStats_ParseQuake` itself on 2026-09-06) and only the Cannon's five
 (`+0x70`) are unchecked.
 
 **The Plasma's block is measured at `+0x9c`..`+0xc4`**, which is exactly where
