@@ -502,9 +502,9 @@ pub struct Evaluated {
     ///
     /// An edge, and the arm rather than the payout: the original plays its cue
     /// on the landing, so nothing in the force law needs this. It is reported
-    /// because our AI rolls on purpose - a deviation the original does not carry
-    /// - and a deviation that cannot be counted on the disc's own circuits
-    /// cannot be shown to have been tuned right. `crate::barrel_roll::arm`
+    /// because our AI rolls on purpose, which the original's does not, and a
+    /// deviation that cannot be counted on the disc's own circuits cannot be
+    /// shown to have been tuned right. `crate::barrel_roll::arm`
     /// charges the pool, so what an arm cost is `roll_cost` percent of it.
     pub roll_armed: bool,
 }

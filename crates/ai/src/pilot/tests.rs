@@ -681,16 +681,34 @@ fn every_built_in_pilot_draws_its_roll_axes_inside_their_spans() {
 
 /// The four have to differ in how readily they roll, or the axis is one
 /// number wearing four names.
+///
+/// Written as a walk over an ordered list rather than as a page of pairwise
+/// `assert!`s, because every one of those compares two `const`s and clippy
+/// folds them: `assertions_on_constants` fires and the test does not build.
 #[test]
 fn the_four_built_ins_have_four_different_roll_characters() {
-    assert!(Pilot::AGGRESSIVE.roll_chance.low > Pilot::BALANCED.roll_chance.low);
-    assert!(Pilot::BALANCED.roll_chance.low > Pilot::PASSIVE.roll_chance.low);
-    assert!(Pilot::PASSIVE.roll_chance.low > Pilot::SHY.roll_chance.low);
-    // And the floor runs the other way: the one that rolls readily is the one
-    // that will dig deepest into the pool for it.
-    assert!(Pilot::AGGRESSIVE.roll_floor.low < Pilot::BALANCED.roll_floor.low);
-    assert!(Pilot::BALANCED.roll_floor.low < Pilot::PASSIVE.roll_floor.low);
-    assert!(Pilot::PASSIVE.roll_floor.low < Pilot::SHY.roll_floor.low);
-    // As does how long a jump it wants before it bothers.
-    assert!(Pilot::AGGRESSIVE.roll_airtime.low < Pilot::SHY.roll_airtime.low);
+    // Most willing first. The floor and the minimum airborne time both run the
+    // other way: the pilot that rolls readily is the one that will dig deepest
+    // into the pool for it and wait least for a jump worth spending on.
+    let order = [
+        ("aggressive", Pilot::AGGRESSIVE),
+        ("balanced", Pilot::BALANCED),
+        ("passive", Pilot::PASSIVE),
+        ("shy", Pilot::SHY),
+    ];
+    for pair in order.windows(2) {
+        let ((keener, willing), (calmer, reluctant)) = (pair[0], pair[1]);
+        assert!(
+            willing.roll_chance.low > reluctant.roll_chance.low,
+            "{keener} does not roll more readily than {calmer}"
+        );
+        assert!(
+            willing.roll_floor.low < reluctant.roll_floor.low,
+            "{keener} does not roll off a lower floor than {calmer}"
+        );
+        assert!(
+            willing.roll_airtime.low <= reluctant.roll_airtime.low,
+            "{keener} waits longer for a jump than {calmer}"
+        );
+    }
 }

@@ -717,6 +717,38 @@ otherwise assume was an oversight:
 pilot's value untouched, and `Elite`, `Skilled` and `Novice` take a lower
 chance, a *raised* floor and a *longer* minimum airborne time.
 
+#### What it costs on the disc, measured
+
+One craft alone, 18,000 ticks, every forward circuit, each cell **arms /
+shield spent** out of a 95-unit pool. `crates/game/tests/ai_roll_ground_truth.rs`,
+`OAG_SWEEP=1`:
+
+| Pilot | Novice | Skilled | Elite | Ace |
+| --- | --- | --- | --- | --- |
+| `aggressive` | 2 / 15.2 | 4 / 30.4 | 20 / 152.0 | 42 / 319.2 |
+| `balanced` | 0 / 0.0 | 1 / 7.6 | 6 / 45.6 | 25 / 190.0 |
+| `passive` | 0 / 0.0 | 1 / 7.6 | 3 / 22.8 | 2 / 15.2 |
+| `shy` | 0 / 0.0 | 0 / 0.0 | 0 / 0.0 | 2 / 15.2 |
+
+The lowest any craft finishes on, on a circuit it laps cleanly, is **21.7 of
+95** - an aggressive Ace on `09_Track`. `05_Track` and `07_Track` finish on
+nothing at every tier *including the ones that armed no rolls at all*, so that
+is the circuits' own doing rather than this mechanic's.
+
+**Two things the measurement changed.** The invented `0.20` shield floor that
+`oag_physics` carried as a bare constant is now a number no built-in uses: it
+was dormant for as long as the AI did not roll - identical per-circuit figures
+at `0.20` and at `0.00` - and the first race that actually exercised it put an
+aggressive Ace on `09_Track` on **6.5** shield. The hard floor held; what it had
+done was remove the buffer the walls then ate. And `shy` was tuned to roll
+*twice* across the disc rather than never, because never is the original's
+behaviour and not this one's.
+
+The harness forces the pilot rather than letting the grid draw it, and that is
+not a detail: `pilot_for_slot` hands slot 1 the same character on every circuit,
+so an unforced lone-craft benchmark measures one of the four and reads as the
+field's.
+
 ### What a driver can see of the grid
 
 `oag_ai::Field` is three optional rivals - the nearest **ahead**, the nearest

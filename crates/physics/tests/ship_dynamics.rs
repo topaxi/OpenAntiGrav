@@ -112,9 +112,8 @@ fn fixture() -> Handling {
             width: 2.0,
             ..Dimensions::default()
         },
-        // Zero on purpose: nothing in this file hands `evaluate` a pad hit, and a
-        // non-zero magnitude here could only mask a boost that fired when it
-        // should not have. Same reasoning for the three roll fields below.
+        // Zero on purpose here and for the three roll fields: nothing hands
+        // `evaluate` a pad hit, so a magnitude could only mask a stray boost.
         speedup_pads: SpeedupPads::default(),
         speedpad_jump: 0.0,
         roll_cost: 0.0,
@@ -418,8 +417,6 @@ fn a_zero_parameter_ship_at_rest_never_accelerates() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
-        // The direct request and the invented floor with them, so the AI's
-        // route through the roll is covered here as well as a pad's.
         roll_request: Some(oag_physics::barrel_roll::TapDirection::Right),
         roll_shield_floor: 0.2,
     };
