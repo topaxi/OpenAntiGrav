@@ -29,11 +29,11 @@ pub struct Simple {
 /// The module's rule is that an attribute is decoded when something reads it,
 /// and this is the first weapon with a projectile behind it: see
 /// `crates/gameplay/src/projectile.rs`. The nine still undecoded need a lock, a
-/// beam, track deformation or the slowdown mechanic, and none of those exists.
+/// beam or track deformation, and none of those exists.
 ///
-/// **One of the Rocket's eleven is left out for the same reason**:
-/// `slowdown_time`, the slowdown mechanic's half of the pair with
-/// [`WeaponStats::slowdown_limit`], which has no consumer.
+/// **All eleven are now decoded.** `slowdown_time` was the last one out, and it
+/// came in on 2026-09-06 when the slowdown mechanic's law was recovered from the
+/// binary - see the field's own docs below.
 ///
 /// # `spread` is the fan angle of three rockets, and that is recovered
 ///
@@ -57,6 +57,27 @@ pub struct RocketStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// **Decoded 2026-09-06, and the recovery of its consumer is what earns it
+    /// a field.** Until then it was the one attribute of this block left out,
+    /// because the module only decodes what something reads. The law, read out
+    /// of the PSP executable:
+    ///
+    /// 1. An impact adds this figure to the victim's pending slot
+    ///    (`entity+0x130`).
+    /// 2. Once per tick the victim's own update drains that slot into a timer
+    ///    (`craft+0x2e0`) and **clamps the total to
+    ///    [`WeaponStats::slowdown_limit`]** - so the global is a ceiling on
+    ///    *seconds of slowdown outstanding*, not a speed floor.
+    /// 3. While that timer is positive the victim gets **no engine thrust, a
+    ///    zeroed throttle state and no lateral grip**, and its hover target
+    ///    height is lowered. The timer decays by `dt` each tick.
+    ///
+    /// `Ship_AddSlowdown` (`0x08848690`) is step 2, fifteen instructions with
+    /// one caller. See
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    pub slowdown_time: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,
     /// Half the fan angle of the three-rocket spread, **in radians**.
@@ -132,11 +153,12 @@ impl RocketStats {
 ///
 /// Confidence 90. See `docs/ghidra/functions/psp-pulse-usa/missile.md`.
 ///
-/// `slowdown_time` is left out for the reason [`RocketStats`] leaves it out: the
-/// slowdown mechanic it feeds has no consumer here yet. **It does have one in the
-/// original** - the missile's own impact accumulates it into the victim's
-/// `weapon_record+0x130` - which is recorded on that page so whoever builds the
-/// mechanic starts from a known consumer rather than from nothing.
+/// `slowdown_time` at `+0x5c` is **read off the shipped instruction stream, not
+/// only off the parser**: the missile's impact bookkeeping (`0x08869054`) does
+/// `victim->0x130 += stats->0x5c` on exactly that offset, three instructions
+/// after `victim->0x120 += stats->0x30` (`damage`). That is the same accumulator
+/// the Mine's blast and the Quake's wave feed, and the whole law is on
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 ///
 /// # A separate struct rather than a widened [`RocketStats`]
 ///
@@ -155,6 +177,11 @@ pub struct MissileStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
     /// Added to the *firing craft's own speed* at launch - see
     /// `oag_gameplay::projectile::launch_missile`, which is where that
     /// distinction is argued and where the recovered arithmetic lives.
@@ -276,6 +303,11 @@ pub struct PlasmaStats {
     /// The largest of any weapon on both shipped tables, which is what a
     /// weapon that fires one bolt where the Rocket fires three needs.
     pub damage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,
     /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
@@ -342,13 +374,12 @@ impl PlasmaStats {
 /// [`crate::weapons::ShurikenStats::speed_for`]'s neighbour,
 /// `oag_gameplay::projectile::shuriken::launch`.
 ///
-/// # Three of the thirteen are authored and decoded nowhere
+/// # Two of the thirteen are authored and decoded nowhere
 ///
 /// `rhicochetdamage` and `rhicochetForce` are the only *second* damage and
 /// force any weapon authors, and nothing read says when they are spent - a
 /// glancing hit off a craft is the obvious guess and a guess is what it would
-/// be. `slowdown_time` is the slowdown mechanic's half of a pair whose other
-/// half has no consumer, as on every other weapon.
+/// be.
 ///
 /// A fourth is decoded but only half understood: `fuse` is read
 /// **here** but its *meaning* is this engine's reading: `Shuriken_Update`
@@ -373,6 +404,11 @@ pub struct ShurikenStats {
     /// `blastdamage`, **not** `rhicochetdamage` - see the type's own docs for
     /// the second pair and why it stays undecoded.
     pub blastdamage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
     /// Added to the throwing craft's own speed at launch.
     pub launch_speed: f32,
     /// How long a blade lives, in seconds.
@@ -450,9 +486,7 @@ impl ShurikenStats {
 /// The Rocket, the Missile, the Plasma and the Shuriken each author four
 /// per-class speeds; the Mine authors none. It is not launched at a speed - it
 /// inherits the firing craft's velocity and a random scatter direction, and
-/// then sits there. `slowdown_time` is left out for the reason
-/// [`RocketStats`] leaves it out: the mechanic behind `<Global slowdown_limit>`
-/// still has no consumer.
+/// then sits there.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct MineStats {
     /// Energy paid back for absorbing it rather than firing it.
@@ -463,6 +497,11 @@ pub struct MineStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
     /// How long a dropped mine lives before it expires, in seconds.
     ///
     /// The attribute is spelled `timetodie`, and `Mine_Init` (`0x08859ac8`)
@@ -503,8 +542,8 @@ pub struct MineStats {
 /// `0x0886794c`) spends `blastradius` for both, and no consumer of a second
 /// radius has been found anywhere.
 ///
-/// So it stays undecoded, for the reason [`RocketStats`] leaves `slowdown_time`
-/// undecoded and the module docs give at length: a field decoded with no
+/// So it stays undecoded, for the reason the module docs give at length: a
+/// field decoded with no
 /// consumer is a field nobody has checked. It is named on
 /// `docs/formats/weapon-stats.md` and here, rather than dropped silently, which
 /// is the part that matters - the next person to look for it should find it
@@ -519,6 +558,11 @@ pub struct BombStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
     /// How long a dropped bomb lives before it goes off on its own, in seconds.
     ///
     /// Twenty on both shipped tables against the Mine's seven, which is the

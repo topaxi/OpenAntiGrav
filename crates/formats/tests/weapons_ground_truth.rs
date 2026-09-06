@@ -514,3 +514,72 @@ fn the_pickup_tables_cover_the_speed_classes() {
         stats.pickups.len()
     );
 }
+
+/// Claim 4: every decoded weapon authors a positive `slowdown_time`, and every
+/// one of them sits **at or under** `<Global slowdown_limit>` on both shipped
+/// tables.
+///
+/// The relation is the point, and it is a prediction rather than a
+/// restatement. `Ship_AddSlowdown` (`0x08848690`) clamps the victim's running
+/// slowdown timer to `slowdown_limit`, so a weapon authored *above* the limit
+/// would be one whose own `slowdown_time` is unreachable - it would be silently
+/// truncated on the very first hit, with no second hit needed. That the shipped
+/// data never does this is what says the two attributes are the pair the law
+/// says they are, and it would catch `slowdown_time` being read off the wrong
+/// attribute (`timetodie`, say, or `fuse`) far more sharply than a
+/// finite-and-positive check does.
+///
+/// No value is asserted, only the relation and the sign - see this file's
+/// header on ADR-0006. `--no-capture` prints the disc's own numbers.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_decoded_weapon_slows_a_victim_within_the_global_limit() {
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let limit = stats.slowdown_limit;
+        assert!(
+            limit > 0.0,
+            "{name}: <Global> slowdown_limit is {limit}, so nothing could ever be slowed"
+        );
+
+        // One list rather than six blocks, so a weapon added to the decoder and
+        // not to this test is a compile error at the `match`, not a silent gap.
+        let authored: Vec<(Weapon, f32)> = [
+            stats.rocket().map(|s| (Weapon::Rocket, s.slowdown_time)),
+            stats.missile().map(|s| (Weapon::Missile, s.slowdown_time)),
+            stats.plasma().map(|s| (Weapon::Plasma, s.slowdown_time)),
+            stats
+                .shuriken()
+                .map(|s| (Weapon::Shuriken, s.slowdown_time)),
+            stats.mine().map(|s| (Weapon::Mine, s.slowdown_time)),
+            stats.bomb().map(|s| (Weapon::Bomb, s.slowdown_time)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        // Every one of the six is authored in both shipped tables. A `None`
+        // here would mean the block went missing, which the other tests would
+        // also catch - this count is what stops the loop below passing vacuously.
+        assert_eq!(
+            authored.len(),
+            6,
+            "{name}: {} of the six decoded blocks are authored - {authored:?}",
+            authored.len()
+        );
+
+        for (weapon, slowdown_time) in &authored {
+            println!("{name}: {weapon:?} slowdown_time/limit = {slowdown_time}/{limit}");
+            assert!(
+                *slowdown_time > 0.0,
+                "{name}: {weapon:?} slows a victim by {slowdown_time}s, which is no slowdown at all"
+            );
+            assert!(
+                *slowdown_time <= limit,
+                "{name}: {weapon:?} authors {slowdown_time}s against a {limit}s cap, so its own \
+                 figure is unreachable - the attribute is probably being read off the wrong name"
+            );
+        }
+    }
+}
