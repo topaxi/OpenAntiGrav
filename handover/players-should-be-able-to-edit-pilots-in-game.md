@@ -62,22 +62,21 @@ Whichever is chosen, **the choice must be recorded in `pilots.rs`'s own module
 doc**, beside the sentence quoted above, because that sentence will otherwise
 read as still-true and it will not be.
 
-## The blocking gap: nothing in this project can accept typed text
+## Nothing in this project can accept typed text - which bounds the first cut rather than blocking it
 
 Checked 2026-09-06: there is **no text entry of any kind** - no text field, no
 on-screen keyboard, nothing in `crates/game/src/` or `crates/input/src/` that
 turns keystrokes into a string. The whole menu layer is rows and abstract
 buttons.
 
-Creating or renaming a pilot needs a name. So **text entry is a prerequisite,
-not a detail of this feature**, and it is the single largest piece of work here.
-It also has to work on a pad, not only a keyboard, since the input layer is
-built around abstract buttons - which usually means an on-screen keyboard, and
-that is its own screen with its own layout.
+Renaming a pilot needs a name, so **renaming waits for text entry** - and that
+is its own screen and its own thread: an on-screen keyboard driven by abstract
+buttons, since the input layer is built around a pad rather than a keyboard.
 
-A create-only-from-template flow that auto-names (`pilot-1`, `pilot-2`) would
-dodge it for a first cut. Whether that is worth shipping without renaming is a
-maintainer call, not one to make here.
+**It does not block the first cut**, per the maintainer's decision below.
+Editing an existing pilot's axes and saving needs no keyboard, and
+create-from-template can auto-name (`pilot-1`, `pilot-2`). So the largest piece
+of work in this feature is deferred rather than done first.
 
 ## Details that will each cost time if they are discovered late
 
