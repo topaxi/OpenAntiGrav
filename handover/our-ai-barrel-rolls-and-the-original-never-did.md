@@ -109,6 +109,30 @@ each is worth honouring rather than reinventing:
 `AI_ROLL_SHIELD_FLOOR`'s existing `0.20` is the natural default for the floor
 axis, which retires it as a bare constant.
 
+### Personality carries it, and provocation deliberately does not
+
+Confirmed with the maintainer 2026-09-06. The three axes are **pilot** axes, so
+the four built-ins (`crates/ai/src/pilot.rs:281` - `balanced`, `aggressive`,
+`passive`, `shy`) each want their own roll character, and that is part of the
+implementation rather than a follow-up: `AGGRESSIVE` rolls readily off a low
+floor, `SHY` and `PASSIVE` rarely and only with plenty in hand, `BALANCED`
+between. A user's own `aggressive.toml` replaces the built-in of that name, so
+this stays retunable without a rebuild.
+
+**Provocation must NOT feed roll usage**, and the reason is already written down
+twice - noted here so nobody wires it later thinking it was simply overlooked.
+`crates/ai/src/driver.rs:460` states that provocation "scales what a driver does
+to *other craft*, not what it asks of its own", and
+`assets/ai/example-pilot.toml` says of the same knob: "It does NOT drive faster:
+an angry AI in the scenery is a bug, not a character."
+
+A barrel roll is entirely what a driver asks of its own craft - it spends its
+own shield for its own boost, aimed at nobody. Feeding the grudge into it would
+make an angry AI *faster*, which is what that rule exists to prevent, and it
+would close a rubber-banding loop the project
+[refuses to port](../docs/gameplay/ai.md#what-we-build-instead): overtake an AI,
+it gets provoked, it rolls, it boosts, it repasses you.
+
 ## Open
 
 - **Whether the AI calls `arm` directly or synthesises tap input.** Direct is
