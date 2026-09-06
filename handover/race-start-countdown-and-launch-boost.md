@@ -438,6 +438,47 @@ In short:
   not a recovery. `countdown.rs`'s module doc and `countdown-widgets.md` both carry the
   precise reason now instead of the old, imprecise "would blink funny" one.
 
+2026-09-06, a seventh pass, and the first to leave Pulse for the question:
+**the gantry-placement blocker is reframed off a wrong premise, and no live
+emulator work is needed.** The premise six passes shared was that the billboard
+system places the gantry. Read on HD/Fury - where Ghidra's call xrefs actually
+work - it provably does not, on either title. Full account in
+[start-gantry.md](../docs/rendering/start-gantry.md#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse)
+and [ps3-hdfury-eu/billboards.md](../docs/ghidra/functions/ps3-hdfury-eu/billboards.md#2026-09-06-the-transform-question-is-answered-and-the-answer-is-the-track-supplies-it).
+In short:
+
+- **`get_xrefs_to` works on `ps3-hdfury-eu` for code, and does NOT for data.**
+  20 call sites for `RaceManager_GetInstance`; but a data xref reported against
+  `0x008a704c` is really a read of `0x008b6f38`, `0xFEEC` away - the reference
+  table was built with the wrong TOC and never recomputed, while the decompiler
+  uses the right one. Both halves written up in
+  [workflow.md](../docs/ghidra/workflow.md). This matters well past this thread:
+  the PSP relocation defect does not carry over to the PS3 database for calls.
+- **HD's billboard transform is a literal 4x4 identity**, confirmed from raw
+  disassembly with every `vsldoi` shift worked through (88) - the PowerPC
+  analogue of the VFPU hazard, and the reason `billboards.md` had left it open.
+- **`Billboard_LoadModelAndBind` (`0x003a4da0`, named this pass at 80) touches
+  the track in exactly one place**: it builds `"billboard" + num` and rebinds
+  that material's texture (84). The disc agrees independently - `billboard7.gtf`
+  and `billboard8.gtf` ship in all 17 HD environments (90). **The placement is
+  authored per circuit in the track model.**
+- **Pulse authors the identical convention**: `billboard8.tga` and
+  `321backplate.tga` are in `01/02/03/05/16_Track`'s own `track.vex`. This
+  overturns `docs/formats/README.md`'s standing rejection of the route, whose
+  count-mismatch argument refutes "every slot binds" but not "binding is by
+  name" - HD's `amphiseum` ships 3 placeholders for 8 slots and the executable
+  does the lookup anyway. Flagged, not edited (`docs/formats/` out of lane).
+- **Not recovered: any numeric transform.** `oag-view --draws` needs a GPU
+  adapter this box would not present (two runs, zero bytes, exit 144), and
+  Pulse's track `.vex` nodes are unnamed. Confidence 78 that the transform is
+  track-authored geometry rather than billboard-system state; the weak link is
+  that `psp-pulse-usa` ships no lowercase `billboard` base string, so Pulse's
+  own binding path is untraced.
+- **Nothing was drawn and nothing was synthesised.** No countdown is closer to
+  the screen than it was; what changed is that the next step is a static disc
+  read (`--draws`, or `--class 0x125/0x06e --payload`) rather than a live
+  PPSSPP breakpoint on `func_0x00140bd4`.
+
 ## Open
 
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
