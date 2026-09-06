@@ -144,6 +144,28 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-09-06**, when `Driver::roll_decided` joined the hash. Our
+///   opponents barrel-roll on purpose - a deliberate, authorized deviation, the
+///   original's never do - and that flag is what makes `Pilot::roll_chance` a
+///   probability per airborne window rather than a per-tick rate: it records
+///   that this driver has already made its mind up about the flight it is in.
+///   Two runs agreeing on every position and disagreeing on it are about to
+///   spend a twelfth of a shield pool differently, so it is simulation state.
+///   **Isolated the documented way**: with `roll_decided` destructured as
+///   `roll_decided: _` and its `write_u8` removed, and nothing else changed,
+///   the previous constants - `0x3259_455a_d157_329f` / `0x6351_a74b_9671_1835`
+///   at 60 ticks and `0xe010_a59d_c8a2_8cc6` / `0x4634_1855_0c96_d234` at 600,
+///   and `0x84fa_0540_953f_7dbc` / `0x5544_ea00_8147_b29c` and
+///   `0x71c8_e66d_871f_8f3b` / `0x9c54_22cf_8958_48ea` for the volley -
+///   reproduce bit for bit. So the whole movement is one more byte per ship per
+///   tick entering the stream, and no behaviour at all: **neither scenario ever
+///   calls `Driver::drive`**, both step projectiles over a world whose drivers
+///   are never run, so the flag reads `false` on every ship on every tick of
+///   both. That is the load-bearing claim, not "there is no AI in it".
+///   `crates/physics/tests/determinism.rs` did **not** move, and that is the
+///   expected shape: the deviation reaches physics as two defaulted
+///   `ShipControls` fields, `ShipState` gained nothing, and `oag-physics`
+///   cannot depend on `oag-ai` to drive one anyway.
 /// - **Moved 2026-08-26**, when `Driver::reflex` joined the hash. Reaction
 ///   latency holds a rival back for a few ticks after it arrives in one of a
 ///   driver's three channels, so which craft a driver has *noticed* decides
@@ -439,8 +461,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x3259_455a_d157_329f, 0x6351_a74b_9671_1835),
-    (600, 0xe010_a59d_c8a2_8cc6, 0x4634_1855_0c96_d234),
+    (60, 0x2996_72f1_9bfb_e415, 0x74d7_b35a_d65b_cf4f),
+    (600, 0xab84_733c_e123_4ed8, 0x138d_c8a1_f6e7_3fce),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -567,11 +589,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0x0549_867b_d291_294c` / `0x1f6d_7622_eb31_7338` at 60 ticks and
 ///   `0x626e_0aee_2d8b_48f7` / `0x78f9_263c_8a07_97ee` at 600.
 ///
+/// - **Moved 2026-09-06, later the same day**, the same `Driver::roll_decided`
+///   addition [`REFERENCE`]'s own history records, inherited through the same
+///   `hash_world` call and isolated there rather than twice. Replaces
+///   `0x84fa_0540_953f_7dbc` / `0x5544_ea00_8147_b29c` at 60 ticks and
+///   `0x71c8_e66d_871f_8f3b` / `0x9c54_22cf_8958_48ea` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x84fa_0540_953f_7dbc, 0x5544_ea00_8147_b29c),
-    (600, 0x71c8_e66d_871f_8f3b, 0x9c54_22cf_8958_48ea),
+    (60, 0x1c04_b982_1568_c020, 0xf163_ab66_b835_8958),
+    (600, 0xe056_48f0_86b7_33fb, 0x1605_35e4_1596_b4ee),
 ];
 
 #[test]
