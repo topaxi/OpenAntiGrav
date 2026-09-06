@@ -21,6 +21,13 @@ pub enum Action {
     LaunchRemix,
     /// Close the game.
     Quit,
+    /// Writes the pilot editor's current axis edit to disk. See
+    /// `crate::pilots::set_axis`.
+    SavePilot,
+    /// Creates a new pilot file from whichever one is currently selected on
+    /// the pilot editor's own list, auto-named (`pilot-1`, `pilot-2`, ...) so
+    /// this cut needs no text entry - see `crate::pilots::template`.
+    NewPilot,
 }
 
 impl Action {
@@ -31,6 +38,8 @@ impl Action {
             Self::LaunchRace => "launch_race",
             Self::LaunchRemix => "launch_remix",
             Self::Quit => "quit",
+            Self::SavePilot => "save_pilot",
+            Self::NewPilot => "new_pilot",
         }
     }
 
@@ -41,14 +50,22 @@ impl Action {
             "launch_race" => Some(Self::LaunchRace),
             "launch_remix" => Some(Self::LaunchRemix),
             "quit" => Some(Self::Quit),
+            "save_pilot" => Some(Self::SavePilot),
+            "new_pilot" => Some(Self::NewPilot),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 3] {
-        [Self::LaunchRace, Self::LaunchRemix, Self::Quit]
+    pub fn all() -> [Self; 5] {
+        [
+            Self::LaunchRace,
+            Self::LaunchRemix,
+            Self::Quit,
+            Self::SavePilot,
+            Self::NewPilot,
+        ]
     }
 }
 
@@ -182,6 +199,32 @@ pub enum ValueSource {
     /// scoped to whichever title `CRAFT TITLE` picked rather than to the
     /// title this process booted from.
     RemixVariant,
+    /// Every pilot the in-game editor's roster currently holds - the four
+    /// built-ins plus whatever `crate::pilots::directory` has, in
+    /// `crate::pilots::Roster`'s own order.
+    ///
+    /// Supplied rather than spelled for the reason [`Self::Teams`] is: the
+    /// roster is not fixed, and how many files a player has authored is not
+    /// knowable here.
+    Pilots,
+    /// Every axis `crate::pilots::AXES` names, in its own draw order.
+    ///
+    /// The list itself is fixed, but it is supplied rather than spelled for
+    /// the same reason [`Self::RaceModes`] is a source despite being a fixed
+    /// list too: one list, walked in one place, is what keeps a landed axis
+    /// from being wired into the loader and forgotten here.
+    PilotAxes,
+    /// The low end of whichever pilot and axis [`Self::Pilots`] and
+    /// [`Self::PilotAxes`] currently hold, as a set of selectable numbers
+    /// within `crate::pilots::limit`'s range for that axis.
+    ///
+    /// Resupplied whenever the `PILOT` or `AXIS` row moves, the same idiom
+    /// [`Self::RemixTracks`] uses for `TRACK TITLE` - a menu whose PILOT row
+    /// just changed should show that pilot's own bounds on the very next
+    /// frame, not the previous one's.
+    PilotAxisLow,
+    /// [`Self::PilotAxisLow`]'s sibling for the high end of the range.
+    PilotAxisHigh,
 }
 
 impl ValueSource {
@@ -205,6 +248,10 @@ impl ValueSource {
             Self::RemixSpeedClasses => "remix_speed_classes",
             Self::RaceVariant => "race_variant",
             Self::RemixVariant => "remix_variant",
+            Self::Pilots => "pilots",
+            Self::PilotAxes => "pilot_axes",
+            Self::PilotAxisLow => "pilot_axis_low",
+            Self::PilotAxisHigh => "pilot_axis_high",
         }
     }
 
@@ -228,6 +275,10 @@ impl ValueSource {
             "remix_speed_classes" => Some(Self::RemixSpeedClasses),
             "race_variant" => Some(Self::RaceVariant),
             "remix_variant" => Some(Self::RemixVariant),
+            "pilots" => Some(Self::Pilots),
+            "pilot_axes" => Some(Self::PilotAxes),
+            "pilot_axis_low" => Some(Self::PilotAxisLow),
+            "pilot_axis_high" => Some(Self::PilotAxisHigh),
             _ => None,
         }
     }
