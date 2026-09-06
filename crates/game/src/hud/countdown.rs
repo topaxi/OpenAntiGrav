@@ -200,7 +200,14 @@ impl Countdown {
     /// convention [`super::Overlay::draw`] uses.
     ///
     /// `viewport` is `(x, y, width, height)` of the presentation surface's
-    /// aspect rectangle - this pass's own depth buffer tracks its size.
+    /// aspect rectangle, the same one every other HUD pass restricts itself
+    /// to - see `crate::render::Renderer::overlay`'s own `set_viewport`. Not
+    /// the same thing as `target_size`, `view`'s own full pixel dimensions:
+    /// a windowed run pillarboxes the aspect rectangle inside a wider
+    /// surface, and this pass's own depth attachment has to match `view`'s
+    /// size rather than the (possibly smaller) rectangle drawn into, or the
+    /// two attachments disagree and the pass is invalid.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
@@ -209,6 +216,7 @@ impl Countdown {
         view: &wgpu::TextureView,
         seconds: f32,
         viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
     ) {
         if self.model.vertices.is_empty() || self.model.indices.is_empty() {
             return;
@@ -253,8 +261,7 @@ impl Countdown {
             bytemuck::bytes_of(&NodeAnims::sample(&self.model, seconds)),
         );
 
-        let (_, _, width, height) = viewport;
-        let (width, height) = (width.max(1.0) as u32, height.max(1.0) as u32);
+        let (width, height) = (target_size.0.max(1), target_size.1.max(1));
         let depth_view = self.depth_view(device, width, height).clone();
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -280,6 +287,12 @@ impl Countdown {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+
+        // The same aspect rectangle every other HUD pass restricts itself
+        // to (`crate::render::Renderer::overlay`), so a pillarboxed window
+        // draws the countdown inside the same bars rather than stretched
+        // across the whole surface.
+        pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
 
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_bind_group(2, &self.built.fog_bind, &[]);

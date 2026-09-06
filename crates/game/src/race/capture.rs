@@ -730,6 +730,7 @@ pub fn capture(
                             &hud_view,
                             readout.race_ticks as f32 / 60.0,
                             hud_viewport,
+                            (width, height),
                         ),
                         Err(why) => {
                             warn!(

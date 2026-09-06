@@ -160,6 +160,7 @@ impl RaceStage {
                             view,
                             readout.race_ticks as f32 / 60.0,
                             viewport,
+                            (gpu.config.width, gpu.config.height),
                         );
                     }
                 }
