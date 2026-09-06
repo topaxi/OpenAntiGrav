@@ -353,3 +353,80 @@ fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
         pcm.len() / 4
     );
 }
+
+/// Every race circuit names a bank in its own manifest, beside its own `.vex`.
+///
+/// The sweep behind `docs/formats/psp-audio.md`'s per-circuit bank table, and
+/// the reason that table is a reading rather than an extrapolation from the one
+/// circuit this thread was written against. Three things have to hold together
+/// on all twelve, and no two of them come from the same place:
+///
+/// 1. the circuit's `trackstartup.xml` names a bank,
+/// 2. that name resolves **in the circuit's own directory** - `Data\Sound\` is
+///    where every executable-named bank lives and it is not where these are,
+/// 3. and the bank's own self-name is a label the circuit's emitters spell,
+///    which is what the resolved count below stands in for.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+        .expect("opening the source");
+    let mut archives = opened.archives;
+
+    let mut found = 0;
+    for number in 1..=16 {
+        let track = format!(r"Data\Environments\{number:02}_Track\track.vex");
+        let Ok(blob) = archives.read_name(&track) else {
+            continue;
+        };
+        let loaded = TrackEmitters::load(&mut archives, opened.title.race.sounds, &track, &blob);
+        assert!(
+            !loaded.omni.is_empty(),
+            "{track} is a race circuit and authors no emitter"
+        );
+        found += 1;
+
+        // The bank line names the entry and the self-name together, so one
+        // assertion covers both halves of the claim.
+        let bank = loaded
+            .report
+            .iter()
+            .find(|line| line.contains("circuit "))
+            .unwrap_or_else(|| panic!("{track}: no circuit bank opened\n{:#?}", loaded.report));
+        assert!(
+            bank.contains(&format!("{number:02}_Track")),
+            "{track}: its bank did not come from its own directory: {bank}"
+        );
+
+        // And the label really is what its nodes ask for. Taken off the bank's
+        // own self-name rather than a table written here, so what is checked is
+        // two sources agreeing rather than this file agreeing with itself.
+        let label = bank
+            .split('"')
+            .nth(1)
+            .unwrap_or_else(|| panic!("{track}: no self-name in {bank}"))
+            .to_string();
+        assert!(
+            loaded
+                .omni
+                .iter()
+                .any(|node| node.emitter.bank == label && node.sound.is_some()),
+            "{track}: nothing it authors resolved in {label:?}, the bank its own \
+             manifest names"
+        );
+
+        let playing = loaded
+            .omni
+            .iter()
+            .filter(|node| node.sound.is_some())
+            .count();
+        println!("{bank}; {playing} of {} play", loaded.omni.len());
+        for line in loaded.report.iter().filter(|l| l.contains("play nothing")) {
+            println!("  {line}");
+        }
+    }
+    assert_eq!(found, 12, "twelve race circuits, and this found {found}");
+}

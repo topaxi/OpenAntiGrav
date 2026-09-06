@@ -35,44 +35,56 @@ taste, and are the reason it is worth doing properly rather than quickly:**
 
 ## Open
 
-- **The voice budget.** Nothing has counted how many of a circuit's emitters are
-  simultaneously in range on a real lap, and nothing has read what the original
-  does when more want a voice than exist. `oag_audio`'s pool is hardware-free
-  and can be sized; the original's cannot.
-- **What a dangling reference should do.** Five references on the disc do not
-  resolve - `fortcle~blueflashlight` (14 nodes), `basilic~groupcraft`,
-  `fortcle~RED_NEON_TUN`, `techder~neon` and `outpostf~AIR_CON_FAN`. Per
-  `CLAUDE.md` the answer is to play nothing and say so in the loader report, but
-  whether the original silently drops them or falls back to a bank-index lookup
-  is unread: `Scream_FindSoundInBank`'s name comparison has not been decompiled,
-  and `techder~neon` in particular would resolve under any fallback that
-  searches other banks.
-- **Which cone angle is which.** `soundcone`'s own init has not been found, so
-  which of the two authored angles reaches the emitter's `+0x40` half-angle is
-  unread, and `+0x42` reading `0` on all 134 cones is unexplained. **A cone
-  stays unwired until that is read** - it is exactly the "an effect with no
-  recovered trigger stays unwired" case.
+- **At least one waveform-binding opcode is undecoded, and 38 nodes are silent
+  because of it.** Playing the emitters found a failure the name-table sweep
+  could not: a cue that *is* in the bank and whose command run binds no
+  waveform, because every command is an opcode `oag_formats::sblk` does not
+  read. Eight circuits, 38 nodes, tabulated on
+  [track-sound-emitters.md](../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md).
+  Most are spelled `~SetReg*` and may genuinely emit nothing, but
+  `moather~birds` (5 nodes) and `dekonst~CRANE` are named after sounds, and Moa
+  Therma having five silent bird emitters is not a plausible reading.
+  **`moather~birds` is the cue to point a re-read of the command decoder at.**
+- **What a latched voice should do.** `SoundEmitter_ServiceRequests` leaves a
+  latched request untouched - "not even reaped" - so the original's voice keeps
+  playing at the last in-range gain, which is near zero. `Ambience::tick` stops
+  it instead and says so in its own doc comment. What reclaims the original's
+  voice is unread, and that is the gap.
+- **The mix clips.** 7,932 samples over 30 s of `01_Track` before the ambience
+  landed, 23,540 after - about 0.8% of the render. Every emitter plays at the
+  `1.0` `VexSound_Init` passes and `Mixer::starved` stays at zero, so this is
+  the sum's headroom rather than a voice budget. Nothing here invents a gain to
+  hide it.
+- **Which cone angle is which.** Unchanged: `soundcone`'s own init has not been
+  found, so which of the two authored angles reaches the emitter's `+0x40`
+  half-angle is unread, and `+0x42` reading `0` on all 134 cones is
+  unexplained. **A cone stays unwired until that is read**, and 134 nodes are
+  waiting on it - 32 of them on `07_Track` reversed alone.
 - **Whether Pure and the PS2 author the same node.** Only `pulse-psp-usa` has
-  been swept. `docs/formats/pure-status.md` lists `speaker` in Pure's class
-  table, so Pure at least names the classes.
-- **`emitter+0x3c`.** Written from payload `+0x0c` by `VexSound_Init` and absent
-  from `positional-audio.md`'s three-way-pinned emitter table, so nothing
-  observed reads it back. It is `25.0` on every cone and equal to the radius on
-  every `sound`.
+  been swept for the classes. Two things are now known either way: Pure and the
+  PS2 both carry `Data\Sound\generaltrack.bnk` (`oag_title::SoundBanks::track_general`),
+  and **Pure ships no `trackstartup.xml` per circuit**, so if Pure does author
+  emitters its circuit bank is named some other way and would have to be found
+  before the non-`gentrak` half of them could resolve.
+- **`emitter+0x3c`.** Unchanged: written from payload `+0x0c` by `VexSound_Init`
+  and absent from `positional-audio.md`'s three-way-pinned emitter table, so
+  nothing observed reads it back. It is `25.0` on every cone and equal to the
+  radius on every `sound`.
 
 ## Next Steps
 
-1. **Count what is audible.** Run a lap on `01_Track` with the parsed emitters
-   and the recovered radius law, and print how many are inside their radius per
-   tick. That is one scenario and it answers the budget question before any
-   mixing code is written; it needs no new subsystem, only
-   `sound_emitters::emitters` and `oag_audio::spatial`.
-2. **Play the omnidirectional ones.** `sound` `0x3e1` only, looping, started at
-   load, gated by the same in-range latch the original uses. Leave `soundcone`
-   out - its trigger half is genuinely unread, and a cone played as a sphere is
-   a stand-in for something the disc already specifies.
-3. **Report the five dangling references** in the loader output rather than
-   dropping them silently, so the count is visible if a later decode changes it.
-4. Sweep `pure-psp-usa` and `pulse-ps2-eu` for the same three classes, which is
-   one `--nodes --class` run each and would tell whether this generalises before
-   anything is built on the assumption that it does.
+1. **Re-read `sblk`'s command decoder against `moather~birds`.** One cue, one
+   command, and it is the difference between five silent bird emitters and Moa
+   Therma sounding like Moa Therma. `crates/game/tests/track_audio_ground_truth.rs`
+   already names every one of the 38 nodes and its cue, so the check is a
+   before/after on that test's own output.
+2. **Sweep `pure-psp-usa` and `pulse-ps2-eu` for the three classes** - one
+   `--nodes --class` run each. If Pure authors them, finding where its circuit
+   banks live is the follow-on, because it ships no `trackstartup.xml`.
+3. **Find `soundcone`'s init**, which is the only thing standing between 134
+   authored directional emitters and being played. Everything else they need is
+   in place: the payload decodes, the emitter record has the half-angle at
+   `+0x40` and the enable byte at `+0x4c`, and `SoundEmitter_ComputeVolumeAndAngle`
+   already multiplies the cone falloff in.
+4. **Decide whether the mix wants headroom.** Not an audio-emitter question -
+   it was already clipping - but the ambience is what made it visible.
