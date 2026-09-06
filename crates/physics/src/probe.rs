@@ -365,7 +365,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         stun_timer,
         wall_contact_prev,
         pending_impulse,
-        leap_timer,
+        slowdown_timer,
         grounded,
         grounded_prev,
         sideshift_timers,
@@ -404,7 +404,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // `ShipState::pending_impulse`'s own doc - the same fixed-run-of-bytes shape
     // as `pad_direction` below before a probe script crosses a pad.
     hasher.write_vec3(pending_impulse);
-    hasher.write_f32(leap_timer);
+    hasher.write_f32(slowdown_timer);
     hasher.write_f32(grounded);
     hasher.write_f32(grounded_prev);
     hasher.write_f32(sideshift_timers[0]);

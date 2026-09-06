@@ -216,10 +216,14 @@ use crate::ship::{ShipControls, ShipState};
 ///   window. Against this: a Time Trial run holding accelerate should not be scraping
 ///   a wall, and the stun also kills lateral grip, which would show as a visible
 ///   slide.
-/// - **The leap timer** (`craft+0x2e0`), whose arming condition
-///   [`ShipState::leap_timer`] records as unknown, with "a leap, a respawn and a race
-///   start are all plausible". A capture taken near a race start would have it
-///   running, which fits a clean straight-line run better than wall contact does.
+/// - **The weapon slowdown timer** (`craft+0x2e0`), whose arming condition this
+///   bullet recorded as unknown until 2026-09-06 and guessed at with "a leap, a
+///   respawn and a race start are all plausible". It is now recovered: a weapon
+///   impact arms it, and nothing else does - see [`ShipState::slowdown_timer`]
+///   and [`crate::slowdown`]. A Time Trial run has no weapon in the air, which
+///   makes this arm the *unlikely* one rather than the tidy explanation it read
+///   as here. **That is an inference from the recovered law, not a measurement**;
+///   the capture still does not carry either timer.
 ///
 /// **Neither timer is in the capture**, so no amount of re-reading the existing CSV
 /// settles it. The decisive measurement is one line in `scripts/psp-trace.py`: record
@@ -353,8 +357,9 @@ impl EngineForce {
 /// The early return **is** implemented, on both timers. The `0x0200` escape from it
 /// is not, because nothing decodes that flag; the effect is that a stunned ship here
 /// always loses its engine where the original might not. The `0x0010` escape on the
-/// leap arm is not implemented either, for the same reason - and since nothing in
-/// this crate arms [`ShipState::leap_timer`], that arm is inert today regardless.
+/// slowdown arm is not implemented either, for the same reason. That arm is no
+/// longer inert: [`crate::slowdown::add`] arms [`ShipState::slowdown_timer`] from a
+/// weapon impact, so this early return is what a craft hit by a rocket meets.
 ///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
 /// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo and its boost
@@ -369,9 +374,10 @@ pub fn engine(
     forward_speed: f32,
     auto_speed: Option<f32>,
 ) -> EngineForce {
-    // The prologue's early return, at `0x0884c634`. A stunned or leaping craft gets
-    // no thrust and no lift at all - the original writes nothing to either
-    // accumulator and returns. See `ShipState::stun_timer`.
+    // The prologue's early return, at `0x0884c634`. A stunned or weapon-slowed
+    // craft gets no thrust and no lift at all - the original writes nothing to
+    // either accumulator and returns. See `ShipState::stun_timer` and
+    // `ShipState::slowdown_timer`.
     //
     // **The original's `craft+0x2b8 = 0` on this path is not reproduced.**
     // `ShipState::thrust` is rewritten from the input by `controls::update` every
@@ -379,7 +385,7 @@ pub fn engine(
     // original's store is observable only to the other readers of `craft+0x2b8`
     // within the stun, which are the HUD's throttle display. Keeping `engine` a
     // function of `&ShipState` is worth more than a cosmetic store.
-    if state.stun_timer > 0.0 || state.leap_timer > 0.0 {
+    if state.stun_timer > 0.0 || state.slowdown_timer > 0.0 {
         return EngineForce::default();
     }
 

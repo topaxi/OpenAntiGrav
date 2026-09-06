@@ -143,7 +143,7 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         dt,
     );
 
-    state.leap_timer = (state.leap_timer - dt).max(0.0);
+    state.slowdown_timer = (state.slowdown_timer - dt).max(0.0);
 }
 
 #[cfg(test)]

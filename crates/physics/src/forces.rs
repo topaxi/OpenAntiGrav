@@ -624,7 +624,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     //    `Ship_UpdateCraft` from the previous frame's blend and both consumers read
     //    that one value. Recomputing it after the ramp would give the reposition a
     //    target the spring never saw.
-    let target_height = hover::target_height(handling, state.mag_lock_blend, state.leap_timer);
+    let target_height = hover::target_height(handling, state.mag_lock_blend, state.slowdown_timer);
     let hover = hover::evaluate(state, handling, env, raycaster, target_height);
     for probe in &hover.probes {
         if probe.contact {
@@ -681,7 +681,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let mag_lock = maglock::update(state, env, mag_contact, target_height);
 
     // 9. Lateral grip, into the *local* force accumulator, and only once both the
-    //    collision stun and the leap timer have expired.
+    //    collision stun and the weapon slowdown timer have expired.
     //
     //    `Ship_ApplyLateralGrip` opens with `if (craft+0x290 > 0) { craft+0x290 -=
     //    dt; return; }`, so the stun both suppresses the grip and is what counts it
@@ -691,7 +691,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let lateral_grip = if state.stun_timer > 0.0 {
         state.stun_timer = (state.stun_timer - dt).max(0.0);
         Vec3::ZERO
-    } else if state.leap_timer > 0.0 {
+    } else if state.slowdown_timer > 0.0 {
         Vec3::ZERO
     } else {
         airbrake::lateral_grip(state, handling, contact_grounded)

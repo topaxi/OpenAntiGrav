@@ -41,8 +41,8 @@
 //!   *entry* of `Ship_UpdateCraft`, so its control states are what tick n-1
 //!   wrote, and feeding them as tick n's input lags our ramps by one frame on top
 //!   of the double ramp. Under an authored input neither effect exists.
-//! - **`time_since_landing` and the leap timer are not in the capture**, so a run
-//!   starts outside the landing window with no leap in progress.
+//! - **`time_since_landing` and the weapon slowdown timer are not in the capture**,
+//!   so a run starts outside the landing window with no craft slowed by a weapon.
 
 use std::num::NonZeroUsize;
 

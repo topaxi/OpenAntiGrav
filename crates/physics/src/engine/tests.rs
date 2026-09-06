@@ -95,13 +95,13 @@ fn a_stun_timer_at_exactly_zero_does_not_gate() {
     assert!(engine(&state, &handling, 1.0, 24.0, None).thrust > 0.0);
 }
 
-/// The same early return has a second arm, on the leap timer.
+/// The same early return has a second arm, on the weapon slowdown timer.
 #[test]
-fn a_leaping_ship_produces_no_thrust_either() {
+fn a_weapon_slowed_ship_produces_no_thrust_either() {
     let handling = test_handling();
     let mut state = ship_moving_forward(24.0);
     state.thrust = 100.0;
-    state.leap_timer = 1.0;
+    state.slowdown_timer = 1.0;
 
     assert_eq!(
         engine(&state, &handling, 1.0, 24.0, None),

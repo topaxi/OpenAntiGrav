@@ -233,9 +233,9 @@ fn braking_does_nothing_in_the_air() {
     assert!(grounded_eval.brakes.z > 0.0);
 }
 
-/// The leap timer suppresses lateral grip entirely while it runs.
+/// The weapon slowdown timer suppresses lateral grip entirely while it runs.
 #[test]
-fn lateral_grip_is_suppressed_while_the_leap_timer_runs() {
+fn lateral_grip_is_suppressed_while_the_slowdown_timer_runs() {
     let handling = Handling {
         antigrav: Antigrav {
             grip_ground: 2.0,
@@ -259,12 +259,12 @@ fn lateral_grip_is_suppressed_while_the_leap_timer_runs() {
     );
     assert_ne!(free.lateral_grip, Vec3::ZERO);
 
-    let mut leaping = ship_at(4.0);
-    leaping.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
-    leaping.grounded = 1.0;
-    leaping.leap_timer = 1.0;
+    let mut slowed = ship_at(4.0);
+    slowed.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
+    slowed.grounded = 1.0;
+    slowed.slowdown_timer = 1.0;
     let held = evaluate(
-        &mut leaping,
+        &mut slowed,
         &ShipControls::default(),
         &handling,
         &Environment::default(),

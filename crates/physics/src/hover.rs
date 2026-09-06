@@ -135,16 +135,16 @@ pub const TARGET_MAG_LOCK_GAIN: f32 = 0.2;
 /// cast length (a longer cast measurably made things worse); it was this scale.
 pub const TARGET_GLOBAL_SCALE: f32 = 0.75;
 
-/// The largest reduction the leap timer can make to the hover target height.
+/// The largest reduction the weapon slowdown timer can make to the hover target.
 ///
-/// `leapAdjust = min(craft+0x2e0, 4.0)`, subtracted from the target while that
-/// timer runs.
-pub const LEAP_ADJUST_MAX: f32 = 4.0;
+/// `min(craft+0x2e0, 4.0)`, subtracted from the target while that timer runs,
+/// and **unreachable on the shipped disc** - see [`crate::slowdown`].
+pub const SLOWDOWN_ADJUST_MAX: f32 = 4.0;
 
 /// The hover spring's target height.
 ///
 /// ```text
-/// target = (ride_height + offset - min(leapTimer, 4.0)) * (1 + 0.2 * magLockBlend) * K2
+/// target = (ride_height + offset - min(slowdownTimer, 4.0)) * (1 + 0.2 * magLockBlend) * K2
 /// ```
 ///
 /// **`ride_height` is the primary term.** `docs/physics/README.md` said it "never
@@ -191,9 +191,9 @@ pub const LEAP_ADJUST_MAX: f32 = 4.0;
 /// `normal_gravity`. A disturbance larger than that still drops the probes. See
 /// `crate::hover`'s module documentation and the M3 notes.
 #[must_use]
-pub fn target_height(handling: &Handling, mag_lock_blend: f32, leap_timer: f32) -> f32 {
-    let leap_adjust = leap_timer.clamp(0.0, LEAP_ADJUST_MAX);
-    let base = handling.antigrav.ride_height - leap_adjust;
+pub fn target_height(handling: &Handling, mag_lock_blend: f32, slowdown_timer: f32) -> f32 {
+    let slowdown_adjust = slowdown_timer.clamp(0.0, SLOWDOWN_ADJUST_MAX);
+    let base = handling.antigrav.ride_height - slowdown_adjust;
 
     base * (1.0 + TARGET_MAG_LOCK_GAIN * mag_lock_blend) * TARGET_GLOBAL_SCALE
 }
