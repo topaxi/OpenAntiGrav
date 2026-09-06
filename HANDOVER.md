@@ -204,8 +204,10 @@ file does not need to carry its own.
     test usually encodes a real disagreement, so "make it green" is the wrong
     instinct without understanding why first):
     [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md)
-    (one press throws zero blades, since `0c78c477`'s VECTOR-class refactor
-    made `shuriken::launch` fallible) and
+    (one press throws zero blades - **not** `0c78c477`, that attribution is
+    refuted; bisected to `cc395862`, the countdown-hold fix, which correctly
+    leaves the field grid-tight at throw time and a blade clips a grid-mate)
+    and
     [`stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md)
     (a healthy craft blips stalled for exactly one tick on `16_Track` Ace,
     likely the countdown-hold fix `cc395862` releasing opponent thrust one
@@ -575,7 +577,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
-- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. The blade's first same-tick advance sweeps into opponent ship 7's hull 11.4 units away - a normal straggler while six others are 34-131 units clear - and detonates per the documented hull rule. **It also predates the commits it was blamed on**: `d11c5fb7`, immediately before them, reproduces the identical failure, so it is not a same-day regression. Open: what moved ship 7 into the path (bisect `b4c45477`..`d11c5fb7`), and whether `hull_radius`'s lateral width - marked "ours, not recovered" - is over-wide for a 20-degree off-nose throw
+- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/a-thrown-shuriken-detonates-on-a-straggler-before.md) - `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. **Bisected and confirmed**: `cc395862` (hold AI opponents at the line through the start countdown) is the exact commit - `9785a177` (its parent) passes twice, `cc395862` fails twice with the identical panic `d11c5fb7`/`main` also show. A diagnostic readout (headings ~1.0, field 15-136 units out in grid order post-fix vs 536-681 units out on a since-curved line pre-fix) confirms this is a grid-tight field at throw time, not a steering-displacement bug in the gate itself - `cc395862`'s own fix is not implicated. Still open: whether `hull_radius`'s lateral width - marked "ours, not recovered" - is over-wide for a 20-degree off-nose throw this early in a race, and whether the test's premise (throwing 120 ticks after release) is even fair; a from-play or PPSSPP read is the next step, and both are outside `crates/core`/`crates/game`
 - [A healthy AI craft blips stalled for one tick off the line](handover/a-healthy-craft-blips-stalled-for-one-tick-off-the-line.md) - `stall_rescue_ground_truth`'s zero-tolerance test reads a one-tick stall on `16_Track` at Ace; leading hypothesis is an unavoidable transition tick where the countdown-hold fix (`cc395862`) releases opponent thrust before velocity has risen off zero, not a physics or AI bug.
 
 ## Pending maintainer decision: shipped design data in tracked docs
@@ -706,6 +708,22 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A start-line or grid-timing change can flip an `#[ignore]`d ground-truth
+test without CI ever seeing it, because `just test` never runs `#[ignore]`d
+tests at all.** 2026-09-06, bisecting `shuriken_ground_truth`'s red test (see
+the shuriken thread above). `cc395862` ("hold AI opponents at the line
+through the start countdown") updated the three synthetic `oag-game` tests
+its own gate broke and added a dedicated countdown test - every one of those
+runs under `just test` and would have caught a regression there. But it also
+changed where every opponent is, tick for tick, for the rest of any race
+longer than the countdown, and the disc-backed `shuriken_ground_truth` and
+`stall_rescue_ground_truth` tests that measure exact opponent position and
+state both broke the same day - invisibly, because both are `#[ignore]`d and
+only `just test-data` (which needs `data/images/`) runs them. A change that
+only touches synthetic, in-memory fixtures cannot see this class of
+regression at all; only a real-track, real-grid ground-truth test can, and
+those only run on demand.
 
 **A breakpoint-driven PPSSPP capture (break, screenshot, resume) burns real
 wall-clock time far faster than emulated game time, and the attract-demo
