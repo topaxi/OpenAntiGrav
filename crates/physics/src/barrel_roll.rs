@@ -255,11 +255,24 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// `oval_of(60.0, 300.0)` - the deliberately pathological corner
 /// `a_differential_holds_a_corner_the_steering_alone_cannot` keeps because a
 /// craft "genuinely cannot make it on the stick alone" and sits on the steering
-/// stop for 300+ ticks. So ordinary AI cornering does not arm rolls; a driver
-/// missing a corner badly enough can arm one about once a minute, at
-/// `roll_cost` percent of its shield. Not pinned by a test on purpose - the
-/// number moves with any controller tuning, which is the same reason
-/// `closed_loop.rs` keeps its own bounds loose.
+/// stop for 300+ ticks. Not pinned by a test on purpose - the number moves
+/// with any controller tuning, which is the same reason `closed_loop.rs` keeps
+/// its own bounds loose.
+///
+/// **The synthetic ovals understate it by an order of magnitude, and the disc
+/// says so.** Re-measured on 2026-09-06 against the real circuits - one lone
+/// Ace craft, `Mode::SingleRace`, 18,000 ticks, every forward circuit - an
+/// opponent arms **four to eight rolls in a three-lap race on ten of the
+/// twelve**, spending **30 to 54 of its 95 shield**. On `07_Track` and
+/// `16_Track` it never leaves the ground for a single tick, so [`release`] is
+/// never called, [`ShipState::roll_payout_timer`] is never armed, and every
+/// one of those charges buys nothing. On `07_Track` that is fatal: the craft
+/// is destroyed on lap 2 where it used to bank a clean lap first, which is
+/// what `crates/game/tests/race_ground_truth.rs`'s
+/// `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` caught. So
+/// ordinary AI cornering *does* arm rolls, routinely. The gesture is left
+/// ungated all the same, for the reason above - what is missing is a trace,
+/// not a rule invented to fit this measurement.
 ///
 /// # No airborne gate
 ///
