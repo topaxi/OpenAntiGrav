@@ -276,8 +276,56 @@ titles in the lineage.
 **The asset's `GO` lands ~1.5 s / 90 ticks before the 272-tick gate this thread measured**,
 and nothing measures the gap - so nothing was wired to `COUNTDOWN_TICKS`.
 
+2026-09-06, the HUD-overlay route is wired for Pulse, and it is a genuinely different
+mechanism from the gantry's - not the same UV-staircase trick read onto a second asset.
+**`Data\HUD\Cockpit_321GO.vex`, the `Cockpit321Go` `<Mode3D><Model>` widget's own file,
+carries the `3`, `2`, `1` and `GO` as four separate mesh nodes** (`Jons321go:x3`, `x2`,
+`x1`, `GO`), each with its own `Anim Transform` scale-burst (rest ~3.5x, peaking ~8x) and
+its own per-material `TEXOFFSET` sweep across a pure-white, alpha-only 64x16 texture -
+confirmed by dumping both textures' texels and both classes of animation track
+(`cargo run -p oag-render --example ready_go_census`, kept as the evidence trail). The
+sibling widget, `ReadyGo`/`Pulse_Ready_Go.vex`, is a single static mesh whose one material
+loops a **0.983 s** texture sweep with no recovered gate - not drawn, since playing it
+against the race clock would blink it roughly 4.6 times through a 272-tick countdown, a
+duration nothing here measured.
+
+**Rendered through a new, dedicated pass** (`crates/game/src/hud/countdown.rs`,
+`oag_render::mesh_render::write_uniforms_raw` added for it), reusing the generic
+`TexAnims`/`NodeAnims` playback `start-gantry.md` already said needed no new mechanism -
+true here too, once the actual bug was found. **The bug, worth recording because it will
+recur**: an orthographic projection built by mirroring `top`/`bottom` to get "HUD-pixel
+down is positive" the cheap way also reverses the winding the rasteriser sees, and every
+one of this model's eight draws authors `culled=true` - so `Face::Back` culling silently
+discarded the entire model. Remapping the HUD `y` to bottom-up *before* an unmirrored
+`orthographic(0, 480, 0, 272, ...)` fixed it. Confirmed by capturing all four glyphs in
+sequence at a diagnostic screen-centre position (ticks 47/92/137/210, matching each
+glyph's own predicted peak-alpha tick): a clean `3`, `2`, `1`, `GO` in order, culling and
+orientation both correct.
+
+**What ships instead draws a clipped sliver at the screen's left edge**, because the
+widget's own authored position is `x="0.0" y="0.0"` and the one validated placement
+convention this codebase has (`model_draw`, ground-truth tested against Pure's pickup
+icons, which author `x="240" y="250"` - dead centre, near the bottom) reads coordinates
+verbatim. An `x` of exactly `0.0` on a widget whose siblings all carry real screen
+coordinates most likely means the same thing `widget.rs`'s own doc already says of the
+nine sight-bracket widgets: placeholder, overwritten by code at runtime. No such override
+has been found for the countdown the way `crate::race::sight` supplies one for the
+sights - see `## Open` below. The code draws the literal disc position rather than a
+guessed centre; see `crates/game/src/hud/countdown.rs`'s own module doc for the full
+account, including why `z="-70.0"` and the block's `OriginX`/`OriginY` are handled the
+way they are.
+
 ## Open
 
+- **What actually places the countdown's `Cockpit321Go` widget is unrecovered**, new
+  2026-09-06. Its authored `x="0.0" y="0.0"` most likely reads as "runtime-placed", the
+  same shape `widget.rs` already documents for the nine sight brackets - but no
+  placement code has been found for it the way `crate::race::sight` supplies one for
+  the sights, so today it draws at the literal disc position (mostly off the left edge
+  of the frame) rather than at a guessed centre. Finding that placement - or confirming
+  there isn't one and the disc really does mean the left edge - is what would take the
+  HUD-overlay route from "mechanism proven, wrongly placed" to "on screen where a
+  player can read it".
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
   (same 40-tick cue, same two-part gate) or differs is the single most direct
   open question for the display/logic focus. One attempt this session to reach it
