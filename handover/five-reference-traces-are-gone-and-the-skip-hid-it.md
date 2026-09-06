@@ -7,12 +7,12 @@ rather than fails.
 
 | Capture | State |
 | --- | --- |
-| `talons-junction-time-trial-lap.csv` | present, now tracked in git |
-| `pad0-boost.csv` | **gone** |
-| `talons-junction-pitch-both-ways.csv` | **gone** |
-| `talons-junction-standing-start.csv` | **gone** |
-| `talons-junction-time-trial-lap-omega.csv` | **gone** |
-| `venom-straight.csv` | **gone** |
+| `talons-junction-time-trial-lap.csv` | present, tracked |
+| `pad0-boost.csv` | **recovered from `vimes`**, tracked |
+| `talons-junction-standing-start.csv` | **recovered from `vimes`**, tracked |
+| `talons-junction-pitch-both-ways.csv` | still missing - **recapturable**, see below |
+| `talons-junction-time-trial-lap-omega.csv` | still missing |
+| `venom-straight.csv` | still missing |
 
 They were never deleted by a policy - `data/` is gitignored, so they only ever
 existed in whichever checkout captured them. **The maintainer has a second
@@ -40,6 +40,39 @@ designs it as an optional input.
 
 **So `just test-data` being green is weaker evidence than it looks**, and that
 is the durable lesson here rather than the file list.
+
+## Recovered, 2026-09-06
+
+**Two of the five came back off the host `vimes`**, and with them six
+ground-truth tests: all three `chase_camera_ground_truth` (which wanted
+`pad0-boost.csv`) and all three `wall_contact_ground_truth`. Verified under
+`OAG_REQUIRE_GAME_DATA=1`: 9 tests in those four binaries, 6 pass, 3 fail, and
+the 3 are missing-file panics for the two captures still absent.
+
+`vimes` also holds 27 other captures this checkout did not have - `head-pad*`,
+`shield-*`, `talons-junction-steer-*`, `talons-junction-venom-assegai`,
+`sideshift-double-tap-clean*` and others. They are copied in but **not tracked**:
+no test names them, so [ADR-0046](../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md)
+leaves them excluded, which the allowlist enforced without anyone deciding it
+per-file (2 staged, 27 ignored, `just audit-leakage` green).
+
+**One hazard found in the process, and it is exactly the one ADR-0046 exists to
+stop.** `vimes` carries its own `talons-junction-time-trial-lap.csv` at 874,185
+bytes; this checkout's is 897,897 bytes with a different MD5. **Same filename,
+different capture.** Neither is labelled, and nothing recorded which one any
+test was written against. The local copy is the one that passes and the one now
+in git; the `vimes` copy was deliberately not pulled over it (`rsync
+--ignore-existing`). Two divergent captures under one name is how a
+ground-truth test silently starts measuring something other than what its
+author meant - which is the whole argument for the reference living in git
+beside the test.
+
+**`talons-junction-pitch-both-ways.csv` is recapturable and does not need
+`vimes` or the other workstation.** Its input script is tracked:
+`verification/scenarios/pitch-both-ways.inputs`, one of 18 in git. So the
+recipe survived even though the capture did not - which is worth noting as the
+thing that *did* work. No matching `.inputs` was found for `venom-straight` or
+the `-omega` lap.
 
 ## Open
 
