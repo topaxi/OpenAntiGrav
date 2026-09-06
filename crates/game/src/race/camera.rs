@@ -138,8 +138,14 @@ impl Race {
         let target = target_of(self.ship());
         let base = if self.view == crate::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
-            // snap: the cockpit is bolted to the hull.
-            oag_render::camera::internal::view(target, &self.internal_params)
+            // snap: the cockpit is bolted to the hull. The roll phase rides
+            // along so the cockpit view rolls with the manoeuvre too - see
+            // `oag_render::camera::internal::view`.
+            oag_render::camera::internal::view(
+                target,
+                &self.internal_params,
+                self.ship().physics.roll_phase,
+            )
         } else {
             self.camera.view(target, &self.chase_params)
         };
