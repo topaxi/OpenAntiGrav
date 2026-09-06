@@ -127,7 +127,13 @@ Verbatim: *"First cut shall already save toml files."* So writing is in scope
 from the start, and the comment-preservation question above stops being a
 deferred choice - it is the first thing to settle.
 
-**Recommendation: format-preserving edit via `toml_edit`.** The dependency
+**Decided 2026-09-06: use `toml_edit`.** The maintainer approved it directly
+("Fair, use it"), so the comment-preservation question is closed and the two
+fallbacks below - editor-owned-files-only, and save-as - are recorded for
+context rather than as live options. `toml::to_string_pretty` remains out for
+pilot files whatever else changes.
+
+The dependency
 position, measured rather than assumed:
 
 - `toml_edit` **is already in `Cargo.lock`** (v0.25.13), so it is resolved and
@@ -164,9 +170,11 @@ Delete and rename come after.
 
 ## Next Steps
 
-1. **Confirm `toml_edit` is acceptable** (see above) - it determines the shape
-   of the write path and therefore most of the rest; deciding it late means
-   rewriting the save code.
+1. ~~Confirm `toml_edit` is acceptable.~~ **Approved 2026-09-06.** Add it to
+   `crates/game/Cargo.toml`; it is already resolved in `Cargo.lock` at 0.25.13
+   but is not yet in the build graph. Record the choice in `pilots.rs`'s module
+   doc beside the "nothing is rewritten on load" sentence, which will otherwise
+   read as still-true once the editor can write.
 2. ~~Settle whether text entry is in scope for the first cut.~~ **Not needed** -
    editing and template-creation need no keyboard; renaming does, and waits.
 3. Build **read** first: a page listing pilots from `pilots::directory()`, with
