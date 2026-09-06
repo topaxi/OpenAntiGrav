@@ -3,7 +3,7 @@
 //! Split out of [`super`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`, and the seam is a real one rather than a
 //! convenient cut: everything here is a **scalar** function of the road and the
-//! craft's speed, with no access to [`Driver`]'s own state at all. That is why
+//! craft's speed, with no access to [`Driver`](crate::Driver)'s own state at all. That is why
 //! all five are testable without a craft, and why the steering loop above -
 //! which is stateful, and closed on a rate - stays where it is.
 //!
@@ -12,7 +12,7 @@
 //! the both-sides brake) -> [`trail`] (the differential) -> [`airbrakes`] (the
 //! two commands the physics actually reads).
 
-use super::{Driver, Personality, Steer, Tuning};
+use super::{Personality, Steer, Tuning};
 
 /// The chord [`Line::curvature`](crate::Line::curvature) measures over, for a driver looking `look`
 /// ahead.
@@ -20,8 +20,8 @@ use super::{Driver, Personality, Steer, Tuning};
 /// Half the lookahead unless [`Tuning::curvature_span`] caps it, which is where
 /// the reasoning and the sweep behind the cap are written down.
 ///
-/// **All three callers share this** - the braking window in [`Driver::drive`],
-/// [`Driver::allows_speed`]'s boost gate and the rocket gate in
+/// **All three callers share this** - the braking window in [`Driver::drive`](crate::Driver::drive),
+/// [`Driver::allows_speed`](crate::Driver::allows_speed)'s boost gate and the rocket gate in
 /// [`super::weapons`] - because they are asking one estimator the same question
 /// about the same road. A span that differed between them would mean a corner a
 /// craft brakes for is one it will still fire a rocket through, and the
