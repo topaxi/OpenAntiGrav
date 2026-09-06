@@ -438,6 +438,57 @@ In short:
   not a recovery. `countdown.rs`'s module doc and `countdown-widgets.md` both carry the
   precise reason now instead of the old, imprecise "would blink funny" one.
 
+2026-09-06, a seventh pass, targeted squarely at the fifth pass's own reframed step
+(resolve `func_0x00267b30()`'s type descriptor for the object
+`Billboard_ConstructResource_q` stores at `param_1+0x40`): **resolved, and the answer
+retires the lead rather than confirming it.** Full account in
+[billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md#func_0x00267b30s-type-descriptor-is-the-maya-camera-node-class---not-a-placement-mount-point-2026-09-06-seventh-pass).
+In short:
+
+- **The getter is one of a table of per-class type-id stubs** (disassembled directly,
+  not the decompiler summary): each returns its own address as a literal constant, the
+  standard "type-id = address of a dedicated static function" idiom. Seven call sites
+  across six functions were found program-wide via `search_instructions`, working
+  around the `get_xrefs_to` no-PSP-relocation gap.
+- **Class id `0xf7` is `"Camera"`**, per this project's own already-ground-truthed Maya
+  class-ID table (`crates/formats/src/vex/class_names.rs`, confidence 95 in
+  `exhaust.md`) - reached by identifying `func_0x00104eb8` as `Vex_RegisterClass`
+  itself and reading its class-id argument off one of the seven callers, a static
+  initialiser shaped exactly like this project's own
+  `DynamicShadowOccluder_RegisterClass`. A second caller of the same getter
+  independently registers class `0x3dd`, `"gridCamera"` in the same table - the exact
+  node name `oag-view --nodes` found in `start_grid.vex` months earlier for an
+  unrelated reason, and a `gridCamera`-derives-from-`Camera` reading is exactly what
+  `Vex_RegisterClass`'s own documented "base table, then override" pattern predicts.
+  Two independently-reached facts landing on the same node type is real corroboration.
+- **`param_1+0x40` is therefore, at confidence 75, `321Go_StartFinish.vex`'s own
+  authored `camera1`/`cameraShape1` node - not a placement mount point.** The mesh's
+  own scene graph (confirmed populated by the time the search runs: `Vex_LoadModel`
+  runs three "collect every descendant of a type" walks against large output buffers,
+  which only make sense against a real node tree) is what the type-search actually
+  reaches, not some engine-attached generic Transform the prior pass hypothesised.
+  This is a narrower, not a wider, answer: a Camera node is markedly less likely to
+  carry a circuit's own gantry coordinates than the generic Transform/Locator two
+  passes running had hoped for.
+- **A wrong turn caught before publishing, worth recording so it isn't repeated**: this
+  pass's own first reading, live for several tool calls, was that `param_1+0x40` was a
+  generic engine-wide Transform/Locator placement node - built on a genuinely separate,
+  real API (`func_0x00140544`/`func_0x00141220`/`func_0x00141254`, a lazily-allocated
+  parent/local/world matrix triad) that turned out to belong to the *base* `Transform`
+  class (id `0x6e`, per `exhaust.md`), not the `0xf7`-tagged class this getter actually
+  names. Retracted in `billboards.md` directly rather than left to mislead a future
+  reader. Five new/renamed functions from this pass:
+  `Camera_GetTypeId`/`Camera_Construct`/`Camera_AttachChild` (confidence 60-65, `_q` per
+  the confidence floor), `Camera_RegisterClass`/`GridCamera_RegisterClass` (80/85).
+- **Nothing here narrows who writes a per-circuit position** for `321Go_StartFinish`'s
+  own `world` node or for the registry objects (`0x09837cb0`/`0x0983a240`) the live
+  capture two passes ago tied to constant per-frame reads during the countdown. No
+  static lead currently points at a candidate for that. The concrete next step, if
+  picked up again, is a live breakpoint on the child-list insert (`func_0x00140bd4`,
+  `0x08944bd4`, confirmed by direct disassembly this pass) during an actual track load,
+  watching what gets parented to `321Go_StartFinish`'s root or to the registry objects -
+  nothing static-only remains untried after three passes at this specific blocker.
+
 ## Open
 
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
@@ -515,15 +566,18 @@ In short:
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
 - **Slot 8's own world transform - the gantry-placement blocker - is still not
-  recovered**, after a fifth pass (2026-09-06, above) aimed squarely at it. What that
-  pass adds: a corrected static reading of the one transform construction does write
-  (fixed local offset, not identity), two ruled-out leads (`start_grid.vex`, the
-  parent/ownership alloc chain), and a reframed, cheaper next step (resolve
-  `func_0x00267b30()`'s type descriptor for the object at `param_1+0x40`) - all in
+  recovered**, after a fifth pass (2026-09-06) and a seventh pass (2026-09-06, above)
+  both aimed squarely at it. What they add: a corrected static reading of the one
+  transform construction does write (fixed local offset, not identity), three
+  ruled-out leads (`start_grid.vex`, the parent/ownership alloc chain, and now
+  `param_1+0x40` itself - resolved to the mesh's own authored `Camera` node, not a
+  placement mount point) - all in
   [billboards.md](../docs/ghidra/functions/psp-pulse-usa/billboards.md). A live PPSSPP
-  capture was attempted to settle it directly and did not complete in four tries; see
-  that page's own account of why, including a `timeout`/`uv run` trap worth avoiding
-  next time.
+  capture was attempted to settle the fifth pass's own question directly and did not
+  complete in four tries; see that page's own account of why, including a
+  `timeout`/`uv run` trap worth avoiding next time. **No static lead remains untried**;
+  the concrete next step is a live breakpoint on the child-list insert
+  (`func_0x00140bd4`, `0x08944bd4`) during an actual track load.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered

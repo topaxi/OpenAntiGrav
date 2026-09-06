@@ -40,6 +40,11 @@ value by hand, is to watch the access happen.
 | `0x089012d4` | function | `Billboard_CreateFromLocation_q` | 65 |
 | `0x08901004` | function | `Billboard_CreateFromColour_q` | 60 |
 | `0x08900220` | function | `Billboard_ConstructResource_q` | 75 |
+| `0x08a6bb30` | function | `Camera_GetTypeId_q` | 65 |
+| `0x08901764` | function | `Camera_Construct_q` | 65 |
+| `0x08901850` | function | `Camera_AttachChild_q` | 60 |
+| `0x08902324` | function | `Camera_RegisterClass` | 80 |
+| `0x08908aec` | function | `GridCamera_RegisterClass` | 85 |
 
 ## The call chain, walked live
 
@@ -323,6 +328,136 @@ frame when the thing being measured is "what happens over N seconds",
 even briefly; watch the *object* the function operates on with a
 non-halting watchpoint instead.
 
+## `func_0x00267b30`'s type descriptor is the Maya `Camera` node class - not a placement mount point (2026-09-06, seventh pass)
+
+The prior pass's reframed next step - resolve what type
+`func_0x00267b30()` (real address `0x08a6bb30`) identifies, since it is the
+key `Billboard_ConstructResource_q` searches its own newly-built child tree
+for and stores the result of at `param_1+0x40` - is now answered, and the
+answer **retires this as a placement lead rather than confirming it**.
+
+**The getter itself.** Disassembled directly (not the decompiler summary):
+`func_0x00267b30` is a 3-instruction stub (`lui`/`jr ra`/`addiu`) that
+returns a literal 32-bit constant equal to its own address - the standard
+"class type-id = the address of a dedicated static function" idiom, used
+here with no vtable or name string attached to the getter itself. It sits in
+a dense run of at least eight identically-shaped 12-byte stubs starting at
+`0x08a6bb30` (`0x08a6bb30`, `3c`, `48`, `54`, `60`, `6c`, `78`, `a8`, each
+disassembled directly and confirmed) - a table of per-class type-id getters,
+not a one-off.
+
+**Every caller of this exact getter**, found via `search_instructions`
+(`mnemonic=jal`, `operand_pattern=267b30` - a program-wide search, not
+limited to this function, and the fix for the `get_xrefs_to`
+no-PSP-relocation gap this project already knows about): seven call sites in
+six functions - `Billboard_ConstructResource_q` itself, plus
+`0x08901764`, `0x08901850`, `0x08902324`, `0x08908aec`, `0x0887f9bc` and
+`0x08886af4`.
+
+**The class-ID link, the load-bearing part.** `0x08902324` is a static,
+argument-less initialiser shaped exactly like this project's own
+`DynamicShadowOccluder_RegisterClass`/`Shadow_RegisterClass`
+([`shadow-occluder.md`](shadow-occluder.md)) and `exhaust.md`'s
+`Vex_RegisterClass` template: it calls `func_0x00104eb8(0x88b08,0xf7)` -
+`func_0x00104eb8` is `Vex_RegisterClass` itself (`0x08908eb8`, confirmed by
+address arithmetic against [`exhaust.md`](exhaust.md)'s own disassembly
+excerpt for the same call shape), called with a **class id of `0xf7`** and a
+descriptor pointer (`0x88b08`) whose own `+4`/`+0x28`/`+0x38` fields this
+same function fills with `func_0x00267b30()`'s value, the debug-allocator
+tag `0x280bf0`, and the method-table pointer `0x2cd18c` - the exact three
+fields every instance this getter tags also carries at those offsets.
+**Class `0xf7` is `"Camera"`** in the already-established, ground-truthed
+Maya class-ID table this project carries in
+[`crates/formats/src/vex/class_names.rs:287`](../../../../crates/formats/src/vex/class_names.rs)
+and documents in [`exhaust.md`](exhaust.md) at confidence 95 (self-validating
+against ten independently-placed IDs). `0x08901764` (`Camera_Construct_q`)
+is this class's own instance constructor - the only other caller that
+stores the getter's result into its own `+4` "own type" field rather than
+using it as a search key - and `0x08901850` (`Camera_AttachChild_q`)
+allocates fresh `0xc0`-byte instances of this same class and parents them
+onto a caller-supplied owner, the shape of a generic "attach a Camera-typed
+child" constructor.
+
+**`0x08908aec` closes an independent loop**: it registers a *different*
+class, id `0x3dd` - `"gridCamera"` in the same table
+([`crates/formats/src/vex/class_names.rs:897`](../../../../crates/formats/src/vex/class_names.rs))
+- and copies `func_0x00267b30()`'s value onto that class's own descriptor
+before a second block does the same with a sibling getter
+(`func_0x00267ba8`, real address `0x08a6bba8`, independently disassembled
+and confirmed as the same 3-instruction stub shape returning its own
+address). `gridCamera` is the exact node name `oag-view --nodes` already
+found as `start_grid.vex`'s one non-`World`/`Anim Transform` leaf, months
+before this pass and for an unrelated reason (ruling `start_grid.vex` out as
+a placement source). A Maya `gridCamera` node being a specialisation of the
+base `Camera` class, sharing its type-id as a starting point before
+overriding parts of its method table, is exactly what `Vex_RegisterClass`'s
+own documented "assign the base method table, then overwrite it" pattern
+predicts - two independently-reached facts (a class-ID string table read
+here, a `--nodes` dump read passes earlier for a different reason) landing
+on the same node type is real corroboration, not a coincidence being
+over-read.
+
+**`0x0887f9bc`**, one of the two other callers, further corroborates the
+class identification from a different angle: its own constructor (a much
+larger class, not itself the `Camera` VEX-node class) writes FOV/near/far
+-shaped float fields (`0x3f800000` = 1.0, `0x3f000000` = 0.5, angle values
+masked to 14 bits and cast to float) immediately around the same
+`func_0x00267b30()` search-key construction - the field shape of a camera
+*controller* that separately looks up a `Camera`-typed child, not the
+`Camera` node itself.
+
+**What this means for `param_1+0x40`.** `Billboard_ConstructResource_q`'s
+search runs *after* its `.VEX` branch has already called `Vex_LoadModel`
+(`0x08912b80` - already named at confidence 90; `func_0x0010eb80`'s real
+address is this, not the `0x08914b80` this pass first miscalculated by a
+simple hex-addition slip, corrected before publishing) to load
+`321Go_StartFinish.vex` and store the result at the billboard's own `+0x3c`.
+`Vex_LoadModel` does not call the child-list insert
+(`func_0x00140bd4`, confirmed by direct disassembly at its real address
+`0x08944bd4`: append to the singly-linked list at `+0x10`/`+0xc`, the exact
+fields the type-search itself walks) anywhere in its own body - but it does
+run three separate "collect every descendant of a given type" walks
+(`func_0x0026d364` among them, itself confirmed by direct decompile to walk
+the very same `+0x10`/`+0xc` list recursively) against 2000/1000/`0x40`
+-entry output buffers, which only make sense against a real, populated node
+tree - so the tree is built by `Vex_LoadModel`'s own callees
+(`func_0x0013f330`'s parse, `func_0x001404d8`'s attach), not by
+`Vex_LoadModel` calling the primitive insert directly. **The tree that
+results is `321Go_StartFinish.vex`'s own scene graph**, and that file's
+node dump (recorded in "The gantry is a separate instantiated mesh" above)
+already lists `camera1`/`cameraShape1` alongside `world`/`start_lights`.
+**`param_1+0x40` is therefore, at confidence 75, the mesh's own authored
+Camera node - not a generic placement mount point the engine attaches to
+carry a circuit's coordinates.** This retires the leading candidate from
+the prior pass rather than confirming it: a Camera node is markedly less
+likely to be "where a circuit's gantry position gets written" than the
+generic Transform/Locator this page hypothesised for it two passes running.
+Retracted here, not carried forward: that Transform/Locator reading was
+this pass's own first hypothesis for several tool calls, built on the
+matching field shape of a genuinely different, base-class API
+(`func_0x00140544`/`func_0x00141220`/`func_0x00141254`, which really is
+this engine's generic parent/local/world matrix accessor triad - just for
+the `Transform` base class itself, id `0x6e`, method table `0x08ad22f4` per
+`exhaust.md`, not for the `0xf7`-tagged class this getter names). It does
+not carry a circuit's own placement either, and nothing in this pass ties
+it to `param_1+0x40` specifically.
+
+One correction to this pass's own working notes, so it is not carried into
+a later one: applying `+0x08804000` to *every* low `func_0x0XXXXXXX` call
+target in the same function briefly looked inconsistent (one attempt landed
+on an unrelated, already-named function). That was an arithmetic slip in
+this pass, not a defect in the correction - `shadow-occluder.md` already
+documents `+0x08804000` as the standard whole-binary unrelocated-constant
+offset, and every address in this section resolves correctly under it.
+
+**None of this narrows who writes a per-circuit position for
+`321Go_StartFinish`'s own top-level node** (its `world` node, not its
+camera) **or for the registry object** (`0x09837cb0`/`0x0983a240`) **the
+live capture two passes ago tied to the object actually read every frame
+during the countdown.** Those remain the open questions; this pass answers
+a different one (what `param_1+0x40` holds) and its answer points away from
+where the prior pass hoped it would point.
+
 ## Verdict
 
 Construction-time placement is absent (confirmed: a fixed local transform -
@@ -334,7 +469,10 @@ separate, live-updated mesh (`321Go_StartFinish.vex`, matching
 window the original shows "GO" instead of a digit. What is still missing
 is the transform that would place that mesh at each circuit's own gantry
 rather than at the world origin - without it, "instantiated" is settled and
-"drawn where the player sees it" is strong inference, not proof.
+"drawn where the player sees it" is strong inference, not proof. The
+seventh pass (above) resolved what `param_1+0x40` holds - the loaded mesh's
+own authored `Camera` node, not a placement mount point - which narrows the
+search by retiring a candidate rather than by finding the writer.
 [`crates/formats/src/trackstartup.rs:173`](../../../../crates/formats/src/trackstartup.rs)
 carries the same "literal identity matrix" wording this page used to (not
 edited here - out of this lane's scope - flagged for whoever owns that
@@ -344,28 +482,33 @@ crate).
 
 - **No transform writer has been found** that would move
   `321Go_StartFinish`'s instantiated object off the world origin to a given
-  circuit's own gantry. Highest priority: the fixed local transform
-  (identity rotation, constant translation) and shared-across-16-circuits
-  facts are in direct tension with "drawn at the gantry" until something
-  resolves it. **The most promising next static step, found this pass**: the
-  object `Billboard_ConstructResource_q` stores at `param_1+0x40`
-  (`func_0x000fc0f8`, real address `0x089000f8` after the `+0x08804000`
-  `jal`-target correction) is found by an RTTI-style type match - a type
-  descriptor built from `func_0x00267b30()` is compared against a child's own
-  type at `func_0x089000f8`'s `+4` offset, walking a child list until one
-  matches. This is a plausible spatial-scene-graph entry point (structurally
-  matching the world-transform-composer traffic this page's live capture
-  already found on a `+0x40`-shaped object), and resolving what
-  `func_0x00267b30()`'s type descriptor actually names is cheaper than
-  another live-capture pass - it is one more decompile plus a look at what
-  else compares against the same type. Two things checked and ruled out this
-  pass, so as not to repeat them: `Billboard_ConstructResource_q`'s own
-  `param_3` is declared and never referenced in its body, so the outer
-  caller's discarded `param_1` cannot be a parent/locator reference reaching
-  construction; and the alloc/`func_0x00140bd4` chain (billboard object ->
-  a per-track container -> `_DAT_002ae2b4`) is an ownership/lifetime tree for
-  cleanup, with nothing shown to give it a spatial transform of its own -
-  it is not the renderer's transform-composition chain.
+  circuit's own gantry. **`param_1+0x40` is closed, with a negative result**
+  (seventh pass, above): it is the loaded mesh's own authored `Camera` node
+  (`camera1`/`cameraShape1`), found by an RTTI-style type match against
+  class id `0xf7` - a real object, but not a placement mount point, and a
+  markedly less promising lead than the prior pass's "plausible
+  spatial-scene-graph entry point" framing hoped for. **What remains
+  genuinely open**: who places `321Go_StartFinish`'s own `world` node (or
+  the separately-registered `0x09837cb0`/`0x0983a240` objects the live
+  capture two passes ago tied to the object read every frame during the
+  countdown) at a given circuit's own gantry coordinates. No static lead
+  currently points at a candidate for that; the two ruled-out options below
+  and the closed `Camera`-node one above are what's been checked and
+  retired, not what remains to check. A live capture - a breakpoint on the
+  child-list insert (`func_0x00140bd4`, `0x08944bd4`, confirmed by direct
+  disassembly this pass to append to the same `+0x10`/`+0xc` list the type
+  search walks) during an actual track load, watching what gets parented to
+  `321Go_StartFinish`'s own root or to the registry objects - is the
+  concrete next step if this is picked up again; nothing static-only is
+  left to try that this and the two prior passes haven't already covered.
+  Two things checked and ruled out earlier, so as not to repeat them:
+  `Billboard_ConstructResource_q`'s own `param_3` is declared and never
+  referenced in its body, so the outer caller's discarded `param_1` cannot
+  be a parent/locator reference reaching construction; and the alloc/
+  `func_0x00140bd4` chain (billboard object -> a per-track container ->
+  `_DAT_002ae2b4`) is an ownership/lifetime tree for cleanup, with nothing
+  shown to give it a spatial transform of its own - it is not the
+  renderer's transform-composition chain.
 - **The final texture bind is untraced.** Nobody has caught a
   `Gfx_BindTexture` call for the gantry's screen position and confirmed it
   reads from the instantiated object - see the halting-function trap above
