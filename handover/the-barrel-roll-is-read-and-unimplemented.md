@@ -1,4 +1,4 @@
-# The barrel roll is playable; nothing draws it
+# The barrel roll is playable; its visual is read but not drawn
 
 A headline Pulse mechanic this project did not have. Every number it needs is
 **authored data on the disc**, so nothing here required inventing a constant.
@@ -15,9 +15,16 @@ after - see "Implemented" below. A real `InputSnapshot` now arms a roll,
 from the d-pad or from the stick alone, and
 `crates/gameplay/tests/barrel_roll.rs` proves it through
 `oag_gameplay::controls::ship_controls` and `oag_physics::step`, the two
-calls the race loop itself makes. **What is left is the visual**: nothing
-draws the roll, and no render-side consumer of `entity+0x87c` has been
-searched for.
+calls the race loop itself makes.
+
+**The render search is done, later the same day, and it found a consumer.**
+`entity+0x87c` is eased into `entity+0x880` and that field rotates the
+ship's own display matrix about its nose, and the internal camera's up
+vector with it - confidence **88**, evidence in
+[input-bindings.md](../docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-roll-is-drawn-0x87c-eases-into-0x880-which-rolls-the-ship-about-its-nose).
+Drawing it is a job of its own and has its own thread,
+[the-barrel-roll-has-a-drawing-job.md](the-barrel-roll-has-a-drawing-job.md);
+**this** thread keeps only what is left on the mechanic itself.
 
 ## What the original does
 
@@ -161,10 +168,11 @@ See the module's own doc comment if a future trace contradicts it.
   and that is the open question, not the rate. Not pinned by a test: the
   number moves with any controller tuning, the same reason `closed_loop.rs`
   keeps its own bounds loose.
-- Nothing draws the roll. **No render-side consumer of `entity+0x87c` has been
-  searched for**, so whether the visual is an angle derived from the phase or a
-  canned animation is unknown. The `0x400` flag is *not* how it gets there -
-  that was checked, and all three consumers are handling code.
+- ~~Nothing draws the roll and no render-side consumer of `entity+0x87c` has been
+  searched for.~~ **Closed 2026-09-06**: there is one, the visual is a rotation
+  derived from the phase and not a canned animation, and it moved to its own
+  thread - [the-barrel-roll-has-a-drawing-job.md](the-barrel-roll-has-a-drawing-job.md).
+  The `0x400` flag was never how it gets there, as this thread already recorded.
 - `<Special turbo_jump>` = `0.1` sits in the same element with a recovered name
   (`g_turbo_jump`, `0x08b36be8`) and **no traced reader**, so what it does is
   open. It is probably not the barrel roll's, given the naming pair
@@ -179,17 +187,14 @@ See the module's own doc comment if a future trace contradicts it.
 
 ## Next Steps
 
-1. Search for a render-side consumer of `entity+0x87c` (or establish there is
-   none and the roll is handling-only) before drawing anything - per this
-   project's "parse it and play it, or draw nothing" rule. This is now the
-   only thing between the mechanic and being visible: the phase is live on
-   `ShipState::roll_phase`, ramping every tick a pilot rolls, and nothing
-   reads it outside `oag-physics`.
-2. Confirm the gesture off the original with a capture, the way the
+1. Confirm the gesture off the original with a capture, the way the
    sideshift's veteran double-tap was confirmed in
    `docs/reverse-engineering/ppsspp-debugger.md` - the whole chain here is
    still a static read. A capture would settle the two Open bullets above at
    once: whether the original arms on the ground, and what its own AI craft
-   do. `scripts/psp-drive.py` can already script a d-pad alternation.
-3. Read `<Special turbo_jump>`'s consumer, if one exists, and `settings+0x238`'s
+   do. `scripts/psp-drive.py` can already script a d-pad alternation. **The
+   same capture also settles the one thing the render read could not** - which
+   way the ship rolls - so running it once serves both threads; see
+   [the-barrel-roll-has-a-drawing-job.md](the-barrel-roll-has-a-drawing-job.md).
+2. Read `<Special turbo_jump>`'s consumer, if one exists, and `settings+0x238`'s
    reader, and check the gesture on PS2.

@@ -585,11 +585,198 @@ both pressings rather than a measurement, the cost expression is shared verbatim
 with an already-named function, and the `0x400` consumer list is a complete scan
 rather than an xref that could have missed one.
 
-Nothing here says what draws the roll. No render-side consumer of `+0x87c` was
-searched for, so whether the visual is an angle derived from the phase or a
-canned animation is still open - the bit simply is not how it gets there.
+Nothing in the paragraphs above says what *draws* the roll; the `0x400` bit
+simply is not how it gets there. **The subsection below answers that**: `+0x87c`
+is eased into a second field and that field rotates the ship's own display
+matrix about its nose.
 
-## Applied renames
+### The roll is drawn: `+0x87c` eases into `+0x880`, which rolls the ship about its nose
+
+Searched 2026-09-06, and the answer is **yes, there is a render consumer** - two
+of them, both reading one intermediate. Confidence **88**.
+
+**Nothing here used `get_xrefs_to`, and an empty result from it would have proved
+nothing.** Ghidra applies no relocation to any PSP database (see
+[workflow.md](../../workflow.md)), so the searchable form is the same
+whole-`.text` operand scan the `craft+0x1c0 & 0x400` section above used:
+`scripts/psp-relocate.py field 0x87c` and `field 0x880`, plus a second sweep for
+the encodings `field` cannot see - `addiu rD, rBase, <off>` followed by an
+indirect access, and the VFPU `lv.s`/`sv.s`/`lv.q`/`sv.q` forms. Both sweeps
+together are what makes the reader sets below complete rather than merely
+unrefuted.
+
+#### Stage 1: the ease, `0x08841eb8` - `0x08841f88`
+
+`FUN_088418e0` reads `craft+0x87c` eight times in one branch nest and stores the
+result to **`craft+0x880`**. The constants are all `lui` immediates at the site
+(`0x4000` = `2.0`, `0xbf00` = `-0.5`, `0xc000` = `-2.0`, `0xbf80` = `-1.0`, with
+`f20` = `0.5`, `f22` = `1.0`, `f26` = `0.0` live across the block):
+
+```c
+p = craft[0x87c];
+if      (p == 0.0f)   e = 0.0f;
+else if (p >  0.0f)   e = (p <= 0.5f) ?  2.0f*p*p         : 1.0f - 2.0f*(1.0f-p)*(1.0f-p);
+else                  e = (p >= -0.5f) ? -2.0f*p*p        : -1.0f + 2.0f*(-1.0f-p)*(-1.0f-p);
+craft[0x880] = e;                       /* swc1 f12, 0x880(s2) at 0x08841f88 */
+```
+
+That is the symmetric quadratic ease-in-out, odd in `p` (`e(-p) == -e(p)`),
+continuous at `+/-0.5` where it takes `+/-0.5`. So the *phase* ramps linearly at
+`roll_speed` and the *picture* accelerates out of level and decelerates back into
+it - the roll does not start or stop with a jerk.
+
+`craft+0x880` has **exactly one writer and exactly two readers** in the whole
+binary. The `field` scan returns 14 sites at that offset; nine are stack slots
+(`r29` base), two are a byte access (`sb`/`lbu`) on an unrelated structure and two
+are `lw` on another; the three float accesses on a craft base are the write above
+and the two reads below. The `addiu`/VFPU sweep returns 29 further sites, 22 of
+them `sp`-relative VFPU spills; **the exclusion criterion for the remaining seven
+is the identity of the containing function, not its base register's provenance** -
+all seven sit outside the craft-update code cluster (`0x0883e...`-`0x0884d...`),
+in functions that handle no craft, so none of them adds a consumer. `field 0x87c`
+is on the stronger footing: its two sweep hits are one `sp`-relative and one in
+`FUN_088ed9ec`, on an unrelated structure.
+
+#### Stage 2a: the ship's own display matrix, `0x08842140` - `0x08842264`
+
+Same function, ~90 instructions later:
+
+```c
+angle = craft[0x854] * 0.5f + craft[0x880] * 6.28f;      /* 0x40c8f5c3 */
+/* wrap to (-pi, pi]: *2^24/pi (0x4aa2f983), trunc.w.s, (x << 7) >> 7, *pi/2^24 (0x34490fdb) */
+c = cos(angle); s = sin(angle);   /* vcst.s 2/PI, vmul.s, vcos.s / vsin.s */
+
+R = [ c  s  0  0 ]      /* up to transpose - see below */
+    [-s  c  0  0 ]
+    [ 0  0  1  0 ]
+    [ 0  0  0  1 ]
+
+M  = vmmul.q(R, *(craft + 0x794));        /* the rigid body's 4x4 */
+M' = vmscl.q(M, [0x002ace1c]);            /* a scalar applied to rows 0..2 only */
+dst = FUN_08945220(craft[0x8b0]);         /* the node's matrix */
+dst[0..2] = M'[0..2];  dst[3] = M[3];     /* translation row taken unscaled */
+FUN_08945284(craft, dst, 0);
+```
+
+**The rotated-about axis is index 2 and that is *not* subject to the transpose
+ambiguity.** The two literal `1.0`s in `R` are written by `vone.s S122` and
+`vone.s S133` - both on the diagonal, and a diagonal element is the same under
+either row-major or column-major reading of the VFPU register names. Only the
+*sign* of the `s`/`-s` pair flips with the reading, so which axis is held fixed is
+determined and which way the ship rolls is not.
+
+Index 2 is the nose. [camera.md](camera.md) establishes "`row2` is the ship's
+forward axis, positive toward the nose" at confidence 92, measured on the running
+game across three views, and lists `craft+0x374` as the pointer to the body's
+forward row. `FUN_088418e0`'s own first ten instructions agree independently:
+
+```c
+body = craft[0x794];
+craft[0x37c] = body;          /* side    <- body + 0x00 */
+craft[0x378] = body + 0x10;   /* up      <- body + 0x10 */
+craft[0x374] = body + 0x20;   /* forward <- body + 0x20 */
+```
+
+So a completed roll turns the drawn ship through `6.28` radians about its own
+nose - a full revolution to within `0.16` degrees, `2*pi` being `6.28319`. The
+`6.28` is a code literal, not authored data.
+
+**`craft+0x854 * 0.5` is a second, independent contribution to the same angle**
+and is *not* part of the barrel roll. It is the steering lean computed by
+`FUN_0883fab4`, which [camera.md](camera.md) scores at confidence 0 for what it
+physically means. Nothing in a reimplementation should transcribe it; the roll
+term stands alone.
+
+#### Stage 2b: the internal camera's up vector
+
+`0x08845d7c`, in `FUN_088455ec`, the internal rig's update - already on
+[camera.md](camera.md) as `up = Rot(craft[0x880] * 6.28) * up`, "a roll about the
+view axis", recorded there before anything connected `craft+0x880` to the barrel
+roll. Two consumers reached independently, reading one field at one scale, is the
+corroboration that carries most of this section's confidence.
+
+#### That the drawing code runs is proven, not assumed
+
+`psp-relocate.py callers 0x088418e0` returns **zero** `jal` sites, which on its
+own would leave this in the same position as
+[ps2-pulse-eu/camera.md](../ps2-pulse-eu/camera.md)'s dead vtable. It is not:
+`xrefs 0x088418e0` finds one reference, a **data** word at `0x08aca104`, inside a
+`{this-adjustment, fn-pointer}` vtable. Its neighbouring slots, read through the
+same relocation replay, are `0x089444d0`, `0x0894479c`, `0x089447a4`,
+**`0x088418e0`**, `0x089447f4`, `0x0883e418`, `0x0894484c`, `0x0894485c`,
+`0x08944864`, `0x089449a4`, `0x08944a30` - a live class in which most slots hold a
+base implementation from the `0x08944xxx` run and two, this one among them, are
+overrides. `FUN_088418e0` is reached through that pointer, which is why no `jal`
+names it.
+
+**That the vtable is installed, and that this slot is the one that gets called,
+are both established from the binary alone.** The table's base is loaded by a
+`lui`/`addiu` pair at two sites and **stored into `object+0x38`** at both -
+`sw a0, 0x38(s0)` at `0x0883d6a0` and `sw a1, 0x38(s0)` at `0x08840d80`, the
+constructor pattern. And `FUN_088418e0` **itself** dispatches through the same
+slot, on a sub-object, at `0x088427cc`-`0x088427f4`:
+
+```
+lw    a0, 0x78(s2)        ; child = craft->0x78, skipped if null
+lwc1  f12, 0x344(sp)      ; dt
+lw    a1, 0x38(a0)        ; vtbl = child->0x38
+addiu a1, a1, 0x20
+lh    a2, 0x0(a1)         ; this-adjustment,  vtbl + 0x20
+lw    a1, 0x4(a1)         ; function pointer, vtbl + 0x24
+jalr  a1
+addu  a0, a0, a2          ; this += adjustment
+```
+
+`0x08aca0e0 + 0x24` is `0x08aca104`, this function's own slot, and the
+`{lh adjust, lw fnptr}` pair at `+0x20`/`+0x24` is exactly the 8-byte entry layout
+the table dump shows. So slot `+0x24` is a virtual per-frame update taking `dt` in
+`f12`, `FUN_088418e0` is a class's override of it, and the function's own
+signature (`float, int`) matches the call it makes. Nothing about that argument
+routes through another page.
+
+A weaker second line of evidence exists and is recorded with its own caveat rather
+than leaned on: `FUN_088455ec` has exactly one caller in the binary - the `jal` at
+`0x08841b6c`, inside `FUN_088418e0` - and [camera.md](camera.md) settled
+`fov = 60 + 0.075 * dot(fwd, vel)` live at confidence 94, a law whose arithmetic
+matches `FUN_088455ec`'s `craft+0x790` store. **That is not proof**: camera.md's
+own correction section leaves open whether the internal rig's update runs while an
+external view is selected, and `g_camera_fov_degrees` (`0x08b34310`) is a global
+that page treats as distinct from `craft+0x790`. The vtable argument above does
+not depend on either point.
+
+#### The other writers of `+0x87c`, for completeness
+
+Besides `Ship_UpdateSideshiftInput_q`'s ramp, three sites write the phase and none
+of them reads it:
+
+| Site | What it does |
+| --- | --- |
+| `0x0883d5b4` | a six-instruction leaf: `table[i]->0x87c = 0.0f` and nothing else |
+| `0x088442e8` | clears `+0x860 & 0x100`, stores `+0.0` to `+0x87c`, zeroes the tap history `+0x88c`/`+0x890` |
+| `0x08847a54` | clears `+0x860 & 0x100`, stores `f20` to `+0x87c`, zeroes `+0x88c`/`+0x890` |
+
+All three are roll-cancel paths. `f20`'s value at `0x08847a54` was not traced.
+
+#### Deliberately not renamed
+
+`FUN_088418e0` stays `FUN_`. It advances per-craft timers, runs contact reaction
+over the body's contact array, updates the internal camera rig **and** builds and
+submits the display matrix; no `Subsystem_VerbNoun` covers that, and camera.md
+already declined to name it for the same reason. Naming it would be a guess that
+stops the next reader looking.
+
+#### What is not determined
+
+- **The sign of the roll.** The `s`/`-s` placement is the one thing the transpose
+  ambiguity does reach, so whether a `1,2,1` gesture rolls the ship left or right
+  on screen is not settled by this static read. A capture settles it in one run.
+- **`vmmul.q`'s operand order.** Whether the composed matrix is `R * body` or
+  `body * R` was not established, and the two differ when the body matrix is not
+  orthonormal.
+- **`[0x002ace1c]`**, the scalar `vmscl.q` applies to rows 0-2. Unidentified;
+  camera.md's own `g_craft_scale` discussion is the place to look first.
+
+
 
 | Address | Name | Conf |
 | --- | --- | ---: |
