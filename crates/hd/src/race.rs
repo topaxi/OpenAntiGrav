@@ -290,6 +290,11 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\shiphd.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
+    // No bank at the analogous path: `Data\audio\sound\generaltrack.bnk`
+    // resolves to nothing on `hdfury-ps3-eu-dec.iso`. HD's circuits have not
+    // been swept for the three `.vex` audio classes either, so this is an
+    // absence twice over rather than an unfinished lookup.
+    track_general: None,
 };
 
 /// The ship directory a Zone race flies out of.

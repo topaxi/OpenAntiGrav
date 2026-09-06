@@ -397,6 +397,9 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
+    // `None` for the reason HD's is, and 2048 follows HD everywhere in this
+    // table. See [`oag_hd::race::SOUND_BANKS`].
+    track_general: None,
 };
 
 #[cfg(test)]

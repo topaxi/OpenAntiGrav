@@ -193,3 +193,62 @@ fn the_densest_circuit_on_the_disc_fits_in_the_pool_too() {
         oag_audio::mixer::MAX_VOICES
     );
 }
+
+/// The loader names both banks it opened and every reference it cannot resolve.
+///
+/// The dangling half is the point. Five references on the Pulse disc name a cue
+/// or a bank that does not exist - the disc's own bugs, decoded in
+/// `track-sound-emitters.md` - and the rule this project holds to is that an
+/// asset which will not resolve plays nothing **and says so**. A silent drop
+/// would make a later decode that fixed one of them invisible, which is exactly
+/// what is still open: `Scream_FindSoundInBank`'s name comparison is unread, so
+/// whether the original falls back to another bank is not settled.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_loader_names_its_banks_and_every_dangling_reference() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    for (track, dangling) in [
+        (
+            TRACK,
+            &["1 node(s) name basilic~groupcraft and play nothing"][..],
+        ),
+        (
+            DENSEST,
+            &[
+                "7 node(s) name fortcle~blueflashlight and play nothing",
+                "1 node(s) name fortcle~RED_NEON_TUN and play nothing",
+            ][..],
+        ),
+    ] {
+        let opened =
+            oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+                .expect("opening the source");
+        let mut archives = opened.archives;
+        let blob = archives.read_name(track).expect("the circuit");
+        let loaded = TrackEmitters::load(&mut archives, opened.title.race.sounds, track, &blob);
+        for line in &loaded.report {
+            println!("{line}");
+        }
+        let says = |what: &str| loaded.report.iter().any(|line| line.contains(what));
+
+        // The shared bank is named by the executable; the circuit's own is
+        // named by its own `trackstartup.xml` and sits beside it, which is the
+        // half nothing had read before.
+        assert!(
+            says("generaltrack.bnk is bank \"gentrak\""),
+            "{track}: the shared bank did not open"
+        );
+        assert!(
+            says("_ENV.bnk is bank"),
+            "{track}: the circuit's own bank did not open"
+        );
+        for reference in dangling {
+            assert!(says(reference), "{track}: {reference} was not reported");
+        }
+        let playing = loaded.omni.iter().filter(|n| n.sound.is_some()).count();
+        assert!(playing > 0, "{track}: nothing resolved at all");
+        println!("{track}: {playing} of {} play", loaded.omni.len());
+    }
+}

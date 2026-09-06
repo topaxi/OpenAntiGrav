@@ -5,8 +5,19 @@
 use super::*;
 use oag_formats::sound_emitters::RadiusCurve;
 
-/// An emitter at `position` with a constant radius and no cone.
-fn omni(position: [f32; 3], radius: f32) -> SoundEmitter {
+/// An emitter at `position` with a constant radius, no cone and no audio.
+///
+/// `sound: None` throughout: what these assert is placement, and a `Loaded`
+/// needs a real bank behind it. The resolved half is the disc-backed test.
+fn omni(position: [f32; 3], radius: f32) -> Authored {
+    Authored {
+        emitter: node(position, radius),
+        sound: None,
+    }
+}
+
+/// The decoded node an [`Authored`] wraps.
+fn node(position: [f32; 3], radius: f32) -> SoundEmitter {
     let mut to_world = [0.0; 16];
     to_world[0] = 1.0;
     to_world[5] = 1.0;
@@ -89,7 +100,7 @@ fn the_near_field_is_flat_and_the_far_field_falls_off() {
 
 #[test]
 fn a_cone_is_counted_and_never_placed() {
-    let mut cone = omni([0.0, 0.0, 0.0], 100.0);
+    let mut cone = node([0.0, 0.0, 0.0], 100.0);
     cone.cone = Some(oag_formats::sound_emitters::Cone {
         angle_a: 1.0,
         angle_b: 0.7,

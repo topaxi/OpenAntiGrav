@@ -88,6 +88,9 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\ship_zone.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
+    // A literal string in the executable too, at the same confidence as the
+    // five above, and the bank 568 of the 1,164 authored `sound` nodes name.
+    track_general: Some(r"Data\Sound\generaltrack.bnk"),
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

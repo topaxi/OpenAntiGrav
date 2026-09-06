@@ -46,11 +46,13 @@ pub(super) fn banks_and_announcers(
 /// and a Zone circuit authors none, where the bank table is one per release.
 /// See [`crate::audio::sfx::TrackEmitters`].
 pub(super) fn track_emitters(
+    archives: &mut oag_assets::Archives,
+    banks: &oag_title::SoundBanks,
     track: &str,
     blob: &[u8],
     report: &mut Vec<String>,
 ) -> crate::audio::sfx::TrackEmitters {
-    let parsed = crate::audio::sfx::TrackEmitters::parse(track, blob);
-    report.extend(parsed.report.iter().cloned());
-    parsed
+    let loaded = crate::audio::sfx::TrackEmitters::load(archives, banks, track, blob);
+    report.extend(loaded.report.iter().cloned());
+    loaded
 }

@@ -752,7 +752,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     let (sounds, announcer, class_announcer) =
         audio::banks_and_announcers(&mut archives, title.race, options.mode, &mut report);
-    let track_emitters = audio::track_emitters(&track, &track_blob, &mut report);
+    let track_emitters = audio::track_emitters(
+        &mut archives,
+        title.race.sounds,
+        &track,
+        &track_blob,
+        &mut report,
+    );
 
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own - craft content,
