@@ -129,6 +129,15 @@ impl Race {
     /// but an override exists to reproduce a captured pose exactly and the
     /// shake's phase is randomised, so a matched-pose comparison must not see
     /// it. See `oag_render::camera::shake`.
+    ///
+    /// The shake's two rotations are read off `base`'s own rows 1 and 2 -
+    /// this engine's closest live analogue to the camera basis rows
+    /// `Camera_SubmitScene` re-reads every tick, since nothing here keeps a
+    /// persisted per-camera basis object the way the original does; see
+    /// `oag_render::camera::shake`'s "modeling choice" section for what that
+    /// substitution does and does not claim. They are read from `base`
+    /// *before* the shake perturbs it, matching the original's own read of
+    /// its basis at the top of the same function that then rotates it.
     #[must_use]
     pub fn view(&self) -> Mat4 {
         if let Some(over) = &self.camera_override {
@@ -155,7 +164,9 @@ impl Race {
             // that transform and pre-multiplies `Q`'s inverse into its
             // inverse - see `oag_render::camera::shake`'s module documentation
             // for what the rotation itself reproduces.
-            Mat4::from_quat(self.shake.rotation().inverse()) * base
+            let row1 = base.row(1).truncate();
+            let row2 = base.row(2).truncate();
+            Mat4::from_quat(self.shake.rotation(row1, row2).inverse()) * base
         } else {
             base
         }

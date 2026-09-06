@@ -444,3 +444,55 @@ fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_
     );
     assert_eq!(authored, unchanged);
 }
+
+/// An armed shake must never move the camera's own world position - it is a
+/// rotation of the view, not a translation of the eye, both by the original's
+/// own reading (`collision-shake.md`'s "not a positional jitter") and by this
+/// implementation's own composition side (`oag_render::camera::shake`'s
+/// closing paragraph proves left-multiplying a rotation's inverse onto the
+/// view always fixes the eye, for any rotation at all). This is the test
+/// that would have caught composing the shake onto the wrong side of the
+/// view matrix: get that wrong and the eye visibly orbits the world origin
+/// the instant a shake arms.
+#[test]
+fn an_active_shake_never_moves_the_camera_eye() {
+    let mut race = Race::start(setup(Handling::default()));
+    let before = race.camera_position();
+
+    race.shake.arm(
+        1.0,
+        oag_render::camera::shake::Side::Ahead,
+        &mut Rng::new(1),
+    );
+    let just_armed = race.camera_position();
+    assert!(
+        (before - just_armed).length() < 1e-4,
+        "before={before}, just_armed={just_armed}"
+    );
+
+    // And through the decay, not only at the moment of arming.
+    for _ in 0..20 {
+        race.shake.advance(1.0 / 60.0);
+        let during = race.camera_position();
+        assert!(
+            (before - during).length() < 1e-4,
+            "before={before}, during={during}"
+        );
+    }
+}
+
+/// The `Elsewhere` mode must move the camera at all once armed - otherwise
+/// the eye-invariant test above would pass vacuously for a shake that
+/// silently does nothing.
+#[test]
+fn an_active_shake_does_rotate_the_view() {
+    let mut race = Race::start(setup(Handling::default()));
+    let level = race.view();
+
+    race.shake.arm(
+        1.0,
+        oag_render::camera::shake::Side::Elsewhere,
+        &mut Rng::new(1),
+    );
+    assert_ne!(race.view(), level);
+}

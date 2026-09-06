@@ -31,30 +31,76 @@
 //!   of the eye, which is what an earlier pass of the thread this module
 //!   implements had assumed while the apply side was still unread.
 //!
-//! # What is confirmed and not yet reproduced: the rotation axis
+//! # The rotation axis: two sequential rotations about the camera's own live basis
 //!
-//! **Settled 2026-09-05, and this module does not yet implement what was
-//! found.** The original does not rotate about a fixed axis at all: each
-//! `shake_mode` reads two of the camera's own *live* basis rows (`+0x50`
-//! then `+0x60` for `Ahead`/`Elsewhere`, `+0x50` then `+0x40` for the third,
-//! unimplemented mode) and applies two sequential rotations, one per row,
-//! composing on top of each other - confirmed independently on both
-//! binaries by disassembly/decompile alone (no p-code needed once the
-//! register origin was traced), see
+//! **Settled 2026-09-05, implemented 2026-09-06.** The original does not rotate
+//! about a fixed axis at all: each `shake_mode` reads two of the camera's own
+//! *live* basis rows (`+0x50` then `+0x60` for `Ahead`/`Elsewhere`, `+0x50` then
+//! `+0x40` for the third, unimplemented mode) and applies two sequential
+//! rotations, one per row, composing on top of each other - confirmed
+//! independently on both binaries by disassembly/decompile alone (no p-code
+//! needed once the register origin was traced), see
 //! `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`'s "Settled
-//! 2026-09-05" section. A single fixed [`Vec3`] constant cannot reproduce
-//! this: the axes are the camera's current orientation state, not values
-//! known ahead of time, so a faithful port needs the camera's basis passed
-//! into whatever plays the shake rather than a module-level constant.
+//! 2026-09-05" section. For the two modes the collision path actually arms,
+//! the row order is **not** ambiguous: row1 first (`+0x50`), row2 second
+//! (`+0x60`), in both `Ahead` and `Elsewhere` - they differ only in the first
+//! rotation's angle, which `Ahead` negates. Confidence 92 (PS2 disassembly) /
+//! 95 (cross-checked against the PSP's explicit pointer argument).
 //!
-//! [`AXIS`] and the single-rotation-about-one-axis shape of
-//! [`Shake::rotation`] below are **known simplifications, not a stand-in for
-//! an unconfirmed reading** - the axis question itself is answered; what is
-//! open is only the larger, out-of-scope change (an axis input threaded
-//! through this type's API) needed to reproduce it. Revisit both together
-//! if that change is ever made. Everything else here - the envelope, the
-//! oscillator term, the per-mode combination, the magnitude and the
-//! duration - is the original's own numbers.
+//! [`Shake::rotation`] takes the caller's `row1`/`row2` - two [`Vec3`]s read
+//! fresh from the camera's current basis every tick, never cached - and
+//! applies two [`quat_from_axis_angle`] rotations in that order: `row1` with
+//! the mode's own (possibly negated) envelope-plus-oscillator angle, then
+//! `row2` with the oscillator alone. `row2`'s own vector is rotated by the
+//! first quaternion before being used as the second rotation's axis, matching
+//! the original's own fresh re-read of that offset *after* the first call has
+//! already rotated the whole basis in place - the same "read back the row the
+//! first call just rotated" mechanism the evidence page's "else" branch shows
+//! explicitly and this page's general reasoning extends to `row2` here.
+//!
+//! # What is still a modeling choice, not a reading
+//!
+//! Two things this module cannot get from the evidence pages as written,
+//! flagged here rather than silently assumed:
+//!
+//! - **Which concrete vectors are `row1`/`row2`.** `collision-shake.md`'s own
+//!   "Not determined" section leaves what each basis row physically represents
+//!   open at confidence ~55 (world right/up/forward directly, or the
+//!   transposed "columns are world axes" reading `positional-audio.md`
+//!   establishes for the camera elsewhere) - and says answering it is not
+//!   needed to settle the axis-selection question above. `oag-game`'s own
+//!   caller (`Race::view`, outside this crate - `oag-render` has no gameplay
+//!   type to read a ship or a camera struct from) reads `row1`/`row2` off the
+//!   camera's own already-built view matrix for the current tick (its rows 1
+//!   and 2) rather than a persisted basis object like the original's camera
+//!   struct - this engine does not keep one, recomputing the view fresh every
+//!   frame instead. That is the closest live analogue this codebase has to
+//!   "the camera's own current basis row", not a claim that it is numerically
+//!   the same quantity the original's struct stores.
+//! - **The handedness of the two rotations**, in two places: whether `row2`
+//!   should be rotated *forward* by the first quaternion before being used as
+//!   the second axis (what [`Shake::rotation`] does) or by its inverse, and
+//!   whether each angle's sign matches the disc's own VU convention or its
+//!   mirror. Neither is recoverable from the two evidence pages, which pin
+//!   *which* offsets are read and in *what order*, not the exact sign
+//!   convention the underlying `vmulabc`/`vmaddabc`-shaped instructions use.
+//!   Carried the same way [`crate::roll::ROLL_DIRECTION`] carries its own
+//!   unmeasured sign: a named choice, not a reading, with a one-line fix
+//!   (negate the angle, or use `first.inverse() * row2`) if a future
+//!   play-test or capture shows the shake twisting the wrong way.
+//!
+//! **What composing the result onto a view matrix does not need to guess
+//! about: which side of the multiply to use.** [`Shake::rotation`] returns
+//! one [`Quat`], and left-multiplying its inverse onto a view matrix - the
+//! existing convention `Race::view` already uses, unchanged by this pass -
+//! keeps the camera's eye at exactly its pre-shake world position for *any*
+//! rotation, because a view matrix's translation column maps the eye to the
+//! view-space origin and a zero-translation left factor maps that origin to
+//! itself regardless of its own rotation. Right-multiplying instead would
+//! orbit the eye around the world's origin by the rotation's inverse - a
+//! large, visible bug for any camera not standing at `(0, 0, 0)`, which is
+//! effectively always. So the multiply side is not a modeling choice at all;
+//! only the two items above are.
 //!
 //! Also unconfirmed: whether the oscillator's phase
 //! (`progress * `[`BASE_FREQUENCY`]`)` is plain radians or goes through the
@@ -99,12 +145,6 @@ const OSCILLATOR_SCALE: f32 = 0.1;
 
 /// Range the phase offset is drawn from once per arm - `Rng_RangeF(0.2, 0.8)`.
 pub const PHASE_RANGE: (f32, f32) = (0.2, 0.8);
-
-/// The rotation axis - **a known simplification, not what the original
-/// does**. The original rotates about two different *live* camera basis
-/// rows per frame, not one fixed axis; see the module documentation's
-/// "rotation axis" section.
-pub const AXIS: Vec3 = Vec3::X;
 
 /// Which side of the craft a collision arming a shake landed on -
 /// `Camera_ArmShake`'s `mode` argument, which the collision path only ever
@@ -197,19 +237,36 @@ impl Shake {
     /// This tick's rotation of the camera basis, [`Quat::IDENTITY`] once the
     /// shake has decayed away or was never armed.
     ///
-    /// Combines `Camera_SubmitScene`'s two-call angle arithmetic for `shake_mode`
-    /// `1`/`3` into one angle about one [`AXIS`] - **an approximation, now
-    /// known to be one**, not the reading it once looked like. The original
-    /// calls its rotation builder twice per mode, each time about a
-    /// different live camera basis row (see the module documentation's
-    /// "rotation axis" section), so its two terms compose two rotations
-    /// about two different vectors rather than adding two angles about one.
-    /// [`Side::Ahead`]'s angle arithmetic below - negate the envelope+
-    /// oscillator sum, then add the oscillator term back unsigned - is still
-    /// the original's own numbers; only the "collapses to one axis" step is
-    /// this module's own simplification.
+    /// `row1`/`row2` are the camera's own current basis vectors for this
+    /// tick, standing in for `Camera_SubmitScene`'s live re-reads of
+    /// `+0x50`/`+0x60` - see the module documentation's "rotation axis"
+    /// section for what a caller should pass and what is and is not
+    /// confirmed about that choice. Two rotations are built and composed in
+    /// the original's own order: `row1` first, with the mode's own
+    /// (possibly negated) envelope-plus-oscillator angle; `row2` second,
+    /// rotated by the first quaternion before it is used as an axis (the
+    /// original re-reads that offset only after the first call has already
+    /// rotated the whole basis in place), with the oscillator alone.
+    ///
+    /// [`Side::Ahead`]'s first angle - negate the envelope+oscillator sum -
+    /// is the original's own arithmetic; both modes share the same second
+    /// angle (the oscillator alone) and the same row order, so nothing about
+    /// which row goes first is a per-mode choice here. Whether `row2` should
+    /// be rotated forward by the first quaternion (as below) or by its
+    /// inverse before becoming the second axis is not settled by the
+    /// evidence - see the module documentation's "handedness" item.
+    ///
+    /// The composed result is one [`Quat`] representing "apply `row1`'s
+    /// rotation, then `row2`'s" (`q2 * q1`, the right-hand factor applying
+    /// first). A caller composes it onto a view matrix the same way the
+    /// single-fixed-axis approximation this replaces did - left-multiplying
+    /// its inverse (`rotation.inverse() * view`) - which is not itself a
+    /// choice: for any rotation at all, a zero-translation *left* factor
+    /// maps the view-space origin to itself, so the camera's eye stays
+    /// exactly where it was and only the viewing direction turns. See the
+    /// module documentation's closing paragraph.
     #[must_use]
-    pub fn rotation(&self) -> Quat {
+    pub fn rotation(&self, row1: Vec3, row2: Vec3) -> Quat {
         if self.timer <= 0.0 || self.duration <= 0.0 {
             return Quat::IDENTITY;
         }
@@ -218,11 +275,14 @@ impl Shake {
         let envelope = self.envelope(progress);
         let (sin_a, _) = sin_cos(progress * BASE_FREQUENCY);
         let oscillator = sin_a * remaining * OSCILLATOR_SCALE * self.magnitude;
-        let angle = match self.side {
-            Side::Elsewhere => envelope + oscillator + oscillator,
-            Side::Ahead => -(envelope + oscillator) + oscillator,
+        let angle1 = match self.side {
+            Side::Elsewhere => envelope + oscillator,
+            Side::Ahead => -(envelope + oscillator),
         };
-        quat_from_axis_angle(AXIS, angle)
+        let angle2 = oscillator;
+        let first = quat_from_axis_angle(row1, angle1);
+        let second = quat_from_axis_angle(first * row2, angle2);
+        second * first
     }
 }
 

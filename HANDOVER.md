@@ -544,7 +544,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The Missile fires without a lock, and the lock-on reticle and its tone are in](handover/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/pure-and-hd-lock-on-too-and-two-axes.md)
 - [The hull sparks are approximated in three named ways](handover/the-hull-sparks-are-approximated-in-three-named.md)
-- [The camera shake on impact is implemented; only its rotation axis is unconfirmed](handover/the-originals-camera-hud-shake-on-impact-is.md)
+- [The camera shake on impact reproduces its two-rotation shape now; two composition details are open](handover/the-originals-camera-hud-shake-on-impact-is.md)
 - [PVS culling: three ceilings, one of them invented](handover/pvs-culling-three-ceilings-one-of-them-invented.md)
 - [The HUD's four remaining items](handover/the-huds-four-remaining-items.md)
 - [Race modes: the start line is measured on one circuit only](handover/race-modes-the-start-line-is-measured-on.md)
