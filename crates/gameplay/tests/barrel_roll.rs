@@ -21,10 +21,26 @@
 use oag_gameplay::controls::{ControlScheme, ship_controls};
 use oag_gameplay::input::{Button, Input, InputSnapshot};
 use oag_physics::probe;
-use oag_physics::{Environment, ShipState, step};
+use oag_physics::{Environment, Handling, ShipState, step};
 
 /// Our own fixed timestep. ADR-0007.
 const TICK: f32 = 1.0 / 60.0;
+
+/// [`probe::start`]'s craft, lifted clear of the corridor floor.
+///
+/// **Every gesture in this file has to start airborne**, because the original
+/// zeroes the whole tap history on every tick the contact bit is set
+/// (`0x08846bd0`; see `oag_physics::barrel_roll::advance_gesture`) and this
+/// port does the same. Tapping from `probe::start`'s resting craft would
+/// measure that gate rather than the binding this file exists to test.
+/// A kilometre of air is far more than the six ticks a gesture takes.
+fn airborne(handling: &Handling) -> ShipState {
+    let mut state = probe::start(handling);
+    state.body.position.y = 1_000.0;
+    state.grounded = 0.0;
+    state.grounded_prev = 0.0;
+    state
+}
 
 /// What a pilot is doing on one tick, in the two terms this gesture reads.
 #[derive(Clone, Copy, Default)]
@@ -63,7 +79,7 @@ fn drive(state: &mut ShipState, buttons: &mut Input, tick: Tick) {
 #[test]
 fn three_d_pad_taps_from_an_input_snapshot_arm_a_roll() {
     let handling = probe::handling();
-    let mut state = probe::start(&handling);
+    let mut state = airborne(&handling);
     let mut buttons = Input::new();
     let full_pool = state.shield;
 
@@ -100,7 +116,7 @@ fn three_d_pad_taps_from_an_input_snapshot_arm_a_roll() {
 #[test]
 fn three_stick_crossings_from_an_input_snapshot_arm_a_roll() {
     let handling = probe::handling();
-    let mut state = probe::start(&handling);
+    let mut state = airborne(&handling);
     let mut buttons = Input::new();
 
     for push in [1.0, -1.0, 1.0] {
@@ -129,7 +145,8 @@ fn three_stick_crossings_from_an_input_snapshot_arm_a_roll() {
 #[test]
 fn holding_the_stick_through_a_corner_arms_nothing() {
     let handling = probe::handling();
-    let mut state = probe::start(&handling);
+    // Airborne, so this measures the alternation and not the grounded gate.
+    let mut state = airborne(&handling);
     let mut buttons = Input::new();
 
     for _ in 0..180 {
@@ -156,7 +173,8 @@ fn holding_the_stick_through_a_corner_arms_nothing() {
 #[test]
 fn taps_spaced_past_the_timeout_never_complete() {
     let handling = probe::handling();
-    let mut state = probe::start(&handling);
+    // Airborne, so this measures the timeout and not the grounded gate.
+    let mut state = airborne(&handling);
     let mut buttons = Input::new();
 
     for button in [Button::Left, Button::Right, Button::Left] {
@@ -175,4 +193,45 @@ fn taps_spaced_past_the_timeout_never_complete() {
 
     assert_eq!(state.roll_target, 0.0, "nothing armed");
     assert_eq!(state.shield, handling.dimensions.shield, "never charged");
+}
+
+/// And the gate itself, from a snapshot: the same gesture that arms in the air
+/// arms nothing at all on the ground, and costs nothing either.
+///
+/// This is the fix for the `07_Track` playability regression - see
+/// `oag_physics::barrel_roll::advance_gesture` - so it is worth one test at the
+/// level a pilot actually reaches the mechanic from.
+#[test]
+fn the_same_gesture_on_the_ground_arms_nothing() {
+    let handling = probe::handling();
+    // Inside the hover probe's reach: `probe::start` leaves the craft at
+    // exactly its ride height, where the probe finds nothing and `grounded`
+    // reads `0.0` from the first tick on - which would silently turn this into
+    // the airborne case. Ten units up is in contact and stays there.
+    let mut state = probe::start(&handling);
+    state.body.position.y = 10.0;
+    let mut buttons = Input::new();
+
+    assert!(
+        state.grounded > 0.0,
+        "the fixture is meant to start resting"
+    );
+    for button in [Button::Left, Button::Right, Button::Left] {
+        for tick in [
+            Tick {
+                dpad: button.bit(),
+                ..Tick::default()
+            },
+            Tick::default(),
+        ] {
+            drive(&mut state, &mut buttons, tick);
+            assert!(
+                state.grounded > 0.0,
+                "the fixture left the ground, so this stopped measuring the gate"
+            );
+        }
+    }
+
+    assert_eq!(state.roll_target, 0.0, "a grounded craft armed a roll");
+    assert_eq!(state.shield, handling.dimensions.shield, "and paid for it");
 }
