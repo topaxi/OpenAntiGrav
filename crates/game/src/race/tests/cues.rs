@@ -330,7 +330,8 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Bomb"><Stats absorb="30" blastforce="31" blastradius="32"
-               damage="33" timetodie="6" trigger_radius="3"/></Weapon>
+               damage="33" slowdown_time="0.5" timetodie="6"
+               trigger_radius="3"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Bomb"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>

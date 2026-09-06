@@ -1363,10 +1363,13 @@ missile's `0x088690d4`, and six more - against exactly **one** consumer, in
 `FUN_088418e0` at `0x088420cc`-`0x08842110`:
 
 ```c
-if (entity+0x4c != 0 && *(float *)(*(int *)(entity + 0x4c) + 0x130) > 0.0) {
-    if ((entity->0x1b8 & 0x10) == 0)
-        Ship_AddSlowdown(entity->0x130, craft);
-    entity->0x130 = 0.0;
+Ship *T = *(Ship **)(entity + 0x4c);            /* the same indirection
+                                                   Ship_ApplyCollisionImpulse
+                                                   uses to reach T+0x110 */
+if (T != NULL && T->pending_0x130 > 0.0f) {
+    if ((T->flags_0x1b8 & 0x10) == 0)           /* the pickup/shield word */
+        Ship_AddSlowdown(T->pending_0x130, craft);
+    T->pending_0x130 = 0.0f;
 }
 ```
 
