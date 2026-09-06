@@ -231,6 +231,12 @@ pub const fn at_rest() -> Vec3 {
 /// transform to read instead, so the firing craft's whole
 /// [`oag_physics::Body::orientation`] is what it uses - the closest available
 /// reading, not the recovered one.
+///
+/// **A second, separate open question lives at the draw site, not here**:
+/// whether `Pulse_Mine.vex`/`Pulse_Bomb.vex` need a `MODEL_YAW`-style
+/// per-model axis correction the way `Ship.vex` does. Unmeasured for these
+/// two; see `oag_game::race::weapons::visuals::projectile_model_matrices`'s
+/// own doc comment.
 #[must_use]
 pub const fn frozen_pose(orientation: Quat) -> Quat {
     orientation

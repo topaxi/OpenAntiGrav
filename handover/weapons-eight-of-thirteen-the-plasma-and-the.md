@@ -397,6 +397,30 @@ done, for the reading and its confidence split.
   sizes" footing this module already applies to `at_rest`, even though the
   Bomb's own spawn helper (`0x0885f188`) is unresolved and does not confirm
   the same matrix copy happens there.
+- **Whether `Pulse_Mine.vex`/`Pulse_Bomb.vex` need a `MODEL_YAW`-style
+  per-model axis correction is unmeasured, and worth closing before trusting
+  a laid charge's picture at a glance.** `MODEL_YAW` (`race.rs`) exists
+  because `Ship.vex`'s own hull was measured wider at one end than the
+  other and is authored nose-along a different axis than
+  `oag_physics::Body::forward` uses - a **per-model** fact about that one
+  file, not a `.vex`-format universal. The only precedent this engine has for
+  a *weapon* model is the Rocket's, which needs no correction
+  (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down` measures
+  `Pulse_Rocket.vex` against its own flight direction and passes as drawn);
+  nothing equivalent has measured the Mine's or the Bomb's own model against
+  `Body::orientation`'s convention. A live-race screenshot was attempted to
+  settle it empirically and could not: the chase camera sits almost exactly
+  where a charge is dropped, so a freshly-laid mine is occluded by the firing
+  craft's own hull in every framing tried (stock chase view, `--camera-view
+  far`/`close`, and a dozen `--camera-pose` attempts from the side, above and
+  behind, at the stationary grid and moving); only a mine already left well
+  behind by a moving craft is visible, and by then its pose reflects
+  wherever the track had banked to, not a controlled level baseline. If this
+  is wrong the failure mode is specific and checkable: a laid charge would
+  read as lying on its side or nose-down relative to the track it is
+  sitting on, in a screenshot from a hand-placed camera or `oag-view --mesh
+  Data\Weapons\Pulse_Mine.vex` measured the way `MODEL_YAW`'s own doc comment
+  measured `Ship.vex`.
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the

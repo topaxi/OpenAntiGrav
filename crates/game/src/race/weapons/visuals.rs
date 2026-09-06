@@ -407,6 +407,20 @@ impl Race {
     /// than the effect path, as the mine that used to ride
     /// [`ROCKET_FLARE_EFFECT`] from the moment it landed - see
     /// [`Race::advance_projectile_flares`]'s doc comment.
+    ///
+    /// **Neither branch applies a [`MODEL_YAW`]-style correction, and whether
+    /// one is needed here is unmeasured, not ruled out.** `MODEL_YAW` exists
+    /// because `Ship.vex`'s own hull is authored with its nose along a
+    /// different axis than [`oag_physics::Body::forward`] uses, found by
+    /// measuring which end of the mesh is wider - a **per-model** fact, not a
+    /// property of `.vex` as a format. The velocity-built branch above has the
+    /// closest thing to a check: `the_rocket_model_is_longest_along_the_axis_it_is_flown_down`
+    /// measures `Pulse_Rocket.vex` against its own flight direction and needs
+    /// no such correction, which is this engine's only evidence that a
+    /// *weapon* `.vex` (as opposed to a ship one) tends not to need one. Mine's
+    /// `orientation` branch has no equivalent check: nothing here has measured
+    /// whether `Pulse_Mine.vex`/`Pulse_Bomb.vex`'s own nose axis agrees with
+    /// [`Body::orientation`]'s convention the way the Rocket's was shown to.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_formats::weapons::Weapon) -> Vec<Mat4> {
         self.world
