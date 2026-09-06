@@ -120,6 +120,72 @@ pub struct Tuning {
     /// How far ahead the speed target looks for the sharpest bend, as a multiple
     /// of the lookahead. A corner has to be seen before it is entered.
     pub brake_lookahead: f32,
+    /// Ceiling on the chord the curvature estimator measures over, in units, or
+    /// `None` for no ceiling at all.
+    ///
+    /// **This is the estimator's resolution, and without a ceiling it is tied
+    /// to speed.** Every caller of `Line::max_curvature` passes half its own
+    /// lookahead as the span, so at 80 units/s `Line::curvature`'s chord triple
+    /// covers ~72 units of track. A corner shorter than that is averaged with
+    /// the straights either side of it and comes back smaller than it is:
+    /// `07_Track`'s tightest arc is ~50 units long and reads 0.0155-0.0186
+    /// where the local value is 0.047, understating it 2.5-3x and putting its
+    /// own peak thirty samples early. A driver cannot slow for a corner it
+    /// cannot see.
+    ///
+    /// # Ten, measured
+    ///
+    /// `sweep_curvature_span` in `race_ground_truth.rs` is the harness - a lone
+    /// Ace, twelve circuits, 18,000 ticks each, with `OAG_SWEEP_SPAN` taking
+    /// the list of caps. Shield retained is the metric rather than lap time,
+    /// because the failure this reaches is a craft that laps cleanly *while*
+    /// grinding down a wall, which every clean/round/respawn column reads as a
+    /// pass.
+    ///
+    /// | span | shield left, summed over twelve | respawns | clean laps | mean |
+    /// | --- | --- | --- | --- | --- |
+    /// | 4 | 689.31 | 3 | 11 | 43.6s |
+    /// | 5 | 738.77 | 1 | 12 | 43.3s |
+    /// | 6 | 726.01 | 1 | 12 | 42.8s |
+    /// | 7 | 715.32 | 1 | 12 | 42.7s |
+    /// | 8 | 709.29 | 7 | 11 | 43.5s |
+    /// | 9 | 709.51 | 1 | 12 | 42.7s |
+    /// | **10** | **725.91** | **1** | **12** | **42.8s** |
+    /// | 11 | 705.68 | 1 | 12 | 42.7s |
+    /// | 12 | 704.18 | 1 | 12 | 42.6s |
+    /// | 14 | 688.94 | 1 | 12 | 42.4s |
+    /// | 16 | 669.70 | 1 | 12 | 42.2s |
+    /// | 20 | 660.42 | 1 | 12 | 42.2s |
+    /// | 25 | 620.39 | 1 | 12 | 42.0s |
+    /// | 32 | 620.28 | 1 | 12 | 42.2s |
+    /// | none | 613.52 | 1 | 12 | 42.2s |
+    ///
+    /// **The trend is real down to about 12 and flat below it.** From uncapped
+    /// to 12 the board gains ~90 shield monotonically; under 12 it is a plateau
+    /// at 704-739 with about +/-20 of noise, which is one wedging event on a
+    /// board where a single one costs 10-40. Nothing in 5..12 is separated from
+    /// anything else in 5..12 by this measurement, so the value inside that
+    /// plateau is chosen on the plateau's *shape*:
+    ///
+    /// - Rows 4 and 8 each break a circuit outright - 4 wedges `05` to one lap
+    ///   and two respawns, 8 wedges `01` to seven - while their neighbours are
+    ///   fine. That is the single-craft wall-wedging mode, surfacing at
+    ///   particular spans rather than as a trend in span.
+    /// - The line's own geometry bounds the useful range at both ends. Below
+    ///   ~7 all three chords can fall inside one path segment (every circuit
+    ///   carries two seams shaped `0.30, 0.11, ~7.0` units) and a 4-5 unit
+    ///   chord spans only 3-5 samples, so the estimator reads sample spacing as
+    ///   curvature. Above ~16 the triple covers `3 * span` > 48 and can no
+    ///   longer resolve `07`'s ~50-unit arc, which is exactly where the sweep
+    ///   puts `07` back to dying on lap 3.
+    /// - Inside `7..=16`, 10 is the maximum, and every value from 9 to 25
+    ///   clears the gates - a wide plateau rather than the three-wide ledge
+    ///   `[5, 7]` that the nominally higher 5 and 6 sit on, with a
+    ///   circuit-breaking row one step either side of it.
+    ///
+    /// `None` is kept rather than folded away so the uncapped row of that table
+    /// stays re-runnable.
+    pub curvature_span: Option<f32>,
     /// Fraction over target at which the airbrakes come on, rather than merely
     /// lifting off.
     pub brake_margin: f32,
@@ -204,6 +270,7 @@ impl Default for Tuning {
             max_turn_rate: 1.8,
             lateral_accel: 260.0,
             brake_lookahead: 2.5,
+            curvature_span: Some(10.0),
             brake_margin: 0.05,
             corridor_use: 0.6,
             brake_floor: 0.35,
