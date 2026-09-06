@@ -18,18 +18,19 @@ left open gets an answer; 2048 ships those same four plus four of its own
 (three real glyph files and one empty stub), and turns out to author a third
 countdown mechanism entirely - a manifest reaches only two of the eight.
 
-> **Nothing on this page places the gantry**, and no numeric transform has been
-> read on any title. What changed on 2026-09-06 is *where to look*: HD/Fury's
-> equivalent code path was read end to end and provably reads no position
-> either - it reaches the world only by binding to geometry the **track model**
-> authors, keyed by the name `billboard<num>`. So the transform was never going
-> to be found in the billboard system on Pulse either. See
-> [the placement section below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse)
-> and
+> **The gantry is placed, and it is drawn.** This page used to open by saying
+> nothing on it placed the gantry. That changed in two steps on 2026-09-06:
+> HD/Fury's equivalent code path was read end to end and provably reads no
+> position either - it reaches the world only by binding to geometry the
+> **track model** authors, keyed by the name `billboard<num>` - and Pulse's own
+> track files turned out to author the identical surface, at coordinates this
+> project's parser reads straight off the disc. `oag_render::gantry` measures
+> that surface per circuit and `oag_game::race::gantry` stands
+> `321Go_StartFinish.vex` on it, so a race now plays the `3`, `2`, `1`, `GO`
+> on the object over the start line rather than as a screen overlay. See
+> [the placement section below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
+> [what it took to draw it](#what-it-took-to-actually-draw-it), and
 > [`ghidra/functions/ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
-> The model is still loaded by nothing and the load report still names the file
-> it wanted instead. What is recovered here is what the model *does* once
-> something draws it.
 
 ## The asset
 
@@ -1079,18 +1080,109 @@ number repeating to within 2 units on two unrelated circuits is the strongest
 single signal here** - it is what a fixed authoring convention looks like, and it
 is not something a coincidence of unrelated geometry would produce.
 
+### The basis, the scale and the whole disc: `gantry_mount_ground_truth`
+
+The two circuits above were done by hand with `--draws`. The sweep in
+[`crates/render/tests/gantry_mount_ground_truth.rs`](../../crates/render/tests/gantry_mount_ground_truth.rs)
+does every circuit on the PSP disc through `oag_render::gantry`, which fits the
+mount's **plane** - principal axes of its own vertices, so the
+smallest-variance axis is the surface normal and the other two span the panel -
+rather than only its centroid. **Twelve circuits author a mount**, not the two
+this was found on - and that is the count off the base disc alone, over
+`track.vex` only:
+
+| | measured |
+| --- | --- |
+| circuits with a mount | **12** (`01`-`07`, `09`, `10`, `13`, `14`, `16`) |
+| panel size | 45.13-45.50 wide x 8.61-12.96 tall, except `13_Track` at **36.30 x 8.61** |
+| panel thickness | 0.000-0.100 - flat, so the normal means something |
+| angle between the panel's normal and the `Start Position`'s own forward | **0.0-3.0 degrees**, on all twelve |
+| the mount's direction from the grid, dotted with that forward | **+0.99 to +1.00** - dead ahead, on all twelve |
+| distance from the `Start Position` | 163.5-173.9 |
+
+Two of those close the questions this section used to leave open.
+
+**The basis.** The panel's normal lands within three degrees of the start
+line's own authored forward on every circuit, and the panel is flat to a
+tenth of a unit. That is not something a centroid could have said and it is not
+something unrelated geometry does twelve times: the mounting surface faces
+straight back down the track at the grid. The eigenvector's *sign* is
+still ambiguous - a principal axis is a line - so `Mount::matrix` takes the
+race direction from the caller and points the board at the grid, which the
+`+0.99` column is what justifies.
+
+**Which surface.** `321backplate.tga`, and the argument that settles it is not
+the texture list - it is `14_Track`. On eleven circuits the `billboard8` stub
+sits 0.48-1.63 units from the backplate on the same plane, so the choice would
+be noise; on `14_Track` the two are **354 units and 54 degrees apart**. So they
+are not interchangeable, the stub is not a safe fallback, and
+`oag_render::gantry::mount` prefers the backplate - which the sweep asserts,
+per circuit, rather than leaving to a comment.
+
+**And the scale is 1.0, measured.** The gantry's own countdown board
+(`start_light_321goShape`) is 34.02 units across against a 36.30-45.50 panel,
+so it fits its mount at 1:1 on every circuit including the narrow one. The
+model's *widest* piece is the 43.25-unit chequered board, which would overhang
+`13_Track` - but that is one of the pieces clipped away below, so it never
+reaches the screen.
+
+### What it took to actually draw it
+
+Three things the coordinates alone did not say, found by rendering:
+
+1. **The gantry cannot stand exactly on the panel.** Its board is then coplanar
+   with the track's own and loses a `Less` depth test at every distance - the
+   whole gantry invisible, with the 8x8 placeholder showing through where it
+   should be. `oag_game::race::gantry::CLEARANCE` stands it one unit in front.
+   That value is **chosen, not measured, and carries no confidence score**; what
+   is measured is only its order of magnitude, from the 0.48-1.63 units the
+   artists themselves put between the two co-located surfaces.
+2. **The parked states have to be clipped, or the race opens with `FINAL LAP`.**
+   One asset carries every state as windows on one timeline (above), and a state
+   that is not its turn is *parked to the side* - 33 units left for `FINAL LAP`,
+   43 right for the chequered board - not hidden. The original parks them behind
+   the track's own structure; this project draws the model in open air, so
+   without a cull the first frame of lap one shows a full-size, legible
+   `FINAL LAP`. `oag_render::gantry::clip_to_panel` drops the draws whose own
+   extent sits outside the **mount's authored width**, which is 6 or 7 of the
+   model's 15 on every circuit - the two states whose trigger is unrecovered,
+   and nothing else.
+3. **The clock is the race clock, unshifted.** `world.tick / 60`, zero at the
+   start, held at frame 559 - the last frame before `Final_Lap`'s own first key.
+   Nothing is offset to make the asset's `GO` (3.03-3.6 s) coincide with the
+   measured thrust gate (4.533 s); that gap is [reproduced as it
+   stands](#timing-against-the-measured-countdown) rather than closed with a
+   constant nobody has measured.
+
+Rendered on `16_Track`, `05_Track`, `13_Track`, `14_Track` and
+`16_Track`'s reversed variant at 1.00 s, 1.83 s, 2.60 s, 4.00 s and 5.90 s, the
+board plays the sequence this page predicts from the texel grid: `3`, then `2`,
+then `1` white with `3` and `2` gone dark red, then a green `GO`. **The `2.60 s`
+frame is the one that was predicted before it was drawn**, and it is the one
+that matches.
+
+### The count through the loader is larger than the count off the base disc
+
+The twelve above is what the sweep measures, and the sweep opens the base disc
+alone and reads `track.vex` alone. The game's own loader mounts the downloadable
+packs too and races the reversed variants, and driving `oag-game --race
+--track ...` over every circuit and both variants places a gantry on **32 track
+files - sixteen circuits, forward and reversed - with no circuit reporting an
+absence.** The four circuits the sweep does not see (`08`, `11`, `12`, `15`) are
+the ones that arrive with a pack.
+
+That is the number that describes what a player gets. The twelve is the number
+that describes what one disc image proves without any pack mounted, which is why
+both are here.
+
 ### What is still open
 
-- **The gantry model's own orientation and scale at that mount.** A centroid
-  gives a position, not a basis. Reading node 74's own vertex bounds (rather
-  than the centroid) would give the surface's plane and therefore the yaw.
-- **Which of the two surfaces the arch actually attaches to.** `321backplate.tga`
-  is the better fit - `321Go_StartFinish.vex`'s own six textures are
-  `321go_NOMIP.tga`, `Fx400_nomip.tga`, `Honey_LightBlue.tga`, `Honey3.tga`,
-  `Checkered.tga` and `Honey2_KEY.tga`, and **`billboard8.tga` is not among
-  them**, so the 8x8 stub is the advert-panel slot and the backplate is the
-  countdown board's backing. But they are 1 unit apart on one node, so this is a
-  distinction to settle by rendering, not by argument.
+- **The gap between the asset's `GO` and the measured green** is unchanged, and
+  a player sees it: the board says `GO` about a second before a craft can move.
+  See [the timing section](#timing-against-the-measured-countdown).
+- **The `FINAL LAP` and chequered states are not shown at all**, because their
+  triggers are unrecovered. Recovering them turns the clip above from a
+  necessity into a per-state cull.
 - **Pulse's own binding path.** `search_strings billboard` on
   `/psp-pulse-usa/BOOT.BIN` returns only `Billboard` (the XML element),
   `PI_BILLBOARD` and `PI_Billboard` - **no lowercase `billboard` base string for

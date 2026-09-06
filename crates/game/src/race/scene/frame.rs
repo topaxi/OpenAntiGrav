@@ -283,6 +283,12 @@ impl Scene {
             // runs both off the tick.
             drawable.write_node_anims(queue, seconds);
         }
+        // The gantry rides the same clock and clamps it itself - see
+        // `race::gantry::CLOCK_LIMIT` for why it stops rather than looping.
+        if let Some(gantry) = &self.gantry {
+            queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
+            gantry.write(queue, view_projection, prev_vp, seconds);
+        }
         oag_render::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
@@ -799,6 +805,10 @@ impl Scene {
         }
         if let Some(pads) = &self.weapon_pads {
             stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
+        }
+        // With the track and before the hulls: scenery a craft passes under.
+        if let Some(gantry) = &self.gantry {
+            stats.add(gantry.draw(&mut pass, frustum.as_ref()));
         }
         // After the track and the pads, before the hulls: the road's depth has
         // to be in the buffer for the quad to be occluded by the geometry in

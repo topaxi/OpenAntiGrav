@@ -479,6 +479,14 @@ pub struct Loaded {
     pub hud: crate::hud::Assets,
     /// What to draw for the track.
     pub track_model: Model,
+    /// The start gantry and where it stands, when this circuit authors a mount
+    /// for one and the model loads.
+    ///
+    /// `None` is a circuit with no gantry drawn at all, never a gantry at a
+    /// borrowed coordinate: the mount is measured off each circuit's own
+    /// geometry and every circuit's answer differs. See `race::gantry` and
+    /// `docs/rendering/start-gantry.md`.
+    pub gantry: Option<crate::race::gantry::Placed>,
     /// One hull, plume, nozzle and spark-anchor set per grid slot, each off
     /// its own team's directory. Slot 0 is the player's.
     ///

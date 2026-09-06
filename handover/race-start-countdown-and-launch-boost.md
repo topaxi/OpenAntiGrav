@@ -691,10 +691,62 @@ Steps already naming it a false lead - a text-position formatter inside
 `Race_CreateModeObject`, not the mode-object switch. Retracted there and
 recorded here so a fourth reader does not spend the same time.
 
+## 2026-09-06, ninth pass: the gantry is placed, drawn, and playing the countdown
+
+**The `3`, `2`, `1`, `GO` is on the start gantry in a real race, on every Pulse
+circuit the loader reaches - 32 track files, sixteen circuits forward and
+reversed, no circuit reporting an absence.** The eighth pass recovered the mount as a centroid on two
+circuits; this one measured its *basis*, drew the model there and moved the
+count off the HUD. What landed is in
+[`docs/rendering/start-gantry.md`](../docs/rendering/start-gantry.md) - "The
+basis, the scale and the whole disc" and "What it took to actually draw it" -
+and in `oag_render::gantry` / `oag_game::race::gantry`.
+
+The three things that were open and are now measured, all in
+`crates/render/tests/gantry_mount_ground_truth.rs` over the whole disc:
+
+- **Orientation.** The mount's plane, fitted from its own vertices, sits
+  **0.0-3.0 degrees off the `Start Position`'s authored forward on all twelve
+  circuits**, and the mount is **dead ahead of the grid** (direction dotted with
+  forward, `+0.99` to `+1.00`). The sign of a principal axis is ambiguous, so the
+  race direction resolves it; the `+0.99` is what says which way that is.
+- **Scale.** 1.0. The gantry's own countdown board is 34.02 across and the
+  authored panel 36.30-45.50, so it fits at 1:1 on every circuit, `13_Track`'s
+  narrow one included.
+- **Which surface.** The backplate, and `14_Track` is the proof rather than the
+  texture list: eleven circuits put the `billboard8` stub 0.48-1.63 units from
+  the backplate on the same plane, and `14_Track` puts it **354 units and 54
+  degrees** away. The two are not interchangeable and the stub is not a safe
+  fallback.
+
+Two things only rendering could have found, both now in the docs: the model
+cannot stand *exactly* on the panel (coplanar, loses the depth test, whole
+gantry invisible with the 8x8 placeholder showing through), and the parked
+states have to be clipped or lap one opens with a full-size legible
+`FINAL LAP`.
+
+**The HUD overlay is now the fallback, not the countdown.** Both call sites
+(`main::race_stage`, `race::capture`) are gated on `Scene::draws_gantry`, so it
+draws where no gantry does and nowhere else. It is not deleted - a circuit with
+no mount, and every title whose gantry is unplaced, still needs it.
+
+**Still open and player-visible:** the board says `GO` about a second before the
+craft can move (the asset's 3.03-3.6 s against the measured 4.533 s thrust
+gate). That gap is reproduced rather than papered over, exactly as this thread's
+timing section asks; nothing measures it yet.
+
 ## Next Steps
 
 **Display/logic, current focus:**
 
+0. **Close the `GO`-to-green gap.** Now that the gantry draws, this is the one
+   remaining defect a player sees on the start line: the board finishes its
+   count about a second before `oag_race::COUNTDOWN_TICKS` releases thrust.
+   Either the asset's clock does not start at tick zero in the original, or the
+   engine drives the `TEXOFFSET` itself rather than playing the authored track -
+   `docs/rendering/start-gantry.md`'s "What is not proven" section already names
+   the gated per-frame accumulator at `0x0890cf34` as the live candidate, and it
+   is a live-debugger question rather than a static one.
 1. **The 18-entry table at `0x08a7a1e8` is a dead end for this, confirmed rather
    than just suspected** - both entries checked land on genuine mid-function
    re-entry points inside one HUD-text formatter (`0x0881d458`, raw
