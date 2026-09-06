@@ -571,6 +571,43 @@ import is the actual fix and is nobody's task yet.
 `0x08804000` image base. Scanning the extracted binary for calls to
 `0x0884d850` means searching for `0x0C012614`, not `0x0E213614`.
 
+### `get_xrefs_to` on `ps3-hdfury-eu`: code xrefs are sound, data xrefs are not
+
+Two different answers, and conflating them wastes a session either way.
+
+**Code xrefs work, and this is worth knowing** - the PSP databases return
+nothing from `get_xrefs_to` because Ghidra applies no Allegrex relocation, and
+that defect does **not** carry over to the PS3 PowerPC database.
+`get_xrefs_to 0x00054628` (`RaceManager_GetInstance`) returns 20 call sites,
+several landing in independently named functions. A `bl` displacement is encoded
+in the instruction with no TOC involved, so call resolution never depended on
+the TOC being right. **Use it. Tracing callers and parents directly is available
+on this binary and is not available on the PSP ones.**
+
+**Data xrefs are systematically wrong for any function whose TOC is not the
+analysis-time default**, in exactly the way [memory.md](functions/ps3-hdfury-eu/memory.md)
+describes for the decompiler. The reference table was built with the wrong `r2`
+and never recomputed. Worked example, all four checks against the same
+instruction:
+
+- `get_xrefs_to 0x008a704c` reports `From 003a43a8 in .opd.FUN_003a4380 [READ]`.
+- `disassemble_function 0x003a4380` shows that instruction is
+  `lwz r30,-0x648c(r2)`.
+- `scripts/ps3-toc.py resolve 0x003a4380 -0x648c` gives **`0x008b6f38`**.
+- `get_xrefs_to 0x008b6f38` returns **"No references found"**.
+
+The observed shift is `0xFEEC`. Confusingly, Ghidra's *decompiler* gets the same
+operand right (it prints `PTR_DAT_008b6f38`), so a decompile and an xref query
+on one instruction can disagree, and the decompile is the one to believe.
+
+**Rule: never take a data xref on this binary at face value.** Resolve the
+displacement with `scripts/ps3-toc.py resolve <function> <disp>` and confirm the
+reverse direction. A wrong-TOC data address will also have a plausible-looking
+Ghidra label attached to it - `0x008a704c` came out as `PTR_s_WIP3OUT_008a704c`,
+a real pointer to a real string, just not the one the code loads. That is how
+the wrong name reached
+[billboards.md](functions/ps3-hdfury-eu/billboards.md) and survived a session.
+
 ## Cross-referencing platforms
 
 When a function is understood on one platform, look for its counterpart on the
