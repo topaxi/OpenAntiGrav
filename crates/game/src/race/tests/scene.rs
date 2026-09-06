@@ -363,31 +363,37 @@ fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
     );
 }
 
-/// A laid mine or bomb is drawn with no orientation - a reading, not a
-/// shortcut, since a laid charge carries zero velocity ([`at_rest`]) and
-/// there is nowhere recovered to put a rotation on it. See
-/// [`Race::mine_model_matrices`]'s own doc comment for what `Mine_Init`
-/// carries that this does not yet draw.
+/// A laid mine or bomb is drawn with the pose it landed in, not a bare
+/// translation - the fix over what this asserted before 2026-09-07. See
+/// [`Race::mine_model_matrices`]'s own doc comment and
+/// `oag_gameplay::projectile::mine::frozen_pose` for what `Mine_Init` carries
+/// and which half of the reading is chosen rather than measured.
 ///
-/// [`at_rest`]: oag_gameplay::projectile::mine::at_rest
+/// Goes through [`oag_gameplay::projectile::Projectiles::lay`] rather than
+/// `Projectiles::spawn` on purpose: `spawn` is the flying weapons' own entry
+/// point and defaults `orientation` to identity, which would pass this test
+/// whether the drawing code used the field at all - `lay` is the one entry
+/// point a real drop calls, with a non-identity pose to tell a bug in the
+/// plumbing apart from a coincidence.
 #[test]
-fn a_laid_mine_and_bomb_are_translation_only() {
+fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    let pose = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
     race.world
         .projectiles
-        .spawn(oag_formats::weapons::Weapon::Mine, Vec3::X, Vec3::ZERO, 0);
+        .lay(oag_formats::weapons::Weapon::Mine, Vec3::X, 0, 5.0, pose);
     race.world
         .projectiles
-        .spawn(oag_formats::weapons::Weapon::Bomb, Vec3::Y, Vec3::ZERO, 0);
+        .lay(oag_formats::weapons::Weapon::Bomb, Vec3::Y, 0, 20.0, pose);
 
     let mine = race.mine_model_matrices();
     assert_eq!(mine.len(), 1);
-    assert_eq!(mine[0], Mat4::from_translation(Vec3::X));
+    assert_eq!(mine[0], Mat4::from_rotation_translation(pose, Vec3::X));
 
     let bomb = race.bomb_model_matrices();
     assert_eq!(bomb.len(), 1);
-    assert_eq!(bomb[0], Mat4::from_translation(Vec3::Y));
+    assert_eq!(bomb[0], Mat4::from_rotation_translation(pose, Vec3::Y));
 }
 
 /// A rocket fired straight down still gets a usable basis.

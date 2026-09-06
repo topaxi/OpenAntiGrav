@@ -59,7 +59,7 @@
 //!   range. See [`triggered_by`].
 
 use super::{Impact, Projectile};
-use oag_core::math::Vec3;
+use oag_core::math::{Quat, Vec3};
 use oag_formats::weapons::{BombStats, MineStats, Weapon};
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
@@ -205,6 +205,35 @@ pub fn drop_point(state: &ShipState, dimensions: &Dimensions) -> Vec3 {
 #[must_use]
 pub const fn at_rest() -> Vec3 {
     Vec3::ZERO
+}
+
+/// The pose a laid charge is drawn with, frozen at the instant it lands.
+///
+/// **Recovered as a mechanism, chosen as to which basis.** `Mine_Init`
+/// (`0x08859ac8`, confidence 90) copies a whole matrix - `entity+0x60` through
+/// `+0x9c` - into the entity once, at drop
+/// (`docs/ghidra/functions/psp-pulse-usa/mine.md#mine_init-scatters-and-takes-its-fuse-from-timetodie`),
+/// and nothing this project has read updates it afterward: a laid mine keeps
+/// the pose it landed with, not the world's up, for the rest of its life.
+/// Applied here to the Bomb too, on the same footing this module already
+/// applies [`at_rest`] to both: `Weapon_FireBomb`'s own spawn helper
+/// (`0x0885f188`) could not be resolved statically, so nothing says the Bomb
+/// does the same copy, but nothing says it does not either, and "one weapon in
+/// two sizes" is this module's standing reading rather than a per-field one.
+///
+/// **Chosen, not measured, and carries no confidence score**: the matrix
+/// `Mine_Init` copies comes from `craft->anchor`, the *rear emitter's own*
+/// transform (`craft+0xa0`) - not necessarily the hull's own orientation this
+/// takes instead. An emitter's basis is not guaranteed to equal the body's:
+/// the Shuriken's trail anchor is known to carry a non-identity local rotation
+/// of its own (`docs/ghidra/functions/psp-pulse-usa/shuriken.md`, the
+/// constructor rotating it by `-pi/2`). This engine has no located rear-emitter
+/// transform to read instead, so the firing craft's whole
+/// [`oag_physics::Body::orientation`] is what it uses - the closest available
+/// reading, not the recovered one.
+#[must_use]
+pub const fn frozen_pose(orientation: Quat) -> Quat {
+    orientation
 }
 
 /// Whether a craft at `position` is close enough to set this mine off.

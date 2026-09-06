@@ -363,21 +363,16 @@ impl Race {
         self.projectile_model_matrices(oag_formats::weapons::Weapon::Rocket)
     }
 
-    /// Where each live mine is, for the model draw.
+    /// Where each live mine is, and the pose it landed in, for the model draw.
     ///
-    /// **Translation only, and that is a reading rather than a shortcut.**
-    /// `oag_gameplay::projectile::mine::at_rest` is the recovered velocity a
-    /// laid mine carries - zero, so [`Self::projectile_model_matrices`]'s
-    /// `forward == Vec3::ZERO` branch is exactly what fires here and there is
-    /// no separate degenerate case to handle the way the Rocket's has one.
-    ///
-    /// **`Mine_Init` does carry an orientation** - it copies the firing
-    /// craft's own anchor matrix into the entity once, at drop, and nothing
-    /// found updates it afterward (see `mine.md`'s "`Mine_Init` scatters"
-    /// section) - but `oag_gameplay::Projectile` has no field to carry a
-    /// frozen pose in, and adding one touches the determinism hash for a
-    /// value nothing else in the simulation reads. Left as an open item
-    /// rather than invented; see `handover/`.
+    /// **No longer translation only.** `oag_gameplay::projectile::mine::at_rest`
+    /// is the recovered velocity a laid mine carries - zero, so
+    /// [`Self::projectile_model_matrices`]'s `forward == Vec3::ZERO` branch is
+    /// exactly what fires here - but that branch now draws
+    /// `Projectile::orientation` rather than a bare translation. See
+    /// [`oag_gameplay::projectile::mine::frozen_pose`] for what `Mine_Init`
+    /// copies at drop, at what confidence, and which half of this reading is
+    /// chosen rather than measured.
     #[must_use]
     pub fn mine_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_formats::weapons::Weapon::Mine)
@@ -385,10 +380,11 @@ impl Race {
 
     /// Where each live bomb is, for the model draw - the Mine's, one size up.
     ///
-    /// Same reading as [`Self::mine_model_matrices`]: `Weapon_FireBomb`'s own
-    /// direction argument is a heading, not a velocity a laid bomb keeps (see
-    /// `mine.md`'s "The Bomb is the same weapon, one size up"), so this is
-    /// translation only for the same reason.
+    /// Same reading as [`Self::mine_model_matrices`], carried over on the same
+    /// terms [`oag_gameplay::projectile::mine::frozen_pose`] already applies
+    /// [`oag_gameplay::projectile::mine::at_rest`] to both weapons: the Bomb's
+    /// own spawn helper is unread, so nothing confirms the same matrix-copy
+    /// happens there, and nothing rules it out either.
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_formats::weapons::Weapon::Bomb)
@@ -421,7 +417,14 @@ impl Race {
             .map(|projectile| {
                 let forward = projectile.velocity.normalize_or_zero();
                 if forward == Vec3::ZERO {
-                    return Mat4::from_translation(projectile.position);
+                    // Every weapon that reaches this branch lays rather than
+                    // flies (`oag_gameplay::projectile::mine::at_rest`), so
+                    // `orientation` is the frozen pose it landed with, not the
+                    // identity default a flying projectile carries here.
+                    return Mat4::from_rotation_translation(
+                        projectile.orientation,
+                        projectile.position,
+                    );
                 }
                 // `Vec3::Y` is a poor reference exactly when the rocket is flying
                 // straight up or down; `any_orthonormal_vector` is the fallback

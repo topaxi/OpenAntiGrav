@@ -222,6 +222,44 @@ weapon and a rear one against an empty field.
 doc comment was stranded 270 lines above it, attached to `Driver::wants_to_fire`.
 Put back.
 
+## 2026-09-07: the Cannon, the Quake and the LeachBeam checked and still blocked; the Mine's and the Bomb's pose built instead
+
+**Checked all three of the remaining unbuilt weapons against the committed
+docs alone, with no Ghidra session, per this pass's own constraint - and all
+three are still genuinely blocked, not merely under-read.** `plasma.md`'s
+sixteen-bit table (2026-09-02) already says so and nothing has been added to
+it since: the Cannon's fire bit `0x2000` is dispatched by **nothing** in
+`Weapons_DispatchFire`, and bit `0x4000`'s handler (`0x088537ac`,
+`world+0x58`) - the one candidate for where it actually fires - is itself
+unread past being reachable, and is not even confirmed to be the Cannon's;
+the Quake's handler (`Weapon_FireQuake`, `0x0886c600`) and the LeachBeam's
+(`Weapon_FireLeachBeam`, `0x08866658`) are each named only from the dispatch
+table and a bit map, at confidence 82, with **no body read at all** -
+`plasma.md`'s own words, "do not assume anything about what they do."
+Addresses anyone picking this up next would need to read:
+
+- `0x088537ac` (`world+0x58`) - the Cannon's own candidate, and whether it is
+  the Cannon at all is itself unsettled.
+- `0x0886c600` - `Weapon_FireQuake`'s body.
+- `0x08866658` - `Weapon_FireLeachBeam`'s body.
+
+**Checked `docs/ghidra/functions/ps3-hdfury-eu/weapons.md` for a cross-title
+shortcut, per this pass's own instruction to look before declaring a block -
+it is not one.** HD/Fury's PS3 binary does carry real, `__FILE__`-tagged
+`CannonManager` and `LeachBeamManager` classes (`weapons.md`'s own finding,
+independent of this pass), which is a pleasing confirmation that the Cannon
+and the LeachBeam are real weapons in this engine lineage rather than cut
+content - but it says nothing about how Pulse's PSP binary dispatches or
+flies either one, being a different binary from a later console generation.
+A lead worth naming, not a licence to port HD's shape onto Pulse's - doing
+that would be exactly the plausible-reading-across-titles this pass was
+told not to do.
+
+**So the pass went to the best weapons-area improvement available without
+Ghidra**: a laid mine or bomb now draws the pose it landed in rather than a
+bare translation - see the "Open" list below, where that item is now marked
+done, for the reading and its confidence split.
+
 ## Open
 
 - **`<Plasma charge_time>` is authored and nothing read spends it, and play
@@ -341,14 +379,24 @@ Put back.
   dodge nobody has verified.
 - ~~**A mine and a bomb both draw no model.**~~ **Done 2026-09-05** - see
   Next Steps.
-- **A laid mine's or bomb's own drop orientation is recovered and unwired.**
-  `Mine_Init` copies the firing craft's anchor matrix into the entity once,
-  at drop, and nothing found updates it afterward - a frozen heading, not a
-  velocity. `oag_gameplay::Projectile` carries no field to hold that pose in,
-  so `oag_game::race::Race::mine_model_matrices`/`bomb_model_matrices` draw
-  both translation-only for now. Adding the field touches the determinism
-  hash for a value nothing else in the simulation reads, which is why this
-  is recorded rather than done on the spot.
+- ~~**A laid mine's or bomb's own drop orientation is recovered and
+  unwired.**~~ **Done 2026-09-07.** `Projectile` now carries `orientation:
+  Quat`, set at drop from the firing craft's own body orientation and read
+  back by `mine_model_matrices`/`bomb_model_matrices`. Kept out of
+  `crate::hash`'s reference on purpose - it is presentation state nothing in
+  the simulation reads back, so hashing it would only make the reference move
+  the day the field started being set, for a value that cannot be the reason
+  two runs diverge. See `oag_gameplay::projectile::mine::frozen_pose`'s doc
+  comment for the two-part reading it carries: that a laid charge freezes a
+  pose at drop is recovered from `Mine_Init` (`0x08859ac8`, confidence 90,
+  `entity+0x60..0x9c`); that the pose is the craft's *body* orientation rather
+  than the rear emitter's own local rotation is chosen, not measured, and
+  carries no confidence score - `Mine_Init` actually copies `craft->anchor`
+  (`craft+0xa0`), and this engine has no located rear-emitter transform to
+  read instead. Applied to the Bomb too, on the same "one weapon in two
+  sizes" footing this module already applies to `at_rest`, even though the
+  Bomb's own spawn helper (`0x0885f188`) is unresolved and does not confirm
+  the same matrix copy happens there.
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the
