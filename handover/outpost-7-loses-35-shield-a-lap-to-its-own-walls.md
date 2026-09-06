@@ -1,4 +1,4 @@
-# Outpost 7 loses 34-35 shield a lap to its own walls, and it is not the line
+# Outpost 7 loses 34-35 shield a lap to a corner no craft can hold at the speed the AI picks
 
 Split out of `an-ai-craft-pays-for-barrel-rolls-it-never-flies.md` on
 2026-09-06, whose other three findings all landed with the grounded gate in
@@ -69,14 +69,108 @@ that believes it has a third of the grip runs just as wide here.
 Full evidence, tables and the reproduction recipe:
 `~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/outpost7-walls.md`.
 
+## Step 2 is done: it is neither the steering nor the grip. The corner is untakeable.
+
+Measured 2026-09-06 on the merged tree, same lone Ace, same circuit. **Neither
+of the two candidates step 1 left open is the cause, and both were ruled out by
+measurement.**
+
+- **Yaw does not saturate below its cap.** `Tuning::max_turn_rate` (1.8) clamps
+  the rate pure pursuit *requests* in `Driver::steering`; 1.55-1.62 is the rate
+  the *hull* achieves. Nothing clamps the second to the first. The hull's
+  ceiling is arithmetic off recovered constants and `max_turn_rate` is not one
+  of them: `steer * Turning.amount / (5 * I_yy)` = `100 * 1.68 / 108` =
+  **1.556 rad/s**, and `docs/ghidra/functions/psp-pulse-usa/engine.md` measures
+  the *original* at 1.42-1.51 under full lock. We are within a few per cent of
+  the original hull. `Tuning::max_turn_rate`'s own doc already said 1.8 was
+  chosen to stop binding.
+- **The craft is not sliding.** Slip - velocity against the craft's own forward
+  - is **-8.4 degrees** and flat through the whole departure, and `grounded` is
+  **1.00 on every tick** with `time_airborne` at 0.000, so the
+  `grip_ground`/`grip_air` split is never crossed. The "53 degrees against 30"
+  step 1 recorded is `vel_err` against `head_err`, both taken against the
+  *line's* tangent; their difference is that same 8.4 degrees. What grows is the
+  heading: the craft is pointed up to 26 degrees off where the line goes and the
+  velocity follows the body faithfully.
+
+**What binds is kinematics.** A craft at speed `v` on a line of curvature `k`
+must yaw at `v * k`; with the hull's ~1.55 rad/s the fastest any craft can hold
+that line is `v_yaw = 1.55 / k`. The racing line's **local** curvature (chords
+of 4, 8 and 16 samples, all three agreeing) peaks at **0.047 at index 2,119** -
+radius 21 units, `v_yaw` **33 units/s**. The craft is doing 94.
+
+The departure begins where the speed crosses `v_yaw`, **within three samples**:
+at 2,098 the craft is at 82.4 against a `v_yaw` of 80, `lat` is +0.2 there, 0.0
+at 2,100 and negative from 2,101 to -30.9 at the wall.
+
+**And the driver never sees the corner.** `corner_target` is built on
+`Line::max_curvature(index, window, look * 0.5)`, and at 80 units/s that span is
+24, so `Line::curvature`'s chord triple covers ~72 units of track while the
+tight arc is ~50 long. It reports **0.0155-0.0186** where the local value is
+0.047 - understating it **2.5-3x** - and puts its own peak at index 2,090,
+thirty samples before the real one.
+
+**This is also why the `lateral_accel` probe came back null.** `v_grip(90)` at
+`k = 0.047` is 43.8 and `v_yaw` is 33: a driver that believes it has a third of
+the grip is still asking for a speed the hull cannot rotate at. The grip knob
+cannot reach this corner from either end.
+
+Fraction of each circuit yaw-limited (`k > 1.55^2 / 260`), worst sample:
+06 26 % / `k` 0.055 / `v_yaw` 28; **07 20 % / 0.047 / 33**; 16 16 % / 0.028 / 55;
+03 15 %; 02 15 %; 09 13 %; 13 12 % but its worst still admits 90 units/s;
+14 9 %; 10 8 %; 05 7 %; 04 7 %; 01 3 %. **13's 2.7 shield is not this bug.**
+
+Full evidence, tables, per-tick dumps and the two probes below:
+`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/steering-saturation.md`.
+
+## The fix is a design call, probed and deliberately not taken
+
+Two probes, each measured on the whole twelve-circuit board, then reverted.
+
+- **A: the yaw-rate term alone.** `corner_target` returns
+  `min(sqrt(lateral_accel * commitment / k), max_turn_rate / k)` - kinematics,
+  not a tuned constant. Board-wide worth having (16 32.78 -> 48.75 shield, 09
+  59.20 -> 72.10, 14 41.41 -> 48.38) and it **does not fix 07 at all**: the
+  cluster moves from 2,100-2,149 to 2,150-2,199 for the same 24.1, because A
+  caps against the understated curvature.
+- **B: A, plus capping the estimator's span at 10 units** so it resolves a
+  50-unit corner. This is the one that reaches 07 - 27.4/26.4/28.0 a lap, and
+  the craft survives to lap 4 - and it transforms half the board (16 71.69,
+  09 84.54, 05 73.09, 14 65.91). **It breaks 06**, which loses its clean lap and
+  takes three respawns. `min(10.0)` is a number chosen to make 07 behave, which
+  is exactly the invisible damage the thread's own rule forbids.
+
+**B's damage is two *located* events, not conservative cornering**, and the
+obvious reading - "B corners slowly and 06 has the tightest corner" - is wrong.
+Shield by 50-index bucket, per lap:
+
+- **06, indices 1,200-1,249: nothing at all in baseline, 34.72 on lap 1 under
+  B** with three respawns, then 4.43 and 3.45. That bucket holds 06's worst
+  corner, `k` 0.0547 at index **1204**, `v_yaw` **28 units/s** - the tightest
+  sample on the disc. Every other bucket on 06 improved. So B is doing something
+  specific at 06:1204, most likely wedging a craft it has slowed to a crawl.
+  **Cause not established.**
+- **14, indices 750-799: nothing in baseline, 7.60 on lap 3 under B** and
+  nothing on laps 1-2. `crates/game/tests/race_ground_truth.rs` already records
+  14 as having **82 racing-line samples with nothing under them at 684-765**,
+  which that bucket overlaps - a craft slowed over an unsupported stretch is a
+  different failure from one that flies it. 14 is a large net win under B all
+  the same: 29.09 total against baseline's 53.59, its worst bucket (2800-2849,
+  at its tightest corner, index 2785) falling from ~6 a lap to under 1.
+
+So the fix wants its own thread: it is a change to which limit law the AI uses
+and at what resolution it reads the line, it moves every circuit, the span has
+no measured value yet, and **the one measurement that would anchor a sweep -
+06's shield - is dominated by a located event nobody has looked at.**
+
 ## Open
 
-- **Which of the two remaining causes binds.** The craft's yaw rate is pinned
-  at 1.55-1.62 rad/s against `Tuning::max_turn_rate` 1.8 through the whole
-  departure, *and* its velocity is further off the line's tangent than its body
-  is (53 degrees against 30), so the steering is near saturation and the
-  lateral grip is not holding. Which one to move is a design call and was
-  deliberately not made.
+- **The AI's cornering model has no yaw-rate term and its curvature estimator
+  cannot resolve a corner shorter than its own span.** Both established above.
+  The fix is A plus a *measured* span rule, swept the way `lateral_accel` was
+  (`sweep_grip` in `race_ground_truth.rs` is the harness shape), with 06 as the
+  circuit that discriminates rather than 07.
+
 - **Whether the wall response should stop a craft dead.** 101.0 to 2.7 units/s
   in 18 ticks with one contact resolved a tick, against the 3.5 per cent
   per-frame tangential bleed
@@ -111,12 +205,21 @@ Full evidence, tables and the reproduction recipe:
 
 ## Next Steps
 
-1. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
+1. **Find out what probe B does at 06:1204 before sweeping anything.** 34.72
+   shield and three respawns, one bucket on one lap, at a place baseline never
+   loses anything: that is a located failure, not conservative cornering, and a
+   span sweep anchored on 06's shield would be optimising against a cause nobody
+   has looked at.
+2. Then sweep the curvature estimator's span the way `lateral_accel` was swept,
+   with probe A's yaw-rate term in place. A span chosen against 07 alone is a
+   span fitted to one circuit.
+3. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
    grazing a flat wall at 28 degrees, one contact a tick, and compare the
-   tangential bleed against the recovered 0.035. That is the one open question
-   with a committed evidence page behind it, and it decides whether the grind's
-   ~5 shield a lap is legitimate.
-2. Only then look at the steering saturation. Do **not** trim `07_Track` out of
-   the test's known-good list: it has always passed and the assertion is right,
-   and do not move `lateral_accel` - the probe above shows it does not touch
-   this corner.
+   tangential bleed against the recovered 0.035. Independent of step 1 and
+   downstream of it - the craft reaches that wall at 101 because it was never
+   slowed for a corner that admits 33, so a cheaper scrape would hide the cause
+   rather than fix it.
+4. Do **not** trim `07_Track` out of the test's known-good list: it has always
+   passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
+   or `grip_air` - the first cannot reach this corner and the last two are
+   authored per-craft data that the `grounded == 1.00` measurement clears.
