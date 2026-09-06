@@ -210,9 +210,42 @@ than, say, a shadow-volume or reflection-clip use.
   per-camera function-pointer/vtable slot, which a direct-`jal` byte search
   cannot find and which would also fit the "second, spectator/photo camera"
   object this page already can't locate (a vtable would explain both at
-  once). Not chased further; worth flagging for whoever picks up the vtable
-  question or the general relocation-defect thread, since the empty-xrefs
-  symptom looks identical to that defect's from the outside and isn't it.
+  once).
+
+  **2026-09-06: the vtable-shaped table exists, confirmed by finding
+  `Camera_SubmitScene`'s own address stored as data, and it too has no
+  caller.** A byte-pattern search for `0x0013e280` little-endian (`80 E2 13
+  00`) across `SCES_547.48` returns exactly one hit, at `0x00293084`. Reading
+  the surrounding bytes shows a null-terminated table of nine 8-byte entries
+  starting at `0x00293070`, each `{u32 zero, u32 pointer}`: the pointer at
+  `0x00293084` is `Camera_SubmitScene`'s own address, the third entry.
+  Two of the other eight pointers land inside recognised function bodies
+  (`0x0013edb8`, a function Ghidra already has a boundary for but which
+  itself has zero xrefs either); the remaining six point into byte ranges
+  Ghidra has never marked as function starts at all, which is consistent
+  with a dispatch table whose entries were never reached by any path static
+  analysis could follow - not with hand-picked data that happens to alias
+  code. `analyze_data_region` on `0x00293070` reports zero xrefs and
+  classifies it only as `PRIMITIVE`/`DAT_00293070`, i.e. this table's shape
+  is not something Ghidra's own analysis noticed either.
+
+  This does not, on its own, prove the table is *the* mechanism that calls
+  `Camera_SubmitScene` - no `jalr` was traced loading a register from this
+  table's address, and the table itself has zero xrefs of any kind, the same
+  as the function pointer it holds. A second, matching negative result rules
+  out the most likely alternative for how it could still be reached in a way
+  Ghidra would show: searched for a `lui`/`ori` or `lui`/`addiu` pair
+  constructing the table's base address (`0x00293070`, hi half `0x0029`) -
+  `lui reg, 0x29` does not occur anywhere in the image (631 `lui` matches
+  contain the substring `0x29`, none of them exactly that operand), so
+  nothing builds this address via ordinary two-instruction absolute
+  addressing either. Whatever loads a pointer out of this table does it by a
+  path this project's static tools can't yet follow - a runtime-computed
+  base (e.g. a struct field set up elsewhere and indexed at a variable
+  offset), most likely. Not chased further past this; worth flagging for
+  whoever picks up the vtable question or the general relocation-defect
+  thread, since the empty-xrefs symptom looks identical to that defect's
+  from the outside and isn't it.
 - **`FUN_001e9420`**, the perspective-matrix builder the aspect widen calls
   into - read only for its two diagonal terms, not renamed.
 - **What reads the five frustum planes back** - see the plane section above.
@@ -270,3 +303,10 @@ than, say, a shadow-volume or reflection-clip use.
   other threads have hit, just a program that never carried one - the
   missing callers are more likely an indirect `jalr` dispatch than a Ghidra
   analysis gap.
+- 2026-09-06: found `Camera_SubmitScene`'s own address stored as data, inside
+  a null-terminated, nine-entry `{u32 zero, u32 pointer}` table at
+  `0x00293070` with no xrefs of its own and no `lui`/`ori` pair anywhere in
+  the image constructing that table's base address either - so the
+  vtable-shaped table this page already suspected does exist, but nothing
+  Ghidra's static analysis can see reaches it. See the "Not determined"
+  section for the full trace.
