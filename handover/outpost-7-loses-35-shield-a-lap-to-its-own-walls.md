@@ -258,24 +258,24 @@ and destroyed on lap 3. Full table, criterion and reproduction:
 
 ## Open
 
-- **The span is a chosen number sitting on an unfixed bug.** 11 is green and 10
-  is red on the field board, and nothing about the estimator explains that
-  ordering - both failure modes are the wall-wedging and traffic-grinding items
-  below. **Re-sweep the span once the wall response lands**; the table above is
-  the harness and the field columns are the part to keep.
+- **The span is a chosen number, and it is no longer waiting on the wall.** 11
+  is green and 10 is red on the field board, and nothing about the estimator
+  explains that ordering. Step 5 below settles what that item used to be
+  blocked on: **the wall response is faithful, so nothing lands there and the
+  span does not want re-sweeping on account of it** - no committed constant
+  moved. The wedging is a *correct* consequence of the recovered law applied to
+  a craft that arrives at the wall with 34 degrees of its velocity normal to
+  it, so what is left of this item is upstream, in what the driver asks for.
+  The table above is the harness and the field columns are the part to keep.
 
-- **Whether the wall response should stop a craft dead.** 101.0 to 2.7 units/s
-  in 18 ticks with one contact resolved a tick, against the 3.5 per cent
-  per-frame tangential bleed
-  `docs/ghidra/functions/psp-pulse-usa/contact-response.md` recovers. Some of
-  the gap is the normal impulse killing an into-wall velocity the craft's own
-  28-degree heading error keeps restoring, so this needs its own measurement
-  against `oag_physics::wall::resolve` in isolation before it is called a bug.
-  It is the same wedging mode `crates/game/tests/race_ground_truth.rs`'s module
-  docs already record.
-- **Whether hull damage should be charged on every tick of a sustained
-  contact.** ~5 of the 8 shield a lap in cluster 1 is the grind rather than the
-  impact. `FUN_088418e0` is the evidence page for what the original does.
+- ~~**Whether the wall response should stop a craft dead.**~~ **Answered by
+  step 5: yes, and it is not the friction doing it.** Closed.
+- ~~**Whether hull damage should be charged on every tick of a sustained
+  contact.**~~ **Yes.** `Body_RecordContact` (`0x0884dbf4`) stores
+  `p = j*n - f*v_t` - the friction impulse is *inside* the recorded magnitude -
+  and `FUN_088418e0` charges `FUN_088439ac(|p| * 0.05 * 0.7, ...)` per record
+  with **no magnitude threshold**. Ours reproduces it to the digit. Closed; see
+  step 5.
 - **Why the wall beside this stretch is short.** Repeating the sideways cast at
   0, 2, 5 and 11 units above the line finds the left wall at h0 and **nothing
   within 80 units at h2 and above** almost everywhere in the window - the
@@ -296,16 +296,84 @@ and destroyed on lap 3. Full table, criterion and reproduction:
   650-749 (9.26), 2,850-2,949 (8.22), 1,100-1,149 (5.03).
 - **`13_Track`'s 2.7 shield** has never been decomposed.
 
+## Step 5 is done: the bleed is exactly 0.035, and the bleed was never the cost
+
+Measured 2026-09-06 on the merged tree. **`oag_physics::wall::resolve`'s
+tangential bleed is `0.035` to five significant figures, agreeing with the
+value `docs/ghidra/functions/psp-pulse-usa/contact-response.md` recovers off
+two literals. Nothing changed.**
+
+Two isolation measurements, both now pinned in `crates/physics/src/wall/tests.rs`:
+
+- **`a_28_degree_graze_bleeds_the_recovered_friction_and_nothing_else`.** A
+  craft at 100 units/s meeting a flat `Wall` at 28 degrees, one contact a tick.
+  The tangential factor is `0.965` on **every** tick at every angle tried (0, 5,
+  10, 28 degrees), and the *total* loss converges **down** onto `3.5000 %` -
+  `12.84 %`, `5.31 %`, `3.81 %`, `3.55 %`, ... - as the normal component is
+  spent. It approaches the floor from above and never crosses it, which is the
+  same one-sided shape the recovered page's own capture has (`5.21 %` ...
+  `3.560 %`, minimum `3.534 %` at 104 units/s). `0.036` is falsified by the
+  tail, `0.030` by the floor.
+- **`a_held_heading_makes_the_bounce_the_cost_not_the_friction`.** The same
+  graze with the velocity re-pointed to 28 degrees every tick - a stand-in for
+  what grip on a craft whose heading is 28 degrees off does, not the grip law.
+  **100 units/s to 7.34 in 19 ticks, one contact a tick, no thrust**, a flat
+  `12.84 %` a tick. Of that, `2.72 %` is the friction and `9.82 %` is
+  `-(1 + 0.4) * v_n / D` - the measured `v_n` factor is `-0.391`, i.e. `-e`.
+  **The bounce is 73 % of the cost and the friction 27 %.**
+
+So the `101.0 -> 2.7 in 18 ticks` figure has its **mechanism** identified and
+measured, and the mechanism is the normal impulse against a `v_n` the heading
+error restores - not the coefficient this step was sent to check. The residual
+between the isolated `7.34` and the recorded `2.7` is the 2-3-contact ticks and
+thrust, and is **not decomposed**, because **the event no longer reproduces on
+the span-11 tree**:
+
+- Instrumented lone-Ace run, `07_Track`, 6,000 ticks: 234 contact ticks, and
+  **no contact tick after tick 200 has the craft below 30 units/s**. The
+  2,100-2,145 wedge does not happen at all - the craft comes through at 40-42
+  units/s with no contacts. 54.37 shield over two laps, matching step 4's
+  28.19/29.08/29.69.
+- The two remaining large events are **not grazes**: idx 2,158 arrives with an
+  `impact_speed` of **59.78** and idx 2,395 with **74.76** against a total speed
+  of 132.37 - a third of the velocity straight into the wall. Those are crashes.
+- **`14_Track`'s 7.60 at index 751 is gone too**: 18,000 ticks, four laps, zero
+  respawns, 78.44 end shield, and **zero contacts anywhere in 740-760**. The
+  cheapest case this step was told to start from cannot be started from.
+
+Two worries retired permanently, from the same instrumentation:
+
+- **`MAX_HITS_PER_PROBE` and `HULL_CONTACTS` - the two caps `wall.rs` labels
+  inventions - never bind on real geometry.** `dropped_contacts` is `0` on all
+  24,000 instrumented ticks across both circuits. The swept path never fires
+  either.
+- Contacts per tick on `07` are `1` on 200 of 234 contact ticks, `2` on 27, `3`
+  on 5 and `5` on 2 - and the two 5-contact ticks are square-on crashes. So
+  `contact-response.md`'s "five applications would cost `16.3 %`, which the
+  capture forbids outright" is not contradicted: that argument is about scrape
+  geometry, and a scrape here is one contact 88 % of the time.
+
+And one reading that could have invalidated the whole thread and does not:
+**`FUN_0883e64c` is `Ship_State`** (`names.tsv`, confidence 84), so reaction
+#2's `== 1` gate is a **racing-state** test and not a local-player one.
+Opponents take contact damage in the original, and
+`oag_physics::damage::subtract`'s `craft_state != CraftState::Racing` early
+return already reproduces the gate.
+
+Full tables, the per-tick dumps and the reproduction:
+`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/wall-bleed.md`.
+
 ## Next Steps
 
-1. Measure `oag_physics::wall::resolve` in isolation: a craft at 100 units/s
-   grazing a flat wall at 28 degrees, one contact a tick, and compare the
-   tangential bleed against the recovered 0.035. **14's 7.60 at index 751 is
-   the cheapest case to start from** - one tick, one index, one lap in four, at
-   a steady 134 units/s, and it flips on a sub-unit positional difference.
-2. **Re-sweep `Tuning::curvature_span` once step 1 lands.** The table in step 4
-   is the harness and the field columns are the part that matters; 11 is green
-   and 10 is red for reasons step 1 owns, not reasons the estimator owns.
+1. **Do not re-tune the wall response.** It is measured against the recovered
+   law and agrees; step 5 is the evidence and the two tests are the guard. The
+   thing that costs a craft its shield at a wall is the bounce, and the bounce
+   is `-(1 + 0.4) * v_n / D` with `e` read off `body+0x388`.
+2. **`Tuning::curvature_span` does not need re-sweeping on account of the wall**
+   - no constant moved. What is still open on the span is the 11-green /
+   10-red field ordering, and step 5 shows it is **not** blocked on the wall
+   response. The remaining lead is upstream: why the driver arrives at 34
+   degrees of normal velocity at `07`'s idx 2,158 and 2,395 at all.
 3. Do **not** trim `07_Track` out of the test's known-good list: it has always
    passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
    or `grip_air` - the first cannot reach this corner and the last two are
