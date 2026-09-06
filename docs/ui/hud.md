@@ -56,8 +56,10 @@ rounded to an integer; 22 are not**. This paragraph said 121 and 20 until
 2026-09-05 - the earlier count used a weaker key and, in one case, paired
 `TimeDiffIcon`'s `y` with a value that actually belongs to
 `RearWarningMissileIcon`. Of the 22: **18 are the nine `<Mode3D><Model>`
-placements**, sitting at the PSP's own `x="-240" y="136"` unchanged in an
-`orthographic` mode this codebase does not drive; **4 are small integer
+placements**, sitting at the PSP's own `x="-240" y="136"` unchanged - a
+placeholder overwritten every frame by `HudSight_Update` (see
+[`lock-sight.md`](../ghidra/functions/psp-pulse-usa/lock-sight.md)), so an
+unscaled copy costs nothing; **4 are small integer
 nudges** (`LapTxt`'s `y`, `RearWarningMissileIcon`'s and
 `RearWarningRocketIcon`'s `y`, and most of `TimeDiffIcon`'s `x`) that stay
 byte-identical across consoles while the `<Item>` enclosing every one of them
@@ -151,7 +153,10 @@ Small and closed: 8 element names and 33 attributes across all five files. No
 
 ### Attributes that carry geometry
 
-- `x`, `y`, `width`, `height` - destination, in the PSP's 480x272 space.
+- `x`, `y`, `width`, `height` - destination, in the PSP's 480x272 space. True
+  of every `<Image>`/`<Text>` and of a `<Mode3D><Model>` whose enclosing block
+  authors `mode="orthographic"`. **A `<Model>` in the other `<Mode3D>` dialect
+  reads `x`/`y` differently** - see "Two `<Mode3D>` dialects" below.
 - `U`, `V`, `TxtrWidth`, `TxtrHeight` - **source** rectangle in atlas pixels.
   Genuinely differs from the destination: `TimeDiffIcon` samples 28x23 and draws
   it at 14x12.
@@ -187,8 +192,40 @@ Small and closed: 8 element names and 33 attributes across all five files. No
 - `BorderColor` - parsed and carried, **not drawn**: the renderer has no outline
   pass, and faking one with four offset copies would quadruple the glyph count
   for something never compared against the original.
-- `ztest`, `Delay`, `Enabletransition`, `cached`, `FirstPass`, `OriginX/Y`,
-  `mode="orthographic"` - all on the `<Mode3D>` layer, which is deferred.
+- `ztest`, `Delay`, `Enabletransition`, `cached`, `FirstPass` - all on the
+  `<Mode3D>` layer, still deferred. `mode` and `OriginX/Y` are **no longer** on
+  this list - see below.
+
+### Two `<Mode3D>` dialects, distinguished by `mode="orthographic"`
+
+**Previously lumped together as one deferred `<Mode3D>` feature; they are
+opposite ends of the same fork.** Every `<Mode3D>` block on both Pulse and
+Pure, checked across all four layouts that carry one (`Arcade`, `TimeTrial`,
+`Elimination`, `Zone`), is exactly one of two shapes and never a mix:
+
+| | sights, Pure's weapon icons/bars | `ReadyGo`/`Cockpit321Go` (the countdown) |
+| --- | --- | --- |
+| `<Values>` carries | `mode="orthographic"` | `FirstPass="yes" OriginX="0.0" OriginY="35.0"` |
+| `x`/`y`, every layout | real screen pixels (`240,250`; `-240,136`; `394,20`) | always `0.0, 0.0` |
+| `z` | `0`, `-1` or `-10` - never used for depth | `-70.0` |
+
+The orthographic dialect is the one `model_draw`'s convention was measured
+against (`pickup_icon_ground_truth.rs`, `lock_sight_ground_truth.rs`): `x`/`y`
+are literal HUD pixels. The countdown's own block never authors
+`mode="orthographic"`, and reading its `x=0, y=0` the same way put the widget
+off the left edge of the screen - the actual defect behind the countdown being
+undrawable in practice, not the runtime-placement question
+[countdown-widgets.md](../ghidra/functions/psp-pulse-usa/countdown-widgets.md)
+settled separately (there is no runtime writer, and there does not need to be
+one). `x=0, y=0` is where a symmetric perspective camera along `-z` always
+projects the optical axis, for any FOV and any `z != 0` - so it reads as
+screen-centre in this dialect, not a placeholder. `oag_game::hud::Layout::collect`
+now parses `mode` and `OriginX`/`OriginY` per `<Mode3D>` block (`super::Model::orthographic`/`::origin`),
+and [`countdown.rs`](../../crates/game/src/hud/countdown.rs)'s own module doc
+has the full derivation, including why no projection matrix needs to be built
+for the `(0, 0)` case every shipped layout actually authors, and why a future
+widget authored at a nonzero `x`/`y` in this dialect is a documented gap
+rather than a guess.
 
 ## Two properties of the data that a first reading gets wrong
 

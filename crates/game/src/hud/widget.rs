@@ -226,4 +226,25 @@ pub struct Model {
     /// The `colour` attribute, split into RGBA. `None` when absent, which is
     /// every model on Pulse and HD/Fury and three of Pure's own thirteen.
     pub colour: Option<[f32; 4]>,
+    /// Whether the enclosing `<Mode3D>` authors `mode="orthographic"`.
+    ///
+    /// **Two dialects, both disc-confirmed, distinguished by this one
+    /// attribute alone.** True for the sights and Pure's weapon icons/bars -
+    /// [`Self::position`]'s `x`/`y` are then literal HUD pixels, the
+    /// convention `model_draw` already implements and
+    /// `pickup_icon_ground_truth.rs` checks. **False only for the
+    /// countdown's `Cockpit321Go`/`ReadyGo` widgets**, on every layout
+    /// checked on both Pulse and Pure: their `<Mode3D>` block never authors
+    /// `mode="orthographic"`, carrying `FirstPass`/[`Self::origin`] instead.
+    /// `x=0, y=0` there is not a placeholder or a left-edge position - it is
+    /// where a symmetric perspective camera looking down `-z` always
+    /// projects the optical axis, for any FOV and any `z != 0`. See
+    /// `crate::hud::countdown`'s module doc for the derivation and
+    /// `docs/ui/hud.md`'s "Two dialects" note for the disc evidence.
+    pub orthographic: bool,
+    /// The enclosing `<Mode3D><Values OriginX="..." OriginY="...">`, in HUD
+    /// pixels. `[0.0, 0.0]` when absent, which is every orthographic block -
+    /// `x`/`y` already carry the whole story there and this attribute simply
+    /// never appears alongside `mode="orthographic"` in any layout read.
+    pub origin: [f32; 2],
 }
