@@ -661,3 +661,8 @@
 0x08b36bf8	data	g_roll_turbotime	88	input-bindings.md
 0x0881fbec	function	Hud_BindWidgets	80	countdown-widgets.md
 0x0881f624	function	Hud_UpdateCountdownFade	70	countdown-widgets.md
+0x08a6bb30	function	Camera_GetTypeId	65	billboards.md
+0x08901764	function	Camera_Construct	65	billboards.md
+0x08901850	function	Camera_AttachChild	60	billboards.md
+0x08902324	function	Camera_RegisterClass	80	billboards.md
+0x08908aec	function	GridCamera_RegisterClass	85	billboards.md
