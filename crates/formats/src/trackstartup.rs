@@ -169,9 +169,18 @@
 //! confirming HD's `array[Num]`, no-name-lookup architecture on a second
 //! title, and confirming live that `Color`/`Colour` merge into one field
 //! here too. Both constructors funnel into a shared object builder that,
-//! for a `.vex` (model) slot, writes a 4x4 transform into the new object -
-//! **read live, it is the literal identity matrix, the same sixteen floats
-//! for every billboard regardless of `num`.**
+//! for a `.vex` (model) slot, writes a 4x4 transform into the new object.
+//! **That transform is NOT the identity matrix - corrected 2026-09-06 at
+//! confidence 92.** It carries an identity rotation and a translation of
+//! `(x, -10.0, z, w)`, the same constant on every call regardless of `num`,
+//! so it still carries no per-circuit placement - but the older "literal
+//! identity matrix, the same sixteen floats" reading was wrong for one of
+//! the sixteen. `decompile_function` rendered a VFPU `lv.q` quadword
+//! transfer as four scalar assignments and gave no cue that a same-block
+//! scalar `swc1` overwrites a float inside the block the `sv.q` had just
+//! placed. See
+//! `docs/ghidra/functions/psp-pulse-usa/billboards.md` and the trap recorded
+//! in `docs/ghidra/workflow.md`.
 //!
 //! **That was first read as "nothing overrides the disc's `billboard8.tga`
 //! icon", and that reading was wrong - caught by the project owner, who
