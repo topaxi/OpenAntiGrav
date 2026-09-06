@@ -7,6 +7,7 @@ use super::*;
 use crate::collide::{CollisionWorld, TriangleSoup};
 use crate::params::Dimensions;
 use crate::ship::Body;
+use oag_core::math::Quat;
 
 /// A ship two units wide, four long, one high, at the origin.
 fn handling() -> Handling {
@@ -781,4 +782,141 @@ fn the_frictionless_sentinel_combines_to_zero_and_never_to_a_negative() {
         combine_friction(SHIP_FRICTION, Surface::Wall.friction()),
         0.035
     );
+}
+
+/// The same law at an **angle**, which the pure scrape above cannot see.
+///
+/// `a_pure_scrape_costs_exactly_the_contact_friction_per_frame` holds `v_n` at
+/// zero, so it measures the tangential term with nothing else in the frame.
+/// This is a craft at 100 units/s meeting the wall at **28 degrees** - the
+/// heading error `handover`'s Outpost 7 investigation recorded - and it
+/// separates the two halves of the response:
+///
+/// | tick | `\|v\|` | total loss | `v_n` | tangential loss |
+/// | ---: | ---: | ---: | ---: | ---: |
+/// | 0 | 100.00 -> 87.16 | 12.84 % | 46.95 -> -18.35 | **3.5000 %** |
+/// | 1 | 87.16 -> 82.53 | 5.31 % | -18.35 -> 7.18 | **3.5000 %** |
+/// | 2 | 82.53 -> 79.39 | 3.81 % | 7.18 -> -2.81 | **3.5000 %** |
+/// | 6+ | | 3.5000 % | ~0 | **3.5000 %** |
+///
+/// Two properties, and the second is the one the recovered page's capture
+/// actually tests. The tangential factor is `0.965` on **every** tick
+/// regardless of angle, and the *total* loss converges **down** onto `3.5 %`
+/// as the normal component is spent - approaching the friction floor from
+/// above and never crossing it. That is the shape
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` records
+/// (`5.21 %`, `4.03 %`, ... `3.560 %`, with a minimum anywhere in contact of
+/// `3.534 %` at 104 units/s), and it is one-sided rather than a fit: a
+/// friction of `0.036` is falsified by the tail and `0.030` by the floor.
+///
+/// The position is reset each tick so exactly one contact fires, and the spin
+/// with it, for the reason the pure scrape gives: a scrape off a point that is
+/// not on the centre line imparts a yaw, and carrying it forward would make
+/// the next tick a measurement of a rotating hull instead of of the law.
+#[test]
+fn a_28_degree_graze_bleeds_the_recovered_friction_and_nothing_else() {
+    let radians = 28.0f32.to_radians();
+    let mut state = ship_at(1.0, 0.0);
+    state.body.linear_velocity = Vec3::new(radians.sin() * 100.0, 0.0, radians.cos() * 100.0);
+
+    let mut settled = 0.0f32;
+    for tick in 0..20 {
+        state.body.position = Vec3::new(1.0, 0.0, 0.0);
+        state.body.angular_velocity = Vec3::ZERO;
+        state.body.orientation = Quat::IDENTITY;
+
+        let before = state.body.linear_velocity;
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &narrow_wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        let after = state.body.linear_velocity;
+
+        assert_eq!(response.contacts, 1, "tick {tick}: {response:?}");
+        assert!((response.friction - 0.035).abs() < 1e-6, "tick {tick}");
+
+        // The tangential axis is `+z` here, and it loses exactly `0.035` of
+        // itself every tick the contact exists - independent of how much of
+        // the motion is in the normal.
+        let expected = before.z * (1.0 - 0.035);
+        assert!(
+            (after.z - expected).abs() < 1e-3,
+            "tick {tick}: {after:?} is not {expected}"
+        );
+
+        settled = 1.0 - after.length() / before.length();
+        // Never below the floor, on any tick. This is the whole one-sided
+        // test, and it is what a friction of `0.030` would fail.
+        assert!(settled > 0.035 - 1e-5, "tick {tick}: {settled}");
+    }
+
+    // And it has converged onto the floor rather than sitting above it, which
+    // is what a friction of `0.036` would fail.
+    assert!((settled - 0.035).abs() < 1e-5, "{settled}");
+}
+
+/// **What actually stops a craft that leans on a wall: the bounce, not the
+/// friction.**
+///
+/// The graze above spends its normal velocity in three ticks and settles onto
+/// the friction floor. A craft whose *heading* is 28 degrees off the wall does
+/// not: grip pulls the velocity back onto the hull's own forward every tick,
+/// so `v_n` is restored as fast as the contact kills it.
+///
+/// **The re-pointing here is a stand-in for that, not the grip law.** It sets
+/// the velocity's direction back to 28 degrees each tick, magnitude preserved,
+/// which is what perfect grip on a fixed heading would do. `crate::forces` is
+/// where the real term lives and this test deliberately does not reach for it:
+/// the point is to isolate what [`resolve`] costs *given* a restored `v_n`.
+///
+/// The result, one contact a tick and no thrust at all:
+///
+/// | angle | per-tick loss | 100 units/s after 19 ticks |
+/// | ---: | ---: | ---: |
+/// | 10 deg | 4.72 % | 39.87 |
+/// | 20 deg | 8.34 % | 19.12 |
+/// | **28 deg** | **12.84 %** | **7.34** |
+///
+/// At 28 degrees the split is `2.72 %` from friction and `9.82 %` from the
+/// normal impulse - **the bounce is 73 % of the cost and the friction 27 %**.
+/// The `9.82` is `-(1 + BODY_RESTITUTION) * v_n / D` with `D` near `1`: the
+/// measured `v_n` factor is `-0.391`, i.e. `-e`.
+///
+/// This is the answer to "should the wall response stop a craft dead". It
+/// does, it is the recovered law doing it, and the coefficient this thread
+/// suspected - `0.035` - is the smaller half of it.
+#[test]
+fn a_held_heading_makes_the_bounce_the_cost_not_the_friction() {
+    let radians = 28.0f32.to_radians();
+    let mut state = ship_at(1.0, 0.0);
+    let mut speed = 100.0f32;
+
+    for tick in 0..19 {
+        state.body.position = Vec3::new(1.0, 0.0, 0.0);
+        state.body.angular_velocity = Vec3::ZERO;
+        state.body.orientation = Quat::IDENTITY;
+        state.body.linear_velocity = Vec3::new(radians.sin() * speed, 0.0, radians.cos() * speed);
+
+        let before = speed;
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &narrow_wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        speed = state.body.linear_velocity.length();
+
+        assert_eq!(response.contacts, 1, "tick {tick}: {response:?}");
+        // Flat, because both halves of the response scale with the speed.
+        let loss = 1.0 - speed / before;
+        assert!((loss - 0.128_412).abs() < 1e-4, "tick {tick}: {loss}");
+    }
+
+    // 100 units/s to a walking pace in nineteen ticks, with one contact each -
+    // and only a quarter of that is the friction coefficient.
+    assert!((speed - 7.3437).abs() < 1e-3, "{speed}");
 }
