@@ -41,34 +41,45 @@ pub const INTER_TAP_TIMEOUT: f32 = 0.6;
 /// out of the XML. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const COMPLETION_SPLIT: f32 = 0.5;
 
-/// The fraction of the shield pool an **AI** driver keeps back rather than
-/// spending on a barrel roll.
+/// Whether spending a roll's cost would leave the pool above
+/// [`ShipControls::roll_shield_floor`].
 ///
-/// # This number is invented, and it is the only invented number this mechanic
+/// # This gate is invented, and it is the only invented rule this mechanic
 /// carries
 ///
 /// Nothing on the disc authors it and nothing in the recovered chain gates on
-/// it. It was chosen by the maintainer on 2026-09-06, in those terms - "I think
-/// AI should still avoid barrel rolls if they are low on energy, like below 20%
-/// or something, unsure what the original does here, but I'd be good with
-/// inventing a value here too" - and it is recorded here as a design decision,
-/// **not** as a finding. It deliberately carries no confidence score: a score
-/// would let a later reader cite a choice as evidence.
+/// it. It was chosen by the maintainer on 2026-09-06 - "I think AI should still
+/// avoid barrel rolls if they are low on energy, like below 20% or something,
+/// unsure what the original does here, but I'd be good with inventing a value
+/// here too" - and it is recorded as a design decision, **not** as a finding.
+/// It deliberately carries no confidence score: a score would let a later
+/// reader cite a choice as evidence.
 ///
 /// It sits *on top of* the original's own gate, which is [`arm`]'s
-/// `cost < shield` and is recovered at confidence 90. An AI craft therefore
-/// needs both; a human craft needs only the recovered one, and
-/// [`ShipControls::computer_driven`] is what tells the two apart. **That
-/// asymmetry is the deviation.** It is an AI-quality choice - an opponent that
-/// spends its last energy on a manoeuvre and is then destroyed by one wall is
-/// a worse opponent - and it is not a claim about how the original's craft
+/// `cost < shield` and is recovered at confidence 90. A craft flown by
+/// `oag_ai::Driver` needs both; a human craft leaves the floor at `0.0` and
+/// needs only the recovered one. **That asymmetry is the deviation**, and it is
+/// an AI-quality choice rather than a claim about how the original's craft
 /// behave.
 ///
-/// If the original's own AI gate is ever recovered, this constant is
-/// **replaced** by it rather than reconciled with it, and this whole doc
-/// comment goes with it. Changing the value meanwhile is a one-line edit here
-/// and nowhere else.
-pub const AI_ROLL_SHIELD_FLOOR: f32 = 0.20;
+/// The `0.20` this used to hold as a bare `AI_ROLL_SHIELD_FLOOR` constant is
+/// now the low end of `oag_ai::Pilot::BALANCED`'s `roll_floor`, so it is a
+/// per-pilot number a player can retune in a file. If the original's own AI
+/// gate is ever recovered, this is **replaced** by it rather than reconciled
+/// with it.
+#[must_use]
+pub fn within_budget(
+    state: &ShipState,
+    dimensions: &Dimensions,
+    roll_cost: f32,
+    shield_floor: f32,
+) -> bool {
+    // A hard floor: what is compared is the pool the roll would *leave*, not
+    // the one it starts from. The other reading lets a craft sitting exactly on
+    // its floor spend anyway and land under it, which is the shape of "an
+    // opponent that rolled itself down to nothing".
+    state.shield - roll_cost * 0.01 * dimensions.shield >= shield_floor * dimensions.shield
+}
 
 /// How far the steering axis has to be pushed for a tap, normalised.
 ///
@@ -293,10 +304,25 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// deviation**, recorded so the next reader does not mistake it for a finding;
 /// what makes it affordable is the grounded gate below, which is a port.
 ///
-/// The second half of that ruling is [`AI_ROLL_SHIELD_FLOOR`], an **invented**
-/// AI-only shield floor that the human player's path does not carry. It is the
-/// only invented number in this module, it has no confidence score on purpose,
-/// and its own doc comment is where the reasoning lives.
+/// # The direct request, and why it is not synthesised taps
+///
+/// A ruling of the same day went further: *our* AI barrel-rolls on purpose,
+/// with an `Ace` rolling whenever its energy budget allows. Leaving that to an
+/// accidental alternation of the driver's own steering would not have produced
+/// it - after the grounded gate below landed, an opponent armed **zero** rolls
+/// on all twelve circuits - so the decision is taken in `oag_ai::Driver` and
+/// arrives here on [`ShipControls::roll_request`].
+///
+/// That request is honoured **through the same two gates the gesture is**: it
+/// is read below the grounded early-out, so an airborne craft is the only kind
+/// that can arm one, and it reaches [`arm`], so `cost < shield` still refuses
+/// it. What it skips is the tap history, which is the point - an invented
+/// intent routed back through the recovered input path would be
+/// indistinguishable from the recovered path a year from now.
+///
+/// The third gate, [`within_budget`], is invented and applies to both routes.
+/// It reads [`ShipControls::roll_shield_floor`], which a real pad leaves at
+/// `0.0`, so a human keeps the recovered behaviour exactly.
 ///
 /// # The grounded gate
 ///
@@ -364,21 +390,41 @@ pub fn advance_gesture(
         None
     };
 
-    let Some(direction) = direction else {
+    if let Some(direction) = direction
+        && let Some(sign) = record_tap(state, direction)
+    {
+        // The invented budget sits *outside* `arm`, which holds the original's
+        // own `cost < shield` and nothing else. See [`within_budget`].
+        let armed = within_budget(state, dimensions, roll_cost, input.roll_shield_floor)
+            && arm(state, dimensions, roll_cost, sign);
+        // Levelled whether or not the shield could pay - see the section above.
+        // The budget refuses the same way a flat shield does, so it levels too.
+        state.roll_phase = 0.0;
+        return armed;
+    }
+
+    // The direct request, last: a craft whose own steering happened to complete
+    // the alternation this tick has already spent the pool on that, and a
+    // second charge in one tick is not a thing either route means.
+    let Some(direction) = input.roll_request else {
         return false;
     };
-    let Some(sign) = record_tap(state, direction) else {
-        return false;
+    let sign = match direction {
+        TapDirection::Right => 1.0,
+        TapDirection::Left => -1.0,
     };
-    // The invented AI-only floor sits *outside* `arm`, which holds the
-    // original's own `cost < shield` and nothing else. See
-    // [`AI_ROLL_SHIELD_FLOOR`].
-    let floored = input.computer_driven && state.shield < AI_ROLL_SHIELD_FLOOR * dimensions.shield;
-    let armed = !floored && arm(state, dimensions, roll_cost, sign);
-    // Levelled whether or not the shield could pay - see the section above.
-    // The floor refuses the same way a flat shield does, so it levels too.
+    if !within_budget(state, dimensions, roll_cost, input.roll_shield_floor)
+        || !arm(state, dimensions, roll_cost, sign)
+    {
+        return false;
+    }
+    // **Levelled only on success, unlike the gesture above**, and the
+    // difference is not cosmetic. Levelling is the original's response to a
+    // completed *pattern*, which a direct request is not; and a roll armed
+    // without it would start from the previous roll's `+-1.0` residue, reach
+    // its target instantly and collect the landing payout for nothing.
     state.roll_phase = 0.0;
-    armed
+    true
 }
 
 #[cfg(test)]

@@ -157,11 +157,17 @@ pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipCon
         // two are ORed into one tap; see that function for why they must be.
         roll_tap_left: snapshot.buttons.is_pressed(Button::Left),
         roll_tap_right: snapshot.buttons.is_pressed(Button::Right),
-        // A real pad, so **false**: this is the one field that is not a
-        // control, and it is what keeps the invented
-        // `oag_physics::barrel_roll::AI_ROLL_SHIELD_FLOOR` off the human
-        // player's path. Only `oag_ai::Driver` sets it.
-        computer_driven: false,
+        // A real pad, so **never**: a human's roll arrives through the gesture
+        // above, exactly as the original's does. `roll_request` is the direct
+        // request `oag_ai::Driver` sets instead, which is a deliberate
+        // deviation and documented as one - see
+        // `oag_physics::ShipControls::roll_request`.
+        roll_request: None,
+        // And **zero**, which is the recovered behaviour exactly: the invented
+        // shield floor that used to be
+        // `oag_physics::barrel_roll::AI_ROLL_SHIELD_FLOOR` is a per-pilot
+        // number now, and the human player's path does not carry one.
+        roll_shield_floor: 0.0,
     }
 }
 

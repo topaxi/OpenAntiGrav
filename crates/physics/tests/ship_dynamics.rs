@@ -418,7 +418,10 @@ fn a_zero_parameter_ship_at_rest_never_accelerates() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
-        computer_driven: true,
+        // The direct request and the invented floor with them, so the AI's
+        // route through the roll is covered here as well as a pad's.
+        roll_request: Some(oag_physics::barrel_roll::TapDirection::Right),
+        roll_shield_floor: 0.2,
     };
 
     for _ in 0..600 {

@@ -167,6 +167,21 @@ pub struct Driver {
     /// has not ticked yet, which is not the same as one that has looked and
     /// seen nobody.
     pub reflex: Reflex,
+    /// Whether this driver has already made its mind up about a barrel roll
+    /// during the flight it is in.
+    ///
+    /// **One decision per airborne window, which is what makes
+    /// [`Personality::roll_chance`] a probability rather than a rate.** Rolled
+    /// every tick it would be neither: a chance of a tenth would fire in the
+    /// first second of any long jump, and the axis would do far more than its
+    /// number says.
+    ///
+    /// Set on the first tick past [`Personality::roll_airtime`] whichever way
+    /// the decision went - a driver that decided *not* to roll this jump does
+    /// not get to reconsider - and cleared the moment the craft is on the
+    /// ground again. A `bool` because this type is `Eq` and lives in the world
+    /// snapshot, for the reason [`Self::provocation`] gives.
+    pub roll_decided: bool,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -198,6 +213,16 @@ const MISTAKE_TICKS: u16 = 30;
 
 /// The noise stream weapon decisions are rolled against.
 const WEAPON_STREAM: u32 = 2;
+
+/// The noise stream the barrel roll's commit decision is rolled against.
+const ROLL_STREAM: u32 = 4;
+
+/// And the one that picks which way it goes.
+///
+/// A stream of its own rather than a second use of [`ROLL_STREAM`]: sharing it
+/// would tie which way a driver rolls to how readily it rolls at all, so a
+/// pilot with a high [`Personality::roll_chance`] would only ever roll one way.
+const ROLL_SIDE_STREAM: u32 = 5;
 
 /// How often a driver at full `trigger` will fire once it has a target, per
 /// tick.
@@ -335,10 +360,77 @@ impl Driver {
             airbrake_left,
             airbrake_right,
             sideshift: self.ram(state, ctx, &personality),
-            // Not a control: the one flag `oag-physics` uses to apply an
-            // AI-only rule, `barrel_roll::AI_ROLL_SHIELD_FLOOR`. See there.
-            computer_driven: true,
+            roll_request: self.wants_to_roll(state, &personality),
+            // Every tick, not only the ones a roll is asked for: it also gates
+            // the *gesture*, which this driver's own steering can complete by
+            // accident. See `oag_physics::barrel_roll::within_budget`.
+            roll_shield_floor: personality.roll_floor,
             ..ShipControls::default()
+        }
+    }
+
+    /// Whether this driver commits to a barrel roll this tick, and which way.
+    ///
+    /// # This is invented, and the original's opponents never roll
+    ///
+    /// Recovered 2026-09-06 at confidence 85: the original reads the roll's tap
+    /// history out of the human player's pad block and nothing else. Ours roll
+    /// on a maintainer's directive of the same day - *"our AI shall do barrel
+    /// rolls, 'invented', ACE level shall do barrel rolls as long as there's
+    /// energy budget, lower AI tiers shall do less barrel rolls"* - so this
+    /// whole method is a game-design choice rather than a port, and
+    /// `docs/gameplay/ai.md` records it as one.
+    ///
+    /// # Two gates here, two more below
+    ///
+    /// This decides **propensity** only. Being airborne at all and
+    /// `cost < shield` are both recovered, both enforced in
+    /// `oag_physics::barrel_roll`, and neither is weakened by anything here -
+    /// a request this returns is refused there if either fails. The energy
+    /// budget travels with it on [`ShipControls::roll_shield_floor`], because
+    /// the cost and the pool's capacity are physics' to know.
+    ///
+    /// # One decision per flight
+    ///
+    /// [`Personality::roll_chance`] is a probability and not a rate, unlike
+    /// [`Personality::trigger`]: [`Driver::roll_decided`] is set on the first
+    /// tick past [`Personality::roll_airtime`] whichever way the coin lands, so
+    /// a jump gets exactly one decision. A per-tick roll would make a tenth
+    /// fire on any long jump and the axis would not mean what it says.
+    ///
+    /// **Provocation is deliberately not an input.** The grudge scales what a
+    /// driver does to *other craft*, never what it asks of its own - see
+    /// [`Self::stew`] - and a roll is entirely the latter. Feeding it would
+    /// make an angry AI faster, closing the rubber-banding loop this project
+    /// refuses to port.
+    ///
+    /// `state.grounded` is **last completed tick's** contact count, which is
+    /// exactly the value `oag_physics::forces::evaluate` will hand the gesture
+    /// as its own grounded gate on the tick these controls are stepped with.
+    /// Reading `grounded_prev` instead would be a tick behind it, and the
+    /// disagreement would let a second roll into one flight.
+    fn wants_to_roll(
+        &mut self,
+        state: &ShipState,
+        personality: &Personality,
+    ) -> Option<oag_physics::barrel_roll::TapDirection> {
+        if state.is_grounded() {
+            self.roll_decided = false;
+            return None;
+        }
+        if self.roll_decided || state.time_airborne < personality.roll_airtime {
+            return None;
+        }
+        self.roll_decided = true;
+        if roll(self.seed, self.phase, ROLL_STREAM) >= personality.roll_chance {
+            return None;
+        }
+        // Which way is arbitrary and says so: nothing about the corner ahead or
+        // the craft's attitude is read. A roll is aimed at nobody.
+        if roll(self.seed, self.phase, ROLL_SIDE_STREAM) < 0.5 {
+            Some(oag_physics::barrel_roll::TapDirection::Left)
+        } else {
+            Some(oag_physics::barrel_roll::TapDirection::Right)
         }
     }
 

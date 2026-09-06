@@ -139,6 +139,7 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         pilot,
         mistake,
         reflex,
+        roll_decided,
     } = driver;
 
     // **Hashed, unlike `handling`.** A driver's place on the racing line is the
@@ -190,6 +191,11 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         hasher.write_u8(pending[channel]);
         hasher.write_u32(u32::from(wait[channel]));
     }
+    // **And whether it has already made its mind up about a barrel roll this
+    // jump.** One decision per airborne window, so two runs that agree on every
+    // position and disagree on this are about to spend a twelfth of a shield
+    // pool differently. See `oag_ai::Driver::roll_decided`.
+    hasher.write_u8(u8::from(*roll_decided));
 }
 
 /// A craft's place in the race, which decides the finishing order and is
