@@ -468,16 +468,27 @@ In short:
   count-mismatch argument refutes "every slot binds" but not "binding is by
   name" - HD's `amphiseum` ships 3 placeholders for 8 slots and the executable
   does the lookup anyway. Flagged, not edited (`docs/formats/` out of lane).
-- **Not recovered: any numeric transform.** `oag-view --draws` needs a GPU
-  adapter this box would not present (two runs, zero bytes, exit 144), and
-  Pulse's track `.vex` nodes are unnamed. Confidence 78 that the transform is
-  track-authored geometry rather than billboard-system state; the weak link is
-  that `psp-pulse-usa` ships no lowercase `billboard` base string, so Pulse's
-  own binding path is untraced.
-- **Nothing was drawn and nothing was synthesised.** No countdown is closer to
-  the screen than it was; what changed is that the next step is a static disc
-  read (`--draws`, or `--class 0x125/0x06e --payload`) rather than a live
-  PPSSPP breakpoint on `func_0x00140bd4`.
+- **The placement is recovered, in coordinates, on two circuits (85).**
+  `oag-view --draws` does run headlessly - the first two attempts were killed by
+  their own timeout, not by a missing GPU. On `16_Track`, **mesh node 74** draws
+  `billboard8.tga` (an **8x8 stub**) and `321backplate.tga` from one node at
+  `(34, -36, -185)`; on `05_Track`, node 19 does the same at `(-37, -2, -219)`.
+  Its parent is a zero-byte `Transform` under the `World`, so no `Anim
+  Transform` anchoring applies and the composed centres are track-space
+  (confirmed by their range, x `-1273..952`). On both circuits the mount sits
+  ~10-15 units above the road, inside the `startline_*` cluster's own z band,
+  and **~165 units from the `Start Position` node - repeating to within 2 units
+  across two unrelated circuits.**
+- **Still open**: the mount's orientation and scale (a centroid is not a basis),
+  which of the two co-located surfaces the arch attaches to, and Pulse's own
+  binding path - `psp-pulse-usa` ships no lowercase `billboard` base string, so
+  it does not use HD's exact name concatenation. The Zone negative control did
+  not run: `26_Track` is not in `Data.wad` under that name, so that check is
+  **untested, not passed**.
+- **Nothing was drawn and nothing was synthesised.** No gantry was rendered in a
+  race this pass, so no countdown is on screen yet - but for the first time
+  there is a position to draw it at, obtained statically, with no live PPSSPP
+  breakpoint on `func_0x00140bd4` and no emulator session at all.
 
 ## Open
 
