@@ -187,15 +187,17 @@ fn rolls_everywhere(
 /// off and will be destroyed by the first wall it meets - which is a worse
 /// opponent, and the regression this whole mechanic caused once already.
 ///
-/// Two circuits rather than twelve, so this is cheap enough to live in
-/// `just test-data`: `10_Track` has the longest airborne windows the disc-wide
-/// sweep found on a circuit a craft laps cleanly, and `14_Track` finished on
-/// the least shield of the twelve before the AI rolled at all. The whole table
-/// is [`sweep_rolls`].
+/// Three circuits rather than twelve, so this is cheap enough to live in
+/// `just test-data`. **`09_Track` is the one that earns its place**: it is
+/// where the failure actually happened, an aggressive Ace finishing on 6.5
+/// shield at the floors this landed with, and it is still the worst case at
+/// 21.7. `10_Track` has the longest airborne windows the sweep found on a
+/// circuit a craft laps cleanly, and `14_Track` finished on the least shield of
+/// the twelve before the AI rolled at all. The whole table is [`sweep_rolls`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn no_tier_rolls_itself_down_to_nothing() {
-    let wanted = ["10_Track", "14_Track"];
+    let wanted = ["09_Track", "10_Track", "14_Track"];
     let circuits: Vec<(String, String)> = circuits()
         .into_iter()
         .filter(|(id, _)| wanted.contains(&id.as_str()))

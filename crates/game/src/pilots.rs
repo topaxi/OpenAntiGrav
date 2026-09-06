@@ -90,6 +90,18 @@ fn limit(axis: &str) -> (f32, f32) {
         // Both are fractions: a probability per airborne window, and a share
         // of the shield pool. A floor of one is a pilot that never rolls,
         // which is a thing somebody may reasonably want to write.
+        //
+        // **No floor-of-the-floor, unlike `commitment` above, and the two
+        // failures are not the same shape.** A `commitment` over the cap is a
+        // craft that corners faster than the physics allows - broken, on
+        // someone else's machine, in a race they did not author. A
+        // `roll_floor` of zero is a pilot that spends its own shield down to
+        // the recovered `cost < shield` and gets destroyed by the first wall:
+        // a worse opponent, which is the author's own business, and every
+        // recovered gate still holds around it. Measured, so this is a
+        // decision rather than an oversight - at floors near zero an
+        // aggressive Ace finished `09_Track` on 6.5 of 95, which is why no
+        // built-in goes near it. See `docs/gameplay/ai.md`.
         "roll_chance" | "roll_floor" => (0.0, 1.0),
         // Seconds of flight. Ten is longer than any jump on the disc, so the
         // top of this range is also a way of saying "never".

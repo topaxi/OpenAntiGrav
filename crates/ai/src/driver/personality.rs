@@ -119,12 +119,23 @@ impl Personality {
         ram: 0.0,
         provocation_ticks: 0.0,
         trigger: 0.0,
-        // **Never rolls, and needs no floor to say so.** A chance of zero is
-        // the neutral value the way a bias of zero is, and it is what keeps
-        // `Driver::default()` the plain line-follower every exact assertion in
-        // this crate is written against - a driver that occasionally spends a
-        // twelfth of its shield mid-jump is not one of those.
+        // **Never asks for a roll.** A chance of zero is the neutral value the
+        // way a bias of zero is, and it is what keeps `Driver::default()` the
+        // plain line-follower every exact assertion in this crate is written
+        // against - a driver that occasionally spends a twelfth of its shield
+        // mid-jump is not one of those.
         roll_chance: 0.0,
+        // **And a floor of zero, which is deliberately not protection.**
+        // `roll_chance` gates `Driver::wants_to_roll` and nothing else; the
+        // *gesture* path in `oag_physics::barrel_roll` reads this floor alone,
+        // so seed zero's accidental alternation is ungated where a seeded
+        // driver's is. That is the right answer rather than an oversight: seed
+        // zero is what flies slot 0 under `--autopilot` and under the Autopilot
+        // pickup, and the player's own craft should behave like the player's
+        // own craft - a human pad carries no floor either. It is also
+        // unreachable in practice: an opponent armed **zero** rolls by
+        // accidental alternation on all twelve circuits once the grounded gate
+        // landed.
         roll_floor: 0.0,
         roll_airtime: 0.0,
     };

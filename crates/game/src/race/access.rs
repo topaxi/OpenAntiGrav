@@ -169,11 +169,15 @@ impl Race {
         self.respawns.get(slot).copied().unwrap_or(0)
     }
 
-    /// How many barrel rolls a craft has armed this race.
+    /// How many barrel rolls an **opponent** has armed this race.
     ///
     /// Counted for the deviation our AI carries and the original's does not -
     /// see `Race::rolls_armed`. Out of bounds reads zero, as
-    /// [`Self::respawns_of`] does.
+    /// [`Self::respawns_of`] does, and **slot 0 is structurally always zero**:
+    /// the player's craft is stepped by `Race::tick` rather than by
+    /// `Race::step_opponents`, which is the only thing that counts. A roll the
+    /// player flies - or one their own driver flies under `--autopilot` - is
+    /// not counted here.
     #[must_use]
     pub fn rolls_armed_of(&self, slot: usize) -> u32 {
         self.rolls_armed.get(slot).copied().unwrap_or(0)
