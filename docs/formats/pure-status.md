@@ -461,6 +461,49 @@ took considerably longer to reach its Pulse coverage. **The repository script
 was deliberately not modified**: it hard-codes Pulse's team list, plugin list
 and output path, and forking it is work for a real Pure effort, not for a probe.
 
+### Pure has four per-craft models Pulse has no name for, and no boost plume
+
+**Added 2026-09-06**, and it is the reason the Pulse-shaped probe above stopped
+where it did. Cross-checking Pulse's five ship-model names against Pure found
+one - `Ship.vex` - and that miss rate was read for three weeks as "Pure's other
+models are spelled differently and unrecovered". Half of that was right. Pure's
+executable holds **five** per-craft templates in one contiguous block at
+`0x08a7a5d4`..`0x08a7a61c`, inside `Ship.cpp`'s own string run, and four of them
+have no Pulse counterpart at all:
+
+| Template | Address | Resolves on |
+| --- | --- | --- |
+| `%s\Ship.vex` | `0x08a7a5f4` | all eleven `<PI_Team>` locations |
+| `%s\Shipwreck.vex` | `0x08a7a61c` | all eleven |
+| `%s\VR\Ship.vex` | `0x08a7a5d4` | ten - not `Zone_01` |
+| `%s\Phantom.vex` | `0x08a7a5e4` | the eight core racing teams only |
+| `%s\Phantom_shipwreck.vex` | `0x08a7a600` | the same eight |
+
+Confidence **96**: the templates are read byte for byte with `read_memory`,
+every composed name hash-resolves on both pressings, and each blob carries its
+*own* exporter source path back (`Z:/Data/Ships/Feisar/Phantom.mb` inside
+`Data\Ships\Feisar\Phantom.vex`), so the archive is corroborated by its payload
+rather than by itself. Pinned by
+[`crates/pure/tests/ship_models_ground_truth.rs`](../../crates/pure/tests/ship_models_ground_truth.rs).
+
+**`Phantom` is the top speed-class rung getting its own model**, which **Pulse**
+does not do - its recovered template set is mode-keyed, not class-keyed. **HD
+and 2048 were not checked**, so that is a two-title comparison rather than a
+lineage claim. See the ladder below and `Unlock Phantom Class` (`0x08a7c848`).
+What *selects* it is unread. `VR` names a whole alternate
+presentation set across the disc (`vr_bomb.vex`, `vr_env.tga`,
+`vr_engine_noise.mip`); what mode uses it is also unread.
+
+**Pure ships no boost-plume asset at all**, which retires the last entry name
+this page listed as unrecovered. Pulse composes its plume from `%s\%sboost.vex`
+(`0x08a84ccc` on `psp-pulse-usa`); Pure's whole 3.6 MiB executable holds two
+strings matching `boost` case-insensitively and neither is a path, no declared
+location answers to `shipboost.vex` on either pressing, and no Pure hull carries
+the `boost_flare` anchor nodes Pulse's do. Confidence **93**. What is *not*
+determined is whether Pure's boost is visually inert - the engine-flare
+billboard is present and its draw path is unread. Full evidence on
+[ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md).
+
 ## Handling stats: the schema holds, the parser does not
 
 `Data\Ships\<Team>\handlingstats.xml` exists on Pure at the same addresses, in

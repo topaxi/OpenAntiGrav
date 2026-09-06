@@ -8,24 +8,23 @@
 //! of the right shape is about as direct as this gets short of watching the
 //! original load it.
 //!
-//! # There is no `ships` module here, and that is a measurement
+//! # Pure's per-craft models are its own, and there are five of them
 //!
-//! `oag_pulse::race::ships` names five things. **One of them resolves on this
-//! disc and it resolves identically**, so it is shared vocabulary rather than a
-//! title fact and `oag_game::race` keeps reading Pulse's spelling of it on both
-//! sources. Restating it here would be a second copy of one string.
-//!
-//! The other four find nothing, and their absence is recorded here rather than
-//! left to be rediscovered:
+//! **This section said "there is no `ships` module here" until 2026-09-06**, on
+//! the strength of probing Pulse's five names against this disc and finding one.
+//! That probe was right about Pulse's names and wrong about the conclusion: Pure
+//! spells four models Pulse has no counterpart for, so the miss was a vocabulary
+//! gap rather than an absence. See [`ships`], and the table below for what the
+//! Pulse-name probe actually established.
 //!
 //! | Pulse name | On Pure |
 //! | --- | --- |
-//! | `Data\Ships\<Team>\Ship.vex` | **present** |
-//! | `Data\Ships\<Team>\shipboost.vex` | absent |
-//! | `Data\Ships\<Team>\Zone.vex` | absent - **and now explained**, see below |
-//! | `Data\Ships\<Team>\Zoneboost.vex` | absent |
+//! | `Data\Ships\<Team>\Ship.vex` | **present** - and so are four models Pulse has no name for |
+//! | `Data\Ships\<Team>\shipboost.vex` | absent, and **this title ships no boost-plume asset at all** - see [`ships`] |
+//! | `Data\Ships\<Team>\Zone.vex` | absent - **and explained**, see below |
+//! | `Data\Ships\<Team>\Zoneboost.vex` | absent, for both reasons at once |
 //! | `<environment>\track_reversed.vex` | absent, on every circuit |
-//! | `<environment>\zone_track.vex` | absent - **and now explained**, see below |
+//! | `<environment>\zone_track.vex` | absent - **and explained**, see below |
 //!
 //! The `track_reversed` row is corroborated by the disc's own plugin definition,
 //! which carries **no `Reversed` attribute on any `PI_Track`** - so Pure ships no
@@ -41,14 +40,6 @@
 //! opens `<Stats team="ZoneMode">`. So `Zone.vex` and `zone_track.vex` are
 //! absent here not because their spelling is unrecovered but because this disc
 //! has nowhere to put them. See [`DEFAULT_ZONE_TRACK`] and [`ZONE_TEAM`].
-//!
-//! **The boost plume is still genuinely unrecovered**, and the distinction
-//! matters: Pure certainly has one, and **what it calls that file is unread**. So
-//! nothing here guesses at a spelling, and no constant records the absence
-//! either: `oag_game::race::load` reports a boost model it cannot find and
-//! carries on, which makes the consequence a race with no plume rather than no
-//! race. An absent entry is a fact; a table saying "Pure's boost is called X"
-//! would be an invention.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
@@ -128,6 +119,149 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
     bank: r"Data\Sound\speech_zone.bnk",
     milestones: &[5, 10, 15, 20, 25, 30, 40, 50, 75, 100],
 };
+
+/// The five models a Pure craft is built from, as leaf names under a team's own
+/// directory.
+///
+/// **Recovered 2026-09-06**, and the counterpart to `oag_pulse::race::ships` -
+/// which this module's own docs said for three weeks did not need one. Pure's
+/// executable holds all five as `printf` templates in one contiguous `.rodata`
+/// block, inside the run of strings belonging to
+/// `c:/Work/Wipeout/Code/Backend/Ships/Ship.cpp`:
+///
+/// | Address (`psp-pure-usa`) | Template |
+/// | --- | --- |
+/// | `0x08a7a5d4` | `%s\VR\Ship.vex` |
+/// | `0x08a7a5e4` | `%s\Phantom.vex` |
+/// | `0x08a7a5f4` | `%s\Ship.vex` |
+/// | `0x08a7a600` | `%s\Phantom_shipwreck.vex` |
+/// | `0x08a7a61c` | `%s\Shipwreck.vex` |
+///
+/// The `%s` is a `<PI_Team>` `location` out of
+/// `Data\Plugins\PI001\Definition.xml` (eleven of them on this disc), not a bare
+/// team name, which is why the leaf names here are joined to a location rather
+/// than to [`DEFAULT_TEAM`].
+///
+/// **Confidence 96.** Three independent things agree: the templates are read
+/// byte for byte at the addresses above (`read_memory`, not a decompile); every
+/// composed name hash-resolves in `Data.wad` on **both** pressings; and each
+/// blob that comes back carries its *own* authoring path - `Z:/Data/Ships/
+/// Feisar/Phantom.mb` inside `Data\Ships\Feisar\Phantom.vex` - so the payload
+/// spells the recovered name back in the exporter's words. Pinned by
+/// `crates/pure/tests/ship_models_ground_truth.rs`.
+///
+/// # There is no boost plume on this disc
+///
+/// **Pure ships no boost-plume asset, and that is a finding rather than a name
+/// still unrecovered.** This module used to say the opposite - "Pure certainly
+/// has one, and what it calls that file is unread" - which was an assumption
+/// carried from Pulse. Three axes say otherwise, each with its Pulse half
+/// alongside so the negative is a measurement:
+///
+/// 1. **No template.** Pulse composes its plume from `%s\%sboost.vex` at
+///    `0x08a84ccc` on `psp-pulse-usa`. Pure's five templates above are the whole
+///    block, and none of them is a plume. Searching the entire 3.6 MiB
+///    executable case-insensitively for `boost` returns exactly **two** strings,
+///    neither a path: `HUD_Perfect Boost!` (`0x08a46398`, a Zone HUD message)
+///    and `StartBoostSpeed` (`0x08a79bc8`, a tuning key in the AI stat block
+///    beside `LeadZone`/`TailZone`/`AIThrust`). Same two on the EU pressing.
+/// 2. **No entry.** `<location>\shipboost.vex` hash-resolves against none of the
+///    eleven declared locations, on either pressing, while the same probe
+///    resolves on Pulse.
+/// 3. **No anchor.** Pulse's `Data\Ships\Feisar\Ship.vex` carries `boost_flare`
+///    and `boost_flare1` locator nodes - the anchors
+///    `docs/ghidra/functions/psp-pulse-usa/exhaust.md` documents the plume
+///    riding. Pure's carries `engine_flare` and no node naming `boost` at all.
+///
+/// **Not determined: whether Pure's boost is visually inert.** The asset is
+/// absent; the *effect* need not be. Pure carries
+/// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` and
+/// `Data\Tex\engineFlare\Engine_noise.mip`, the same two Pulse does, plus a
+/// Pure-only `Data\Tex\EngineFlare\vr_engine_noise.mip` - so a boost that
+/// brightens or widens the existing `engine_flare` billboard in code would leave
+/// nothing for any of the three axes above to find. The draw path has not been
+/// read. What is settled is only that **there is no file to look for**, so
+/// nothing downstream should keep reporting one as missing.
+pub mod ships {
+    /// The hull every mode draws, `%s\Ship.vex` at `0x08a7a5f4`.
+    ///
+    /// The one name of the five that Pulse spells identically
+    /// (`oag_pulse::race::ships::HULL`), which is why the pre-2026-09-06 probe
+    /// found it and stopped.
+    pub const HULL: &str = "Ship";
+
+    /// The wreckage a destroyed craft leaves, `%s\Shipwreck.vex` at
+    /// `0x08a7a61c`.
+    ///
+    /// On all eleven declared locations. Pulse composes its own from
+    /// `%s\%swreck.vex`, a two-part template, so the recovered leaf differs even
+    /// though the concept does not.
+    pub const WRECK: &str = "Shipwreck";
+
+    /// The Phantom-class hull, `%s\Phantom.vex` at `0x08a7a5e4`.
+    ///
+    /// **A model swapped in for one speed class**, which **Pulse** does not do -
+    /// its own recovered template set is mode-keyed (`Ship`/`Zone`/`shipboost`/
+    /// `Zoneboost`/`shipshield`), not class-keyed. **HD and 2048 were not
+    /// checked**, so this is a two-title comparison and not a lineage claim.
+    /// The identification of *what* `Phantom` is rests on the
+    /// title's own vocabulary and not on the word alone: `PHANTOM` is the top
+    /// rung of the five [`DEFAULTS`] carries, the executable names
+    /// `Unlock Phantom Class` (`0x08a7c848`) and `PhantomStats` (`0x08a79afc`),
+    /// and the model's textures are `feis_phantom1_shinemap.tga` and friends -
+    /// a separate paint set, not a re-skin of the base hull. Confidence 90.
+    ///
+    /// **Not determined: what selects it.** No call site has been read, so
+    /// whether the swap happens on the class alone, on an unlock, or somewhere
+    /// else entirely is unknown; nothing here should be wired to a class
+    /// comparison on the strength of the name.
+    ///
+    /// Present for the **eight core racing teams only** - not `Medievil`, not
+    /// `Zone`, not `Zone_01`, all three of which are unlockable or Zone-mode
+    /// craft. That split is asserted, not assumed, in
+    /// `ship_models_ground_truth.rs`.
+    pub const PHANTOM_HULL: &str = "Phantom";
+
+    /// The wreckage [`PHANTOM_HULL`] leaves, `%s\Phantom_shipwreck.vex` at
+    /// `0x08a7a600`. Same eight teams, same reasoning.
+    pub const PHANTOM_WRECK: &str = "Phantom_shipwreck";
+
+    /// `%s\VR\Ship.vex` at `0x08a7a5d4` - the one template with a directory in
+    /// it.
+    ///
+    /// On ten of the eleven declared locations; `Zone_01`, the Zone-mode craft,
+    /// has none. Each is a genuinely separate model with its own texture set
+    /// (`Data\Ships\<Team>\VR\Textures\vr_<team>_01_shinemap.tga`) sharing one
+    /// environment map, `Data\Tex\vr_env.tga`.
+    ///
+    /// **The name is recovered; what `VR` means is not.** The prefix recurs
+    /// across the disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`,
+    /// `vr_shield.vex`, `Data\Tex\EngineFlare\vr_engine_noise.mip` - so it names
+    /// a whole alternate presentation set rather than one model, but no code
+    /// path that selects it has been read. Pulse carries exactly one member of
+    /// that set (`%s\vr_shield_cockpit.vex`) and no `VR\` craft directory at
+    /// all. Recording the spelling is safe; guessing the mode is not.
+    pub const VR_HULL: &str = r"VR\Ship";
+
+    /// `%s\VR\Phantom.vex` at `0x08a7cb64`.
+    ///
+    /// **Named in the executable and resolving nowhere** - under the same `%s`
+    /// the five templates above take. The composed name hash-matches nothing in
+    /// `Data.wad`, `FE.wad` or `FEData.wad`, on either pressing.
+    ///
+    /// **The name reads that absence as "authored and cut", and that is one of
+    /// two readings.** This template is in a *different* `.rodata` block from
+    /// the five above (`0x08a7cb54`/`0x08a7cb64`, beside `Unlock Phantom
+    /// Class`), and the five are known to take a `<PI_Team>` location as their
+    /// `%s` only *because they resolve*. Whether this block's `%s` is a team
+    /// location at all is unread, so "composed with the wrong argument" is not
+    /// excluded.
+    ///
+    /// Kept either way, because someone re-probing this name later should find
+    /// the answer written down instead of re-deriving it. Nothing reads this
+    /// constant, and nothing should try to load it.
+    pub const VR_PHANTOM_HULL_UNSHIPPED: &str = r"VR\Phantom";
+}
 
 /// Where each race cue lives - **Pulse's spelling exactly**.
 ///
