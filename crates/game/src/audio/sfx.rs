@@ -387,14 +387,14 @@ impl Audio {
                     engine.stop(mixer);
                     continue;
                 };
-                let placed = oag_audio::Emitter::engine(position.to_array()).place(&listener, 1.0);
                 engine.tick(
                     mixer,
                     banks,
                     &mut voices.rng,
                     speed * oag_render::exhaust::SPEED_TO_KMH,
                     running,
-                    placed,
+                    position.to_array(),
+                    &listener,
                     slot != 0,
                     DT,
                 );

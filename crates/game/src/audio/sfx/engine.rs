@@ -141,7 +141,8 @@ impl Engine {
         rng: &mut Rng,
         speed_kmh: f32,
         on: bool,
-        placed: Option<oag_audio::Placed>,
+        position: [f32; 3],
+        listener: &oag_audio::Listener,
         quieter: bool,
         dt: f32,
     ) {
@@ -182,11 +183,15 @@ impl Engine {
 
         let pitch = (self.pitch / CENTS_PER_OCTAVE).exp2();
         // Three terms, multiplied the way the original multiplies them:
-        // `Exhaust_UpdateEngineSound` writes `i * 0.6 + 0.4` to the sound
-        // instance, the emitter contributes its own attenuation through
-        // `SoundEmitter_ComputeVolumeAndAngle`, and `Scream_PanVolumePair`
-        // combines them - three separate arguments to one product, not one
-        // number computed twice.
+        // `Exhaust_UpdateEngineSound` writes `i * 0.6 + 0.4` (`x 0.85` for
+        // everyone but the player) **into the sound instance's own volume
+        // field**, which is exactly `SoundEmitter_ComputeVolumeAndAngle`'s
+        // `request_volume` - the term the emitter's attenuation multiplies
+        // *before* `curve()`, per `positional-audio.md`'s
+        // `volume = curve(atten * request_volume)`. So the law has to reach
+        // [`oag_audio::Emitter::place`] as its `volume` argument, not
+        // multiply the already-curved gain afterwards: `curve` is a power
+        // curve, and `curve(atten) * law != curve(atten * law)`.
         //
         // **`None` here is out of range, not un-placed**, and it goes to
         // silence rather than to unity: `SoundInstance_UpdateSpatial` writes
@@ -197,9 +202,10 @@ impl Engine {
         // opened once at the grid would then never exist for a craft that
         // happened to start more than 50 units from the camera, and nothing
         // read says the original re-opens it.
-        let (spatial, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
         let law = self.intensity * ENGINE_GAIN_SPAN + ENGINE_GAIN_FLOOR;
-        let gain = law * spatial * if quieter { OPPONENT_ENGINE_SCALE } else { 1.0 };
+        let volume = law * if quieter { OPPONENT_ENGINE_SCALE } else { 1.0 };
+        let placed = oag_audio::Emitter::engine(position).place(listener, volume);
+        let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
 
         match self.voice {
             Some(id) if mixer.is_playing(id) => {
