@@ -63,6 +63,76 @@ use crate::{ShipState, params::Dimensions, wall::WallResponse};
 /// factor of 225. The same 25 calls also confirm **one call per ring record**:
 /// a tick with four contacts produced four calls, each matching a different
 /// record. That is what [`crate::wall::WallResponse::impulse_sum`] sums for.
+///
+/// # Charging every tick of a sustained graze is faithful, not a bug
+///
+/// Checked 2026-09-06, prompted by `07_Track`'s Ace opponent reaching
+/// end-of-run shield `0.00` at every `Tuning::look_speed` tried
+/// (`docs/gameplay/ai.md`'s convergence section). The open question was
+/// whether charging [`CONTACT_DAMAGE_SCALE`] on **every** tick of a multi-tick
+/// scrape - rather than once per contact *event* or scaled by some other
+/// per-event quantity - is what the original does, or an artefact of this
+/// crate calling [`apply_contact`] once a tick regardless of contact
+/// duration.
+///
+/// **It is what the original does.** `shield.md`'s own runtime leg
+/// (`steer-left.inputs`, 200 ticks ending in a wall) already measured this
+/// directly: 115 of ~200 ticks in wall contact, the pool "drained
+/// monotonically - 0 of 199 ticks rose", because `FUN_088418e0`'s contact
+/// loop runs unconditionally every tick the ring holds a record and gates
+/// nothing on how long the contact has persisted. One `Ship_Damage` call per
+/// ring record **per tick**, for as many ticks as the contact lasts, is the
+/// recovered mechanism - not an approximation this crate introduced. This is
+/// also why the scale is charged against `impulse_sum` rather than against a
+/// contact-event count: `Body_RecordContact`'s own third argument is `p`, the
+/// resolver's full combined normal-plus-tangential impulse (see
+/// `contact-response.md`'s `Body_ResolveContact` listing), the same quantity
+/// [`crate::wall::resolve`] sums into `impulse_sum` - so a low-speed graze,
+/// where the tangential term dominates, and a hard impact, where the normal
+/// term does, are charged by the same rule rather than two different ones.
+///
+/// Two things checked alongside this that could have explained an
+/// over-charge without moving this constant, both come back clean:
+///
+/// - **The ring's own hard cap.** `Body_RecordContact` rejects a ring append
+///   past **8** entries a tick (`body+0x370`, `n < 8`), so the original's
+///   damage/reaction loop can only ever see the first 8 contacts a body
+///   resolves in one frame - a cap this crate's [`crate::wall::WallResponse`]
+///   does not reproduce. Measured directly on `07_Track` and `13_Track`, lone
+///   Ace, 18,000 ticks each: `resolved_count` never exceeds **5** anywhere in
+///   either run, so the cap would be a no-op today and was not implemented -
+///   there is nothing here for it to change.
+/// - **The fixed 60 Hz timestep versus the original's variable one**
+///   ([ADR-0007](../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md)).
+///   `docs/psp/frame-pacing.md`'s own runtime leg puts `dt` during racing at
+///   `0.016396`-`0.016973`, ±2 % around one vblank, and presentation has no
+///   catch-up - an overrunning frame produces a *larger* `dt`, i.e. **fewer**
+///   `Ship_Damage` calls per real second under load, not more. A fixed 60 Hz
+///   tick is, if anything, a small upper bound on call frequency in the wrong
+///   direction to explain an over-charge, and cannot be the mechanism.
+///
+/// What actually varies the per-tick charge, measured on the same two
+/// circuits: `WallResponse::impulse_sum` swings with the contact's approach
+/// angle exactly as the recovered contact law predicts, not with anything
+/// damage-specific. A prior flat-wall probe already measured this in
+/// isolation (see `HANDOVER.md`'s Outpost 7 entry): held at a fixed
+/// 28-degree approach with no thrust, one contact a tick converges on
+/// **12.84 %** total velocity loss a tick, of which 73 % is the restitution
+/// bounce (`-(1 + e) * v_n / D`) and only 27 % is the `0.035` friction floor
+/// this module's own scale rides on. Reproduced independently here: across
+/// both circuits' scrape ticks, the per-tick fractional velocity loss has a
+/// **median of 3.55 %** (essentially the pure-friction floor, near-tangential
+/// contact) but a long tail past 15 % on the steeper-incidence ticks - the
+/// same bounce-dominated shape, not a flat rate. So a lap that grinds at a
+/// steep angle is charged more per tick than one that grazes tangentially
+/// **because the recovered physics law says it should be**, not because
+/// [`CONTACT_DAMAGE_SCALE`] or the charging cadence is wrong.
+///
+/// **Conclusion: this constant and the per-tick charging cadence both stay.**
+/// `07_Track`'s destruction is a real, faithfully-computed consequence of a
+/// sustained, steep contact angle - which is a driving-line question
+/// (`docs/gameplay/ai.md`'s "correction converges too slowly" section is the
+/// open lead on *that*), not a damage-model one.
 pub const CONTACT_DAMAGE_SCALE: f32 = 0.05 * 0.7;
 
 /// What `Ship_Damage` multiplies the amount by when the race has weapons off.
