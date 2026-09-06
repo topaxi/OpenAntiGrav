@@ -227,6 +227,46 @@ for the `(0, 0)` case every shipped layout actually authors, and why a future
 widget authored at a nonzero `x`/`y` in this dialect is a documented gap
 rather than a guess.
 
+**`OriginX`/`OriginY` reads as a screen-space translation added to the
+projected result, not as the projected result itself, and `OriginX="0.0"`
+is the reason to believe that rather than the other way round.** The
+alternative reading - "`OriginX`/`OriginY` *is* the final screen pixel,
+full stop" - would put the countdown right back on the left edge it was
+just taken off (`OriginX="0.0"` read as a literal pixel is column zero),
+the exact failure this page exists to record. "No horizontal nudge" is
+what an author who wants a centred widget actually writes; "column zero"
+is not a coordinate anyone authors on purpose next to a `z="-70.0"` that
+places the same widget in front of a camera. HD/Fury's own copy of this
+element (`hud_ready_go.xml`'s `<aMode3D><Values OriginX="0.0" OriginY="140.0">`,
+disabled by the tag-rename convention `hd-hud.md` documents, not
+repositioned) is consistent either way and settles nothing on its own - see
+[countdown-widgets.md](../ghidra/functions/psp-pulse-usa/countdown-widgets.md)'s
+own section on it. The `OriginX="1220" OriginY="412"` data point on HD's
+`Team Selection`'s `ShipModel` and `OriginX="960" OriginY="540"` on its
+`<BackgroundAnim>` (`docs/formats/race-setup.md`, `docs/formats/hd-frontend.md`)
+look like they support "`OriginX`/`OriginY` is the literal screen pixel"
+instead, since `960,540` is exactly the centre of a 1920x1080 screen with no
+further offset needed - but both carry `nearZ` and sit directly on a
+`<Model>`/`<BackgroundAnim>` **widget**, a different XML dialect from
+Pulse's and HD's own `<Mode3D><Values OriginX/OriginY>` **container**
+attribute. The two attribute sets are disjoint - no Pulse or Pure `<Mode3D>`
+block ever carries `nearZ`, and no HD `<aMode3D>`/`<Mode3D>` container ever
+carries it either - which is what licenses reading them as two different
+attributes that happen to share a name, not one attribute with two
+data points pulling in opposite directions.
+
+**Position at `x=0, y=0` is FOV-independent; apparent size is not, and only
+the first was derivable here.** `countdown.rs` keeps the same "one model
+unit is one HUD pixel" orthographic draw `model_draw` uses for its own
+scale, rather than computing a foreshortened size from `z="-70.0"` and a
+real perspective camera - correctly, since recovering a size that way needs
+the original's actual FOV, which nothing recovered states, and guessing one
+is exactly what this page's own derivation avoided doing for position. The
+glyph's on-screen size today comes entirely from `Cockpit_321GO.vex`'s own
+mesh extents and its authored `Anim Transform` scale-burst (rest ~3.5x,
+peaking ~8x), not from a projection - recorded so a reader does not read the
+position fix as having also derived the scale.
+
 ## Two properties of the data that a first reading gets wrong
 
 Both cost a test failure here, so they are recorded rather than left to be

@@ -73,6 +73,17 @@
 //! argument above only eliminates the unknown for the zero case every layout
 //! actually ships. [`Countdown::new`] errors rather than guesses if that ever
 //! changes; see [`Countdown::screen_position`]'s own doc.
+//!
+//! **Position at `(0, 0)` is FOV-independent; apparent size is not, and only
+//! the first is derived above.** [`Countdown::draw`]'s own orthographic pass
+//! still treats one model unit as one HUD pixel - `model_draw`'s convention,
+//! reused for scale rather than reinvented - instead of foreshortening the
+//! mesh by `z="-70.0"` through a real perspective camera, which would need
+//! the original's actual FOV the same way a nonzero position would. The
+//! glyph's on-screen size comes entirely from `Cockpit_321GO.vex`'s own mesh
+//! extents and its authored `Anim Transform` scale-burst, not from a
+//! projection - recorded so fixing the position is not mistaken for having
+//! also derived the scale.
 
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_render::mesh::Model;
