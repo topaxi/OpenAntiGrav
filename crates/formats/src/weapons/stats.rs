@@ -77,6 +77,13 @@ pub struct RocketStats {
     /// `Ship_AddSlowdown` (`0x08848690`) is step 2, fifteen instructions with
     /// one caller. See
     /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    ///
+    /// **Required, not defaulted**, and that is checked against data rather
+    /// than assumed: all four tables that reach this parser author it on every
+    /// decoded block - Pulse's race and Eliminator files on the USA and EU
+    /// pressings, and Pure's `weaponstats.xml` on both. A silent zero here is a
+    /// weapon that slows nobody, which is the failure the module's
+    /// no-defaults rule exists to prevent.
     pub slowdown_time: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,

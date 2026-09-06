@@ -1283,6 +1283,23 @@ stores it:
 | `+0x30` / `+0x5c` | `0x08869054`, the missile's impact bookkeeping | `WeaponStats_ParseMissile`, `damage` / `slowdown_time` |
 | `+0x60` / `+0x68` | `FUN_088418e0`'s wave branch | `WeaponStats_ParseQuake` (`0x0880c60c`), `damage` / `slowdown_time` |
 
+`WeaponStats_ParseQuake` was decompiled directly for this, and its four stores
+settle the Quake's whole block - the last of the runs
+[weapon-stats.md](../../../formats/weapon-stats.md) derived from attribute
+counts alone rather than measuring. Confidence 92, the attribute strings being
+the ones [mine.md](mine.md) already identified in the contiguous `.rodata` run
+at `0x08a78a2c`:
+
+| Offset | Attribute | String |
+| --- | --- | --- |
+| `+0x60` | `damage` | `0x08a78a34` |
+| `+0x64` | `radius` | `0x08a78ad4` |
+| `+0x68` | `slowdown_time` | `0x08a78a3c` |
+| `+0x6c` | `absorb` | `0x08a78aac` |
+
+**Note the store order is not the attribute order the file authors**, which is
+why the block had to be read off the parser rather than counted.
+
 The middle and bottom rows are the load-bearing ones: in both, the `damage`
 offset is passed to `Ship_Damage` (`0x088439ac`) as its damage argument and the
 `slowdown_time` offset is added to `victim+0x130`, three instructions apart. A
@@ -1403,8 +1420,15 @@ without that step. Prefer the script for a completeness claim.
   compares it against `7`. A weapon-type id is the obvious reading and it does
   not match the class-name pool's order, so it is **not named**.
 - **Whether the `4.0` in effect 1 is reachable in any title.** See above.
-- **Which of the nine `+0x130` writers is which weapon.** Four are identified
-  (Mine/Bomb blast, Rocket, Missile, Quake); the other five were not chased,
+- **Which of the nine `+0x130` writers is which weapon.** Three are identified
+  *here* and off the verified `0x08b32420` table - the Rocket
+  (`Rocket_HitCraft_q`, `0x0886eca4`), the Missile (`0x08869054`) and the Quake
+  wave. A fourth, `Weapon_PostBlastImpulse`'s (`0x08867b14`, the Mine and Bomb
+  blast), is **inherited from [mine.md](mine.md) and rests on the reading of
+  `0x0885bff0` that the last bullet below reopens** - do not bank it as
+  independently established. The maintainer's own play report has mines slowing
+  a craft, which is corroboration of a different kind and worth naming as such
+  rather than folding into the disassembly. The remaining five were not chased,
   because the law does not depend on the roster.
 - **A contradiction this section deliberately does not resolve.**
   [mine.md](mine.md) reads the pointer table at `0x0885bff0` as "one per weapon

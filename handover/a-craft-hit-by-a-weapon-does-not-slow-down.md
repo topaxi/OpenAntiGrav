@@ -92,16 +92,38 @@ second one inside the window adds nothing.
   unnamed. A weapon-type id is the obvious reading and it does not match the
   class-name pool's order. Nothing in the law depends on it, but a HUD or a
   kill-attribution feature would.
-- **Five of the nine writers of the pending slot are unidentified** - four are
-  (the Mine/Bomb blast, the Rocket, the Missile and the Quake wave). The roster
-  does not change the law; it changes which weapons visibly slow a victim once
-  the mechanic is wired.
+- **Five of the nine writers of the pending slot are unidentified**, and the
+  four that are identified are not all the same quality of evidence: the
+  Rocket, the Missile and the Quake wave are read here off the verified
+  `0x08b32420` table, while the Mine/Bomb blast is **inherited from
+  [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md)** and rests on a
+  reading of a *different* table that this work's own `Ship_Damage` evidence
+  reopens (see the last bullet). Play says mines do slow a craft, which is
+  corroboration of a different kind. The roster does not change the law; it
+  changes which weapons visibly slow a victim once the mechanic is wired.
 - **The Quake's own path also charges damage**, from the same `<WeaponStats>`
   block, so wiring the Quake means wiring both together. No Quake exists here.
 - **No runtime capture.** Every claim on `engine.md` is static; nothing has been
   watched in PPSSPP with a craft actually taking a hit. A trace column on
   `craft+0x2e0` would confirm the decay rate and the saturation behaviour in one
   run, and `scripts/psp-trace.py` already carries the field as `timer_2e0`.
+- **A contradiction this work reopened and did not settle.**
+  [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) reads the pointer
+  table at `0x0885bff0` as one entry per weapon type; `Ship_Damage`
+  (`0x088439ac`) indexes that same table with `entity+0x13c` - which the
+  missile's own bookkeeping fills with an *attacker index* - and reads `+0x364`
+  and `+0x8d8` off the result, both craft fields.
+  [contact-response.md](../docs/ghidra/functions/psp-pulse-usa/contact-response.md)
+  had already floated "keyed by craft". Nothing in the slowdown law rests on it
+  (that table is `0x08b32420`, measured three ways), but
+  `Weapon_PostBlastImpulse`'s stats identification does, and that is the
+  Mine's whole blast.
+- **PS2 is unchecked.** The four PSP tables that route through this parser -
+  Pulse USA and EU (race and Eliminator each) and Pure USA and EU - all author
+  `slowdown_time` on every decoded block, checked directly off the discs, which
+  is why the parser requires it rather than defaulting. `docs/formats/README.md`
+  lists the format as PSP-only and nothing calls the parser with a PS2 blob, so
+  the PS2 build was not read.
 
 ## Next Steps
 
