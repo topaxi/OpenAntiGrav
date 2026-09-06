@@ -83,6 +83,7 @@ pub mod passive;
 pub mod probe;
 pub mod reset;
 pub mod ship;
+pub mod slowdown;
 pub mod wall;
 
 pub use collide::{
