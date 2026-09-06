@@ -498,6 +498,15 @@ pub struct Evaluated {
     /// the tick after the one that produced it reads zeroes. See
     /// [`crate::damage::Shield`].
     pub shield: crate::damage::Shield,
+    /// Whether a barrel roll was **armed** this frame, by either route.
+    ///
+    /// An edge, and the arm rather than the payout: the original plays its cue
+    /// on the landing, so nothing in the force law needs this. It is reported
+    /// because our AI rolls on purpose, which the original's does not, and a
+    /// deviation that cannot be counted on the disc's own circuits cannot be
+    /// shown to have been tuned right. `crate::barrel_roll::arm`
+    /// charges the pool, so what an arm cost is `roll_cost` percent of it.
+    pub roll_armed: bool,
 }
 
 /// Evaluates every force for one frame, at full `dt`, exactly once.
@@ -581,14 +590,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // `ShipControls` every other term reads, so a real input snapshot arms a
     // roll here and nowhere else; `advance_gesture` advances the inter-tap
     // timer itself, which is why nothing calls `advance_tap_timer` beside it.
-    // Whether it armed is deliberately dropped: the original plays a cue on the
-    // *payout*, not on the arm, and this crate emits no cues at all. See
+    // Whether it armed changes nothing in the force law - the original plays a
+    // cue on the *payout*, not on the arm - and is reported on
+    // `Evaluated::roll_armed` so a caller can count it. See
     // `crate::barrel_roll`.
     //
     // `control_contact` and not `contact_grounded`: the original's own read of
     // `craft+0x1c0 & 1` here is last frame's, because this runs before hover
     // rebuilds the bit. Same value the sideshift above is handed.
-    barrel_roll::advance_gesture(
+    let roll_armed = barrel_roll::advance_gesture(
         state,
         input,
         &handling.dimensions,
@@ -756,6 +766,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         contact_grounded,
         wall: crate::wall::WallResponse::default(),
         shield: crate::damage::Shield::default(),
+        roll_armed,
     }
 }
 

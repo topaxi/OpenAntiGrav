@@ -105,11 +105,11 @@ of work in this feature is deferred rather than done first.
   progress; resolve pilots at race start and leave the running race alone, the
   way the control scheme already resolves once at startup
   ([sideshift-has-no-runtime-leg.md](sideshift-has-no-runtime-leg.md)).
-- **A new axis appends to the end of the draw order, for ever.** If the editor
-  ships alongside the AI barrel-roll axes
-  ([our-ai-barrel-rolls-and-the-original-never-did.md](our-ai-barrel-rolls-and-the-original-never-did.md)),
-  the ordering rule in `docs/gameplay/ai.md` binds both, and an editor that
-  writes keys in its own order must not imply the *draw* order changed.
+- **A new axis appends to the end of the draw order, for ever.** The AI
+  barrel-roll axes landed on 2026-09-06 and are draws 17-19
+  ([ai.md](../docs/gameplay/ai.md)); the ordering rule there binds an editor
+  too, and one that writes keys in its own order must not imply the *draw*
+  order changed.
 - **New menu actions are validated at startup.** `menu/definition.rs:415` parses
   every `action` against `Action::all()` and fails naming the unknown one, so the
   CRUD actions must be added there - a page referencing an action that does not

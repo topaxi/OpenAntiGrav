@@ -502,6 +502,19 @@ pub struct Race {
     /// How many times each craft has been respawned this race, for tests and
     /// for the load report.
     respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many barrel rolls each craft has armed this race, and what they
+    /// cost it.
+    ///
+    /// **Bookkeeping, not simulation state**, which is why it is here rather
+    /// than on `Ship`: nothing reads it back into the race and it is outside
+    /// `Race::state_hash` deliberately. It exists because the deviation our AI
+    /// carries - opponents that barrel-roll, which the original's never do -
+    /// has to be *measurable* on the disc's own circuits, and the thing that
+    /// would say it had gone wrong is a tier rolling itself down to single-digit
+    /// shield. See `crates/game/tests/ai_roll_ground_truth.rs`.
+    rolls_armed: [u32; oag_gameplay::MAX_SHIPS],
+    /// The shield those rolls cost, in pool units.
+    rolls_spent: [f32; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each craft has spent away from the track.
     ///
     /// **The two halves of the grid measure "away" differently and share this

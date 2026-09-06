@@ -67,6 +67,9 @@ struct PilotFile {
     ram: Option<[f32; 2]>,
     provocation_ticks: Option<[f32; 2]>,
     trigger: Option<[f32; 2]>,
+    roll_chance: Option<[f32; 2]>,
+    roll_floor: Option<[f32; 2]>,
+    roll_airtime: Option<[f32; 2]>,
 }
 
 /// The hard limits every axis is checked against, whatever a file asks for.
@@ -84,6 +87,25 @@ fn limit(axis: &str) -> (f32, f32) {
         // dangerous.
         "line_bias" | "wander" | "inside" | "courtesy" | "defence" | "caution" | "ram"
         | "trigger" => (-1.0, 1.0),
+        // Both are fractions: a probability per airborne window, and a share
+        // of the shield pool. A floor of one is a pilot that never rolls,
+        // which is a thing somebody may reasonably want to write.
+        //
+        // **No floor-of-the-floor, unlike `commitment` above, and the two
+        // failures are not the same shape.** A `commitment` over the cap is a
+        // craft that corners faster than the physics allows - broken, on
+        // someone else's machine, in a race they did not author. A
+        // `roll_floor` of zero is a pilot that spends its own shield down to
+        // the recovered `cost < shield` and gets destroyed by the first wall:
+        // a worse opponent, which is the author's own business, and every
+        // recovered gate still holds around it. Measured, so this is a
+        // decision rather than an oversight - at floors near zero an
+        // aggressive Ace finished `09_Track` on 6.5 of 95, which is why no
+        // built-in goes near it. See `docs/gameplay/ai.md`.
+        "roll_chance" | "roll_floor" => (0.0, 1.0),
+        // Seconds of flight. Ten is longer than any jump on the disc, so the
+        // top of this range is also a way of saying "never".
+        "roll_airtime" => (0.0, 10.0),
         // Ticks. Ten seconds of grudge is plenty and a negative one is nonsense.
         "provocation_ticks" => (0.0, 600.0),
         // Ticks per drift step. Below a handful the wander is a twitch.
@@ -198,6 +220,9 @@ pub fn parse(name: &str, text: &str) -> Result<Entry> {
                 base.provocation_ticks,
             )?,
             trigger: span("trigger", file.trigger, base.trigger)?,
+            roll_chance: span("roll_chance", file.roll_chance, base.roll_chance)?,
+            roll_floor: span("roll_floor", file.roll_floor, base.roll_floor)?,
+            roll_airtime: span("roll_airtime", file.roll_airtime, base.roll_airtime)?,
         })
     })()
     .and_then(|pilot| pilot.validated().map_err(|why| anyhow::anyhow!("{why}")))

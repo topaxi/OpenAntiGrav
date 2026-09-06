@@ -143,6 +143,48 @@ impl Difficulty {
         }
     }
 
+    /// How much of a pilot's appetite for **barrel rolls** survives.
+    ///
+    /// **A second axis rather than a reuse of [`Self::aggression`]**, and the
+    /// distinction is the same one `Driver::stew` draws: aggression is what a
+    /// driver does to *other craft*, and a roll is entirely what it asks of its
+    /// own. They also want different bottoms - a novice that never shoots is a
+    /// kindness, a novice that can never roll is a level with a mechanic
+    /// missing from it.
+    ///
+    /// `Ace` is the pilot's own value, per the module docs: the top level gives
+    /// back the measurement with nothing taken away, and every level below it
+    /// rolls less often. Ours, and a play-feel scale.
+    #[must_use]
+    pub fn roll_appetite(self) -> f32 {
+        match self {
+            Self::Novice => 0.10,
+            Self::Skilled => 0.35,
+            Self::Elite => 0.70,
+            Self::Ace => 1.0,
+        }
+    }
+
+    /// How much more of its pool a level keeps back from a roll, and how much
+    /// longer a jump it wants first, as one multiplier on both.
+    ///
+    /// **It rises as the level falls**, which is the same degradation the rest
+    /// of this type applies read from the other end: a weaker driver is more
+    /// cautious about spending, and slower to decide a jump is worth spending
+    /// on. `Ace` is `1.0`, so the pilot's own numbers reach it untouched.
+    ///
+    /// One multiplier for two axes because they are the same instinct, and two
+    /// scales would be two knobs that always moved together.
+    #[must_use]
+    pub fn roll_caution(self) -> f32 {
+        match self {
+            Self::Novice => 2.4,
+            Self::Skilled => 1.7,
+            Self::Elite => 1.3,
+            Self::Ace => 1.0,
+        }
+    }
+
     /// How long a driver takes to notice a craft arriving beside, in front of
     /// or behind it, in ticks.
     ///
@@ -205,10 +247,27 @@ impl Difficulty {
     pub fn temper(self, pilot: &Pilot) -> Pilot {
         let scale = self.aggression();
         let scaled = |span: Span| Span::new(span.low * scale, span.high * scale);
+        // The roll axes degrade in the two directions their own meanings run:
+        // less often, off more shield, after a longer jump. A floor is a
+        // fraction of the pool, so it clamps at one - which is a pilot that
+        // never rolls, and the honest end of the scale rather than a nonsense.
+        let appetite = self.roll_appetite();
+        let caution = self.roll_caution();
+        let dimmed = |span: Span| Span::new(span.low * appetite, span.high * appetite);
+        let raised = |span: Span| {
+            Span::new(
+                (span.low * caution).min(1.0),
+                (span.high * caution).min(1.0),
+            )
+        };
+        let delayed = |span: Span| Span::new(span.low * caution, span.high * caution);
         Pilot {
             trigger: scaled(pilot.trigger),
             ram: scaled(pilot.ram),
             defence: scaled(pilot.defence),
+            roll_chance: dimmed(pilot.roll_chance),
+            roll_floor: raised(pilot.roll_floor),
+            roll_airtime: delayed(pilot.roll_airtime),
             ..*pilot
         }
     }
@@ -236,8 +295,12 @@ mod tests {
             assert!(harder.grip_believed() > easier.grip_believed());
             assert!(harder.turn_allowed() > easier.turn_allowed());
             assert!(harder.aggression() > easier.aggression());
-            // Mistakes are the one that falls.
+            assert!(harder.roll_appetite() > easier.roll_appetite());
+            // Mistakes are one of the two that fall, and how much a level keeps
+            // back from a roll is the other: a harder driver rolls more readily
+            // and off less.
             assert!(harder.mistakes() < easier.mistakes());
+            assert!(harder.roll_caution() < easier.roll_caution());
         }
     }
 
@@ -274,6 +337,42 @@ mod tests {
         // And the novice is the one that errs.
         assert!(easy.mistake_rate > 0.0);
         assert_eq!(Difficulty::Ace.tune(&measured).mistake_rate, 0.0);
+    }
+
+    /// The three roll axes degrade in the directions their meanings run, and
+    /// `Ace` gets the pilot's own numbers back untouched.
+    ///
+    /// **Degradation, never a boost** - the module's own rule. A level that
+    /// rolled *more* readily than the pilot asked for would be tuning nobody
+    /// had measured, on the setting that matters most.
+    #[test]
+    fn a_lower_level_rolls_less_readily_off_more_shield_and_after_a_longer_jump() {
+        let base = Pilot::BALANCED;
+        let ace = Difficulty::Ace.temper(&base);
+        assert_eq!(ace.roll_chance, base.roll_chance);
+        assert_eq!(ace.roll_floor, base.roll_floor);
+        assert_eq!(ace.roll_airtime, base.roll_airtime);
+
+        let levels = Difficulty::ALL.map(|(_, level)| level);
+        for pair in levels.windows(2) {
+            let (easier, harder) = (pair[0].temper(&base), pair[1].temper(&base));
+            assert!(harder.roll_chance.high > easier.roll_chance.high);
+            assert!(harder.roll_floor.low < easier.roll_floor.low);
+            assert!(harder.roll_airtime.low < easier.roll_airtime.low);
+        }
+    }
+
+    /// A floor is a fraction of the pool, so raising it can only reach one -
+    /// which is a pilot that never rolls, and not a span that runs backwards.
+    #[test]
+    fn no_level_raises_a_roll_floor_past_the_whole_pool() {
+        for (_, level) in Difficulty::ALL {
+            for (name, pilot) in Pilot::BUILT_IN {
+                let tempered = level.temper(&pilot);
+                assert!(tempered.roll_floor.high <= 1.0, "{name}");
+                assert!(tempered.is_well_formed(), "{name} at {}", level.name());
+            }
+        }
     }
 
     /// A slow opponent that still shoots you in the back is not an easy race.

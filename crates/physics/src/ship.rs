@@ -239,17 +239,44 @@ pub struct ShipControls {
     /// The `RIGHT` d-pad was pressed this tick, the `2` half of
     /// [`Self::roll_tap_left`]'s encoding.
     pub roll_tap_right: bool,
-    /// This input block came from `oag_ai::Driver` rather than from a pad.
+    /// A barrel roll was decided on this tick, and which way it goes.
     ///
-    /// **The only field on this struct that is not a control**, and the only
-    /// one the original has no counterpart for. It exists for exactly one
-    /// consumer, [`crate::barrel_roll::AI_ROLL_SHIELD_FLOOR`], which is an
-    /// invented AI-quality rule rather than a recovered behaviour - read that
-    /// constant's doc comment before adding a second consumer here.
+    /// **The *direct* request, exactly as [`Self::sideshift`] is**: a caller
+    /// that has already decided a roll should happen sets it, and
+    /// [`crate::barrel_roll::advance_gesture`] arms it - through the same
+    /// [`crate::barrel_roll::arm`] the gesture reaches, so it is gated on
+    /// being airborne and on `cost < shield` identically. A caller that maps
+    /// real buttons leaves this `None` and arms through the three-tap gesture
+    /// instead.
     ///
-    /// Defaults to `false`, so every existing caller, every test and the human
-    /// player all keep the recovered behaviour and nothing else has to change.
-    pub computer_driven: bool,
+    /// `oag_ai::Driver` is the one thing that sets it, and **that is a
+    /// deliberate deviation**: the original reads the gesture out of the human
+    /// player's pad block and nothing else, so its opponents never roll. A
+    /// field of its own rather than synthesised taps on [`Self::steer_x`], so
+    /// the invented intent stays distinguishable from the recovered input path
+    /// it would otherwise be laundered through. See `docs/gameplay/ai.md`.
+    pub roll_request: Option<crate::barrel_roll::TapDirection>,
+    /// The fraction of the shield pool this craft keeps back rather than
+    /// spending it on a barrel roll, `0.0..=1.0`.
+    ///
+    /// **The only field on this struct the original has no counterpart for**,
+    /// and it is an invented AI-quality rule rather than a recovered
+    /// behaviour: an opponent that spends its last energy on a manoeuvre and is
+    /// then destroyed by one wall is a worse opponent. It sits *on top of*
+    /// [`crate::barrel_roll::arm`]'s own `cost < shield`, which is recovered at
+    /// confidence 90 and is not weakened by it.
+    ///
+    /// **Zero is the recovered behaviour exactly**, which is what a real pad
+    /// leaves it at and what [`Default`] gives, so the human player and every
+    /// test that does not mention it keep the original's rule and nothing
+    /// else. `oag_ai` sets it from `Pilot::roll_floor`, which is where the
+    /// `0.20` this replaced now lives - it was a bare constant in
+    /// `crate::barrel_roll` until 2026-09-06.
+    ///
+    /// It is a **hard** floor: a roll that would leave the pool below it is
+    /// refused, rather than one started from above it and allowed to end
+    /// beneath.
+    pub roll_shield_floor: f32,
 }
 
 /// Which way a one-shot sideshift goes, if any.

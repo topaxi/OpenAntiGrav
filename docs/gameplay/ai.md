@@ -659,6 +659,96 @@ pilot consumes the *same* draws in the same order, so an axis a pilot holds fixe
 still spends its draw (`Span::fixed`, `Lean`) - skipping it would silently
 re-roll every later axis, and only for that pilot.
 
+Draws **17, 18 and 19** are the three roll axes below, appended 2026-09-06 in
+that order and fixed there.
+`every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended`
+(`crates/ai/src/pilot/tests.rs`) is the guard, and it covers all four built-ins
+across all fifteen earlier axes rather than one pilot across seven - because
+draws eight to sixteen had nothing pinning them, and those are exactly the ones
+a mid-order insert would move.
+
+### Our AI barrel-rolls on purpose, and the original's never did
+
+**A deliberate, authorized deviation, not a fidelity gap.** The original reads
+the barrel roll's tap history out of the human player's pad block and nothing
+else - recovered at confidence 85, three independent legs, on
+[input-bindings.md](../ghidra/functions/psp-pulse-usa/input-bindings.md). Its
+opponents therefore never roll. Ours do, on a maintainer's directive of
+2026-09-06: an `Ace` rolls whenever the energy budget allows, and lower tiers
+roll less.
+
+Four gates, outermost first. The first two are recovered and the deviation sits
+**on top of** them rather than through them:
+
+| # | Gate | Where | Provenance |
+| --- | --- | --- | --- |
+| 1 | airborne | `oag_physics::barrel_roll::advance_gesture` | recovered, 88 |
+| 2 | `cost < shield` | `oag_physics::barrel_roll::arm` | recovered, 90 |
+| 3 | the energy budget | `ShipControls::roll_shield_floor` | **invented** |
+| 4 | difficulty propensity | `Difficulty::roll_appetite`/`roll_caution` | **invented** |
+
+Three pilot axes carry it, so a player retunes them in a file rather than in a
+rebuild:
+
+| Axis | What it does |
+| --- | --- |
+| `roll_chance` | whether it commits, **once per airborne window** - a probability, not a rate |
+| `roll_floor` | the fraction of the shield pool it will not spend below |
+| `roll_airtime` | how many **seconds** a flight has to have lasted first |
+
+Two decisions worth stating, because each is the sort a later reader would
+otherwise assume was an oversight:
+
+- **Provocation does not feed it.** The grudge scales what a driver does to
+  *other craft*, never what it asks of its own, and a roll is entirely the
+  latter - it spends the driver's own shield for the driver's own turbo, aimed
+  at nobody. Wiring it would make an angry AI *faster*, which is the failure
+  `provocation`'s own cap exists to prevent, and it would close exactly the
+  rubber-banding loop [this project refuses to port](#what-we-build-instead):
+  overtake an AI, it gets provoked, it rolls, it boosts, it repasses you.
+- **The driver asks for the roll directly** rather than synthesising the
+  three-tap gesture on its own steering axis. `ShipControls::roll_request` is
+  the request, on the same pattern `ShipControls::sideshift` already sets: a
+  caller that has decided sets it, and a real pad leaves it empty and arms
+  through the gesture. Routing an invented intent back through the recovered
+  input path would make the two indistinguishable in a year's time.
+
+`Difficulty` degrades it the way it degrades everything else - `Ace` is the
+pilot's value untouched, and `Elite`, `Skilled` and `Novice` take a lower
+chance, a *raised* floor and a *longer* minimum airborne time.
+
+#### What it costs on the disc, measured
+
+One craft alone, 18,000 ticks, every forward circuit, each cell **arms /
+shield spent** out of a 95-unit pool. `crates/game/tests/ai_roll_ground_truth.rs`,
+`OAG_SWEEP=1`:
+
+| Pilot | Novice | Skilled | Elite | Ace |
+| --- | --- | --- | --- | --- |
+| `aggressive` | 2 / 15.2 | 4 / 30.4 | 20 / 152.0 | 42 / 319.2 |
+| `balanced` | 0 / 0.0 | 1 / 7.6 | 6 / 45.6 | 25 / 190.0 |
+| `passive` | 0 / 0.0 | 1 / 7.6 | 3 / 22.8 | 2 / 15.2 |
+| `shy` | 0 / 0.0 | 0 / 0.0 | 0 / 0.0 | 2 / 15.2 |
+
+The lowest any craft finishes on, on a circuit it laps cleanly, is **21.7 of
+95** - an aggressive Ace on `09_Track`. `05_Track` and `07_Track` finish on
+nothing at every tier *including the ones that armed no rolls at all*, so that
+is the circuits' own doing rather than this mechanic's.
+
+**Two things the measurement changed.** The invented `0.20` shield floor that
+`oag_physics` carried as a bare constant is now a number no built-in uses: it
+was dormant for as long as the AI did not roll - identical per-circuit figures
+at `0.20` and at `0.00` - and the first race that actually exercised it put an
+aggressive Ace on `09_Track` on **6.5** shield. The hard floor held; what it had
+done was remove the buffer the walls then ate. And `shy` was tuned to roll
+*twice* across the disc rather than never, because never is the original's
+behaviour and not this one's.
+
+The harness forces the pilot rather than letting the grid draw it, and that is
+not a detail: `pilot_for_slot` hands slot 1 the same character on every circuit,
+so an unforced lone-craft benchmark measures one of the four and reads as the
+field's.
+
 ### What a driver can see of the grid
 
 `oag_ai::Field` is three optional rivals - the nearest **ahead**, the nearest

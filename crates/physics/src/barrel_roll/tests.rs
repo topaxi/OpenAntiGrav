@@ -257,72 +257,196 @@ fn gesture_tick(
     steer_x: f32,
     dpad: Option<TapDirection>,
 ) -> bool {
-    airborne_tick(state, dimensions, steer_x, dpad, false)
+    airborne_tick(state, dimensions, steer_x, dpad, 0.0)
 }
 
-/// The same, with [`ShipControls::computer_driven`] under the caller's control.
+/// The same, with [`ShipControls::roll_shield_floor`] under the caller's
+/// control.
 fn airborne_tick(
     state: &mut ShipState,
     dimensions: &Dimensions,
     steer_x: f32,
     dpad: Option<TapDirection>,
-    computer_driven: bool,
+    roll_shield_floor: f32,
 ) -> bool {
     let input = ShipControls {
         steer_x,
         roll_tap_left: dpad == Some(TapDirection::Left),
         roll_tap_right: dpad == Some(TapDirection::Right),
-        computer_driven,
+        roll_shield_floor,
         ..ShipControls::default()
     };
     advance_gesture(state, &input, dimensions, 8.0, false, 1.0 / 60.0)
 }
 
-/// Three airborne taps from one driver kind, and whether they armed.
-fn three_taps(computer_driven: bool, shield: f32) -> (bool, ShipState) {
+/// Three airborne taps against one shield floor, and whether they armed.
+fn three_taps(roll_shield_floor: f32, shield: f32) -> (bool, ShipState) {
     let (mut state, dimensions) = armable();
     state.shield = shield;
     let mut armed = false;
     for dir in [TapDirection::Right, TapDirection::Left, TapDirection::Right] {
-        armed = airborne_tick(&mut state, &dimensions, 0.0, Some(dir), computer_driven);
+        armed = airborne_tick(&mut state, &dimensions, 0.0, Some(dir), roll_shield_floor);
     }
     (armed, state)
 }
 
-/// The invented AI-only floor: an AI craft under
-/// [`AI_ROLL_SHIELD_FLOOR`] of its pool does not arm, and a human on the same
-/// shield does.
+/// The floor an AI carries and a pad does not: the same gesture on the same
+/// shield arms for a pad and refuses for a driver keeping a fifth back.
 ///
-/// **This pins a choice, not a finding** - see the constant's own doc comment.
-/// The asymmetry is the whole point of the test: if a change ever makes the
-/// floor apply to a pad as well, the second half fails.
+/// **This pins a choice, not a finding** - see [`within_budget`]'s own doc
+/// comment. The asymmetry is the whole point: the floor is a field on the
+/// controls, so if a change ever fills it in on the human path, the second half
+/// fails.
 #[test]
-fn the_ai_floor_refuses_an_ai_and_not_a_pad() {
-    // The pool is 100.0 in `armable`, so the floor is 20.0 and the recovered
-    // `cost < shield` gate would still allow this at 8.0.
-    let under = AI_ROLL_SHIELD_FLOOR * 100.0 - 1.0;
+fn the_invented_floor_refuses_where_a_pad_arms() {
+    // The pool is 100.0 in `armable`, the cost 8.0, so a fifth kept back needs
+    // 28.0 to spend from. The recovered `cost < shield` gate alone would allow
+    // this at anything over 8.0.
+    let under = 27.0;
 
-    let (ai, state) = three_taps(true, under);
-    assert!(!ai, "an AI armed a roll below the floor");
+    let (floored, state) = three_taps(0.20, under);
+    assert!(!floored, "a roll armed below the budget");
     assert_eq!(state.roll_target, 0.0);
     assert_eq!(state.shield, under, "and it was not charged");
 
-    let (pad, state) = three_taps(false, under);
-    assert!(pad, "the floor reached the human path");
+    let (pad, state) = three_taps(0.0, under);
+    assert!(pad, "the floor reached a caller that did not ask for one");
     assert_eq!(state.roll_target, 1.0);
     assert!(state.shield < under, "and the pad paid the recovered cost");
 }
 
-/// And above the floor an AI arms exactly as a pad does, so the test above is
-/// measuring the floor rather than a driver kind that can never roll.
+/// **The floor is hard: what it compares is the pool the roll would leave.**
+/// The other reading lets a craft sitting exactly on its floor spend anyway and
+/// land underneath it, which is the shape of an opponent rolling itself down to
+/// nothing.
 #[test]
-fn an_ai_above_the_floor_arms_like_a_pad() {
-    let over = AI_ROLL_SHIELD_FLOOR * 100.0 + 1.0;
-    let (ai, ai_state) = three_taps(true, over);
-    let (pad, pad_state) = three_taps(false, over);
-    assert!(ai && pad);
-    assert_eq!(ai_state.roll_target, pad_state.roll_target);
-    assert_eq!(ai_state.shield, pad_state.shield);
+fn the_floor_is_measured_after_the_cost_not_before_it() {
+    // Exactly on the floor before the cost, and a whole cost under it after.
+    let (on_the_floor, state) = three_taps(0.20, 20.0);
+    assert!(
+        !on_the_floor,
+        "spending it would have left 12 against a 20 floor"
+    );
+    assert_eq!(state.shield, 20.0);
+
+    // And a shield the cost clears the floor from arms, so this is measuring
+    // the arithmetic rather than a floor that never lets anything through.
+    let (clears, state) = three_taps(0.20, 28.0);
+    assert!(clears);
+    assert_eq!(
+        state.shield, 20.0,
+        "left exactly on the floor, not under it"
+    );
+}
+
+/// Above the budget the floored craft arms exactly as an unfloored one does, so
+/// the tests above measure the floor rather than a caller that can never roll.
+#[test]
+fn above_the_budget_a_floored_craft_arms_like_an_unfloored_one() {
+    let over = 40.0;
+    let (floored, floored_state) = three_taps(0.20, over);
+    let (pad, pad_state) = three_taps(0.0, over);
+    assert!(floored && pad);
+    assert_eq!(floored_state.roll_target, pad_state.roll_target);
+    assert_eq!(floored_state.shield, pad_state.shield);
+}
+
+/// The direct request arms the same roll the gesture does, without a tap.
+///
+/// **The deviation's own entry point**, and what makes it legible: no tap
+/// history is touched, `oag_ai::Driver` is the only thing that sets it, and it
+/// still pays the recovered cost.
+#[test]
+fn a_direct_request_arms_a_roll_with_no_taps_at_all() {
+    let (mut state, dimensions) = armable();
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    let armed = advance_gesture(&mut state, &input, &dimensions, 8.0, false, 1.0 / 60.0);
+    assert!(armed);
+    assert_eq!(state.roll_target, 1.0);
+    assert_eq!(state.shield, 92.0, "8% of a 100 shield pool, as a tap pays");
+    assert_eq!(state.roll_taps, [0, 0, 0], "and no tap history was written");
+}
+
+/// The grounded gate is the outermost of the four and the direct request does
+/// not get past it either. **If this fails, the deviation has been let through
+/// a recovered gate rather than placed on top of one.**
+#[test]
+fn a_direct_request_on_the_ground_arms_nothing() {
+    let (mut state, dimensions) = armable();
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    let armed = advance_gesture(&mut state, &input, &dimensions, 8.0, true, 1.0 / 60.0);
+    assert!(!armed);
+    assert_eq!(state.roll_target, 0.0);
+    assert_eq!(state.shield, 100.0, "and nothing was charged");
+}
+
+/// And the recovered `cost < shield` refuses it too.
+#[test]
+fn a_direct_request_on_an_empty_shield_arms_nothing() {
+    let (mut state, dimensions) = armable();
+    state.shield = 4.0;
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Left),
+        ..ShipControls::default()
+    };
+    let armed = advance_gesture(&mut state, &input, &dimensions, 8.0, false, 1.0 / 60.0);
+    assert!(!armed);
+    assert_eq!(state.shield, 4.0);
+}
+
+/// A second roll requested after a completed one starts from level.
+///
+/// **The bug this is the regression for**: `roll_phase` is left at `+-1.0` by a
+/// completed roll, so a request that armed without levelling would reach its
+/// target on the tick it was made and collect the landing payout for nothing.
+#[test]
+fn a_requested_roll_after_a_completed_one_starts_from_level() {
+    let (mut state, dimensions) = armable();
+    state.roll_phase = 1.0;
+    state.roll_target = 1.0;
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    assert!(advance_gesture(
+        &mut state,
+        &input,
+        &dimensions,
+        8.0,
+        false,
+        1.0 / 60.0
+    ));
+    assert_eq!(state.roll_phase, 0.0, "the new roll starts from level");
+    assert_eq!(state.roll_target, 1.0);
+}
+
+/// A refused request leaves the phase where it was, because levelling is the
+/// original's answer to a completed *pattern* and a request is not one.
+#[test]
+fn a_refused_request_does_not_level_the_phase() {
+    let (mut state, dimensions) = armable();
+    state.shield = 4.0;
+    state.roll_phase = 0.75;
+    state.roll_target = 1.0;
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Right),
+        ..ShipControls::default()
+    };
+    assert!(!advance_gesture(
+        &mut state,
+        &input,
+        &dimensions,
+        8.0,
+        false,
+        1.0 / 60.0
+    ));
+    assert_eq!(state.roll_phase, 0.75);
 }
 
 #[test]

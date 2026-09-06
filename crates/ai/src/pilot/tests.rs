@@ -348,3 +348,367 @@ fn the_pilot_a_slot_draws_does_not_track_its_personality_seed() {
         "pilot choice tracks the personality seed: {ratio} agreement"
     );
 }
+
+/// **The append-order guard for the three roll axes**, and the reason it
+/// covers all four built-ins rather than just `BALANCED`.
+///
+/// `the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`
+/// above pins draws one to seven of one pilot. Nothing pinned draws eight to
+/// sixteen of any pilot, which is exactly the stretch an axis inserted in the
+/// middle would move - and an axis inserted in the middle is the documented
+/// failure of this module. So these are `f32::to_bits` of every one of the
+/// fifteen pre-existing axes, for each of the four built-ins, captured off the
+/// tree at `bc53a3f0` before `roll_chance`, `roll_floor` and `roll_airtime`
+/// were appended.
+///
+/// If this fails, the three new draws did not land at the end. Regenerating
+/// the table is never the fix.
+///
+/// Order per row: `line_bias`, `wander`, `wander_rate`, `look`, `commitment`,
+/// `patience`, `trail`, `width`, `inside`, `courtesy`, `defence`, `caution`,
+/// `ram`, `provocation_ticks`, `trigger`.
+#[test]
+fn every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended() {
+    const BEFORE: [(&str, u32, [u32; 15]); 12] = [
+        (
+            "balanced",
+            0x0000_0001,
+            [
+                0xbef9_3e4e,
+                0x3e04_a8c3,
+                0x3b96_e5e1,
+                0x3f66_6aaa,
+                0x3f86_0319,
+                0x3f94_3455,
+                0x3f73_d4bd,
+                0x3f84_3cdd,
+                0x3dc0_616b,
+                0x3e80_d794,
+                0x3ea7_033c,
+                0x3f55_8af1,
+                0x3e3f_7669,
+                0x433d_7ad0,
+                0x3f02_099d,
+            ],
+        ),
+        (
+            "balanced",
+            0x0000_0007,
+            [
+                0xbf00_6988,
+                0x3e75_1b9e,
+                0x3b2e_798e,
+                0x3f7e_bd9c,
+                0x3f75_7eef,
+                0x3f8f_83db,
+                0x3f3a_c83c,
+                0x3f6b_ef74,
+                0x3d69_d5c2,
+                0x3eae_d105,
+                0x3eca_6bd0,
+                0x3f0d_853c,
+                0x3e41_3842,
+                0x4356_c4fe,
+                0x3f03_5722,
+            ],
+        ),
+        (
+            "balanced",
+            0xdead_beef,
+            [
+                0x3f25_dbe6,
+                0x3e4e_06c2,
+                0x3b67_9c7a,
+                0x3f91_7f6a,
+                0x3f7a_cd64,
+                0x3f7a_8519,
+                0x3f69_a566,
+                0x3f84_f150,
+                0x3dbb_82ea,
+                0x3e54_7fe9,
+                0x3e84_8482,
+                0x3f22_0635,
+                0x3e15_653c,
+                0x434e_57cc,
+                0x3ee7_d01f,
+            ],
+        ),
+        (
+            "aggressive",
+            0x0000_0001,
+            [
+                0xbefe_a2db,
+                0x3d60_5bc2,
+                0x3bae_f13e,
+                0x3f5d_e023,
+                0x3f86_3d06,
+                0x3f6d_f565,
+                0x3fa0_50c5,
+                0x3f5d_cb5c,
+                0x3ee0_30b6,
+                0x3d26_88e5,
+                0x3f54_f859,
+                0x3ecd_1d36,
+                0x3f6a_4ef0,
+                0x43cf_e658,
+                0x3f5a_9e68,
+            ],
+        ),
+        (
+            "aggressive",
+            0x0000_0007,
+            [
+                0xbf02_7a14,
+                0x3de0_a0bc,
+                0x3b6e_03e8,
+                0x3f6a_d92e,
+                0x3f81_8b83,
+                0x3f69_6738,
+                0x3f83_ca85,
+                0x3f3a_1e84,
+                0x3eba_7570,
+                0x3d9c_d38d,
+                0x3f71_4c02,
+                0x3e42_294f,
+                0x3f6b_7ad6,
+                0x43e4_f97e,
+                0x3f5b_452b,
+            ],
+        ),
+        (
+            "aggressive",
+            0xdead_beef,
+            [
+                0x3f21_aeb6,
+                0x3db9_8be0,
+                0x3b92_5fbc,
+                0x3f7e_2f2a,
+                0x3f82_a686,
+                0x3f57_ab6f,
+                0x3f9b_3919,
+                0x3f5f_8e7a,
+                0x3edd_c175,
+                0x3cbc_7a97,
+                0x3f39_5fc4,
+                0x3e7f_ac39,
+                0x3f4e_437d,
+                0x43dd_f3d5,
+                0x3f53_8da1,
+            ],
+        ),
+        (
+            "passive",
+            0x0000_0001,
+            [
+                0xbeda_eeba,
+                0x3e13_165e,
+                0x3b66_3874,
+                0x3f88_89ab,
+                0x3f7c_dbb1,
+                0x3f9e_3262,
+                0x3f0d_6e56,
+                0x3f8a_a343,
+                0x3d80_40f2,
+                0x3ef1_a688,
+                0x3e43_8a4c,
+                0x3f73_5b68,
+                0x3d3b_0448,
+                0x42d4_a3c0,
+                0x3e8f_db38,
+            ],
+        ),
+        (
+            "passive",
+            0x0000_0007,
+            [
+                0xbee0_9e4c,
+                0x3e6d_0bda,
+                0x3b15_e0c3,
+                0x3f8f_0631,
+                0x3f6b_f63d,
+                0x3f9b_8465,
+                0x3ea8_c3ac,
+                0x3f78_bc41,
+                0x3d1b_e3d7,
+                0x3f14_68ee,
+                0x3e7c_319f,
+                0x3f3d_5720,
+                0x3d3d_5c14,
+                0x42f6_5bfc,
+                0x3e91_cf80,
+            ],
+        ),
+        (
+            "passive",
+            0xdead_beef,
+            [
+                0x3f0c_64ec,
+                0x3e4d_c7f6,
+                0x3b3c_4de0,
+                0x3f98_b12f,
+                0x3f6f_f115,
+                0x3f91_15ef,
+                0x3f03_3f00,
+                0x3f8b_57b6,
+                0x3d7a_03e2,
+                0x3ed6_8a2f,
+                0x3e0c_5921,
+                0x3f4c_b7db,
+                0x3d02_ed61,
+                0x42eb_1fbb,
+                0x3e75_51c8,
+            ],
+        ),
+        (
+            "shy",
+            0x0000_0001,
+            [
+                0xbf1b_9d4d,
+                0x3e33_5202,
+                0x3b77_9e19,
+                0x3f83_6af3,
+                0x3f77_bcf9,
+                0x3fa5_9189,
+                0x3eb4_7646,
+                0x3f91_09aa,
+                0xbbc6_b620,
+                0x3f52_6cde,
+                0x3d66_f1c1,
+                0x3f77_9246,
+                0x0000_0000,
+                0x4281_7ad0,
+                0x3df0_9676,
+            ],
+        ),
+        (
+            "shy",
+            0x0000_0007,
+            [
+                0xbf1e_2439,
+                0x3e89_736a,
+                0x3b1d_0fd5,
+                0x3f89_e778,
+                0x3f66_d785,
+                0x3fa2_9ef3,
+                0x3e04_ba8b,
+                0x3f82_c487,
+                0xbd2f_c3d8,
+                0x3f6e_0288,
+                0x3da0_cb89,
+                0x3f53_8f6b,
+                0x0000_0000,
+                0x429a_c4fe,
+                0x3df7_1a0e,
+            ],
+        ),
+        (
+            "shy",
+            0xdead_beef,
+            [
+                0x3f37_1b22,
+                0x3e71_aeb3,
+                0x3b47_c8f7,
+                0x3f93_9276,
+                0x3f6a_d25d,
+                0x3f97_2571,
+                0x3ea0_1799,
+                0x3f91_be1d,
+                0xbc0a_4f18,
+                0x3f44_deb1,
+                0x3d0e_a316,
+                0x3f5d_cfe8,
+                0x0000_0000,
+                0x4292_57cc,
+                0x3da9_eeb2,
+            ],
+        ),
+    ];
+
+    for (name, seed, expected) in BEFORE {
+        let pilot = Pilot::BUILT_IN
+            .iter()
+            .find(|(spelling, _)| *spelling == name)
+            .map(|(_, pilot)| *pilot)
+            .expect("a built-in pilot lost its name");
+        let drawn = Personality::from_pilot_seed(&pilot, seed);
+        let got = [
+            drawn.line_bias.to_bits(),
+            drawn.wander.to_bits(),
+            drawn.wander_rate.to_bits(),
+            drawn.look.to_bits(),
+            drawn.commitment.to_bits(),
+            drawn.patience.to_bits(),
+            drawn.trail.to_bits(),
+            drawn.width.to_bits(),
+            drawn.inside.to_bits(),
+            drawn.courtesy.to_bits(),
+            drawn.defence.to_bits(),
+            drawn.caution.to_bits(),
+            drawn.ram.to_bits(),
+            drawn.provocation_ticks.to_bits(),
+            drawn.trigger.to_bits(),
+        ];
+        assert_eq!(
+            got, expected,
+            "{name} at seed {seed:#010x} no longer draws what it did: an axis \
+             went into the middle of the draw order rather than onto the end"
+        );
+    }
+}
+
+/// The three roll axes actually draw, and inside their own spans. A frozen
+/// order is worth nothing if the axes it froze read zero.
+#[test]
+fn every_built_in_pilot_draws_its_roll_axes_inside_their_spans() {
+    for (name, pilot) in Pilot::BUILT_IN {
+        for seed in 1..200u32 {
+            let drawn = Personality::from_pilot_seed(&pilot, seed);
+            for (axis, span, value) in [
+                ("roll_chance", pilot.roll_chance, drawn.roll_chance),
+                ("roll_floor", pilot.roll_floor, drawn.roll_floor),
+                ("roll_airtime", pilot.roll_airtime, drawn.roll_airtime),
+            ] {
+                assert!(
+                    (span.low..=span.high).contains(&value),
+                    "{name} seed {seed}: {axis} drew {value}, outside [{}, {}]",
+                    span.low,
+                    span.high
+                );
+            }
+        }
+    }
+}
+
+/// The four have to differ in how readily they roll, or the axis is one
+/// number wearing four names.
+///
+/// Written as a walk over an ordered list rather than as a page of pairwise
+/// `assert!`s, because every one of those compares two `const`s and clippy
+/// folds them: `assertions_on_constants` fires and the test does not build.
+#[test]
+fn the_four_built_ins_have_four_different_roll_characters() {
+    // Most willing first. The floor and the minimum airborne time both run the
+    // other way: the pilot that rolls readily is the one that will dig deepest
+    // into the pool for it and wait least for a jump worth spending on.
+    let order = [
+        ("aggressive", Pilot::AGGRESSIVE),
+        ("balanced", Pilot::BALANCED),
+        ("passive", Pilot::PASSIVE),
+        ("shy", Pilot::SHY),
+    ];
+    for pair in order.windows(2) {
+        let ((keener, willing), (calmer, reluctant)) = (pair[0], pair[1]);
+        assert!(
+            willing.roll_chance.low > reluctant.roll_chance.low,
+            "{keener} does not roll more readily than {calmer}"
+        );
+        assert!(
+            willing.roll_floor.low < reluctant.roll_floor.low,
+            "{keener} does not roll off a lower floor than {calmer}"
+        );
+        assert!(
+            willing.roll_airtime.low <= reluctant.roll_airtime.low,
+            "{keener} waits longer for a jump than {calmer}"
+        );
+    }
+}

@@ -87,3 +87,26 @@ provocation_ticks = [240.0, 480.0]
 # not a probability: at 1.0 it shoots about a fifth of a second after a target
 # lines up, at 0.2 about a second and a half.
 trigger = [0.5, 0.9]
+
+# --- Whether it barrel-rolls ----------------------------------------------
+# THE ORIGINAL'S OPPONENTS NEVER BARREL-ROLL. Ours do, on purpose, and these
+# three axes are how much. Nothing under this heading is a port of anything -
+# it is a game-design choice this project made with the original's behaviour
+# already known. See docs/gameplay/ai.md.
+#
+# Whether it commits, once per jump. A real probability and not a rate, unlike
+# `trigger`: the driver decides ONCE per flight - on the first tick past
+# `roll_airtime` below - and lives with it until it lands. So 0.5 really is
+# every other long jump.
+roll_chance = [0.4, 0.7]
+
+# How much of its shield pool it keeps back rather than spending on a roll. A
+# roll costs 8% of the pool and buys a turbo on landing, so this is the pilot's
+# own answer to "can I afford to show off?". At 1.0 it never can.
+roll_floor = [0.25, 0.4]
+
+# How many SECONDS a jump has to have lasted before it is worth rolling - the
+# one axis here measured in seconds rather than ticks, because a jump is. Too
+# low and it pays for rolls that touch down half-finished, which costs the
+# shield and buys nothing.
+roll_airtime = [0.45, 0.7]

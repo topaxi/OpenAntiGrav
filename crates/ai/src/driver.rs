@@ -167,6 +167,21 @@ pub struct Driver {
     /// has not ticked yet, which is not the same as one that has looked and
     /// seen nobody.
     pub reflex: Reflex,
+    /// Whether this driver has already made its mind up about a barrel roll
+    /// during the flight it is in.
+    ///
+    /// **One decision per airborne window, which is what makes
+    /// [`Personality::roll_chance`] a probability rather than a rate.** Rolled
+    /// every tick it would be neither: a chance of a tenth would fire in the
+    /// first second of any long jump, and the axis would do far more than its
+    /// number says.
+    ///
+    /// Set on the first tick past [`Personality::roll_airtime`] whichever way
+    /// the decision went - a driver that decided *not* to roll this jump does
+    /// not get to reconsider - and cleared the moment the craft is on the
+    /// ground again. A `bool` because this type is `Eq` and lives in the world
+    /// snapshot, for the reason [`Self::provocation`] gives.
+    pub roll_decided: bool,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -198,6 +213,16 @@ const MISTAKE_TICKS: u16 = 30;
 
 /// The noise stream weapon decisions are rolled against.
 const WEAPON_STREAM: u32 = 2;
+
+/// The noise stream the barrel roll's commit decision is rolled against.
+const ROLL_STREAM: u32 = 4;
+
+/// And the one that picks which way it goes.
+///
+/// A stream of its own rather than a second use of [`ROLL_STREAM`]: sharing it
+/// would tie which way a driver rolls to how readily it rolls at all, so a
+/// pilot with a high [`Personality::roll_chance`] would only ever roll one way.
+const ROLL_SIDE_STREAM: u32 = 5;
 
 /// How often a driver at full `trigger` will fire once it has a target, per
 /// tick.
@@ -335,9 +360,11 @@ impl Driver {
             airbrake_left,
             airbrake_right,
             sideshift: self.ram(state, ctx, &personality),
-            // Not a control: the one flag `oag-physics` uses to apply an
-            // AI-only rule, `barrel_roll::AI_ROLL_SHIELD_FLOOR`. See there.
-            computer_driven: true,
+            roll_request: self.wants_to_roll(state, &personality),
+            // Every tick, not only the ones a roll is asked for: it also gates
+            // the *gesture*, which this driver's own steering can complete by
+            // accident. See `oag_physics::barrel_roll::within_budget`.
+            roll_shield_floor: personality.roll_floor,
             ..ShipControls::default()
         }
     }
@@ -931,6 +958,7 @@ mod avoidance;
 mod personality;
 mod ram;
 mod reflex;
+mod roll;
 mod tuning;
 mod weapons;
 

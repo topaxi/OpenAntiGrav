@@ -88,6 +88,12 @@ pub struct Personality {
     pub provocation_ticks: f32,
     /// How readily it puts a weapon in the air once it has a target.
     pub trigger: f32,
+    /// How readily it commits to a barrel roll, per airborne window.
+    pub roll_chance: f32,
+    /// The fraction of its shield pool it keeps back from one.
+    pub roll_floor: f32,
+    /// How long a flight has to last, in seconds, before it is worth rolling.
+    pub roll_airtime: f32,
 }
 
 impl Personality {
@@ -113,6 +119,25 @@ impl Personality {
         ram: 0.0,
         provocation_ticks: 0.0,
         trigger: 0.0,
+        // **Never asks for a roll.** A chance of zero is the neutral value the
+        // way a bias of zero is, and it is what keeps `Driver::default()` the
+        // plain line-follower every exact assertion in this crate is written
+        // against - a driver that occasionally spends a twelfth of its shield
+        // mid-jump is not one of those.
+        roll_chance: 0.0,
+        // **And a floor of zero, which is deliberately not protection.**
+        // `roll_chance` gates `Driver::wants_to_roll` and nothing else; the
+        // *gesture* path in `oag_physics::barrel_roll` reads this floor alone,
+        // so seed zero's accidental alternation is ungated where a seeded
+        // driver's is. That is the right answer rather than an oversight: seed
+        // zero is what flies slot 0 under `--autopilot` and under the Autopilot
+        // pickup, and the player's own craft should behave like the player's
+        // own craft - a human pad carries no floor either. It is also
+        // unreachable in practice: an opponent armed **zero** rolls by
+        // accidental alternation on all twelve circuits once the grounded gate
+        // landed.
+        roll_floor: 0.0,
+        roll_airtime: 0.0,
     };
 
     /// Derives a personality from a seed.
@@ -189,6 +214,13 @@ impl Personality {
         let ram = pilot.ram.draw(rng);
         let provocation_ticks = pilot.provocation_ticks.draw(rng);
         let trigger = pilot.trigger.draw(rng);
+        // Draws 17, 18 and 19, appended 2026-09-06 and fixed in this order.
+        // Everything above them is untouched by their arrival, which is the
+        // whole reason they are here rather than beside the axes they are
+        // about - see the module docs on [`Pilot`].
+        let roll_chance = pilot.roll_chance.draw(rng);
+        let roll_floor = pilot.roll_floor.draw(rng);
+        let roll_airtime = pilot.roll_airtime.draw(rng);
 
         Self {
             line_bias,
@@ -206,6 +238,9 @@ impl Personality {
             ram,
             provocation_ticks,
             trigger,
+            roll_chance,
+            roll_floor,
+            roll_airtime,
         }
     }
 }
