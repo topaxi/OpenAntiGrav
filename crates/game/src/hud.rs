@@ -47,12 +47,14 @@ use oag_formats::fexml::{self, Node};
 
 mod assets;
 mod compose;
+pub mod countdown;
 mod draw;
 mod overlay;
 mod widget;
 
 pub use assets::Assets;
 pub use compose::{Composed, compose};
+pub use countdown::Countdown;
 pub use draw::{Context, Frame, draw_list, pickup_icon_name, sprite_draw};
 pub use overlay::Overlay;
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};

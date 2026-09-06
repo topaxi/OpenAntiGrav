@@ -822,6 +822,51 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
 
+    // The countdown's own `<Mode3D><Model>` mesh - see `crate::hud::countdown`
+    // for why this one is drawn through the mesh pipeline rather than
+    // `crate::hud::draw::model_draw`'s baked-quad shortcut every other
+    // `<Mode3D>` widget uses. Placed by this mode's own layout, found by name
+    // rather than assumed present: Pure's HUD authors `Ready_GO.vex` and no
+    // `Cockpit321Go` widget at all, so a title or mode with no such widget has
+    // nothing to place this model by and gets none, the same "absence is
+    // reported, not fatal" rule `weapon_models::load` follows.
+    let countdown_model = hud
+        .layout
+        .as_ref()
+        .and_then(|layout| {
+            layout
+                .models
+                .iter()
+                .find(|model| model.name == "Cockpit321Go")
+        })
+        .filter(|widget| !widget.src.is_empty())
+        .and_then(|widget| match archives.read_name(&widget.src) {
+            Ok(blob) => match mesh::build(&widget.src, &blob) {
+                Ok(model) => {
+                    report.push(format!(
+                        "{}: {} triangle(s), radius {:.2} - the countdown's own Mode3D \
+                         model, placed at its widget's authored {:?}",
+                        widget.src,
+                        model.indices.len() / 3,
+                        model.radius,
+                        widget.position
+                    ));
+                    Some((model, widget.clone()))
+                }
+                Err(error) => {
+                    report.push(format!("{}: did not decode ({error})", widget.src));
+                    None
+                }
+            },
+            Err(_) => {
+                report.push(format!(
+                    "{}: absent - the countdown draws nothing this race",
+                    widget.src
+                ));
+                None
+            }
+        });
+
     // The ring the lap counter runs on. Reported either way: "this track has no
     // lap counting" is exactly the kind of thing that otherwise gets discovered
     // as a HUD that never counts past one.
@@ -919,6 +964,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         mine_model,
         bomb_model,
         shield_cockpit,
+        countdown_model,
         visibility,
         flare,
         noise,
