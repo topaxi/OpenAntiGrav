@@ -117,16 +117,44 @@ mod tests {
         assert!(report.is_empty());
     }
 
+    /// **This is the test that used to assert the file was empty**, with a
+    /// comment saying it would start failing the moment something looked a
+    /// project string up by id. That happened: the pilot editor's CRUD rows
+    /// and the on-screen keyboard it opens are the first screen in this build
+    /// whose text is looked up rather than written into the widget.
+    ///
+    /// What it pins now is the property that still matters - every id in the
+    /// file is one of ours. The `OAG_` prefix is what keeps a project entry
+    /// from colliding with a disc idstring, and this file shares one id space
+    /// with the disc's own by design. An id landing here without it would
+    /// silently override a real front-end string on somebody's disc.
+    ///
+    /// It deliberately does **not** list the ids: that would be a second
+    /// place to update for every string added, which is exactly the kind of
+    /// bookkeeping nobody does.
     #[test]
-    fn english_parses_and_is_empty_today() {
-        // Not a claim that it always will be - once something looks up a
-        // project string by id, this file is where its English text lands,
-        // and this test starts failing in a way that says so.
+    fn every_english_entry_is_one_of_ours_and_reads_back() {
         let mut table = StringTable::default();
         let mut report = Vec::new();
         overlay(&mut table, "English", &mut report);
-        assert!(table.is_empty());
-        assert!(report.is_empty());
+        // The report is a *count*, not an error list - it used to be empty
+        // only because the file was.
+        assert_eq!(report.len(), 1, "{report:?}");
+        assert!(report[0].contains("english.toml"), "{report:?}");
+        assert!(!table.is_empty(), "the file has entries now");
+        // One of them, spot-checked, so "not empty" cannot pass on a file
+        // that parsed into something unrelated.
+        assert_eq!(table.get("OAG_PILOT_RENAME"), Some("RENAME"));
+
+        let text = built_in("English").expect("English ships a file");
+        let file: File = toml::from_str(text).expect("the shipped file must parse");
+        for id in file.strings.keys() {
+            assert!(
+                id.starts_with("OAG_"),
+                "{id:?} has no OAG_ prefix, so it would override a disc idstring \
+                 of that name rather than adding one of ours"
+            );
+        }
     }
 
     #[test]

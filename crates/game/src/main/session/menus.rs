@@ -509,6 +509,10 @@ impl Session {
                 // hand-off already had its moment, and starting a transition
                 // here would zoom the first page in from nothing on every boot.
                 change: None,
+                // Nothing is being typed or confirmed the instant the menus
+                // open, and a prompt carried across a rebuild would be one
+                // asking about a page that is no longer on screen.
+                prompt: None,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
                     rect: shape.rect,
@@ -760,6 +764,11 @@ impl Session {
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
+            // Both open a modal prompt rather than doing anything: what they
+            // fire is `MenuStage::prompt`, and `Session::finish_prompt` acts
+            // on the answer. See `session::pilot_editor`.
+            menu::MenuEvent::Fired(menu::Action::RenamePilot) => self.rename_pilot(),
+            menu::MenuEvent::Fired(menu::Action::DeletePilot) => self.delete_pilot(),
             // Backing out of the root page used to always mean the same thing
             // as QUIT: there was nothing behind the menus to go back to. Now
             // there can be - a race `escape` parked rather than discarded -
@@ -848,6 +857,16 @@ impl Session {
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
         if let Stage::Menu(stage) = &mut self.stage {
+            // **A modal prompt takes escape first, and takes it whole.**
+            // `Menu::back` is called here out of band with the tick loop -
+            // see its own doc - so without this, escape over an open keyboard
+            // would pop the page *behind* the overlay and leave the prompt
+            // hanging over a page it was never opened from. Cancelling is
+            // also what escape means in the one other modal state this build
+            // has: `rebind::Capture::Cancel`.
+            if stage.prompt.take().is_some() {
+                return;
+            }
             let events = stage.menu.back();
             for event in events {
                 self.handle_menu(&event);

@@ -13,11 +13,7 @@ fn tick(buttons: &[Button]) -> Input {
 /// Pulse's own menu table against the 22-pixel face its menus name, the same
 /// skin `menu/tests.rs` draws with.
 fn skin() -> Skin {
-    Skin::new(
-        oag_pulse::FRONT_END.menu,
-        crate::frontend::Space::PSP,
-        22.0,
-    )
+    Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0)
 }
 
 fn keyboard(initial: &str) -> Keyboard {
@@ -99,7 +95,7 @@ fn the_grid_offers_exactly_the_characters_a_pilot_name_may_hold() {
 /// decoration. Walked with the d-pad, so a wrapping bug is what this catches.
 #[test]
 fn every_cell_is_reachable_with_the_d_pad() {
-    let mut seen = vec![false; CELLS];
+    let mut seen = [false; CELLS];
     let mut keyboard = keyboard("");
     for _ in 0..GRID_ROWS {
         for _ in 0..COLUMNS {
@@ -164,8 +160,14 @@ fn the_buffer_stops_at_its_limit_rather_than_growing_past_it() {
 #[test]
 fn circle_cancels_and_start_accepts_from_anywhere() {
     let mut keyboard = keyboard("winston");
-    assert_eq!(keyboard.update(&mut tick(&[Button::Circle])), Outcome::Cancelled);
-    assert_eq!(keyboard.update(&mut tick(&[Button::Start])), Outcome::Accepted);
+    assert_eq!(
+        keyboard.update(&mut tick(&[Button::Circle])),
+        Outcome::Cancelled
+    );
+    assert_eq!(
+        keyboard.update(&mut tick(&[Button::Start])),
+        Outcome::Accepted
+    );
     // Neither touches the buffer: the caller decides what to do with it, and
     // there is nothing to reset because the caller drops this.
     assert_eq!(keyboard.text(), "winston");
@@ -244,16 +246,25 @@ fn confirm() -> Confirm {
 fn a_confirm_opens_on_no_and_a_bare_cross_cancels() {
     let mut confirm = confirm();
     assert!(!confirm.on_yes());
-    assert_eq!(confirm.update(&mut tick(&[Button::Cross])), Outcome::Cancelled);
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Cross])),
+        Outcome::Cancelled
+    );
 }
 
 /// Moving to yes and confirming is the only way through.
 #[test]
 fn a_confirm_accepts_only_after_the_answer_is_moved_to_yes() {
     let mut confirm = confirm();
-    assert_eq!(confirm.update(&mut tick(&[Button::Right])), Outcome::Pending);
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Right])),
+        Outcome::Pending
+    );
     assert!(confirm.on_yes());
-    assert_eq!(confirm.update(&mut tick(&[Button::Cross])), Outcome::Accepted);
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Cross])),
+        Outcome::Accepted
+    );
 }
 
 /// Down works as well as right: two answers side by side still answer to a
@@ -273,7 +284,10 @@ fn circle_cancels_a_confirm_even_on_yes() {
     let mut confirm = confirm();
     confirm.update(&mut tick(&[Button::Right]));
     assert!(confirm.on_yes());
-    assert_eq!(confirm.update(&mut tick(&[Button::Circle])), Outcome::Cancelled);
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Circle])),
+        Outcome::Cancelled
+    );
 }
 
 /// A confirm's message reaches the screen: the built-in-restore sentence is

@@ -50,6 +50,15 @@ pub(crate) struct MenuStage {
     pub(crate) frame: menu::Frame,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
+    /// The modal prompt on screen, if one is: an on-screen keyboard or a
+    /// yes/no. See [`crate::overlay`].
+    ///
+    /// **On the stage rather than on `Session`, and carrying its own
+    /// purpose.** It is part of what is drawn, the same argument
+    /// [`Self::backdrop`] makes one paragraph up - and while it is `Some` the
+    /// menus behind it take no input at all, which is a fact about this
+    /// stage's tick rather than about the session.
+    pub(crate) prompt: Option<crate::overlay::Prompt>,
     /// The page change in flight, if one is.
     ///
     /// **The page the player left is kept as a finished draw list, not as a
@@ -398,6 +407,15 @@ impl MenuStage {
             .collect()
         } else {
             list
+        };
+        // The prompt last, so it is over everything: its own scrim is what
+        // says the rows behind it are not the thing taking input, and a
+        // marquee or a page tween running underneath it is still correct -
+        // neither is being driven while a prompt is open, so what shows
+        // through is a still picture of where the player will land back.
+        let list: Vec<Draw> = match &self.prompt {
+            Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
+            None => list,
         };
         // `LoadOp::Load` over a parked race - `Session::draw` already
         // resolved its scene into `view` this frame, and clearing here would

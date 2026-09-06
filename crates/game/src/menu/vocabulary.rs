@@ -25,9 +25,31 @@ pub enum Action {
     /// `crate::pilots::set_axis`.
     SavePilot,
     /// Creates a new pilot file from whichever one is currently selected on
-    /// the pilot editor's own list, auto-named (`pilot-1`, `pilot-2`, ...) so
-    /// this cut needs no text entry - see `crate::pilots::template`.
+    /// the pilot editor's own list, auto-named (`pilot-1`, `pilot-2`, ...).
+    ///
+    /// **Kept alongside [`Self::RenamePilot`] rather than replaced by it.**
+    /// Auto-naming was the thing that let create-from-template ship before
+    /// there was any text entry at all, and it is still the faster of the two
+    /// for a player copying a pilot to tinker with: one press against a name
+    /// typed on a grid. See `crate::pilots::template`.
     NewPilot,
+    /// Opens the on-screen keyboard on the selected pilot's name and, on
+    /// accept, moves its file.
+    ///
+    /// **Only a pilot with a file of its own can be renamed.** An untouched
+    /// built-in lives in the binary and has nothing on disk to move - see
+    /// `crate::pilots::rename_pilot`. Gated in Rust off `Entry::from_file`
+    /// and not by a `disabled_by` on the four built-in *names*: the moment a
+    /// player saves an edit to `aggressive` a file exists, and renaming that
+    /// file is perfectly legitimate.
+    RenamePilot,
+    /// Asks, and then deletes the selected pilot's file.
+    ///
+    /// Behind a [`crate::prompt::Confirm`] because it destroys a file, and
+    /// because for a file named after a built-in "delete" is not what
+    /// happens: the file was *replacing* the built-in, so removing it
+    /// restores it. See `crate::pilots::is_built_in_name`.
+    DeletePilot,
 }
 
 impl Action {
@@ -40,6 +62,8 @@ impl Action {
             Self::Quit => "quit",
             Self::SavePilot => "save_pilot",
             Self::NewPilot => "new_pilot",
+            Self::RenamePilot => "rename_pilot",
+            Self::DeletePilot => "delete_pilot",
         }
     }
 
@@ -52,19 +76,23 @@ impl Action {
             "quit" => Some(Self::Quit),
             "save_pilot" => Some(Self::SavePilot),
             "new_pilot" => Some(Self::NewPilot),
+            "rename_pilot" => Some(Self::RenamePilot),
+            "delete_pilot" => Some(Self::DeletePilot),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 5] {
+    pub fn all() -> [Self; 7] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
             Self::Quit,
             Self::SavePilot,
             Self::NewPilot,
+            Self::RenamePilot,
+            Self::DeletePilot,
         ]
     }
 }

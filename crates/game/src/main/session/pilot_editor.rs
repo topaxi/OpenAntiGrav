@@ -29,12 +29,51 @@
 
 use log::{error, info};
 
+use oag_game::language::StringTable;
 use oag_game::menu::{self, Value};
 use oag_game::pilots;
+use oag_game::prompt::{self, Outcome};
 
+use crate::menu_stage::MenuStage;
+use crate::overlay::{Finished, Prompt, Purpose};
 use crate::stage::Stage;
 
 use super::Session;
+
+/// One project-owned string, or the English written beside its id.
+///
+/// **The first caller of `assets/ui/strings/english.toml`'s second kind of
+/// entry** - an id for text this project invented rather than an override of
+/// a disc idstring. Every label the pilot prompts draw goes through here, so
+/// the prompt models themselves hold no table and no English: see
+/// `oag_game::prompt`'s own module doc on that seam.
+///
+/// The fallback is not politeness. A language with no file yet overlays
+/// nothing (`crate::strings::built_in` ships English alone today), so an id
+/// that resolves to nothing has to read as English rather than as a blank
+/// line - the same rule `menu::definition::resolve` applies to a row's own
+/// `string_id`.
+///
+/// `Option`, because the table lives on [`super::Shell`] and a `--race` run
+/// has no shell at all. Nothing can open one of these prompts without menus,
+/// so `None` is unreachable from the pilot editor - but it is the honest
+/// signature, and it costs one `and_then`.
+fn say(strings: Option<&StringTable>, id: &str, english: &str) -> String {
+    strings
+        .and_then(|table| table.get(id))
+        .unwrap_or(english)
+        .to_string()
+}
+
+/// [`say`] with the pilot's name substituted for every `%s`.
+///
+/// `%s` rather than Rust's own `{}`: this is a *string table* entry, which a
+/// translator edits, and the disc's own tables already spell a substitution
+/// that way. `{}` would also make an accidental brace in a translation a
+/// formatting error rather than a brace.
+fn say_of(strings: Option<&StringTable>, id: &str, english: &str, name: &str) -> String {
+    say(strings, id, english).replace("%s", name)
+}
 
 /// How many steps [`axis_choices`] spreads across an axis's own range,
 /// before the pilot's actual value is folded in.
@@ -279,6 +318,261 @@ impl Session {
         self.reload_pilot_roster(Some(&name));
     }
 
+    /// Opens the on-screen keyboard on PILOT's current name.
+    ///
+    /// **Refused for a pilot with no file of its own.** An untouched built-in
+    /// lives in the binary and there is nothing on disk to move; the way to
+    /// get one a file is to save an edit to it, which the same page already
+    /// does. Gated on [`pilots::Entry::from_file`] rather than on the name
+    /// being one of the four, because the moment that save happens a file
+    /// exists and renaming *it* is perfectly legitimate - a name-based gate
+    /// would go on refusing for ever.
+    pub(crate) fn rename_pilot(&mut self) {
+        let Some(name) = self.selected_pilot() else {
+            return;
+        };
+        if !self.pilot_has_a_file(&name) {
+            error!(
+                "{name} has no file of its own to rename - save an edit to it first, \
+                 which is what creates one"
+            );
+            return;
+        }
+        let labels = prompt::Labels {
+            title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
+            delete: say(self.table(), "OAG_KEYBOARD_DELETE", "DEL"),
+            accept: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
+            hint: say(
+                self.table(),
+                "OAG_KEYBOARD_HINT",
+                "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+            ),
+        };
+        let keyboard = prompt::Keyboard::new(labels, &name, pilots::MAX_NAME);
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.prompt = Some(Prompt::typing(
+                Purpose::RenamePilot { from: name },
+                keyboard,
+            ));
+        }
+    }
+
+    /// Asks whether to delete PILOT's file, and says what deleting it will
+    /// actually do.
+    ///
+    /// **The wording is the feature here.** For a file named after one of the
+    /// four built-ins, deleting it does not remove a pilot: the file was
+    /// *replacing* the built-in, so removing it restores the built-in and the
+    /// pilot goes on existing with the numbers the binary ships. A player who
+    /// deletes `aggressive` and finds it still on the list, unexplained, has
+    /// been misled by a menu - see `pilots::is_built_in_name`.
+    pub(crate) fn delete_pilot(&mut self) {
+        let Some(name) = self.selected_pilot() else {
+            return;
+        };
+        if !self.pilot_has_a_file(&name) {
+            error!("{name} has no file of its own to delete - it is the built-in");
+            return;
+        }
+        let message = if pilots::is_built_in_name(&name) {
+            say_of(
+                self.table(),
+                "OAG_PILOT_DELETE_BUILT_IN",
+                "%s IS ONE OF THE FOUR BUILT-IN PILOTS AND YOUR FILE REPLACES IT. \
+                 DELETING THE FILE DOES NOT REMOVE %s - IT RESTORES THE BUILT-IN.",
+                &name,
+            )
+        } else {
+            say_of(
+                self.table(),
+                "OAG_PILOT_DELETE_ASK",
+                "DELETE %s? THIS CANNOT BE UNDONE.",
+                &name,
+            )
+        };
+        let confirm = prompt::Confirm::new(prompt::ConfirmLabels {
+            title: say(self.table(), "OAG_PILOT_DELETE_TITLE", "DELETE PILOT"),
+            message,
+            yes: say(self.table(), "OAG_PILOT_DELETE_YES", "DELETE"),
+            no: say(self.table(), "OAG_PILOT_DELETE_NO", "KEEP"),
+        });
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.prompt = Some(Prompt::asking(Purpose::DeletePilot { name }, confirm));
+        }
+    }
+
+    /// The chosen language's string table, or `None` on a `--race` run with
+    /// no shell. See [`say`].
+    fn table(&self) -> Option<&StringTable> {
+        self.shell.as_ref().map(|shell| &shell.strings)
+    }
+
+    /// Whatever PILOT currently holds, or `None` off the AI PILOTS page.
+    fn selected_pilot(&self) -> Option<String> {
+        let Stage::Menu(stage) = &self.stage else {
+            return None;
+        };
+        held_text(&stage.menu, "pilot.selected")
+    }
+
+    /// Whether `name` has a file on disk, as opposed to being a built-in
+    /// nobody has retuned. The gate both operations above need.
+    fn pilot_has_a_file(&self, name: &str) -> bool {
+        self.pilot_roster
+            .entries()
+            .iter()
+            .any(|entry| entry.name == name && entry.from_file)
+    }
+
+    /// Does what a finished prompt asked for.
+    ///
+    /// Takes [`Finished`] by value rather than reading the model back off the
+    /// stage: the model is gone by now, which is what lets this run with
+    /// `&mut self` and no borrow of the stage still live.
+    pub(crate) fn finish_prompt(&mut self, finished: Finished) {
+        let Some(dir) = pilots::directory() else {
+            error!("no config directory on this platform, so nothing can be written");
+            return;
+        };
+        match finished.purpose {
+            Purpose::RenamePilot { from } => {
+                let to = finished.text;
+                if to == from {
+                    return;
+                }
+                if let Err(e) = pilots::rename_pilot(&dir, &from, &to) {
+                    // Left on screen the way `save_pilot`'s own failure is:
+                    // a rename that did not happen is not worth losing the
+                    // player's place in the menus over, and the list below
+                    // still shows the old name, which is the truth.
+                    error!("cannot rename {from}: {e:#}");
+                    return;
+                }
+                info!("renamed {from} to {to}");
+                // `Some(&to)`, for `new_pilot`'s reason: `from` is gone from
+                // the reloaded list, so without this PILOT would fall to
+                // whichever entry happened to be first.
+                self.reload_pilot_roster(Some(&to));
+            }
+            Purpose::DeletePilot { name } => {
+                if let Err(e) = pilots::delete_pilot(&dir, &name) {
+                    error!("cannot delete {name}: {e:#}");
+                    return;
+                }
+                if pilots::is_built_in_name(&name) {
+                    info!("deleted the {name} file; the built-in {name} is back");
+                } else {
+                    info!("deleted {name}");
+                }
+                // **No `select`, and the two cases differ.** A built-in name
+                // is still in the reloaded list - as the built-in - so
+                // `Menu::supply`'s own "keep the value it was already on"
+                // rule leaves PILOT exactly where it is, which is right: the
+                // pilot the player was looking at is still there. Any other
+                // name is gone from the list and the same rule drops PILOT to
+                // the first entry, which is also right - there is nothing
+                // better to land on than the top.
+                self.reload_pilot_roster(None);
+            }
+        }
+    }
+
+    /// Whether an on-screen **keyboard** is open - not a confirm, which has
+    /// nothing to type into.
+    ///
+    /// Read by `app.rs` before it decides whether a raw key event is text or
+    /// a game button. See [`crate::typing`].
+    pub(crate) fn typing_is_open(&self) -> bool {
+        let Stage::Menu(stage) = &self.stage else {
+            return false;
+        };
+        stage
+            .prompt
+            .as_ref()
+            .is_some_and(|prompt| matches!(prompt.model, crate::overlay::Model::Keyboard(_)))
+    }
+
+    /// Applies one decision off a desk keyboard, and says whether it was
+    /// used.
+    ///
+    /// `false` means the event is still the abstract input layer's - see the
+    /// call site in `app.rs` for why that distinction is what keeps the arrow
+    /// keys navigating the grid.
+    pub(crate) fn typed(&mut self, typed: crate::typing::Typed) -> bool {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return false;
+        };
+        let Some(prompt) = stage.prompt.as_mut() else {
+            return false;
+        };
+        let Some(keyboard) = prompt.keyboard_mut() else {
+            // A confirm has no buffer, so a typed key is not its business.
+            return false;
+        };
+        match typed {
+            crate::typing::Typed::Edit(edit) => {
+                keyboard.edit(edit);
+                true
+            }
+            crate::typing::Typed::Accept => {
+                let text = keyboard.text().to_string();
+                let prompt = stage.prompt.take().expect("checked just above");
+                self.finish_prompt(Finished {
+                    purpose: prompt.purpose,
+                    text,
+                });
+                true
+            }
+            crate::typing::Typed::Ignore => false,
+        }
+    }
+
+    /// One tick of whatever prompt is open, plus the live note under it.
+    ///
+    /// An associated function taking the stage rather than a method on
+    /// `&mut Session`, for [`resupply_bounds`]' reason one step further out:
+    /// the caller in [`super::frame`] is already inside a `match &mut
+    /// self.stage`, so the stage arrives borrowed and `self` cannot be.
+    ///
+    /// Returns what to act on once that borrow is over - see
+    /// [`Session::finish_prompt`].
+    pub(crate) fn tick_prompt(
+        stage: &mut MenuStage,
+        input: &mut oag_game::input::Input,
+        roster: &pilots::Roster,
+        strings: Option<&StringTable>,
+    ) -> Option<Finished> {
+        let prompt = stage.prompt.as_mut()?;
+        // The note is set from out here every tick because whether there is
+        // anything to say depends on what the text *means*, which is exactly
+        // what `prompt::Keyboard` does not know.
+        if let Purpose::RenamePilot { from } = &prompt.purpose {
+            let from = from.clone();
+            if let Some(keyboard) = prompt.keyboard_mut() {
+                let note = rename_note(keyboard.text(), &from, roster, strings);
+                keyboard.set_note(note);
+            }
+        }
+        match prompt.update(input) {
+            Outcome::Pending => None,
+            Outcome::Cancelled => {
+                stage.prompt = None;
+                None
+            }
+            Outcome::Accepted => {
+                let mut prompt = stage.prompt.take().expect("checked just above");
+                let text = prompt
+                    .keyboard_mut()
+                    .map(|keyboard| keyboard.text().to_string())
+                    .unwrap_or_default();
+                Some(Finished {
+                    purpose: prompt.purpose,
+                    text,
+                })
+            }
+        }
+    }
+
     /// Re-reads [`Session::pilot_roster`] off disk and re-supplies the AI
     /// PILOTS page from it, so a save or a create-from-template shows up on
     /// screen without the player having to leave and reopen the page.
@@ -296,6 +590,57 @@ impl Session {
             supply_pilot_choices(&mut stage.menu, &roster, select);
         }
     }
+}
+
+/// What to say under the keyboard about the name currently typed, if
+/// anything.
+///
+/// **Live, on every keystroke, rather than only on accept.** Every one of
+/// these is a reason `pilots::rename_pilot` would refuse or would surprise,
+/// and finding that out after typing a name on a grid is the difference
+/// between a keyboard that is merely correct and one that is bearable.
+///
+/// The order matters: a name that is *taken* is refused outright, so that
+/// sentence wins over the built-in one even for the four built-in names -
+/// which are only "taken" once a file of that name exists. A built-in with
+/// no file yet is a legitimate destination and the note there says what will
+/// happen rather than refusing it.
+fn rename_note(
+    typed: &str,
+    from: &str,
+    roster: &pilots::Roster,
+    strings: Option<&StringTable>,
+) -> Option<String> {
+    if typed == from {
+        return None;
+    }
+    if let Err(why) = pilots::check_name(typed) {
+        // The writer's own sentence, which already names what is wrong.
+        // Uppercased to sit with the rest of the menu rather than reworded
+        // here, which would be a second place for the rule to drift.
+        return Some(format!("{why}").to_uppercase());
+    }
+    if roster
+        .entries()
+        .iter()
+        .any(|entry| entry.name == typed && entry.from_file)
+    {
+        return Some(say_of(
+            strings,
+            "OAG_PILOT_NAME_TAKEN",
+            "THERE IS ALREADY A PILOT CALLED %s",
+            typed,
+        ));
+    }
+    if pilots::is_built_in_name(typed) {
+        return Some(say_of(
+            strings,
+            "OAG_PILOT_RENAME_SHADOWS",
+            "%s IS BUILT IN: A FILE OF THAT NAME REPLACES IT",
+            typed,
+        ));
+    }
+    None
 }
 
 /// The PILOT supply [`Session::supply_pilot_menu`] does, without needing

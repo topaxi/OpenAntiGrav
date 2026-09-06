@@ -22,8 +22,8 @@
 //! Cross, deleted with Square, accepted with Start or the grid's own accept
 //! key, cancelled with Circle. A desk keyboard types into it directly as well
 //! - that is the binary's own `typing` module, which turns a raw key event
-//! into an [`Edit`] and is deliberately a separate, testable decision from
-//! this model, the same way `rebind` is separate from the CONTROLS page.
+//!   into an [`Edit`] and is deliberately a separate, testable decision from
+//!   this model, the same way `rebind` is separate from the CONTROLS page.
 //!
 //! # Nothing here is recovered, and that is checked rather than assumed
 //!
@@ -108,6 +108,18 @@ fn key_at(index: usize) -> Key {
         None if index == KEYS.len() => Key::Delete,
         _ => Key::Accept,
     }
+}
+
+/// Whether `c` is a character the grid offers, and so one a desk keyboard may
+/// type into the buffer.
+///
+/// **The one place the two input paths agree.** Without this the grid would
+/// offer one set and a real keyboard another, and a name typed at the desk
+/// could be one the pad could never have produced - or one
+/// [`crate::pilots::check_name`] refuses.
+#[must_use]
+pub fn accepts(c: char) -> bool {
+    KEYS.contains(c)
 }
 
 /// The text a [`Keyboard`] draws that is not a key: already resolved, never

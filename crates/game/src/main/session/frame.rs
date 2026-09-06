@@ -367,17 +367,36 @@ impl Session {
                         &mut self.controls,
                         &stage.menu,
                     );
+                    // A modal prompt eats the tick's input outright: while an
+                    // on-screen keyboard or a confirm is up, the rows behind
+                    // it are a picture. Ahead of the menus rather than beside
+                    // them, and `Input::take` is why finishing on this very
+                    // tick is safe - the edge that closed the prompt is
+                    // consumed, so `Menu::update` below sees nothing.
+                    let finished = Session::tick_prompt(
+                        stage,
+                        self.controls.buttons_mut(),
+                        &self.pilot_roster,
+                        self.shell.as_ref().map(|shell| &shell.strings),
+                    );
                     // Frozen while a capture is in flight: `app.rs` diverts
                     // every keyboard event away from `Controls::set_key` for
                     // as long as `awaiting_binding` is `Some`, so there is
                     // nothing new here for the menus to navigate with anyway.
-                    let events = if self.awaiting_binding.is_some() {
+                    let events = if self.awaiting_binding.is_some() || stage.prompt.is_some() {
                         Vec::new()
                     } else {
                         stage.menu.update(self.controls.buttons_mut())
                     };
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);
+                    }
+                    // After the stage borrow above is over, which is the whole
+                    // reason `tick_prompt` hands the answer out rather than
+                    // acting on it: renaming reloads the roster and re-supplies
+                    // the very menu it was reading.
+                    if let Some(finished) = finished {
+                        self.finish_prompt(finished);
                     }
                     for event in events {
                         self.handle_menu(&event);

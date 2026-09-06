@@ -93,7 +93,9 @@ pub const MAX_NAME: usize = 24;
 /// menu says so, which is what this is for. See [`Pilot::BUILT_IN`].
 #[must_use]
 pub fn is_built_in_name(name: &str) -> bool {
-    Pilot::BUILT_IN.iter().any(|(built_in, _)| *built_in == name)
+    Pilot::BUILT_IN
+        .iter()
+        .any(|(built_in, _)| *built_in == name)
 }
 
 /// Checks a name a player typed, **before** it is ever joined onto a path.
