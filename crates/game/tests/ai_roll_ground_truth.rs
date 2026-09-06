@@ -81,6 +81,20 @@ struct Rolls {
     respawns: u32,
     /// The quickest lap it managed with no recovery in it, in ticks.
     best: Option<u64>,
+    /// How many separate airborne windows it flew - a rising edge on
+    /// `ShipState::time_airborne`, counted whether or not it decided to roll
+    /// during one.
+    ///
+    /// **Answers the question the armed count alone cannot**: an airborne gate
+    /// that never opens makes the propensity axes moot regardless of how they
+    /// are tuned, and a circuit that opens it once for half a second looks
+    /// nothing like one that opens it eight times for two.
+    airborne_windows: u32,
+    /// The longest single window, in seconds.
+    longest_airborne: f32,
+    /// Ticks spent airborne at all, out of `TICKS` - the fraction of the race
+    /// the roll gate was even a live question.
+    airborne_ticks: u64,
 }
 
 /// One lone craft, one circuit, one difficulty, and optionally one named
@@ -121,6 +135,10 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     let mut lap = race.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
+    let mut airborne_windows = 0u32;
+    let mut longest_airborne = 0.0f32;
+    let mut airborne_ticks = 0u64;
+    let mut was_airborne = false;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
         race.tick(&oag_gameplay::InputSnapshot::default());
@@ -137,6 +155,15 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
             lap = now;
             recovered_this_lap = false;
         }
+        let airborne = race.world.ships[LONE].physics.time_airborne;
+        if airborne > 0.0 {
+            airborne_ticks += 1;
+            if !was_airborne {
+                airborne_windows += 1;
+            }
+            longest_airborne = longest_airborne.max(airborne);
+        }
+        was_airborne = airborne > 0.0;
     }
 
     Some(Rolls {
@@ -147,6 +174,9 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         laps: lap,
         respawns: race.respawns_of(LONE),
         best,
+        airborne_windows,
+        longest_airborne,
+        airborne_ticks,
     })
 }
 
@@ -179,6 +209,141 @@ fn rolls_everywhere(
         .into_iter()
         .filter_map(|(id, entry)| rolls_on(level, &entry, pilot).map(|rolls| (id, rolls)))
         .collect()
+}
+
+/// One difficulty tier, one circuit, **the full grid a real race actually
+/// starts with** - nothing switched off, nothing forced.
+///
+/// **This is the check `rolls_on` cannot do.** Every other function in this
+/// file isolates one craft so nothing it does is about anybody else, which is
+/// right for reading what one character costs and wrong for answering
+/// whether the mechanic fires with seven rivals, traffic and weapons in the
+/// way. Every opponent draws its own pilot from `oag_ai::pilot_for_slot`, the
+/// same as a player would see; only the tier is chosen here.
+fn grid_rolls_on(level: oag_ai::Difficulty, track: &str) -> Option<Vec<Rolls>> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: level,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .ok()?;
+    let mut race = race::Race::start(loaded.setup);
+    let opponents: Vec<usize> = (1..usize::from(race.ship_count())).collect();
+    measure_grid(&mut race, &opponents)
+}
+
+/// The same full-grid race, but with each opponent slot's **character**
+/// tempered as a named tier rather than whichever one tier the race-wide
+/// difficulty chose for everybody.
+///
+/// **This is the honest substitute for "Ace against the lower tiers".**
+/// `race::Options::difficulty` is a single race-wide setting - `Race::start`
+/// tempers every slot's pilot from it and derives the shared `Tuning` (grip,
+/// turn rate, mistakes, reaction) from it too, and nothing in `Race` takes a
+/// difficulty per slot. So a grid that is *physically* mixed-tier does not
+/// exist to ask about. What this does instead: race-wide difficulty is fixed
+/// at `Ace` (so every craft shares the same grip, turn allowance and reaction
+/// time - nobody is slow because it cannot corner), and each slot's *pilot* is
+/// separately tempered to the tier `tiers` names for it, which is exactly the
+/// three roll axes plus weapon/ram/defence appetite - the axes
+/// `Difficulty::temper` actually touches. A craft named `Novice` here is a
+/// full-speed driver with a novice's *temperament*, not a slow one; that is
+/// the whole of what "propensity" can mean without a per-slot `Tuning`.
+fn grid_rolls_mixed_on(track: &str, tiers: &[oag_ai::Difficulty]) -> Option<Vec<(oag_ai::Difficulty, Rolls)>> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .ok()?;
+    let mut race = race::Race::start(loaded.setup);
+    let opponents: Vec<usize> = (1..usize::from(race.ship_count())).collect();
+    for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
+        race.set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
+    }
+    let rolls = measure_grid(&mut race, &opponents)?;
+    Some(
+        opponents
+            .iter()
+            .zip(tiers.iter())
+            .zip(rolls)
+            .map(|((_, &tier), rolls)| (tier, rolls))
+            .collect(),
+    )
+}
+
+/// Runs the clock on an already-set-up race and reads every named slot's
+/// roll, shield and airborne figures at the end - the per-slot loop
+/// [`rolls_on`] runs for one craft, generalised to however many are asked
+/// for.
+fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
+    let width = slots.iter().copied().max().map_or(0, |m| m + 1);
+    let mut lap = vec![0u32; width];
+    for &slot in slots {
+        lap[slot] = race.world.ships[slot].standing.lap;
+    }
+    let mut started = vec![0u64; width];
+    let mut recovered_this_lap = vec![false; width];
+    let mut best: Vec<Option<u64>> = vec![None; width];
+    let mut airborne_windows = vec![0u32; width];
+    let mut longest_airborne = vec![0.0f32; width];
+    let mut airborne_ticks = vec![0u64; width];
+    let mut was_airborne = vec![false; width];
+
+    for tick in 0..TICKS {
+        let before: Vec<u32> = slots.iter().map(|&s| race.respawns_of(s)).collect();
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        for (i, &slot) in slots.iter().enumerate() {
+            if race.respawns_of(slot) != before[i] {
+                recovered_this_lap[slot] = true;
+            }
+            let now = race.world.ships[slot].standing.lap;
+            if now != lap[slot] {
+                if lap[slot] > 1 && !recovered_this_lap[slot] {
+                    let taken = tick - started[slot];
+                    best[slot] = Some(best[slot].map_or(taken, |held: u64| held.min(taken)));
+                }
+                started[slot] = tick;
+                lap[slot] = now;
+                recovered_this_lap[slot] = false;
+            }
+            let airborne = race.world.ships[slot].physics.time_airborne;
+            if airborne > 0.0 {
+                airborne_ticks[slot] += 1;
+                if !was_airborne[slot] {
+                    airborne_windows[slot] += 1;
+                }
+                longest_airborne[slot] = longest_airborne[slot].max(airborne);
+            }
+            was_airborne[slot] = airborne > 0.0;
+        }
+    }
+
+    Some(
+        slots
+            .iter()
+            .map(|&slot| Rolls {
+                armed: race.rolls_armed_of(slot),
+                spent: race.roll_shield_spent_of(slot),
+                shield: race.world.ships[slot].physics.shield,
+                capacity: race.world.ships[slot].handling.dimensions.shield,
+                laps: lap[slot],
+                respawns: race.respawns_of(slot),
+                best: best[slot],
+                airborne_windows: airborne_windows[slot],
+                longest_airborne: longest_airborne[slot],
+                airborne_ticks: airborne_ticks[slot],
+            })
+            .collect(),
+    )
 }
 
 /// **The constraint, asserted rather than printed.**
@@ -318,4 +483,130 @@ fn sweep_rolls() {
         }
     }
     println!("{report}");
+}
+
+/// **A full grid, not an isolated craft**: does the mechanic still fire with
+/// seven rivals, traffic and weapons in the way, and does a higher tier still
+/// roll more than a lower one when they are actually racing each other?
+///
+/// `09_Track` - the circuit `no_tier_rolls_itself_down_to_nothing` already
+/// treats as the worst case for shield - at all four tiers, nothing
+/// switched off and nothing forced: every opponent draws its own pilot from
+/// `oag_ai::pilot_for_slot`, exactly as a real race does.
+///
+/// **Asserted loosely, on purpose.** Seven independent per-flight coin
+/// tosses over one race is a small sample, so this checks the *aggregate*
+/// across the whole grid is non-decreasing tier to tier rather than any
+/// single slot's count, and it stops short of asserting a strict `>` between
+/// adjacent tiers - see the printed table for whether the ordering the
+/// maintainer asked for actually held on this run, and `docs/gameplay/ai.md`
+/// for the numbers this produced.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less() {
+    let track = circuits()
+        .into_iter()
+        .find(|(id, _)| id == "09_Track")
+        .map(|(_, entry)| entry);
+    let Some(track) = track else {
+        return;
+    };
+
+    let mut totals = Vec::new();
+    for (name, level) in oag_ai::Difficulty::ALL {
+        let Some(rolls) = grid_rolls_on(level, &track) else {
+            return;
+        };
+        let armed: u32 = rolls.iter().map(|r| r.armed).sum();
+        let spent: f32 = rolls.iter().map(|r| r.spent).sum();
+        println!("=== 09_Track, full grid, {name} ===");
+        for (slot, r) in rolls.iter().enumerate() {
+            println!(
+                "  slot {:<2} armed {:<3} spent {:>5.1} left {:>5.1} of {:.0} \
+                 airborne windows {:<3} longest {:.2}s ticks airborne {}/{TICKS} laps {} resp {}",
+                slot + 1,
+                r.armed,
+                r.spent,
+                r.shield,
+                r.capacity,
+                r.airborne_windows,
+                r.longest_airborne,
+                r.airborne_ticks,
+                r.laps,
+                r.respawns
+            );
+        }
+        println!("  TOTAL armed {armed} spent {spent:.1}");
+        totals.push((name, armed));
+    }
+
+    for pair in totals.windows(2) {
+        let ((easier_name, easier), (harder_name, harder)) = (pair[0], pair[1]);
+        assert!(
+            harder >= easier,
+            "on a full grid on 09_Track, {harder_name} armed {harder} rolls total \
+             against {easier_name}'s {easier}, which is a lower tier rolling more \
+             than a higher one, not less"
+        );
+    }
+}
+
+/// **Ace against the lower tiers, in the same race.** `race::Options`'s
+/// difficulty is race-wide - see [`grid_rolls_mixed_on`] for why a physically
+/// mixed-tier grid does not exist to ask about - so this fixes the whole
+/// field's `Tuning` at `Ace` and tempers each opponent's *pilot* to a
+/// different named tier, then reads whether the ones tempered `Ace` still
+/// roll more than the ones tempered `Novice` while contending for the same
+/// track and the same traffic.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_ace_pilot_rolls_more_than_a_novice_pilot_in_the_same_race() {
+    let track = circuits()
+        .into_iter()
+        .find(|(id, _)| id == "09_Track")
+        .map(|(_, entry)| entry);
+    let Some(track) = track else {
+        return;
+    };
+
+    use oag_ai::Difficulty::{Ace, Elite, Novice, Skilled};
+    let tiers = [Ace, Ace, Elite, Elite, Skilled, Skilled, Novice];
+    let Some(rolls) = grid_rolls_mixed_on(&track, &tiers) else {
+        return;
+    };
+
+    println!("=== 09_Track, full grid, mixed pilot tiers (shared Ace Tuning) ===");
+    let mut by_tier: Vec<(oag_ai::Difficulty, u32, f32)> = Vec::new();
+    for (slot, (tier, r)) in rolls.iter().enumerate() {
+        println!(
+            "  slot {:<2} {:<8} armed {:<3} spent {:>5.1} left {:>5.1} of {:.0} \
+             airborne windows {:<3} longest {:.2}s",
+            slot + 1,
+            tier.name(),
+            r.armed,
+            r.spent,
+            r.shield,
+            r.capacity,
+            r.airborne_windows,
+            r.longest_airborne,
+        );
+        by_tier.push((*tier, r.armed, r.spent));
+    }
+
+    let armed_of = |wanted: oag_ai::Difficulty| -> u32 {
+        by_tier
+            .iter()
+            .filter(|(tier, _, _)| *tier == wanted)
+            .map(|(_, armed, _)| armed)
+            .sum()
+    };
+    let ace = armed_of(Ace);
+    let novice = armed_of(Novice);
+    println!("  Ace-tempered slots armed {ace} total, Novice-tempered armed {novice}");
+    assert!(
+        ace >= novice,
+        "an Ace-tempered pilot armed {ace} rolls against a Novice-tempered \
+         pilot's {novice} in the same race, sharing the same grid, track and \
+         Tuning - the difficulty propensity is not doing its job"
+    );
 }
