@@ -317,15 +317,28 @@ way they are.
 
 ## Open
 
-- **What actually places the countdown's `Cockpit321Go` widget is unrecovered**, new
-  2026-09-06. Its authored `x="0.0" y="0.0"` most likely reads as "runtime-placed", the
-  same shape `widget.rs` already documents for the nine sight brackets - but no
-  placement code has been found for it the way `crate::race::sight` supplies one for
-  the sights, so today it draws at the literal disc position (mostly off the left edge
-  of the frame) rather than at a guessed centre. Finding that placement - or confirming
-  there isn't one and the disc really does mean the left edge - is what would take the
-  HUD-overlay route from "mechanism proven, wrongly placed" to "on screen where a
-  player can read it".
+- **What places the countdown's `Cockpit321Go` widget is now answered, and the answer
+  is negative** (2026-09-06, second pass). `Hud_BindWidgets` (`0x0881fbec`) resolves
+  `"HUD->ReadyGo"`/`"HUD->Cockpit321Go"` the same `"HUD->"`-lookup way `HudSight_Bind`
+  resolves the sights, but the only other consumer of those two slots,
+  `Hud_UpdateCountdownFade` (`0x0881f624`), drives a fade timer and a visibility bit
+  and never writes a screen position - no `HudSight_Update` counterpart exists.
+  Separately, `Cockpit_321GO.vex`'s four glyph nodes resolve to a baked translation of
+  `(≈0, ≈0)` and vertex bounds symmetric about their own local origin, so the mesh
+  supplies no absolute placement either. Full evidence, both `jal`-xref-complete
+  searches and the vertex-bounds check, in
+  [countdown-widgets.md](../docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md).
+  Confidence 75: on this title's own binary and asset, `x="0.0" y="0.0"` (composed with
+  the block's `OriginX="0.0" OriginY="35.0"`) is what the disc means, not a
+  placeholder waiting on code found elsewhere - `crates/game/src/hud/countdown.rs`
+  keeps drawing the literal, clipped position rather than a guessed centre. A related
+  finding fell out of the same pass: HD/Fury's own copy of this widget
+  (`hud_ready_go.xml`) is `<aMode3D>`/`<aModel>` - disabled by the same tag-rename
+  convention `hd-hud.md` already documents, not repositioned - so it was never a second
+  data point on placement to begin with. This closes the placement question as far as
+  Ghidra and the disc's own assets can answer it; a mechanism this pass didn't search
+  for (a different HUD subsystem entirely) can't be ruled out at 100, but nothing found
+  points at one.
 - **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
   (same 40-tick cue, same two-part gate) or differs is the single most direct
   open question for the display/logic focus. One attempt this session to reach it

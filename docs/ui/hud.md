@@ -723,6 +723,17 @@ Recorded so none of this reads as undiscovered work.
   place of Arcade's `Bar_1/3.vex`/`Bar_outline_1.vex` - a skin change to the
   HUD bars, nothing to do with the countdown).
 
+  **Correction, 2026-09-06: HD's `hud_ready_go.xml` is disabled, not just
+  present.** Its `<Mode3D>`/`<Model>` tags are actually spelled `<aMode3D>`/
+  `<aModel>` - the same "authored to be skipped without deleting the
+  reference" convention this project's own `docs/formats/hd-hud.md` documents
+  for `<aLoadXML>` in `DATA05`'s `speedlap_hud.xml`. `LoadXML_Item` keys on
+  the literal tag name, so this fragment is never parsed at all on HD. "Byte
+  identical across every skin" above is still true of the fragment's *text*;
+  it is not evidence the widget draws - see
+  `docs/ghidra/functions/psp-pulse-usa/countdown-widgets.md` for the full
+  finding, reached while chasing Pulse's own countdown placement.
+
   **The track-side gantry is a different story, and it is where a real
   difference is confirmed - on HD, from the disc, not a string search this
   time.** `PS3_GAME/USRDIR/DATA00.PSARC` and `DATA02.PSARC` carry, under
