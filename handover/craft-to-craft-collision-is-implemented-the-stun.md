@@ -65,11 +65,21 @@ algorithm, found by sweeping poses rather than hand-picked. Confidence on
 inference from static reading. **The correction has one traced consequence
 outside this crate**: it moves a full-grid race's trajectories enough to fail
 `crates/game/tests/opponent_weapons_ground_truth.rs`'s
-`a_field_racing_with_real_pads_does_not_mine_itself_to_death` (a mine-dodging
-guard), bisected to this change alone - see
-`handover/the-corrected-craft-pair-narrowphase-exposes-a-mine-dodge-gap.md`
-for the numbers. That is `crates/ai`'s territory, not this one's, and is left
-for its owner rather than patched here.
+`a_field_racing_with_real_pads_does_not_mine_itself_to_death`. Instrumented
+directly rather than guessed at: craft-craft contact never charges the
+shield pool in this engine at all (only wall scrape and weapon blasts do), and
+the destroyed craft's own damage log shows a Bomb, a Missile and a
+kill-shot **Plasma** hit - zero mine damage, so this is not the mine-dodging
+gap an earlier version of this row named. Bisecting the three ported
+narrowphase differences individually shows it takes the edge-axis exclusion
+and the midpoint contact point *together* to reproduce the failure - neither
+alone does, and the "up axis needs half the depth" bias is confirmed inert
+in this specific race. See
+`handover/the-corrected-craft-pair-narrowphase-moves-a-full-grids-trajectories.md`
+for the full numbers. Read as a butterfly-effect consequence of a physics fix
+verified correct at instruction level, not a demonstrated bug here or in
+`crates/ai` - left for that test's and that crate's owners to weigh rather
+than patched here.
 
 ## Open
 
