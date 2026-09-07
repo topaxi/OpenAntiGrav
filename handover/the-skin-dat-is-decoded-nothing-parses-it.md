@@ -45,12 +45,15 @@ arithmetic closes with nothing left over against all sixteen real files.
 
 ## Open
 
-- **Nothing parses the format.** `oag-formats` has no reader for it. This is
-  the smallest next piece and it is now fully specified - see
-  [`ship-skin.md`](../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s byte
-  table. A ground-truth test against `Data\Ships\Assegai\ship_alt.dat` is
-  cheap: entry 632 of `pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad`, 26912
-  bytes, header `Assegai\0` then `ms`.
+- **`oag_formats::ship_skin` parses the header and the four blocks; nothing
+  calls it yet.** 2026-09-07: the reader landed - header team name, four
+  `Block`s (three 128x128 4bpp, one 64x64 4bpp) with the fixed 26,912-byte
+  total checked rather than a stored dimension, per the byte table below. A
+  ground-truth test parses `Data\Ships\Assegai\ship_alt.dat` off
+  `pulse-psp-usa.chd` and checks the header, all four block shapes and the
+  `ms` residue. **Deliberately not in scope**: `Skin_ComposeQuarterAtlas`'s
+  fourth-slot composite (the quadrant-mapping question below is still open),
+  `catalogue::Team` collection, and livery selection - see Next Steps.
 - **Nothing draws a livery.** Now that it is settled as a texture swap, this is
   a variant selection on `Livery` rather than a second model path - the
   question the previous thread could not answer.
@@ -99,11 +102,9 @@ arithmetic closes with nothing left over against all sixteen real files.
 
 ## Next Steps
 
-- Write the `.dat` reader in `oag-formats` from the byte table, with an
-  `#[ignore]`d ground-truth test over `Assegai\ship_alt.dat`. Take dimensions
-  as a parameter or derive them from the total; do not invent a header field.
-- Then, in one change, extend `catalogue::Team` to collect
-  `PI_TeamModel`/`PI_ModelSkin` and give `Livery` a variant it can select.
+- In one change, extend `catalogue::Team` to collect
+  `PI_TeamModel`/`PI_ModelSkin` and give `Livery` a variant it can select,
+  now that `oag_formats::ship_skin` parses the payload they'd point at.
 - Decide how a skin gets picked for a race - mode-gated the way the original
   appears to do it, or a stand-in the way
   [`livery::teams_for_slots`](../crates/game/src/livery.rs) already is for slot
