@@ -1,4 +1,4 @@
-//! Scratch probe for `handover/frontend/hd-furys-hud-draws-and-three-of-pulses.md`'s
+//! Scratch probe for `docs/formats/hd-hud.md#what-is-not-done`'s
 //! `ShieldBarText` item: does HD author a `%`-unit companion widget the way it
 //! authors `SpeedBarTextKMH` beside `SpeedBarText`, and what does
 //! `ShieldBarText`'s resolved colour actually come out to on both titles?

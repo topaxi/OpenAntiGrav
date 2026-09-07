@@ -1,5 +1,5 @@
-//! Scratch probe for the `handover/frontend/hd-furys-hud-draws-and-three-of-pulses.md`
-//! tint items: dumps the **raw, unresolved** XML for `DamageBar`/`DamageBarBg`/
+//! Scratch probe for `docs/formats/hd-hud.md#what-is-not-done`'s tint items:
+//! dumps the **raw, unresolved** XML for `DamageBar`/`DamageBarBg`/
 //! `LapBar*`/`PosBar*` across every fragment file each of the eighteen composed
 //! layouts reads, to check whether either references a symbolic
 //! `FEConst->`/`FEGlobals->` name that the HUD's own constant sweep never

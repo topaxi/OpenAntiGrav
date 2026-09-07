@@ -678,42 +678,72 @@ is the case no one-rung-per-zone reading could ever produce.
 before.** `crates/game/examples/hd_hud_shield_census.rs` and
 `hd_hud_tint_census.rs` walk every one of the eighteen composed layouts and
 every raw fragment file each one reads (`cargo run -p oag-game --example
-hd_hud_shield_census|hd_hud_tint_census -- data/images/hdfury-ps3-eu-dec.iso`).
-Neither probe found a data-side signal for any of the four items below - this
-is not "no constant happens to match", it is "no `color=` attribute of any
-kind is authored on the relevant widget, in any of the eighteen layouts or the
-sixteen fragment files behind them".
+hd_hud_shield_census|hd_hud_tint_census -- data/images/hdfury-ps3-eu-dec.iso`),
+through the same archive precedence a real load uses
+(`Archives::holder_of`, above). Because `DamageBarBg`, `HUD_lap_counters.xml`
+and `HUD_positions.xml` are exactly the kind of multi-copy path this page's
+[precedence section](#diffing-the-three-copies-directly-three-different-relations-not-one)
+warns can disagree, every fragment below was additionally pulled **archive by
+archive** with `scripts/psarc.py cat` and diffed by hand, not just read through
+the one copy precedence serves - so this is not "no constant happens to
+match", it is "no copy on the disc authors a `color=` attribute on the
+relevant widget", checked directly rather than inferred from resolved colours
+alone.
 
 - **Two runtime tints are unrecovered**, and both are visible in the frame:
-  - `DamageBarBg` carries **no `color=` attribute in any of the sixteen
-    fragment files that author it** - every copy is a bare `<Values ... src=
-    "..."/>`, so its resolved tint is always white (no modulation) and the
-    hexagon draws exactly the atlas's own pale blue-grey pixels, never the
-    saturated blue the reference frame shows. Its sibling `DamageBar` **is**
-    authored a literal colour in every fragment that has one -
-    `color="0xFFFF0000"` (opaque red) in the default, `wo3` and `2097` skins'
-    `HUD_damage_indicator.xml`, and, distinctly, `color="0xFF1664FF"` (a
-    saturated blue) in `zone_hud.xml` alone. That pairing is this dialect's own
+  - `DamageBarBg` carries **no `color=` attribute in any of its three copies**
+    (`DATA02`/`DATA06`, byte-identical; `DATA00`/`DATA03` do not ship this
+    fragment at all) - every one is a bare `<Values ... src="..."/>`, so its
+    resolved tint is always white (no modulation) and the hexagon draws exactly
+    the atlas's own pale blue-grey pixels, never the saturated blue the
+    reference frame shows. **`DATA06`'s copy alone adds a third widget,
+    `DamageBarShieldBg`, layered between the background and the fill, coloured
+    `0xFF00FF00` (opaque green)** - not blue, and not reached anyway: precedence
+    resolves this path to `DATA02` (`fe`), which does not carry
+    `DamageBarShieldBg` at all. Worth knowing as a genuinely-authored,
+    precedence-excluded tint layer, but it does not explain the frame's blue.
+    Its other sibling `DamageBar` **is** authored a literal colour in every
+    fragment that has one - `color="0xFFFF0000"` (opaque red), identical in
+    every copy of `HUD_damage_indicator.xml`/`HUD_Elim_damage_indicator.xml`
+    across every skin - and, distinctly, `color="0xFF1664FF"` (a saturated
+    blue), identical across all three copies of `zone_hud.xml`
+    (`DATA02`/`DATA03`/`DATA06`). That red/blue pairing is this dialect's own
     "at most one of these is live" idiom - so `DamageBar` is a second *state*
     of the shield readout, not a bar over a background, and cropping it the way
     Pulse's `ShieldBar` is cropped would be an invention. **The reference frame
     this section is written from is speed lap, not Zone** - the mode whose own
     `DamageBar` authors blue - so the blue in the frame cannot be explained by
     drawing Zone's `DamageBar` in the wrong mode; the speed-lap and arcade
-    fragments never author blue anywhere. Neither is drawn.
+    fragments never author blue anywhere, in any copy. Neither is drawn.
+
+    **A second, unrelated finding surfaced looking for it**: `arcade_hud.xml`
+    composes **two** widgets both named `DamageBar` - the red one above, from
+    `HUD_damage_indicator.xml`, and a second, colourless one from
+    `HUD_pickups.xml` (`TxtrWidth="-78"`, a pickup-bar frame element that
+    happens to reuse the name). `oag_game::hud::draw_list`'s `drawn_once` guard
+    draws only the first widget of a repeated name, so wiring `DamageBar` by
+    name alone would silently pick whichever one composition order puts first
+    - worth a name check before anyone wires this widget on the strength of a
+    single `layout.sprite("DamageBar")` lookup.
   - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
-    two panels, carry **no `color=` attribute at all** in either fragment file
-    (`HUD_lap_counters.xml`, `HUD_positions.xml`) or in any of the four
-    `FEConst`/`FEGlobals` names the composed layouts declare anywhere
-    (`HudBGColour`, `HudColour1`, `HudColour2`, `HudColour3`/`HudColour3A` -
-    none is yellow). White in the layout, unconditionally; yellow in the frame.
-  - Both need the executable: nothing in `skin.xml`'s `FEGlobals` table is
+    two panels, carry **no `color=` attribute at all**, in any of the five
+    copies checked across `HUD_lap_counters.xml` (`DATA02` only) and
+    `HUD_positions.xml` (`DATA00`/`DATA02`/`DATA03`/`DATA05`/`DATA06`), or in
+    any of the four `FEConst`/`FEGlobals` names the composed layouts declare
+    anywhere (`HudBGColour`, `HudColour1`, `HudColour2`,
+    `HudColour3`/`HudColour3A` - none is yellow). `DATA05`/`DATA06`'s extra
+    copies of `HUD_positions.xml` do add colours - `0xFFFFFF00` (yellow) on the
+    big `Position` digit text and `0xB40048FF` on a `HeadToHeadBar` fill - but
+    neither is on a `PosBar*` arc, so the yellow the reference frame shows on
+    the *arcs* stays unexplained by any copy. White in the layout,
+    unconditionally; yellow in the frame.
+  - All three need the executable: nothing in `skin.xml`'s `FEGlobals` table is
     loaded into a HUD layout's constant sweep either (`oag_game::hud::compose`
     only collects `<Variable global=>` from the HUD's own fragment tree), so
     there is no unread symbolic reference waiting to be wired up - the widgets
-    genuinely author no colour for this state. **Needs the Ghidra bridge**,
-    which nobody on this pass held (see this thread's report); flagged rather
-    than taken.
+    genuinely author no colour for this state, in every copy the disc ships.
+    **Needs the Ghidra bridge**, which nobody on this pass held (see this
+    thread's report); flagged rather than taken.
 - **`ShieldBarText` shows `100%` where the original shows `100`**, in the red the
   layout authors where the original shows grey. Both halves are Pulse's answer
   applied here and neither has a data-side signal to key off: **both discs
@@ -724,7 +754,10 @@ sixteen fragment files behind them".
   red) in every mode that authors a placeholder, against Pulse's own
   `ShieldBarText`, which resolves to plain white - so the red is not a bug in
   this build's constant resolution, it is what HD's own `Arcade_HUD.xml`
-  equivalent (`arcade_hud.xml` et al.) actually declares. No widget anywhere
+  equivalent (`arcade_hud.xml` et al.) actually declares - checked directly in
+  both copies of `HUD_damage_indicator.xml` that carry it (`DATA02`, `DATA06`,
+  which resolve identically: `color="0x94FF0000"`, the same translucent red).
+  No widget anywhere
   names a `%`-suffix companion the way `SpeedBarTextKMH` does for the speed
   unit, so there is no layout-derived way to drop it either. **One frame at
   full shield cannot distinguish "always grey" from "grey only when not
