@@ -80,6 +80,7 @@ const TITLE: &Title = &Title {
         // Unread here too: nothing in this crate resolves a team's variant.
         team_variants: None,
         guest_roster: None,
+        hull_variants: None,
         // A fixture: this test needs a `Title` to exist, not a real ladder.
         speed_classes: None,
     },
