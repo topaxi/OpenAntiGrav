@@ -275,8 +275,9 @@ of this is already read and recorded:
   ([`rpcs3-capture.md`](../reverse-engineering/rpcs3-capture.md)).
 - The lightmap's **alpha is a baked shadow mask**, and the renderer already
   reads it ([ADR-0026](../architecture/adr/0026-hd-authored-lighting-is-linear.md)).
-- Nine `ambient_shadow.gtf`, 128x64, one per team, **fully decoded and drawn by
-  nobody** ([`gtf.md`](../formats/gtf.md#the-9-b8-files-are-ship-shadows-and-their-own-remap-broadcasts-them)).
+- Nine `ambient_shadow.gtf`, 128x64, one per team, **fully decoded, and now
+  drawn by the `blob` tier below**
+  ([`gtf.md`](../formats/gtf.md#the-9-b8-files-are-ship-shadows-and-their-own-remap-broadcasts-them)).
 
 Those nine are the reason the `blob` tier is not an invention on HD: the disc
 ships the craft's soft silhouette as a texture, so `blob` **plays the disc's
