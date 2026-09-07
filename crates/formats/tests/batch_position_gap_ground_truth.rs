@@ -1,4 +1,5 @@
-//! What batch `+0x14` is not, censused over the whole disc.
+//! What batch `+0x14` is not - and what `+0x10` beside it is - censused over
+//! the whole disc.
 //!
 //! **`#[ignore]`d and never run in CI.** Needs game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -16,6 +17,9 @@
 //! anything meaningful into. This is the check, not the decode - no
 //! consuming instruction has been found for it, so nothing here is claimed
 //! as a name.
+//!
+//! Its neighbour `+0x10` *is* decoded, and the second test here holds up the
+//! file-side invariant the runtime's read of it depends on.
 
 use std::path::{Path, PathBuf};
 
@@ -233,5 +237,84 @@ fn batch_plus_0x14_is_never_zero_or_negative() {
         percentile(&mut ratio_half_diag.clone(), 0.5),
         percentile(&mut ratio_half_diag.clone(), 0.9),
         percentile(&mut ratio_half_diag, 1.0),
+    );
+}
+
+/// **Every batch in a mesh carries a bit-identical position scale**, and
+/// `+0x14` does not - which is what makes the runtime's own read of the scale
+/// safe.
+///
+/// `Mesh_InitFromPayload` (`0x0890e998`) walks both batch lists purely to find
+/// the **last** batch, then takes that one batch's `+0x10` as the whole mesh's
+/// scale (`lwc1 f12, 0x10(s2)` at `0x0890ef5c`, stored to the runtime mesh at
+/// `+0x54`) - see
+/// [vex.md](../../../docs/formats/vex.md#the-scale-which-decides-whether-models-come-out-the-right-size).
+/// A single batch disagreeing would silently rescale the entire model, so the
+/// file must guarantee uniformity for that read to be correct; this asserts the
+/// disc actually does. It also pins the difference between the two fields: the
+/// scale is a mesh-wide constant stored per batch, `+0x14` genuinely varies
+/// batch to batch, so whatever `+0x14` is, it is not a second copy of something
+/// mesh-wide.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_batch_in_a_mesh_carries_the_same_position_scale() {
+    let Some(path) = image() else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let blobs = psp_vex_blobs(&mut disc);
+
+    let mut meshes = 0usize;
+    let mut batches = 0usize;
+    let mut scale_varies = 0usize;
+    let mut gap_uniform = 0usize;
+    for bytes in &blobs {
+        let Ok(nodes) = vex::nodes(bytes) else {
+            continue;
+        };
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let range = node.payload();
+            if range.end > bytes.len() {
+                continue;
+            }
+            let payload = &bytes[range];
+            let mut rows = Vec::new();
+            for list in [0u8, 1] {
+                walk(payload, list, &mut rows);
+            }
+            let Some(first) = rows.first() else {
+                continue;
+            };
+            meshes += 1;
+            batches += rows.len();
+            let scale = first.scale.to_bits();
+            if rows.iter().any(|r| r.scale.to_bits() != scale) {
+                scale_varies += 1;
+            }
+            let gap = first.gap_as_f32.to_bits();
+            if rows.iter().all(|r| r.gap_as_f32.to_bits() == gap) {
+                gap_uniform += 1;
+            }
+        }
+    }
+
+    const MIN_MESHES: usize = 20_000;
+    assert!(
+        meshes >= MIN_MESHES,
+        "{meshes} meshes is too few to census; the walk is broken"
+    );
+    println!(
+        "{meshes} meshes, {batches} batches: {scale_varies} with a varying +0x10, \
+         {gap_uniform} with a uniform +0x14"
+    );
+    assert_eq!(
+        scale_varies, 0,
+        "some mesh's batches disagree about +0x10 - the runtime reads only the \
+         last batch's copy, so that mesh would be drawn at the wrong size"
+    );
+    assert!(
+        gap_uniform < meshes,
+        "+0x14 is uniform within every mesh, which would make it mesh-wide data \
+         rather than the per-batch value this file treats it as"
     );
 }

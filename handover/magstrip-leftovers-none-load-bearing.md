@@ -40,17 +40,42 @@ censused across all 65,279 non-VIF PSP batches on `Data.wad`
 batch's own `scale` at a fixed ratio, but sits in a loose band (median 1.46,
 10th-90th percentile 1.10-2.65) against half the batch's own bounding-box
 diagonal - consistent with, not proof of, some kind of per-batch bounding
-radius. No consuming instruction has been found for it in
-`psp-pulse-usa/BOOT.BIN`, and whether it is even one `f32` rather than two
-packed sub-fields was not tested. See `docs/formats/vex.md`'s "Not
-determined" list for the same writeup.
+radius. See `docs/formats/vex.md`'s "Not determined" list for the same
+writeup.
+
+**The `+0x10`-first route in was taken, 2026-09-07, and it worked - for
+`+0x10`.** `Mesh_InitFromPayload` (`0x0890e998`) walks both batch lists only
+to reach the **last** batch, reads that one's `+0x10` (`lwc1 f12, 0x10(s2)`,
+`0x0890ef5c`) into the runtime mesh at `+0x54`, and divides the mesh header's
+own `f32` bounding box through it; `Vex_UpdateNodeWorldMatrix`
+(`0x08944544`, named this pass at 85) applies it with `vmscl.q` at
+`0x0894464c`. Full chain on
+[vex.md](../docs/formats/vex.md#the-chain-that-consumes-it-walked-instruction-by-instruction),
+and the file-side invariant it depends on is now a test: 21,055 meshes, zero
+whose batches disagree about `+0x10`.
+
+**The hoped-for spillover did not happen: `+0x14` is read by nothing.**
+Confidence 80. Every batch-list walker was enumerated by the `payload_size`
+load each one needs (`lhu ..., 0xc(...)`, 55 sites program-wide) and checked
+for any `+0x14` access - all stack slots. Independently every float load at
+`+0x14` in the whole executable was enumerated across `s`/`a`/`v`/`t` bases
+plus `lv.s`, and the only one in mesh code is the *mesh header's* bounding
+box. An integer read, or a read through a base already offset by `0x10`,
+would evade both sweeps - that is the gap in the negative. Two dead
+hypotheses recorded so nobody re-runs them: `+0x14` is **not** the alternate
+vertex block's own scale (no batch on `Data.wad` has an alternate block at
+all - 0 of 65,279), and it is **not** two packed `u16`/`f16` sub-fields
+(20,979 distinct low halves, 4 zeros, under a genuinely spread exponent -
+mantissa noise). It is also not mesh-wide: uniform within 11,167 of 21,055
+meshes, where `+0x10` is uniform within all of them.
 
 ## Open
 
-- Batch `+0x14`'s meaning - narrowed (see above), not decoded; no consuming instruction found yet
+- Batch `+0x14`'s meaning - narrowed hard (see above), not decoded. It is a per-batch quantity `psp-pulse-usa` authors and never reads, so the answer is not in that executable
 - Corner tick-frames have not been reproduced
 
 ## Next Steps
 
+- Look for a `+0x14` consumer in a **different** executable - `ps2-pulse-eu/SCES_547.48` first, then `psp-pure-usa/BOOT.BIN`. Both are already imported. Note PS2 batches are shaped differently (`vex.md`: `f32` bounding box at `+0x20`/`+0x30`, `scale` always exactly 1.0), so a PS2 hit would be a different field at the same offset, not the same one - which is itself worth knowing
+- Do **not** fit more geometry against the `s16` box. Six candidate ratios have been run against it and every band is looser than a factor of two; the remaining information is in the vertices or in another executable
 - Reproduce the corner tick-frames, if it still matters - the magnification-artefact explanation already stands as an explanation
-- If anyone picks up batch `+0x14` from Ghidra: the position-scale field it sits next to (batch `+0x10`) has no known consuming instruction either, so finding what reads *that* first may be the faster route in - whatever reads `+0x10` is likely to touch `+0x14` in the same few instructions

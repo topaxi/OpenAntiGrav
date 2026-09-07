@@ -592,6 +592,46 @@ offset.
 Missing this is the classic failure: every model comes out a uniform wrong
 size, which reads as a units problem rather than a decoding bug.
 
+#### The chain that consumes it, walked instruction by instruction
+
+Confidence **90**, from `psp-pulse-usa/BOOT.BIN`. The scale is read **once per
+mesh at load**, never per batch at draw time:
+
+1. `Mesh_InitFromPayload` (`0x0890e998`) walks both batch lists to their end -
+   the loop advancing by `payload_size + header_size`, exactly the walk above -
+   keeping only a pointer to the **last** batch it saw. `lwc1 f12, 0x10(s2)` at
+   `0x0890ef5c` takes that one batch's `+0x10` and stores it to the runtime
+   mesh at `+0x54`.
+2. The next four instructions take `1.0 / scale` (`div.s f12, f13, f12` at
+   `0x0890ef70`, `f13` set to `1.0` from `lui 0x3f80`) and divide the **mesh
+   header's** own `f32` bounding box through it - `+0x10`/`+0x14`/`+0x18` and
+   `+0x20`/`+0x24`/`+0x28` in the mesh header, out to the runtime mesh's
+   `+0x80..0x98`, with the box centre at `+0xa0..0xa8` and `1.0` at `+0xac`.
+   That is the same normalisation in the other direction: the runtime keeps the
+   box in the `s16` vertices' own `[-1, 1)` space, which is what makes the GE's
+   automatic `s16 / 32768` division and the `32768.0` above the same convention.
+3. `Vex_UpdateNodeWorldMatrix` (`0x08944544`) applies it. In the
+   `flags & 0x0f000000 == 0x00400000` branch: `addiu a0, s0, 0x54` /
+   `lv.s S200, 0x0(a0)` at `0x08944640`, then `vmov.q C230, C030` to hold the
+   parent's translation row aside and `vmscl.q E100, E000, S200` at
+   `0x0894464c` to scale the 3x3 - the "translation restored unscaled" above,
+   now read rather than inferred.
+
+**The consequence for a parser: reading `scale` per batch is safe, and it is
+safe only because the data is uniform.** The original looks at exactly one
+batch's copy and applies it to the whole mesh, so a file whose batches
+disagreed would be drawn at one of the two sizes with no complaint.
+`every_batch_in_a_mesh_carries_the_same_position_scale`
+(`crates/formats/tests/batch_position_gap_ground_truth.rs`) holds that up:
+**21,055 meshes and 65,279 batches on `Data.wad`, with not one mesh whose
+batches disagree** about `+0x10` bit-for-bit.
+
+**Also settled by that walk: `+0x06` (`use_alternate`) is a live mechanism no
+shipped batch uses.** `Mesh_BuildBatchDrawCommands` visibly branches on it
+(`0x0892e900`), and every batch on PSP Pulse USA's `Data.wad` - all 65,279 -
+declares an alternate vertex count of zero. Scoped to that archive, which is
+the only one this walk covers.
+
 **Self-check, and it is a test rather than an anecdote now.** Each *batch*
 carries its own bounding box as `s16` at `+0x18` and `+0x20`, in the same space
 as its positions. Decoded vertices must fall inside it, so a wrong stride or a
@@ -1455,11 +1495,31 @@ Applied, from
   central tendency), but sits closer to a fixed band against half the batch's
   own bounding-box diagonal (ratio 1.10-2.65 at the 10th-90th percentile,
   median 1.46) - consistent with, but not proof of, some kind of per-batch
-  bounding radius. No consuming instruction has been found for it in
-  `psp-pulse-usa/BOOT.BIN`, and whether it is even one `f32` rather than two
-  packed sub-fields (the way the texture-transform block's tracks are) was not
-  tested either. Below the confidence this project renames anything at -
+  bounding radius. Below the confidence this project renames anything at -
   recorded as a lead, not a decode.
+
+  **Narrowed twice more, 2026-09-07, both negatives.** First: *nothing in
+  `psp-pulse-usa/BOOT.BIN` reads it.* Every function that walks a batch list
+  was enumerated by the `payload_size` load each one needs (`lhu ..., 0xc(...)`,
+  55 sites program-wide) and each checked for any access at `+0x14`; all that
+  come back are stack slots. Independently, every float load at `+0x14` in the
+  whole executable was enumerated across all register classes (`lwc1` against
+  `s`/`a`/`v`/`t` bases, plus `lv.s`) and the only one anywhere in mesh code is
+  `Mesh_InitFromPayload`'s `0x0890efac`, which is the **mesh header's** bounding
+  box, not a batch's. Confidence **80**, and the limits are worth stating: an
+  integer read, or a read through a base register already offset by `0x10`,
+  would evade both sweeps. Contrast `+0x10` beside it, whose single consumer the
+  same sweep found immediately (above) - so the sweep does find what is there.
+  Second: *the two-packed-sub-fields reading is disfavoured.* Across the 65,279
+  batches the low half takes 20,979 distinct values and is zero on 4, and the
+  high half 1,252 - full mantissa noise under a genuinely spread exponent, not
+  the constrained or small-integer half a packed pair would show. It is also
+  **not** mesh-wide data: it is uniform within only 11,167 of the 21,055 meshes,
+  where `+0x10` is uniform within all of them.
+
+  What this leaves: a per-batch quantity the PSP runtime authored and never
+  reads. The next place to look is another title's executable - `ps2-pulse-eu`
+  or `psp-pure-usa` - not more geometry fitted against six `s16`s.
 - **Collision mesh representation**: see
   [collision](../ghidra/functions/psp-pulse-usa/collision.md), now decoded.
 - Exact `pass_mask` bit meanings. Partial: `0x800` means the batch has its own

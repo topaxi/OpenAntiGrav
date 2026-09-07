@@ -691,3 +691,4 @@
 0x0891c7e0	function	Quake_ProximityToCraft	60	cannon-quake-leachbeam.md
 0x0891c82c	function	Quake_SpanIntensityAt	55	cannon-quake-leachbeam.md
 0x0898d614	function	Scream_SetSoundVolume	88	positional-audio.md
+0x08944544	function	Vex_UpdateNodeWorldMatrix	85	../../../formats/vex.md
