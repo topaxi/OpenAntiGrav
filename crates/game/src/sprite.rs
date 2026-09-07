@@ -183,6 +183,19 @@ impl Image {
     }
 }
 
+/// One image on its way into a sheet, with the two model-only properties that
+/// travel beside it.
+///
+/// The blob path and the [`DecodedImage`] path converge here, which is the
+/// only reason it exists - a tuple of four said nothing about which `Option`
+/// was which.
+struct Staged {
+    src: String,
+    image: Image,
+    quad_extent: Option<[f32; 2]>,
+    blend: Option<vex::BlendClass>,
+}
+
 /// Transparent rows left between stacked images.
 ///
 /// Not optional. The sheet is sampled with linear filtering, so without a gutter
@@ -325,12 +338,16 @@ impl Sheet {
         extra: Vec<DecodedImage>,
         report: &mut Vec<String>,
     ) -> Self {
-        let mut decoded: Vec<(String, Image, Option<[f32; 2]>, Option<vex::BlendClass>)> =
-            Vec::new();
+        let mut decoded: Vec<Staged> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
-                Ok(image) => decoded.push((src.clone(), image, None, None)),
+                Ok(image) => decoded.push(Staged {
+                    src: src.clone(),
+                    image,
+                    quad_extent: None,
+                    blend: None,
+                }),
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
@@ -345,7 +362,12 @@ impl Sheet {
                 blend,
             } = image;
             match Image::from_rgba(width, height, rgba) {
-                Some(image) => decoded.push((src, image, quad_extent, blend)),
+                Some(image) => decoded.push(Staged {
+                    src,
+                    image,
+                    quad_extent,
+                    blend,
+                }),
                 None => report.push(format!(
                     "image {src}: {width}x{height} does not match the pixels handed over"
                 )),
@@ -358,19 +380,25 @@ impl Sheet {
 
         let width = decoded
             .iter()
-            .map(|(_, t, _, _)| u32::from(t.width))
+            .map(|staged| u32::from(staged.image.width))
             .max()
             .unwrap_or(1);
         let height: u32 = decoded
             .iter()
-            .map(|(_, t, _, _)| u32::from(t.height) + GUTTER)
+            .map(|staged| u32::from(staged.image.height) + GUTTER)
             .sum();
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
         let mut pen = 0u32;
 
-        for (src, texture, quad_extent, blend) in decoded {
+        for Staged {
+            src,
+            image: texture,
+            quad_extent,
+            blend,
+        } in decoded
+        {
             let (w, h) = (u32::from(texture.width), u32::from(texture.height));
             let bits_per_pixel = texture.bits_per_pixel;
             let pixels = texture.into_rgba();

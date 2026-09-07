@@ -92,14 +92,11 @@ const MODE_ATLAS: f32 = 0.0;
 const MODE_SPRITE: f32 = 1.0;
 /// [`MODE_SPRITE`], composited **additively** rather than over.
 ///
-/// A third mode rather than a second pipeline, which is what keeps the draw
-/// list's own back-to-front order intact: the pass never splits. What makes
-/// that possible is that the pipeline blends *premultiplied* alpha, so an
-/// additive quad is one that emits an alpha of zero - see `ui.wgsl`'s
-/// `fs_main` for the algebra and `Draw::BlendedSprite` for who asks for it.
-///
-/// Both this and [`MODE_SPRITE`] index the sprite sheet, so every `mode > 0.5`
-/// test in the shader is still exactly "is this a sheet quad".
+/// A third mode rather than a second pipeline, which keeps the draw list's own
+/// back-to-front order intact: the pass never splits. The pipeline blends
+/// *premultiplied* alpha, so an additive quad is one emitting an alpha of zero
+/// (see `ui.wgsl`'s `fs_main` and `Draw::BlendedSprite`). Both this and
+/// [`MODE_SPRITE`] index the sheet, so `mode > 0.5` still means "a sheet quad".
 const MODE_SPRITE_ADDITIVE: f32 = 2.0;
 
 /// How many quads the instance buffer holds before it is grown.
@@ -373,17 +370,15 @@ impl Renderer {
                     // `ALPHA_BLENDING` this used to be.** The two differ in
                     // exactly one factor - the colour source, `One` here
                     // against `SrcAlpha` there - and `fs_main` multiplies the
-                    // colour by its own alpha before returning it, which
-                    // cancels the difference exactly. The alpha component is
-                    // `BlendComponent::OVER` in both, so nothing about
-                    // `render_with(LoadOp::Load, ..)`'s behaviour moves; the
-                    // pause-overlay test below asserts that directly.
-                    //
-                    // What it buys is a **per-quad** additive blend without a
-                    // second pipeline or a split pass: a quad that emits an
-                    // alpha of zero leaves the destination factor at one and
-                    // is added rather than mixed. That is what the three
-                    // lock-on sight models' own `pass_mask` asks for - see
+                    // colour by its own alpha before returning it, cancelling
+                    // the difference. The alpha component is
+                    // `BlendComponent::OVER` in both, so `render_with(
+                    // LoadOp::Load, ..)` does not move; the pause-overlay test
+                    // below asserts that directly. What it buys is a
+                    // **per-quad** additive blend without a second pipeline or
+                    // a split pass - a quad emitting an alpha of zero leaves
+                    // the destination factor at one - which is what the three
+                    // lock-on sight models' own `pass_mask` asks for. See
                     // [`MODE_SPRITE_ADDITIVE`] and [`Draw::BlendedSprite`].
                     blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
@@ -614,14 +609,12 @@ impl Renderer {
                     color: *color,
                     border: *color,
                     // **The model's own class, mapped and not chosen.**
-                    // `Additive` is the one this pipeline can express as
-                    // something other than an ordinary over-blend; `AlphaOver`
-                    // *is* the over-blend, and `None` - the `0x400` class,
-                    // "sorted with the transparent batches but drawn
-                    // unblended" - has no equivalent for a 2D overlay quad and
-                    // nothing measured reaching this path declares it, so it
-                    // draws as it did before rather than being invented an
-                    // equation.
+                    // `Additive` is the one this pipeline expresses as
+                    // something other than an over-blend; `AlphaOver` *is* the
+                    // over-blend, and the `0x400` class has no equivalent for a
+                    // 2D overlay quad and is declared by nothing measured
+                    // reaching here, so it draws as it did rather than being
+                    // invented an equation.
                     mode: match blend {
                         Some(oag_formats::vex::BlendClass::Additive) => MODE_SPRITE_ADDITIVE,
                         _ => MODE_SPRITE,

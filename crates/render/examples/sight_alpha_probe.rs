@@ -82,7 +82,7 @@ fn main() -> anyhow::Result<()> {
         for texture in vex::textures(&blob)?.into_iter().flatten() {
             let rgba = texture.to_rgba();
             let mut histogram = std::collections::BTreeMap::new();
-            for texel in rgba.chunks_exact(4) {
+            for texel in rgba.as_chunks::<4>().0 {
                 *histogram.entry(texel[3]).or_insert(0usize) += 1;
             }
             println!(
@@ -95,7 +95,7 @@ fn main() -> anyhow::Result<()> {
             );
             println!("    alpha histogram: {histogram:?}");
             let mut rgb = std::collections::BTreeMap::new();
-            for texel in rgba.chunks_exact(4) {
+            for texel in rgba.as_chunks::<4>().0 {
                 *rgb.entry((texel[0], texel[1], texel[2])).or_insert(0usize) += 1;
             }
             println!("    rgb histogram: {rgb:?}");

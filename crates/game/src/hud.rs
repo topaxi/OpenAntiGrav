@@ -780,6 +780,8 @@ pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
 #[cfg(test)]
 mod pickup_model_tests;
 #[cfg(test)]
+mod readout_tests;
+#[cfg(test)]
 mod reticle_tests;
 #[cfg(test)]
 mod shield_tests;
