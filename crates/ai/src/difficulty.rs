@@ -273,9 +273,43 @@ impl Difficulty {
     }
 }
 
+impl std::fmt::Display for Difficulty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// So `--autopilot-skill` can be `Option<Difficulty>` directly, the same way
+/// `oag_gameplay::ControlScheme` lets `--scheme` be - clap rejects an
+/// unrecognised token at parse time and names the valid ones, rather than a
+/// caller having to do that by hand the way `oag_game`'s settings path (which
+/// wants to warn and fall back instead of refusing to boot) does through
+/// [`Difficulty::from_name`].
+impl std::str::FromStr for Difficulty {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_name(&s.to_ascii_lowercase()).ok_or_else(|| {
+            let names: Vec<_> = Self::ALL.iter().map(|(name, _)| *name).collect();
+            format!("{s:?} is not a difficulty; try {}", names.join(", "))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_str_matches_from_name() {
+        use std::str::FromStr;
+
+        for (name, level) in Difficulty::ALL {
+            assert_eq!(Difficulty::from_str(name), Ok(level));
+            assert_eq!(level.to_string(), name);
+        }
+        assert!(Difficulty::from_str("impossible").is_err());
+    }
 
     #[test]
     fn every_level_round_trips_through_its_name() {

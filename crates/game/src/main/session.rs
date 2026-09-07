@@ -282,6 +282,10 @@ pub(crate) struct Session {
     /// the results table is reached without driving. See
     /// `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,
+    /// `--autopilot-pilot`, carried the same way. See `race::Race::set_autopilot_pilot`.
+    pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
+    /// `--autopilot-skill`, carried the same way. See `race::Race::set_autopilot_tuning`.
+    pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
     pub(crate) anisotropy: Anisotropy,
     /// The control scheme every race this session starts is driven with.
     ///

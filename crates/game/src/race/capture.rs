@@ -30,6 +30,12 @@ pub struct CaptureOptions {
     /// into the first wall. See [`Race::set_autopilot`], which is a verification
     /// aid rather than a mode the original has.
     pub autopilot: bool,
+    /// `--autopilot-pilot`: fly with a named pilot instead of the neutral
+    /// baseline. See [`Race::set_autopilot_pilot`].
+    pub autopilot_pilot: Option<oag_ai::Pilot>,
+    /// `--autopilot-skill`: fly at a stated AI skill instead of the race's
+    /// own. See [`Race::set_autopilot_tuning`].
+    pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a
@@ -279,6 +285,9 @@ pub fn capture(
         ..
     } = loaded;
     let mode = setup.mode;
+    // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
+    // fallback when the flag was not given. See `main::stage::build_race_stage`.
+    let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
@@ -286,6 +295,15 @@ pub fn capture(
     race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);
     race.set_autopilot(options.autopilot);
+    if options.autopilot {
+        let skill = options.autopilot_skill.unwrap_or(difficulty);
+        if let Some(pilot) = options.autopilot_pilot {
+            race.set_autopilot_pilot(pilot, skill);
+        }
+        if let Some(skill) = options.autopilot_skill {
+            race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+        }
+    }
 
     let mut held = HeldButtons::new(options.held);
     // A motion blur capture holds the **last** tick back: every velocity is a

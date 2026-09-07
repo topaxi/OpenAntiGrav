@@ -570,6 +570,35 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) autopilot: bool,
 
+    /// With `--autopilot`, fly the player with a named pilot instead of the
+    /// neutral baseline `Driver::default` otherwise leaves slot 0 at.
+    ///
+    /// One of the same characters a real single race deals from
+    /// [`oag_game::pilots::load`]: the four built-ins - `balanced`, `aggressive`,
+    /// `passive`, `shy` - or a name out of `<config dir>/oag/pilots/`. This is
+    /// what makes `--autopilot` useful for checking *a character*, not only
+    /// for reaching the finish line unattended - the roster a player edits in
+    /// the pilot screen is the same one this flag can fly.
+    ///
+    /// Tempered by `--autopilot-skill`, or by `[ai] difficulty` when that flag
+    /// is not given - the same temper an opponent's own entry gets, so naming
+    /// `aggressive` here is exactly the character a grid slot could draw, not
+    /// a stronger or weaker claim.
+    #[arg(long, value_name = "PILOT", requires = "autopilot")]
+    pub(crate) autopilot_pilot: Option<String>,
+
+    /// With `--autopilot`, fly the player at a stated AI skill instead of the
+    /// race's own: `novice`, `skilled`, `elite` or `ace`. See
+    /// [`oag_ai::Difficulty`].
+    ///
+    /// **Independent of `[ai] difficulty`** - the opponents still race at
+    /// whatever that resolves to, only the autopiloted craft moves. That is
+    /// the point: it is what lets a claim like "Ace corners a third faster
+    /// than Novice" be checked by flying both across the same field, without
+    /// restarting the race between them and losing the comparison.
+    #[arg(long, value_name = "SKILL", requires = "autopilot")]
+    pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race

@@ -302,6 +302,8 @@ impl Stage {
         render_profile: &settings::RenderProfile,
         scheme: ControlScheme,
         autopilot: bool,
+        autopilot_pilot: Option<oag_ai::Pilot>,
+        autopilot_skill: Option<oag_ai::Difficulty>,
     ) -> Result<Self> {
         Ok(Self::Race(Self::build_race_stage(
             gpu,
@@ -312,6 +314,8 @@ impl Stage {
             render_profile,
             scheme,
             autopilot,
+            autopilot_pilot,
+            autopilot_skill,
         )?))
     }
 
@@ -355,6 +359,15 @@ impl Stage {
         // it is a run flag rather than a stored preference, and nothing in the
         // settings file has any business turning it on.
         autopilot: bool,
+        // `--autopilot-pilot`, already resolved to a `Pilot` by
+        // `crate::args::autopilot_pilot` - roster lookup needs a filesystem
+        // read this function has no business making, and an unknown name is
+        // an error `main` reports before a window ever opens.
+        autopilot_pilot: Option<oag_ai::Pilot>,
+        // `--autopilot-skill`. `clap` has already validated the token against
+        // `oag_ai::Difficulty`'s `FromStr`, so this is never a string to
+        // reject, only a choice to apply or not.
+        autopilot_skill: Option<oag_ai::Difficulty>,
     ) -> Result<Box<RaceStage>> {
         let race::Loaded {
             setup,
@@ -446,6 +459,9 @@ impl Stage {
             })
             .transpose()
             .context("building the countdown overlay")?;
+        // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
+        // fallback when the flag was not given.
+        let difficulty = setup.difficulty;
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -459,6 +475,14 @@ impl Stage {
         race.set_autopilot(autopilot);
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
+            let skill = autopilot_skill.unwrap_or(difficulty);
+            if let Some(pilot) = autopilot_pilot {
+                race.set_autopilot_pilot(pilot, skill);
+            }
+            if let Some(skill) = autopilot_skill {
+                info!("--autopilot-skill: flying at {}", skill.name());
+                race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+            }
         }
         Ok(Box::new(RaceStage {
             scene,

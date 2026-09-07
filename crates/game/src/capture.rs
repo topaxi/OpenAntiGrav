@@ -82,6 +82,10 @@ pub struct Options {
     /// `--autopilot`: fly the race this hands off to with an opponent's
     /// driver. See `race::CaptureOptions::autopilot`.
     pub autopilot: bool,
+    /// `--autopilot-pilot`. See `race::CaptureOptions::autopilot_pilot`.
+    pub autopilot_pilot: Option<oag_ai::Pilot>,
+    /// `--autopilot-skill`. See `race::CaptureOptions::autopilot_skill`.
+    pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// Image size.
     pub size: (u32, u32),
     /// Render one named screen straight out of the XML and stop.
@@ -357,6 +361,8 @@ pub fn run(
                 pressed: options.pressed,
                 input_script: None,
                 autopilot: options.autopilot,
+                autopilot_pilot: options.autopilot_pilot,
+                autopilot_skill: options.autopilot_skill,
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,
