@@ -16,7 +16,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 use crate::app::App;
 use crate::args::{
-    button_mask, give_weapon, parse_progress, parse_size, parse_step, resolve_scheme,
+    autopilot_pilot, button_mask, give_weapon, parse_progress, parse_size, parse_step,
+    resolve_scheme,
 };
 use crate::cli::Cli;
 use crate::hints;
@@ -151,6 +152,8 @@ pub(crate) fn run_windowless(
             &capture::Options {
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.autopilot,
+                autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
+                autopilot_skill: cli.autopilot_skill,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -405,6 +408,8 @@ pub(crate) fn run_race(
             &race::CaptureOptions {
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.autopilot,
+                autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
+                autopilot_skill: cli.autopilot_skill,
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
@@ -478,6 +483,8 @@ pub(crate) fn run_race(
         pick_language: false,
         give,
         autopilot: cli.autopilot,
+        autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
+        autopilot_skill: cli.autopilot_skill,
         anim_seconds: cli.anim_seconds,
         race: Some(loaded),
         race_options: Some(options),

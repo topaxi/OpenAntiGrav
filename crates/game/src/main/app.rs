@@ -50,6 +50,10 @@ pub(crate) struct App {
     /// `--autopilot`: whether the player's craft is flown for them. A
     /// verification aid - see `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,
+    /// `--autopilot-pilot`, resolved to a pilot at startup. See the CLI field.
+    pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
+    /// `--autopilot-skill`. See the CLI field.
+    pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--anim-seconds`: pins the trackside animation clock. See
     /// `Session::anim_seconds`.
     pub(crate) anim_seconds: Option<f32>,
@@ -232,6 +236,8 @@ impl App {
                 &render_profile,
                 self.scheme,
                 self.autopilot,
+                self.autopilot_pilot,
+                self.autopilot_skill,
             )?
         } else if let Some(shell) = self.boot_shell.take() {
             // **Always the loading screen**, where this used to be `--prefetch`
@@ -349,6 +355,8 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             autopilot: self.autopilot,
+            autopilot_pilot: self.autopilot_pilot,
+            autopilot_skill: self.autopilot_skill,
             anim_seconds: self.anim_seconds,
             pvs_culling: self.pvs_culling,
             camera_jitter: self.camera_jitter,

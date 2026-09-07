@@ -240,3 +240,28 @@ pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_formats::weap
         }
     }
 }
+
+/// Resolves `--autopilot-pilot`'s spelling to a pilot, against the same
+/// roster [`oag_game::race::Race::start`] deals the grid from.
+///
+/// **A missing or unreadable pilot directory falls back to the built-in
+/// four**, the same way `Race::start` does - a player who has never
+/// authored one should still be able to name `aggressive`. An unknown name is
+/// rejected rather than ignored, for the reason [`give_weapon`] gives.
+pub(crate) fn autopilot_pilot(name: Option<&str>) -> Result<Option<oag_ai::Pilot>> {
+    let Some(name) = name else { return Ok(None) };
+    let roster = oag_game::pilots::load().unwrap_or_else(|e| {
+        warn!("pilots: {e:#} - matching --autopilot-pilot against the built-in four");
+        oag_game::pilots::Roster::built_in()
+    });
+    match roster.find(name) {
+        Some(entry) => Ok(Some(entry.pilot)),
+        None => {
+            let known: Vec<&str> = roster.entries().iter().map(|e| e.name.as_str()).collect();
+            anyhow::bail!(
+                "--autopilot-pilot {name:?} is not a pilot; the roster holds {}",
+                known.join(", ")
+            )
+        }
+    }
+}

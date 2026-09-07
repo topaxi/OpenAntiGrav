@@ -102,7 +102,7 @@ mod typing;
 mod window;
 
 use crate::app::App;
-use crate::args::give_weapon;
+use crate::args::{autopilot_pilot, give_weapon};
 use crate::cli::Cli;
 use crate::headless::{run_race, run_windowless};
 use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
@@ -497,6 +497,8 @@ fn main() -> Result<()> {
 
     let scheme = pending.scheme();
     let give = give_weapon(cli.give.as_deref())?;
+    let autopilot_pilot = autopilot_pilot(cli.autopilot_pilot.as_deref())?;
+    let autopilot_skill = cli.autopilot_skill;
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
         cli.pick_language,
@@ -520,6 +522,8 @@ fn main() -> Result<()> {
         pick_language,
         give,
         autopilot,
+        autopilot_pilot,
+        autopilot_skill,
         anim_seconds,
         race: None,
         race_options,

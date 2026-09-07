@@ -52,6 +52,32 @@ impl Race {
         }
     }
 
+    /// Tempers `pilot` by `skill` and assigns it to the player's slot, for
+    /// `--autopilot-pilot`.
+    ///
+    /// The same temper [`Self::start`] runs over an opponent's roster entry,
+    /// so naming `aggressive` here is the same character a grid slot could
+    /// actually draw at that skill - not a stronger or weaker claim than the
+    /// roster makes. `skill` is `--autopilot-skill`'s choice, or the race's
+    /// own AI difficulty when that flag was not given; see
+    /// [`Self::set_autopilot_tuning`] for the other half of that flag.
+    pub fn set_autopilot_pilot(&mut self, pilot: oag_ai::Pilot, skill: oag_ai::Difficulty) {
+        self.set_ai_pilot(0, skill.temper(&pilot));
+    }
+
+    /// Overrides the tuning [`Self::autopilot_controls`] flies with, for
+    /// `--autopilot-skill` - independent of [`Self::ai_tuning`], which stays
+    /// the opponents' own.
+    ///
+    /// **Why this cannot reuse [`Self::set_ai_tuning`]:** that setter replaces
+    /// the tuning for the *whole field*, so a race with opponents would have
+    /// them match the flag too. `--autopilot-skill` exists to feel one skill's
+    /// numbers against the field a real race deals, not to replace the
+    /// field's own setting mid-race.
+    pub fn set_autopilot_tuning(&mut self, tuning: oag_ai::Tuning) {
+        self.autopilot_tuning = Some(tuning);
+    }
+
     /// Hands the player's craft to an opponent's driver, or takes it back.
     ///
     /// **A verification aid, and the same kind of thing `Options::opponents`
@@ -170,15 +196,20 @@ impl Race {
 
     /// What the player's own driver wants this tick.
     ///
-    /// The opponents' path exactly - the same line, the same tuning, the same
-    /// pilot slot and the same view of the field - through slot 0's own
-    /// [`oag_ai::Driver`], which is on the ship like everyone else's and so
-    /// inside the world snapshot. A wrecked craft is released rather than
-    /// driven, for the reason [`Self::step_opponents`] gives.
+    /// The opponents' path exactly - the same line, the same pilot slot and
+    /// the same view of the field - through slot 0's own [`oag_ai::Driver`],
+    /// which is on the ship like everyone else's and so inside the world
+    /// snapshot. A wrecked craft is released rather than driven, for the
+    /// reason [`Self::step_opponents`] gives.
+    ///
+    /// **The tuning is the one exception.** [`Self::autopilot_tuning`], not
+    /// [`Self::ai_tuning`], when `--autopilot-skill` set it - see
+    /// [`Self::set_autopilot_tuning`] for why the two stay apart.
     pub(super) fn autopilot_controls(&mut self) -> oag_physics::ShipControls {
         let places = self.places();
         let field = self.field_for(0, &places);
         let pilot = self.ai_pilots[0];
+        let tuning = self.autopilot_tuning.unwrap_or(self.ai_tuning);
         let ship = &mut self.world.ships[0];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             return oag_physics::ShipControls::default();
@@ -187,7 +218,7 @@ impl Race {
             &ship.physics,
             &oag_ai::Context {
                 line: &self.racing_line,
-                tuning: &self.ai_tuning,
+                tuning: &tuning,
                 pilot: &pilot,
                 field: &field,
             },

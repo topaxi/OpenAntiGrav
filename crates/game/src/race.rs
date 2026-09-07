@@ -444,8 +444,18 @@ pub struct Race {
     ///
     /// Not world state: it is read-only for the whole race and drawn from the
     /// race seed, so it reproduces without being carried. Slot 0 is the
-    /// player's and is never read.
+    /// player's, and is read only while [`Self::flown_for_the_player`] is -
+    /// by [`Self::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
+    /// pickup - otherwise inert.
     ai_pilots: [oag_ai::Pilot; oag_gameplay::MAX_SHIPS],
+    /// [`Self::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
+    ///
+    /// `None` outside that flag - every ordinary race, and every existing
+    /// `Race::set_autopilot(true)` call - which is what lets
+    /// [`Self::autopilot_controls`] fall back to [`Self::ai_tuning`], the
+    /// field's own. See [`Self::set_autopilot_tuning`] for why this is a
+    /// second field rather than a call to [`Self::set_ai_tuning`].
+    autopilot_tuning: Option<oag_ai::Tuning>,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on

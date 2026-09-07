@@ -591,6 +591,17 @@ impl Roster {
         &self.entries
     }
 
+    /// The entry named `name`, or `None`.
+    ///
+    /// **Case-sensitive**, like `is_built_in_name` and `check_name` - a lookup
+    /// that folded case would find a pilot `rename_pilot` and `delete_pilot`
+    /// could not. For `--autopilot-pilot`, which wants exactly this: is `name`
+    /// one of the same characters a grid slot could actually draw.
+    #[must_use]
+    pub fn find(&self, name: &str) -> Option<&Entry> {
+        self.entries.iter().find(|entry| entry.name == name)
+    }
+
     /// How many there are, for `oag_ai::pilot_for_slot`.
     #[must_use]
     pub fn len(&self) -> u32 {

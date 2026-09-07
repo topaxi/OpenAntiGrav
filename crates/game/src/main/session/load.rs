@@ -494,6 +494,8 @@ impl Session {
                     &render_profile,
                     self.scheme,
                     self.autopilot,
+                    self.autopilot_pilot,
+                    self.autopilot_skill,
                 );
                 info!("race scene built in {:?}", start.elapsed());
                 // **Building the pipeline objects above is not the same as the
