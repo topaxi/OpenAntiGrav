@@ -129,7 +129,6 @@ BASELINE_LABELS: set[tuple[str, str]] = {
     ("audio", "MUSIC SOURCE"),
     ("audio", "BACK"),
     ("controls", "THRUST"),
-    ("controls", "BRAKE"),
     ("controls", "STEER LEFT"),
     ("controls", "STEER RIGHT"),
     ("controls", "PITCH UP"),

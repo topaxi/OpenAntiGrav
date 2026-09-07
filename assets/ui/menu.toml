@@ -934,6 +934,18 @@ title = "CONTROLS"
 # broken one. See `docs/architecture/menus.md`'s rebinding section and
 # `crates/game/src/main/rebind.rs`, which decides what a raw key press means
 # while a row is waiting.
+# FIRE PICKUP and ABSORB PICKUP are chosen text, not measured - neither PSP
+# title's front-end XML authors this page at all, see this page's own header.
+# Picked to match the game's own vocabulary rather than invent new words:
+# `assets/ui/strings/english.toml`'s `OAG_HINTS_RACE_KEYS` already says "C
+# fires a pickup and Z absorbs it", and `Race::spend_pickup`
+# (`crates/game/src/race/weapons.rs`) reads exactly `Button::Square` for fire
+# and `Button::Circle` for absorb - confirmed against that function, not
+# assumed from the button names. `circle` used to read "BRAKE" here, which was
+# wrong on both counts: there is no brake action anywhere in
+# `oag_gameplay::controls::ship_controls` (braking is the airbrakes below, on
+# `l`/`r`), and circle absorbs, it does not brake. `square` had no row at all
+# before this, so fire was unbindable and undiscoverable from this page.
 [[page.entry]]
 kind = "binding"
 label = "THRUST"
@@ -941,7 +953,14 @@ button = "cross"
 
 [[page.entry]]
 kind = "binding"
-label = "BRAKE"
+label = "FIRE PICKUP"
+string_id = "OAG_CONTROLS_FIRE_PICKUP"
+button = "square"
+
+[[page.entry]]
+kind = "binding"
+label = "ABSORB PICKUP"
+string_id = "OAG_CONTROLS_ABSORB_PICKUP"
 button = "circle"
 
 [[page.entry]]
