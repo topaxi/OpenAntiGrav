@@ -369,6 +369,45 @@ pub fn lock(
     stats: &MissileStats,
     circuit_length: Option<f32>,
 ) -> Option<u8> {
+    lock_window(
+        ships,
+        firer,
+        origin,
+        forward,
+        stats.lock_min_dist,
+        stats.lock_max_dist,
+        circuit_length,
+    )
+}
+
+/// The same acquisition, against a window given directly rather than off the
+/// Missile's block.
+///
+/// **`Ship_AcquireLock` (`0x08844784`) is one function serving two weapons**,
+/// and this is that shape written out. The original switches on the held weapon
+/// id to pick which pair of offsets the window comes from -
+/// `stats+0x50`/`+0x54` for the Missile, `stats+0x114`/`+0x118` for the
+/// LeachBeam - and everything after that switch is shared: the same `0.9` cone,
+/// the same along-track screen, the same nearest-by-longitudinal-distance
+/// tie-break, the same "not the firer, and racing" skip.
+///
+/// So the two weapons differ by **two numbers and nothing else**, which is why
+/// this takes the numbers instead of a second stats type. [`lock`] is the
+/// Missile's spelling of it and is what every existing caller uses.
+///
+/// The LeachBeam's window is authored shorter at the far end than the Missile's
+/// on both shipped tables - see `oag_formats::weapons::LeachBeamStats`, which is
+/// where that finding lives.
+#[must_use]
+pub fn lock_window(
+    ships: &[crate::world::Ship],
+    firer: u8,
+    origin: Vec3,
+    forward: Vec3,
+    lock_min_dist: f32,
+    lock_max_dist: f32,
+    circuit_length: Option<f32>,
+) -> Option<u8> {
     let mut best: Option<(f32, u8)> = None;
 
     for (slot, ship) in ships.iter().enumerate() {
@@ -377,7 +416,7 @@ pub fn lock(
         }
         let to_them = ship.physics.body.position - origin;
         let along = to_them.dot(forward);
-        if along <= stats.lock_min_dist || along >= stats.lock_max_dist {
+        if along <= lock_min_dist || along >= lock_max_dist {
             continue;
         }
         // Nearest by longitudinal distance. Tested before the two remaining

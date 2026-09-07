@@ -61,6 +61,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "missile_sight_4",
         ],
         inner: "missile_sight_inner",
+        // The LeachBeam's own four, all four instancing
+        // `Data\HUD\leachbeam_sight.vex` - a hollow arrowhead - and bound by the
+        // same slot run at `+0x108` … `+0x114`. No inner: only the Missile gets
+        // a closed box.
+        leach: Some([
+            "leachbeam_sight_1",
+            "leachbeam_sight_2",
+            "leachbeam_sight_3",
+            "leachbeam_sight_4",
+        ]),
     },
     pickup_backdrop_colour: Some(PICKUP_BACKDROP_COLOUR),
     pickup_colours: Some(PICKUP_COLOURS),

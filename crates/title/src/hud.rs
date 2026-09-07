@@ -119,6 +119,22 @@ pub enum Sights {
         brackets: [&'static str; 4],
         /// The closed box at the middle.
         inner: &'static str,
+        /// The LeachBeam's own four, or `None` for a title that authors none.
+        ///
+        /// **The second lockable weapon draws a second set of four**, and it is
+        /// a set rather than a recolour: `HudSight_Bind` (`0x0881b604`) binds
+        /// nine widgets over *three* models - four instances of the Missile's
+        /// corner bracket, one closed box, and four instances of the
+        /// LeachBeam's hollow arrowhead. Same placement law, same four
+        /// rotations, different texture, and **no inner** on this one.
+        ///
+        /// `None` is Pure's answer and it is measured rather than assumed: its
+        /// `Data\XML\Arcade_HUD.xml` carries `missile_sight_1` … `_4` and
+        /// `missile_sight_inner` and no `leachbeam_sight_*` at all, which
+        /// agrees with its weapon table authoring no `<Weapon
+        /// type="LeachBeam">`. A title with `None` here draws nothing for a
+        /// LeachBeam rather than lending it the Missile's brackets.
+        leach: Option<[&'static str; 4]>,
     },
     /// Concentric sprites at one centre, at the sizes the layout authors.
     ///

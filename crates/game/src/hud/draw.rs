@@ -833,8 +833,29 @@ fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -> Vec<Draw>
 
     match cx.art.sights {
         oag_title::hud::Sights::Unread => Vec::new(),
-        oag_title::hud::Sights::Brackets { brackets, inner } => {
-            bracket_draws(cx, sight, *brackets, inner, tint, alpha)
+        oag_title::hud::Sights::Brackets {
+            brackets,
+            inner,
+            leach,
+        } => {
+            // **Off the reticle's own held weapon, never off its target.** The
+            // reticle belongs to what is in the player's pickup slot; a craft
+            // ahead is the same craft whichever weapon found it. See
+            // `crate::race::sight::Held`.
+            //
+            // The LeachBeam's set is four arrowheads and **no inner** - only the
+            // Missile's nine-widget bind gets a closed box. A title that authors
+            // no LeachBeam sights draws nothing for one, which is this project's
+            // answer for art it does not have rather than lending it the
+            // Missile's.
+            let (names, inner) = match sight.held() {
+                crate::race::sight::Held::Missile => (Some(*brackets), Some(*inner)),
+                crate::race::sight::Held::LeachBeam => (*leach, None),
+            };
+            match names {
+                Some(names) => bracket_draws(cx, sight, names, inner, tint, alpha),
+                None => Vec::new(),
+            }
         }
         oag_title::hud::Sights::Concentric { seeking, locked } => {
             let names = seeking
@@ -845,18 +866,22 @@ fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -> Vec<Draw>
     }
 }
 
-/// The PSP dialect: four rotated brackets around a box, plus the inner.
+/// The PSP dialect: four rotated brackets around a box, plus an optional inner.
 ///
 /// Each is drawn at the size the model's own quad is - `8.0` units, and the
 /// `<Mode3D mode="orthographic">` block those widgets live in spans the 480x272
 /// screen one unit to a pixel, so eight units is eight pixels. The *box* they
 /// sit at the corners of grows and shrinks; the brackets themselves do not, and
 /// the original writes only a position and a rotation to each.
+///
+/// `inner` is `None` for the LeachBeam, whose four arrowheads have no closed box
+/// at their centre - `HudSight_Bind` (`0x0881b604`) binds one inner across the
+/// whole nine and it belongs to the Missile.
 fn bracket_draws(
     cx: &Context<'_>,
     sight: &crate::race::sight::Sight,
     brackets: [&'static str; 4],
-    inner: &'static str,
+    inner: Option<&'static str>,
     tint: f32,
     alpha: f32,
 ) -> Vec<Draw> {
@@ -889,7 +914,9 @@ fn bracket_draws(
     for (name, piece) in brackets.iter().zip(sight.brackets()) {
         place(name, piece);
     }
-    place(inner, sight.inner());
+    if let Some(inner) = inner {
+        place(inner, sight.inner());
+    }
     out
 }
 
