@@ -49,6 +49,7 @@ mod assets;
 mod compose;
 pub mod countdown;
 mod draw;
+mod lap_splits;
 mod overlay;
 mod widget;
 
@@ -510,6 +511,11 @@ pub struct Readout {
     pub lap_ticks: u64,
     /// The best lap so far, in ticks.
     pub best_lap_ticks: Option<u32>,
+    /// Each completed lap's own time, in ticks, indexed by `lap - 1` - the same
+    /// history [`oag_race::RaceState::lap_splits`] carries, for HD/Fury's
+    /// `Lap1Image`-`Lap4Image` rows. `None` in a slot means that lap has not
+    /// been completed and its row draws nothing, not a zero.
+    pub lap_splits: [Option<u32>; oag_race::MAX_RECORDED_LAPS],
     /// Whether the ship is pointing back down the track.
     pub wrong_way: bool,
     /// The zone number, Zone mode only.

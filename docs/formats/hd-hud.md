@@ -672,6 +672,82 @@ them, and a four-row gap does.
 `7`-`11` on Sub Rapier with the bump at `12` - on a band five zones wide, which
 is the case no one-rung-per-zone reading could ever produce.
 
+## The per-lap history draws, off a new `RaceState`/`Standing` field
+
+**2026-09-07.** `Lap1Image`-`Lap4Image`, the four rows in
+`HUD_lap_times.xml`, draw now. This page used to record the whole group as
+undrawable because there was nothing behind it to draw: `oag_race::RaceState`
+and `oag_race::Standing` tracked a running `best_lap_ticks` only, no per-lap
+history, so `Readout` had nothing to carry even once the HUD side read the
+widgets. That prerequisite is `oag_race::RaceState::lap_splits` and
+`oag_race::Standing::lap_splits` (`crates/race/src/state.rs`,
+`crates/race/src/standing.rs`) - a `[Option<u32>; MAX_RECORDED_LAPS]`, not a
+`Vec`, per [ADR-0003](../architecture/adr/0003-no-ecs.md).
+
+**`MAX_RECORDED_LAPS` is four because the disc's own layout is**: every copy
+of `HUD_lap_times.xml` checked (root, `2048_hud`, `2097_hud`, `wo3_hud` -
+2048's `data.psarc` ships one identical to HD's, byte for byte) composes
+exactly `Lap1Image` through `Lap4Image` and no fifth row, so the array is
+sized to the one consumer that exists rather than to a guess. A lap beyond the
+fourth stops being recorded; nothing shipped needs a fifth slot today, both of
+this crate's lap targets ([`Mode::TIME_TRIAL_LAPS`], [`Mode::SINGLE_RACE_LAPS`])
+being `3`.
+
+Each `<Image name="Lap{n}Image">` carries two `<Text>` children,
+`Lap{n}Text` and `Lap{n}Time`, both authored `string=""` in every copy - so
+neither half comes from the layout itself. `oag_game::hud::lap_splits` reads
+the family the same way `zone_plus` reads `ZonePlusN`: one function per half
+rather than eight match arms.
+
+- **The row's own number, in `Lap{n}Text`.** Read off which named slot is
+  populated, not off any authored digit - `Lap1Text` is definitionally lap 1's
+  row. This is a structural fact about the naming, not a guess, but no
+  reference frame has this cluster on screen to confirm the reading against;
+  see below.
+- **The row's time, in `Lap{n}Time`.** `format_lap_time(_, Precision::
+  Hundredths)` - the same rule already measured for `BestTime`, reused rather
+  than chosen fresh: both are a clock that has stopped, where `CurrentTime`'s
+  `Precision::Tenths` is one still running.
+- **The row draws nothing until its lap is recorded**, background included -
+  `Lap{n}Image` is not in [`oag_hd::hud::ALWAYS_ON`], and is instead drawn
+  conditionally by `oag_game::hud::lap_splits::lap_split_sprites`, gated on
+  `RaceState::lap_splits[n - 1]` being `Some`. The alternative - drawing every
+  row and letting the blank ones show an empty box - is the "no value" versus
+  "not wired up" confusion this page's `text_for` allow-list already rejects
+  everywhere else, so the row's own background follows the same rule as the
+  text it holds.
+
+**Confidence 70 on the two bulleted readings**, not the 90 the rest of this
+page carries: everything about the fragment's shape (four rows, both halves
+blank, the source rectangles, the offsets) is read straight off the disc, but
+*what those two blank widgets are for* is inferred rather than checked against
+a frame - see [What is not done](#what-is-not-done).
+
+**2048 ships the identical fragment and does not reach it from a played
+race.** Checked directly against `data/extracted/vita/PCSF00007/base/PSP2/
+data.psarc`: the bare-root `TimeTrial_HUD.xml` loads `HUD_lap_times.xml`, but
+that root is the one [`2048-hud.md`](2048-hud.md) already found is reached
+only by `DemoRaceManager_Construct` - the attract-mode demo, not a race a
+player starts. None of the seven played `2048_hud\` roots (`Arcade`,
+`Elimination`, `Zone`, `MPTag`, `SpeedLap`, `SpeedLap_TimeTrial`, `Zombie`)
+load it; `SpeedLap_TimeTrial_HUD.xml` - the file a real time trial reads - pulls
+in `HUD_lap_counters.xml` and `HUD_target_time_total.xml` instead, neither of
+which is this cluster. So the fragment is genuine 2048 data, but wiring it
+there today would draw a widget group no played 2048 race ever loads; left
+for whoever next holds `crates/2048`'s HUD reading, alongside filling in its
+still-empty [`oag_2048::hud::ALWAYS_ON`].
+
+**Pulse and Pure author no equivalent at all.** Every one of Pulse's five HUD
+layouts (`Arcade`, `Elimination`, `TimeTrial`, `Zone`, `MPTag`) and Pure's
+`TimeTrial_HUD.xml` were read directly off their discs (`oag-wad cat
+--expand`) for a `Lap[0-9]` name and none carries one - not a gap in what this
+build reads, the two PSP titles simply never authored a per-lap history
+widget.
+
+[`Mode::TIME_TRIAL_LAPS`]: ../../crates/race/src/mode.rs
+[`Mode::SINGLE_RACE_LAPS`]: ../../crates/race/src/mode.rs
+[`oag_hd::hud::ALWAYS_ON`]: ../../crates/hd/src/hud.rs
+
 ## What is not done
 
 **Re-checked 2026-09-07, still true, and with a stronger negative result than
@@ -773,14 +849,13 @@ alone.
   (`Readout::shield_forced_red`), but applying that rule to `ShieldBarText`
   without a second frame at low shield would be exactly the invention this
   project's rules forbid. Recorded rather than fixed on a guess.
-- **`Lap1Image`-`Lap4Image`**, the per-lap time rows, appear as laps are set -
-  their labels are authored as empty strings - and nothing drives them. Not a
-  data gap: `oag_race::RaceState`/`Standing` (`crates/race/src/state.rs`,
-  `crates/race/src/standing.rs`) track only a running `best_lap_ticks`, no
-  per-lap split history, so there is nothing for `Readout` to carry even if the
-  HUD side were wired. Populating that history is `crates/race` and
-  `crates/game/src/race/*`, outside this thread's HUD-only lane
-  (`crates/game/src/hud/*`, `crates/hd`, `docs/formats/hd-hud.md`).
+- **The per-lap history has no reference frame.** [The section
+  above](#the-per-lap-history-draws-off-a-new-racestatestanding-field) draws
+  `Lap1Image`-`Lap4Image` now, but the digit-and-time reading it draws from was
+  never checked against a running race: no capture of the original shows more
+  than one lap completed with this cluster on screen. Confidence 70 on the two
+  inferences that section names, against 90 for the rest of this page - a
+  frame with two or more laps down would settle both at once.
 - **No skin selection.** Three skins ship; which one a race picks is a branch in
   a race-manager constructor and is unread.
 - **The split-screen family**, above.

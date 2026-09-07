@@ -17,7 +17,7 @@
 use oag_core::math::Vec3;
 
 use crate::course::Course;
-use crate::state::{LapGate, wrapped_backward, wrapped_forward};
+use crate::state::{LapGate, MAX_RECORDED_LAPS, record_split, wrapped_backward, wrapped_forward};
 
 /// One craft's place in the race.
 ///
@@ -70,6 +70,14 @@ pub struct Standing {
     ///
     /// [`RaceState::best_lap_ticks`]: crate::RaceState::best_lap_ticks
     pub best_lap_ticks: Option<u32>,
+    /// Each completed lap's own time, in ticks, indexed by `lap - 1`.
+    ///
+    /// The same field and the same bound [`RaceState::lap_splits`] carries,
+    /// recorded through the shared [`record_split`] so the two never disagree
+    /// about which lap an index means.
+    ///
+    /// [`RaceState::lap_splits`]: crate::RaceState::lap_splits
+    pub lap_splits: [Option<u32>; MAX_RECORDED_LAPS],
 }
 
 impl Default for Standing {
@@ -84,6 +92,7 @@ impl Default for Standing {
             finish_tick: None,
             lap_start_tick: None,
             best_lap_ticks: None,
+            lap_splits: [None; MAX_RECORDED_LAPS],
         }
     }
 }
@@ -214,6 +223,7 @@ impl Standing {
                 Some(best) => best.min(ticks),
                 None => ticks,
             });
+            record_split(&mut self.lap_splits, self.lap, ticks);
         }
         self.lap_start_tick = Some(tick);
 
