@@ -718,6 +718,41 @@ detonating projectile rather than reading which file each weapon authors.
 - **Re-read the five undefined `<Stats>` parsers** once the Ghidra bridge can
   read `.text` again - see Open.
 
+## Answered 2026-09-07: Pulse's Quake is fire, **Pure's** is the concrete one
+
+The maintainer's *"like a concrete wave"* is a real memory of a real effect -
+just not Pulse's. Every colour below was parsed with `oag_formats::pob`, not
+transcribed by hand.
+
+| title | `WO_QUAKE.POB` emitters | reads as |
+| --- | --- | --- |
+| **Pulse** (PSP `Data.wad` #524, PS2 `WADS2.WAD` #3758, byte-identical) | `WO_QUAKE` cream -> bright orange -> ash-brown (additive); `fireballs` near-white -> red-orange -> black (additive); `debris` near-white (alpha-over) | fire |
+| **Pure** (PSP `Data.wad` #587) | the same, **plus `bobs`: grey `(102,102,102)` -> black, alpha-over** - occluding rather than glowing, one fixed shade per particle | **concrete** |
+| **HD/Fury** (`DATA02.PSARC:/data/psys/wo_quake.pob`) | fire/molten/dust, no grey | fire |
+
+**No Pulse emitter authors grey at all**, so our wave is not mis-tinted and
+**was not tinted to match the memory** - which would have been exactly the
+"plausible-looking stand-in" this file's own rule forbids.
+
+**Our render was checked against the file and is faithful.** The whiteout in
+the screenshots is dense *additive overlap* - track-width-scaled quads with a
+real `dst_factor: One` summing past 1.0 and clipping to white - which is a
+correct consequence of the authored blend mode, not an override. The whitening
+term removed from `psys.wgsl` on 2026-08-12 is confirmed still removed; palette
+RGB is sampled with alpha from the separate alpha channel rather than the
+palette's own alpha byte; blend classes map 2 -> Additive and 3 -> AlphaOver;
+and `Race::advance_quake_visual`'s `(right - left).length() / 50.0` matches
+`Quake_Update`'s own recovered scale formula.
+
+**One gap recorded rather than glossed:** at distance (`/tmp/quake-fix-t40.png`,
+`t80.png`) the wave stays warm-white instead of resolving into individual
+orange particles, so the saturation story is argued from the blend maths rather
+than confirmed by eye. Minor, and open.
+
+**If Pure's grey wave is ever wanted in Pulse**, that is the
+[enhanced-rendering opt-in](../docs/overview/goals.md) shape - another title's
+authored effect played deliberately - and not a tint invented here.
+
 ## The Quake's "no track deformation" finding is about the fire handler only
 
 **2026-09-07, from the maintainer's own play experience:** *"In the originals,
