@@ -182,7 +182,10 @@ pub struct Redirect {
 pub struct Image {
     /// Widget name, when it has one.
     pub name: Option<String>,
-    /// The texture's archive entry name, with the extension the XML gives.
+    /// The texture's archive entry name, with the extension the XML gives -
+    /// or, for a widget the XML leaves `src`-less entirely, a
+    /// `hash:`-prefixed spec out of a title's own `fallback_images` table.
+    /// See [`Screens::from_xml_with_fallbacks`].
     pub src: String,
     /// Left edge. Absent in the XML means zero, as it does for `Text`.
     pub x: f32,
@@ -374,8 +377,28 @@ impl Screens {
     /// A real declaration always wins: `fallback` only fills a name the
     /// file's own `<Variable global="...">` list never mentions, the same
     /// contract `entry().or_insert()` gives everywhere else in this crate.
+    ///
+    /// Carries no `fallback_images` of its own - see
+    /// [`Self::from_xml_with_fallbacks`] for the widget this file's own XML
+    /// leaves with no `src` at all, which is a different kind of gap from an
+    /// undeclared colour and needs its own table.
     #[must_use]
     pub fn from_xml_with_fallback_globals(xml: &str, fallback: &[(&str, &str)]) -> Self {
+        Self::from_xml_with_fallbacks(xml, fallback, &[])
+    }
+
+    /// [`Self::from_xml_with_fallback_globals`], plus `fallback_images`: an
+    /// `Image` widget's `src`, keyed by the widget's own `name` attribute, for
+    /// a widget whose XML declares none at all - assigned programmatically on
+    /// the original. Consulted only where a widget's own XML leaves `src`
+    /// unset; a real one always wins, the same contract `fallback` carries for
+    /// a colour.
+    #[must_use]
+    pub fn from_xml_with_fallbacks(
+        xml: &str,
+        fallback: &[(&str, &str)],
+        fallback_images: &[(&str, &str)],
+    ) -> Self {
         let root = parse(xml);
         let mut out = Self::default();
 
@@ -388,7 +411,7 @@ impl Screens {
                 .or_insert_with(|| value.to_string());
         }
         for node in &root.children {
-            out.collect(node, None);
+            out.collect(node, None, fallback_images);
         }
         out
     }
@@ -410,10 +433,10 @@ impl Screens {
         }
     }
 
-    fn collect(&mut self, node: &Node, parent: Option<&str>) {
+    fn collect(&mut self, node: &Node, parent: Option<&str>, fallback_images: &[(&str, &str)]) {
         if !node.name.eq_ignore_ascii_case("Screen") {
             for child in &node.children {
-                self.collect(child, parent);
+                self.collect(child, parent, fallback_images);
             }
             return;
         }
@@ -422,7 +445,7 @@ impl Screens {
         // screens. They still hold children, so they are walked through.
         let Some(name) = node.attr("name") else {
             for child in &node.children {
-                self.collect(child, parent);
+                self.collect(child, parent, fallback_images);
             }
             return;
         };
@@ -440,13 +463,13 @@ impl Screens {
         };
 
         for child in &node.children {
-            self.collect_widgets(&mut screen, child, None);
+            self.collect_widgets(&mut screen, child, None, fallback_images);
         }
 
         self.screens.push(screen);
 
         for child in &node.children {
-            self.collect(child, Some(&path));
+            self.collect(child, Some(&path), fallback_images);
         }
     }
 
@@ -498,9 +521,27 @@ impl Screens {
     /// colour-only `Image` draws at its own authored position the same as any
     /// other widget - which is the point: `Title Screen`'s own frame lines are
     /// authored exactly this way.
-    fn collect_widgets(&self, screen: &mut Screen, child: &Node, viewport_width: Option<f32>) {
+    fn collect_widgets(
+        &self,
+        screen: &mut Screen,
+        child: &Node,
+        viewport_width: Option<f32>,
+        fallback_images: &[(&str, &str)],
+    ) {
         match child.name.to_ascii_lowercase().as_str() {
-            "image" => match child.value("src") {
+            "image" => match child.value("src").or_else(|| {
+                // A widget whose XML gives no `src` at all is assigned one
+                // programmatically on the original - matched here by its own
+                // `name` attribute against a title's own measured table. A
+                // widget this table does not name, and that carries no
+                // `color` either, falls through to `fill_from_node` below and
+                // is dropped exactly as it always was.
+                let name = child.attr("name")?;
+                fallback_images
+                    .iter()
+                    .find(|(widget, _)| *widget == name)
+                    .map(|(_, src)| *src)
+            }) {
                 // A `src` names a texture; a bare colour is a [`Fill`].
                 Some(src) => screen.images.push(self.image_from_node(child, src)),
                 None => {
@@ -531,7 +572,7 @@ impl Screens {
             "viewport" => {
                 let width = self.number(child.value("width"));
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, width);
+                    self.collect_widgets(screen, grandchild, width, fallback_images);
                 }
             }
             // Neither carries a `width` of its own to pass down - whatever the
@@ -542,7 +583,7 @@ impl Screens {
             // same silent drop `Screen` below has, just one container earlier.
             "animation" | "backgroundcontroller" => {
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, viewport_width);
+                    self.collect_widgets(screen, grandchild, viewport_width, fallback_images);
                 }
             }
             // An anonymous `Screen` is a grouping container, not a navigable
@@ -561,7 +602,7 @@ impl Screens {
             // would draw a menu's own chrome on its parent's frame too.
             "screen" if child.attr("name").is_none() => {
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, viewport_width);
+                    self.collect_widgets(screen, grandchild, viewport_width, fallback_images);
                 }
             }
             _ => {}

@@ -504,6 +504,7 @@ pub fn load_shell(
         &mut archives,
         front_end.root,
         profile.fallback_globals,
+        profile.fallback_images,
         &mut report,
     )?;
     steps.lap("screens");
@@ -1473,10 +1474,21 @@ fn load_sprites(
 /// [`oag_assets::Archives::read_image`], which knows the handful of
 /// images the PS2 keeps under an entry its own XML's name does not hash to -
 /// `pulse_logo.mip` among them.
+///
+/// **Checked before any of that**: a `hash:`-prefixed `name` is a
+/// `fallback_images` entry, not a path, and belongs nowhere near
+/// `oag_pulse::read_image`'s PS2 `.pct` name rewrite - that rule turns a real
+/// PSP path into a PS2 one, which a hash spec is not.
+/// [`oag_assets::Archives::read_hash`] already searches every mounted
+/// archive, so this both short-circuits and replaces the FE-then-Data order
+/// below, which a raw hash has no use for.
 fn read_front_end_first(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> oag_assets::Result<Vec<u8>> {
+    if let Some(hash) = images::hash_spec(name) {
+        return archives.read_hash(hash);
+    }
     if let Some(fe) = archives.fe.as_mut()
         && let Ok(blob) = fe.read_entry(name)
     {
@@ -1489,6 +1501,7 @@ fn load_screens(
     archives: &mut oag_assets::Archives,
     root: &str,
     fallback_globals: &[(&str, &str)],
+    fallback_images: &[(&str, &str)],
     report: &mut Vec<String>,
 ) -> Result<Screens> {
     // The one piece with no degraded form: a front end with no screens is not a
@@ -1510,7 +1523,7 @@ fn load_screens(
     // to be handed to every source on the grounds that `or_insert` made it a
     // no-op on Pulse - true, and true only for as long as no two titles measure a
     // *different* value for one name. Pulse's own table is empty.
-    let screens = Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+    let screens = Screens::from_xml_with_fallbacks(&xml, fallback_globals, fallback_images);
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
         root,
@@ -1698,6 +1711,7 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 mod fonts;
+mod images;
 mod movies;
 mod provenance;
 pub(crate) mod roster;

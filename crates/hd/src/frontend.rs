@@ -250,6 +250,8 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     menu_backdrop: None,
     picker_backdrop_parent: None,
     fallback_globals: &[],
+    // No src-less widget found on this title yet.
+    fallback_images: &[],
 };
 
 /// HD's front end: the layout it authors and the boot order it takes.
