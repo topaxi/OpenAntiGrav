@@ -83,7 +83,12 @@ asset file.
   trace on this binary usually gets.
 - **On this reading, a Zone race with its HUD hidden would freeze the colour
   grade**, the store to `+0x640` being inside the HUD-text update. That is what
-  the code says and it has not been checked against the running game.
+  the code says about the **original**, and it is still unchecked against the
+  running game - no HUD-hide toggle exists on real hardware or in RPCS3 either.
+  **This port's own equivalent is answered, 2026-09-07 (see the dated section
+  below): this codebase's `sync_zone_grade` does not depend on the HUD draw
+  call at all**, which is a statement about the port's architecture, not a new
+  reading of the original's unfound writer.
 - **The rotation's sign is passed through, not verified.** `ZoneBG`'s quarter
   turn covers the same pixels either way and the ticks are too small to read off
   the frame.
@@ -237,11 +242,107 @@ anything**: this sharpens what a watchpoint on `zoneOrigin` should look for
 (a value that moves frame to frame versus one written once) rather than
 supplying the value itself.
 
+## 2026-09-07: a long race does walk the ladder, but nothing survives to the top of it
+
+The first Next Step, finally watched. `just play hd --race --mode zone --ticks
+40000 --screenshot` **as literally written does not reach far**: with no input
+held, the craft has no steering, drifts into the walls and is eliminated by
+tick 3230 (zone 5, stage 4) - `RaceState::eliminate` ends the race exactly the
+way a single race or Zone always can
+(`crates/game/src/race/tick.rs`), and `RaceState::update`'s own early return on
+`self.finished` (`crates/race/src/state.rs`) then stops `advance_zone` cold, so
+the zone counter (and with it the grade) freezes at whatever it reached. That
+is not a grade bug - it is what "drive with the pad untouched" always does in
+this mode, since Zone's auto-speed needs no accelerate but still needs
+steering, which nothing here was supplying.
+
+**With `--autopilot` added, the ladder does escalate, and it is checked at
+every rung reached, not just the last frame.** Captures at ticks 600, 1200,
+1800, 3000, 4200, 7200, 9600, 12000, 16200, 21000, 25200 and 40000 on the
+default Zone track (`/data/environments/zone_1`) each print the exact `zone N:
+the colour grade steps to stage S` line
+`crate::race::scene::queries::sync_zone_grade` raises, and the HUD's own
+ladder column and current-row name step in lock with it: `SUB-VENOM` (zone 1)
+-> `VENOM` (2, teal-green) -> `FLASH` (5, purple) -> `SUB-RAPIER` (7) ->
+`RAPIER` (12) -> `SUB-PHANTOM` (16, copper) -> `PHANTOM` (20, orange) ->
+`SUPER-PHANTOM` (27) -> `ZEN` (35, white/silver) -> `SUPER ZEN` (42). Every one
+of those matches `ZONE_STAGES`' own thresholds exactly - this is the same
+table `docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md` names,
+now watched stepping in a continuous run rather than at one forced
+`--zone-stage`. Nine of these frames are saved at `data/shots/` as
+`hd_zone_ladder_zone<N>_stage<S>.png` (zones 1, 2, 5, 16, 20, 35, 42, plus the
+eliminated end state and the `zone_2`-track zone-52 frame below), gitignored
+like every other capture this thread cites. The full tick-by-tick log and the
+rest of this session's working are in `.claude/scratch/zone-grade-report.md`
+inside the worktree this landed from - not linked further, since a worktree
+scratch path does not survive the worktree.
+
+**Nothing survives to the top two rungs (`Mach 1` at zone 60, `Supersonic` at
+75), and that turned out to be Zone mode working as designed, not a defect.**
+`oag_race::zone::thrust` scales
+speed by the zone number with no ceiling
+(`crates/race/src/zone.rs`), so the craft goes
+faster every ten seconds forever; eventually every track and every AI skill
+level tried (`novice` default and `ace`) loses the craft to a wall and
+`RaceState::eliminate` ends the race - "how far can you get before you die" is
+the mode. On the default track the autopilot always dies at the same tick
+(25466, zone 42, deterministic - same seed, same course) regardless of skill;
+the purpose-built `zone_2` arena did better, reaching zone 52-54 (stage 12,
+`SUBSONIC`) before the same fate, one screenshot away from `MACH 1`'s zone-60
+label already visible as the next row. **Zone 75 (`Supersonic`) was not
+reached in any run tried**, and is not verified live - only that the table and
+the HUD agree on every rung this session's runs did cross.
+
+**Both of the thread's own open questions got answered along the way, for
+free:**
+
+1. **"Would a Zone race with its HUD hidden freeze the colour grade?" - no, on
+   this port, and the code says why without needing a toggle that does not
+   exist.** `Scene::sync_zone_grade` is called from `RaceStage::render`
+   (`crates/game/src/main/race_stage.rs`) unconditionally, before and
+   independent of `RaceStage::draw_hud` - the HUD only *reads*
+   `Scene::zone_stage()` afterwards to print the class name, it never drives
+   the sync. The headless `--screenshot` path shows the same split even more
+   starkly: `race::capture` runs the whole tick loop with no rendering at all,
+   then calls `scene.sync_zone_grade(&race)` exactly once
+   (`crates/game/src/race/capture.rs`), before the HUD overlay is even built.
+   So in this port the grade is a function of the zone counter alone, not of
+   whether a HUD widget ever draws - **this is a statement about this
+   codebase's own architecture**, not a new reading of the original's
+   `+0x640` store, which still has no traced writer independent of the HUD
+   update and stays open on that side.
+2. **The two ladders do collide, and the code path itself arbitrates
+   nothing between them - confirmed by reading the call sites, not just
+   predicted.** `crate::race::tick` pushes a milestone announcement and (when
+   the same `zone_advanced` edge also crosses a `ZONE_STAGES` boundary) a
+   class announcement into two separate queues, unconditionally, on the same
+   tick (`crates/game/src/race/tick.rs`). `crate::audio::sfx::race_tick`
+   drains both queues and calls `mixer.play` once per entry, both to
+   `Bus::Speech`, back to back, with nothing between them that checks whether
+   the bus already has a voice open - and each call's own result is discarded
+   (`let _ = mixer.play(...)`) so a refusal is not surfaced either
+   (`crates/game/src/audio/sfx.rs`). Zone 20 (`PHANTOM` + the "20" milestone)
+   and zone 35 (`ZEN` + "35") were both crossed live in this session's
+   40,000-tick run; its own health log shows voice refusals scattered
+   throughout (40 over 25,466 ticks, not concentrated at those two ticks), so
+   **whether both cues actually sound together there, or one loses a refused
+   slot to something else, is not established** - only that nothing in the
+   code path treats a collision differently from an ordinary single-cue zone
+   step. Full detail in `docs/formats/psp-audio.md`'s own 2026-09-07 addendum.
+
 ## Next Steps
 
-- **Check the grade actually escalates in a long race now**, which nothing has
-  watched: `just play hd --race --mode zone --ticks 40000 --screenshot`, at 600
-  ticks a zone, should walk the palette up the ladder.
+- ~~Check the grade actually escalates in a long race now~~ **Answered,
+  2026-09-07 - see the dated section above.** It does, rung for rung, from
+  zone 1 to zone 54 across several runs; nothing tried survived to zones 60 or
+  75, which is Zone mode's own escalating-speed design ending the race rather
+  than a grade defect.
+- **Zones 60 (`Mach 1`) and 75 (`Supersonic`) are still unverified live** -
+  every autopilot run tried died first, deterministically per track/seed. A
+  hand-flown or held-input run that outlasts the autopilot, or a `--seed`
+  sweep against the `zone_2`/`zone_3`/`zone_4` arenas, is the way to actually
+  see them rather than trusting the table for the two rungs closest to the
+  cross-fade blend's own home turf.
 - Look for the same `{threshold, stringId}` shape on **Detonator**, whose own
   ladder is recovered by a different mechanism (`RaceManager->+0x2e10`) and may
   or may not share this table's walker.

@@ -278,6 +278,24 @@ reason unrecovered on this axis, is unread; ruled out is that the tables
 themselves disagree - they were both read straight off the disc. A maintainer
 who plays past one of the five zones above can settle which case this is.
 
+**2026-09-07: confirmed at the call sites, and two of the five crossed live in
+a real run - but "both start" is as far as the code proves it.**
+`crate::race::tick` pushes a milestone announcement and, when the same
+`zone_advanced` edge also crosses a `ZONE_STAGES` boundary, a class
+announcement into two separate per-tick queues unconditionally
+(`crates/game/src/race/tick.rs`); `crate::audio::sfx::race_tick` drains both
+and calls `mixer.play` once per entry, both to `Bus::Speech`, with nothing
+between the two calls that checks whether the bus already has a voice open
+(`crates/game/src/audio/sfx.rs`) - each call's own `Result` is even discarded
+(`let _ = mixer.play(...)`), so a refusal is not surfaced either. Zones 20 and
+35 were both crossed live in an autopiloted 40,000-tick capture on
+`/data/environments/zone_1`; the run's own health log shows voice refusals scattered throughout
+(40 of them over 25,466 ticks, not concentrated at those two ticks
+specifically), so **whether both cues are actually audible together at a
+collision zone, or one loses a refused voice slot to something else entirely,
+is not established** - only that the code path itself arbitrates nothing
+between the two calls it makes on the same tick.
+
 **A candidate for the non-verbal half of a class change, found the same day
 and deliberately left unwired - and the maintainer's own play now
 corroborates that it exists.** `env0_zone.bnk` (HD's Zone environment sound
