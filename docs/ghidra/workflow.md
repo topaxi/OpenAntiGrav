@@ -193,6 +193,38 @@ Ghidra GUI. Learned redoing `/psp-pure-eu` on 2026-08-10, which had sat at 0
 functions for a session; it was reimported rather than diagnosed, which was the
 cheaper call.
 
+#### Two traps when replaying names onto fresh imports
+
+Both cost three `apply-names` attempts on 2026-09-07 and neither is obvious
+from the failure text.
+
+**1. `apply-names` only reaches programs that are *open*.** It reported
+nothing at all for five of seven binaries - no error, no "0 applied", just a
+row count and silence - because only two were open after a Ghidra restart. The
+run still exited non-zero, from an unrelated save error, so the silence was
+easy to miss. **Open every program first** (`open_program` per path, or in the
+GUI), then run it. With all seven open the same command applied **1,731 names,
+0 failed, exit 0**.
+
+**2. Setting the image base triggers re-analysis, and saves fail while it
+runs**, with `{"error":"Unable to lock due to active transaction"}`. This is
+the flip side of the rebase working at all: `AllegrexRelocationFixupHandler`
+re-applies every relocation, and that is a transaction. Wait for
+`analysis_status` to report `analyzing: false` before applying names or saving
+- a few minutes on a PSP binary. `REMINDER-ghidra-reimport.md` predicted the
+rebase *order* would matter; it did not predict this.
+
+**The full set is relocated as of 2026-09-07:**
+
+| database | relocations | functions |
+| --- | --- | --- |
+| `psp-pulse-eu` | 108,729 | 10,672 |
+| `psp-pulse-usa` | 108,813 | 10,680 |
+| `psp-pure-usa` | 111,698 | 8,958 |
+| `psp-pure-eu` | 111,269 | 8,968 |
+
+Every one of those read **zero** before the patch.
+
 #### Measured 2026-09-07: `psp-pulse-eu` is reimported and xrefs work
 
 **The patch is installed, `psp-pulse-eu` is reimported, and it reads
