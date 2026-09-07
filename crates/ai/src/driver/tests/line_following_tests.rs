@@ -383,3 +383,53 @@ fn the_requested_turn_rate_is_clamped() {
     );
     assert!(controls.steer_x.abs() <= tuning.max_turn_rate * tuning.rate_gain + 1e-3);
 }
+
+/// A craft mid-flight holds full thrust and never brakes for a corner ahead,
+/// however tight - there is no lateral grip off the ground to spend a
+/// symmetric brake on, and it is a pure loss of the forward speed a landing
+/// needs. Found chasing `13_Track`'s Novice jump pathology: before this
+/// fix, this exact fixture (a 60-unit circle at 200, tight enough to
+/// saturate the steering loop and brake hard on the ground) produced
+/// **identical** controls whether `time_airborne` was zero or not - the
+/// state existed and was read nowhere in `Driver::drive`. See
+/// `docs/gameplay/ai.md#the-13_track-novice-pathology-chased`.
+#[test]
+fn a_craft_mid_flight_never_brakes_for_the_corner_ahead() {
+    let tuning = Tuning::default();
+    let line = Line::new(
+        (0..128)
+            .map(|step| {
+                let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+            })
+            .collect(),
+    );
+    // On the ground, this fixture is exactly
+    // `a_saturated_driver_over_its_corner_speed_brakes_asymmetrically`'s -
+    // over the corner's target speed, with the brakes on.
+    let grounded = craft(line.point(0), 200.0);
+    let controls_grounded = Driver::default().drive(&grounded, &Context::new(&line, &tuning));
+    assert_eq!(controls_grounded.thrust, 0.0, "grounded should still brake");
+    assert!(
+        controls_grounded.airbrake_left > 0.0 || controls_grounded.airbrake_right > 0.0,
+        "grounded should still brake"
+    );
+
+    let mut airborne = craft(line.point(0), 200.0);
+    airborne.time_airborne = 0.3;
+    let controls_airborne = Driver::default().drive(&airborne, &Context::new(&line, &tuning));
+    assert_eq!(controls_airborne.thrust, 1.0, "airborne should hold thrust");
+    // The low side of the two airbrakes is the symmetric brake `airbrakes`
+    // slid the differential atop - see that function's own doc. Zero there
+    // means no deceleration is being bought, even though the steering loop
+    // is still allowed to spend a **differential** airbrake for yaw
+    // authority (one side alone, which decelerates nothing - the same
+    // "brake off" case `airbrakes`'s own doc describes).
+    assert_eq!(
+        controls_airborne
+            .airbrake_left
+            .min(controls_airborne.airbrake_right),
+        0.0,
+        "airborne should not spend a symmetric brake it has no grip for"
+    );
+}

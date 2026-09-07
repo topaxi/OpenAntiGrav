@@ -348,6 +348,22 @@ impl Driver {
         let (thrust, brake) = if self.mistake > 0 {
             // Sailing through it. See [`Self::mistake`].
             (1.0, 0.0)
+        } else if state.time_airborne > 0.0 {
+            // **No lateral grip to spend a brake on.** `throttle`'s own doc
+            // says what the symmetric brake buys: cornering grip, traded for
+            // deceleration. Off the ground there is no cornering grip at
+            // all, so the same command that is a sensible trade on the
+            // track is a pure loss of the forward speed a landing needs.
+            // Found via a unit test with no craft or track at all -
+            // `time_airborne` was previously read nowhere in this function,
+            // so a grounded and an airborne fixture produced byte-identical
+            // controls on an ordinary corner - not by observing this on any
+            // one circuit; measured afterward not to be the cause of
+            // `13_Track`'s own Novice jump pathology, which this branch does
+            // not change. Chosen, not measured, no confidence score: this is
+            // our own driver's behaviour, not a recovered one - see
+            // `docs/gameplay/ai.md#the-jump-clearing-failure-the-mechanism-a-real-bug-that-turned-out-not-to-be-it-and-why-this-is-where-the-chase-stops`.
+            (1.0, 0.0)
         } else {
             throttle(speed, target, tuning)
         };
