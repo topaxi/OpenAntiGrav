@@ -1,6 +1,6 @@
 //! Measures how far an opponent strays from the line after firing a Turbo, on
 //! top of the `allows_speed` gate that already exists, across a range of
-//! `Tuning::look_max` settings.
+//! `Tuning::look_max` settings and, separately, across circuits.
 //!
 //! Written while chasing why the field drove in single file - see
 //! `docs/gameplay/ai.md`'s Turbo section for the measurement
@@ -12,6 +12,17 @@
 //! ```sh
 //! cargo run --release -p oag-game --example turbo_lookahead_sweep
 //! ```
+//!
+//! # Why more than one circuit
+//!
+//! The first `look_max` sweep ran on `16_Track` alone and came back flat -
+//! that rules out `look_max` there, but `16_Track` is one geometry among
+//! twelve, and a negative result on one circuit is evidence the escape is
+//! rare, not proof it is gone. [`TRACKS`] widens the same excursion
+//! measurement to two more circuits, at the shipped `look_max` (90) only -
+//! the first sweep already answered whether `look_max` itself is the lever,
+//! so this does not re-sweep it. See that constant for which circuits and
+//! why.
 //!
 //! # Why this measures excursion, not respawn count
 //!
@@ -33,6 +44,30 @@ use oag_game::race;
 /// `ai.md` describes without folding in the craft's next, unrelated Turbo.
 const COAST_TICKS: u32 = 120;
 
+/// Circuits the widened sweep runs on, beyond the original `16_Track`.
+///
+/// **Chosen, not measured** - both are picked from `docs/gameplay/ai.md`'s
+/// own prior findings about circuit geometry, not drawn at random:
+///
+/// - `07_Track` has the disc's tightest measured arc: curvature 0.047,
+///   radius 21, admitting 33 units/s, where the grip term alone already
+///   predicted 74 and a craft arrived at 94 (see "The second was missing and
+///   it cost a circuit" in `ai.md`'s speed-model section). A corner that
+///   already overspeeds an *unboosted* craft this badly is the most likely
+///   place left for a boosted one to leave the road.
+/// - `09_Track` is independently flagged twice in `ai.md` as the worst case
+///   for a craft finishing a lap with the least shield left, across both the
+///   roll-arming and shield-economics sweeps - a circuit that already
+///   punishes a driving mistake hardest is a reasonable place to look for a
+///   Turbo one.
+///
+/// `13_Track` is deliberately excluded even though it is on the twelve-
+/// circuit list: it carries its own, separately chased and unrelated
+/// pathology (`ai.md`'s "The `13_Track` Novice pathology, chased" section,
+/// the authored jump at `grip_believed` 0.30) that would confound a Turbo
+/// excursion count with a different failure entirely.
+const TRACKS: [&str; 3] = ["16_Track", "07_Track", "09_Track"];
+
 struct RunStats {
     /// Forward speed, across every craft and every tick - confirms whether a
     /// given `look_max` can ever actually bind the lookahead clamp at all.
@@ -48,7 +83,7 @@ struct RunStats {
     rescue_distance: f32,
 }
 
-fn run(seeds: &[u64], look_max: f32) -> RunStats {
+fn run(seeds: &[u64], track: &str, look_max: f32) -> RunStats {
     let image = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/pulse-psp-usa.chd");
@@ -64,7 +99,7 @@ fn run(seeds: &[u64], look_max: f32) -> RunStats {
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             difficulty: oag_ai::Difficulty::Ace,
-            track: Some("Data\\Environments\\16_Track\\track.vex".to_string()),
+            track: Some(format!(r"Data\Environments\{track}\track.vex")),
             seed: Some(seed),
             ..race::Options::default()
         })
@@ -131,6 +166,20 @@ fn run(seeds: &[u64], look_max: f32) -> RunStats {
     stats
 }
 
+fn report(label: &str, stats: &RunStats) {
+    let n = stats.excursions.len().max(1) as f32;
+    let mean = stats.excursions.iter().sum::<f32>() / n;
+    let worst = stats.excursions.iter().cloned().fold(0.0f32, f32::max);
+    println!(
+        "{label}: {} Turbo(s) fired, mean excursion {mean:.1}, \
+         worst {worst:.1} (rescue at {:.0}), {} escape(s), max speed seen {:.1}",
+        stats.excursions.len(),
+        stats.rescue_distance,
+        stats.escapes,
+        stats.max_speed,
+    );
+}
+
 fn main() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -148,19 +197,18 @@ fn main() {
     // 90 is today's default. 100/110/120 probe just above and below where the
     // arithmetic (`look_min + look_speed * speed > look_max`) says the clamp
     // starts to matter for a boosted craft. 200 is the "clamp essentially
-    // never binds" control.
+    // never binds" control. This part of the sweep stays on `16_Track` alone -
+    // it already answered the `look_max` question there.
+    println!("-- look_max, 16_Track --");
     for look_max in [90.0f32, 100.0, 110.0, 120.0, 200.0] {
-        let stats = run(&seeds, look_max);
-        let n = stats.excursions.len().max(1) as f32;
-        let mean = stats.excursions.iter().sum::<f32>() / n;
-        let worst = stats.excursions.iter().cloned().fold(0.0f32, f32::max);
-        println!(
-            "look_max {look_max:>5.0}: {} Turbo(s) fired, mean excursion {mean:.1}, \
-             worst {worst:.1} (rescue at {:.0}), {} escape(s), max speed seen {:.1}",
-            stats.excursions.len(),
-            stats.rescue_distance,
-            stats.escapes,
-            stats.max_speed,
-        );
+        let stats = run(&seeds, "16_Track", look_max);
+        report(&format!("look_max {look_max:>5.0}"), &stats);
+    }
+
+    // Widened part: shipped look_max only, across TRACKS.
+    println!("-- circuits, look_max 90 (shipped) --");
+    for track in TRACKS {
+        let stats = run(&seeds, track, 90.0);
+        report(track, &stats);
     }
 }

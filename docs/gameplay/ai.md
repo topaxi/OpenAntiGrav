@@ -731,9 +731,18 @@ characters on every replay, and drawing a personality from `World::rng` (which
 would move every later pickup roll) was deliberately not done.
 
 **Until 2026-08-11 the field had no idea another craft existed.** What it has
-now is [a view of its rivals](#what-a-driver-can-see-of-the-grid); what it still
-has not got is an overtaking line, or anything that touches another craft on
-purpose.
+now is [a view of its rivals](#what-a-driver-can-see-of-the-grid), plus
+blocking, yielding, a lift off a craft ahead, mine avoidance, and - since
+2026-08-24 - a deliberate shove: see
+[being provoked, and shoving](#being-provoked-and-shoving). **Corrected
+2026-09-07**: this paragraph read "anything that touches another craft on
+purpose" as still missing well after `Driver::ram` landed; it does not touch
+`Driver::social`'s own paragraph below, which was already accurate. What
+still is not built is a distinct overtaking *line* - a driver does not choose
+a different path to pass, only a lean off the one it already drives - and a
+ram may only ever target the player, never another AI craft (`ram.rs`'s
+`PLAYER_SLOT`, a deliberate gate against an AI-on-AI pile-up, not an
+oversight).
 
 ### Pilots, and the personalities drawn inside them
 
@@ -2474,6 +2483,50 @@ speed - 321-322 u/s, consistent across every setting - means it *does*
 bind occasionally even at `look_max` 120. `look_max` is exclusively a
 boost-phase parameter: no craft in this sample ever drove fast enough
 outside a Turbo to feel it.
+
+**Widened to two more circuits, 2026-09-07 - the negative result above was
+one circuit only, and the thread said so.** `turbo_lookahead_sweep` now also
+sweeps `07_Track` and `09_Track`, 32 seeds each, at the shipped `look_max`
+(90) only - the block above already settled whether `look_max` itself is the
+lever, so this does not re-sweep it. Both are chosen, not drawn at random:
+`07_Track` carries the disc's tightest measured arc (curvature 0.047, radius
+21, admitting 33 units/s, where an *unboosted* craft already overspeeds it at
+94 - see "The second was missing and it cost a circuit" above), and `09_Track`
+is independently flagged twice elsewhere on this page as the worst case for
+**end-of-run** shield. `13_Track` is deliberately
+excluded despite being on the twelve-circuit list: its own authored-jump
+pathology (see
+["The `13_Track` Novice pathology, chased"](#the-13_track-novice-pathology-chased))
+would confound a Turbo-excursion count with an unrelated failure.
+
+| circuit | Turbos fired | mean excursion | worst excursion | rescue threshold | escapes |
+| --- | --- | --- | --- | --- | --- |
+| 16_Track | 55 | 13.6 | 36.3 | 456 | 0 |
+| 07_Track | 28 | 12.0 | 42.4 | 393 | 0 |
+| 09_Track | 51 | 11.1 | 22.1 | 414 | 0 |
+
+**Zero escapes on all three**, including `07_Track`'s own tightest corner.
+The escape this section opened with still does not reproduce - not just on
+`16_Track`, but on the circuit picked specifically because it already
+overspeeds a corner unboosted. Each circuit is 32 seeds times seven
+opponents times a minute, the same 224 craft-minutes the original `16_Track`
+sweep measured, so the two new circuits add **448 craft-minutes and 79
+Turbos** (28 on `07_Track`, 51 on `09_Track`) on top of it - 672
+craft-minutes and 134 Turbos total across all three, same result throughout:
+the residual gap this section describes is not shown to exist any more.
+
+One number moved between the two sweeps and is worth flagging rather than
+silently reusing: this session's own re-run of `16_Track` at `look_max` 90
+fired 55 Turbos (mean 13.6, worst 36.3, max speed 313.6) against the
+2026-09-02 sweep's 104 (mean 14.5, worst 47.4, max speed 321-322) - fewer
+than half. That is not a change made in this session; `crates/ai` moved
+underneath the harness between the two runs (`look_speed` was lowered on
+2026-09-06 to fix `13_Track`'s convergence lag, among other changes), which
+plausibly changed how the driving reaches the Turbo trigger at all. It is
+not a regression in what this table is checking: `race_ground_truth::
+a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` still passes
+all twelve clean with `01_Track` at its usual single respawn (index 794),
+and no committed hash moved - this sweep only reads.
 
 ### The field burns
 
