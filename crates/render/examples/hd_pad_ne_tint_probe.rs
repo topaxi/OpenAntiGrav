@@ -11,6 +11,15 @@
 //! reports every instruction that reads a `Constant` source, so a baked-in
 //! tint (red or otherwise) would show up as a literal float4 here rather
 //! than as a parameter this project already checked.
+//!
+//! Also prints every instruction's source and destination swizzle/write
+//! mask, which the first version of this probe omitted -
+//! `docs/rendering/pads.md`'s "Next Steps" step 0 asks for exactly this, to
+//! settle which alpha channel (the diffuse's, covering 93% of the plate, or
+//! `_ne`'s own, covering the ~7% light-bar mask) actually gates the pad's
+//! final accumulate, rather than assuming the renderer's already-implemented
+//! generic `emissive` shape (`mesh.wgsl`, `glow = second.rgb * tint.rgb *
+//! first.a`) is what the pad's own microcode executes.
 
 use oag_formats::{rcsmaterial, rcsmodel, vex};
 use oag_render::mesh;
@@ -85,6 +94,17 @@ fn main() -> anyhow::Result<()> {
             .find(|(h, _)| *h == NE_SAMPLER_HASH)
             .map(|&(_, unit)| unit);
         println!("  _ne sampler binds unit {ne_unit:?}");
+        println!("  declared samplers: {:#010x?}", program.declared.samplers);
+        let unit2_is_lightmap = program
+            .declared
+            .samplers
+            .iter()
+            .any(|&(h, unit)| unit == 2 && h == rcsmaterial::LIGHTMAP_SAMPLER);
+        println!(
+            "  unit 2 is the lightmap sampler ({:#010x})? {unit2_is_lightmap}",
+            rcsmaterial::LIGHTMAP_SAMPLER
+        );
+        println!("  output_texels(): {:#?}", program.output_texels());
 
         let tint_patch_slots: Vec<u16> = program.patches(TINT_HASH).collect();
         println!(
@@ -95,6 +115,17 @@ fn main() -> anyhow::Result<()> {
             program.declared.parameters.len(),
             program.declared.parameters
         );
+        for &param in &program.declared.parameters {
+            let slots: Vec<u16> = program.patches(param).collect();
+            let value = material
+                .parameters
+                .iter()
+                .find(|p| p.hash == param)
+                .map(|p| p.value);
+            if !slots.is_empty() {
+                println!("    {param:#010x} patches code slots {slots:?} material value={value:?}");
+            }
+        }
 
         println!(
             "  full disassembly ({} instructions):",
@@ -114,9 +145,26 @@ fn main() -> anyhow::Result<()> {
                     String::new()
                 }
             );
-            for src in insn.sources.iter().take(insn.arity()) {
-                line.push_str(&format!("{src:?} "));
+            let lane = |l: u8| ['x', 'y', 'z', 'w'][usize::from(l) & 3];
+            for (slot, src) in insn.sources.iter().take(insn.arity()).enumerate() {
+                let tag = match src {
+                    rcsmaterial::fragment::Source::Register { index, half } => {
+                        format!("{}{index}", if *half { "H" } else { "R" })
+                    }
+                    rcsmaterial::fragment::Source::Input => "IN".to_string(),
+                    rcsmaterial::fragment::Source::Constant => "C".to_string(),
+                    rcsmaterial::fragment::Source::Unknown => "?".to_string(),
+                };
+                let swiz: String = insn.swizzles[slot].iter().map(|&l| lane(l)).collect();
+                line.push_str(&format!("{tag}.{swiz} "));
             }
+            line.push_str(&format!(
+                "-> .{}",
+                (0u8..4)
+                    .filter(|c| insn.mask & (1 << c) != 0)
+                    .map(lane)
+                    .collect::<String>()
+            ));
             if let Some(c) = insn.constant {
                 line.push_str(&format!("const_slot={:?} value={c:?}", insn.const_slot));
                 // Flag if this constant's slot is one the TINT parameter

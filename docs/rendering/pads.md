@@ -364,3 +364,154 @@ different alpha channels this page has now found in the disc's own code -
 and this pass did not resolve the accumulate instruction's own swizzle/mask
 to settle any of it. Do not treat the PNG as measured; the measured half is
 only the fallback tint value and each file's own alpha coverage.
+
+### Which alpha channel gates the accumulate - settled, asset-side, 2026-09-07
+
+The open question above is answered by tracing register writes with their
+own swizzle and write mask (`crates/render/examples/hd_pad_ne_tint_probe.rs`,
+extended this pass to print both - it previously showed only the opcode and
+the bare source list), cross-checked against `Program::output_texels()`, the
+codebase's own already-calibrated register-taint reader for exactly this
+question. **Confidence 82** on the hand trace itself: mechanical over a
+50-instruction straight-line program with no branches, reproducible from the
+probe's own output - capped below `output_texels()`'s own documented ceiling
+because both readings share one unproven assumption (see the aliasing note
+below), not because the arithmetic is in doubt.
+
+**Neither of the two named candidates is what the pad's own microcode runs.**
+It is not `mesh.wgsl`'s already-implemented generic shape
+(`glow = second.rgb * tint.rgb * first.a`, gated by the diffuse's alpha) -
+that shape is a single `MAD` and the pad's own program spends roughly forty
+instructions between the unit-1 sample and the program's end computing two
+separate curves against the material's other two textures. It is also not a
+clean "`_ne`'s alpha alone, gating an add of `_ne`'s own RGB" shape either,
+because `_ne`'s RGB is a normal map and is never used as colour (see above) -
+it is consumed once, at the very first instruction after the `TEX`, and
+never read again.
+
+**The "second texture" the specular-shaped chain reads is not a fourth,
+unbound one - it is unit 2, and unit 2 is the material's own already-known
+lightmap.** `program.declared.samplers` names it directly:
+`(0x37b5db58, unit 2)`, and `0x37b5db58` is `rcsmaterial::LIGHTMAP_SAMPLER` -
+the exact hash `Material::lightmap_entry()` already resolves to
+`lmaps/ile_mesh_combine13-lmap.gtf` for this material. So the renderer
+already samples the one non-`_cs`, non-`_ne` texture a pad's own shader
+reads: `skin::picks`'s "the lightmap wins the second binding" rule (see
+above) is exactly what routes that same entry into the `aux`/`lightmap`
+binding today. **There are two distinct power-shaped chains here, not one**,
+easy to conflate because both share the `LG2`/`MUL`/`EX2` idiom
+`Program::specular_exponent` already names elsewhere on this disc:
+
+- A **per-channel curve applied directly to the lightmap sample itself**
+  (`H6`/`H4`, the raw `TEX unit=2` result, each channel independently run
+  through its own `LG2`→`MUL`→`EX2`) - the same `pow(lightmap.rgb, k)` shape
+  `specular_exponent`'s own doc comment already records for `track_surface`,
+  not a specular term at all.
+- A **genuine `N·H` specular exponent**, a saturated `DP3` between two
+  vectors built from the interpolated input and the unpacked `_ne` normal,
+  fed through the identical `LG2`/`MUL(32.0)`/`EX2` idiom, landing in the
+  scalar this page's trace below calls the "specular scalar."
+
+**What the trace actually shows, identically shaped on both `Speedup Pad`
+and `Weapon Pad`:**
+
+- The unit-1 `TEX`'s destination register (`R0`) is written in full at
+  instruction 0, then only its `.xyz` lanes are touched again (by the
+  normal-unpack and the tangent-space chain that follows). **`R0.w` - the
+  raw `_ne` alpha, exactly the file's own light-bar mask - is never
+  overwritten for the rest of the program.** It survives, untouched, to
+  instruction 41 (`Speedup Pad`) / 43 (`Weapon Pad`):
+  ```text
+  MAD H4, R0.wwww, C.xyzw, H4.xyzw   ; speedup, const_slot 55
+  MAD H2, R0.wwww, C.xyzw, H0.xyzw   ; weapon,  const_slot 58
+  ```
+  an accumulate whose first operand is `_ne`'s own alpha, broadcast, times a
+  material constant, added to a term that is itself `diffuse.rgb ×` the
+  lightmap-power curve above. **This is the channel that gates the additive
+  term** - `_ne`'s own alpha, the bars mask, not the diffuse's.
+  **Aliasing caveat, `Weapon Pad` only**: this reading treats `H`- and
+  `R`-indexed registers as independent storage, the same design choice
+  `Program::output_texels()` makes (validated once, on a shipped `H2`/`R2`
+  pair, per that method's own doc comment - not proven disc-wide). NV40
+  packs `H[2i]`/`H[2i+1]` into `R[i]`, so `H0` packs into `R0` - and
+  `Weapon Pad`'s diffuse sample is `TEX H0` (not `H5`, unlike `Speedup
+  Pad`'s), landing between `R0`'s first write and this use. If `H0` and `R0`
+  physically alias on real hardware *and* the compiler let a live `R0` value
+  cross that write, `R0.w` here would not be pristine `_ne` alpha. Two
+  things weigh against that: a compiler correctness argument (a live value
+  colliding with a same-cycle full-mask `TEX` write into aliased storage is
+  a basic register-allocation bug, not a plausible compiled shape), and a
+  direct cross-check - `program.output_texels()` independently reports the
+  `Weapon Pad` program's alpha lane as `Unit { unit: 1, channel: Some(3) }`,
+  agreeing with this hand trace exactly, channel for channel. Both readings
+  share the same underlying assumption, so this is not independent proof of
+  the hardware's real packing - but it does rule out an arithmetic slip in
+  the hand trace, and the `Speedup Pad` reading has no such caveat at all:
+  its diffuse fetch is `TEX H5`, which packs into `R2`, disjoint from `R0`
+  under the very same rule.
+- The diffuse's own alpha (`H5.w`/`H0.w`, from the unit-0 `TEX` at
+  instruction 36/39, likewise never overwritten before use) is read too, but
+  one step later and as a **multiplier on the whole accumulated sum**, not a
+  second independent gate: `H1.xyz = H1.xyz * diffuse_alpha + H4.xyz`, where
+  `H4.xyz` already carries the `_ne`-alpha-gated term above. So a pad pixel
+  where the diffuse is fully transparent would zero out *everything*,
+  including the bars' own contribution - consistent with this being an
+  alpha-tested surface (`pad_alpha_test_ground_truth.rs`) where a fragment
+  that fails the test never reaches this arithmetic at all, rather than a
+  second gate meaningfully narrowing the ~93% diffuse-alpha region down to
+  the ~7% bars.
+- The whole sum is then scaled again by the program's own specular scalar
+  (the `EX2(log2(N·H) * 32)` chain, landing in `R0.x` on `Speedup Pad` /
+  `R0.z` on `Weapon Pad`) and added to a third term, at the program's true
+  final (`end`-flagged) instruction, built entirely from constants and that
+  specular scalar - no texture read reaches it at all.
+- **The two pad types' own output alpha differs, and `output_texels()`
+  agrees with the hand trace on both.** `Weapon Pad`'s final `H0.w` is a
+  bare `MOV` from `R0.w` - `_ne`'s own raw alpha becomes the fragment's
+  output alpha directly, so the light-bar mask is what the alpha-test/blend
+  stage itself sees; `program.output_texels()`'s own fourth lane reports
+  exactly `Unit { unit: 1, channel: Some(3) }` for this program. `Speedup
+  Pad`'s final `H0.w` is a `MOV` from a patched constant, unrelated to
+  either texture; `output_texels()`'s fourth lane for that program is
+  `Untraced` - no texture unit reaches it at all, which is what a
+  constant-sourced alpha should report.
+
+**The colour patched into the `_ne`-alpha-gated term is now identified, and
+it is not red.** The constant at code slot 55 (`Speedup Pad`) is driven by
+parameter hash `0x7611a2d8`; slot 58 (`Weapon Pad`) by `0xce5c4410` - the
+same two per-material hashes `pads.md`'s earlier pass already found were
+*not* `emissive`'s tint/offset/scroll, but did not go on to read what they
+actually carry. Both materials' one declared parameter authors the identical
+value on `12_sol_2`: `[0.0, 0.768628, 0.992157, 0.0]` - RGB `(0, 196, 253)`,
+a light cyan/sky-blue, not red, and **identical between the two otherwise
+separate material files**, which reads more like a shared circuit rim/sky
+tint than a pad-specific "this is my glow colour." Confidence 85 for the
+value itself (`Material::parameters` is a direct field read); confidence 55,
+chosen rather than measured, for reading it as a shared rim tint rather than
+a coincidence - nothing pins down the parameter's *name*, only its hash and
+its authored value.
+
+**So, settled:** of the two channels this page's earlier pass left open,
+`_ne`'s own alpha - not the diffuse's - is the one genuinely wired into an
+additive term in the pad's own shader, on both pad classes, at the identical
+structural position. That is consistent with (though it does not explain
+the colour of) the maintainer's "only the light bars" report, since `_ne`'s
+alpha is exactly that mask. It does **not** reopen "light up red": the
+colour this channel actually gates is measured, authored blue, and shared
+between two otherwise-independent material files, which is a second,
+independent reason (beyond the already-closed "no tint anywhere in either
+program") to doubt this material record is the source of what the
+maintainer described. What gates the diffuse's own alpha is a straight
+multiplier on the sum that already includes the `_ne`-gated term, not a
+second selection between two different light-bar masks - so the "the
+generic shape would spread a normal-map-coloured glow across 93% of the
+plate" concern that opened this section does not apply either: the pad's
+real formula is not that shape at all, on either channel.
+
+This still does not identify a cooldown state, and does not need to: the
+`_ne`-alpha-gated term above runs through the same unconditional accumulate
+already established (no parameter patch gates it, 18 of 18 chunks), so
+whatever the maintainer describes from play is not sitting in this material
+record any more than the earlier tint check found it there. Steps 2-3 of the
+handover thread's Next Steps - the Ghidra-side vtable diff - remain the way
+to find it, unchanged by this section.
