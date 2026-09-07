@@ -348,6 +348,20 @@ impl Driver {
         let (thrust, brake) = if self.mistake > 0 {
             // Sailing through it. See [`Self::mistake`].
             (1.0, 0.0)
+        } else if state.time_airborne > 0.0 {
+            // **No lateral grip to spend a brake on.** `throttle`'s own doc
+            // says what the symmetric brake buys: cornering grip, traded for
+            // deceleration. Off the ground there is no cornering grip at
+            // all, so the same command that is a sensible trade on the
+            // track is a pure loss of the forward speed a landing needs -
+            // measured on `13_Track`, whose racing line keeps a corner's
+            // worth of curvature (up to 0.0126, the same order as the S-bend
+            // just before liftoff) authored across the gap itself, so a
+            // craft still mid-flight can walk into this exact case. Chosen,
+            // not measured, no confidence score: this is our own driver's
+            // behaviour, not a recovered one - see
+            // `docs/gameplay/ai.md#the-13_track-novice-pathology-chased`.
+            (1.0, 0.0)
         } else {
             throttle(speed, target, tuning)
         };
