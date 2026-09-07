@@ -1295,8 +1295,8 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     );
 
     // And the three weapons-off modes hand out nothing from the same spot, for
-    // any number of ticks. A time trial and a speed lap start already holding
-    // lap 1's own free turbo (`Race::start`), cleared here to isolate the pad.
+    // any number of ticks. A time trial and a speed lap are handed a free
+    // turbo at the countdown's release edge (`Race::tick`), cleared here first.
     for mode in [
         oag_race::Mode::TimeTrial,
         oag_race::Mode::SpeedLap,
