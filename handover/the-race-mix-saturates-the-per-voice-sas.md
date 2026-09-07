@@ -1,5 +1,22 @@
 # The race mix saturates; the per-voice SAS volume would settle whether it should
 
+**2026-09-07, sixth pass: the three wrapper names landed, and this thread's
+own Next Step 1 is retired as unchaseable-as-written.** `Sas_SetPitch`
+(`0x08a2ae6c`), `Sas_SetNoise` (`0x08a2af18`) and `Sas_SetSL` (`0x08a2b03c`)
+are named at confidence 90 and are in `psp-pulse-usa/names.tsv`, with the
+convention they follow written down on
+[sound.md](../docs/ghidra/functions/psp-pulse-usa/sound.md#the-naming-pass-2026-09-07-the-three-remaining-wrappers-take-their-imports-names):
+mirror the import, `__sceSas` -> `Sas_`, which is what the two names that
+already existed were doing. `FUN_089961e4` stays unnamed on purpose, and that
+section says why. **Separately - and this is the part worth reading - both
+candidates the fifth pass left as "the residual 3-6 dB gap" are refuted by
+measurements already in this thread**, so nobody should spend a PPSSPP
+session on either. See the rewritten Next Steps.
+
+**Gate**: no `.rs` file changed. `just check-names` (1,544 rows across 7
+binaries) and `just check-docs` pass; the full gate is not run, per
+`CLAUDE.md`'s docs-only carve-out.
+
 **2026-09-07, fifth pass: `Scream_PanVolumePair` ported.** The fourth pass's
 own "what feeds `a0`/`a1`/`t1`" question is answered and the whole stage now
 lives in `crates/audio`. Full derivation:
@@ -346,29 +363,93 @@ is a stronger check on this exact change than a ground-truth suite would be).
   already diagnosed (several honestly-scaled voices summing two to six times
   a single voice's own value, no reserved headroom) - a separate mechanism,
   not touched by this pass, and not this bullet's subject.
-- **Three `Sas_CommitVoices` wrapper functions are still unnamed** -
-  `FUN_08a2ae6c` (`__sceSasSetPitch`), `FUN_08a2af18` (`__sceSasSetNoise`)
-  and `FUN_08a2b03c` (`__sceSasSetSL`), all resolved with confidence 90 -
-  though the fourth, `FUN_08a2ae08` (`__sceSasSetVolume`), now is: named
-  `Sas_SetVolume` as of 2026-09-06, confidence 92, following the
-  `Sas_SetVoice` precedent for this exact "guarded call to a named import"
-  shape. Not applied to the Ghidra project itself, since its function
-  boundary is broken at that address (merged into an unrelated neighbour) -
-  the `names.tsv` row is in regardless, per project convention, and the
-  database can catch up whenever someone next has the project open for a
-  reason that already touches this region.
+- **Resolved 2026-09-07, sixth pass: the three `Sas_CommitVoices` wrapper
+  functions are named.** `Sas_SetPitch` (`0x08a2ae6c`), `Sas_SetNoise`
+  (`0x08a2af18`) and `Sas_SetSL` (`0x08a2b03c`), all confidence 90, all in
+  `names.tsv`. Kept here, struck rather than deleted, so the "still unnamed"
+  framing is not read as current. As with `Sas_SetVolume` on 2026-09-06, the
+  rows are in without the Ghidra project being touched - its function
+  boundary at `0x08a2ae08` is still broken (merged into an unrelated
+  neighbour) and the database can catch up whenever someone next has the
+  project open for a reason that already reaches this region. The one thing
+  genuinely left on this sub-question is `func_0x00226f64` (`0x08a2af64`),
+  which Ghidra resolves to no function at all: resolving it is what would let
+  `FUN_089961e4` be named and would move bit `0x80`'s ADSR reading off 80.
 
 ## Next Steps
 
-- **New, fifth pass 2026-09-07: the residual 3-6 dB gap.** Two named,
-  unchased candidates: `a3`'s interpolator (this port holds it at a constant
-  `1.0`; the original's own glide toward a new target after a fade could sit
-  below ceiling for part of a voice's life) and the per-voice fade-in itself
-  (`sound.md`'s live capture: a newly-sounding SAS voice ramps over several
-  frames rather than jumping to its target on the first one, and this port's
-  `Mixer::play` starts at the target gain immediately). Chasing either needs
-  the same live-breakpoint technique this thread has used throughout, one
-  level below where this pass stopped.
+- **The residual 3-6 dB gap - and NOT via the fifth pass's two candidates,
+  both of which this sixth pass retires without needing a new measurement.**
+  Read this bullet before booting anything; both refutations run on numbers
+  already in this thread.
+
+  **The per-voice fade-in cannot produce it, by a bound rather than an
+  estimate.** The residual's cleanest reading is the 1-craft Time Trial row
+  (8.50 dB -> 5.83 dB after the `Scream_PanVolumePair` port), a 24 s capture
+  whose second half is a *sustained* tone - `exhaust.md`'s own law saturates
+  engine intensity about 4 s in. A fade-in only attenuates the beginning of a
+  voice's life. Take a ramp five times longer than anything observed - 5 s,
+  linear, against the ~1 s the `audio-levels.md` capture's own step sizes
+  imply - and it removes about `(5/24) * (1 - 1/3)` of the capture's energy,
+  **0.65 dB**. The residual is 5.83. The ramp is real and worth naming for its
+  own sake (last bullet here), but it is not this gap.
+
+  **`a3`'s interpolator cannot produce it either, in the regime the gap is
+  measured in.** The fourth pass read `a3` as `127`/max on **all ten**
+  breakpoint hits, and those hits were taken during full-throttle engine play
+  - the exact sustained regime the 5.83 dB lives in. The honest statement is
+  not "`a3` never moves" but "`a3` does not move where the residual is
+  measured," which is enough.
+
+  **What replaces them: ask the SFX bus the question that found the music
+  bus's `0.44`.** The third pass found `MUSIC_MASTER_TRIM` by asking what
+  multiplies the volume field on its way to the buffer. The symmetric question
+  was never asked on the SFX side - and the reason it was not is a scale
+  confusion worth stating so the next pass does not repeat it. "Every group
+  volume reads `1024`" is a fact about `Audio_SetGroupVolume`'s **software**
+  table, which is a different object from the per-voice `sceSasSetVolume`
+  value, on a different scale, and it settles nothing about the latter. **A
+  voice volume's absolute scale is unrecovered, and `audio-levels.md` says so
+  in its own words**: the commonly-cited `0`-`0x1000` range for
+  `sceSasSetVolume` is flagged there as "unverified recall, not a
+  measurement", `Sas_Init`'s `0x1000` is a *pitch* argument on a different
+  scale, and the only nearby bounds check rejects above `0x8000`. So the sharp
+  form of the candidate is: **the original's per-voice values are in unknown
+  units, so this port's own per-voice gains have never been checked against
+  them at all**, and the residual 5.83 dB could sit entirely in that unit
+  mismatch rather than in any missing stage.
+
+  Two ways to settle it, in preference order:
+
+  1. **A one-voice calibration, live - the stronger one, because it needs no
+     ceiling constant at all.** Silence everything but one cue whose waveform
+     is on the disc, read its committed `+0x40`/`+0x44` off `g_sas_voices`,
+     and measure the resulting `DumpAudio` amplitude against that same
+     waveform's own raw PCM. The ratio *is* the scale factor, empirically, on
+     the same footing as the raw-PCM check the third pass already used to
+     confirm the music decode. Every technique it needs is in this thread
+     already. Three things to get right, each a trap this thread has already
+     paid for once:
+     - **Do not calibrate on the engine.** `exhaust.md`'s law modulates engine
+       intensity over the capture, so its `+0x40` moves and there is no stable
+       value to divide by. Use a one-shot with a fixed authored volume (a
+       pickup chime, a pad) - its authored byte is one of the two `sblk`
+       fields the fifth pass wired in, so it is known independently.
+     - **Filter on the dirty bit and confirm the voice index.** A stale slot
+       reads nonzero forever and is indistinguishable from a driven voice; a
+       calibration off the wrong slot returns a confidently wrong ratio with
+       nothing to flag it.
+     - **Report it as what it is**: the end-to-end product of every stage
+       downstream of the raw PCM, not the per-voice term alone. That is the
+       portable number and the one worth having, but calling it "the ceiling"
+       would be wrong by whatever the DAC stage contributes.
+  2. **PPSSPP's own `sceSas` HLE source for the clamp constant** - a source
+     read, not an emulator boot, and no PPSSPP checkout exists on this machine
+     (checked). Weaker than (1) because it establishes the *emulator's*
+     ceiling, and cheaper only if a checkout is already to hand.
+
+  Do not port a scale factor recalled from either a wiki or this bullet. The
+  number has to come from (1) or (2).
 - **Struck 2026-09-07 (above): trace `Scream_PanVolumePair`'s callers.**
   Done - see the top-of-file entry.
 - **Done 2026-09-07 (above): where `g_music_player_ptr+0x40`/`+0x44` reach
@@ -388,9 +469,9 @@ is a stronger check on this exact change than a ground-truth suite would be).
   original attenuates a movie's own audio the same way, differently, or not
   at all was not read this pass. Only worth chasing if a movie is ever heard
   or measured to be at the wrong level.
-- Decide and apply a naming convention for the remaining three wrapper
-  functions, then add their `names.tsv` rows. Optional and separate from the
-  volume question: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance
+- **Done 2026-09-07, sixth pass: the naming convention and the three
+  `names.tsv` rows.** See the top-of-file entry. Optional and separate from the
+  volume question, and still open: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance
   write forward (or the SAS voice record's `+0x40` backward) until they meet
   would name the exact function that ramps a fading-in voice, which the
   2026-09-06 live capture saw happen but did not localise to an address -

@@ -141,6 +141,22 @@ impl RaceDefaults {
             .map(|guest| guest.variants)
     }
 
+    /// Whether this title has a variant axis at all, for *any* team.
+    ///
+    /// Wipeout Pure and Wipeout Pulse author neither [`Self::team_variants`]
+    /// nor [`Self::guest_roster`] - the feature does not exist on either
+    /// title, on any team, ever, not "exists but happens to be empty for the
+    /// team currently held". That distinction is what lets `oag_game` drop
+    /// the RACE page's VARIANT row entirely for those two rather than draw it
+    /// permanently unusable: see `oag_game`'s `boot::shell_definition`. The
+    /// same disjunction [`Self::team_variants_for`] already encodes ("own
+    /// table, then guest roster"), kept in one place so a third source added
+    /// later cannot be missed at one call site and not the other.
+    #[must_use]
+    pub fn has_team_variants(&self) -> bool {
+        self.team_variants.is_some() || self.guest_roster.is_some()
+    }
+
     /// Which directory an **already-combined** team id's guest roster lives
     /// under, if it is one - the fact [`Self::ships_for`] and
     /// [`Self::handling_dir_for`] both key off.

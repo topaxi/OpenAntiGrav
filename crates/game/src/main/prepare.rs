@@ -202,8 +202,13 @@ impl Pending {
         // settings file stores, and on a circuit or a team those are different
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
+        let mut definition = self.definition.clone();
+        // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
+        // race defaults declare no variant axis at all - see
+        // `menu::Definition::drop_unavailable_race_variant`.
+        definition.drop_unavailable_race_variant(title);
         let shell = Shell {
-            definition: self.definition.clone(),
+            definition,
             title,
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),

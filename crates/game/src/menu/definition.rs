@@ -338,6 +338,38 @@ impl Definition {
     pub fn page(&self, id: &str) -> Option<&Page> {
         self.pages.iter().find(|page| page.id == id)
     }
+
+    /// Drops the RACE page's VARIANT row when `title` has no variant axis at
+    /// all - `oag_title::race::RaceDefaults::has_team_variants` - rather than
+    /// leaving it to draw permanently empty and unusable.
+    ///
+    /// **Dropped from the definition itself, not greyed and not skipped at
+    /// render time.** [`Menu::is_disabled`](super::Menu::is_disabled)'s own
+    /// docs are deliberate about never hiding a row: greying beats hiding
+    /// because a row that vanishes mid-session leaves the player unable to
+    /// find what took it away. Neither concern applies here - a title is
+    /// fixed for the life of a boot, so this runs once before the row is ever
+    /// drawn, and the row does not exist on Wipeout Pure or Wipeout Pulse on
+    /// *any* team, not merely the one currently held, the way the
+    /// `disabled_by` machinery's "not now" is scoped to answer. Row count,
+    /// the scroll window and `Menu::held`'s page scan all read
+    /// [`Page::entries`] directly, so removing the entry here - once, before
+    /// any of the three ever sees it - is what keeps all three in agreement;
+    /// skipping it only at draw time would leave a gap in the strip with the
+    /// cursor still able to land on it.
+    ///
+    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name an
+    /// HD/Fury or Wipeout 2048 team regardless of which title booted, so it
+    /// keeps offering real variants even in a Pure- or Pulse-booted session.
+    pub fn drop_unavailable_race_variant(&mut self, title: &oag_title::Title) {
+        if title.race.has_team_variants() {
+            return;
+        }
+        if let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.entries
+                .retain(|entry| entry.setting() != Some("race.variant"));
+        }
+    }
 }
 
 /// Looks `string_id` up in `strings`, falling back to `literal` when it names
