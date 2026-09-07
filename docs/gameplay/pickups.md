@@ -435,14 +435,23 @@ weapons the *pool* would hand out and the authored *odds* never do.
   same day its evidence page was written, and it is the odd one out among
   every weapon built here: it does not fire through
   `Weapon_RequestFire`'s bit system at all. `Cannon_UpdateReload`
-  (`0x0883f424`) runs every frame, gated only on the craft holding it, and it
-  is *that* countdown - reloaded from the Cannon's own authored `rate` - that
-  periodically arms the bit `Weapon_FireCannon` (`0x088577ac`) reads. So a
-  picked-up Cannon fires itself, twin barrels alternating by the low bit of
-  its own remaining `rounds`, until the magazine runs out - `oag_gameplay::
-  pickup::Held::advance_cannon_reload` is the port, called from
-  `Race::advance_cannons` for every craft in slot order, every tick, whether
-  or not its driver ever presses fire. Each round carries the firing craft's
+  (`0x0883f424`) advances a per-craft countdown on every frame the **fire
+  button is held**, and it is *that* countdown - reloaded from the Cannon's
+  own authored `rate` - that periodically arms the bit `Weapon_FireCannon`
+  (`0x088577ac`) reads. So holding fire gives auto-repeat at the authored rate
+  and tapping gives a few frames of countdown per tap, twin barrels
+  alternating by the low bit of its own remaining `rounds`, until the magazine
+  runs out - `oag_gameplay::pickup::Held::advance_cannon_reload` is the port,
+  called from `Race::advance_cannons` for the player alone, on the ticks the
+  button is down.
+
+  **Corrected 2026-09-07, after a play report.** The first build of this
+  weapon had it self-firing with no press, from reading the countdown's own
+  gate - `*(*(entity+0x94)+0x78) + 0x16` - as a *track weapon-pad* flag. It is
+  the craft's control record, the block the binary registers under the string
+  `player_input`, and `+0x16` is the held state of `OPT_CTRL_FIRE`. Nothing in
+  the image writes that byte except the human pad's own update, which is why
+  the port fires this weapon for slot 0 only. Each round carries the firing craft's
   own current speed rather than a class figure - the same "carry the
   shooter's speed" shape the Shuriken's throw already has - plus a base this
   engine had to invent: the Cannon's `<Stats>` authors no speed at all, and

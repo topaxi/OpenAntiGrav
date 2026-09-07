@@ -479,15 +479,23 @@ impl Race {
             return;
         } else if weapon == oag_formats::weapons::Weapon::Cannon {
             // **Named here rather than left to fall through to absorb, and
-            // for a different reason than the Autopilot's.** The Cannon does
-            // not wait for this function's own decision at all -
-            // `Race::advance_cannons` fires it every tick off its own reload
-            // countdown, whichever craft holds it, human or AI. Cashing it
-            // in for energy here the moment an opponent collects one would
-            // silence a weapon this project has just built, the same way
-            // the pre-2026-08-26 `&&`-chain bug silenced the Rocket - see
-            // the comment on that fix above. Nothing to do here but keep
-            // the pickup.
+            // for a different reason than the Autopilot's.** An opponent
+            // cannot fire a Cannon at all, and that is recovered rather than
+            // an omission: `Cannon_UpdateReload` (`0x0883f424`) gates on the
+            // *fire-held* byte of the craft's control record (`+0x16`), and
+            // nothing in the whole image writes that byte except the human
+            // pad's own per-frame update. `WeaponAi_Update` (`0x08851550`)
+            // writes the record's fire-*press* byte `+0x15` and its absorb
+            // byte `+0x17` and never `+0x16`, so an AI's press sets a request
+            // bit nothing dispatches and no round leaves. See
+            // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+            //
+            // Keeping the pickup rather than absorbing it is the conservative
+            // half of that: what `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`)
+            // chooses for held-weapon id 3 is not read, and turning an
+            // opponent's Cannon straight into energy would be inventing an
+            // answer. So the slot simply stays occupied until the next pad
+            // replaces it.
             return;
         } else {
             // **Anything not named above falls through to absorb**, which is how

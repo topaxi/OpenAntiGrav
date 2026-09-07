@@ -52,11 +52,21 @@
 //!
 //! **The Cannon left the list the same day**, and it is the odd one out among
 //! everything built here so far: it does not fire through
-//! `Weapon_RequestFire`'s bit system at all. `craft+0x1bc == 3` (holding it)
-//! is the only gate `Cannon_UpdateReload` (`0x0883f424`) reads - not a press -
-//! so a picked-up Cannon fires itself, on a per-craft reload countdown built
-//! from its own authored `rate`, until its own authored `rounds` runs out.
-//! `Race::advance_cannons` is the port of that countdown; see
+//! `Weapon_RequestFire`'s bit system at all. It is driven by the fire button
+//! being **held** rather than by the press edge every other weapon consumes -
+//! `Cannon_UpdateReload` (`0x0883f424`) advances a per-craft reload countdown,
+//! built from the weapon's own authored `rate`, on each frame the button is
+//! down, and arms the spawn bit whenever the countdown crosses zero. So
+//! holding fire gives auto-repeat and tapping gives a few frames of countdown
+//! per tap, which is exactly how the maintainer describes the original.
+//!
+//! **A first reading of the same function, on 2026-09-07, had it self-firing
+//! with no press at all**, from taking `*(*(entity+0x94)+0x78) + 0x16` for a
+//! *track weapon-pad* flag. It is the craft's control record - the block the
+//! binary itself registers under the string `player_input` - and `+0x16` is
+//! the held state of `OPT_CTRL_FIRE`. The correction is recorded rather than
+//! quietly overwritten because the wrong version shipped and a player found
+//! it. `Race::advance_cannons` is the port of the countdown; see
 //! [`crate::projectile::cannon`] for the round itself and
 //! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
 //! whole reading, including the address correction it made to the
@@ -429,6 +439,13 @@ impl Held {
     /// choice for the same reason and it applies unchanged here: a
     /// picked-up weapon should visibly do something on the tick it arrives
     /// rather than sit silent for a full reload first.
+    ///
+    /// **Only called on ticks where the fire button is held.** The gate is the
+    /// caller's - `Race::advance_cannons` - and not this method's, because
+    /// `Cannon_UpdateReload` returns before touching `craft+0x158` when the
+    /// button is up: the countdown *pauses* rather than resets, so releasing
+    /// and re-pressing resumes where it stopped. That is what makes tapping a
+    /// slower route to the same shot rather than a way to never fire.
     pub fn advance_cannon_reload(&mut self, dt: f32, rate: f32, full: u8) -> Option<u8> {
         if full == 0 {
             // Degenerate authored data - a Cannon with no rounds at all.

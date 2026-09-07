@@ -105,32 +105,18 @@ cached track-locator record (`entity+0xad8..+0xae4`, the same fields
 onto the round before playing a fire cue. Confidence **80** - direct decompile,
 the base-speed lookup and the hit/damage path are not chased.
 
-### What actually fires it: `craft+0x1bc == 3` drives a reload countdown, not the pickup bit
+### What actually fires it: the fire button, held, driving a reload countdown
 
-> **CONTRADICTED BY PLAY, 2026-09-07. Do not implement against this section
-> until it is re-read.** The maintainer reports from playing the original that
-> the Cannon **shoots projectiles either by holding the fire button or by
-> tapping it repeatedly** - i.e. it is press-driven, not self-firing. That is
-> incompatible with the conclusion below, which says a press does nothing and
-> the countdown runs unconditionally. On this project a from-play report has
-> beaten static analysis before, and this one is specific and repeatable.
->
-> **The likeliest reconciliation is the first line of the pseudocode below,
-> and it is a naming assumption rather than a measurement.**
-> `if (ship->weapon_pad_flags->0x16 == 0) return;` was read as a *track*
-> weapon-pad flag. If `ship+0x94+0x78` is instead the **input pad** and `0x16`
-> is the fire button, then everything else on this page stays true and only
-> the conclusion changes: bit `0x2000` really is dispatched by nothing, but
-> `Cannon_UpdateReload` only advances **while fire is held**, which is exactly
-> "hold to fire, or tap to fire" as reported. That would make the Cannon a
-> press-gated auto-repeat rather than a self-firing weapon.
->
-> **What to do:** resolve what `ship+0x94+0x78` points at and what `+0x16`
-> holds, before changing any code. Confirm or refute the input-pad reading;
-> either answer settles it. `oag_game::race::weapons`'s Cannon arm and
-> `oag_gameplay::pickup`'s module docs both restate the conclusion below and
-> both need correcting with it.
-
+> **RESOLVED 2026-09-07, and the banner that stood here is gone with it.** The
+> maintainer's play report - the Cannon shoots **either by holding the fire
+> button or by tapping it repeatedly** - is correct, and the hypothesis raised
+> against it is confirmed. `ship+0x94+0x78` is the craft's **live control
+> record**, `+0x16` is the **fire button held** boolean, and the countdown
+> below advances only on frames where it is set. Every other fact on this page
+> survives untouched: bit `0x2000` really is dispatched by nothing, and the
+> Cannon really does not route through the fire-request word. See
+> [The gate is the fire button](#the-gate-is-the-fire-button-held-not-a-track-pad-flag)
+> for the read.
 
 **Bit `0x2000` (the Cannon's own request bit per `Weapon_RequestFire`'s
 id-to-bit map) is dispatched by nothing, and that is expected, not broken.**
@@ -139,7 +125,7 @@ weapons share at all. `Cannon_UpdateReload` (`0x0883f424`) does:
 
 ```c
 void Cannon_UpdateReload(float dt, Entity *ship) {
-    if (ship->weapon_pad_flags->0x16 == 0) return;      // ship+0x94+0x78
+    if (ship->craft->controls->fire_held == 0) return;   // *(*(ship+0x94)+0x78) + 0x16
     if (ShipState(ship) != 1) return;                   // must be racing
     Craft *craft = ship->craft;                          // ship + 0x4c
     if (craft->held != 3) return;                        // craft + 0x1bc - held-weapon id
@@ -158,13 +144,16 @@ void Cannon_UpdateReload(float dt, Entity *ship) {
 
 Called every frame per craft from `FUN_0883f540`, itself part of the main
 per-craft update chain (it also drives the Missile/LeachBeam lock scan and a
-craft's own scene-node cache refresh), gated only on the craft's *held weapon
-id being 3* - not on any bit of `craft+0x1b8`. So the sequence is: the player
-presses fire, `Weapon_RequestFire` sets bit `0x2000` (which nothing reads) and
-leaves `craft+0x1bc == 3` in place; `Cannon_UpdateReload` runs every frame
-regardless, and it is *that* function's own countdown - refilled from the
-Cannon's own authored `rate` - that periodically arms bit `0x4000`, which *is*
-dispatched, to `Weapon_FireCannon` above. **Three independent facts tie id 3 to
+craft's own scene-node cache refresh), gated on the fire button being **held**
+and on the craft's *held weapon id being 3* - not on any bit of `craft+0x1b8`.
+So the sequence is: the player presses fire, `Weapon_RequestFire` sets bit
+`0x2000` (which nothing reads) and leaves `craft+0x1bc == 3` in place; and
+separately, for every frame the button stays down, `Cannon_UpdateReload`'s own
+countdown - refilled from the Cannon's own authored `rate` - periodically arms
+bit `0x4000`, which *is* dispatched, to `Weapon_FireCannon` above. Holding the
+button therefore gives auto-repeat at the authored rate; tapping it gives a few
+frames of countdown per tap, which is the slower way to the same thing. That is
+exactly the behaviour reported from play. **Three independent facts tie id 3 to
 the Cannon**: this function is gated on it and reads/writes exactly the
 `rounds` (`craft+0x154`) and `rate` (`ActiveCannonStats+0x78`) attributes
 `mine.md` and `weapon-fire.md` already identified as authored by the Cannon's
@@ -184,6 +173,113 @@ trap the handover thread already records for the Mine.
 instruction level. Not chased: the per-class base speed
 (`func_0x00060af4`), and what a round does on hitting a craft or wall (no
 `Cannon_HitCraft`-style function was located this pass).
+
+### The gate is the fire button, held, not a track pad flag
+
+**Read 2026-09-07 with the Ghidra bridge on `psp-pulse-usa`. Confidence 90.**
+This section replaces the "self-firing" conclusion an earlier revision drew
+from reading `ship+0x94+0x78` as a *track weapon-pad* flag. It was the input
+pad all along, and the maintainer's play report is what sent anyone looking.
+
+At instruction level, `0x0883f424`-`0x0883f448`:
+
+```
+lw   a1, 0x94(a0)      ; a1 = *(entity+0x94)   -> the craft object
+lw   a0, 0x78(a1)      ; a0 = *(craft+0x78)    -> the craft's live control record
+lbu  a0, 0x16(a0)      ; a0 = record[0x16]
+beq  a0, zero, ...     ; the whole body is skipped when it is zero
+```
+
+**The record's base is named by the binary itself.** `PlayerInput_Construct`
+(`0x0883c74c`) ends with
+
+```c
+FUN_0893c804(&DAT_08b317b8, s_player_input_08a7b684, this + 0x44, tag);
+```
+
+- it registers **`this + 0x44`** in the named-resource registry `DAT_08b317b8`
+  under the string literal **`player_input`** at `0x08a7b684`, whose only two
+  references in the image are this one `lui`/`addiu` pair. So the record base is
+  `controller + 0x44`, and its name is the original author's, not ours.
+
+**`PlayerInput_Update` (`0x0883c870`) fills it from `g_input`.** It has no
+direct callers - it is reached through the vtable slot at `0x08aca094` - and it
+is the class's per-frame update:
+
+| Record | Controller | Written from |
+| --- | --- | --- |
+| `+0x00` | `+0x44` | analog X, `0.25` deadzone, scaled to +/-100 |
+| `+0x04` | `+0x48` | `Input_IsHeld(Options_ButtonForAction(0 = OPT_CTRL_ACC))`, as `0`/`100` |
+| `+0x08` | `+0x4c` | left airbrake (`OPT_CTRL_LAB`, or the novice combo) |
+| `+0x0c` | `+0x50` | right airbrake (`OPT_CTRL_RAB`) |
+| `+0x10` | `+0x54` | analog Y, same deadzone and gain |
+| `+0x15` | `+0x59` | `Input_IsPressed(Options_ButtonForAction(1 = OPT_CTRL_FIRE))` - **fire, rising edge** |
+| `+0x16` | `+0x5a` | `Input_IsHeld(Options_ButtonForAction(1 = OPT_CTRL_FIRE))` - **fire, held** |
+| `+0x17` | `+0x5b` | `Input_IsPressed(Options_ButtonForAction(2 = OPT_CTRL_ABS))` - absorb |
+| `+0x18` | `+0x5c` | `Input_IsHeld(Options_ButtonForAction(3 = OPT_CTRL_LBACK))` - look back |
+| `+0x20` | `+0x64`/`+0x66` | `g_input+0x48` pressed and `g_input+0x44` released masks, as `u16` |
+| `+0x24` | `+0x68`/`+0x6a` | `g_input+0x3c` held and `g_input+0x40` held-last masks, as `u16` |
+
+The action numbering is [`input-bindings.md`](input-bindings.md)'s, read there
+off the options page's own localisation keys; `Input_IsHeld` (`0x0894f158`)
+tests `g_input+0x3c` and `Input_GetAxis` (`0x0894f198`) returns
+`g_input+0xec`/`+0xf0`, both against the mask layout [`input.md`](input.md)
+already documents.
+
+**Six independent legs**, which is why this is 90 and not a hypothesis:
+
+1. **The literal name.** `player_input` is registered at `controller+0x44`,
+   which fixes the record base beyond argument.
+2. **`Ship_UpdateCraft` (`0x08849618`) copies exactly `0x28` bytes** out of
+   `*(craft+0x3c)` into `craft+0x44..+0x6c` when the autopilot blend is live -
+   `0x44 + 0x28 = 0x6c` is precisely the span `PlayerInput_Update` writes and
+   not one byte more.
+3. **`craft+0x78` *is* that record.** The same function's first statement is
+   `*(craft+0x78) = *(craft+0x3c)`, re-pointed at the blend buffer only when
+   `craft+0x1d4 != 0`.
+4. **A sibling consumer on the identical chain reads `+0x15`.**
+   `Ship_FireHeldWeapon` (`0x08844ae8`) gates on
+   `*(*(entity+0x94)+0x78) + 0x15` and *that* is what calls
+   `Weapon_RequestFire`. `+0x15` and `+0x16` are the press and the hold of one
+   button, read by two functions called back to back out of `FUN_0883f540`.
+5. **[`camera.md`](camera.md)'s independently recovered steer.** That page reads
+   the *first float* of the same `*(*(craft+0x94)+0x78)` as `steer * 0.01`;
+   record `+0x00` is the +/-100 analog value, so the product is +/-1.0. Its
+   standing "confidence 0 on what this field means" is closed by this.
+6. **`input-bindings.md`'s independently recovered masks.** That page reads
+   `*(ship+0x78) + 0x20`/`+0x24` as button masks indexed by
+   `Options_ButtonForAction`; they are `controller+0x64` and `+0x68`, copied
+   straight off `g_input`.
+
+### Only a human can fire a Cannon, and that is measured rather than assumed
+
+`FUN_0883f540` wraps the whole per-craft weapon block in a null check on the
+record:
+
+```c
+if (*(int *)(*(int *)(entity + 0x94) + 0x78) != 0) {
+    Ship_FireHeldWeapon(entity);
+    Cannon_UpdateReload(dt, entity);
+    FUN_08844ec4(entity);
+}
+```
+
+AI craft **do** have a record - `WeaponAi_Update` (`0x08851550`) and
+`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) write `record+0x15` (fire press)
+and `record+0x17` (absorb) through `*(ai+0x10)`, which is how an opponent fires
+anything at all. **Neither ever writes `record+0x16`.**
+
+That is exhaustive rather than a sample. `scripts/psp-relocate.py field 0x16`
+over the whole relocated image finds **one** byte access at `+0x16` in the game
+range - `lbu a0, 0x16(a0)` at `0x0883f438`, the read above - and **zero** byte
+stores; `field 0x5a` finds exactly one store, `0x0883ccd0`, inside
+`PlayerInput_Update`. The human pad is the only producer of "fire held" in the
+image.
+
+So an AI holding a Cannon sets the press edge, `Weapon_RequestFire` sets bit
+`0x2000`, nothing reads it, and no round ever leaves. Whether a reimplementation
+*should* copy that is a design question of the same shape as the 2026-09-06
+barrel-roll ruling, not an RE one; `oag_game::race::weapons` copies it for now.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 

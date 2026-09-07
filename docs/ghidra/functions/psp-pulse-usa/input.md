@@ -60,6 +60,19 @@ State lives in four masks on the input object:
 `*(u32 *)(this + 0x48) & (1 << (index & 0x1f))`, and `Input_ConsumePress`
 (`0x0894f22c`) clears a bit so one press cannot be handled twice.
 
+`Input_IsHeld` (`0x0894f158`) is the same test against `+0x3c` - **the held
+mask, not the rising edge** - and `Input_GetAxis` (`0x0894f198`) returns
+`this+0xec` for axis `0` and `this+0xf0` for axis `1`, zero for anything else.
+Both were read 2026-09-07 while resolving what gates the Cannon; the pair is
+what `PlayerInput_Update` (`0x0883c870`) calls to build the per-craft control
+record, and the *held* half of it is the Cannon's whole fire mechanism. See
+[cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#the-gate-is-the-fire-button-held-not-a-track-pad-flag)
+for the record's layout and the six legs behind it. Confidence **90** for
+`Input_IsHeld` (a three-line test against a mask this page already identifies)
+and **85** for `Input_GetAxis` (direct decompile; what `+0xec`/`+0xf0` hold is
+`Input_ReadAnalog`'s deadzoned output, which is read but not separately
+verified against a capture).
+
 `Input_ParseButtonName` (`0x0894f2a0`) maps the XML strings above to indices,
 which is how the data-driven front end binds buttons.
 
@@ -74,6 +87,8 @@ inferred from call position rather than decompiled.
 | `0x0894ebd0` | `Input_ReadAnalog` | 88 |
 | `0x0894eec4` | `Input_BuildState` | 90 |
 | `0x0894f1cc` | `Input_IsPressed` | 92 |
+| `0x0894f158` | `Input_IsHeld` | 90 |
+| `0x0894f198` | `Input_GetAxis` | 85 |
 | `0x0894f22c` | `Input_ConsumePress` | 70 |
 | `0x0894f2a0` | `Input_ParseButtonName` | 88 |
 | `0x08b059f0` | `g_pad_buffer` | 90 |
