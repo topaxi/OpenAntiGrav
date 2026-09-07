@@ -3,9 +3,8 @@
 //! from it.
 //!
 //! Recovered at confidence 88 - see
-//! `docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-roll-is-drawn-0x87c-eases-into-0x880-which-rolls-the-ship-about-its-nose`
-//! and `handover/the-barrel-roll-has-a-drawing-job.md`, which this module is
-//! the drawing half of. Two call sites use it: the ship's own transform
+//! `docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-roll-is-drawn-0x87c-eases-into-0x880-which-rolls-the-ship-about-its-nose`.
+//! Two call sites use it: the ship's own transform
 //! (about its forward axis) and the internal camera's up vector (about the
 //! view axis) - both documented at their own call site, not here, since this
 //! module owns only the shared angle.
@@ -38,8 +37,7 @@ pub const FULL_TURN: f32 = 6.28;
 /// nose - because both literal `1.0`s of the rotation matrix sit on the
 /// diagonal, which survives a transpose; it does not settle the *sign*,
 /// because that reaches exactly the `sin`/`-sin` placement the transpose
-/// does move. See
-/// `handover/the-barrel-roll-has-a-drawing-job.md`.
+/// does move.
 ///
 /// `1.0` is picked so that a `[1, 2, 1]` gesture - tap LEFT first, which ramps
 /// `roll_phase` toward `-1.0` - drops the **left** wing (anticlockwise seen
@@ -87,8 +85,7 @@ pub fn ease(p: f32) -> f32 {
 /// This is the roll term alone. The original's angle is
 /// `craft[0x854] * 0.5 + craft[0x880] * 6.28`, and the first term -
 /// `FUN_0883fab4`'s steering lean, confidence **0** for what it physically
-/// means - is deliberately **not** transcribed here; see
-/// `handover/the-barrel-roll-has-a-drawing-job.md`. So the reimplementation's
+/// means - is deliberately **not** transcribed here. So the reimplementation's
 /// total roll angle differs from the original's by whatever that term
 /// contributes - an honest, documented gap rather than a guessed constant.
 #[must_use]

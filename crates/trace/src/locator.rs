@@ -4,8 +4,7 @@
 //!
 //! Its own file rather than another `main.rs` function: that file already sits
 //! at its frozen `scripts/check-file-size.py` ceiling, and this is a new
-//! feature rather than a fix to something already there. See Task #33,
-//! `handover/task-33-oag-trace-cannot-exercise-the-mag.md`.
+//! feature rather than a fix to something already there. See Task #33.
 
 use anyhow::Result;
 use oag_formats::track;

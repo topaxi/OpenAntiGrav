@@ -1,6 +1,5 @@
-//! Scratch probe, the reproducer for the finding recorded in
-//! `handover/2048s-track-vex-parses-but-two-binary-formats-changed.md`
-//! (2026-09-01 addendum): Race Remix's RACE REMIX page is the first thing to
+//! Scratch probe, the reproducer for a 2026-09-01 finding: Race Remix's
+//! RACE REMIX page is the first thing to
 //! ever offer a 2048 team through a live picker, and every one of the 17 ids
 //! `crate::remix::catalogue` builds for it fails to resolve - for two
 //! different, already-documented reasons.

@@ -353,8 +353,7 @@ pub const ROCKET_MODEL_ENTRY: &str = r"Data\Weapons\Rocket.vex";
 /// the second cue's tracked handle - no call anywhere in it resolves to
 /// `Psys_Spawn_q` (`0x08915484`). So a mine is laid silently on the visual
 /// side, the same as it always was; only the sound and the body model are new.
-/// See `handover/weapons-eight-of-thirteen-the-plasma-and-the.md` for the read
-/// and the live-database caveat it carries (this session's Ghidra instance
+/// The live-database caveat this carries: this session's Ghidra instance
 /// resolves `Mine_Init`'s and `Mine_Construct`'s own function boundaries to
 /// different addresses than `mine.md` records, most likely because
 /// `just apply-names` has not been replayed into it - the *content* at both

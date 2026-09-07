@@ -380,8 +380,7 @@ pub const ROOTS: &[&str] = &[
 /// four are absences rather than confirmations, and because **the literal HUD
 /// code path is still unread** - the ceiling below still applies. What moved
 /// it off 85: a hardcoded instance of the *identical* convention was found in
-/// `EBOOT.elf` while chasing this rule through the executable
-/// (`handover/wipeout-hd-furys-hud-reads-and-the-reader.md`) - a ship-thumbnail
+/// `EBOOT.elf` while chasing this rule through the executable - a ship-thumbnail
 /// loader builds `%s\fe\miniBW.gtf` from a bare directory, ignoring entirely
 /// that the XML authors the same asset as `Data\Ships\<Ship>\fe\miniBW.tga`.
 /// The engine hardcoding `.gtf` and discarding the source extension, observed

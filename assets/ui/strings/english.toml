@@ -18,9 +18,7 @@
 # a *new* row or page in `assets/ui/menu.toml` names no id at all - a literal
 # English label is only allowed on the rows `check-strings.py`'s own
 # `BASELINE_LABELS`/`BASELINE_TITLES` name, which is the debt that predates
-# this rule. See that script's own module doc for the ratchet, and
-# `handover/invented-ui-text-has-no-translation-and-the.md` for how this
-# started.
+# this rule. See that script's own module doc for the ratchet.
 #
 # **These ids are ours, not the disc's.** The `OAG_` prefix is what keeps them
 # from ever colliding with an idstring off a real string table, since this file

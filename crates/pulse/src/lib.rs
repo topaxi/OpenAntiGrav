@@ -98,8 +98,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // bar and two bars framing the footer's news ticker, all three patches of
     // one shared `Data\FE\Images\pulse_assets.mip` sitting three anonymous
     // `<Screen>` levels down. Naming it puts that bar on screen and changes a
-    // picture this build already draws - see `handover/the-menus-draw-the-discs-layout-the-chrome.md`
-    // for the before-and-after.
+    // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
 };
 

@@ -83,7 +83,9 @@ the work in isolated worktrees.
   hold the Ghidra bridge at a time (the MCP server switches programs globally),
   and only one may drive PPSSPP. Say so explicitly in every brief, naming who
   holds what.
-- Sources for threads: `handover/*.md`, `HANDOVER.md`'s open-threads index, a
+- Sources for threads: `handover/*.md` (now sorted into `rendering/`, `gameplay/`,
+  `frontend/`, `tooling/`, `audio/` - `fd`/`find` still reach them recursively),
+  `HANDOVER.md`'s open-threads index, a
   red test on `main`, and whatever the previous member's report left open.
 - **Prefer player-facing value.** The user's standing instruction. A pass that
   produces only another analysis document is a weak pass.

@@ -792,8 +792,7 @@ pub(crate) struct Uniforms {
 /// `orientation * roll` is a local-space rotation about `-Z`
 /// ([`oag_physics::ship::Body::forward`]'s own axis), and composing it there
 /// keeps it independent of whatever `vmmul.q`'s unresolved operand order
-/// would otherwise carry through a following scale. See
-/// `oag_render::roll` and `handover/the-barrel-roll-has-a-drawing-job.md`.
+/// would otherwise carry through a following scale. See `oag_render::roll`.
 pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
     let body = &ship.physics.body;
     let roll = oag_render::roll::rotation(Vec3::NEG_Z, ship.physics.roll_phase);

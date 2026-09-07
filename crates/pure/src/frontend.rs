@@ -133,8 +133,7 @@ pub mod states {
     /// declares no default-background global for either, so whatever texture
     /// the real menu shows is assigned by the executable at runtime, not
     /// authored here - the same class of gap as `Title Screen`'s own missing
-    /// wordmark texture, `TitleFrame`, still open on
-    /// `handover/pures-title-screen-is-missing-its-own-logo.md`. See
+    /// wordmark texture, `TitleFrame`, still open. See
     /// [`super::FRONT_END`]'s own `menu_frame`.
     pub const FE_SCREEN: &str = "FE Screen";
 }

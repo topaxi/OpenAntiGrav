@@ -108,9 +108,8 @@ DISPLAY_MARKER = os.path.expanduser("~/.cache/oag-rpcs3-drive/xvfb.owner.json")
 # window, and with `Start games in fullscreen mode` that is the display's size
 # capped by the game's `Resolution Scale`. HD's own output is 1280x720, so a
 # capture at scale 100 is 1278x718 after the black trim - fine for reading a
-# colour, and too coarse to measure a 17x7-pixel widget corner, which is the
-# measurement `handover/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`
-# actually needed and could not get. Raise both this and `Resolution Scale`
+# colour, and too coarse to measure a 17x7-pixel widget corner - a measurement
+# this ceiling was hit trying and could not get. Raise both this and `Resolution Scale`
 # together when a capture has to resolve geometry; raising either alone does
 # nothing, since the smaller of the two is what the frame ends up at.
 DISPLAY_GEOMETRY = os.environ.get("OAG_RPCS3_GEOMETRY", "1600x1200x24")

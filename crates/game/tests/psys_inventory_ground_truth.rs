@@ -391,7 +391,7 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 /// for each of the other 75 on the strength of "that weapon isn't built"
 /// would be exactly the plausibility-over-evidence shortcut this file's own
 /// doc comment forbids for the two discs it already covers. That bucketing is
-/// still owed; see `handover/hds-engine-trail-is-one-of-four-ribbons.md`.
+/// still owed.
 ///
 /// What *is* checkable without inventing a reason for anything: that every
 /// [`RACE_EFFECTS`] name this engine already fires is really on the disc (so

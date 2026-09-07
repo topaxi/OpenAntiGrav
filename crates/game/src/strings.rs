@@ -5,9 +5,7 @@
 //! Everything this project has added on top of it (`assets/ui/menu.toml`'s
 //! `label`/`title`, [`oag_race::Mode::fallback_label`]-style fallbacks, the
 //! loading screen's prose, ...) is wired through this module's [`overlay`]
-//! now, project entries winning over a matching disc id. See
-//! `handover/invented-ui-text-has-no-translation-and-the.md` for how that
-//! landed.
+//! now, project entries winning over a matching disc id.
 //!
 //! **`just check-strings` (`scripts/check-strings.py`) is the gate that keeps
 //! it wired.** It fails if a `string_id`/`title_string_id` referenced

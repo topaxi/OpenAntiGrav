@@ -1,0 +1,54 @@
+---
+categories: [rendering, frontend]
+---
+
+# The camera shake on impact reproduces its two-rotation shape now; two composition details are open
+
+A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has no shake at all.
+
+**2026-09-03: found and corroborated on both discs.** PS2's `Camera_ArmShake` (`0x0013eec0`) and its apply side inside `FUN_0013e280` were found first, from the collision-response path - full account in [`docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`](../../docs/ghidra/functions/ps2-pulse-eu/collision-shake.md). A maintainer's own memory of playing the PSP/Pure builds ("this happens there too") sent the search back to the PSP disc, where the mechanism turns out to already have been sitting in plain sight, mislabelled: `docs/ghidra/functions/psp-pulse-usa/contact-response.md`'s own retraction ("nothing in this function's body calls a camera API") was checking the wrong call - the "audio cue" it left unread at confidence 40 is `Camera_ArmShake` (now `0x08878750`, confidence 88), field-for-field the same function as the PS2's, called from the same collision-response path (`Ship_DispatchCollisionFx`) with the same severity clamp, the same `[0.2, 0.8]` phase randomiser, and the same front/behind mode branch. That correction is written up in place on `contact-response.md` rather than as a separate note, per this project's own convention for a retraction that itself needed retracting.
+
+**So this is settled, not open: both PSP and PS2 arm and apply the same shake, from the same collision event, at the same severity.**
+
+**2026-09-03, later the same day: the apply side is a rotation, not a translation - and the envelope/scale constants are read, not guessed.** `Camera_ArmShake`'s writes and `FUN_0013e280`'s reads were re-checked field-for-field (full accounting in
+[`docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`](../../docs/ghidra/functions/ps2-pulse-eu/collision-shake.md)):
+
+- The falloff is a **three-key piecewise-linear envelope**: `magnitude * 0.25` at progress 0, `magnitude * 0.125` at progress 0.3, `0.0` at progress 1.0 - authored by `Camera_ArmShake` itself, not a separate table.
+- The two arm-call scale constants are read directly from both binaries' `.data`: **magnitude scale `0.3`, duration `0.6` seconds flat** (`DAT_0027e8dc`/`DAT_0027e8e0` on PS2, `DAT_08ab0dfc`/`DAT_08ab0e00` on PSP - identical bytes).
+- **The "offset vector" this thread previously flagged as unconfirmed is not an offset at all.** `param_1 + 0x40` is the first row of the camera's own 3x4 basis matrix. `FUN_0025cbb0` (PS2) and `func_0x002676b4` (PSP, `0x08a6b6b4`) both build a Rodrigues axis-angle rotation matrix from the shake's oscillator output and `vmmul_t` it into that basis - confirmed independently on both binaries. **The shake rotates the camera's orientation; it does not translate the eye.**
+
+**2026-09-03, implemented.** `oag_render::camera::shake::Shake` reproduces the
+confirmed envelope, timing, severity scale and per-mode combination exactly;
+wired into `oag-game`'s `Race` at the same wall-contact site the hull sparks
+already fire from, applied as a post-rotation on the view matrix. The
+rotation axis is the one unconfirmed piece and is implemented as this
+module's own flagged choice (the camera's local right) rather than a
+reading - see the module's own doc comment for the full accounting of what
+is confirmed and what is not. `just` passes clean with the implementation in.
+
+**2026-09-05: the rotation axis is settled, and it is not a fixed axis.** `FUN_0025ca48`'s `in_a1_qw` traces (by disassembly alone - no p-code needed) to a fresh `lq a1` off one of the camera's own three live basis rows (`+0x40`/`+0x50`/`+0x60`) immediately before every call, picked by `shake_mode`, with **two sequential rotations per frame** (row1 then row2 for `Ahead`/`Elsewhere`, row1 then row0 for the third mode) rather than one rotation about one axis. Cross-checked independently on the PSP's `Camera_SubmitScene`, whose decompile shows the same axis as an explicit pointer argument at the same three offsets - confidence 92 (PS2) / 95 (cross-checked). Full accounting in [`docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`](../../docs/ghidra/functions/ps2-pulse-eu/collision-shake.md)'s "Settled 2026-09-05" section.
+
+This falsifies the premise this thread's own "Next Steps" item bet on: the consequence was scoped to "`AXIS` and `Shake::rotation` are the only things that would need to change" if the axis turned out not to be a fixed local-right. It isn't fixed at all, and a correct fix is bigger than that - the axes are the camera's own current orientation state, not a constant, so reproducing this needs the camera's live basis threaded into whatever plays the shake (an API/signature change), not a swapped constant. Making the two-item edit anyway would produce a plausible-looking axis choice that still isn't what the disc does - exactly the stand-in this project's own rule warns against - so it was not made. `oag_render::camera::shake`'s module doc comment, `AXIS`'s doc comment and `Shake::rotation`'s doc comment are corrected to stop presenting the current single-fixed-axis, single-rotation shape as an unconfirmed reading and say plainly that it's a known simplification with the axis question already answered. No logic changed.
+
+**2026-09-06: the API change landed - `Shake::rotation` now takes the camera's live basis and applies two sequential rotations, in the recovered order.** `crates/render/src/camera/shake.rs`'s `rotation(&self, row1: Vec3, row2: Vec3) -> Quat` replaces the old zero-argument, single-fixed-`AXIS` version: it builds a rotation about `row1` with the mode's own (possibly negated) envelope-plus-oscillator angle, rotates `row2` by that first quaternion, then builds a second rotation about the result with the oscillator alone, and composes the two (`row1` first) - exactly the order both evidence pages record for `Ahead`/`Elsewhere`, the only two modes the collision path ever arms. `AXIS` is gone; nothing else references it (checked with a repo-wide grep before removing it). `Race::view` (`crates/game/src/race/camera.rs`) supplies `row1`/`row2` as `base`'s own rows 1 and 2 - the pre-shake view matrix for the current tick - since this engine keeps no persisted per-camera basis object the way the original's struct does. Composition onto the view matrix is unchanged (`rotation.inverse()` left-multiplied onto `base`): that side of the multiply is not a modeling choice at all, since a zero-translation left factor provably keeps the camera's eye fixed at its pre-shake world position for *any* rotation, while the other side would visibly orbit the eye around the world origin - a new test (`an_active_shake_never_moves_the_camera_eye`, `crates/game/src/race/tests/camera.rs`) pins exactly that invariant, and a second (`an_active_shake_does_rotate_the_view`) checks the shake is not vacuously doing nothing. `crates/render/src/camera/shake/tests.rs` adds order-dependence (`the_two_rotations_do_not_commute`), the per-mode sign relationship (`ahead_negates_only_the_first_angle`), and a moment-of-impact pin (`at_the_moment_of_impact_only_row1_contributes`, since the oscillator is exactly zero there and the whole thing collapses to a single row1 rotation - the one case cheap enough to check by hand). `just` passes clean (fmt, lint, the full workspace test suite at 3100 passed/0 failed, check-docs, check-deps, check-determinism, check-size, check-names, check-handover).
+
+A before/during/after screenshot triple confirms the effect on screen:
+`verification/scenarios/steer-left.inputs` (constant left lock into a wall, by design) driven through `--race --input-script ... --ticks {305,315,325}` shows a level HUD before the hit, a visibly tilted HUD and horizon at the spark-burst tick, and level again ten ticks later once the shake has decayed - the three-term composition (headtilt carried-but-unapplied, barrel roll, shake) does not fight itself on screen.
+
+Two things this pass could not settle from the two evidence pages alone, carried forward rather than guessed past:
+
+- **What each basis row physically represents** (world right/up/forward directly, vs. the transposed "columns are world axes" reading `positional-audio.md` established for the active camera elsewhere) - confidence ~55, the same open item `collision-shake.md` already carried, now also determining what this engine's own `base.row(1)`/`base.row(2)` substitution numerically means relative to the original's own struct offsets rather than only what a from-scratch implementation should read.
+- **The handedness of the two rotations** - whether `row2` should be rotated forward by the first quaternion (what `rotation()` does) or by its inverse before becoming the second axis, and whether each angle's sign matches the disc's own VU convention or its mirror. Neither is recoverable from disassembly/decompile alone; both are named choices in `shake.rs`'s module doc comment, carried the same way `oag_render::roll::ROLL_DIRECTION` carries its own unmeasured sign - a one-line fix (negate the angle, or use the inverse quaternion) if a play-test or capture ever shows the shake twisting the wrong way.
+
+## Open
+
+- What each basis row physically represents, and the composition handedness - both above, both flagged in `shake.rs`'s own doc comment, neither blocking the shape this pass reproduces.
+- Whether the shake's basis-row writes are read back (and so accumulate) before or after the per-frame copy-out/orthogonalise pass in `FUN_0013e280` - order suggests they're read before, not traced further.
+- Whether Pure, HD/Fury and 2048 carry the same mechanism - a maintainer's guess that it continues into newer titles, not yet checked on any of them.
+- Whether the shake reads right on screen against the real games - the before/during/after triple above shows *a* rotation at the right moment, not that its direction or magnitude match a captured original; nobody has yet compared this implementation's motion against a capture or a play session, only against the recovered arithmetic and, now, its own screen presence.
+
+## Next Steps
+
+- Check HD/Fury and 2048 for the same collision-response shape (a `min(|impulse| * k, 1)` severity feeding both a spark trigger and a camera-shake arm) if/when either title's collision path is read for other reasons - not worth a dedicated pass on its own yet.
+- Play-test or capture-compare the landed implementation against the real games at some point, the way `crates/game/tests/chase_camera_ground_truth.rs` did for the chase camera - nothing here has been checked against a running original yet, only against its decompiled arithmetic and this pass's own before/during/after screenshots.
+- If a future capture shows the shake twisting the wrong way, the fix is one of the two handedness choices above, not a re-read of the evidence.

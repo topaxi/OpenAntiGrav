@@ -512,8 +512,7 @@ fn pures_own_globals_are_merged_only_where_the_disc_leaves_them_out() {
 /// `MemoryStickWarning`'s two `Image`s carry `x`/`y`/`width`/`height` and a
 /// `Color="FEGlobals->MSWarningColour1"` indirection - not full-screen, and
 /// not a literal colour. Both have to hold for the screen to draw a warning
-/// stripe rather than a full-screen wash or nothing at all. See
-/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+/// stripe rather than a full-screen wash or nothing at all.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
@@ -561,7 +560,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
 /// so this also pins the measured fallback colour against what actually draws.
 /// Rects read off `pure-psp-usa.chd`'s own `Skin.xml`, in document order,
 /// behind the white background `Fill` `Show Logo`-style backdrops already
-/// cover. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+/// cover.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {

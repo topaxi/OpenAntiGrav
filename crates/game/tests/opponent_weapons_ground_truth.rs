@@ -190,8 +190,7 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// history for that version and its own "What the dodge bought" table
 /// (blind 34, dodging 75, dodging-with-Plasma 47). **`oag_physics::pair::overlap`
 /// was corrected the same day against a live, instruction-level read of
-/// `Collision_BoxAgainstBox`** (confidence 92 - see
-/// `handover/craft-to-craft-collision-is-implemented-the-stun.md`), and that
+/// `Collision_BoxAgainstBox`** (confidence 92), and that
 /// correction is not being touched or reverted here: it changes which axis wins
 /// a narrowphase tie on an already-detected overlap, and eight craft over 3,600
 /// ticks is a chaotic enough system that the *first* differently-resolved
@@ -199,10 +198,8 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// a different trajectory. At `SEED = 1` specifically, that cascade now seats
 /// one opponent inside a Plasma blast (60 of 95 in one hit) that it did not
 /// stand in before - `worst` reads `0.00` at the exact tuning
-/// (`Tuning::look_speed = 0.30`) this floor was written to pass. See
-/// `handover/the-corrected-craft-pair-narrowphase-moves-a-full-grids-trajectories.md`
-/// for the instrumented trace (a Bomb, a Missile and a Plasma hit, no mine
-/// contact at all, on the craft that ends destroyed).
+/// (`Tuning::look_speed = 0.30`) this floor was written to pass. That craft's
+/// hits, in order: a Bomb, a Missile and a Plasma, no mine contact at all.
 ///
 /// **Measured directly, rather than assumed, that a single seed cannot carry
 /// this floor any more**: `crates/game/tests/weapon_floor_sweep.rs`'s

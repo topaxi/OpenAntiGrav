@@ -876,7 +876,7 @@ fn mag_floor() -> CollisionWorld {
     world
 }
 
-/// The point of Task #33 (`handover/task-33-oag-trace-cannot-exercise-the-mag.md`):
+/// The point of Task #33:
 /// without a locator, [`oag_physics::maglock::probe`] has no track sample to
 /// build a ray direction from, so the hold's blend can never leave zero however
 /// the collision mesh underneath is tagged. Handing `drive_with` a one-sample

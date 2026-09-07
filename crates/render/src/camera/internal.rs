@@ -127,8 +127,7 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// `headtilt` itself still is not applied. Only the eye's own basis is
 /// rolled; [`eye`] and [`look_at_point`] read `target.up` unrolled, matching
 /// the original, whose `row1` offsets both before this rotation is taken.
-/// See `oag_render::roll` and
-/// `handover/the-barrel-roll-has-a-drawing-job.md`.
+/// See `oag_render::roll`.
 #[must_use]
 pub fn view(target: Target, params: &InternalParams, roll_phase: f32) -> Mat4 {
     let up = crate::roll::rotation(target.forward, roll_phase) * target.up;

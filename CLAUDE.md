@@ -301,16 +301,20 @@ Key entry points: [goals](docs/overview/goals.md), [roadmap](docs/overview/roadm
 isn't in the docs tree itself: what was deliberately deferred, which findings are
 independently verified versus single-source, and traps that cost time - read it before
 starting non-trivial work, and update it when handing off. Work in flight is one file per
-thread under [`handover/`](handover/), each with `## Open` and `## Next Steps`;
+thread under [`handover/`](handover/), each with `## Open` and `## Next Steps`, sorted
+into five subdirectories by category (`rendering/`, `gameplay/`, `frontend/`, `tooling/`,
+`audio/`) - pick whichever fits the thread's primary subject; a thread that genuinely
+crosses categories carries a `categories:` YAML frontmatter block naming the extras.
 `HANDOVER.md`'s own "Open threads" section is just the index - delete a thread's file and
 its index line together once the work lands, the same rule this file always applied to a
 row.
 
-**A `docs/` page must never link into `handover/`.** A thread file gets deleted the
-moment its work lands, so a link from a permanent doc into one is a dead link waiting to
-happen with nothing to catch it - `just check-docs` only proves links resolve today. The
-reverse direction is normal and expected: a `handover/` thread citing a `docs/` page as
-its evidence is how every thread is written. When a finding grew out of a thread, cite
+**Nothing outside `handover/` and `HANDOVER.md` may link into `handover/`.** A thread
+file gets deleted the moment its work lands, so a link from a permanent doc, a code
+comment, a script or a test into one is a dead link waiting to happen with nothing to
+catch it - `just check-docs` only proves links resolve today, and only for `docs/**/*.md`.
+The reverse direction is normal and expected: a `handover/` thread citing a `docs/` page
+as its evidence is how every thread is written. When a finding grew out of a thread, cite
 the evidence (the doc page, the test, the address) instead of the thread file.
 
 ADRs are immutable; a changed decision gets a new ADR that supersedes the old one, not an edit.

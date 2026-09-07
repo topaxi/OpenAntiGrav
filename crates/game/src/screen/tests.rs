@@ -362,7 +362,7 @@ fn the_logo_image_has_a_y_and_no_x() {
 fn an_image_with_u_v_captures_its_own_sub_rect() {
     // `ArrowSelect`'s own attributes, off `pure-psp-usa.chd`'s `Skin.xml`:
     // one widget sampling one corner of a texture several other widgets
-    // share. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    // share.
     let screens = Screens::from_xml(
         r#"
 <Screen>
@@ -385,8 +385,7 @@ fn an_image_with_u_v_captures_its_own_sub_rect() {
 fn an_image_wrapped_in_an_animation_is_still_collected() {
     // `TitleAnim1`'s own shape, off `pure-psp-usa.chd`'s `Skin.xml`: a
     // `<Key>` reveal timeline wrapping the one widget it reveals. The
-    // timeline is not modelled - only the widget has to survive. See
-    // `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    // timeline is not modelled - only the widget has to survive.
     let screens = Screens::from_xml(
         r#"
 <Screen>
@@ -419,7 +418,7 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect() {
     // disc: a decorative underline, not a backdrop - `width="347" height="1"`
     // at `x="133" y="262"`. `Fill` carries its own rect precisely so this
     // draws as a thin line rather than washing the whole screen in its
-    // colour. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    // colour.
     let screens = Screens::from_xml(
         r#"
 <Screen>

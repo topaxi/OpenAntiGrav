@@ -43,8 +43,7 @@ ENTITY_OWNER = 0x94  # *(entity + 0x94) == the Ship_UpdateCraft craft that owns 
 
 # Correction, 2026-08-27: this used to be `ENTITY_TO_CRAFT = 0xFC0`, added
 # straight to `entities[0]` below to get its craft. That does not hold -
-# checked live against a known player craft address
-# (handover/the-originals-fov-widens-with-speed-and-race.md's capture): 7 of
+# checked live against a known player craft address: 7 of
 # 8 live Ship_ApplyCollisionImpulse a0 values produced an out-of-RAM-range
 # "entity" under `a0 + 0xFC0`, and the one that happened to resolve was not
 # the player. `Ship_ApplyCollisionImpulse`'s own a0 **is** the entity

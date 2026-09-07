@@ -1,8 +1,8 @@
 //! Scratch probe: what mechanism drives Pulse's HUD countdown models,
 //! `Data\HUD\Pulse_Ready_Go.vex` and `Data\HUD\Cockpit_321GO.vex`.
 //!
-//! Not wired into anything; run by hand while working
-//! `handover/race-start-countdown-and-launch-boost.md`.
+//! Not wired into anything; run by hand while working the race-start
+//! countdown state machine and launch reaction boost.
 //!
 //! ```sh
 //! cargo run -p oag-render --example ready_go_census

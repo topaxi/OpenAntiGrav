@@ -10,7 +10,7 @@
 # signal, and the "11.7 units of leftward displacement" figure was never a
 # runtime measurement of the original to begin with (it came from `oag-trace
 # drive` through our own simulation, which does not hit this wall on the same
-# script). See `handover/sideshift-has-no-runtime-leg.md`.
+# script).
 #
 # `Ship_UpdateAirbrakes` (`0x0884c9a4`) applies the sideshift as a constant
 # world-space force (`craft.right * handling.sideshift`, divided by mass by the

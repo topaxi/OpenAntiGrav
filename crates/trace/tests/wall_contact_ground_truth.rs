@@ -106,8 +106,7 @@ fn workspace(relative: &str) -> std::path::PathBuf {
 /// from the working tree means the checkout is broken, not that this test
 /// does not apply. This used to return `None` and let the caller skip
 /// quietly, which is exactly how five of these six captures went missing for
-/// weeks without a single red build - see
-/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md`. It now
+/// weeks without a single red build. It now
 /// panics unconditionally, independent of `OAG_REQUIRE_GAME_DATA`: that
 /// variable escalates *optional* inputs (a disc image under `data/images/`),
 /// and a tracked trace is not optional.

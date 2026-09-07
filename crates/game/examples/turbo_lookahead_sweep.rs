@@ -2,8 +2,8 @@
 //! top of the `allows_speed` gate that already exists, across a range of
 //! `Tuning::look_max` settings.
 //!
-//! Written for the `handover/the-field-drove-in-single-file-and-the.md`
-//! thread - see `docs/gameplay/ai.md`'s Turbo section for the measurement
+//! Written while chasing why the field drove in single file - see
+//! `docs/gameplay/ai.md`'s Turbo section for the measurement
 //! this produced and the conclusion drawn from it. Kept in the tree, unlike
 //! the sweeps `driver/tuning.rs` cites, so the next person who wants to
 //! re-check a driver constant against a real circuit has a harness rather

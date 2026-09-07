@@ -3,8 +3,7 @@
 //!
 //! Split out of [`super`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`, the same seam [`super::volumes`] was split
-//! on - see `handover/streaming-decode-for-audio-would-break-seek-and.md`
-//! for why this exists at all.
+//! on.
 
 use super::*;
 
@@ -26,8 +25,7 @@ fn wait_for_source_switch(audio: &mut Audio) {
     }
 }
 
-/// **The freeze this fixes**, proven rather than assumed - see
-/// `handover/streaming-decode-for-audio-would-break-seek-and.md`. Before
+/// **The freeze this fixes**, proven rather than assumed. Before
 /// this, a source read for the first time this session decoded
 /// synchronously on whatever thread called [`Audio::set_music_source`],
 /// which is reachable from a settings row a player can press mid-race.

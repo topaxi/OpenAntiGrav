@@ -200,7 +200,7 @@ pub struct Screen {
     /// no disc-merged table to build this from, only [`crate::strings::project_table`].
     /// Built once, here, rather than per line: the same reason
     /// `prepare::definition` builds its own copy once rather than at every
-    /// `resolve()` call. See `handover/invented-ui-text-has-no-translation-and-the.md`.
+    /// `resolve()` call.
     strings: StringTable,
 }
 

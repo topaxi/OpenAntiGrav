@@ -76,9 +76,8 @@ pub struct Tuning {
     /// re-measured, not merely re-quoted, and reproduce to the digit against
     /// the row above them.** A lone craft never touches
     /// `oag_physics::pair::overlap` - there is nothing else on the circuit
-    /// to collide with - so nothing about the corrected narrowphase (see
-    /// `handover/craft-to-craft-collision-is-implemented-the-stun.md`,
-    /// confidence 92, not touched by this re-sweep) can have moved a number
+    /// to collide with - so nothing about the corrected narrowphase (confidence
+    /// 92, not touched by this re-sweep) can have moved a number
     /// this harness only ever measured on one craft. That is worth stating
     /// plainly: the convergence story this table exists to tell - `13`
     /// rising from `6.52` to `39.07`-`67.55` as `look_speed` falls, `07`

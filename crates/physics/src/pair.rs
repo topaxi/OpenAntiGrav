@@ -70,8 +70,7 @@ pub struct PairContact {
 /// proxy pair (owners matching the two placed craft) ten times running, with
 /// the world's own contact counter (`world+0x2450`) rising by one across the
 /// first of those hits. See
-/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` and
-/// `handover/craft-to-craft-collision-is-implemented-the-stun.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 ///
 /// So this is a real, running narrowphase, not a stand-in with nothing to
 /// approximate - and `Collision_BoxAgainstBox` has now been decompiled and

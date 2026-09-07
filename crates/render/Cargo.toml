@@ -20,7 +20,7 @@ pollster = "0.4"
 [features]
 # Off by default. Turns on `oag_render::perfprobe`'s counters, its `mark`
 # and `report_frame` printing, `oag-game`'s counting global allocator and its
-# `OAG_RENDER_BENCH` loop. See `handover/the-frame-path-allocated-16-mb-a-frame.md`.
+# `OAG_RENDER_BENCH` loop.
 #
 # Every probe call site is compiled either way and every one of them collapses
 # to nothing without this - the counters are behind `cfg!`, not `#[cfg]`, so

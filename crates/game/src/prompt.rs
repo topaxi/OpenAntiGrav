@@ -53,9 +53,8 @@
 //! [`Skin`] instead is what lets an HD skin get an HD-sized panel.
 //!
 //! The `<TagInput>` is still worth having for the screens it *is* the idiom
-//! for; that is its own thread, with the entry index and the alphabet's
-//! address in it. See
-//! `handover/pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md`.
+//! for; that is its own open question, with the entry index and the
+//! alphabet's address in it.
 //!
 //! # Every label is passed in, already resolved
 //!

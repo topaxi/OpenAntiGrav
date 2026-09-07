@@ -205,8 +205,7 @@ pub struct Image {
     /// at `U="0" V="15"`, and two more widgets on that same screen sample
     /// different rects of the same file (`U="0" V="0"` and `U="26" V="15"`) -
     /// without this, every one of them would draw the file's own top-left
-    /// corner instead of its own patch. See
-    /// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    /// corner instead of its own patch.
     pub u: Option<f32>,
     /// The `V` attribute, likewise.
     pub v: Option<f32>,
@@ -235,8 +234,7 @@ pub struct Image {
 /// That stopped being free the moment `<Animation>` started being recursed
 /// into: `Demo_Definition.xml`, shared verbatim by both Pulse's and Pure's
 /// disc, wraps two colour-only `Image`s at `width="347" height="1"` and
-/// `width="151" height="1"` - a decorative underline, not a backdrop. See
-/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+/// `width="151" height="1"` - a decorative underline, not a backdrop.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fill {
     /// Left edge. Absent in the XML means zero, as it does for [`Image`].
