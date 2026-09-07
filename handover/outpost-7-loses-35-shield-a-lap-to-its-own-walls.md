@@ -258,15 +258,21 @@ and destroyed on lap 3. Full table, criterion and reproduction:
 
 ## Open
 
-- **The span is a chosen number, and it is no longer waiting on the wall.** 11
-  is green and 10 is red on the field board, and nothing about the estimator
-  explains that ordering. Step 5 below settles what that item used to be
-  blocked on: **the wall response is faithful, so nothing lands there and the
-  span does not want re-sweeping on account of it** - no committed constant
-  moved. The wedging is a *correct* consequence of the recovered law applied to
-  a craft that arrives at the wall with 34 degrees of its velocity normal to
-  it, so what is left of this item is upstream, in what the driver asks for.
-  The table above is the harness and the field columns are the part to keep.
+- **The span is a chosen number, and it is no longer waiting on the wall or
+  the driver's identity.** 11 is green and 10 is red on the field board, and
+  nothing about the estimator explains that ordering. Step 5 settled that
+  this item was not blocked on the wall: **the wall response is faithful, so
+  nothing lands there and the span does not want re-sweeping on account of
+  it** - no committed constant moved. Step 6 settled the "upstream" half:
+  the two remaining crashes are `corner_target`'s windowed curvature (`span =
+  11`) understating the true local apex by 1.66x/1.85x, the same mechanism
+  as idx 2,119 in step 2 at smaller magnitude - **not** the differential
+  trail-brake's documented corner-entry gate, which is confirmed live here
+  too but never has an overspeed to correct because the symmetric brake
+  never engages either. What remains open is whether a span change can
+  resolve these two apexes without re-breaking the field board the way span
+  10 did - unmeasured, and real work of its own. The table above is the
+  harness and the field columns are the part to keep.
 
 - ~~**Whether the wall response should stop a craft dead.**~~ **Answered by
   step 5: yes, and it is not the friction doing it.** Closed.
@@ -363,6 +369,42 @@ return already reproduces the gate.
 Full tables, the per-tick dumps and the reproduction:
 `~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/wall-bleed.md`.
 
+## Step 6 is done: the two remaining crashes are the estimator, not the wall or the differential gate
+
+Measured 2026-09-07 on the same post-step-5 tree (`Tuning::curvature_span =
+11`). Instrumented `Driver::drive` (temporary, reverted) to print, per tick in
+the two crash windows (idx 2,130-2,170 and 2,370-2,410, lone Ace, `07_Track`,
+6,000 ticks, both laps): `speed`, `target`, the `curvature` `corner_target`
+was called with, `steer.command`/`rate_error`, the exact `speed < target`
+condition `pace::trail` gates its differential on, and the resulting
+differential and symmetric brake.
+
+**The differential-gate bug `pace.rs` already documents (`trail`'s `speed <
+target` corner-entry gate) is confirmed live here too** - `gated=true` on
+100% of sampled ticks in both windows, both laps, `diff=0.0000` throughout.
+But it is not the cause of these two crashes: there is no overspeed for a
+differential to correct, because **`brake=0.000` on every one of those same
+ticks** - `throttle`'s identical `speed <= target` branch never leaves
+`(1.0, 0.0)`. The craft is at full thrust into both walls; `target` never
+drops below its actual speed until after the impact.
+
+Cross-checked against `Race::racing_line().curvature(idx, span)` at spans 4,
+8, 11 (what `corner_target` actually reads) and 16, on the same finished
+race: **the true local peak (`span = 4`) is 1.66x higher than the windowed
+`span = 11` value `corner_target` is fed, at the first corner (0.02305 vs
+0.01387), and 1.85x at the second (0.02359 vs 0.01273).** Smaller than step
+2's 2.5-3x understatement at idx 2,119 - a sharper, more isolated apex - but
+the identical mechanism: a chord long enough to avoid `Line::curvature`'s
+now-fixed seam bug is also long enough to average a tight apex down against
+its shallower shoulders. `curvature_span = 11` was chosen in step 4 as the
+best point in a band bounded by two field ground-truth tests going red at
+span 10, not as a value proven to resolve every apex on the disc - these two
+corners are the residual the compromise left standing.
+
+Full tables, per-tick data and the two reproduction recipes (both
+instrumentation additions reverted, neither committed):
+`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/outpost7-corner-entry.md`.
+
 ## Next Steps
 
 1. **Do not re-tune the wall response.** It is measured against the recovered
@@ -370,10 +412,15 @@ Full tables, the per-tick dumps and the reproduction:
    thing that costs a craft its shield at a wall is the bounce, and the bounce
    is `-(1 + 0.4) * v_n / D` with `e` read off `body+0x388`.
 2. **`Tuning::curvature_span` does not need re-sweeping on account of the wall**
-   - no constant moved. What is still open on the span is the 11-green /
-   10-red field ordering, and step 5 shows it is **not** blocked on the wall
-   response. The remaining lead is upstream: why the driver arrives at 34
-   degrees of normal velocity at `07`'s idx 2,158 and 2,395 at all.
+   - no constant moved. Step 6 answers what was open on the span: the two
+   remaining crashes are the curvature estimator understating the true local
+   apex by 1.66x/1.85x even at `span = 11`, not the differential-gate bug
+   (confirmed live but inert here - no overspeed exists for it to correct)
+   and not the wall. A further span change is real work of its own, the same
+   shape as step 4's sweep - it would need to hold the two field
+   ground-truth tests green while resolving these two apexes, which is not
+   guaranteed by a smaller number alone (span 10 already failed the field
+   board for an unrelated craft-wedging reason). Not attempted here.
 3. Do **not** trim `07_Track` out of the test's known-good list: it has always
    passed and the assertion is right. Do not move `lateral_accel`, `grip_ground`
    or `grip_air` - the first cannot reach this corner and the last two are
