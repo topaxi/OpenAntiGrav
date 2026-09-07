@@ -208,3 +208,87 @@ fn an_off_centre_hit_produces_spin() {
         "an off-centre impulse must produce angular velocity"
     );
 }
+
+/// The contact point is the plain midpoint of the two bodies' positions,
+/// whatever axis the SAT chose - `Collision_BoxAgainstBox` writes
+/// `(colliderA.centre + colliderB.centre) * 0.5` and a collider's centre is
+/// its body's own position, unconditionally.
+#[test]
+fn the_contact_point_is_the_midpoint_of_the_two_positions() {
+    let a = craft(
+        Vec3::new(hull().width * HULL_SCALE * 0.7, 0.0, 2.0),
+        Vec3::ZERO,
+    );
+    let b = craft(Vec3::ZERO, Vec3::ZERO);
+    let (_, point, _) = overlap(&a.body, &hull(), &b.body, &hull()).expect("they overlap");
+    assert_eq!(point, (a.body.position + b.body.position) * 0.5);
+}
+
+/// Only the six face axes ever choose the normal - the nine edge-edge cross
+/// products are reject-only in the original, so two boxes whose true
+/// shallowest separating axis is an edge-edge cross product must still
+/// resolve to a face normal, never that edge one.
+///
+/// This exact pose was found by sweeping orientations and offsets against
+/// [`overlap_old`] (the pre-2026-09-07 all-fifteen-compete version, kept
+/// around only long enough to diff against): at this pose the true minimum
+/// SAT axis genuinely is one of the nine edge-edge cross products, not a
+/// face axis of either hull, so a port that let all fifteen compete (as this
+/// function used to) picks it - and this function must not.
+#[test]
+fn only_face_axes_ever_become_the_normal() {
+    let long_hull = Dimensions {
+        width: 2.0,
+        height: 3.0,
+        length: 20.0,
+        ..Dimensions::default()
+    };
+    let mut a = craft(Vec3::new(1.5, 0.3, -1.5), Vec3::ZERO);
+    a.body.orientation = Quat::from_rotation_y(0.9);
+    let mut b = craft(Vec3::ZERO, Vec3::ZERO);
+    b.body.orientation =
+        Quat::from_rotation_y(34.0_f32.to_radians()) * Quat::from_rotation_z(19.0_f32.to_radians());
+
+    let (normal, _, _) = overlap(&a.body, &long_hull, &b.body, &long_hull).expect("they overlap");
+
+    // A face axis is `+-right`, `+-up` or `+-forward` of one of the two
+    // hulls - each is a unit vector, so a match dots to (near) +-1. The true
+    // minimum axis at this pose is an edge-edge cross product, which would
+    // land well short of that.
+    let is_face_axis = axes(&a.body)
+        .into_iter()
+        .chain(axes(&b.body))
+        .any(|face| face.dot(normal).abs() > 0.999);
+    assert!(is_face_axis, "normal {normal:?} is not a face axis");
+}
+
+/// Each hull's own "up" axis needs to beat *half* the reigning best depth to
+/// become the normal; a plain SAT (compare every axis with a strict `<`)
+/// would pick whichever axis is shallowest, full stop. Built so `up` is
+/// genuinely shallower than `right` - a plain-`<` port would pick it - but not
+/// shallower than half of it, so the original's own rule must keep `right`.
+#[test]
+fn the_up_axis_needs_to_beat_half_the_best_depth_to_win() {
+    // width == length, both boxes identical and axis-aligned, offset only in
+    // y: `right`'s depth and `forward`'s depth are then both `2 * half_width`
+    // (9.0 below), and `up`'s is `2 * half_height - |dy|` (5.0) - shallower
+    // than `right`, but not under half of it.
+    let square_hull = Dimensions {
+        width: 12.0,
+        height: 8.0,
+        length: 12.0,
+        ..Dimensions::default()
+    };
+    let a = craft(Vec3::new(0.0, 1.0, 0.0), Vec3::ZERO);
+    let b = craft(Vec3::ZERO, Vec3::ZERO);
+
+    let (normal, _, depth) =
+        overlap(&a.body, &square_hull, &b.body, &square_hull).expect("they overlap");
+    assert_eq!(
+        normal,
+        Vec3::X,
+        "up's depth (5.0) is shallower than right's (9.0) but does not clear \
+         half of it (4.5), so a plain `<` SAT would wrongly pick up here"
+    );
+    assert_eq!(depth, 9.0);
+}

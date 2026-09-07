@@ -1707,37 +1707,79 @@ owner ids, a friction term) into the same `world+0x2450`-counted, `+0x40`-stride
 contact array `Collision_AddContact` already documented. Full account on
 [collision.md](collision.md#collision_stepnarrowphase-0x088159c0-builds-the-pair-list).
 
-**This reopens rather than closes the question this section used to answer.**
-Two gates stand between that code existing and it firing for two real craft in
-a race - `world+0x5464` nonzero, and both colliders' own `+0x68` byte nonzero -
-and neither is confirmed live. `world+0x5464` is written `1` by what reads as
-the collision world's own constructor and `0` by an apparently unrelated setup
-routine, which is consistent with "on during a race" but not a live-verified
-claim. **The pending-impulse open item's narrowphase exclusion no longer
-holds**: "whatever reaches `Body_ResolveContactPair` with two craft in it is
-somewhere this project has not found" assumed the narrowphase was positively
-ruled out, and it is not - it may or may not be where that pair comes from,
-which is now itself the open question.
+**Settled 2026-09-07, live: both gates are open during a race, and the
+function genuinely fires and writes a contact for two craft.** PPSSPP v1.20.4,
+`pulse-psp-usa.chd`, a full eight-craft SINGLE RACE grid. Reading `world+0x5464`
+during the race gave `1`; reading every one of the eight craft's own box
+collider's `+0x68` byte (`craft+0x1cc` -> body, `body+0x3bc` -> collider, per
+`Body_SyncBoxCollider`'s own field write) gave `1` for all eight, not a
+sample. Two craft were then teleported onto the same point - the same
+body-write mechanism `scripts/psp-drive.py place` uses for one craft - and a
+breakpoint on `Collision_BoxAgainstBox`'s own entry fired **ten times running**
+with `a1`/`a2` resolving through the proxy table at `world+0x2454` (stride
+`0xc`) to exactly the two placed craft's colliders, their `+0x60` owner ids
+matching the two known craft directly. `world+0x2450`'s own contact counter
+read `0` at the first hit's entry and `1` at the very next hit's entry (same
+frame, the pair revisited in the opposite order) - the counter incrementing
+across the call in between, not just a dispatch with no effect. Full recipe
+and readings on
+[collision.md](collision.md#collision_stepnarrowphase-0x088159c0-builds-the-pair-list).
+**The pending-impulse open item's narrowphase exclusion is retired, not just
+reopened**: the narrowphase is confirmed live as a real source of craft-pair
+contacts. What still rests on the static reading rather than a live one is the
+*consumption* side - that `Body_StepWorld`'s pass 6 is what reads the contact
+`Collision_BoxAgainstBox` just wrote and hands it to `Body_ResolveContactPair`;
+see "Still not determined" below for exactly what that gap is.
 
-**The consequence for `oag_physics::pair`**: its own doc comment claims "there
-is no recovered test to approximate" - also no longer accurate. There is now a
-recovered test (`Collision_BoxAgainstBox`), unread in comparison detail against
-`pair::overlap`'s own fifteen-axis SAT (which independently arrived at the same
-standard axis count - three faces each side, nine edge-edge crosses - since
-that is the ordinary structure of OBB-OBB SAT, not evidence the two algorithms
-match beyond that). Whether `pair::overlap`'s specific choices - its
-axis-preference tie-break, its one-contact-per-pair shape, its friction
-handling - match the original's is not yet compared.
+**The consequence for `oag_physics::pair`**: its own doc comment used to claim
+"there is no recovered test to approximate" - no longer accurate, and now
+corrected there. `Collision_BoxAgainstBox` has been decompiled in full and
+compared against `pair::overlap` in the detail this page asked for, and three
+differences were found and ported:
+
+- **Only the six face axes ever choose the normal.** The nine edge-edge cross
+  products are reject-only in the original - they can throw a pair out as not
+  touching, but never supply the contact normal, unlike `pair::overlap`'s old
+  all-fifteen-compete shape. They are also tested **unnormalized** (`vcrsp.t`
+  feeding `vdot.t` directly, no `vsqrt.s`/`vrcp.s` anywhere in that block), so
+  their depth was never even in the same units as a face axis's - the original
+  could not have compared them into one running best, not merely chose not to.
+- **Each hull's own "up" axis needs to beat *half* the reigning best depth to
+  become the normal**; its right and forward axes (and the other hull's right
+  and forward) only need to beat it outright. Checked at instruction level
+  because a fully-inlined VFPU function is exactly the shape
+  `docs/ghidra/workflow.md`'s `lv.q`/`sv.q` trap warns about trusting from the
+  decompiler's summary alone: `A.right` seeds the running best unconditionally,
+  and disassembly shows exactly two of the remaining five face-axis compares -
+  `A.up` and `B.up` - preceded by a real `mul.s` against `f13`, the same
+  `0.5f` register loaded once at function entry and reused nowhere else but
+  the half-extent computation; `A.forward`, `B.right` and `B.forward` compare
+  directly against the running best with no such multiply nearby. So the bias
+  is a genuine scalar op on a genuine constant, not a decompiler artifact -
+  confidence in this reading is as high as the rest of the function's, **92**.
+- **The contact point is the plain midpoint of the two box centres**,
+  `(a.position + b.position) * 0.5`, not a support point on the chosen axis -
+  a collider's `+0xb0` centre is its body's own position by construction, so
+  this reduces to the two bodies' positions unconditionally. Consequence
+  carried into `pair.rs`: the lever arm for the angular half of the impulse is
+  now always measured from each body's centre to that shared midpoint, never
+  out on either hull's surface, so a craft-to-craft graze imparts noticeably
+  less spin than the old support-point construction did.
+
+Confirmed unchanged by the same read: **no friction term reaches
+`Body_ResolveContactPair`** (this page's own account above already established
+that), and the contact is **one per pair**, matching `pair::overlap`'s shape.
 
 ### Still not determined
 
-- **Whether `world+0x5464` and each collider's `+0x68` byte are actually set
-  during a live race**, which decides whether `Collision_BoxAgainstBox` ever
-  runs for a pair of craft. Not yet checked against a running game.
-- **What feeds `Body_ResolveContactPair` a pair of craft** -
-  `Collision_BoxAgainstBox` is now the leading candidate rather than positively
-  excluded, but this is still not traced end to end.
-- **Whether `pair::overlap`'s algorithm matches `Collision_BoxAgainstBox`'s**
-  beyond both
-  being fifteen-axis OBB-OBB SAT: axis tie-break order, contact count and
-  shape, and friction combination are all unread against the original.
+- **What the live session confirmed is the write, not yet the read.** The
+  2026-09-07 session verified that `Collision_BoxAgainstBox` writes a contact
+  for two craft; it did not separately breakpoint `Body_ResolveContactPair`
+  (`0x0884ef30`) to catch it consuming that exact contact with two real craft
+  bodies. That `Body_StepWorld`'s pass 6 is what reads the array
+  `Collision_BoxAgainstBox` just filled is still `collision.md`'s static
+  frame-order reading, not independently live-verified this pass - a
+  breakpoint on `0x0884ef30` during the same forced-overlap setup would close
+  that gap directly. `Collision_DispatchPair`'s own broadphase pairing is
+  likewise unchanged from what `collision.md` already documents, not
+  re-verified here.

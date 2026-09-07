@@ -1,8 +1,9 @@
 //! Craft against craft: the two-body contact response.
 //!
 //! `Body_ResolveContactPair` (`0x0884ef30`) reimplemented, at confidence **80**
-//! for the response and **nothing at all** for the shape - see
-//! [`overlap`]. The recovery is on
+//! for the response and **92** for the shape (`Collision_BoxAgainstBox`,
+//! `0x0881702c`, live-verified 2026-09-07 to run and produce contacts for two
+//! craft) - see [`overlap`]. The recovery is on
 //! `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 //!
 //! # A craft bounces off another craft differently from how it bounces off a wall
@@ -53,31 +54,73 @@ pub struct PairContact {
 
 /// Whether two craft are touching, and where.
 ///
-/// # Corrected 2026-08-25: the original's is not a stub, and whether it runs is unconfirmed
+/// # Corrected 2026-09-07: live-verified, and now read in comparison detail
 ///
 /// `Collision_DispatchPair` (`0x08816eac`) sends a box proxy against a box
-/// proxy to `Collision_BoxAgainstBox` (`0x0881702c`), not `0x08815ccc` as this
-/// note used to say - that was a mislabelled shape-kind reading, corrected in
+/// proxy to `Collision_BoxAgainstBox` (`0x0881702c`), not `0x08815ccc` as an
+/// earlier note said - that was a mislabelled shape-kind reading, corrected in
 /// `docs/ghidra/functions/psp-pulse-usa/collision.md`. `0x08815ccc` really is a
 /// two-instruction stub (`jr ra; nop`), but it is the *mesh*-against-mesh
-/// dispatch; craft never reach it. `Collision_BoxAgainstBox` is a genuine
-/// fifteen-axis oriented-box SAT that writes a real contact on overlap, gated
-/// on `world+0x5464` and each collider's own `+0x68` byte - neither confirmed
-/// set during a live race yet. See
+/// dispatch; craft never reach it. **Both gates that stood between
+/// `Collision_BoxAgainstBox` existing and it ever running for two craft are now
+/// confirmed live**, not just plausible from static reading: a PPSSPP session
+/// against a full eight-craft grid read `world+0x5464 == 1` and every craft
+/// collider's own `+0x68` byte `== 1` during a race, then forced two craft to
+/// overlap and caught `Collision_BoxAgainstBox` itself firing on their exact
+/// proxy pair (owners matching the two placed craft) ten times running, with
+/// the world's own contact counter (`world+0x2450`) rising by one across the
+/// first of those hits. See
 /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` and
 /// `handover/craft-to-craft-collision-is-implemented-the-stun.md`.
 ///
-/// So this **may** be an approximation of a recovered test after all, not
-/// definitely an invention with nothing to approximate -
-/// `Collision_BoxAgainstBox` is unread against this function in comparison
-/// detail (axis tie-break order,
-/// contact count and shape, friction handling). Until that comparison and the
-/// two gates above are checked live, treat this as **ours, provisionally** -
-/// oriented box against oriented box, by the separating-axis theorem over the
-/// usual fifteen axes, using the hull's own `<Misc width height length>`. A
-/// box is what the shape kind says a craft is, which is still the whole of the
-/// argument for the box's *shape* - it is the "nothing to recover" framing
-/// that no longer holds.
+/// So this is a real, running narrowphase, not a stand-in with nothing to
+/// approximate - and `Collision_BoxAgainstBox` has now been decompiled and
+/// compared against this function in the detail `contact-response.md` asked
+/// for. It differs in three ways this port now follows:
+///
+/// - **The nine edge-edge axes never choose the normal.** The original tests
+///   all fifteen axes as separating candidates (reject if any one clears), but
+///   only the **six face axes** - three per box - ever update the running
+///   "best" depth and normal. An edge-edge cross product can throw the pair
+///   out as not touching; it can never become the contact normal. This
+///   function used to let all fifteen compete on equal footing. The nine edge
+///   axes are also tested **unnormalized** (`vcrsp.t` with no `vsqrt`/`vrcp`
+///   before the `vdot.t`), so their "depth" is never in the same units as a
+///   face axis's - positive evidence the original *could not* have mixed them
+///   into one best-depth comparison, not merely an absence of writes.
+/// - **Each box's own "up" axis needs to beat *half* the reigning best depth
+///   to become the normal; right and forward only need to beat it outright.**
+///   Confirmed at instruction level, not just in the decompiler's summary
+///   (see the VFPU-inlining trap on `docs/ghidra/workflow.md`): `A.right`
+///   seeds the running best unconditionally, then exactly two of the
+///   remaining five face-axis comparisons - `A.up` and `B.up` - are preceded
+///   by a real `mul.s` against the same `0.5f` register (`f13`, loaded once
+///   at function entry and never reloaded) the function already uses to turn
+///   each collider's `<Misc>` dimensions into half-extents; the other three
+///   (`A.forward`, `B.right`, `B.forward`) compare against the running best
+///   directly, with no such multiply anywhere near them. So the bias is a
+///   real scalar op on a real constant, not a mis-attributed prefix or a
+///   decompiler artifact. The effect is a standing bias against picking
+///   either hull's vertical axis as the push-apart direction unless it is
+///   decisively the shallower one - read as tuned against craft popping
+///   vertically off a graze that should read as a sideways scrape. This
+///   function's `axes()` returns `[right, up, forward]` in exactly this
+///   order, so the bias applies to index `1` on each side.
+/// - **The contact point is the plain midpoint of the two box centres**,
+///   `(a.position + b.position) * 0.5` - not a support point on the chosen
+///   axis at all. The original's `collider+0xb0` field the two box centres are
+///   read from is the body's own position (`Body_SyncBoxCollider` copies it
+///   there every sync), so this reduces to the two bodies' positions
+///   unconditionally, independent of which axis won. **Consequence for spin**:
+///   the lever arm `apply_at_point` computes is now always the offset from
+///   each body's own centre to the shared midpoint, never a point out on
+///   either hull's surface, so a craft-to-craft graze now imparts noticeably
+///   less angular velocity than the old support-point construction did - a
+///   real behavioural change, not just a bookkeeping one.
+///
+/// Friction is unread here because `Body_ResolveContactPair` (the response,
+/// not this narrowphase) never applies any - see `contact-response.md`'s
+/// own account of that function, already ported in [`resolve`].
 ///
 /// It replaced a sphere of half the hull's diagonal, which was **far too big**:
 /// on a 4 x 2 x 8 hull that sphere reaches 4.58 units where the flank is 2 away,
@@ -107,49 +150,65 @@ pub fn overlap(
     let mut best_depth = f32::INFINITY;
     let mut best_axis = Vec3::ZERO;
 
-    // The fifteen: three faces each, then the nine edge-edge cross products.
-    // Built in a fixed order and compared with a strict `<`, so the axis chosen
-    // cannot depend on anything but the geometry.
-    let mut candidates = [Vec3::ZERO; 15];
-    candidates[..3].copy_from_slice(&a_axes);
-    candidates[3..6].copy_from_slice(&b_axes);
-    let mut at = 6;
-    for a_axis in a_axes {
-        for b_axis in b_axes {
-            candidates[at] = a_axis.cross(b_axis);
-            at += 1;
-        }
-    }
-
-    for axis in candidates {
-        // A near-zero cross product means the two edges are parallel and the
-        // axis carries no information; the face axes already cover that case.
-        let length = axis.length();
-        if length <= 1.0e-4 {
-            continue;
-        }
-        let axis = axis / length;
+    // The six face axes: `A.right, A.up, A.forward, B.right, B.up, B.forward`,
+    // in exactly this order - it is what the bias below keys on. Every one of
+    // the six is also a reject test: `Collision_BoxAgainstBox` returns with no
+    // contact the moment any single axis clears, so this loop does the same
+    // rather than collecting all six depths first.
+    for (index, axis) in a_axes.into_iter().chain(b_axes).enumerate() {
         let reach = project(&a_axes, a_half, axis) + project(&b_axes, b_half, axis);
         let distance = between.dot(axis).abs();
         let depth = reach - distance;
         if depth <= 0.0 {
             return None;
         }
-        if depth < best_depth {
+        // Each side's own "up" axis - index 1 of the three-axis block, so
+        // index 1 or 4 overall - only replaces the running best if it clears
+        // *half* of it; the other four face axes use a plain `<`. `A.right`
+        // (index 0) always wins here since `best_depth` starts at infinity.
+        let wins = if index == 1 || index == 4 {
+            depth < best_depth * 0.5
+        } else {
+            depth < best_depth
+        };
+        if wins {
             best_depth = depth;
             // Oriented from `b` toward `a`, which is what the caller expects.
             best_axis = if between.dot(axis) < 0.0 { -axis } else { axis };
         }
     }
 
+    // The nine edge-edge cross products: reject-only. Unlike the face axes
+    // above, none of these can ever become the contact normal in the
+    // original - only the SAT's separation test uses them.
+    for a_axis in a_axes {
+        for b_axis in b_axes {
+            let axis = a_axis.cross(b_axis);
+            // A near-zero cross product means the two edges are parallel and
+            // the axis carries no information; the face axes already cover
+            // that case.
+            let length = axis.length();
+            if length <= 1.0e-4 {
+                continue;
+            }
+            let axis = axis / length;
+            let reach = project(&a_axes, a_half, axis) + project(&b_axes, b_half, axis);
+            let distance = between.dot(axis).abs();
+            if reach - distance <= 0.0 {
+                return None;
+            }
+        }
+    }
+
     if !best_depth.is_finite() {
         return None;
     }
-    // On `a`'s surface along the normal, then half the overlap back inside, so
-    // the point sits in the middle of the overlapping slab rather than on either
-    // hull.
-    let support = project(&a_axes, a_half, best_axis);
-    let point = a.position - best_axis * (support - best_depth * 0.5);
+    // The plain midpoint of the two box centres, which are the two bodies'
+    // own positions - not a support point on the chosen axis, and not
+    // dependent on which axis won. `Collision_BoxAgainstBox` writes exactly
+    // this: `(colliderA.centre + colliderB.centre) * 0.5`, and a collider's
+    // centre is copied from its body's position on every sync.
+    let point = (a.position + b.position) * 0.5;
     Some((best_axis, point, best_depth))
 }
 

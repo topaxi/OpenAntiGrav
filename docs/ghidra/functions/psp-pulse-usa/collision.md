@@ -334,32 +334,49 @@ the same array `Collision_AddContact`/`Collision_GetContact` already
 documented - with normal, midpoint, penetration depth, both collider indices,
 both owner ids (`+0x60`), and a friction term read from each collider's own
 `+0x64`-equivalent field. **Two gates stand between this code existing and it
-ever running for a pair of craft**, neither yet settled: `Collision_DispatchPair`
-only reaches it when `world+0x5464` is nonzero, and the function itself
-additionally requires both colliders' own `+0x68` byte to be nonzero (a
-box-collider field, not the same struct as the mesh collider's layout table
-above, and not yet in it). `world+0x5464` is written `1` unconditionally by
-what reads as the collision world's own constructor (`FUN_088151bc` - sets up
-the same `+0x5454` object-count field, `+0x5458` ready flag and `+0x440`
-broadphase pointer `Collision_RaycastWorld` itself reads, and stores its
-pointer to two global world-instance slots) and written `0` by an unrelated,
-much larger setup routine (`FUN_08822dd8`) whose own allocation pattern reads
-like a different subsystem (menu or front-end, not race setup) reaching into
-the world through one of those same globals to disable it. **That is a
-plausible "on during a race, off outside one" story, not a confirmed one** -
-neither function is named, and nothing here was checked against a live race.
-Confidence **75** on "box-box narrowphase collision exists and is not
-categorically dead code," specifically *not* extended to "it runs during a
-race," which needs a live read of `world+0x5464` to settle.
+ever running for a pair of craft, and both are now confirmed live, not just
+plausible from static reading.** `Collision_DispatchPair` only reaches it when
+`world+0x5464` is nonzero, and the function itself additionally requires both
+colliders' own `+0x68` byte to be nonzero (a box-collider field, not the same
+struct as the mesh collider's layout table above). `world+0x5464` is written
+`1` unconditionally by what reads as the collision world's own constructor
+(`FUN_088151bc` - sets up the same `+0x5454` object-count field, `+0x5458`
+ready flag and `+0x440` broadphase pointer `Collision_RaycastWorld` itself
+reads, and stores its pointer to two global world-instance slots at
+`0x08ab0820`/`0x08ab0824`, image-base-relative literals) and written `0` by an
+unrelated, much larger setup routine (`FUN_08822dd8`) whose own allocation
+pattern reads like a different subsystem (menu or front-end, not race setup)
+reaching into the world through one of those same globals to disable it.
 
-**This reopens a claim believed closed.** `contact-response.md` and
-`crates/physics/src/pair.rs`'s own doc comment both say craft-to-craft
-detection "never comes out of Pulse's narrowphase" on the strength of
-`0x08815ccc` being a stub - but `0x08815ccc` is the kind-1-vs-kind-1 (mesh vs
-mesh) dispatch, and craft, being box colliders, are kind 3: their pairs never
-reach `0x08815ccc` at all. Whether they reach `Collision_BoxAgainstBox` instead
-is exactly the two gates above, and is the open item craft-to-craft
-collision detection leaves.
+**Settled 2026-09-07, live, PPSSPP v1.20.4, a full eight-craft SINGLE RACE
+grid on `pulse-psp-usa.chd`:** reading `world+0x5464` off the running game
+during the race gave `1`, and every one of the eight craft's own box
+collider's `+0x68` byte (reached via `craft+0x1cc` -> body, `body+0x3bc` ->
+collider) read `1` too - all eight, not a sample. Two craft were then
+teleported onto the same point (`memory.write` on the followed craft's body at
+a `Ship_UpdateCraft` breakpoint, the same mechanism `place()` in
+`scripts/psp-drive.py` uses for a single craft), and a breakpoint on
+`Collision_BoxAgainstBox`'s own entry (`0x0881702c`) fired **ten times running**
+with `a1`/`a2` resolving, through the proxy table at `world+0x2454`
+(stride `0xc`, collider pointer at each entry's offset `0`), to exactly the two
+placed craft's colliders - their `+0x60` owner ids read `7` and `6` (a second
+run, with a different pair placed, read `7` and `5`), matching the known
+craft addresses directly, not inferred. The world's own
+contact counter at `world+0x2450` was read `0` at the first hit's entry and `1`
+at the very next hit's entry (same frame, the pair visited in the opposite
+order), which is the counter actually incrementing across the call that ran in
+between - not just dispatch, a real contact written. Confidence **92** on "runs
+for two craft, and produces a contact" - a live measurement on the exact
+proxy/collider/owner chain this page already predicted, not an inference from
+static reading. See [`pair.rs`](../../../../crates/physics/src/pair.rs) for
+what changed as a result.
+
+**This retires the claim `contact-response.md` and `crates/physics/src/pair.rs`
+used to carry** - that craft-to-craft detection "never comes out of Pulse's
+narrowphase" on the strength of `0x08815ccc` being a stub. `0x08815ccc` is the
+kind-1-vs-kind-1 (mesh vs mesh) dispatch, and craft, being box colliders, are
+kind 3: their pairs never reach `0x08815ccc` at all. They reach
+`Collision_BoxAgainstBox` instead, and now-confirmed-live it runs for them.
 
 ### `Collision_BoxAgainstMesh` (`0x08815cd4`) is a ten-ray star from the box centre
 
@@ -543,7 +560,7 @@ respawn. Confidence **86**.
 | `0x08818a00` | `Collider_BoxSamplePoints` | 90 |
 | `0x08818964` | `Collider_SetBoxTransform` | 90 |
 | `0x08815cd4` | `Collision_BoxAgainstMesh` | 88 |
-| `0x0881702c` | `Collision_BoxAgainstBox` | 75 |
+| `0x0881702c` | `Collision_BoxAgainstBox` | 92 |
 | `0x0881894c` | `Collider_BoxShapeKind` | 92 |
 | `0x088188a0` | `Collider_InitBox` | 80 |
 | `0x0881585c` | `Collision_AddBoxCollider` | 80 |

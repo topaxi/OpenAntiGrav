@@ -34,18 +34,61 @@ And `FUN_08868ea4`'s two callers are read, not just found -
 `FUN_088690fc`, both shape-confidence 60, semantics still under 50 - the
 prerequisite for porting it has landed even though the port itself has not.
 
+**Settled 2026-09-07: the load-bearing live read landed, and `pair.rs` changed
+as a result.** PPSSPP v1.20.4, a full eight-craft SINGLE RACE grid on
+`pulse-psp-usa.chd`. `world+0x5464` read `1` during the race; all eight craft
+colliders' own `+0x68` byte read `1`. Two craft were teleported onto the same
+point and a breakpoint on `Collision_BoxAgainstBox`'s own entry fired ten
+times running with both proxies resolving to the two placed craft's colliders
+(owner ids matching directly), and `world+0x2450`'s contact counter rose by
+one across the first of those hits - a contact genuinely written, not just a
+dispatch. Full recipe and readings:
+[collision.md](../docs/ghidra/functions/psp-pulse-usa/collision.md#collision_stepnarrowphase-0x088159c0-builds-the-pair-list).
+`Collision_BoxAgainstBox` is now decompiled in full and compared against
+`pair::overlap` in the detail `contact-response.md` asked for; three
+differences were found and ported into `pair.rs` (see its own updated doc
+comment on [`overlap`](../crates/physics/src/pair.rs)): only the six face axes
+ever choose the contact normal (the nine edge-edge cross products are
+reject-only), each hull's own "up" axis needs to beat *half* the reigning best
+depth to win where right/forward only need to beat it outright, and the
+contact point is the plain midpoint of the two bodies' positions rather than a
+support point on the chosen axis. Friction and the one-contact-per-pair shape
+were confirmed unchanged. All three differences, including the "half the best
+depth" bias, are confirmed at instruction level against the disassembly (a
+real `mul.s` on a real `0.5f` register, not a decompiler artifact) - the VFPU
+inlining trap `docs/ghidra/workflow.md` warns about applies directly to a
+function this size, and it was checked rather than assumed. Three new
+regression tests in `pair/tests.rs` pin each difference against the pre-fix
+algorithm, found by sweeping poses rather than hand-picked. Confidence on
+`Collision_BoxAgainstBox` raised **75 -> 92** in `collision.md`'s table and
+`names.tsv` - a live measurement on the exact predicted chain, not an
+inference from static reading. **The correction has one traced consequence
+outside this crate**: it moves a full-grid race's trajectories enough to fail
+`crates/game/tests/opponent_weapons_ground_truth.rs`'s
+`a_field_racing_with_real_pads_does_not_mine_itself_to_death`. Instrumented
+directly rather than guessed at: craft-craft contact never charges the
+shield pool in this engine at all (only wall scrape and weapon blasts do), and
+the destroyed craft's own damage log shows a Bomb, a Missile and a
+kill-shot **Plasma** hit - zero mine damage, so this is not the mine-dodging
+gap an earlier version of this row named. Bisecting the three ported
+narrowphase differences individually shows it takes the edge-axis exclusion
+and the midpoint contact point *together* to reproduce the failure - neither
+alone does, and the "up axis needs half the depth" bias is confirmed inert
+in this specific race. See
+`handover/the-corrected-craft-pair-narrowphase-moves-a-full-grids-trajectories.md`
+for the full numbers. Read as a butterfly-effect consequence of a physics fix
+verified correct at instruction level, not a demonstrated bug here or in
+`crates/ai` - left for that test's and that crate's owners to weigh rather
+than patched here.
+
 ## Open
 
 - `pending_impulse` is set by nothing in this crate, so `apply_pending_impulse` is a correct but fully inert no-op.
 - `body+0x50` as position is in direct tension with rigid-body.md's confidence-88 reading of `body+0x40..0x70` as inverse-inertia storage; flagged in both docs, reconciled in neither.
 - The stun is not armed: craft-craft elasticity (`e = 0.1`) disagrees with the ship's own track elasticity (`e = 0.4`), no friction is applied, and no severity logic is modelled.
-- `FUN_0885bf84` is an unconfirmed fuse-arming candidate for `craft->0x48` - not for `pending_impulse`, which it never touches. Slot arithmetic and the written field now match `FUN_08867370`'s reader exactly; the cap (`16` vs `32`) and cursor offset (`+0xa4` vs `+0x164`) still don't, and a controlled live watchpoint caught its one arm write but missed whatever recycles the slot afterward - see `contact-response.md`'s own section, linked above.
-- Whether `world+0x5464` and each collider's `+0x68` byte are actually nonzero during a live race is unconfirmed - a static reading of the apparent world constructor (unconditional `world+0x5464 = 1`) versus an apparent menu/front-end teardown (`world+0x5464 = 0`) is suggestive of "on during a race, off outside one" but nothing has been checked against a running game.
-- Whether `oag_physics::pair::overlap` matches `Collision_BoxAgainstBox`'s actual algorithm is unread beyond both being fifteen-axis OBB-OBB SAT: axis tie-break order, contact count and shape (the original writes exactly one contact per pair; `pair::overlap` returns exactly one too, but the *selection* rule between them is unread), and friction combination (`Collision_BoxAgainstBox` reads only one collider's own friction field with no averaging, unlike `Collision_AddContact`'s documented combine rule) are all unread against the original.
+- `FUN_0885bf84` is still an unconfirmed fuse-arming candidate for `craft->0x48` - not for `pending_impulse`, which it never touches. Slot arithmetic and the written field match `FUN_08867370`'s reader exactly; the cap (`16` vs `32`) and cursor offset (`+0xa4` vs `+0x164`) still don't. Re-checked this pass: no static `jal` anywhere in the image targets `0x0885bf84` (`search_instructions`, 525,283 instructions scanned, zero hits), confirming the indirect-dispatch shape already on record rather than turning up a new lead - settling it still needs one of the three routes below.
 
 ## Next Steps
 
 - Settle whether `FUN_0885bf84` arms `craft->0x48`'s fuse, by one of the three routes `contact-response.md` already narrowed it to: read what `+0xbc`'s per-type table actually enumerates, find `FUN_0886b458`'s own caller (unresolved by static `jal` search, same indirect-dispatch shape as `FUN_08867370` itself), or catch a slot at the *moment* it is armed and read its `+0x48` on every tick thereafter rather than trusting a watchpoint to report absence.
 - Port `FUN_08868ea4` now that both its callers (`FUN_08868a10`, `FUN_088690fc`) are read, or wire `post_blast_impulse` to a real weapon.
-- Live-verify `world+0x5464` and a craft collider's `+0x68` byte during a race (PPSSPP breakpoint/memory read), to settle whether `Collision_BoxAgainstBox` ever actually runs for two craft - this is still the load-bearing check the corrected narrowphase finding needs before any of `pair.rs` is touched, and it remains unread since 2026-08-25 (see `collision.md`).
-- If confirmed live, compare `Collision_BoxAgainstBox`'s algorithm against `pair::overlap` in the same detail `contact-response.md` gives the one-body path, and port the differences.
