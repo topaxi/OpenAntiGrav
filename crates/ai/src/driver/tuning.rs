@@ -61,24 +61,80 @@ pub struct Tuning {
     ///
     /// | value | 13 end shield | 07 end shield | solo total | field mean | field worst |
     /// | --- | --- | --- | --- | --- | --- |
-    /// | 0.35 (old) | 6.52 | 0.00 | 705.68 | 0.88 | 0.64 |
-    /// | 0.33 | 17.86 | 0.00 | 774.28 | 0.87 | 0.63 |
-    /// | 0.32 | 24.17 | 0.00 | 788.97 | 0.93 | 0.74 |
-    /// | **0.30** | **39.07** | **0.00** | **863.10** | **0.93** | **0.82** |
-    /// | 0.25 | 59.50 | 0.00 | 932.20 | 0.84 | 0.67 |
-    /// | 0.22 | 67.55 | 0.00 | 937.78 | 0.89 | **0.41 (fails 0.45)** |
-    /// | 0.20 | 63.45 | 0.00 | 934.48 | **0.69 (fails 0.70)** | **0.18 (fails 0.45)** |
-    /// | 0.15 | 58.02 | 0.00 | 914.41 | 0.86 | 0.57 |
+    /// | 0.35 (old) | 6.52 | 0.00 | 705.68 | 0.90 | 0.70 |
+    /// | 0.33 | 17.86 | 0.00 | 774.28 | 0.86 | 0.75 |
+    /// | 0.32 | 24.17 | 0.00 | 788.97 | 0.83 | 0.54 |
+    /// | **0.30 (shipped)** | **39.07** | **0.00** | **863.10** | **0.73** | **0.00 (fails 0.45)** |
+    /// | 0.25 | 59.50 | 0.00 | 932.20 | 0.92 | 0.67 |
+    /// | 0.22 | 67.55 | 0.00 | 937.78 | 0.66 (fails 0.70) | 0.20 (fails 0.45) |
+    /// | 0.20 | 63.45 | 0.00 | 934.48 | 0.68 (fails 0.70) | 0.00 (fails 0.45) |
+    /// | 0.15 | 58.02 | 0.00 | 914.41 | 0.85 | 0.50 |
     ///
-    /// **`0.30` is chosen, not the total-maximising row.** `0.25` scores
-    /// higher on both `13` and the solo total, but `0.22` and `0.20` - one and
-    /// two steps further down the same slope - both fail the field floors
-    /// outright, the same "one craft switches basin" trap
-    /// `Tuning::curvature_span` documents. `0.30` is the smallest move off the
-    /// old default and the only row whose field margins **improve** on the
-    /// baseline in both columns rather than sitting close to a value that
-    /// fails; distance from that cliff is worth more here than the last few
-    /// points of `13`'s number.
+    /// # Re-swept 2026-09-07, after `oag_physics::pair::overlap`'s correction
+    ///
+    /// **The three left-hand columns (`13`, `07`, solo total) are
+    /// re-measured, not merely re-quoted, and reproduce to the digit against
+    /// the row above them.** A lone craft never touches
+    /// `oag_physics::pair::overlap` - there is nothing else on the circuit
+    /// to collide with - so nothing about the corrected narrowphase (see
+    /// `handover/craft-to-craft-collision-is-implemented-the-stun.md`,
+    /// confidence 92, not touched by this re-sweep) can have moved a number
+    /// this harness only ever measured on one craft. That is worth stating
+    /// plainly: the convergence story this table exists to tell - `13`
+    /// rising from `6.52` to `39.07`-`67.55` as `look_speed` falls, `07`
+    /// stuck at `0.00` throughout - is exactly as solid today as it was
+    /// before the correction landed.
+    ///
+    /// **The two field columns moved, and they no longer mean what they did.**
+    /// Both are a single seed (the project's fixed `SEED = 1`, unchanged from
+    /// before), and the corrected narrowphase changes which axis wins a
+    /// contact tie on an already-detected overlap - enough, over eight craft
+    /// and 3,600 ticks, to redirect one craft's whole later trajectory and
+    /// every RNG draw it gates. At `0.30` that redirection now seats an
+    /// opponent inside a Plasma blast it did not stand in before: `worst`
+    /// reads `0.00`, failing the very floor this value was chosen to clear.
+    /// **Measured over 16 seeds rather than trusting the one this table is
+    /// pinned to** (`crates/game/tests/weapon_floor_sweep.rs`,
+    /// `sweep_worst_shield_over_seeds` and `sweep_lap_completion_over_seeds`):
+    /// mean-of-means shield is `0.68` at `0.30` against `0.72` at `0.22` and
+    /// `0.71` at `0.20`; mean-of-worsts is `0.32`/`0.38`/`0.30`; a depleted
+    /// craft appears in `2/16`, `2/16` and `3/16` seeds respectively; opponent
+    /// lap completion (no weapon RNG at all) posts `2/16`, `2/16` and `3/16`
+    /// short seeds. **None of mean shield, worst shield, depleted-craft count
+    /// or lap completion separates `0.22` or `0.20` - both independently
+    /// measured above as genuinely wrecking the field - from the shipped
+    /// `0.30` any more.** `0.22` in fact scores better than `0.30` on every
+    /// field column but one. See `opponent_weapons_ground_truth.rs`'s own doc
+    /// comment for the full account; that test no longer serves as an AI
+    /// tuning guard because of this finding, and does not try to.
+    ///
+    /// # `0.30`'s original justification does not survive this, and the
+    /// constant was not moved anyway
+    ///
+    /// **`0.30` was chosen over the total-maximising `0.25` (and `0.22`,
+    /// which scores higher still) entirely on field-floor cliff distance** -
+    /// the paragraph above this one, before the correction, read "`0.22` and
+    /// `0.20`... both fail the field floors outright... distance from that
+    /// cliff is worth more here than the last few points of `13`'s number."
+    /// **That reasoning is gone**: the field floor the cliff was measured
+    /// against no longer discriminates any of these values from one another,
+    /// so there is no field-side evidence left that `0.22` or `0.25` costs
+    /// anything `0.30` does not also cost. On solo evidence alone - the only
+    /// evidence this correction left standing - `0.22` is the best row on the
+    /// board (`937.78` solo total, `67.55` on `13`), with `0.25` close behind
+    /// and `0.30` well back on both.
+    ///
+    /// **This is reported rather than acted on.** Moving the constant on this
+    /// finding alone would be retuning on the strength of a guard that no
+    /// longer exists: the field board was what stood between "a value that
+    /// scores well solo" and "a value that wrecks a real race with other
+    /// craft on it," and nothing here has replaced that check for a *tuning*
+    /// regression - `opponent_weapons_ground_truth`'s rebuilt assertion is
+    /// deliberately coarse (catches the field collapsing, not catches a
+    /// tuning nudge) precisely because the finer-grained version is what this
+    /// section just showed cannot be built from this scenario any more. `0.30`
+    /// stays the shipped value until someone builds the replacement guard or
+    /// rules that solo evidence is enough on its own.
     ///
     /// **`07_Track` is unchanged at every value tested** - `0.00` end shield
     /// in every row, the same craft destroyed at the same eventual state as
