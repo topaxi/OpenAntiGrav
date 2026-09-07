@@ -250,7 +250,7 @@ impl Race {
 
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
-        let mut race = Self {
+        let race = Self {
             racing_line: line,
             ai_order: order,
             // **Degraded from the measured tuning**, never boosted toward it -
@@ -374,11 +374,12 @@ impl Race {
             flap_graphics: setup.airbrake_graphics,
             scheme: ControlScheme::default(),
         };
-        // Lap 1 is a lap too. See `Race::grant_free_turbo` for the mode,
-        // full-slot and missing-table gates this shares with every later
-        // grant - the same call, just made once more, here, before the first
-        // lap-completion edge exists to make it.
-        race.grant_free_turbo();
+        // The free Turbo is granted at the release edge, not here - see
+        // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot
+        // and missing-table gates it shares with every later grant. The
+        // original never holds anything in the pickup slot through the
+        // countdown; granting it at tick 0 put a HUD icon on screen during
+        // those 272 ticks that the disc never draws.
         race
     }
 }

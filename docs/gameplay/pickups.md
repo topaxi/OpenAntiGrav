@@ -32,7 +32,8 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **The weighted draw**: `rand() % total` then a cumulative walk over `<Pickupodds>` | **recovered 2026-08-17** | 92 |
 | **The inventory's shape** - one slot holding a weapon id, `-1` for empty (`craft+0x1bc`) | **recovered 2026-08-17** | 88 |
 | **Granting only into an empty slot** | **ours** | - |
-| **When in the lap the free Turbo arrives** | **ours** | - |
+| **Lap 1's free Turbo arrives at the countdown's release edge, not the start line** | **recovered 2026-09-07**, from a maintainer play-test on `pulse-psp-eu` | 85 |
+| **The moment within a lap for laps 2..N** (crossing the finish line, or the start line a tick later) | unrecovered | - |
 | `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
 | `Ship_Damage`'s `source == 2` being a weapon hit | **recovered** | 75 |
 | `entity+0x1b8` is the fire-request word, one bit per weapon | **recovered** | 80 |
@@ -181,17 +182,28 @@ per-file dictionary, so `name` is `b=` in `Arcade_HUD.xml` and `c=` in
 `TimeTrial_HUD.xml`, and grepping the first file's key against the second
 returns nothing with exit code 0. Expand before grepping, or use the parser.
 
-**Lap 1 gets one too, granted at race start rather than on completing the
-lap.** `Race::grant_free_turbo` is called from `oag_race::Outcome::lap_completed`
-for every later lap and, once more, from `Race::start` directly - the edge
-that grant hangs off does not exist yet for lap 1, so it was silently missing
-its own turbo until this was reported 2026-08-19 and fixed. Both calls share
-every gate (mode, an empty slot, a loaded weapon table), so lap 1 gets
-exactly what lap 2 does, just at its own start instead of its own end - the
-same instant, one lap earlier. **What is still not recovered is the moment
-within a lap for laps 2..N**: "once per lap" constrains the count, not
-whether the original grants it crossing the finish line or at the start line
-a tick later (the same edge, either description) - nothing read pins which.
+**Lap 1 gets one too - reported 2026-08-19 as silently missing, since
+`grant_free_turbo` originally hung only off `oag_race::Outcome::lap_completed`
+and lap 1 never crosses that edge on its way in.** The fix landed at the time
+called `Race::start` directly, at tick 0, on the reasoning that lap 1 is a lap
+too and should get its turbo "at its own start instead of its own end". **That
+reasoning was wrong, caught 2026-09-07 by a maintainer-requested side-by-side
+against the original**: a green `TurboIcon` hexagon sat over the start gantry
+in every Time Trial screenshot with no counterpart in the original, and the
+maintainer confirmed directly on `pulse-psp-eu` (our own render target) that
+the free Turbo appears only *after* the countdown releases the craft - the
+original never holds anything in the pickup slot through the countdown at
+all. Confidence 85 (a single, direct play-test on the render-target disc, not
+yet corroborated by a second binary or a decoded record). Fixed by moving the
+grant from `Race::start` to `Race::tick`, firing once at the tick
+`oag_race::state::RaceState::thrust_gated` first reads `false` (`self.world.tick
+== oag_race::state::COUNTDOWN_TICKS`) - the same instant the HUD's countdown
+board itself releases. Both calls (this one and `lap_completed`'s) share
+every other gate: mode, an empty slot, a loaded weapon table. **What is still
+not recovered is the moment within a lap for laps 2..N**: "once per lap"
+constrains the count, not whether the original grants it crossing the finish
+line or at the start line a tick later (the same edge, either description) -
+nothing read pins which.
 
 ## The icon is found by name, not by an id
 

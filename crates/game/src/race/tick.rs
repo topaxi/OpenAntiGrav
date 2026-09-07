@@ -36,6 +36,16 @@ impl Race {
             controls.thrust = 0.0;
         }
 
+        // The free Time Trial/Speed Lap Turbo is granted at the release edge,
+        // not held through the countdown - the original never has anything
+        // in the pickup slot until the craft is actually released. This is
+        // the tick `RaceState::thrust_gated` first reads `false` for; see
+        // `Race::grant_free_turbo` for the mode, full-slot and missing-table
+        // gates that make this safe to call unconditionally here.
+        if self.world.tick == oag_race::state::COUNTDOWN_TICKS {
+            self.grant_free_turbo();
+        }
+
         // **Before every craft is stepped, and over the whole field at once.**
         // The weapon slowdown a blast credited last tick becomes a running timer
         // here, so this tick's engine, hover and grip all see it - the original

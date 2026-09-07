@@ -904,10 +904,15 @@ so the original never holds anything to gate in the first place. See
 HUD comparison that surfaced this).
 
 **So a blanket countdown weapon gate may now be the correct call**, where it
-was rejected on the reasoning above. Revisit once
-`Race::grant_free_turbo`'s call site moves from `Race::start` (tick 0) to the
-release edge (`world.tick == oag_race::state::COUNTDOWN_TICKS`, i.e. the same
-tick `RaceState::thrust_gated` first reads `false`) - see the other thread for
-the exact change. Once that lands, check whether any *other* weapon-during-
-countdown path still needs a gate, or whether removing the early Turbo grant
-was the whole gap.
+was rejected on the reasoning above.
+
+**Landed 2026-09-07**: `Race::grant_free_turbo`'s call site moved from
+`Race::start` (tick 0) to the release edge (`world.tick ==
+oag_race::state::COUNTDOWN_TICKS`, i.e. the same tick
+`RaceState::thrust_gated` first reads `false`) - see
+`handover/hud-icon-turbo-timing.md`, now closed, for the exact change and
+its test flips. **Still open here**: check whether any *other*
+weapon-during-countdown path still needs a gate, or whether removing the
+early Turbo grant was the whole gap. Not attempted this session - the mine
+drop-rate pass this thread's own body covers is a separate concern from the
+gate question.
