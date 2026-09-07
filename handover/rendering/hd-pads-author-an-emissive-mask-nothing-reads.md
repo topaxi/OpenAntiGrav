@@ -19,6 +19,20 @@ is complete and this file is only what it did **not** close.
 - `uNumSpeedupPads` / `uNumWeaponPads` are **leaderboard stat fields**, not
   render state - their only reader is the `sceNpManagerGetOnlineName`
   serialiser at `0x0001d800`. A dead end, recorded as one.
+- **What binds a pad's `_ne` file - answered, asset-side, 2026-09-07.** Every
+  pad chunk's material record on `12_sol_2` is **inline**, not a separate file
+  the chunk merely names, and it genuinely carries the `_ne` mask as its own
+  `second_texture` (`+0x78`/`+0x60`) - the eight `Weapon Pad` chunks all name
+  `materials/weapon_pads.rcsmaterial`, exactly and only them (8 material
+  records disc-wide name it); the ten `Speedup Pad` chunks all share one
+  material slot naming the generic `materials/diffuse_normal_specular_emmissive.rcsmaterial`
+  instead, not `speedup_material.rcsmaterial` - which **zero** material
+  records in this model name, so it reads as an authored orphan here and does
+  not explain why the disc ships it standalone after all. See
+  `docs/rendering/pads.md`'s "What binds the `_ne` file" section for the full
+  measurement and `crates/render/examples/hd_pad_material_dump.rs` for the
+  probe. **Do not re-derive this**; the next open question is whether it is
+  worth wiring, not whether it exists.
 
 ## Open
 
@@ -41,26 +55,65 @@ Three things the disc authors that this project does not touch:
    duplicated again under `materials_dlc/` in `DATA03.PSARC`. 110 pad-named
    entries across the disc. `weapon_pads` on `12_sol_2` is 105,776 bytes and
    70 variants.
-3. **Neither reaches the frame.** Every pad chunk on `12_sol_2` resolves to
-   one surface role, `0x00000059`: second texture is the circuit's lightmap
-   atlas (`lmaps/ile_mesh_combine13-lmap.gtf`), `ADD_SECOND` clear,
-   `NO_AMBIENT` set. Neither `_ne` file is among the fifteen second textures
-   the pad model loads at all. So the pads currently draw albedo times
-   lightmap with no additive layer - honest, and missing the light bars.
+3. **Neither reaches the frame, and now the exact reason is measured rather
+   than open.** Every pad chunk on `12_sol_2` resolves to one surface role,
+   `0x00000059`: second texture is the circuit's lightmap atlas
+   (`lmaps/ile_mesh_combine13-lmap.gtf`), `ADD_SECOND` clear, `NO_AMBIENT`
+   set. That much is still true, but "neither `_ne` file is among the second
+   textures the pad model loads" undersold it: the material *names* the `_ne`
+   file at `+0x78`/`+0x60`, it just is not what gets **bound**. Each pad
+   material record carries **three** sampler entries, not the two this
+   renderer's `Pick` has room for - `[0]` the `_cs` diffuse, `[1]` the `_ne`
+   mask (the file's own `second_texture`), `[2]` the lightmap - and
+   `oag_render::mesh::rcs::skin::picks` (`crates/render/src/mesh/rcs/skin.rs`)
+   short-circuits on `Material::lightmap_entry().is_some()`: "the lightmap
+   wins the second binding, wherever it sits" grabs entry `[2]` for the
+   renderer's one `aux` slot and entry `[1]` is never looked at again. That
+   short-circuit exists on purpose, to fix Talon's Junction's baked lighting
+   landing on a non-first entry, and it is doing exactly what it was built to
+   do here too - it just also drops a legitimate second thing the material
+   author put in slot `[1]`.
+   **The `_ne` binding is not idle microcode either.** Resolving each pad
+   chunk's own shader variant the way `skin::variants` does (`Class::Static`,
+   the ordinary lit-race pass) and reading its declared samplers: the `_ne`
+   sampler's name hash (`0xa2d555b9`, shared by both pad types) binds
+   fragment unit 1, and `Program::accumulates(1)` is `true` - on **18 of 18**
+   pad chunks measured (10 `Speedup Pad` + 8 `Weapon Pad`). No parameter
+   patch gates it; each material carries exactly one `parameters` entry and
+   neither pad's hash (`0x7611a2d8` speedup, `0xce5c4410` weapon) is the tint,
+   offset or scroll-rate hash `oag_render::mesh::rcs::emissive` already reads,
+   so a wired layer would run at `emissive`'s own defaults - tint
+   `[1.0, 1.0, 1.0]`, no scroll. So the disc's own shader treats the light
+   bars as a plain, unconditional additive layer, on every pad measured, with
+   nothing that looks like a cooldown gate in the material record itself.
 
 ## Next Steps
 
-In order of cost, cheapest first:
+In order of cost, cheapest first. Step 1 (finding the binding) is done; what
+is left is deciding whether to spend on wiring it, and the two RE leads.
 
-1. **Find what binds a pad's `_ne` file.** Asset-side only, no emulator.
-   `oag_render::mesh::rcs::skin::picks` decides which sampler entry a
-   material's second texture comes from; the pad chunk's material is picking
-   the lightmap instead. Start by dumping the pad chunk's own material record
-   out of `12_sol_2/track.rcsmodel` and comparing its sampler list against
-   `weapon_pads.rcsmaterial`'s 70 variants. If the pad material is a *separate
-   file* the chunk names rather than an inline record, that alone is the gap -
-   and it would explain why the disc ships `speedup_material.rcsmaterial`
-   standalone at all.
+1. **Wire the emissive layer - and read the trap before touching it.** This is
+   *not* the cheap step it looks like. The naive fix - make `skin::picks`'s
+   `aux` slot land on sampler entry `[1]` instead of `[2]` for a pad material -
+   is a regression, not a fix: it drops the lightmap binding entirely, and
+   `docs/rendering/pads.md` already establishes what that does to an HD pad
+   lit only by its lightmap with `NO_AMBIENT` set - flat blue-looking-correct
+   turns near-black. **The existing guard would not catch it either**:
+   `crates/render/tests/pad_alpha_test_ground_truth.rs::an_hd_speedup_pad_draws_visible_pixels`
+   counts *lit pixels*, and an added glow layer adds pixels even while the
+   lightmap it silently traded away was worth more of them - a smaller,
+   dimmer, wrongly-lit pad can still clear a lit-pixel floor. The correct
+   shape needs **both** textures bound at once, which this renderer's
+   architecture does not have room for: `Pick` carries exactly one `aux`
+   entry, `skin()` returns exactly two `TextureSlots` (`textures`,
+   `lightmaps`), and `mesh.wgsl` binds exactly two texture units per
+   material. Wiring this for real is a third-texture-per-material change -
+   `Pick`, `skin()`'s return shape, `Model`, `mesh_render::build`'s bind
+   group, `mesh.wgsl`, and a new `slots` flag so the shader knows a material
+   has one - touching the bind-group layout every model in the crate uses,
+   not a pad-only change. Do it with a picture check at each step, not just a
+   pixel count: an isolated pad plate through `capture::capture_from`, at
+   player framing, before and after.
 2. **Diff the `Pad_Importer` vtables.** `WeaponPad_Importer`'s object takes
    its vtable from `0x0086a730`, seventeen slots. The adjacent table at
    `0x0086a780` shares fourteen and differs at slots 0, 3 and 5. A
@@ -76,14 +129,20 @@ In order of cost, cheapest first:
    whole-image scan for the address or a live read; the patched RPCS3 with
    working write watchpoints (`just build-rpcs3-watchpoints`) is the tool for
    the second.
-4. **Only then implement.** Until one of 1-3 lands, an HD pad drawing the same
-   in both states is the correct answer, not a placeholder to improve on. Do
-   not add a cooldown grey by analogy with Pulse - the two titles' pads are
-   already established to differ in mechanism, since Pulse's texture is
-   neutral and HD's is painted.
+4. **Only then implement a state change, if 2-3 find one.** Until they do, an
+   HD pad drawing the same in both states is the correct answer, not a
+   placeholder to improve on. Do not add a cooldown grey by analogy with Pulse
+   - the two titles' pads are already established to differ in mechanism,
+   since Pulse's texture is neutral and HD's is painted. And per step 1's
+   measurement: the material's own shader accumulates the light-bar layer
+   unconditionally on every chunk read, with no parameter that looks like a
+   gate - so if 2-3 do find a cooldown state, it is not sitting in this
+   material record and the light bars wired per step 1 would need to run
+   always-on regardless, with whatever 2-3 find layered on top rather than
+   replacing it.
 
 A play capture would settle the *observable* half quickly and is worth doing
 first if RPCS3 is already up: race on `12_sol_2`, cross a weapon pad, and
 compare the pad in the frame before and a second after. That answers "is there
 a state change at all" without reading a single instruction, and it decides
-whether steps 1-3 are worth their cost.
+whether steps 2-3 are worth their cost.

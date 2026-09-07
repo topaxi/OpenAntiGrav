@@ -92,8 +92,7 @@ rectangles laid out along the chevron and the cross, and nothing else. That is
 an emissive mask, authored per circuit, for precisely the elements that would
 light up and go out.
 
-Each circuit also ships two standalone material files that no other surface
-shares:
+Each circuit also ships two standalone material files carrying a pad name:
 
 ```
 /data/environments/<circuit>/materials/speedup_material.rcsmaterial
@@ -101,15 +100,26 @@ shares:
 ```
 
 Both are duplicated again under `materials_dlc/` in `DATA03.PSARC`. 110 entries
-across the disc carry a pad name, on all eleven circuits.
+across the disc carry a pad name, on all eleven circuits. **Only one of the two
+is what a pad chunk actually names, on `12_sol_2` at least - measured, not
+assumed, 2026-09-07.** `weapon_pads.rcsmaterial` is exclusive to the `Weapon
+Pad` chunks: exactly 8 material records in the whole model name it, and
+`12_sol_2` authors exactly 8 `Weapon Pad` chunks. `speedup_material.rcsmaterial`
+is named by **zero** material records in this model; the ten `Speedup Pad`
+chunks all share one slot naming the generic
+`materials/diffuse_normal_specular_emmissive.rcsmaterial` instead - a name
+that says nothing pad-specific and is presumably reused elsewhere on the
+circuit for ordinary geometry. So `speedup_material.rcsmaterial` reads as an
+authored orphan here, at least on this circuit, and does not explain its own
+existence the way it looked like it might.
 
-**None of that reaches the frame yet, and the reason is measured rather than
-assumed.** Every pad chunk on `12_sol_2` resolves to one surface role,
-`0x00000059`: second texture is the circuit's **lightmap** atlas
-(`lmaps/ile_mesh_combine13-lmap.gtf`), `ADD_SECOND` clear, `NO_AMBIENT` set. So
-the pads draw albedo times lightmap with no additive layer, and neither `_ne`
-file is among the fifteen second textures the pad model loads at all. Whatever
-binds a pad's emissive mask is not the second-texture slot this reader walks.
+**None of that reaches the frame yet, and the reason is now the precise
+mechanism, not an open question.** Every pad chunk on `12_sol_2` resolves to
+one surface role, `0x00000059`: second texture is the circuit's **lightmap**
+atlas (`lmaps/ile_mesh_combine13-lmap.gtf`), `ADD_SECOND` clear, `NO_AMBIENT`
+set. That much still stands, but "neither `_ne` file is among the second
+textures the pad model loads" undersold it - see "What binds the `_ne` file"
+below, which replaces that framing with the actual answer.
 
 ### The regression this replaced
 
@@ -196,20 +206,59 @@ What is established so far, on the executable side:
 - **No colour write and no emissive gate has been read on either class.**
   Nothing above is evidence of one.
 
-Two leads worth the next session, in order of cost:
+### What binds the `_ne` file - answered, asset-side, 2026-09-07
 
-1. **What binds a pad's `_ne` file.** It is authored per circuit, it is an
-   emissive mask over the light bars, and this reader never loads it. The
-   answer is in the two dedicated `.rcsmaterial` files - `weapon_pads` has 70
-   variants on `12_sol_2` - and it is asset-side work with no emulator needed.
-2. **The `Pad_Importer` base's virtual table.** `WeaponPad_Importer`'s object
-   takes its vtable from `0x0086a730`, seventeen slots; the adjacent table at
-   `0x0086a780` shares fourteen of them and differs at slots 0, 3 and 5. Those
-   three are where a class-specific per-frame update would sit, which is how
-   `WeaponPad_UpdateRefreshTimer` was found on PSP.
+**Nothing binds it, and now the reason is a measured mechanism rather than a
+question.** The pad material is not a separate file the chunk merely names -
+it is an ordinary **inline** `.rcsmodel` material record, and it genuinely
+carries the `_ne` mask as the file's own `second_texture`
+(`Material::second_texture`/`second_texture_sampler`, `+0x78`/`+0x60`). What
+drops it is that the record carries a **third** sampler entry beyond the two
+this renderer reads positionally - `[0]` the `_cs` diffuse, `[1]` the `_ne`
+mask, `[2]` the circuit's lightmap - and
+`oag_render::mesh::rcs::skin::picks` (`crates/render/src/mesh/rcs/skin.rs`)
+resolves a material's one `aux` binding by "the lightmap wins the second
+binding, wherever it sits" whenever `Material::lightmap_entry()` finds one
+anywhere in the sampler list. That rule exists on purpose - it is what fixed a
+third of Talon's Junction's baked lighting landing on a non-first entry - and
+it does exactly what it was built to do on a pad material too. It just also
+means entry `[1]`, the material's own designated second texture, is never
+looked at again once a lightmap is found in the same list.
 
-Until one of them lands, an HD pad draws its authored texture under the
-circuit's own lightmap in both states. That is a visible absence - a collected
-pad looks the same as an uncollected one - and it is deliberately preferred to
-inventing a cooldown grey, per [`CLAUDE.md`](../../CLAUDE.md)'s "never invent
-what the assets already author".
+**The binding is not idle microcode either - measured off the actual shader.**
+Resolving each pad chunk's shader variant the way `skin::variants` does
+(`Class::Static`, the ordinary lit-race pass) and reading its declared
+samplers and fragment program: the `_ne` sampler's name hash (`0xa2d555b9`,
+shared by both `Speedup Pad` and `Weapon Pad`) binds fragment unit 1, and
+`Program::accumulates(1)` is `true` on **18 of 18** pad chunks on `12_sol_2`
+(10 `Speedup Pad`, 8 `Weapon Pad`). No parameter patch gates it - each
+material carries exactly one `parameters` entry, and neither pad's hash
+(`0x7611a2d8` speedup, `0xce5c4410` weapon) matches the tint, offset or
+scroll-rate hashes `oag_render::mesh::rcs::emissive` already reads for other
+circuits' glow materials, so a wired layer runs at that module's own
+defaults - tint `1,1,1`, no scroll. **The disc's own shader treats the light
+bars as a plain, unconditional additive layer on every chunk measured**, with
+nothing in the material record that looks like a cooldown gate.
+Reproduce with `crates/render/examples/hd_pad_material_dump.rs`.
+
+**This is not the cheap wiring step it looks like, and that is worth stating
+before anyone tries it.** The renderer's own architecture has room for only
+one second texture per material - `Pick::aux` is a single `Option<usize>`,
+`skin()` returns exactly two `TextureSlots`, `mesh.wgsl` binds exactly two
+texture units per material - so making `aux` land on entry `[1]` instead of
+entry `[2]` does not add the glow, it **trades the lightmap away for it**. On
+a pad chunk with `NO_AMBIENT` set and a flat `0,0,0` vertex light, that is the
+near-black failure this page's "checked as a picture" section above already
+demonstrated the cost of - and the existing pixel-count guard
+(`an_hd_speedup_pad_draws_visible_pixels`) would not catch it, because an
+added glow layer *adds* lit pixels even while silently trading away a larger
+number the lightmap was worth. Wiring this correctly needs a genuine third
+texture slot per material, which is a bind-group-layout change reaching every
+model the crate draws, not a pad-only fix.
+
+Until the third-texture-slot work lands, an HD pad draws its authored texture
+under the circuit's own lightmap in both states, unchanged by this finding.
+That is a visible absence - a collected pad looks the same as an uncollected
+one - and it is deliberately preferred to inventing a cooldown grey or a
+regression dressed as a fix, per [`CLAUDE.md`](../../CLAUDE.md)'s "never
+invent what the assets already author".
