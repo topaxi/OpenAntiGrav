@@ -119,7 +119,7 @@ what it can be given next, so it is simulation state.
 **Three things about the port are ours, and each is labelled where it lives.**
 The *sequence* still cannot match the original, for the reason the next paragraph
 gives. The retry behind the no-repeat rule is **bounded** where the original's
-loop is not: `IMPLEMENTED` holds nine weapons, so a table weighting only one of
+loop is not: `IMPLEMENTED` holds ten weapons, so a table weighting only one of
 them would spin for ever, and after `pickup::REDRAW_ATTEMPTS` a repeat is
 accepted - about one grant in twenty thousand on the shipped odds. And an
 *unplaced* craft spends the `human` column alone, because the original always has
@@ -382,8 +382,9 @@ the first time this build has drawn any part of Pure's pickup on screen.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma and Shuriken**
-(2026-09-02). **Being on this list is necessary but not sufficient** - see
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma, Shuriken and,
+as of 2026-09-07, the Cannon**. **Being on this list is necessary but not
+sufficient** - see
 "Shuriken and Repulser are gated by mode, not by the pool" below for the two
 weapons the *pool* would hand out and the authored *odds* never do.
 
@@ -418,23 +419,44 @@ weapons the *pool* would hand out and the authored *odds* never do.
   throwing craft's own speed, reflecting perfectly off walls until its authored
   `fuse` runs out. See
   [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md).
-- **Quake, LeachBeam and the Cannon are all read now** (2026-09-07) - see
+- ~~**Cannon** needs a fire path nothing has read.~~ **Built 2026-09-07**, the
+  same day its evidence page was written, and it is the odd one out among
+  every weapon built here: it does not fire through
+  `Weapon_RequestFire`'s bit system at all. `Cannon_UpdateReload`
+  (`0x0883f424`) runs every frame, gated only on the craft holding it, and it
+  is *that* countdown - reloaded from the Cannon's own authored `rate` - that
+  periodically arms the bit `Weapon_FireCannon` (`0x088577ac`) reads. So a
+  picked-up Cannon fires itself, twin barrels alternating by the low bit of
+  its own remaining `rounds`, until the magazine runs out - `oag_gameplay::
+  pickup::Held::advance_cannon_reload` is the port, called from
+  `Race::advance_cannons` for every craft in slot order, every tick, whether
+  or not its driver ever presses fire. Each round carries the firing craft's
+  own current speed rather than a class figure - the same "carry the
+  shooter's speed" shape the Shuriken's throw already has - plus a base this
+  engine had to invent: the Cannon's `<Stats>` authors no speed at all, and
+  the per-class base `Cannon_Init` adds to it (`func_0x00060af4`,
+  `0x08864af4`) was not decompiled this pass. See `oag_gameplay::
+  projectile::cannon::BASE_SPEED_KMH`'s own doc comment, marked chosen and
+  not measured. Damage is direct-hit only rather than a blast, and that is
+  the schema's own shape: the Cannon is the only projectile weapon whose
+  block authors neither `blastforce` nor `blastradius`, so a round that hits
+  a wall costs nobody anything and one that hits a craft costs that craft
+  alone, through `oag_gameplay::projectile::cannon::direct_hit`. See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-  The Quake needs no track deformation at all: it is a travelling point along
-  the track's own spline (a segment plus a parametric `t` and a direction
-  sign), and its hit on a craft reuses the same generic pending-damage channel
-  the Missile and Mine/Bomb already share - buildable for the hit itself, not
-  yet for the wave's own per-frame travel, which was not located. The
-  LeachBeam reuses the Missile's own lock-on for target selection outright and
-  drains continuously while connected, crediting one accumulator on the victim
-  and a second, symmetric one on the shooter every tick - buildable for
-  selection and the connect/disconnect gate, not yet for the actual drain
-  amount. The Cannon turned out not to use the fire-request-bit system at all:
-  a per-frame reload countdown gated on the held-weapon id fires it, and that
-  whole mechanism is now read and buildable. The **Repulser** stays the one
-  true "field the craft *is in* rather than a projectile" - its handler copies
-  four of its own `<Stats>` onto the firing craft before it spawns anything -
-  and is still deferred as Eliminator-only, per `HANDOVER.md`.
+- **The Quake and the LeachBeam are read but not built** (2026-09-07) - see
+  the same page. The Quake needs no track deformation at all: it is a
+  travelling point along the track's own spline (a segment plus a parametric
+  `t` and a direction sign), and its hit on a craft reuses the same generic
+  pending-damage channel the Missile and Mine/Bomb already share - buildable
+  for the hit itself, not yet for the wave's own per-frame travel, which was
+  not located. The LeachBeam reuses the Missile's own lock-on for target
+  selection outright and drains continuously while connected, crediting one
+  accumulator on the victim and a second, symmetric one on the shooter every
+  tick - buildable for selection and the connect/disconnect gate, not yet for
+  the actual drain amount. The **Repulser** stays the one true "field the
+  craft *is in* rather than a projectile" - its handler copies four of its
+  own `<Stats>` onto the firing craft before it spawns anything - and is
+  still deferred as Eliminator-only, per `HANDOVER.md`.
 
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
@@ -442,7 +464,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   work.
 
 **This is a departure and a deliberate one.** The authored table weights
-thirteen weapons and the draw sees nine of them, so what a player gets is the
+thirteen weapons and the draw sees ten of them, so what a player gets is the
 authored distribution *conditioned on* the implemented set. It narrows to
 nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
 - and it beats handing out a mine that cannot be dropped.
@@ -727,23 +749,31 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Four of the thirteen weapons**, and as of 2026-09-07 all three buildable
-  ones have a fully read fire body - see
+- **Three of the thirteen weapons**, now that the Cannon has joined the built
+  set - see
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-  **The Cannon's bit `0x4000` handler is `0x088577ac`, not `0x088537ac`** -
-  that address decompiles as `Ai_Construct` and was an arithmetic slip in
-  `plasma.md`'s sixteen-bit table, not a weapon at all. The Cannon's own
-  request bit `0x2000` really is dispatched by nothing, and that turns out to
-  be because **the Cannon does not fire through the request-bit system at
-  all**: a per-frame reload countdown gated on `craft+0x1bc == 3` (the held-
-  weapon id) is what arms bit `0x4000` on a timer built from the Cannon's own
-  authored `rate`. The Quake needs no track deformation - it is a travelling
-  spline position, not a mesh edit, though its own per-frame travel is still
-  unlocated. The LeachBeam's beam is a resolved link to whatever the Missile's
-  own lock-on already picked, drained continuously while connected; the two
-  rate functions and the health/shield consumer are still unread. The
-  Repulser remains the one weapon needing a genuine craft-state field, and is
+  The Quake needs no track deformation - it is a travelling spline position,
+  not a mesh edit, though its own per-frame travel is still unlocated. The
+  LeachBeam's beam is a resolved link to whatever the Missile's own lock-on
+  already picked, drained continuously while connected; the two rate
+  functions and the health/shield consumer are still unread. The Repulser
+  remains the one weapon needing a genuine craft-state field, and is
   deferred as Eliminator-only regardless.
+- **The Cannon's per-class base speed, `func_0x00060af4` (`0x08864af4`).**
+  `Cannon_Init` adds it to the firing craft's own current speed and the
+  Cannon's `<Stats>` authors no speed at all for it to be read off the disc
+  instead, so this build invents a value - see `oag_gameplay::
+  projectile::cannon::BASE_SPEED_KMH`'s own doc comment, chosen and given no
+  confidence score. This is the one place `cannon-quake-leachbeam.md` itself
+  is not sufficient to build the Cannon from without a further Ghidra
+  session, and its own "Not chased" line says so.
+- **What a Cannon round's collision does beyond direct damage.** No
+  `Cannon_HitCraft`-style function was located, so this build gives it the
+  same floor-following flight and wall/craft detonation every other unread
+  projectile weapon here gets as a placeholder, and applies
+  `damage_per_bullet` to whatever it struck directly with no splash - the
+  schema's own shape, since the Cannon authors neither `blastforce` nor
+  `blastradius`.
 - **The Plasma's `charge_time`.** Authored on all three shipped tables, the only
   weapon that carries it, and no consumer found on a path that was read end to
   end - and **a maintainer who plays Pulse says the weapon does wind up before

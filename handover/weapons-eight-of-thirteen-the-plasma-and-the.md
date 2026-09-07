@@ -305,6 +305,66 @@ already-recorded ones (`Weapon_FireQuake`, `Weapon_FireLeachBeam`, both
 `LeachBeam_UpdatePool`, `LeachBeam_Drain`. `plasma.md` and `pickups.md` are
 both corrected in the same change.
 
+## 2026-09-07, later still: the Cannon built, ten of thirteen
+
+Built straight off the same day's evidence page, with no further Ghidra
+session - the page's own "buildable now" claim held. `Weapon::Cannon` joins
+`oag_gameplay::pickup::IMPLEMENTED`; `oag_formats::weapons::CannonStats`
+decodes the block whole (`absorb rounds rate damage_per_bullet
+slowdown_time`); `Race::advance_cannons` is the per-craft, per-tick port of
+`Cannon_UpdateReload` - every craft holding one fires itself, twin barrels
+alternating by the low bit of its own remaining `rounds`, until the
+magazine empties.
+
+**Two things this weapon does that no earlier one does, both load-bearing
+for whoever touches this next:**
+
+- **It is the first weapon with no fire-request arm at all.**
+  `Race::spend_pickup`'s Cannon arm and `Race::spend_opponent_pickup`'s both
+  `return` unconditionally - a press (human or AI) is a recovered non-event,
+  not a stub. The pickup is spent only by
+  `oag_gameplay::pickup::Held::advance_cannon_reload` reaching zero rounds.
+- **It self-arms rather than being armed at grant time.** A pad crossing,
+  `--give` and a test setting `Held::weapon` directly are three different
+  ways this project fills the slot, and only the first goes through this
+  crate's own code at all. `advance_cannon_reload` reads `cannon_rounds == 0`
+  as "not yet armed" on its first call after any of the three, rather than
+  requiring a second call site to remember to initialise it - see that
+  method's own doc comment for why zero is safe to read that way.
+
+**One number in this weapon could not come off the disc and had to be
+invented, flagged accordingly.** `Cannon_Init` adds a per-class base speed
+(`func_0x00060af4`, `0x08864af4`) to the firing craft's own current speed,
+and the Cannon's `<Stats>` authors no speed at all - not even a per-class
+one, the shape every other projectile weapon here has. `0x08864af4` was not
+decompiled this pass; `oag_gameplay::projectile::cannon::BASE_SPEED_KMH` is
+this build's stand-in, `400.0`, chosen and given no confidence score. This
+is the one place `cannon-quake-leachbeam.md` is not sufficient to build the
+Cannon from without a further Ghidra session, and its own "Not chased" line
+already said so.
+
+**Damage is direct-hit only, and that is read off the schema rather than
+chosen.** The Cannon is the only projectile weapon whose block authors
+neither `blastforce` nor `blastradius`, so `oag_gameplay::projectile::step`
+gives it its own arm rather than routing it through the shared
+`blast`/`blast_stats` radius sweep: a round that struck a craft costs that
+craft `damage_per_bullet` directly, through the same recovered
+`apply_weapon` gate every other weapon's hit uses, and a round that struck
+geometry costs nobody anything.
+
+**The flight itself needed no new code.** No `Cannon_Update` was found on
+the evidence page, so a round rides the shared floor-follower every other
+unread projectile weapon here already gets as a placeholder - the same one
+the Missile, the Plasma and the Shuriken fly - and it draws as the same
+billboard-sprite fallback those three already use, since it has no model of
+its own either. Nothing needed touching in `crates/game/src/race/scene/
+frame.rs` for the round to be visible.
+
+Verified against `pulse-psp-usa.chd`: `WeaponStats_ParseCannon`'s block
+decodes with authored `rounds`/`rate`/`damage_per_bullet` all above zero;
+`--give cannon` on a real circuit fires a round with `SQUARE` never held,
+which is the whole point of the weapon.
+
 ## Open
 
 - **`<Plasma charge_time>` is authored and nothing read spends it, and play
@@ -367,13 +427,14 @@ both corrected in the same change.
   Bit `0x4000`, which *is* dispatched, goes to `0x088577ac` (**not**
   `0x088537ac`, an arithmetic slip corrected the same day), confirmed the
   Cannon's own burst spawn.
-- **Two weapons are still unbuilt outright** (Repulser, deferred as
-  Eliminator-only; the Cannon's collision/hit path, unread past its spawn),
-  **and two more are buildable in part**: the Quake for its hit/slowdown half
-  but not its own per-frame travel along the track, and the LeachBeam for
-  target selection and its connect/disconnect gate but not its actual drain
-  amount. None of the three needs track deformation, a fact this thread had
-  wrong as recently as the entry above.
+- ~~Two weapons are still unbuilt outright~~. **The Cannon landed
+  2026-09-07** - see the entry below. **One weapon is still unbuilt
+  outright** (Repulser, deferred as Eliminator-only), **and two more are
+  buildable in part**: the Quake for its hit/slowdown half but not its own
+  per-frame travel along the track, and the LeachBeam for target selection
+  and its connect/disconnect gate but not its actual drain amount. None of
+  the three needs track deformation, a fact this thread had wrong as
+  recently as the entry above.
 - **What ends a Shuriken is a reading, not a recovery.** `Shuriken_Update`
   counts `+0x48` up - the offset the Mine's fuse lives at - and the pool
   teardown that would read it was not followed, so this build reaps a timed-out

@@ -52,9 +52,15 @@
 //!   launched so much as left behind.
 //! - **The Bomb's block**, less `damageradius`, since the same module drops one
 //!   of those too. That weapon is the Mine one size up and its block says so.
+//! - **The Cannon's block**, since `oag_gameplay::projectile::cannon` fires
+//!   itself off it. Five attributes and no speed at all - not even a
+//!   per-class one, the shape every other projectile weapon here has - which
+//!   is what `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s own doc
+//!   comment reads as evidence for rather than restates.
 //!
-//! Everything else - the other eight weapons' blocks and the seven disturber
-//! effects - is named on `docs/formats/weapon-stats.md` and left undecoded,
+//! Everything else - the other three weapons' blocks (the Quake, the
+//! LeachBeam, the Repulser) and the seven disturber effects - is named on
+//! `docs/formats/weapon-stats.md` and left undecoded,
 //! because a field decoded with no consumer is a field nobody has checked.
 //! The Bomb's second radius stays out for exactly that reason - see
 //! [`BombStats`], which is explicit about it because that one is easy to
@@ -195,7 +201,8 @@ impl Weapon {
 mod stats;
 
 pub use stats::{
-    BombStats, MineStats, MissileStats, PlasmaStats, RocketStats, ShurikenStats, Simple,
+    BombStats, CannonStats, MineStats, MissileStats, PlasmaStats, RocketStats, ShurikenStats,
+    Simple,
 };
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
@@ -288,6 +295,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::bomb`].
     bomb: Option<BombStats>,
+    /// The Cannon's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::cannon`].
+    cannon: Option<CannonStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -366,6 +377,15 @@ impl WeaponStats {
     #[must_use]
     pub fn bomb(&self) -> Option<BombStats> {
         self.bomb
+    }
+
+    /// The Cannon's `<Stats>`, or `None` when the file authors no Cannon.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped tables do author one.
+    #[must_use]
+    pub fn cannon(&self) -> Option<CannonStats> {
+        self.cannon
     }
 
     /// The Shuriken's `<Stats>`, or `None` when the file authors no Shuriken.
@@ -485,6 +505,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut shuriken = None;
     let mut mine = None;
     let mut bomb = None;
+    let mut cannon = None;
     let mut absorb = Vec::new();
     let mut skipped = Vec::new();
 
@@ -626,6 +647,23 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             })?;
             continue;
         }
+        if weapon_kind == Weapon::Cannon {
+            // Optional for the Bomb's reason: a title that tunes the Cannon
+            // on attributes this build does not read loses the Cannon and
+            // keeps the rest of its table - Pure ships no `<Weapon
+            // type="Cannon">` block at all, per `pickups.md`'s reading of
+            // its loading-screen icon set.
+            cannon = optional_block(&mut skipped, weapon_kind, || {
+                Ok(CannonStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    rounds: number(block, "Stats", "rounds")?,
+                    rate: number(block, "Stats", "rate")?,
+                    damage_per_bullet: number(block, "Stats", "damage_per_bullet")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
+                })
+            })?;
+            continue;
+        }
         let index = match weapon_kind {
             Weapon::Turbo => 0,
             Weapon::Shield => 1,
@@ -680,6 +718,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         shuriken,
         mine,
         bomb,
+        cannon,
         absorb,
         pickups,
         skipped,

@@ -554,18 +554,19 @@ fn every_decoded_weapon_slows_a_victim_within_the_global_limit() {
                 .map(|s| (Weapon::Shuriken, s.slowdown_time)),
             stats.mine().map(|s| (Weapon::Mine, s.slowdown_time)),
             stats.bomb().map(|s| (Weapon::Bomb, s.slowdown_time)),
+            stats.cannon().map(|s| (Weapon::Cannon, s.slowdown_time)),
         ]
         .into_iter()
         .flatten()
         .collect();
 
-        // Every one of the six is authored in both shipped tables. A `None`
+        // Every one of the seven is authored in both shipped tables. A `None`
         // here would mean the block went missing, which the other tests would
         // also catch - this count is what stops the loop below passing vacuously.
         assert_eq!(
             authored.len(),
-            6,
-            "{name}: {} of the six decoded blocks are authored - {authored:?}",
+            7,
+            "{name}: {} of the seven decoded blocks are authored - {authored:?}",
             authored.len()
         );
 

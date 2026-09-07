@@ -43,12 +43,24 @@
 //! # Only what has an effect is handed out
 //!
 //! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
-//! Autopilot, Mine, Bomb, Plasma and Shuriken.
+//! Autopilot, Mine, Bomb, Plasma, Shuriken and, as of 2026-09-07, the Cannon.
 //!
-//! Of the four still out, the Quake needs to deform the track, the LeachBeam
-//! needs a beam and a victim, the Repulser needs a field the craft *is in*
-//! rather than a projectile, and the Cannon's fire bit `0x2000` is set by
-//! `Weapon_RequestFire` and dispatched by nothing at all.
+//! Of the three still out, the Quake needs its wave's own per-frame travel
+//! along the track's spline (not deformation - that reading was wrong), the
+//! LeachBeam needs its two drain-rate functions, and the Repulser needs a
+//! field the craft *is in* rather than a projectile.
+//!
+//! **The Cannon left the list the same day**, and it is the odd one out among
+//! everything built here so far: it does not fire through
+//! `Weapon_RequestFire`'s bit system at all. `craft+0x1bc == 3` (holding it)
+//! is the only gate `Cannon_UpdateReload` (`0x0883f424`) reads - not a press -
+//! so a picked-up Cannon fires itself, on a per-craft reload countdown built
+//! from its own authored `rate`, until its own authored `rounds` runs out.
+//! `Race::advance_cannons` is the port of that countdown; see
+//! [`crate::projectile::cannon`] for the round itself and
+//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
+//! whole reading, including the address correction it made to the
+//! `0x088537ac` candidate this doc used to cite.
 //!
 //! **The Plasma left that list on 2026-09-02**, and it is the cheapest weapon
 //! since the Bomb for the mirror-image reason: the Bomb reused the Mine's whole
@@ -150,6 +162,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Bomb,
     Weapon::Plasma,
     Weapon::Shuriken,
+    Weapon::Cannon,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.
@@ -271,6 +284,37 @@ pub struct Held {
     /// there rather than left stale so that two worlds with no drop in flight
     /// hash the same.
     pub drop_reload: f32,
+    /// Rounds still to leave the barrel from the Cannon's own reload
+    /// countdown, or `0` for a craft not holding one.
+    ///
+    /// **Recovered as a mechanism**, at confidence 85: the original's
+    /// `craft+0x154` starts at `<Weapon type="Cannon"><Stats rounds>` and
+    /// counts down one per round; `Cannon_UpdateReload` clears the held
+    /// slot in the same branch that sees it reach zero. See
+    /// [`Self::advance_cannon_reload`] and
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    ///
+    /// **Self-arming rather than armed at grant time - chosen, not
+    /// measured.** A pad crossing, `--give` and a test setting
+    /// [`Self::weapon`] directly are three different ways this project fills
+    /// the slot, and only one of them (the pad) is a call site this module
+    /// controls. Reading `0` as "not yet armed" the first time
+    /// [`Self::advance_cannon_reload`] runs after a grant, rather than
+    /// requiring every grant site to call a separate initialiser, is what
+    /// makes all three arm it the same way. Safe because a *genuine* empty
+    /// magazine clears [`Self::weapon`] in the same call that reaches zero -
+    /// see below - so this can never observe `weapon == Some(Cannon)` with a
+    /// counter that is honestly spent.
+    pub cannon_rounds: u8,
+    /// Seconds until the Cannon's own next round leaves.
+    ///
+    /// The original's `craft+0x158`, decremented every tick and reloaded
+    /// with `<Weapon type="Cannon"><Stats rate>` on the tick it goes
+    /// negative. Meaningless when [`Self::cannon_rounds`] is zero, and held
+    /// at zero there for [`Self::drop_reload`]'s own reason: so two worlds
+    /// with no Cannon in hand hash the same regardless of how each got
+    /// there.
+    pub cannon_reload: f32,
 }
 
 impl Held {
@@ -282,6 +326,8 @@ impl Held {
             last: None,
             dropping: 0,
             drop_reload: 0.0,
+            cannon_rounds: 0,
+            cannon_reload: 0.0,
         }
     }
 
@@ -358,6 +404,58 @@ impl Held {
         self.weapon.is_none()
     }
 
+    /// Counts one tick off the Cannon's own reload timer and says whether a
+    /// round leaves now, and the rounds left in the magazine after it does.
+    ///
+    /// `full` is `<Weapon type="Cannon"><Stats rounds>`, passed on every call
+    /// rather than cached at grant time - see [`Self::cannon_rounds`]'s own
+    /// doc comment for why a self-arming counter is what lets a pad
+    /// crossing, `--give` and a test all fill this the same way. `rate` is
+    /// the same block's `<Stats rate>`, read the literal way
+    /// `oag_formats::weapons::CannonStats::rate` argues for.
+    ///
+    /// The returned count is the magazine **after** this round is spent,
+    /// because that is the order `Weapon_FireCannon` reads it in:
+    /// `Cannon_UpdateReload` decrements the counter and arms the fire bit in
+    /// the same branch, and only then does the dispatch loop read
+    /// `craft->shots & 1` to pick a muzzle - see
+    /// `oag_gameplay::projectile::cannon::launch`, which is what that bit
+    /// feeds.
+    ///
+    /// **The first round leaves immediately rather than after one `rate`-
+    /// second wait - chosen, not measured, and deliberately given no
+    /// confidence score.** [`Self::begin_drop`]'s doc comment makes the same
+    /// choice for the same reason and it applies unchanged here: a
+    /// picked-up weapon should visibly do something on the tick it arrives
+    /// rather than sit silent for a full reload first.
+    pub fn advance_cannon_reload(&mut self, dt: f32, rate: f32, full: u8) -> Option<u8> {
+        if full == 0 {
+            // Degenerate authored data - a Cannon with no rounds at all.
+            // Nothing to arm and nothing to fire; clear the slot rather than
+            // spin forever re-arming a zero-round magazine every call.
+            self.weapon = None;
+            self.cannon_rounds = 0;
+            self.cannon_reload = 0.0;
+            return None;
+        }
+        if self.cannon_rounds == 0 {
+            self.cannon_rounds = full;
+            self.cannon_reload = 0.0;
+        }
+        self.cannon_reload -= dt;
+        if self.cannon_reload >= 0.0 {
+            return None;
+        }
+        self.cannon_reload += rate;
+        self.cannon_rounds -= 1;
+        let remaining = self.cannon_rounds;
+        if remaining == 0 {
+            self.weapon = None;
+            self.cannon_reload = 0.0;
+        }
+        Some(remaining)
+    }
+
     /// Fills the slot and remembers what went in it.
     ///
     /// The pairing is the point: [`draw`] needs the previous grant and would
@@ -388,6 +486,13 @@ impl Held {
     pub const fn take(&mut self) -> Option<Weapon> {
         self.dropping = 0;
         self.drop_reload = 0.0;
+        // Same reasoning for the Cannon's own two fields: absorbing one
+        // mid-burst must not leave a live round count behind for the *next*
+        // weapon this craft is granted to inherit, and two worlds that gave
+        // up a Cannon at different points in its magazine must hash the
+        // same once both hold nothing.
+        self.cannon_rounds = 0;
+        self.cannon_reload = 0.0;
         self.weapon.take()
     }
 }
@@ -410,7 +515,7 @@ impl Held {
 ///
 /// **The retry is bounded here and is not in the original**, which loops until it
 /// draws something different. Unbounded is fine when thirteen weapons are
-/// weighted and is not fine here: [`IMPLEMENTED`] is four, so a table weighting
+/// weighted and is not fine here: [`IMPLEMENTED`] is ten, so a table weighting
 /// only one of them would spin for ever, and a simulation that can hang on a
 /// table is worse than one that occasionally repeats a pickup. After
 /// [`REDRAW_ATTEMPTS`] the repeat is accepted.

@@ -93,7 +93,7 @@ a union:
 | **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage slowdown_time venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `spread` |
 | **`Missile`** | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` - **decoded**, offsets and all, on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
 | `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) |
-| `Cannon` | `0x0880c774` | `absorb rounds rate damage_per_bullet slowdown_time` |
+| **`Cannon`** | `0x0880c774` | **`absorb rounds rate damage_per_bullet slowdown_time`** - **decoded** in full, offsets unchecked, on [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |
 | **`Shield`** | **`0x0880ca2c`** | **`absorb time`** |
 | **`Autopilot`** | **`0x0880cb2c`** | **`absorb time`** |
@@ -111,7 +111,8 @@ partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
 eleven attributes, and the one left plain is `spread`.
 
 **`slowdown_time` moved out of that list on 2026-09-06** and is decoded on all
-six decoded blocks. It stayed out for a year because the slowdown mechanic had
+seven decoded blocks now that the Cannon's has joined them. It stayed out for
+a year because the slowdown mechanic had
 no consumer; the mechanic's law is now recovered end to end -
 `Ship_AddSlowdown` (`0x08848690`) adds a hit's `slowdown_time` to a timer and
 clamps the total to `<Global slowdown_limit>`, so the global is a **ceiling on

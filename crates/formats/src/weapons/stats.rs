@@ -523,6 +523,63 @@ pub struct MineStats {
     pub trigger_radius: f32,
 }
 
+/// The Cannon's `<Stats>`: five attributes, and none of them a speed.
+///
+/// # No speed at all, and that is the schema's own shape
+///
+/// Every other projectile weapon here authors at least one speed - four per
+/// class for the Rocket, the Missile, the Plasma and the Shuriken, none for
+/// the Mine and the Bomb because neither is launched. The Cannon has
+/// neither shape: `Weapon_FireCannon` (`0x088577ac`) reads
+/// `craft->entity->body->speed` - the firing craft's own current speed, not a
+/// class figure - and `Cannon_Init` (`0x088648ec`) adds a *base* speed this
+/// schema does not carry at all (`func_0x00060af4`, unread). See
+/// `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`, this engine's own
+/// stand-in for that base, and
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
+/// whole reading.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CannonStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// How many rounds a picked-up Cannon holds before the slot empties
+    /// itself.
+    ///
+    /// `craft+0x154` starts here and counts down one per round; its low bit
+    /// is also what picks which of the two muzzles the next round leaves
+    /// from - see `Weapon_FireCannon`'s own reading on the evidence page.
+    pub rounds: f32,
+    /// Seconds between rounds.
+    ///
+    /// **Read literally, not as a reciprocal.** `Cannon_UpdateReload`
+    /// (`0x0883f424`) does `craft->reload += stats->rate` on the branch that
+    /// just fired - the same shape `oag_gameplay::pickup::Held::advance_drop`
+    /// reloads a mine's timer with a literal constant - so this is read the
+    /// same way rather than inventing a `1.0 / rate` division the evidence
+    /// page does not show. Measured at `20` alongside `rounds="30"` on both
+    /// shipped tables, which reads as an oddly slow "cannon" - one round
+    /// every twenty seconds - until it is read beside
+    /// [`Self::damage_per_bullet`], the smallest single-hit figure any
+    /// weapon authors: the two together describe a low-pressure weapon a
+    /// craft holds for most of a race rather than a burst gun. See
+    /// `oag_gameplay::projectile::cannon`.
+    pub rate: f32,
+    /// Energy one round costs a craft it hits directly.
+    ///
+    /// **Direct-hit only, and that is the schema's own shape rather than a
+    /// choice.** This is the only projectile weapon whose block authors
+    /// neither `blastforce` nor `blastradius`, so a round that hits a wall
+    /// costs nobody anything and one that hits a craft costs that craft
+    /// alone - there is no splash to sweep for.
+    pub damage_per_bullet: f32,
+    /// Seconds of slowdown this weapon charges a craft it hits.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running
+    /// total.
+    pub slowdown_time: f32,
+}
+
 /// The Bomb's `<Stats>`, less the two attributes nothing consumes.
 ///
 /// # The Bomb is the Mine one size up, and that is the shipped data's shape

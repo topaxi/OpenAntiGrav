@@ -71,13 +71,13 @@
 //! shot rather than growing, and [`Projectiles::spawn`] says so.
 
 mod blast;
+pub mod cannon;
 pub mod mine;
 pub mod missile;
 pub mod plasma;
 mod rocket;
 pub mod shuriken;
 
-use blast::blast_stats;
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
@@ -851,22 +851,13 @@ pub fn step<R: Raycaster + ?Sized>(
         class,
     );
 
-    for impact in impacts.iter().flatten() {
-        // A detonation that only shows an explosion - see [`Impact::blast`].
-        if !impact.blast {
-            continue;
-        }
-        let Some(stats) = blast_stats(weapons, impact.kind) else {
-            continue;
-        };
-        blast(
-            &mut world.ships[..count],
-            impact.point,
-            &stats,
-            rules,
-            absorbed,
-        );
-    }
+    blast::apply_impacts(
+        &mut world.ships[..count],
+        weapons,
+        &impacts,
+        rules,
+        absorbed,
+    );
 
     impacts
 }

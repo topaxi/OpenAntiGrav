@@ -412,6 +412,18 @@ impl Race {
             // So this arm returns either way.
             self.drop_opponent_mines(weapon, slot, field);
             return;
+        } else if weapon == oag_formats::weapons::Weapon::Cannon {
+            // **Named here rather than left to fall through to absorb, and
+            // for a different reason than the Autopilot's.** The Cannon does
+            // not wait for this function's own decision at all -
+            // `Race::advance_cannons` fires it every tick off its own reload
+            // countdown, whichever craft holds it, human or AI. Cashing it
+            // in for energy here the moment an opponent collects one would
+            // silence a weapon this project has just built, the same way
+            // the pre-2026-08-26 `&&`-chain bug silenced the Rocket - see
+            // the comment on that fix above. Nothing to do here but keep
+            // the pickup.
+            return;
         } else {
             // **Anything not named above falls through to absorb**, which is how
             // a weapon added to `pickup::IMPLEMENTED` without an arm reaches a

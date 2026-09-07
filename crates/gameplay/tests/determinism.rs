@@ -463,6 +463,18 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   causes are already isolated and explained in their own entries above, so
 ///   what is new here is only their composition.
 ///
+/// - **Moved again 2026-09-07, for the Cannon's two new `Held` fields.**
+///   `cannon_rounds`/`cannon_reload` are hashed unconditionally on every
+///   craft, every tick - the same shape `dropping`/`drop_reload` already
+///   are - so the digest stream differs from tick 0 whether or not a Cannon
+///   is ever held, exactly as it did when those two landed. **Isolated the
+///   way this comment requires**: with `write_held`'s two new `write_*`
+///   calls removed, both rows reproduce the previous constants bit for bit -
+///   this scenario never grants a Cannon, so the movement is the hash
+///   primitive's own shape, not a change to what this scenario's craft do.
+///   See `crates/gameplay/src/hash.rs`'s `write_held` and
+///   `handover/weapons-eight-of-thirteen-the-plasma-and-the.md`.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -470,8 +482,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x4720_28c0_91aa_38d2, 0x431d_32f3_b9d3_7660),
-    (600, 0x9392_e8b7_3a70_eed7, 0x0956_f45c_cb56_aebd),
+    (60, 0x8bbe_7452_37aa_a9d8, 0x71ae_5fa3_1894_6b8a),
+    (600, 0xf25a_43fe_dd1b_5219, 0xde90_bd8b_7c5a_4d17),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -613,11 +625,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   causes are already isolated and explained in their own entries above, so
 ///   what is new here is only their composition.
 ///
+/// - **Moved 2026-09-07**, the same Cannon `Held`-field addition
+///   [`REFERENCE`]'s own history records, inherited through the same
+///   `write_held` call and not re-isolated here for the same reason. Replaces
+///   `0x4a5b_1790_59a4_23c0` / `0x4e62_4203_11e0_9078` at 60 ticks and
+///   `0x2e86_2b63_f59d_657b` / `0x606e_fd2e_04e5_d9ce` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x4a5b_1790_59a4_23c0, 0x4e62_4203_11e0_9078),
-    (600, 0x2e86_2b63_f59d_657b, 0x606e_fd2e_04e5_d9ce),
+    (60, 0x9a80_b71f_63a4_d274, 0xefd7_1d09_2752_84ac),
+    (600, 0x0d5f_98f8_61a6_7ab3, 0xeb2e_415f_80cc_c0ea),
 ];
 
 #[test]
