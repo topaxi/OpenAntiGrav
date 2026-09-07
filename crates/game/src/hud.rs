@@ -51,6 +51,7 @@ pub mod countdown;
 mod draw;
 mod lap_splits;
 mod overlay;
+mod sight_draw;
 mod widget;
 
 pub use assets::Assets;
