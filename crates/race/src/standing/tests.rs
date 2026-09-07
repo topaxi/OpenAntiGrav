@@ -254,6 +254,65 @@ fn driving_backwards_over_the_line_invents_no_lap_time() {
     assert_eq!(standing.lap_start_tick, started, "and so is the clock");
 }
 
+/// **A craft shoved backwards over the line and straight back over it forwards
+/// earns no lap either.** Reversing over the line resets the lap count, but
+/// until 2026-09-07 it left `self.gate` at `Ready` - the value the *forward*
+/// drive above had already earned - so the very next forward crossing read
+/// `Ready` and completed "lap 1" again on the spot, against the clock still
+/// timing the lap actually being driven. That is not a short lap, it is no
+/// lap: the craft never left the near half of the one it is being credited
+/// for.
+///
+/// This is the scenario `crates/game/tests/lap_times_ground_truth.rs` hit for
+/// real: a corrected craft-pair narrowphase threw an opponent back across
+/// Talon's Junction's line in one tick, and its very next ordinary forward
+/// crossing - seconds later, nothing anomalous about it - was booked as a
+/// 316-tick lap.
+#[test]
+fn an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap() {
+    let course = course();
+    let mut standing = Standing::default();
+    drive(&mut standing, &course, 110.0, 200);
+    let (best, started) = (standing.best_lap_ticks, standing.lap_start_tick);
+    assert_eq!(standing.lap, 2);
+
+    // Back over the line the way it came - the same 30 ticks the sibling test
+    // uses, which is enough to cross it: `on_ring(20.0 - step)` reaches
+    // negative distances, i.e. the far side of the line.
+    let mut tick = 200u64;
+    for step in 0..30u32 {
+        standing.update(&course, on_ring(20.0 - step as f32), tick, None);
+        tick += 1;
+    }
+    assert_eq!(standing.lap, 1, "the lap count went back");
+
+    // And straight forward again, back across the same line, continuing from
+    // exactly where the reversal left off.
+    let mut completed_on = None;
+    for step in 1..=20u32 {
+        let position = on_ring(-9.0 + step as f32);
+        if standing.update(&course, position, tick, None) {
+            completed_on = Some(tick);
+        }
+        tick += 1;
+    }
+
+    assert_eq!(
+        completed_on, None,
+        "a lap completed at tick {completed_on:?}, ticks after a backward wrap - \
+         the gate was not re-earned"
+    );
+    assert_eq!(standing.lap, 1, "no lap re-completed itself");
+    assert_eq!(
+        standing.best_lap_ticks, best,
+        "a bogus short lap overwrote the real one"
+    );
+    assert_eq!(
+        standing.lap_start_tick, started,
+        "the clock was not restamped"
+    );
+}
+
 #[test]
 fn a_fresh_standing_is_on_lap_one_and_has_not_finished() {
     let standing = Standing::default();
