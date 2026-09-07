@@ -1,5 +1,16 @@
 # Reminder: install the Allegrex patch and reimport the PSP databases
 
+> **2026-09-07: the patch is installed and `psp-pulse-eu` is done.** It reads
+> `relocations=108729` against zero before, `apply-names` took 301 of 301 rows,
+> and `get_xrefs_to` works on it for **code and data** - verified directly, see
+> `docs/ghidra/workflow.md`. **Three PSP databases remain unreimported:**
+> `psp-pulse-usa`, `psp-pure-usa`, `psp-pure-eu`. Do not delete this file until
+> they are done. The order that worked is the GUI one: import, auto-analyse at
+> the default base, let it finish, then `Window > Memory Map > Set Image Base`
+> and enter `08804000` - *not* the loader's own image-base field, which was
+> left at `0x00000000` on the first attempt and failed `apply-names` with
+> `Unable to create function` on every function row.
+
 Untracked scratch file. Delete it once step 5 is done.
 Written 2026-09-05. Full write-up: `handover/ghidra-applies-no-psp-relocation-the-patch-is.md`
 

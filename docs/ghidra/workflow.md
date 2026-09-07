@@ -193,6 +193,45 @@ Ghidra GUI. Learned redoing `/psp-pure-eu` on 2026-08-10, which had sat at 0
 functions for a session; it was reimported rather than diagnosed, which was the
 cheaper call.
 
+#### Measured 2026-09-07: `psp-pulse-eu` is reimported and xrefs work
+
+**The patch is installed, `psp-pulse-eu` is reimported, and it reads
+`relocations=108729` against zero before.** `just apply-names` applied
+**301 of 301** rows to it, against 17 of 301 on the first attempt.
+
+**`get_xrefs_to` now works on that database, for code *and* for data**, which
+is the whole point of the fix and is better than `ps3-hdfury-eu` manages
+(there, code xrefs work and data xrefs are off by `0xFEEC` because the
+reference table was built with the wrong TOC - see the PS3 section above).
+Both checked directly:
+
+```
+get_xrefs_to 08848a04   (Ship_ApplyLateralGrip)
+  -> From 08849a84 in Ship_UpdateCraft [UNCONDITIONAL_CALL]
+
+get_xrefs_to 08ab1af0   (g_vex_class_table)
+  -> From 08908878 in Vex_RegisterClass [READ]
+  -> From 08908508 in Vex_FindClassDescriptor_q [READ]
+```
+
+**So the standing advice to treat an empty PSP xref result as meaningless no
+longer applies to `psp-pulse-eu`.** It still applies to every PSP database that
+has not been reimported yet - as of this measurement that is `psp-pulse-usa`,
+`psp-pure-usa` and `psp-pure-eu`, which remain unrelocated and on which
+`search_instructions` and `scripts/psp-relocate.py` are still the only reliable
+route.
+
+**The import order that worked**, which is the GUI one this page already
+documents rather than the loader-options one: import, `Analysis > Auto Analyze`
+at the default base, let it finish, then `Window > Memory Map > Set Image
+Base` and enter `08804000`. With relocations actually present,
+`AllegrexRelocationFixupHandler` re-applies them on the rebase - the handler
+that had never once run here, because there were no relocations for it to
+re-apply. A first attempt that left the base at `0x00000000` failed
+`apply-names` with `Unable to create function` on all 284 function rows, since
+no address in `names.tsv` exists at base 0; the 17 that applied were the
+low-address data rows.
+
 #### Reading an unrelocated database, until it is reimported
 
 Until the patch above is installed and the databases reimported, every PSP
