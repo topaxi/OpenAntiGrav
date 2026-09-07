@@ -44,6 +44,8 @@ jobs:
         run: python3 scripts/check-ghidra-names.py
       - name: Assert HANDOVER.md is still under the Read tool's 256 KiB ceiling
         run: python3 scripts/check-handover-size.py
+      - name: Assert every menu.toml row/title has a string_id and its english.toml text
+        run: python3 scripts/check-strings.py
 
   docs:
     name: documentation links
