@@ -547,7 +547,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Frame comparison: three residuals](handover/tooling/frame-comparison-three-residuals.md)
 - [Weapons: nine of thirteen, and the dispatch table read whole](handover/gameplay/weapons-eight-of-thirteen-the-plasma-and-the.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/gameplay/projectiles-follow-the-floor-and-the-km-h.md)
-- [Both lockable weapons draw their reticle now; the sight quads have a black background](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
+- [Both lockable weapons draw their reticle now, and the black background behind it is gone](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/gameplay/pure-and-hd-lock-on-too-and-two-axes.md)
 - [The hull sparks are approximated in three named ways](handover/rendering/the-hull-sparks-are-approximated-in-three-named.md)
 - [The camera shake on impact reproduces its two-rotation shape now; two composition details are open](handover/rendering/the-originals-camera-hud-shake-on-impact-is.md)

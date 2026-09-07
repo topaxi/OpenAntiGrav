@@ -1,4 +1,4 @@
-# Both lockable weapons draw their reticle now; the sight quads have a black background
+# Both lockable weapons draw their reticle now, and the black background behind it is gone
 
 2026-08-26, [missile.md](../../docs/ghidra/functions/psp-pulse-usa/missile.md) - the
 page to read, not this row. **A press with no lock used to do nothing and keep the
@@ -130,19 +130,19 @@ reticle is render-only state on `Race`.
   no confidence score: the grounds are that the two sets are the same shape and
   that one arrowhead makes four corners no other way. A capture checks the
   result, not the rule. Finding the writer of `+0x108` settles it.
-- **The sight quads draw on an opaque black square, and always have.** Seen on
-  2026-09-07 in `--race --mode single_race --opponents --give <weapon>` captures
-  at 480x272: every reticle piece is its white shape on a solid black `8x8`
-  background rather than on the track. **Both weapons alike**, so it predates
-  the LeachBeam and was not noticed when the Missile's half landed - that pass
-  looked at one capture and read the shape rather than the background.
-  Unfixed and out of the LeachBeam's scope. **A hypothesis, not a reading**:
-  `oag_formats::vex` already decodes a per-batch blend mode (`pass_mask & 0x100`
-  ordinary alpha blend, `& 0x200` additive), and the HUD's 2D sprite path draws
-  these models with a plain alpha blend without consulting it - an additive
-  batch would make the black vanish and the shape glow. Nobody has read these
-  three models' own `pass_mask`, so that is where to start rather than in the
-  shader.
+- ~~**The sight quads draw on an opaque black square, and always have.**~~
+  **Fixed 2026-09-07, and the hypothesis was right.** The three models' own
+  `pass_mask` was read and is `0x120e` on all three - the `0x200` bit, so
+  `BlendClass::Additive` - and their textures are named `gunsight_ADD.tga`,
+  `gunsightdot_ADD.tga` and `LeachBeamSight_ADD_nomip.tga` with alpha at
+  250/255 across every texel, so the shape is in the colour channels over a
+  black field and an alpha blend could only ever draw a black tile. The class
+  is now read off each model's batch at load and carried to the draw; both
+  weapons' reticles sit on the track on Pulse **and on Pure**, whose sight
+  models declare the same class. The whole reading and both titles' numbers
+  are in [hud.md](../../docs/ui/hud.md), "A `<Mode3D><Model>` quad carries its
+  own blend". Nothing was chosen: `oag_game::race::hud::quad_blend` tabulates
+  no model name.
 - **`HudSight_Update`'s gate is read and not understood** - `hud->view->0x48 == 2`
   or "one of my missiles is homing". Taken literally the reticle would never
   appear while merely holding a Missile. `oag-game` gates on "the held weapon
@@ -201,10 +201,22 @@ change, the reticle is still render-only state on `Race`.
 
 ## Next Steps
 
-- **Read the three sight models' `pass_mask`** and give the HUD's `<Mode3D>`
-  quads the blend mode their own batch declares. That is the black square in the
-  `## Open` list above, it is the most visible thing wrong with the reticle
-  today, and it is one decode away from settled rather than a design question.
+- **Find the writer of the LeachBeam bind's `+0x108` … `+0x114`.** With the
+  blend settled, this is the reticle's last *chosen, not measured* thing: the
+  LeachBeam's four arrowheads are given the Missile's corners and rotations
+  because the two sets are the same shape, and `HudSight_Update` writes only
+  the Missile's five. A capture checks the result and not the rule, so the
+  arrowheads could be at the right places for the wrong reason - and pointing
+  outward where the original points them inward would look wrong to a player
+  and pass every test in the tree. This replaces the `pass_mask` step, which
+  landed on 2026-09-07.
+- **Pure's sight quad is 12 units where Pulse's is 8**, and
+  `hud::sight_draw::SIGHT_SIZE` is a hardcoded `8.0` for both. Read off the
+  loader report on `pure-psp-usa.chd`: `missile_sight_inner.vex` measures
+  `quad Some([11.999471, 11.999471])` there against `[7.9978027, 7.9978027]`
+  on Pulse, and `crate::sprite::Placed::quad_extent` already carries the real
+  number that `model_draw` uses and `bracket_draws` does not. Small, and it is
+  a title difference being flattened rather than a missing reading.
 
 **Pure and HD both lock and draw now** - see
 [pure-and-hd-lock-on-too-and-two-axes.md](pure-and-hd-lock-on-too-and-two-axes.md),
