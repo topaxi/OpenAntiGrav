@@ -2,7 +2,16 @@
 
 One page per structure, with the evidence for each field's offset and type.
 
-**Currently empty.** Milestone M2.
+**Currently empty**, and measurably so: on 2026-09-07 every Ghidra database in
+the project was surveyed and not one held a hand-recovered struct. Every
+composite present belongs to Ghidra's ELF loader, a console SDK module table, or
+a libc header import - see [../captures/README.md](../captures/README.md) for
+the table. Milestone M2.
+
+[ADR-0047](../../architecture/adr/0047-database-state-beyond-names-is-captured-not-replayed.md)
+settles how a struct is recorded when the first one lands: as a page here, under
+the conventions below, with per-field evidence. It deliberately builds no apply
+or check machinery ahead of that first page.
 
 ## Conventions
 

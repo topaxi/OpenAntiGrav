@@ -663,3 +663,56 @@ otherwise. See [source images](../reverse-engineering/source-images.md).
 The Ghidra database is not committed. If a bulk export becomes useful, write it
 to `data/ghidra/exports/` and keep the hand-written pages as the record of
 truth: an export carries the names, not the reasoning.
+
+## Capturing a database before it is replaced
+
+A reimport - a new loader, a relocation patch, a corrupted project - discards
+everything the database held that `names.tsv` does not carry. Snapshot it first.
+[ADR-0047](../architecture/adr/0047-database-state-beyond-names-is-captured-not-replayed.md)
+sets out what a capture is and, more usefully, what it is not.
+
+Two steps, because only the first needs Ghidra:
+
+1. Run `scripts/ghidra/DumpDatabaseState.java` from the Script Manager, or
+   through the MCP bridge's `run_script_inline`, with a scratch directory as its
+   argument. It walks **every program in the project**, not the current one, and
+   writes raw per-program TSVs plus a `survey.txt` of the counts.
+2. `just capture-ghidra-state <that directory>` filters the tool's own output
+   out of the dump and writes `docs/ghidra/captures/`. Update the measurement
+   table in that directory's README, then `just check-captures`, which asserts
+   the table matches the files.
+
+The filter's output is deterministic - sorted by address, with the duplicate
+comment that carries the function name pinned as the survivor - so re-running it
+against an unchanged database produces an empty `git diff`. That empty diff is
+the check worth making after step 2.
+
+**Step 1 has been compile-verified but not yet run end-to-end** (Ghidra exited
+mid-session during the PSP database swap). The captures currently in the tree
+came from a functionally identical inline script. First person with Ghidra open:
+run it and confirm the diff is empty.
+
+**Identify a program by its `DomainFile` pathname, never by its display name or
+executable path.** Four programs in this project are called `BOOT.BIN`, and an
+old database and its fresh reimport (`BOOT.BIN` and `BOOT.BIN.0`) report the
+*same* executable path, because they were imported from the same file. Only the
+pathname and the version number tell them apart, and version is the reliable
+one: a worked database is at version 69, a fresh import at 2. `switch_program`'s
+`"success": true` is not trustworthy for these - see
+`scripts/apply-ghidra-names.py`'s `Bridge.switch_program`, and note that
+`audit-ghidra-names.py`'s `ensure_active` path check cannot distinguish the two
+either, for exactly the shared-path reason above.
+
+### Reading a second project
+
+A Ghidra project from another machine can be read without merging anything into
+the live one: `GhidraProject.openProject(dir, name, false)` inside a script, then
+the same walk. Close it in a `finally` block. **A script that throws before
+`gp.close()` leaves a lock file** (`<name>.lock`, `<name>.lock~`) beside the
+`.gpr`, and the next attempt fails with "Project is locked. You have another
+instance of Ghidra already running" naming this very machine. Delete the two
+lock files and retry.
+
+Never merge a foreign project into the live one. Compare it in the repository
+instead - `names.tsv` is what the two machines share, and if it is doing its job
+the foreign project holds nothing new.

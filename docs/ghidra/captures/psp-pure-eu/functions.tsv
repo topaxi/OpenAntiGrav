@@ -1,0 +1,10 @@
+# address	name	source
+0880b928	Options_LoadDefaultControlMapping	USER_DEFINED
+088b595c	Screen_FindElementByPath	USER_DEFINED
+088dfe9c	strcasecmp	USER_DEFINED
+0892c53c	Ship_ApplyQuadraticDrag_q	USER_DEFINED
+0892c5c8	Ship_ApplyAngularDamping_q	USER_DEFINED
+0892eb8c	Ship_UpdateEngine_q	USER_DEFINED
+08933f84	Body_Integrate	USER_DEFINED
+0898ba60	Browser_InitMessageQueues	USER_DEFINED
+089ec21c	Browser_BuildCookieHeader	USER_DEFINED

@@ -1,0 +1,15 @@
+# address	name	source
+0880bae8	Options_LoadDefaultControlMapping	USER_DEFINED
+0881f67c	HudSight_UpdateTone	USER_DEFINED
+08831ddc	Sound_Play	USER_DEFINED
+08835a90	Scream_PlaySoundByName	USER_DEFINED
+088561f0	Rocket_SpawnCraftExplosion	USER_DEFINED
+0885ee0c	Rocket_Init	USER_DEFINED
+0885f28c	Rocket_Update	USER_DEFINED
+0886b924	ExhaustFlare_Init	USER_DEFINED
+0888e340	ShipCollisionFx_Trigger	USER_DEFINED
+088e05e8	strcasecmp	USER_DEFINED
+0892cba0	Ship_ApplyQuadraticDrag_q	USER_DEFINED
+0892cc2c	Ship_ApplyAngularDamping_q	USER_DEFINED
+0892f1f0	Ship_UpdateEngine_q	USER_DEFINED
+089345e8	Body_Integrate	USER_DEFINED

@@ -10,6 +10,7 @@ Conventions and per-function documentation for the binary analysis work.
 | [Functions](functions/README.md) | Per-function pages, per binary |
 | [Memory maps](memory-maps/README.md) | Address space layouts |
 | [Structures](structures/README.md) | Recovered structure layouts |
+| [Captures](captures/README.md) | What each database held beyond `names.tsv`, and the measurement showing how little that was |
 
 ## Getting the names back
 

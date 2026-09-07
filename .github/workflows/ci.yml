@@ -42,6 +42,12 @@ jobs:
       # names.tsv at all.
       - name: Assert every names.tsv row still matches its evidence page
         run: python3 scripts/check-ghidra-names.py
+      # The captured databases are the only record of what the Ghidra projects
+      # held beyond names.tsv, and the PSP ones they describe no longer exist.
+      # This also catches a captured comment citing a docs page nobody wrote,
+      # which the documentation job below cannot see - it walks prose, not TSV.
+      - name: Assert docs/ghidra/captures matches its own measurement table
+        run: python3 scripts/check-ghidra-captures.py
       - name: Assert HANDOVER.md is still under the Read tool's 256 KiB ceiling
         run: python3 scripts/check-handover-size.py
       - name: Assert every menu.toml row/title has a string_id and its english.toml text
