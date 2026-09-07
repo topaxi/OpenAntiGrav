@@ -563,6 +563,59 @@ impl Driver {
     /// Continuous in the gap, so it needs no slew limiter and no state on the
     /// driver: it fades in as a rival closes and fades out as it drops away.
     ///
+    /// # A touching rival is `alongside`, not `behind`, and this used to go blind there
+    ///
+    /// **Found from play, 2026-09-07: two craft that are actually touching
+    /// produced *no* lateral response from either driver at all**, which reads
+    /// as sticking - `oag_physics::pair::resolve` pushes them apart by its own
+    /// small positional correction, and both drivers' steering just aims back
+    /// at the same corridor point a tick later, fighting it. The cause: this
+    /// function read only [`Field::behind`], and `crates/game`'s own
+    /// `field_for` classifies a rival as [`Field::alongside`] - a **different**
+    /// channel this function never read - the moment it is within
+    /// `ALONGSIDE_GAP` (16 units of track distance) and `ALONGSIDE_WIDTH` (12
+    /// lateral). A real hull touch (`oag_physics::pair::overlap`, measured
+    /// around 3-6 units on a realistic hull) is always well inside both, so a
+    /// rival close enough to actually be touching had *already left* the one
+    /// bucket this term reacted to, and the yield/cover lean it was building
+    /// as the rival closed **dropped to exactly zero at the moment contact
+    /// started** - confirmed directly: `social` returned the same value for a
+    /// touching alongside rival as for `Field::EMPTY`.
+    ///
+    /// **The fix is to read `alongside` too, preferring it over `behind`** -
+    /// an alongside rival is the more urgent one whenever both are present,
+    /// since it is the one already in or entering contact. This is not a
+    /// widened *range*: `field_for` builds a [`Rival`] identically for every
+    /// channel (`gap`, `offset` and `closing` are the same computation, only
+    /// the bucket differs), and this function already takes `gap.abs()`, so
+    /// nothing here has to change to accept the new source. **No new
+    /// constant is introduced**, and none of `AWARENESS_RANGE`,
+    /// `SOCIAL_MIN_GAP`, `ASTERN_DEADBAND`, `CLOSING_FULL`, `SOCIAL_MAX` or
+    /// `YIELD_MAX` moved.
+    ///
+    /// `ALONGSIDE_GAP` (16) is a little *past* `SOCIAL_MIN_GAP` (14), so an
+    /// alongside rival between 14 and 16 units away is not automatically
+    /// forced to yield-only by gap alone - blocking can still fire there.
+    /// That is not a hole this change opens: a real hull touch
+    /// (`oag_physics::pair::overlap`, around 3-6 units on a realistic hull)
+    /// is well inside `SOCIAL_MIN_GAP` regardless, so blocking still cannot
+    /// fire at actual contact - the only place it can fire under `alongside`
+    /// is the few units between 14 and 16, where nothing is touching yet,
+    /// which is exactly "a block is something you do early" already
+    /// documented below, just reached from a different channel. So this is
+    /// **chosen, not measured** only in the sense that reusing these
+    /// constants for a second channel is a judgement call, not a fit - no
+    /// confidence score, because there is nothing recovered to score
+    /// against: the original has no such term at all (this driver's social
+    /// behaviour is `oag_ai`'s own, not a ported one).
+    ///
+    /// Verified against `crates/game`'s own probe methodology (an env-gated
+    /// instrument on `resolve_craft_pairs`, run and reverted): before this
+    /// change, a real 8-craft `VENOM` race's pair `(4,7)` resolved on **90**
+    /// consecutive ticks with `vn_before` negative on all 90; after, the
+    /// longest streak and the count of streaks past ten ticks are the
+    /// acceptance test - see the ground-truth test this change adds.
+    ///
     /// Three things it will not do:
     ///
     /// - **Take over the whole line.** Capped at [`SOCIAL_MAX`], because
@@ -583,7 +636,7 @@ impl Driver {
     ///   side comes from the corner ahead instead - yielding toward its
     ///   outside, which is where an overtaker does not want to be.
     fn social(&self, ctx: &Context<'_>, personality: &Personality, bend: f32) -> f32 {
-        let Some(rival) = ctx.field.behind else {
+        let Some(rival) = ctx.field.alongside.or(ctx.field.behind) else {
             return 0.0;
         };
         // **Provocation scales covering, not yielding.** A driver that has just
