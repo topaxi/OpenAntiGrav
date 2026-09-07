@@ -64,6 +64,7 @@ pub mod rcsmaterial;
 pub mod rcsmodel;
 pub mod sblk;
 pub mod shadow_occluder;
+pub mod ship_skin;
 pub mod signature;
 pub mod sound_emitters;
 pub mod texture;
