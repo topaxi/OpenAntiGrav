@@ -237,10 +237,31 @@ pub(super) fn menu_page(
     // `session::pilot_editor` resolves, so what this draws is what a player
     // sees rather than a mock-up of it.
     if let Some(kind) = prompt {
-        let name = roster
-            .entries()
-            .first()
-            .map_or_else(|| "winston".to_string(), |entry| entry.name.clone());
+        // `binding` names a button, not a pilot: the CONTROLS page's own
+        // key-capture prompt names whichever button a `binding` row's
+        // confirm press would be capturing for, off the page this capture
+        // already opened - the first one on it, if there is one, since a
+        // still has no selected row to prefer over another. `CIRCLE` covers
+        // a page with none, which the built-in CONTROLS page never is but a
+        // `--menu` override in principle could be.
+        let name = if kind == "binding" {
+            model
+                .page()
+                .entries
+                .iter()
+                .find_map(|entry| match entry {
+                    crate::menu::Entry::Binding { button, .. } => {
+                        Some(button.to_string().to_ascii_uppercase())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| "CIRCLE".to_string())
+        } else {
+            roster
+                .entries()
+                .first()
+                .map_or_else(|| "winston".to_string(), |entry| entry.name.clone())
+        };
         let mut list = layers.flatten();
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
@@ -263,10 +284,12 @@ pub(super) fn menu_page(
 ///
 /// **Every label goes through `strings` here too**, which is the half of this
 /// that is not merely convenience: the live path resolves them in
-/// `session::pilot_editor`, so a capture that spelled its own English would be
-/// the one place a translation could silently fail to show. `typed` is the
-/// keyboard's seed and `name` the pilot the confirm is about - both taken from
-/// the real roster by the caller.
+/// `session::pilot_editor` for the pilot-editor prompts and in
+/// `session::draw` for `binding`, so a capture that spelled its own English
+/// would be the one place a translation could silently fail to show. `name`
+/// is the pilot a rename or delete confirm is about, or the button a
+/// `binding` capture is waiting on - both taken from the real data by the
+/// caller rather than invented here.
 ///
 /// # Errors
 ///
@@ -327,8 +350,21 @@ fn prompt_draws(
             })
             .draw(skin))
         }
+        // The CONTROLS page's key-capture prompt - `crate::prompt::
+        // message_draw` is the same function `MenuStage::render` calls in
+        // the binary, off `Session::awaiting_binding`, so this and a live
+        // capture cannot draw two different pictures for the same state.
+        // See `docs/architecture/menus.md`'s Rebinding section.
+        "binding" => Ok(crate::prompt::message_draw(
+            skin,
+            &say_of(
+                "OAG_BINDING_CAPTURE_PROMPT",
+                "PRESS A KEY FOR %s - ESCAPE CANCELS",
+            ),
+        )),
         other => anyhow::bail!(
-            "no prompt named {other:?}; this build has rename, rename-note, delete, delete-built-in"
+            "no prompt named {other:?}; this build has rename, rename-note, delete, \
+             delete-built-in, binding"
         ),
     }
 }
@@ -347,19 +383,29 @@ mod tests {
         let skin =
             crate::menu::Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0);
         let strings = crate::language::StringTable::default();
-        for kind in ["rename", "rename-note", "delete", "delete-built-in"] {
+        for kind in [
+            "rename",
+            "rename-note",
+            "delete",
+            "delete-built-in",
+            "binding",
+        ] {
             let list = prompt_draws(kind, "winston", &strings, &skin)
                 .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
             assert!(!list.is_empty(), "{kind:?} drew nothing");
-            // The pilot's name reaches every one of them, which is the whole
-            // reason the substitution exists - a confirm that asked about `%s`
-            // would be worse than one that asked about nothing.
+            // `name` reaches every one of them, which is the whole reason the
+            // substitution exists - a prompt that asked about `%s` would be
+            // worse than one that asked about nothing. The test passes
+            // `"winston"` for `binding` too, standing in for a button name
+            // here the same way it stands in for a pilot's elsewhere: this
+            // checks the substitution mechanism, not what `menu_page`'s own
+            // caller derives it from.
             assert!(
                 list.iter().any(
                     |draw| matches!(draw, crate::frontend::Draw::Text { text, .. }
                         if text.contains("winston"))
                 ),
-                "{kind:?} does not name the pilot"
+                "{kind:?} does not substitute name"
             );
             assert!(
                 !list.iter().any(

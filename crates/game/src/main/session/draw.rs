@@ -555,6 +555,25 @@ impl Session {
         // parked, or nothing when the presentation target was never touched
         // this frame (`has_scene` is `false`) - either way `MenuStage::render`
         // itself decides whether to clear or load, off `suspended_race`.
+        // The CONTROLS page's own key-capture prompt, resolved here rather
+        // than carried on `MenuStage` itself: the text names the button
+        // being rebound, off `Session::awaiting_binding`, and `MenuStage`
+        // holds no session state to read that from - the same reason
+        // `bound_keys` two lines down is a closure built at this call site
+        // rather than a field on the stage. `say_of` is
+        // `session::pilot_editor`'s own helper, reused here rather than
+        // duplicated - see its doc comment. See
+        // `docs/architecture/menus.md`'s Rebinding section for why this
+        // prompt exists at all and `MenuStage::render`'s own doc for how it
+        // is drawn.
+        let binding_prompt = self.awaiting_binding.map(|button| {
+            super::pilot_editor::say_of(
+                self.shell.as_ref().map(|shell| &shell.strings),
+                "OAG_BINDING_CAPTURE_PROMPT",
+                "PRESS A KEY FOR %s - ESCAPE CANCELS",
+                &button.to_string().to_ascii_uppercase(),
+            )
+        });
         if let Stage::Menu(stage) = &mut self.stage {
             stage.render(
                 &self.gpu,
@@ -564,6 +583,7 @@ impl Session {
                 self.backdrop.as_mut(),
                 &|button| self.controls.bound_keys(button),
                 self.suspended_race.is_some(),
+                binding_prompt.as_deref(),
             )?;
         }
 

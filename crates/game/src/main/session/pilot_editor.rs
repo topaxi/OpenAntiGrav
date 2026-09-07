@@ -46,7 +46,8 @@ use super::Session;
 /// entry** - an id for text this project invented rather than an override of
 /// a disc idstring. Every label the pilot prompts draw goes through here, so
 /// the prompt models themselves hold no table and no English: see
-/// `oag_game::prompt`'s own module doc on that seam.
+/// `oag_game::prompt`'s own module doc on that seam. `pub(super)` since
+/// `super::draw` reuses it for the CONTROLS page's own capture prompt.
 ///
 /// The fallback is not politeness. A language with no file yet overlays
 /// nothing (`crate::strings::built_in` ships English alone today), so an id
@@ -58,20 +59,21 @@ use super::Session;
 /// has no shell at all. Nothing can open one of these prompts without menus,
 /// so `None` is unreachable from the pilot editor - but it is the honest
 /// signature, and it costs one `and_then`.
-fn say(strings: Option<&StringTable>, id: &str, english: &str) -> String {
+pub(super) fn say(strings: Option<&StringTable>, id: &str, english: &str) -> String {
     strings
         .and_then(|table| table.get(id))
         .unwrap_or(english)
         .to_string()
 }
 
-/// [`say`] with the pilot's name substituted for every `%s`.
+/// [`say`] with one value substituted for every `%s` - the pilot's name here,
+/// the button's name at `session::draw`'s call site.
 ///
 /// `%s` rather than Rust's own `{}`: this is a *string table* entry, which a
 /// translator edits, and the disc's own tables already spell a substitution
 /// that way. `{}` would also make an accidental brace in a translation a
 /// formatting error rather than a brace.
-fn say_of(strings: Option<&StringTable>, id: &str, english: &str, name: &str) -> String {
+pub(super) fn say_of(strings: Option<&StringTable>, id: &str, english: &str, name: &str) -> String {
     say(strings, id, english).replace("%s", name)
 }
 

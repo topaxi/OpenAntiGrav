@@ -73,6 +73,23 @@ OAG_PILOT_BUILT_IN_SUFFIX = " (built-in)"
 # page's own `back` row may reuse it once it is converted.
 OAG_MENU_BACK = "BACK"
 
+# The CONTROLS page's key-capture prompt, drawn over the whole page while
+# `Session::awaiting_binding` is `Some` - see `docs/architecture/menus.md`'s
+# Rebinding section. Read by Rust (`session::pilot_editor::say_of`, reused
+# from `session::draw`), not by a `menu.toml` `string_id`: like the on-screen
+# keyboard below, this is not a row so there is no page entry to carry one.
+# `%s` is the button's own name, upper-cased, from `oag_gameplay::input::
+# Button`'s `Display` impl. **Chosen, not authored**: neither PSP title's
+# front-end XML defines a rebind prompt to read one off - the same search
+# `PAUSE_OVERLAY`'s own doc comment in `crates/game/src/main/menu_stage.rs`
+# describes turned up nothing for a pause screen either, and a per-row key
+# capture is not on the original's own CONTROLS-equivalent page at all (its
+# `Control_Type = "custom"` rebinds abstract-button-to-action, not
+# key-to-button - see `docs/architecture/menus.md`'s "What this does not
+# touch"), so there was nothing to look for beyond that gamepad-remapping
+# screen which is a different axis entirely.
+OAG_BINDING_CAPTURE_PROMPT = "PRESS A KEY FOR %s - ESCAPE CANCELS"
+
 # The on-screen keyboard. Unlike the rows above, these are read by Rust rather
 # than by a `string_id` in `menu.toml` - `crate::prompt` holds no string table
 # of its own and takes every label already resolved, so the lookup happens

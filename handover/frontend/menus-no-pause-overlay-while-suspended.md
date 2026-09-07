@@ -25,13 +25,18 @@ conflict-is-a-steal, unknown-entry fallback) and what it deliberately does
 not cover - the original's own `Control_Type = "custom"` action-to-button
 mapping - in `docs/architecture/menus.md`'s new "Rebinding" section.
 
-**One rough edge left in what landed**: confirming a `binding` row freezes
-the page with nothing on screen saying a capture is open, until any candidate
-key or Escape resolves it. It always resolves on its own, so this is not a
-stuck state, but a "press a key..." prompt was out of scope for a table,
-persistence and conflict handling - see `docs/architecture/menus.md`'s
-Rebinding section for why (`menu.rs` has no size-gate headroom left to draw
-one from inside the menu tree itself).
+**The rough edge closed (2026-09-07): confirming a `binding` row now says a
+capture is open.** `Session::draw` resolves `OAG_BINDING_CAPTURE_PROMPT` off
+`Session::awaiting_binding` and hands it to `MenuStage::render` as one more
+parameter - the same seam `bound_keys` and `frozen_race` already cross - and
+that draws it last, over everything, with `oag_game::prompt::message_draw`: a
+small third shape alongside `Keyboard` and `Confirm`, drawing a status line
+with no input model of its own since the raw key that resolves a capture is
+decided upstream of the whole crate. Landed in `main/` exactly as this
+thread's own Next Step named: `menu_stage.rs` and `prompt.rs` both gained a
+few lines, `crates/game/src/menu.rs` (the one actually at its
+`scripts/check-file-size.py` `BASELINE` ceiling) was not touched at all. See
+`docs/architecture/menus.md`'s Rebinding section for the full account.
 
 **The pause overlay landed (2026-09-05).** Backing into the menus over a
 parked race now renders that race's own scene into the frame - the same
@@ -51,11 +56,9 @@ temporarily swapping in `LoadOp::Clear` and watching it fail. This also
 pushed `session/frame.rs` past the 1,000-line size-gate ceiling, split into
 `Session::draw` in the new `session/draw.rs`.
 
-One thing a live game still needs is not there, and one gap in what landed
-is real but invisible on both titles this build actually plays:
+One gap in what landed is real but invisible on both titles this build
+actually plays:
 
-- **No on-screen prompt while a binding capture is open**, per the rough edge
-  above.
 - **A title whose frame authors a `<ScreenClear>`, or whose `MenuSkin`
   carries a `background` (only Pure's does, per `Skin::background`'s own
   doc), still hides the parked race outright rather than dimming it.**
@@ -67,9 +70,22 @@ is real but invisible on both titles this build actually plays:
   menus.md's "the page is drawn inside the disc's own frame") to actually
   suspend a race and show it.
 
+**Verified headlessly, both states (2026-09-07).** `--menu-page controls
+--screenshot` for the capture-closed page and `--menu-page controls
+--menu-prompt binding --screenshot` for capture-open - the second flag's new
+`"binding"` arm in `crate::capture::menu_page::prompt_draws` calls the exact
+`message_draw` function the live path does, off the first `binding` row the
+CONTROLS page opens on (`THRUST`, so the captured shot reads "PRESS A KEY FOR
+CROSS - ESCAPE CANCELS"). Both screenshots are real pictures, not black: the
+scrim dims every row legibly and the two-line prompt is centred and readable
+over it, including the BRAKE row's now-three-key value
+(`BACKSPACE / Z / Y`, off `Y` joining `Z` on Circle) neither overlapping the
+label column nor running off the value column's own right edge.
+`cargo nextest run -p oag-game` (1064 tests) and the full `just` gate both
+pass; nothing here is a game-data test, so `just test-data` was not run.
+
 ## Open
 
-- No "press a key..." prompt while a binding row's capture is open
 - The pause overlay does not suppress a title's own `<ScreenClear>` /
   `MenuSkin::background` fill, so a title that authors one would show an
   opaque menu background over the parked race rather than a dimmed picture
@@ -77,8 +93,9 @@ is real but invisible on both titles this build actually plays:
 
 ## Next Steps
 
-- Give the CONTROLS page a way to say a capture is open - a new `Draw` the
-  composition root overlays over `MenuStage`'s own picture while
-  `Session::awaiting_binding` is `Some`, rather than a `menu.rs` change: that
-  file has no line budget left under `scripts/check-file-size.py`'s
-  `BASELINE`.
+None currently open. The `<ScreenClear>`/`MenuSkin::background` gap above has
+no actionable next step of its own yet: it cannot fire on either title this
+build plays today - reproducing it needs a live run against a title whose
+`MenuSkin` carries a `background` or whose frame authors a `<ScreenClear>`,
+which neither Pulse nor Pure does. Revisit if a third title's own menus are
+wired up and turn out to author either.
