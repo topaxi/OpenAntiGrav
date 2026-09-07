@@ -13,6 +13,7 @@
 use super::{
     Draw, Font, Label, Layout, Precision, Readout, Sprite, VertAlign, argb_to_rgba, colour,
     format_lap_time, is_screen_positioned,
+    lap_splits::{lap_split_row_text, lap_split_sprites},
 };
 
 /// The colour a glyph's baked outline takes when a widget names none.
@@ -183,17 +184,17 @@ pub(super) fn text_for(
         }),
 
         // Static labels: anything with an `idstring` that this function has not
-        // already claimed. These are the `IG_HUD_*` captions beside the values.
-        //
-        // `ZonePlusN` is checked here rather than as eleven arms: the widget is
-        // a numbered family and the number is the whole rule.
-        name => zone_plus(name)
-            .map(|ahead| {
-                // The gate is on the **current** row alone, not on the ladder.
-                // See [`zone_plus`].
-                (ahead > 0 || readout.zone > 0).then(|| (readout.zone + ahead).to_string())
-            })
-            .unwrap_or_else(|| caption(label, strings)),
+        // already claimed - the `IG_HUD_*` captions beside the values.
+        // `ZonePlusN` and the per-lap history are checked as families here
+        // rather than as arms apiece. See [`lap_split_row_text`].
+        name => lap_split_row_text(name, readout).unwrap_or_else(|| {
+            // Gated on the **current** row alone, not the ladder - see [`zone_plus`].
+            zone_plus(name)
+                .map(|ahead| {
+                    (ahead > 0 || readout.zone > 0).then(|| (readout.zone + ahead).to_string())
+                })
+                .unwrap_or_else(|| caption(label, strings))
+        }),
     }
 }
 
@@ -729,6 +730,8 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         moved.rect[1] = bar[1];
         frame.sprites.extend(sprite_draw(&moved, cx.sheet));
     }
+
+    frame.sprites.extend(lap_split_sprites(cx, readout));
 
     // Decided once for the frame rather than per widget: it is a fact about the
     // layout and the readout together, and two widgets have to agree on it.

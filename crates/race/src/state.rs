@@ -64,6 +64,53 @@ pub fn wrapped_backward(delta: f32, half_length: f32) -> bool {
 /// covers.
 pub const COUNTDOWN_TICKS: u64 = 272;
 
+/// How many completed laps [`RaceState::lap_splits`] and [`crate::Standing::lap_splits`]
+/// keep a time for.
+///
+/// **Read off the authored data, not chosen.** HD/Fury's `HUD_lap_times.xml`
+/// composes exactly four rows - `Lap1Image`-`Lap4Image`, each with its own
+/// `Lap{n}Text`/`Lap{n}Time` pair - and no other shipped layout on any of the
+/// four titles authors a fifth. A fixed array of this length is therefore the
+/// same "no `Vec`, fixed-size arrays" shape [ADR-0003] already requires of
+/// `World`, sized to the one consumer that exists rather than to a guess at how
+/// long a race could run. See `docs/formats/hd-hud.md`.
+///
+/// Both of this crate's current lap targets ([`Mode::TIME_TRIAL_LAPS`],
+/// [`Mode::SINGLE_RACE_LAPS`]) are `3`, so every bounded mode today fits with a
+/// row to spare; a lap beyond the fourth - reachable only in an unbounded mode
+/// like Speed Lap or Zone, or a longer configured race once one exists - simply
+/// stops being recorded, the same way the original's own four rows would have
+/// nowhere left to draw it.
+///
+/// [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
+pub const MAX_RECORDED_LAPS: usize = 4;
+
+/// Records `ticks` as the time for lap `completed_lap`, if it fits.
+///
+/// Shared by [`RaceState::complete_lap`] and [`crate::Standing::update`] so the
+/// bound and the indexing rule live in one place - the same reasoning
+/// `wrapped_forward` and `LapGate` are shared for. `completed_lap` is 1-based,
+/// matching [`RaceState::lap`] before it advances past the lap just finished.
+///
+/// **Overwrites rather than keeping the first or the best.** A lap only
+/// records a second time at all after a backward crossing re-earns it
+/// ([`RaceState::uncomplete_lap`]), which is already a wrong-way situation the
+/// HUD warns about; showing the time from the drive that actually finished the
+/// lap last is the reading with no data-side signal against it, kept for
+/// symmetry with how [`RaceState::best_lap_ticks`] is threaded rather than
+/// measured off the original.
+pub(crate) fn record_split(
+    splits: &mut [Option<u32>; MAX_RECORDED_LAPS],
+    completed_lap: u32,
+    ticks: u32,
+) {
+    if let Some(index) = (completed_lap as usize).checked_sub(1)
+        && index < MAX_RECORDED_LAPS
+    {
+        splits[index] = Some(ticks);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RaceState {
     /// Which mode's rules are running.
@@ -83,6 +130,13 @@ pub struct RaceState {
     pub lap_start_tick: u64,
     /// The fastest completed lap so far, in ticks.
     pub best_lap_ticks: Option<u32>,
+    /// Each completed lap's own time, in ticks, indexed by `lap - 1`.
+    ///
+    /// `None` for a lap not yet completed. Bounded at [`MAX_RECORDED_LAPS`] -
+    /// see that constant for why - rather than a `Vec`, per [ADR-0003].
+    ///
+    /// [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
+    pub lap_splits: [Option<u32>; MAX_RECORDED_LAPS],
     /// The zone number, Zone mode only. Zero before the first step.
     ///
     /// A `u16` because that is what the original stores it as, and it is
@@ -151,6 +205,7 @@ impl RaceState {
             progress: None,
             lap_start_tick: 0,
             best_lap_ticks: None,
+            lap_splits: [None; MAX_RECORDED_LAPS],
             zone: 0,
             zone_timer: 0.0,
             score: 0,
@@ -343,6 +398,7 @@ impl RaceState {
             Some(best) => best.min(ticks),
             None => ticks,
         });
+        record_split(&mut self.lap_splits, self.lap, ticks);
         self.lap = self.lap.saturating_add(1);
         self.lap_start_tick = tick;
         outcome.lap_completed = true;

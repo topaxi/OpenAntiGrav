@@ -135,6 +135,47 @@ fn the_lap_time_is_recorded_and_the_best_is_kept() {
         Some(*lap_times.iter().min().expect("three laps")),
         "best lap is not the fastest of {lap_times:?}"
     );
+    // Each lap keeps its own time too, not just whichever was fastest -
+    // `Lap1Time`-`Lap4Image` on HD's HUD show the history, not a running best.
+    for (index, &ticks) in lap_times.iter().enumerate() {
+        assert_eq!(
+            state.lap_splits[index],
+            Some(ticks),
+            "lap {} did not keep its own time",
+            index + 1
+        );
+    }
+    assert_eq!(
+        state.lap_splits[3], None,
+        "a fourth lap was never driven, and must not read as one"
+    );
+}
+
+/// A fifth lap has nowhere to go: [`super::MAX_RECORDED_LAPS`] is four, read
+/// off the widget count HD's own `HUD_lap_times.xml` authors, and the array
+/// does not grow. It must not panic and must not silently overwrite an
+/// earlier lap either.
+#[test]
+fn a_lap_past_the_recorded_maximum_is_not_recorded_and_does_not_panic() {
+    let course = course();
+    let mut state = RaceState::new(Mode::SpeedLap);
+    let mut tick = 0;
+
+    for _ in 0..5 {
+        drive_lap(&mut state, &course, tick);
+        tick += course.len() as u64;
+        let position = course.position(0).expect("in range");
+        let outcome = state.update(&course, position, tick, DT, false);
+        assert!(outcome.lap_completed, "lap did not close");
+        tick += 1;
+    }
+
+    assert_eq!(state.lap, 6, "five laps completed");
+    assert!(
+        state.lap_splits.iter().all(Option::is_some),
+        "all four recordable slots should have filled: {:?}",
+        state.lap_splits
+    );
 }
 
 #[test]
