@@ -154,11 +154,21 @@ fn axis_choices(min: f32, max: f32, current: f32) -> Vec<menu::Choice> {
 /// Plain text baked into the row's own list rather than a second `Value`
 /// variant: a built-in is a fact about the *pilot*, not a boolean setting a
 /// `toggle` row's [`Value::Flag`] could carry.
-fn pilot_choice(entry: &pilots::Entry) -> menu::Choice {
+///
+/// The suffix goes through [`say`] like every other invented string here,
+/// even though it is glued onto a value rather than a whole row's `label` -
+/// `just check-strings` cannot see into a value list built at runtime, so an
+/// id it never checks is exactly the literal `&str` this file's other rows
+/// stopped being.
+fn pilot_choice(entry: &pilots::Entry, strings: Option<&StringTable>) -> menu::Choice {
     let label = if entry.from_file {
         entry.name.clone()
     } else {
-        format!("{} (built-in)", entry.name)
+        format!(
+            "{}{}",
+            entry.name,
+            say(strings, "OAG_PILOT_BUILT_IN_SUFFIX", " (built-in)")
+        )
     };
     menu::Choice::labelled(&entry.name, label)
 }
@@ -175,11 +185,12 @@ impl Session {
     /// which axis are on screen is not persisted, so both simply open on
     /// whichever their list's first entry is.
     pub(crate) fn supply_pilot_menu(&mut self, model: &mut menu::Menu) {
+        let strings = self.table();
         let pilots: Vec<menu::Choice> = self
             .pilot_roster
             .entries()
             .iter()
-            .map(pilot_choice)
+            .map(|entry| pilot_choice(entry, strings))
             .collect();
         model.supply(menu::ValueSource::Pilots, &pilots);
         let axes: Vec<menu::Choice> = pilots::AXES
@@ -586,8 +597,14 @@ impl Session {
             Err(e) => error!("could not reload pilots after saving: {e:#}"),
         }
         let roster = self.pilot_roster.clone();
+        // `self.shell.as_ref()...` rather than `self.table()`: the latter
+        // borrows all of `self` for as long as the `&StringTable` it returns
+        // is alive, which would collide with the `&mut self.stage` below.
+        // Projecting the field directly keeps the borrow checker's view of
+        // the two as disjoint, which they are.
+        let strings = self.shell.as_ref().map(|shell| &shell.strings);
         if let Stage::Menu(stage) = &mut self.stage {
-            supply_pilot_choices(&mut stage.menu, &roster, select);
+            supply_pilot_choices(&mut stage.menu, &roster, select, strings);
         }
     }
 }
@@ -653,8 +670,17 @@ fn rename_note(
 /// was already on" rule leaves PILOT exactly where it was, so a fresh
 /// `pilot-1` exists on disk and in the list with nothing on screen saying
 /// so.
-fn supply_pilot_choices(model: &mut menu::Menu, roster: &pilots::Roster, select: Option<&str>) {
-    let pilots: Vec<menu::Choice> = roster.entries().iter().map(pilot_choice).collect();
+fn supply_pilot_choices(
+    model: &mut menu::Menu,
+    roster: &pilots::Roster,
+    select: Option<&str>,
+    strings: Option<&StringTable>,
+) {
+    let pilots: Vec<menu::Choice> = roster
+        .entries()
+        .iter()
+        .map(|entry| pilot_choice(entry, strings))
+        .collect();
     model.supply(menu::ValueSource::Pilots, &pilots);
     if let Some(name) = select {
         model.seed("pilot.selected", &Value::Text(name.to_string()));

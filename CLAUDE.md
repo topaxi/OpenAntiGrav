@@ -27,6 +27,7 @@ just check-determinism # asserts no platform transcendental reaches simulation c
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
+just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
@@ -177,6 +178,15 @@ ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 
 Gameplay state will be one `World` struct of plain data with fixed-size arrays, no ECS
 (see [ADR-0003](docs/architecture/adr/0003-no-ecs.md)) - deliberately, so the whole world
 snapshots in one `memcpy`-shaped operation for replays and golden tests.
+
+**A new row or page in `assets/ui/menu.toml` needs a `string_id`/`title_string_id` and
+its English text in `assets/ui/strings/english.toml`, in the same change** -
+`just check-strings` (`scripts/check-strings.py`) fails the gate otherwise, the same
+ratchet shape `check-size` above already is: pre-existing debt is frozen in that
+script's own `BASELINE_LABELS`/`BASELINE_TITLES`, but nothing *new* may join it. A
+second language's file may lag a translation, but only by naming the gap under its own
+`[untranslated]` table - never by omitting the id, and never by machine-translating to
+clear it. See `assets/ui/strings/english.toml`'s own doc comment for the convention.
 
 ### Determinism
 

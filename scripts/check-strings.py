@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+"""A ratchet on invented English shipping with no translatable id.
+
+`assets/ui/menu.toml`'s own header settles that an invented menu tree is in
+scope for this project - it is not a transcription of the disc's own XML.
+What it does not settle on its own is *translation*: a row's `label` is
+literal English unless it names a `string_id` that
+`crate::menu::definition::resolved` looks up in `assets/ui/strings/<language>
+.toml`, and nothing forced a new row to name one. The pilot editor landed a
+whole screen - an AI PILOTS page, an on-screen keyboard, a confirm dialog -
+before anything checked that. This script is that check.
+
+It mirrors `check-file-size.py`'s own shape on purpose, for the same reason:
+82 of this file's label rows and 9 of its page titles already had no id
+before this script existed, and failing the gate on all of them turns the
+gate off. So existing debt is frozen in `BASELINE_LABELS`/`BASELINE_TITLES` -
+a row already there when the rule landed may stay untranslated, but nothing
+*new* may join it, and a row that gains a `string_id` must have its baseline
+entry deleted, the same "graduated" rule `check-file-size.py` enforces.
+
+Three things are checked, offline and without a Ghidra bridge or a built
+binary:
+
+1. **Every row's `label` and every page's `title` in `assets/ui/menu.toml`
+   names a `string_id`/`title_string_id`, unless `BASELINE_LABELS`/
+   `BASELINE_TITLES` names it as pre-existing debt.** A new row or page with
+   neither is the failure this script exists to catch.
+2. **Every id actually named - by a row, a page, or one of the hand-picked
+   Rust call sites in `STRING_CONSUMERS` below - resolves to real text in
+   `assets/ui/strings/english.toml`.** English is the base language and
+   `check-strings.py` allows it no gap: a `string_id` that resolves to
+   nothing is a typo or a forgotten entry, not a language that has not
+   caught up, and it is a hard failure either way.
+3. **Every *other* language file under `assets/ui/strings/` covers the same
+   ids** - translated under its own `[strings]`, or named, explicitly, under
+   an `[untranslated] ids = [...]` table. A missing entry is a hard failure;
+   a marked one is not. See `assets/ui/strings/english.toml`'s own doc
+   comment for why the second is honest and the first is not, and never
+   machine-translate to clear a row here - that is worse than the gap it
+   would hide. No second language file exists yet, so this rule is written
+   for the one that lands next rather than proven against one today.
+
+`STRING_CONSUMERS` is deliberately a short, hand-maintained list rather than
+a scan of every `.rs` file in the tree: this project's own env vars
+(`OAG_REQUIRE_GAME_DATA`, `OAG_SWEEP_LOOK`, `OAG_IMAGE`, ...) share the same
+`OAG_` prefix by convention, and a blanket regex over `crates/game/src`
+would flag every one of them as an unresolved string id. Each file named
+here was read by hand and confirmed to hold nothing but `say`/`say_of`/
+`resolved` lookups against a real `StringTable` - adding a new consumer
+means doing that reading once, then adding its path to the list.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+MENU_TOML = ROOT / "assets/ui/menu.toml"
+STRINGS_DIR = ROOT / "assets/ui/strings"
+BASE_LANGUAGE = "english"
+
+# Pre-existing debt: `(page id, label)` pairs allowed to carry no
+# `string_id`. Recorded on 2026-09-07, the day this script landed - every
+# row here predates the rule, on a page the pilot editor did not touch.
+# **May shrink, never grow.** Converting a row: give it a `string_id`, add
+# the id to `assets/ui/strings/english.toml`, and delete its row here.
+BASELINE_LABELS: set[tuple[str, str]] = {
+    ("main", "RACE"),
+    ("main", "REMIX"),
+    ("main", "OPTIONS"),
+    ("main", "QUIT"),
+    ("race", "MODE"),
+    ("race", "SPEED CLASS"),
+    ("race", "AI DIFFICULTY"),
+    ("race", "TEAM"),
+    ("race", "VARIANT"),
+    ("race", "TRACK"),
+    ("race", "START"),
+    ("race", "BACK"),
+    ("remix", "MODE"),
+    ("remix", "SPEED CLASS"),
+    ("remix", "AI DIFFICULTY"),
+    ("remix", "TRACK TITLE"),
+    ("remix", "TRACK"),
+    ("remix", "CRAFT TITLE"),
+    ("remix", "TEAM"),
+    ("remix", "VARIANT"),
+    ("remix", "START"),
+    ("remix", "BACK"),
+    ("options", "DISPLAY"),
+    ("options", "GRAPHICS"),
+    ("options", "AUDIO"),
+    ("options", "CONTROLS"),
+    ("options", "AI PILOTS"),
+    ("options", "LANGUAGE"),
+    ("options", "BACK"),
+    ("display", "MONITOR"),
+    ("display", "WINDOW MODE"),
+    ("display", "WINDOW SIZE"),
+    ("display", "ASPECT RATIO"),
+    ("display", "FRONT END STYLE"),
+    ("display", "VSYNC"),
+    ("display", "FRAME LIMIT"),
+    ("display", "BRIGHTNESS"),
+    ("display", "GAMMA"),
+    ("display", "BACK"),
+    ("graphics", "RENDERER"),
+    ("graphics", "RENDER SCALE"),
+    ("graphics", "TARGET FPS"),
+    ("graphics", "MINIMUM RESOLUTION"),
+    ("graphics", "RECONSTRUCTION"),
+    ("graphics", "UPSCALER SHARPNESS"),
+    ("graphics", "MSAA"),
+    ("graphics", "MOTION BLUR"),
+    ("graphics", "SHADOWS"),
+    ("graphics", "ANISOTROPIC FILTERING"),
+    ("graphics", "CAMERA VIEW"),
+    ("graphics", "FIELD OF VIEW"),
+    ("graphics", "BOOST FOV KICK"),
+    ("graphics", "PERFORMANCE OVERLAY"),
+    ("graphics", "BACK"),
+    ("audio", "MUSIC VOLUME"),
+    ("audio", "SFX VOLUME"),
+    ("audio", "ANNOUNCER VOLUME"),
+    ("audio", "MASTER VOLUME"),
+    ("audio", "MUSIC SOURCE"),
+    ("audio", "BACK"),
+    ("controls", "THRUST"),
+    ("controls", "BRAKE"),
+    ("controls", "STEER LEFT"),
+    ("controls", "STEER RIGHT"),
+    ("controls", "PITCH UP"),
+    ("controls", "PITCH DOWN"),
+    ("controls", "AIRBRAKE LEFT"),
+    ("controls", "AIRBRAKE RIGHT"),
+    ("controls", "CAMERA VIEW"),
+    ("controls", "SIDESHIFT"),
+    ("controls", "TRIGGERS"),
+    ("controls", "TRIGGER SENSITIVITY"),
+    ("controls", "BACK"),
+}
+
+# Pre-existing debt: page ids allowed to carry no `title_string_id`. The
+# `pilots` page is not here - it is the newest page in the file, and it
+# shipped translated from day one of this rule.
+BASELINE_TITLES: set[str] = {
+    "main",
+    "race",
+    "remix",
+    "options",
+    "display",
+    "graphics",
+    "audio",
+    "controls",
+}
+
+# Files read by hand and confirmed to hold nothing under an `OAG_` string
+# literal but a real lookup against a `StringTable` - see this module's own
+# doc for why this is a named list and not a tree-wide regex.
+#
+# `hints.rs` and `wording.rs` had already wired the *mechanism* -
+# `OAG_HINTS_*`/`OAG_LOADING_*` lookups with a fallback - before
+# `english.toml` carried real text for any of them, which is exactly the gap
+# this script exists to close. Their 23 ids now have entries there too, so
+# both are scanned rather than carved out; the fallback literal at each call
+# site is what was copied in, so the two must be kept in step by hand until
+# either file gains its own generated manifest.
+STRING_CONSUMERS = [
+    "crates/game/src/main/session/pilot_editor.rs",
+    "crates/game/src/main/session/pilot_editor/tests.rs",
+    "crates/game/src/capture/menu_page.rs",
+    "crates/game/src/main/hints.rs",
+    "crates/game/src/loading/wording.rs",
+]
+
+ID_LITERAL = re.compile(r'"(OAG_[A-Z0-9_]+)"')
+
+
+def load_menu() -> dict:
+    with MENU_TOML.open("rb") as handle:
+        return tomllib.load(handle)
+
+
+def load_strings(path: Path) -> tuple[dict[str, str], list[str]]:
+    """A language file's `[strings]` table and its `[untranslated].ids`."""
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+    return data.get("strings", {}), data.get("untranslated", {}).get("ids", [])
+
+
+def ids_from_consumers() -> set[str]:
+    found: set[str] = set()
+    for relative in STRING_CONSUMERS:
+        path = ROOT / relative
+        if not path.exists():
+            continue
+        found |= set(ID_LITERAL.findall(path.read_text(encoding="utf-8")))
+    return found
+
+
+def report(heading: str, rows: list[str], advice: str) -> None:
+    if not rows:
+        return
+    print(f"\n{heading}\n")
+    for row in sorted(rows):
+        print(f"  {row}")
+    print(f"\n{advice}")
+
+
+def main() -> int:
+    menu = load_menu()
+
+    uncovered_labels: list[str] = []
+    uncovered_titles: list[str] = []
+    graduated_labels: list[str] = []
+    graduated_titles: list[str] = []
+    menu_ids: set[str] = set()
+    seen_labels: set[tuple[str, str]] = set()
+    seen_titles: set[str] = set()
+
+    for page in menu.get("page", []):
+        page_id = page["id"]
+        seen_titles.add(page_id)
+        title_id = page.get("title_string_id")
+        baselined_title = page_id in BASELINE_TITLES
+        if title_id is None:
+            if not baselined_title:
+                uncovered_titles.append(f"page {page_id!r}: title {page['title']!r}")
+        else:
+            menu_ids.add(title_id)
+            if baselined_title:
+                graduated_titles.append(page_id)
+
+        for entry in page.get("entry", []):
+            label = entry.get("label", "")
+            if not label:
+                continue
+            key = (page_id, label)
+            seen_labels.add(key)
+            string_id = entry.get("string_id")
+            baselined = key in BASELINE_LABELS
+            if string_id is None:
+                if not baselined:
+                    uncovered_labels.append(f"page {page_id!r} label {label!r}")
+            else:
+                menu_ids.add(string_id)
+                if baselined:
+                    graduated_labels.append(f"{key!r}")
+
+    vanished_labels = [f"{key!r}" for key in BASELINE_LABELS if key not in seen_labels]
+    vanished_titles = [page_id for page_id in BASELINE_TITLES if page_id not in seen_titles]
+
+    all_ids = menu_ids | ids_from_consumers()
+
+    base_path = STRINGS_DIR / f"{BASE_LANGUAGE}.toml"
+    base_strings, base_untranslated = load_strings(base_path)
+    if base_untranslated:
+        # The base language is the one place a gap cannot be marked instead
+        # of filled - see `english.toml`'s own doc comment.
+        print(
+            f"\n{base_path}'s own [untranslated] names "
+            f"{sorted(base_untranslated)} - the base language may not defer "
+            "a translation, only ship one.\n"
+        )
+        return 1
+
+    missing_in_base = sorted(id_ for id_ in all_ids if not base_strings.get(id_))
+
+    other_language_problems: list[str] = []
+    for path in sorted(STRINGS_DIR.glob("*.toml")):
+        if path.stem == BASE_LANGUAGE:
+            continue
+        strings, untranslated = load_strings(path)
+        untranslated_set = set(untranslated)
+        both = untranslated_set & {id_ for id_ in strings if strings.get(id_)}
+        for id_ in sorted(both):
+            other_language_problems.append(
+                f"{path.name}: {id_!r} is marked [untranslated] and also translated - "
+                "delete it from [untranslated]"
+            )
+        stale = untranslated_set - all_ids
+        for id_ in sorted(stale):
+            other_language_problems.append(
+                f"{path.name}: [untranslated] names {id_!r}, which nothing in "
+                "menu.toml or STRING_CONSUMERS references any more - delete the row"
+            )
+        for id_ in sorted(all_ids):
+            if strings.get(id_) or id_ in untranslated_set:
+                continue
+            other_language_problems.append(
+                f"{path.name}: {id_!r} has neither a translation nor an "
+                "[untranslated] marker - a player reading this language sees "
+                "nothing this script can vouch for"
+            )
+
+    report(
+        "menu row(s) with no string_id and not in BASELINE_LABELS:",
+        uncovered_labels,
+        "A new row needs a string_id and its English text in "
+        "assets/ui/strings/english.toml, in the same change. If this row "
+        "predates that rule, add it to BASELINE_LABELS instead and say why.",
+    )
+    report(
+        "page title(s) with no title_string_id and not in BASELINE_TITLES:",
+        uncovered_titles,
+        "A new page needs a title_string_id and its English text in "
+        "assets/ui/strings/english.toml, in the same change. If this page "
+        "predates that rule, add its id to BASELINE_TITLES instead and say why.",
+    )
+    report(
+        "BASELINE_LABELS row(s) that now carry a string_id - delete them:",
+        graduated_labels,
+        "The baseline only ever gets shorter. Leaving a row here keeps an exemption alive.",
+    )
+    report(
+        "BASELINE_TITLES row(s) that now carry a title_string_id - delete them:",
+        graduated_titles,
+        "The baseline only ever gets shorter. Leaving a row here keeps an exemption alive.",
+    )
+    report(
+        "BASELINE_LABELS row(s) naming a page/label that no longer exists:",
+        vanished_labels,
+        "Delete them, or a rename carries the old exemption forward under a new label.",
+    )
+    report(
+        "BASELINE_TITLES row(s) naming a page that no longer exists:",
+        vanished_titles,
+        "Delete them, or a rename carries the old exemption forward under a new id.",
+    )
+    report(
+        f"string_id(s) with no real text in {base_path.relative_to(ROOT)}:",
+        missing_in_base,
+        "Every id used anywhere must resolve in the base language - this is "
+        "either a typo in the id or a forgotten entry in english.toml.",
+    )
+    report(
+        "other-language string file problem(s):",
+        other_language_problems,
+        "Every id the base language carries needs either a real translation "
+        "or an explicit [untranslated] marker in this file - never a silent "
+        "gap, and never a machine translation either.",
+    )
+
+    failed = any(
+        [
+            uncovered_labels,
+            uncovered_titles,
+            graduated_labels,
+            graduated_titles,
+            vanished_labels,
+            vanished_titles,
+            missing_in_base,
+            other_language_problems,
+        ]
+    )
+    if failed:
+        return 1
+
+    print(
+        f"OK: {len(seen_labels)} menu row(s) ({len(BASELINE_LABELS)} baselined), "
+        f"{len(seen_titles)} page title(s) ({len(BASELINE_TITLES)} baselined), "
+        f"{len(all_ids)} string id(s) all resolve in {BASE_LANGUAGE}.toml"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

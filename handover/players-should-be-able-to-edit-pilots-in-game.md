@@ -234,18 +234,27 @@ maintainer call, not one to make here.
   preview - "this pilot brakes late and defends hard" derived from its axes -
   would make experimentation much cheaper, and is entirely invented UI.
   Untouched by this cut.
-- Labels on the new AI PILOTS page do not use `string_id`, the same gap
-  every other row in `assets/ui/menu.toml` has - see
-  [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md).
+- **Landed 2026-09-07**: every row on the AI PILOTS page now names a
+  `string_id`, the page itself names a `title_string_id` (new mechanism,
+  resolved the same way a row's `label` is), and `pilot_choice`'s
+  "(built-in)" suffix is looked up too. `just check-strings`
+  (`scripts/check-strings.py`) now gates this: a new `menu.toml` row/page
+  with no id fails the build. Every other page in the file still carries
+  none - see
+  [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md)
+  for the ratchet that bounds it.
 
 ## Next Steps
 
 1. The axis preview above - it needs no new mechanism, only reading
    `Pilot`'s own numbers into a sentence, and it is what makes
    experimenting cheap rather than blind.
-2. Give the rest of `assets/ui/menu.toml`'s rows a `string_id`. Three of
-   them have one now and the mechanism is proven end to end, including its
-   fallback; the remaining hundred-odd are bookkeeping rather than design.
+2. Give the rest of `assets/ui/menu.toml`'s rows a `string_id` - the AI
+   PILOTS page's own are done now, and the mechanism (including the
+   `title_string_id` a page carries too) is proven end to end; the
+   remaining eight pages are bookkeeping rather than design, one
+   `BASELINE_LABELS`/`BASELINE_TITLES` row in `check-strings.py` deleted per
+   row converted.
 3. Reuse `crate::prompt::Keyboard` for the next thing that needs a name -
    a profile, a replay, a saved setup. It was built to be reused and
    nothing about it knows what a pilot is; the only thing to decide is

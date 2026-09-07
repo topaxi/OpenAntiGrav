@@ -71,32 +71,60 @@ order:
    checks that overriding one of the eight ids never changes another's
    answer.
 
+## Landed 2026-09-07: the AI PILOTS page is fully covered, and a gate stops the gap reopening
+
+- **`assets/ui/menu.toml`'s `pilots` page names a `string_id` on every one of
+  its 9 rows and a `title_string_id` on the page itself** (`title_string_id`
+  is new - `Definition::parse` resolves a page's `title` the same way
+  `resolve` already did a row's `label`, through one shared `resolved`
+  helper). `assets/ui/strings/english.toml` is no longer close to empty:
+  `OAG_PILOT_PILOT`/`_AXIS`/`_LOW`/`_HIGH`/`_SAVE`/`_PAGE_TITLE`, a shared
+  `OAG_MENU_BACK`, and `OAG_PILOT_BUILT_IN_SUFFIX` (the "(built-in)" marker
+  `pilot_choice` builds into a value, not a `label`) joined the ids the
+  pilot-editor session already added.
+- **A hard gate now exists: `just check-strings`
+  (`scripts/check-strings.py`).** It fails if a *new* `menu.toml` row or page
+  names no `string_id`/`title_string_id`, or if any id used anywhere resolves
+  to nothing in `english.toml`. The other 73 rows and 8 titles that predate
+  this change are frozen in the script's own `BASELINE_LABELS`/
+  `BASELINE_TITLES` - the same ratchet shape `check-size` already is - so old
+  debt is bounded and visible without blocking, and it is wired into `just
+  check`.
+- **The maintainer's own call, since it bears on the second bullet below**:
+  a language is allowed to lag a translation, but only by naming the gap
+  under its own `[untranslated]` table, never by omitting the id or by a
+  machine translation - see `english.toml`'s own doc comment for the worked
+  example. No second language file exists yet to prove this against, so the
+  rule is written ahead of a caller rather than proven by one.
+
 ## Open
 
-- `assets/ui/menu.toml` names no `string_id` on any row, and
-  `assets/ui/strings/english.toml` ships empty as a result - the mechanism
-  has nothing to demonstrate yet beyond its own unit tests. Adding either
-  is straightforward now that both exist; nobody has decided which rows are
-  worth an id first.
+- 73 of 82 label rows and 8 of 9 page titles in `assets/ui/menu.toml` still
+  carry no id - every page but `pilots`. `check-strings.py`'s own
+  `BASELINE_LABELS`/`BASELINE_TITLES` name them individually; converting one
+  is: give it an id, add its English text, delete its baseline row.
 - No second language file exists yet (`assets/ui/strings/french.toml`, ...),
   so the override layer has only ever been proved against English overriding
-  English, or an empty table falling through to the id. A real translation is
-  the only way to prove the *language* half of this, as opposed to the
-  *override* half.
+  English, or an empty table falling through to the id, and the
+  `[untranslated]` marker convention above has never been exercised by a real
+  file either.
 - Pure's own `StringTable` loading empty is still a bug in the read side, not
   fixed and not papered over by the override layer above - see the next
   section.
 
 ## Next Steps
 
-- Now that all four sources have real ids, give `assets/ui/menu.toml` a
-  `string_id` on a row or two and add matching entries to
-  `assets/ui/strings/english.toml` - this is the point where that file
-  stops being empty, and where "the mechanism works" becomes "a row is
-  actually overridden".
+- Convert another page's rows the same way `pilots` was: a `string_id` per
+  row, a `title_string_id` on the page, matching entries in
+  `assets/ui/strings/english.toml`, and its `BASELINE_LABELS`/
+  `BASELINE_TITLES` rows deleted in `scripts/check-strings.py` - the smallest
+  page (`main`, 4 rows) is the cheapest way to prove the pattern generalises
+  past the screen that motivated it.
 - Add a second language's file (`assets/ui/strings/french.toml`, ...) with a
-  real translation of whatever ids exist by then, to prove the *language*
-  half rather than only the *override* half.
+  real translation of whatever ids exist by then, marking anything not yet
+  translated under `[untranslated]` rather than leaving it out - this is the
+  only way to prove the *language* half of this, as opposed to the *override*
+  half, and the first real exercise of the marker convention above.
 - Cross-check against
   [pures-string-tables-are-not-read-and-its.md](pures-string-tables-are-not-read-and-its.md):
   Pure's own table loading empty is a bug in the read side, distinct from this

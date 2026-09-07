@@ -63,7 +63,7 @@ impl Drop for Scratch {
 /// with the two free functions directly, since there is no [`Session`]
 /// in this test.
 fn land_on(model: &mut menu::Menu, roster: &pilots::Roster, name: &str, axis: &str) {
-    supply_pilot_choices(model, roster, Some(name));
+    supply_pilot_choices(model, roster, Some(name), None);
     model.supply(menu::ValueSource::PilotAxes, &[menu::Choice::plain(axis)]);
     model.seed("pilot.axis", &Value::Text(axis.to_string()));
     resupply_bounds(model, roster);
