@@ -184,6 +184,33 @@ pub(crate) struct Session {
     /// claim goes unwritten is a scene with no `Chain` at all, never a
     /// mid-chain bail-out.
     pub(crate) hd_bloom_timer: Option<oag_render::timing::PassTimer>,
+    /// How long [`Session::frame`] itself took, in the same seconds
+    /// [`Session::meter`] is fed - the **fifth** meter, and the first one that
+    /// is not a GPU timestamp at all.
+    ///
+    /// **What the `OTHER` row could never say.** That row is
+    /// `frame - (every timed pass)`, and a large one has three possible
+    /// causes - idle sleep under a frame limiter or vsync, CPU work on this
+    /// thread, and GPU passes nothing brackets - which no amount of further
+    /// device timing can tell apart, because the first of them is not GPU
+    /// work and not work at all. Two `Instant`s do tell them apart, and they
+    /// need no adapter feature: a machine with no `TIMESTAMP_QUERY` gets this
+    /// breakdown when it gets no other. See [`perf::CpuCost`].
+    ///
+    /// Deliberately **display-only**. It is not fed to [`Session::drs`] and
+    /// must not be: `drs::Cost` splits GPU cost by whether the render extent
+    /// moves it, and a CPU reading answers a different question - see
+    /// `race::scene::frame::Scene::render`'s own note on which passes may be
+    /// timestamped for the controller.
+    pub(crate) cpu_cost: perf::Meter,
+    /// How much of [`Session::cpu_cost`] went into the two swapchain calls
+    /// that may block - `Surface::get_current_texture` and `Queue::present`.
+    ///
+    /// The sixth meter, and the one that separates a loop *waiting* from a
+    /// loop *working*: under [`perf::Vsync::On`] the wait for the refresh
+    /// happens inside the frame rather than in the limiter's own sleep, so
+    /// without this a vsync-bound run reads as CPU-bound.
+    pub(crate) present_cost: perf::Meter,
     /// Whether the "this target is out of reach" line has already been said
     /// for the spell the controller is currently in.
     ///

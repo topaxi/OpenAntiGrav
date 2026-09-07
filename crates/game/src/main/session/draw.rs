@@ -71,6 +71,12 @@ impl Session {
         // instead would be a parameter earning its keep only on the one
         // stage (`Stage::Loading`) that reads it.
         let (phase, progress) = self.loading_progress();
+        // The first of the two swapchain calls that are allowed to block, and
+        // the reason `PRESENT` is a row of its own: with `Vsync::On` this is
+        // where the wait for the refresh lands, and a loop waiting here looks
+        // exactly like a loop doing too much work in the frame time alone.
+        // See `perf::CpuCost`.
+        let acquire_start = std::time::Instant::now();
         let frame = match self.gpu.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -86,6 +92,10 @@ impl Session {
             }
         };
 
+        // Only the frames that got a texture are measured: the arms above
+        // return before this, and a frame that never drew is not a frame time
+        // on any of these meters.
+        let mut present_seconds = acquire_start.elapsed().as_secs_f32();
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -618,6 +628,15 @@ impl Session {
                     .stats()
                     .map(|s| s.mean_ms / 1000.0),
             },
+            // The wall-clock half, and a frame behind for a plainer reason
+            // than the GPU readings are: this frame's own duration is not
+            // known until it ends, which is after this list is built. A mean
+            // over the last window of frames is what the row wants anyway -
+            // the panel beside it reports one too.
+            perf::CpuCost {
+                frame: self.cpu_cost.stats().map(|s| s.mean_ms / 1000.0),
+                present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
+            },
         );
         if !list.is_empty() {
             self.overlay.overlay(
@@ -658,10 +677,23 @@ impl Session {
         if let Some(start) = submit_start {
             info!("first race frame: submitted in {:?}", start.elapsed());
         }
-        let present_start = timing_first_race_frame.then(std::time::Instant::now);
+        // Unconditional, unlike the `submit_start` above it: this one is both
+        // the first race frame's diagnostic *and* the second half of the
+        // `PRESENT` row, which every frame contributes to.
+        let present_start = std::time::Instant::now();
         self.gpu.queue.present(frame);
-        if let Some(start) = present_start {
-            info!("first race frame: presented in {:?}", start.elapsed());
+        present_seconds += present_start.elapsed().as_secs_f32();
+        if timing_first_race_frame {
+            info!(
+                "first race frame: presented in {:?}",
+                present_start.elapsed()
+            );
+        }
+        // The same guard `Session::meter` is under, said the same way: a frame
+        // that carried a load is not a frame time, and `frame_seconds` is how
+        // the caller says so. See `Session::present_cost`.
+        if frame_seconds.is_some() {
+            self.present_cost.record(present_seconds);
         }
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.
         // Taken rather than read, so this fires once: the first frame drawn

@@ -67,7 +67,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::frontend::{Align, Draw};
 
+pub mod cost;
 pub mod memory;
+
+pub use cost::{CpuCost, GpuCost};
 
 /// How many frames the meter remembers: two seconds at 60 Hz.
 ///
@@ -643,133 +646,6 @@ impl RenderSize {
     }
 }
 
-/// What the GPU spent on the passes this build actually times, in seconds.
-///
-/// **The frame-time panel cannot answer this on its own.** `Meter` measures
-/// the interval between loop iterations, which under `Vsync::On` is the
-/// refresh and under a frame limit is the limit - so a frame with headroom
-/// and a frame with none read the same *there*. These are GPU timestamps
-/// around specific work, from [`oag_render::timing::PassTimer`]. Read
-/// together - see [`GpuCost::rows`] and the `OTHER` row it appends - the two
-/// say what the frame-time panel alone cannot: how much of a frame is
-/// accounted for and how much is not.
-///
-/// Four numbers rather than one because they answer different questions and a
-/// render scale moves them in different directions: lowering it makes the
-/// scene pass, the motion-blur chain and the HD bloom chain cheaper and gives
-/// the temporal resolve *more* to reconstruct, and the upscale chain runs
-/// after the other three rather than inside them. Choosing a render scale
-/// without all four is choosing on part of the cost.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct GpuCost {
-    /// The race's scene pass, or `None` before its first reading has come back.
-    pub scene: Option<f32>,
-    /// The motion-blur chain, or `None` before its first reading has come
-    /// back. That includes every frame `[render_profiles.<title>]
-    /// motion_blur` is `off`, since `oag_render::post::motion_blur::MotionBlur::render`
-    /// then encodes nothing and the claimed slot is given back unwritten. See
-    /// [ADR-0042](../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
-    pub blur: Option<f32>,
-    /// Wipeout HD/Fury's read bloom chain, or `None` before its first reading
-    /// has come back. `None` forever on Pulse, Pure, or an HD circuit with no
-    /// `HDR and Bloom` block - see `race::Scene::has_hd_bloom` and
-    /// [ADR-0043](../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md).
-    pub bloom: Option<f32>,
-    /// FSR 3.1's six render-resolution dispatches, or `None` when no temporal
-    /// upscaler has run - which is every frame on every other rung of the
-    /// ladder.
-    ///
-    /// **Six and not eight since
-    /// [ADR-0045](../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md)**:
-    /// the chain is timed in two halves, and this is the one that falls when
-    /// the render extent does.
-    pub upscale: Option<f32>,
-    /// FSR 3.1's `accumulate` and `rcas`, at presentation resolution, on the
-    /// same terms as [`GpuCost::upscale`].
-    ///
-    /// The half of the chain a lower render scale does not make cheaper, which
-    /// is why it is the only part in [`crate::drs::Cost::fixed`].
-    pub upscale_presented: Option<f32>,
-}
-
-impl GpuCost {
-    /// One row per reading that has come back, each labelled and in
-    /// pipeline order, followed by `OTHER` - what [`Self::residual_ms`]
-    /// found. Empty when nothing has been measured yet.
-    ///
-    /// **One row per number rather than one crammed line**, since the panel
-    /// this feeds is a dedicated one - see `draw_list`'s own top-left panel,
-    /// separate from the frame-time panel at top-right precisely so a reader
-    /// is not holding five numbers in one line. A reading arrives a frame or
-    /// more after the frame it describes, so the first few frames of a run
-    /// legitimately have nothing to show for a field - a row for it would
-    /// read as "free" rather than as "not measured yet", which is why each
-    /// row is conditional on its own field rather than the whole panel being
-    /// all-or-nothing.
-    #[must_use]
-    pub fn rows(self, frame_ms: f32) -> Vec<String> {
-        let mut rows = Vec::new();
-        if let Some(scene) = self.scene {
-            rows.push(format!("SCENE {:.2} MS", scene * 1000.0));
-        }
-        if let Some(bloom) = self.bloom {
-            rows.push(format!("BLOOM {:.2} MS", bloom * 1000.0));
-        }
-        if let Some(blur) = self.blur {
-            rows.push(format!("BLUR {:.2} MS", blur * 1000.0));
-        }
-        if let Some(upscale) = self.upscale {
-            rows.push(format!("FSR3 REN {:.2} MS", upscale * 1000.0));
-        }
-        if let Some(upscale) = self.upscale_presented {
-            rows.push(format!("FSR3 OUT {:.2} MS", upscale * 1000.0));
-        }
-        if let Some(residual) = self.residual_ms(frame_ms) {
-            rows.push(format!("OTHER {residual:.1} MS"));
-        }
-        rows
-    }
-
-    /// What `frame_ms` does not account for, or `None` when nothing has been
-    /// measured yet.
-    ///
-    /// **The whole point of carrying `frame_ms` in rather than reading a
-    /// target period.** A target is what a player asked for; `frame_ms` -
-    /// `Stats::mean_ms`, the same wall-clock reading the panel's own top row
-    /// already carries - is what the machine is actually doing, timed passes
-    /// and untimed ones both. The difference is real cost sitting outside
-    /// every `PassTimer` this build has: the MSAA resolve, `hd_bloom` on a
-    /// circuit with no chain built for it, the HUD, the composite, the blit,
-    /// the driver's own overhead, and the frame loop's own CPU-side work.
-    /// Reporting nothing here would leave a player doing the subtraction by
-    /// hand against two panels that do not share a decimal place.
-    ///
-    /// Can be negative in principle - `frame_ms` is a rolling mean and the GPU
-    /// readings are a frame or more old, so a moment where the mean has fallen
-    /// faster than the GPU cost has is not impossible - and is passed through
-    /// rather than clamped, because a small negative number says "these two
-    /// signals are close and slightly out of phase" where zero would claim
-    /// nothing is missing.
-    #[must_use]
-    pub fn residual_ms(self, frame_ms: f32) -> Option<f32> {
-        if self.scene.is_none()
-            && self.blur.is_none()
-            && self.bloom.is_none()
-            && self.upscale.is_none()
-            && self.upscale_presented.is_none()
-        {
-            return None;
-        }
-        let timed_ms = (self.scene.unwrap_or(0.0)
-            + self.blur.unwrap_or(0.0)
-            + self.bloom.unwrap_or(0.0)
-            + self.upscale.unwrap_or(0.0)
-            + self.upscale_presented.unwrap_or(0.0))
-            * 1000.0;
-        Some(frame_ms - timed_ms)
-    }
-}
-
 /// The overlay, as plain data.
 ///
 /// The same [`Draw`] vocabulary the front end and the menus emit, so the
@@ -793,6 +669,10 @@ impl GpuCost {
 /// one ([ADR-0038](../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md)),
 /// so a size there would name a texture nothing on screen came from. Same
 /// discipline as `scene`: absent rather than stale.
+///
+/// `gpu` and `cpu` are the two clocks a frame can be asked about, and they
+/// share one panel because they are read as one answer - see [`cost`] for why
+/// only the second of them adds up to the frame time.
 #[must_use]
 #[expect(clippy::too_many_arguments, reason = "one row's worth of GPU cost")]
 pub fn draw_list(
@@ -804,6 +684,7 @@ pub fn draw_list(
     memory: Option<u64>,
     render: Option<RenderSize>,
     gpu: GpuCost,
+    cpu: CpuCost,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -920,7 +801,12 @@ pub fn draw_list(
     // second block inside the one above. `Dev`-only, the same tier every
     // other GPU-cost row here already was.
     if mode == Overlay::Dev {
-        let gpu_rows = gpu.rows(stats.mean_ms);
+        // The GPU's rows first and the wall clock's under them, in one panel
+        // rather than two: they are two axes (see [`cost`]) but they are read
+        // together, and a reader asking "where did the frame go" should not
+        // have to find a third rectangle to finish the sentence.
+        let mut gpu_rows = gpu.rows(stats.mean_ms);
+        gpu_rows.extend(cpu.rows(stats.mean_ms));
         if !gpu_rows.is_empty() {
             let gpu_h = PAD * 2.0 + gpu_rows.len() as f32 * LINE;
             out.push(Draw::Fill {

@@ -212,6 +212,28 @@ The Deck reading is still missing the other rows - `SCENE`, `BLOOM`, `OTHER`,
 the render scale and the `residual` field - so next step 1 stands as written,
 with two rows where it says `FSR3`: `FSR3 REN` and `FSR3 OUT`.
 
+## The CPU-side clock ADR-0044 said it needed now exists, display-only
+
+Landed 2026-09-07, from a question about the `dev` overlay rather than from
+this thread: `OTHER` reading 6.1 ms while every timed row read far lower, on a
+run with `vsync = smooth` and `frame_limit = 120`. Three rows now sit under it
+- `CPU`, `PRESENT` and `SLEEP` (`perf::CpuCost`, fed by `Session::cpu_cost`
+and `Session::present_cost`) - and they partition the wall-clock frame time
+exactly: the frame body, the two swapchain calls inside it that may block, and
+everything outside it including the limiter's own `WaitUntil`.
+
+**This is the mechanism the Open section above says does not exist** ("only a
+real CPU-side timer closes that. Still no mechanism to reuse - `PassTimer`
+reaches GPU work only"). Two `Instant`s, no adapter feature, so it works on a
+machine with no `TIMESTAMP_QUERY` at all.
+
+**It is not wired into `drs` and that is deliberate, not an oversight.**
+`residual::observe` gates on an inequality that treats sleep as an unmeasured
+non-negative term; with `CpuCost::sleep_ms` that term is measurable, and
+subtracting it would change the gate ADR-0044 derived rather than tune it -
+a new ADR's worth of decision, not an edit. `Cost` is also a GPU-cost split by
+what the extent moves, which a wall-clock reading is not.
+
 ## Next Steps
 
 1. Ask for (or take) a `dev`-overlay reading during the race that motivated
@@ -222,14 +244,25 @@ with two rows where it says `FSR3`: `FSR3 REN` and `FSR3 OUT`.
    ADR-0044 moved the Deck at all.
 2. If `OTHER` is still large with `BLOOM` small, decide the CPU-floor design
    question above before building it - this is a real design decision, not a
-   measurement.
-3. ~~Repeat the four-row measurement on a second adapter.~~ **Done, on Steam
+   measurement. **Now readable rather than inferred**: ask for the `CPU`,
+   `PRESENT` and `SLEEP` rows in the same reading as step 1, and a large
+   `OTHER` sorts itself into idle, CPU-bound or untimed-GPU without any
+   further instrumentation.
+3. Decide whether the vsync-at-target hole in ADR-0044 should be closed with
+   the measured sleep term, in a new ADR. The evidence it says is destroyed -
+   "under vsync at the target rate the sleep destroys the evidence once the
+   controller is comfortable" - is now a number the loop has;
+   `reading - sleep` is a tighter upper bound than `reading`, on every frame,
+   with the same one-sided argument. What has to be settled first is whether
+   the CPU mean and the GPU readings, which are one frame out of phase, are
+   close enough to subtract per frame rather than per window.
+4. ~~Repeat the four-row measurement on a second adapter.~~ **Done, on Steam
    Deck** - and it found the freeze bug above rather than a `RESIDUAL_SHARE`
    answer. Once the fix has had a real race on the Deck, this still wants
    redoing: does `reconstruction = fsr3` actually resolve there once it stops
    silently going bilinear, and if so, what does the render scale settle at
    with the freeze no longer masking the real number.
-4. ~~Find out why FSR 3.1 fails to build on RADV at all.~~ **Stale**: it runs
+5. ~~Find out why FSR 3.1 fails to build on RADV at all.~~ **Stale**: it runs
    there, per the 2026-09-04 reading above. If the `warn!` line
    (`"the FSR 3.1 pipelines did not build (...); staying bilinear"`) ever
    appears on a Deck log again, that is a new question rather than this one.

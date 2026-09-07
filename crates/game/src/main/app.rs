@@ -333,6 +333,8 @@ impl App {
             blur_timer,
             hd_bloom_cost: perf::Meter::new(),
             hd_bloom_timer,
+            cpu_cost: perf::Meter::new(),
+            present_cost: perf::Meter::new(),
             drs_unreachable_said: false,
             frame_index: 0,
             stall_frame: 0,

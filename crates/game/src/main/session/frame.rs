@@ -134,6 +134,12 @@ impl Session {
             // frame is still somewhere between the queue and the map. Every
             // reading up to and including this one is dropped when it lands.
             self.scene_cost.clear();
+            // The two wall-clock meters, on the same guard and for the same
+            // reason: a 300 ms track build recorded as this frame's CPU cost
+            // would sit in the `CPU` row for the two seconds a player is most
+            // likely to be reading it.
+            self.cpu_cost.clear();
+            self.present_cost.clear();
             // The controller's own half of the same guard. It holds the scale
             // rather than resetting it - see `drs::Controller::reset` for why
             // snapping back to the ceiling on a load is the wrong move.
@@ -472,6 +478,22 @@ impl Session {
             }
         }
 
-        self.draw(now, frame_seconds)
+        let drawn = self.draw(now, frame_seconds);
+        // **What the `SLEEP` row is derived from**, and the anchor matters:
+        // measured from `now`, which is the same instant `elapsed` above is
+        // taken from, so this frame's body and the gap after it partition the
+        // interval between one frame's `now` and the next exactly. What lands
+        // in the gap is the frame limiter's `ControlFlow::WaitUntil` (see
+        // `App::about_to_wait`), the event loop, and the handful of cheap
+        // calls this function makes before it reads the clock at all.
+        //
+        // Recorded after the draw rather than around it, so the reading covers
+        // the whole frame - ticks, stage update and draw together - which is
+        // what has to be subtracted from the wall clock for the remainder to
+        // be sleep. Under the same load guard as `meter` above.
+        if frame_seconds.is_some() {
+            self.cpu_cost.record(now.elapsed().as_secs_f32());
+        }
+        drawn
     }
 }

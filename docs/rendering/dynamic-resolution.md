@@ -230,6 +230,25 @@ into the budget instead of only printed, "The residual learns" below. Its own pa
 than a block inside the frame-time one, so a reader is not holding five
 numbers on one crammed line.
 
+**Three further rows sit under `OTHER` since 2026-09-07, and none of them is a
+GPU timestamp**: `CPU`, `PRESENT` and `SLEEP`, from two `Instant`s in the frame
+loop rather than from any adapter feature, so a machine with no
+`TIMESTAMP_QUERY` at all still gets a breakdown of its frame. They partition
+the wall-clock frame time exactly - the frame body, the two swapchain calls
+inside it that may block (`get_current_texture` and `present`, which is where a
+`Vsync::On` wait lands), and everything outside it, the frame limiter's own
+`ControlFlow::WaitUntil` above all. That is what says which of the three
+possible causes a large `OTHER` actually is: idle sleep, CPU work, or GPU
+passes nothing brackets. `OTHER` itself is unchanged and overlaps all three,
+because it is the reading the controller learns from and the panel should show
+what the controller is fed. See `perf::CpuCost`.
+
+They are **display-only** and deliberately not fed to `drs::Cost`: that type
+splits GPU cost by whether the render extent moves it, and a wall-clock
+reading answers a different question. What they make possible is recorded
+under "The residual learns" - the sleep term ADR-0044 can only infer is now
+measured directly.
+
 ### What the signal does in a running race
 
 Measured 2026-09-02 in a window under Xvfb, NVIDIA RTX PRO 2000, `pulse-psp-usa

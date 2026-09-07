@@ -29,7 +29,8 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
             None,
             None,
             None,
-            GpuCost::default()
+            GpuCost::default(),
+            CpuCost::default()
         )
         .is_empty()
     );
@@ -131,7 +132,8 @@ fn off_draws_nothing_however_full_the_meter_is() {
             None,
             None,
             None,
-            GpuCost::default()
+            GpuCost::default(),
+            CpuCost::default()
         )
         .is_empty()
     );
@@ -153,6 +155,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert_eq!(fps.len(), 2);
     assert!(matches!(fps[0], Draw::Fill { .. }));
@@ -167,6 +170,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     // panel + two lines + the rule + one column per frame
     assert_eq!(pacing.len(), 4 + WINDOW);
@@ -191,6 +195,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
     // rule + one column per frame.
@@ -212,6 +217,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         with_scene
@@ -228,6 +234,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         Some(64 * 1024 * 1024),
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         with_memory
@@ -244,6 +251,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         with_video
@@ -263,6 +271,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
             allocation: (1440, 816),
         }),
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         with_all
@@ -320,6 +329,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
         None,
         None,
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         !none
@@ -340,6 +350,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
             allocation: (1440, 816),
         }),
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         race.iter()
@@ -367,6 +378,7 @@ fn the_render_row_is_dev_only() {
             allocation: (1440, 816),
         }),
         GpuCost::default(),
+        CpuCost::default(),
     );
     assert!(
         !pacing
@@ -405,6 +417,7 @@ fn nothing_is_drawn_outside_the_panel() {
             None,
             None,
             GpuCost::default(),
+            CpuCost::default(),
         ),
         draw_list(
             &meter,
@@ -420,6 +433,7 @@ fn nothing_is_drawn_outside_the_panel() {
                 allocation: (1440, 816),
             }),
             GpuCost::default(),
+            CpuCost::default(),
         ),
     ] {
         let Draw::Fill { rect: panel, .. } = list[0] else {
@@ -462,6 +476,7 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
             None,
             None,
             GpuCost::default(),
+            CpuCost::default(),
         )
         .into_iter()
         .skip(4) // the panel, two lines of text and the rule
@@ -549,84 +564,6 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
     assert!("graph".parse::<Overlay>().is_err());
 }
 
-/// The GPU cost rows say only what has actually been measured.
-///
-/// A reading arrives a frame or more after the frame it describes, so all
-/// five are legitimately absent at the start of a run - and an
-/// `FSR3 REN 0.00 MS` row on a frame the bilinear blit resolved would be a lie
-/// that reads as "free" rather than as "not running". Each row appears only
-/// once its own field has a number, in pipeline order, with `OTHER` last.
-#[test]
-fn the_gpu_cost_rows_show_only_what_was_measured() {
-    assert_eq!(
-        GpuCost::default().rows(11.76),
-        Vec::<String>::new(),
-        "nothing measured, no rows"
-    );
-    assert_eq!(
-        GpuCost {
-            scene: Some(0.004_2),
-            blur: None,
-            bloom: None,
-            upscale: None,
-            upscale_presented: None,
-        }
-        .rows(11.76),
-        vec!["SCENE 4.20 MS".to_string(), "OTHER 7.6 MS".to_string()],
-        "a scene reading alone must not imply blur, bloom or an upscaler ran"
-    );
-    assert_eq!(
-        GpuCost {
-            scene: Some(0.004_2),
-            blur: Some(0.001_2),
-            bloom: Some(0.003_1),
-            upscale: Some(0.001_8),
-            upscale_presented: None,
-        }
-        .rows(11.76),
-        vec![
-            "SCENE 4.20 MS".to_string(),
-            "BLOOM 3.10 MS".to_string(),
-            "BLUR 1.20 MS".to_string(),
-            "FSR3 REN 1.80 MS".to_string(),
-            "OTHER 1.5 MS".to_string(),
-        ]
-    );
-    // **Both halves of the chain, which is what a reader compares.** The two
-    // rings are claimed together, so in a running race both rows appear or
-    // neither does - and the `OTHER` residual has to subtract both, or the
-    // presentation half reads as unaccounted-for cost.
-    assert_eq!(
-        GpuCost {
-            scene: Some(0.004_2),
-            blur: None,
-            bloom: None,
-            upscale: Some(0.001_8),
-            upscale_presented: Some(0.003_0),
-        }
-        .rows(11.76),
-        vec![
-            "SCENE 4.20 MS".to_string(),
-            "FSR3 REN 1.80 MS".to_string(),
-            "FSR3 OUT 3.00 MS".to_string(),
-            "OTHER 2.8 MS".to_string(),
-        ]
-    );
-    // The upscaler can report before the scene pass does: the four rings are
-    // independent, and a slot is claimed per ring per frame.
-    assert_eq!(
-        GpuCost {
-            scene: None,
-            blur: None,
-            bloom: None,
-            upscale: Some(0.001_8),
-            upscale_presented: None,
-        }
-        .rows(11.76),
-        vec!["FSR3 REN 1.80 MS".to_string(), "OTHER 10.0 MS".to_string()]
-    );
-}
-
 /// The GPU panel is `Dev`-only, like the two rows above it, and it is its own
 /// panel - a separate `Fill` at [`super::GPU_LEFT`], not folded into the
 /// frame-time panel at `RIGHT`.
@@ -644,9 +581,19 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         upscale_presented: None,
     };
     let has_panel = |mode| {
-        draw_list(&meter, mode, 60, None, None, None, None, cost)
-            .iter()
-            .any(|d| matches!(d, Draw::Fill { rect, .. } if rect[0] == super::GPU_LEFT))
+        draw_list(
+            &meter,
+            mode,
+            60,
+            None,
+            None,
+            None,
+            None,
+            cost,
+            CpuCost::default(),
+        )
+        .iter()
+        .any(|d| matches!(d, Draw::Fill { rect, .. } if rect[0] == super::GPU_LEFT))
     };
     assert!(has_panel(Overlay::Dev));
     assert!(!has_panel(Overlay::Pacing), "pacing is about the interval");
@@ -654,7 +601,17 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
 
     // And it is genuinely separate from the frame-time panel: two `Fill`
     // backgrounds, not one panel widened to fit both.
-    let draws = draw_list(&meter, Overlay::Dev, 60, None, None, None, None, cost);
+    let draws = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        None,
+        None,
+        None,
+        None,
+        cost,
+        CpuCost::default(),
+    );
     let panel_count = draws
         .iter()
         .filter(|d| matches!(d, Draw::Fill { color, .. } if *color == super::PANEL))
@@ -674,47 +631,4 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
     };
     assert_eq!(*x, super::GPU_LEFT + super::PAD);
     assert_eq!(*align, Align::Left);
-}
-
-/// The residual is the frame-time row minus whatever the GPU row itself adds
-/// up to - not a fraction of a target, and not clamped at zero.
-#[test]
-fn the_residual_is_the_frame_time_minus_the_gpu_row() {
-    let cost = GpuCost {
-        scene: Some(0.002_5),
-        blur: Some(0.001_2),
-        bloom: Some(0.003_1),
-        upscale: Some(0.002_8),
-        upscale_presented: None,
-    };
-    // 2.5 + 1.2 + 3.1 + 2.8 = 9.6 ms accounted for out of an 11.76 ms frame.
-    assert!((cost.residual_ms(11.76).unwrap() - 2.16).abs() < 1e-4);
-
-    // A field that never reported does not count as zero cost accidentally -
-    // it is simply left out of the sum, the same way `rows` leaves it out of
-    // the panel.
-    let partial = GpuCost {
-        scene: Some(0.002_5),
-        blur: None,
-        bloom: None,
-        upscale: None,
-        upscale_presented: None,
-    };
-    assert!((partial.residual_ms(11.76).unwrap() - 9.26).abs() < 1e-4);
-
-    // Nothing measured yet: no row, no residual either - there is nothing to
-    // subtract from.
-    assert_eq!(GpuCost::default().residual_ms(11.76), None);
-
-    // A moment where the rolling mean has fallen faster than the GPU readings
-    // (which lag a frame or more) can go negative, and that is reported
-    // rather than clamped - zero would claim nothing is missing.
-    let heavy = GpuCost {
-        scene: Some(0.010_0),
-        blur: None,
-        bloom: None,
-        upscale: None,
-        upscale_presented: None,
-    };
-    assert!(heavy.residual_ms(8.0).unwrap() < 0.0);
 }
