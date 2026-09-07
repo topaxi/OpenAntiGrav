@@ -1,8 +1,9 @@
 //! Overlays an [`oag_formats::ship_skin::Skin`] onto an already-built
 //! [`super::Model`]'s texture slots.
 //!
-//! **What selects a skin for a race is not decided yet** - see
-//! `handover/the-skin-dat-is-decoded-nothing-parses-it.md`. This is the other
+//! **What selects a skin for a race is not decided yet**: nothing collects a
+//! team's `PI_ModelSkin` paths, and no caller reads an Alternative or
+//! Eliminator pick. This is the other
 //! half, decoupled from that question: given a skin, put its four blocks
 //! where the original's own `Skin_ApplyToModel` would. Nothing here reads a
 //! `.dat` off an archive or a `PI_ModelSkin`'s `Unlock`; a caller that has

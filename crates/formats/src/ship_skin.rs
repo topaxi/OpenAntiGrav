@@ -49,8 +49,9 @@
 //! blocks 1-3 is, built by `Skin_ComposeQuarterAtlas`, and its top-right
 //! quadrant is left as uninitialised stack in the original. That composition
 //! is model-application logic, not part of this file's own byte layout, and
-//! is deliberately out of scope here; see the ship-skin doc page and
-//! `handover/the-skin-dat-is-decoded-nothing-parses-it.md`.
+//! is deliberately out of scope here; see
+//! [`ship-skin.md`](../../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s
+//! own section on it.
 //!
 //! Confidence 90 on the layout: the offsets and the 128x128 size are plain
 //! immediates in `Skin_ApplyToModel` / `Skin_ComposeQuarterAtlas`, and the
