@@ -61,10 +61,59 @@ batches rather than by looking. What makes them a reticle is the texture:
 - `missile_sight_inner.vex` is a **closed rounded box** outline.
 - `leachbeam_sight.vex` is a **hollow triangle**, an arrowhead.
 
+**Both sets are driven as of 2026-09-07**, and the difference between them is
+the whole of what a title has to author: four names and, for the Missile alone,
+a fifth. `oag_game::race::sight::Held` carries which of the two is up and
+`oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
+for a title that authors no such widget. What had kept the LeachBeam's four dark
+was entirely upstream - `oag_formats::weapons` parsed no
+`<Weapon type="LeachBeam">`, so `Ship_AcquireLock`'s second pair of offsets had
+nothing behind them. See [The LeachBeam's own window](#the-leachbeams-own-window).
+
 So the Missile's reticle is four brackets around a box with a closed box at its
 centre, and the LeachBeam's is four arrowheads pointing inward. That the same
 model appears four times is why the placement below writes a **rotation** per
 instance.
+
+## The LeachBeam's own window
+
+`Ship_AcquireLock` (`0x08844784`) selects `stats+0x114`/`+0x118` when the held
+weapon id is 10 and `stats+0x50`/`+0x54` when it is 1 - see
+[missile.md](missile.md#the-lock) for the switch itself. **Everything after that
+selection is shared**: the same `0.9` cone, the same 1.4 along-track screen, the
+same nearest-by-longitudinal-distance tie-break, the same "not the firer, and
+racing" skip. So the two lockable weapons differ by **two numbers and nothing
+else**, which is why `oag_gameplay::projectile::missile::lock_window` takes the
+numbers rather than a second stats type.
+
+**And the two numbers differ, which is the finding.** Measured 2026-09-07
+against `WeaponStats_Race.xml` and `WeaponStats_Elimination.xml` on both the USA
+and the EU pressing: the LeachBeam's near bound equals the Missile's on all
+four, and its **far bound is shorter on all four**. So the LeachBeam reaches
+less far than the Missile does and its reticle takes a target later. No value is
+quoted here or asserted anywhere, per
+[ADR-0006](../../../architecture/adr/0006-no-copyrighted-content.md); the
+*relation* is what `crates/formats/tests/weapons_ground_truth.rs` pins, and it
+is the assertion that would catch a decoder reading one block for both.
+
+Two further things the block says:
+
+- **It authors no `slowdown_time`**, alone among the blocks
+  `oag_formats::weapons` decodes, on all four tables. A weapon that fastens onto
+  a craft and drains it is not one that charges a fixed slowdown on impact, so
+  the absence reads as design; recorded because the module's own docs had
+  claimed the attribute was universal.
+- **It authors a `range` at the same figure as this page's own `250.0` draw
+  range**, and that is a coincidence rather than the same number twice: the
+  `250.0` above is a code literal in `HudSight_Update` and the `range` is
+  tuning data for a beam nothing here fires. `LeachBeamStats` deliberately does
+  not decode it, so nothing can grow a dependency between the two.
+
+**Pure authors neither.** Its `Data\XML\weaponstats.xml` carries no
+`<Weapon type="LeachBeam">` and its `Data\XML\Arcade_HUD.xml` no
+`leachbeam_sight_*` - measured on `pure-psp-usa.chd`, not inferred from the
+Missile - so `oag_pure::hud::ART` names `leach: None` and a LeachBeam there
+would draw nothing rather than borrow the Missile's brackets.
 
 ## `HudSight_Update`, the whole law
 
@@ -326,7 +375,10 @@ one is read **off the names**, at confidence 70: they are unambiguous about what
 each widget is and silent about whether the seeking set stays up underneath.
 `oag_game` draws them additively, which shows every authored widget rather than
 hiding some on a guess. HD also authors four `LeachBeamSight*` off
-`HUD_Components_01.gtf`, unwired for the same reason Pulse's are.
+`HUD_Components_01.gtf`, still unwired - but no longer for Pulse's old reason,
+which was the missing `<Weapon>` block and is gone. HD's are unwired because
+`Sights::Concentric` has no second set to name and nothing has read which of
+its six sprites the LeachBeam would use.
 
 **The placeholder idiom is what says the reading is right.** Every sight widget
 on every title is authored centred on `(-width/2, +height/2)` of that title's own
