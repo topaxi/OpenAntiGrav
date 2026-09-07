@@ -353,14 +353,16 @@ impl Driver {
             // says what the symmetric brake buys: cornering grip, traded for
             // deceleration. Off the ground there is no cornering grip at
             // all, so the same command that is a sensible trade on the
-            // track is a pure loss of the forward speed a landing needs -
-            // measured on `13_Track`, whose racing line keeps a corner's
-            // worth of curvature (up to 0.0126, the same order as the S-bend
-            // just before liftoff) authored across the gap itself, so a
-            // craft still mid-flight can walk into this exact case. Chosen,
-            // not measured, no confidence score: this is our own driver's
-            // behaviour, not a recovered one - see
-            // `docs/gameplay/ai.md#the-13_track-novice-pathology-chased`.
+            // track is a pure loss of the forward speed a landing needs.
+            // Found via a unit test with no craft or track at all -
+            // `time_airborne` was previously read nowhere in this function,
+            // so a grounded and an airborne fixture produced byte-identical
+            // controls on an ordinary corner - not by observing this on any
+            // one circuit; measured afterward not to be the cause of
+            // `13_Track`'s own Novice jump pathology, which this branch does
+            // not change. Chosen, not measured, no confidence score: this is
+            // our own driver's behaviour, not a recovered one - see
+            // `docs/gameplay/ai.md#the-jump-clearing-failure-the-mechanism-a-real-bug-that-turned-out-not-to-be-it-and-why-this-is-where-the-chase-stops`.
             (1.0, 0.0)
         } else {
             throttle(speed, target, tuning)
