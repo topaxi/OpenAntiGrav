@@ -26,15 +26,23 @@ accumulated error, so trajectory phase cannot enter the answer by construction.
   on 1595-1600, `0` on 1601-1607, `1` at 1608 - which shifted by that one tick is
   exactly the original's `0` at 1595, `0.5` on 1596-1601, `0` on 1602-1608, `1`
   at 1609.
-- **Confirmed a second way, integrator and sweep included.** `oag-trace run
-  --reseed 2` on the same capture: `grounded  max error 0.000e0 ... exact`, and
-  the emitted crest column is the original's tick for tick. So from a pose exact
-  one tick before liftoff we agree on every tick of the crest.
+- **Confirmed a second way, integrator and sweep included** - neither of which
+  a pose walk exercises, since `hover::sweep` runs only when both probes miss.
+  `oag-trace run --reseed 2` on the same capture: `grounded  max error 0.000e0
+  ... exact`, and the emitted crest column is the original's tick for tick. Read
+  it as half a column: at reseed 2 the even rows are the reseed echo (emitted
+  before the step, `grounded` copied off the recording by `initial_state`), so
+  only the odd rows carry a stepped verdict - they do cover the transitions at
+  1595, 1601, 1603, 1605 and 1607.
+- **The lag itself, re-measured here rather than inherited**: at `--reseed 60`
+  ours is airborne 1603-1615 against the original's 1595-1608, liftoff eight
+  ticks late, plus a three-tick event at 1590-1592 the original does not have.
+  The previous pass read 1602-1614; the shape is the same.
 
 **The falsification criterion the previous pass wrote down was explicit** - if
 the lag survives a pose that is exact on the tick before liftoff, it is our
 reach. It does not survive. The reach, the surface classes, the probe offsets and
-the fast-path branch are all right on this circuit; the seven ticks are where the
+the fast-path branch are all right on this circuit; the eight ticks are where the
 craft *is* by the time it reaches the crest.
 
 Written up permanently in [`docs/physics/README.md`](../../docs/physics/README.md)
@@ -55,10 +63,10 @@ the `6.0` are untouched.
 
 ## Open
 
-- **Why the phase drifts seven ticks of crest in the 35 ticks after a reseed.**
+- **Why the phase drifts eight ticks of crest in the 35 ticks after a reseed.**
   This is the force-law drift [`oag-trace.md`](../../docs/tools/oag-trace.md)
   already documents, now with a sharp instance attached to it: at `--reseed 60`
-  the craft reaches the crest late enough to move liftoff from 1595 to 1602,
+  the craft reaches the crest late enough to move liftoff from 1595 to 1603,
   while its *contact test* is exact. Nothing about the cushion will move it.
 - Unchanged from the previous pass, and still true: **do not read the
   single-seeded run as contact evidence.** There `grounded` is `1.0` on all 2,977

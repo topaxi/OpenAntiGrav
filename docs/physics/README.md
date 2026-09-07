@@ -196,11 +196,15 @@ Two things follow, and the second is the useful one:
   classes accepted, the probe offsets and the fast-path branch are all right on
   this circuit. **A residual that looks like the cushion holding on too long is
   not the cushion.** The seven-tick liftoff lag the hover thread measured at
-  `--reseed 60` survives only until the pose is made exact: `oag-trace run
-  --reseed 2` on the same capture reports `grounded max error 0.000e0 ... exact`,
-  integrator and sweep included. What is left is trajectory phase - where the
-  craft is on the crest by the time it gets there - which is the force-law drift
-  [oag-trace.md](../tools/oag-trace.md) already documents.
+  `--reseed 60` (measured: ours airborne 1603-1615 against the original's
+  1595-1608, liftoff eight ticks late) survives only until the pose is made
+  exact. `oag-trace run --reseed 2` on the same capture reports `grounded max
+  error 0.000e0 ... exact` with the integrator and the sweep in the loop, which a
+  pose walk does not exercise - though read that as half a column: at reseed 2 the
+  even rows are the reseed echo, and only the odd rows carry a stepped verdict.
+  They cover every transition on the crest. What is left is trajectory phase -
+  where the craft is on the crest by the time it gets there - which is the
+  force-law drift [oag-trace.md](../tools/oag-trace.md) already documents.
 - **The pose walk is the technique to reach for whenever a per-tick boolean
   disagrees**, and it is cheap. It is the same method
   `crates/trace/tests/wall_contact_ground_truth.rs` uses for the hull, and it

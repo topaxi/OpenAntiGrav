@@ -29,7 +29,11 @@ ticks, `0.5` runs included - see
   (`crates/physics/src/airbrake.rs:303`), so it wants airborne ticks with lateral
   velocity and airbrake deflection - and that is exactly what these are: through
   1602-1608 the right airbrake is pinned at `100`, lateral velocity runs -9.3 to
-  -4.7 units/s, and `grounded` is `0`. The problem is the *confound*, not the
+  -4.7 units/s, and `grounded` is `0`. (Tick numbers as the columns print them.
+  `grounded(t)` describes the pose at `t - 1` - see
+  `crates/trace/tests/hover_contact_ground_truth.rs` - so the airborne window is
+  smeared by one tick against the velocity columns, which does not move anything
+  said here about a seven-tick window.) The problem is the *confound*, not the
   excitation: the craft is yawing at 0.25 to 1.18 rad/s through the same ticks,
   so the body frame the lateral component is measured in rotates through the
   sample, and the steer column ramps monotonically across the whole event. Seven

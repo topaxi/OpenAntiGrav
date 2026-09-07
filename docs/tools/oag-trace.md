@@ -900,6 +900,19 @@ large enough that a window is mostly *simulation* rather than mostly
 initial-condition artefact - `60` is a second, and is the value the whole-lap
 readings below use.
 
+**`--reseed 1` is degenerate, and reads as a perfect score.** A row is emitted
+*before* the step and the reseed happens before that, so at `N = 1` every row is
+the recording copied back out through `replay::initial_state` - for the state
+fields it seeds, `grounded` included, the comparison is the recording against
+itself. `N = 2` is the smallest informative interval, and even there only the
+**odd** rows carry a stepped verdict; the even ones are still the echo. Read a
+reseed-2 field as half a column, and check that the ticks you care about are on
+the odd side of it. Worth knowing before designing a "reseed every tick"
+experiment: 2026-09-07's crest experiment was specified that way and had to be
+run as a pose walk instead - see
+[`docs/physics/README.md`](../physics/README.md), "The contact test itself is
+exact against a capture".
+
 It is deliberately not the default, and the report says so on every reseeded run
 (the written CSV carries it as a header comment too, because a CSV outlives the
 terminal it came from). The two numbers answer different questions and neither

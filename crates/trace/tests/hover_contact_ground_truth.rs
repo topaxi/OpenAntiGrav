@@ -29,13 +29,22 @@
 //! `speed_cached` is documented as the previous frame's `|dot(velocity,
 //! forward)|` at 199/199 for the same reason.
 //!
-//! Confirmed a second way, with the integrator and the sweep in the loop:
-//! `oag-trace run --reseed 2` on the same capture reports `grounded  max error
-//! 0.000e0 ... exact`, i.e. from a pose exact one tick before liftoff we agree on
-//! every tick of the crest. **So the seven-tick lag at `--reseed 60` is crest
-//! phase, not reach.** Nothing in the cushion needs shortening; what is left is
-//! the force-law drift that moves the craft off the recording's phase between one
-//! reseed and the next.
+//! Confirmed a second way, with the integrator and the sweep in the loop -
+//! neither of which a pose walk exercises, since `hover::sweep` runs from the
+//! force path only when both probes miss. `oag-trace run --reseed 2` on the same
+//! capture reports `grounded  max error 0.000e0 ... exact`, and its emitted crest
+//! column is the original's tick for tick. **Read that as half a column, not a
+//! whole one**: at reseed 2 the even rows are the reseed echo, emitted before the
+//! step from a state whose `grounded` `initial_state` copied off the recording,
+//! so only the odd rows carry a stepped verdict. The odd rows do cover the
+//! transitions - 1595, 1601, 1603, 1605, 1607 - which is what the claim needs.
+//!
+//! **So the lag at `--reseed 60` is crest phase, not reach.** Measured here
+//! rather than inherited: at reseed 60 our airborne run on this crest is
+//! 1603-1615 against the original's 1595-1608, liftoff eight ticks late, plus a
+//! three-tick event at 1590-1592 the original does not have at all. Nothing in
+//! the cushion needs shortening; what is left is the force-law drift that moves
+//! the craft off the recording's phase between one reseed and the next.
 //!
 //! # A correction that falls out: `grounded` does read `0.5` at speed
 //!
@@ -50,6 +59,16 @@
 //! that is exactly the state the original is in on all 23 of those ticks - front
 //! miss, rear hit. Corrected on that page; the branch and the `6.0` are
 //! untouched.
+//!
+//! # One thing the walk deliberately does not have to control for
+//!
+//! `initial_state` seeds `grounded_prev` from the **same** tick's recorded
+//! `grounded` rather than the previous tick's, which would matter if the contact
+//! verdict depended on it. It does not: `HoverProbe::contact` is set at
+//! `crates/physics/src/hover.rs:807` from the raycast hitting plus the surface
+//! class being hoverable, and nothing else - `grounded_prev` only scales the
+//! spring's load below that point. So the seeding cannot bias what this test
+//! measures.
 //!
 //! `#[ignore]`d and never run in CI: it needs a disc image under `data/images/`.
 //! Run it with `just test-data`.
@@ -260,6 +279,14 @@ fn the_pose_walk_dates_the_crest_within_a_tick() {
         );
     }
 
+    // Structural, not a check that can fail: `initial_state` never seeds
+    // `mag_lock_blend` or `slowdown_timer`, so `hover::target_height` is the
+    // same 4.125 on every tick by construction. Asserted anyway so the day one
+    // of those is seeded, this line is what says the walk's ray length stopped
+    // being constant. **A pose walk on a magstrip circuit would silently use the
+    // wrong reach**, since the recording carries no `mag_lock_blend` column to
+    // seed one from; Talon's Junction has no magstrip on this stretch, and what
+    // establishes that is the 2,976-of-2,976 agreement below, not this line.
     let reach = samples[0].reach;
     assert!(
         samples.iter().all(|sample| sample.reach == reach),
