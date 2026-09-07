@@ -70,10 +70,10 @@ hardware call to make, and the loop clears the word once it has committed:
 
 | Bit | Call made | Record fields passed |
 | --- | --- | --- |
-| `0x0f` | `FUN_08a2ae08(voice, ...)` | `+0x40`, `+0x44`, `+0x48`, `+0x4c` |
-| `0x10` | `FUN_08a2ae6c(voice, ...)` | `+0x50`, defaulting to `1` when it is zero |
-| **`0x20`** | **`Sas_SetVoice(voice, ...)`** | **`+0x54`, `+0x58`, `+0x5c`** |
-| `0x40` | `FUN_08a2af18(voice, ...)` | `+0x60` |
+| `0x0f` | `Sas_SetVolume(voice, ...)` (`0x08a2ae08`) | `+0x40`, `+0x44`, `+0x48`, `+0x4c` |
+| `0x10` | `Sas_SetPitch(voice, ...)` (`0x08a2ae6c`) | `+0x50`, defaulting to `1` when it is zero |
+| **`0x20`** | **`Sas_SetVoice(voice, ...)`** (`0x08a2aebc`) | **`+0x54`, `+0x58`, `+0x5c`** |
+| `0x40` | `Sas_SetNoise(voice, ...)` (`0x08a2af18`) | `+0x60` |
 | `0x80` | `FUN_08a2b088` or `FUN_089961e4` | `+0x64`, `+0x68` |
 
 So:
@@ -117,9 +117,9 @@ The other two call targets resolve the same way, against Ghidra's own already-na
 
 | Bit | Wrapper | Resolves to | Address |
 | --- | --- | --- | --- |
-| `0x0f` | `FUN_08a2ae08` | `__sceSasSetVolume` | `0x08a76c24` |
-| `0x10` | `FUN_08a2ae6c` | `__sceSasSetPitch` | `0x08a76c7c` |
-| `0x40` | `FUN_08a2af18` | `__sceSasSetNoise` | `0x08a76c84` |
+| `0x0f` | `Sas_SetVolume` (`0x08a2ae08`) | `__sceSasSetVolume` | `0x08a76c24` |
+| `0x10` | `Sas_SetPitch` (`0x08a2ae6c`) | `__sceSasSetPitch` | `0x08a76c7c` |
+| `0x40` | `Sas_SetNoise` (`0x08a2af18`) | `__sceSasSetNoise` | `0x08a76c84` |
 
 `0x10`'s guess ("pitch") was right; `0x40` was left unguessed and is a noise-generator
 enable, not a volume. Bit `0x80`'s two fields are not a "keyed volume pair"
@@ -127,10 +127,10 @@ either: `FUN_089961e4` decodes `+0x64`/`+0x68`'s bitfields into curve-mode and
 rate arguments and calls `func_0x00226f64` (`0x08a2af64`) with mask `0xf` -
 Ghidra does not resolve that inner call to a function, so what it ultimately
 reaches is not confirmed by name. What corroborates the ADSR reading instead:
-`FUN_08a2b03c`, itself called from inside `FUN_089961e4`'s own body (not a
-separate dirty-bit handler), calls `func_0x00272c34` = `0x08a76c34` =
-**`__sceSasSetSL`** (sustain level) the same guarded way `Sas_SetVoice` calls
-`__sceSasSetVoice`. Bit `0x80` is ADSR rate/curve configuration, the thing
+`Sas_SetSL` (`0x08a2b03c`), itself called from inside `FUN_089961e4`'s own
+body (not a separate dirty-bit handler), calls `func_0x00272c34` =
+`0x08a76c34` = **`__sceSasSetSL`** (sustain level) the same guarded way
+`Sas_SetVoice` calls `__sceSasSetVoice`. Bit `0x80` is ADSR rate/curve configuration, the thing
 bit `0x0f` was wrongly guessed to be.
 
 Confidence **90** on `0x0f`/`0x10`/`0x40`'s three resolved call targets: each
@@ -139,18 +139,62 @@ already read for `Sas_SetVoice`, landing on an import stub Ghidra has
 independently named from its own symbol table - not an inference from
 argument count. Confidence **80** on `0x80`'s ADSR reading: `__sceSasSetSL`
 is confirmed the same way, but it is reached one call deeper
-(`FUN_089961e4` -> `FUN_08a2b03c` -> `__sceSasSetSL`) rather than directly
+(`FUN_089961e4` -> `Sas_SetSL` -> `__sceSasSetSL`) rather than directly
 from the dirty-bit dispatch, and the unresolved `func_0x00226f64` call
-alongside it is not independently confirmed. Not renamed here and no
-`names.tsv` row added: `FUN_08a2ae6c`, `FUN_08a2af18`, `FUN_089961e4` and
-`FUN_08a2b03c` are thin guarded wrappers around those imports rather than
-the imports themselves, and this page has not yet worked out this
-project's naming convention for "guarded call to a named import" for the
-remaining three - `FUN_08a2ae08` is now named below (`Sas_SetVolume`,
-confidence 92, live-confirmed), following the one precedent that already
-existed for this exact shape (`Sas_SetVoice` for `__sceSasSetVoice`). The
-other three are a naming pass, not a re-read, and left for whoever picks
-this up next.
+alongside it is not independently confirmed. All three wrappers are named in
+the section below; the fourth, `FUN_089961e4`, is not, and that section says
+why.
+
+### The naming pass, 2026-09-07: the three remaining wrappers take their imports' names
+
+The 2026-09-06 correction above resolved five call targets and named exactly
+one of them (`Sas_SetVolume`), leaving three resolved-but-unnamed wrappers
+behind because the convention for this shape - a thin guarded call to an
+import Ghidra has already named from its own symbol table - had not been
+settled. It had, in fact, by the two names that already existed:
+`Sas_SetVoice` wraps `__sceSasSetVoice` and `Sas_SetVolume` wraps
+`__sceSasSetVolume`, both **mirroring the import's own verb-noun with the
+`__sceSas` prefix replaced by this project's `Sas_` subsystem prefix**. That
+is the convention, applied here to the remaining three:
+
+| Address | Name | Wraps | Confidence |
+| --- | --- | --- | --- |
+| `0x08a2ae6c` | `Sas_SetPitch` | `__sceSasSetPitch` (`0x08a76c7c`) | 90 |
+| `0x08a2af18` | `Sas_SetNoise` | `__sceSasSetNoise` (`0x08a76c84`) | 90 |
+| `0x08a2b03c` | `Sas_SetSL` | `__sceSasSetSL` (`0x08a76c34`) | 90 |
+
+`Sas_SetSL` keeps the import's own abbreviation rather than expanding to
+`Sas_SetSustainLevel`: mirroring is the whole content of the convention, and a
+wrapper whose name differs from the import it guards is the one thing that
+would make the pair hard to find from either end. It is a judgement call and
+is recorded as one.
+
+**Why all three are 90 even though bit `0x80`'s ADSR reading is 80.** A name
+here claims what the function *calls*, not what its caller does with the
+result. Each of the three is a direct `jal` onto an import stub Ghidra named
+independently from its own symbol table, which is what the 90 above is scored
+on. The 80 belongs to the *interpretation* of bit `0x80` as ADSR
+rate/curve configuration - an inference from `__sceSasSetSL` being one of the
+calls reached, which the name `Sas_SetSL` does not restate. For the same
+reason the name is not weakened by `Sas_SetSL` being reached from inside
+`FUN_089961e4`'s body rather than from the dirty-bit dispatch directly: a name
+describes the function, not its call path.
+
+**`FUN_089961e4` is deliberately left unnamed**, though the 2026-09-06
+correction listed it alongside the other three. It is not a thin wrapper: it
+decodes `+0x64`/`+0x68`'s bitfields into curve-mode and rate arguments and
+calls `func_0x00226f64` (`0x08a2af64`), which Ghidra does not resolve to a
+function at all. Any name for it would have to encode the confidence-80 ADSR
+interpretation rather than a resolved import, and this project's own rule
+(names carry their confidence; below 70 they do not happen at all) is better
+served by leaving `FUN_089961e4` as it is than by a `_q` name that reads as a
+conclusion. Resolving `func_0x00226f64` is what would change that.
+
+No Ghidra project was open for this pass and none is needed: the three
+`names.tsv` rows land regardless, per this project's convention, exactly as
+`Sas_SetVolume`'s row did while Ghidra's own function boundary at its address
+was (and still is) broken. `just check-names` verifies the rows against this
+page offline.
 
 **What this settles for [audio-levels.md](audio-levels.md#what-is-not-recovered-and-why-it-is-the-next-thing-to-read):**
 the per-voice SAS volume is written every frame through `+0x40`/`+0x44` (dry
