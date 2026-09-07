@@ -37,7 +37,7 @@ thirteen-entry jump table:
 | Bit | Handler | Subsystem | Name |
 | --- | --- | --- | --- |
 | `0x1000` | `0x088613bc` | `world`/`craft` | `Autopilot_Fire` |
-| `0x4000` | `0x088537ac` | `world+0x58` | *not in the jump table* - see below |
+| `0x4000` | `0x088577ac` | `world+0x58` | `Weapon_FireCannon` - *not in the jump table*, see below and [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md) |
 | `0x400` | `0x088614c4` | `world`/`craft` | Turbo, arming |
 | `0x20` | `0x08861568` | `world`/`craft` | `Shield_Fire` |
 | `0x100` | `0x08863a20` | `world+0x44` | `Weapon_FireBomb` |
@@ -67,15 +67,21 @@ arithmetic, in the same pass.
   tested and `0x2000` is not among them, which turns
   [pickups.md](../../../gameplay/pickups.md)'s "dispatched by nothing" from a
   claim about five printed bits into one about all sixteen. `0x4000` **is**
-  dispatched and is **not** in `Weapon_RequestFire`'s
-  jump table at all, so it is set by something else - `0x088537ac`, on
-  `world+0x58`, remains the obvious candidate for where the Cannon actually
-  fires and is still unchased.
-- **Every other unbuilt weapon does have a handler.** Quake, LeachBeam, Repulser
-  and Shuriken are each dispatched to a real function whose body has **not**
-  been read here. They are named in `names.tsv` at 82 on the strength of the bit
-  map plus this dispatch and nothing else; do not assume anything about what
-  they *do*.
+  dispatched and is **not** in `Weapon_RequestFire`'s jump table at all, so it
+  is set by something else. **Corrected 2026-09-07: the address is
+  `0x088577ac`, not `0x088537ac`** - the latter was a `0x4000` arithmetic slip
+  in this table (the same magnitude as the bit itself) and decompiles as
+  `Ai_Construct`, not a weapon handler at all. `0x088577ac` is confirmed the
+  Cannon's own burst spawn, and the whole mechanism - including what actually
+  arms bit `0x4000`, since nothing in `Weapon_RequestFire` does - is read on
+  [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md).
+- ~~**Every other unbuilt weapon does have a handler.**~~ **Read in full,
+  2026-09-07**: Quake, LeachBeam and the Cannon are read end to end on
+  [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md) - raised to 88/85
+  confidence there. The Repulser's handler alone is still unread past the
+  reading `shuriken.md`'s own last section already carries (it copies four of
+  its own `<Stats>` onto the firing craft before spawning anything), and stays
+  deferred as Eliminator-only regardless.
 
 ## `Weapon_FirePlasma` (`0x0886a868`) fires exactly one
 

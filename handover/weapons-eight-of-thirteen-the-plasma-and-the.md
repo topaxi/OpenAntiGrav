@@ -260,6 +260,51 @@ Ghidra**: a laid mine or bomb now draws the pose it landed in rather than a
 bare translation - see the "Open" list below, where that item is now marked
 done, for the reading and its confidence split.
 
+## 2026-09-07, later: all three fire bodies read, and the Cannon candidate above was wrong
+
+**With a live Ghidra session this time**, per
+[cannon-quake-leachbeam.md](../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) -
+the page to read, not this row. Three findings that matter most to whoever
+builds from this next:
+
+- **`0x088537ac`, this thread's own candidate two entries up, is not the
+  Cannon.** It decompiles as `Ai_Construct`. `Weapons_DispatchFire`'s bit
+  `0x4000` really does go to a Cannon handler, but the correct address (found
+  by decompiling the dispatcher directly and re-adding the image base by hand)
+  is `0x088577ac` - `0x088537ac` was a `0x4000` arithmetic slip in `plasma.md`'s
+  own table, ironically the same magnitude as the bit under discussion.
+  `weapon-fire.md` had the right address all along, uncited by the later table
+  that superseded it.
+- **The Cannon does not use the fire-request-bit system at all**, which is why
+  its own request bit `0x2000` being "dispatched by nothing" was never a sign
+  of missing work. A separate per-frame function, gated directly on
+  `craft+0x1bc == 3` (the held-weapon id), runs a reload countdown built from
+  the Cannon's own authored `rate` and periodically arms bit `0x4000` itself.
+  Fully buildable now.
+- **The Quake does not need track deformation.** Its fire handler locates the
+  firing craft on the track's own spline (the same `SplinePt` records
+  `engine.md` already reads) and stores a travelling position - a segment, a
+  parametric `t`, a direction sign - with no mesh, vertex or collision-geometry
+  access anywhere in the chain. Its damage/slowdown application reuses the
+  same shared `entity+0x130` pending-hit channel the Missile and Mine/Bomb
+  already use. **Not fully buildable yet**: the function that advances that
+  travelling position every frame, and the one that flags "the wave has
+  reached this craft," were not found.
+- **The LeachBeam reuses the Missile's own lock-on for victim selection**,
+  unmodified - nothing new to build there. It drains continuously while
+  connected (not a single hit), crediting one accumulator on the victim
+  (`entity+0x120`) and a symmetric one on the shooter (`entity+0x128`) every
+  tick a range/shield/state gate passes. **Not fully buildable yet**: the two
+  rate functions and whatever consumes those two accumulators into an actual
+  health/shield change were not decompiled this pass.
+
+Eight names landed in `names.tsv` this pass, two of them raised confidence on
+already-recorded ones (`Weapon_FireQuake`, `Weapon_FireLeachBeam`, both
+82 -> 88): `Weapon_FireCannon`, `Cannon_UpdateReload`, `Cannon_Init`,
+`Quake_Init`, `LeachBeam_InitLocked`, `LeachBeam_InitUnlocked`,
+`LeachBeam_UpdatePool`, `LeachBeam_Drain`. `plasma.md` and `pickups.md` are
+both corrected in the same change.
+
 ## Open
 
 - **`<Plasma charge_time>` is authored and nothing read spends it, and play
@@ -314,15 +359,21 @@ done, for the reading and its confidence split.
   address rendering, and because `contact-response.md` records a live breakpoint
   reading its `+0x164` as `1` at race load with no weapon fired, which a mine
   count should not be. Under 50 by the rubric, so no rename.
-- **Nothing dispatches bit `0x2000`**, the Cannon's own fire bit - and as of
-  2026-09-02 that is a statement about **all sixteen** dispatched bits rather
-  than the five `weapon-fire.md` printed. Bit `0x4000` **is** dispatched, to
-  `0x088537ac` on `world+0x58`, and is absent from `Weapon_RequestFire`'s jump
-  table entirely, so something other than the request word sets it. Still the
-  obvious candidate, still unchased.
-- **Four weapons are still unbuilt.** The Quake needs track deformation, the
-  LeachBeam a beam and a victim, the Repulser a craft-state field (below), and
-  the Cannon a fire path that nothing dispatches.
+- ~~**Nothing dispatches bit `0x2000`**, the Cannon's own fire bit~~. **Read
+  2026-09-07**: it never needed to be dispatched. The Cannon fires through a
+  separate per-frame reload countdown gated on the held-weapon id, not through
+  the request-bit system - see
+  [cannon-quake-leachbeam.md](../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+  Bit `0x4000`, which *is* dispatched, goes to `0x088577ac` (**not**
+  `0x088537ac`, an arithmetic slip corrected the same day), confirmed the
+  Cannon's own burst spawn.
+- **Two weapons are still unbuilt outright** (Repulser, deferred as
+  Eliminator-only; the Cannon's collision/hit path, unread past its spawn),
+  **and two more are buildable in part**: the Quake for its hit/slowdown half
+  but not its own per-frame travel along the track, and the LeachBeam for
+  target selection and its connect/disconnect gate but not its actual drain
+  amount. None of the three needs track deformation, a fact this thread had
+  wrong as recently as the entry above.
 - **What ends a Shuriken is a reading, not a recovery.** `Shuriken_Update`
   counts `+0x48` up - the offset the Mine's fuse lives at - and the pool
   teardown that would read it was not followed, so this build reaps a timed-out

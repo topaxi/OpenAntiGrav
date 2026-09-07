@@ -418,10 +418,23 @@ weapons the *pool* would hand out and the authored *odds* never do.
   throwing craft's own speed, reflecting perfectly off walls until its authored
   `fuse` runs out. See
   [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md).
-- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and the
-  **Repulser** a field the craft *is in* rather than a projectile - its handler
-  copies four of its own `<Stats>` onto the firing craft before it spawns
-  anything.
+- **Quake, LeachBeam and the Cannon are all read now** (2026-09-07) - see
+  [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+  The Quake needs no track deformation at all: it is a travelling point along
+  the track's own spline (a segment plus a parametric `t` and a direction
+  sign), and its hit on a craft reuses the same generic pending-damage channel
+  the Missile and Mine/Bomb already share - buildable for the hit itself, not
+  yet for the wave's own per-frame travel, which was not located. The
+  LeachBeam reuses the Missile's own lock-on for target selection outright and
+  drains continuously while connected, crediting one accumulator on the victim
+  and a second, symmetric one on the shooter every tick - buildable for
+  selection and the connect/disconnect gate, not yet for the actual drain
+  amount. The Cannon turned out not to use the fire-request-bit system at all:
+  a per-frame reload countdown gated on the held-weapon id fires it, and that
+  whole mechanism is now read and buildable. The **Repulser** stays the one
+  true "field the craft *is in* rather than a projectile" - its handler copies
+  four of its own `<Stats>` onto the firing craft before it spawns anything -
+  and is still deferred as Eliminator-only, per `HANDOVER.md`.
 
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
@@ -714,18 +727,23 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Four of the thirteen weapons.** Quake needs track deformation, LeachBeam a
-  beam, the Repulser a craft-state field, and the Cannon a fire path nothing has
-  read. **Three of the four have a dispatched handler**, read on
-  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md); only their bodies
-  are unread, which is a much shorter walk than this row used to describe.
-
-  The Cannon is the odd one and stays odd: its fire bit `0x2000` is set by
-  `Weapon_RequestFire` and dispatched by **nothing**. That is now a statement
-  about all sixteen dispatched bits rather than the five `weapon-fire.md`
-  printed. Bit `0x4000` **is** dispatched, to `0x088537ac` on `world+0x58`, and
-  is absent from `Weapon_RequestFire`'s jump table entirely - so something other
-  than the request word sets it, and it remains the candidate.
+- **Four of the thirteen weapons**, and as of 2026-09-07 all three buildable
+  ones have a fully read fire body - see
+  [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+  **The Cannon's bit `0x4000` handler is `0x088577ac`, not `0x088537ac`** -
+  that address decompiles as `Ai_Construct` and was an arithmetic slip in
+  `plasma.md`'s sixteen-bit table, not a weapon at all. The Cannon's own
+  request bit `0x2000` really is dispatched by nothing, and that turns out to
+  be because **the Cannon does not fire through the request-bit system at
+  all**: a per-frame reload countdown gated on `craft+0x1bc == 3` (the held-
+  weapon id) is what arms bit `0x4000` on a timer built from the Cannon's own
+  authored `rate`. The Quake needs no track deformation - it is a travelling
+  spline position, not a mesh edit, though its own per-frame travel is still
+  unlocated. The LeachBeam's beam is a resolved link to whatever the Missile's
+  own lock-on already picked, drained continuously while connected; the two
+  rate functions and the health/shield consumer are still unread. The
+  Repulser remains the one weapon needing a genuine craft-state field, and is
+  deferred as Eliminator-only regardless.
 - **The Plasma's `charge_time`.** Authored on all three shipped tables, the only
   weapon that carries it, and no consumer found on a path that was read end to
   end - and **a maintainer who plays Pulse says the weapon does wind up before
