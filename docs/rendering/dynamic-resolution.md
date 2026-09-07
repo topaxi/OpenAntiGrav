@@ -230,18 +230,28 @@ into the budget instead of only printed, "The residual learns" below. Its own pa
 than a block inside the frame-time one, so a reader is not holding five
 numbers on one crammed line.
 
-**Three further rows sit under `OTHER` since 2026-09-07, and none of them is a
-GPU timestamp**: `CPU`, `PRESENT` and `SLEEP`, from two `Instant`s in the frame
-loop rather than from any adapter feature, so a machine with no
-`TIMESTAMP_QUERY` at all still gets a breakdown of its frame. They partition
-the wall-clock frame time exactly - the frame body, the two swapchain calls
-inside it that may block (`get_current_texture` and `present`, which is where a
-`Vsync::On` wait lands), and everything outside it, the frame limiter's own
+**A `FRAME` row and three indented rows under it sit below `OTHER` since
+2026-09-07, and none of them is a GPU timestamp**: `CPU`, `PRESENT` and
+`OUTSIDE`, from two `Instant`s in the frame loop rather than from any adapter
+feature, so a machine with no `TIMESTAMP_QUERY` at all still gets a breakdown
+of its frame. They partition the wall-clock frame time exactly - the frame
+body, the two swapchain calls inside it that may block
+(`get_current_texture` and `present`, which is where a `Vsync::On` wait
+lands), and everything outside it, the frame limiter's own
 `ControlFlow::WaitUntil` above all. That is what says which of the three
-possible causes a large `OTHER` actually is: idle sleep, CPU work, or GPU
-passes nothing brackets. `OTHER` itself is unchanged and overlaps all three,
-because it is the reading the controller learns from and the panel should show
-what the controller is fed. See `perf::CpuCost`.
+possible causes a large `OTHER` actually is: idle time, CPU work, or GPU
+passes nothing brackets.
+
+Two things about that layout are deliberate. The indent hangs off `FRAME` and
+not off `OTHER`, because the three sum to the wall-clock frame time and not to
+the residual, which has the timed passes subtracted out of it and overlaps all
+three; nesting them under `OTHER` would put a visibly wrong sum on an
+instrument. And the third row is spelled `OUTSIDE` rather than `SLEEP`:
+`App::about_to_wait` only waits while the deadline is still ahead, so a loop
+already at or behind its limit takes the `Poll` branch and the same gap is
+event-loop dispatch rather than sleep. `OTHER` itself is unchanged, because it
+is the reading the controller learns from and the panel should show what the
+controller is fed. See `perf::CpuCost`.
 
 They are **display-only** and deliberately not fed to `drs::Cost`: that type
 splits GPU cost by whether the render extent moves it, and a wall-clock

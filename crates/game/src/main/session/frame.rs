@@ -478,22 +478,26 @@ impl Session {
             }
         }
 
-        let drawn = self.draw(now, frame_seconds);
-        // **What the `SLEEP` row is derived from**, and the anchor matters:
+        let presented = self.draw(now, frame_seconds)?;
+        // **What the `OUTSIDE` row is derived from**, and the anchor matters:
         // measured from `now`, which is the same instant `elapsed` above is
         // taken from, so this frame's body and the gap after it partition the
         // interval between one frame's `now` and the next exactly. What lands
         // in the gap is the frame limiter's `ControlFlow::WaitUntil` (see
         // `App::about_to_wait`), the event loop, and the handful of cheap
-        // calls this function makes before it reads the clock at all.
+        // calls this function makes before it reads the clock at all - which
+        // is why the row is not called `SLEEP`.
         //
         // Recorded after the draw rather than around it, so the reading covers
         // the whole frame - ticks, stage update and draw together - which is
         // what has to be subtracted from the wall clock for the remainder to
-        // be sleep. Under the same load guard as `meter` above.
-        if frame_seconds.is_some() {
+        // be the gap. Under the same load guard as `meter` above, and under
+        // `draw`'s own answer besides: a frame that never got a surface
+        // texture recorded nothing on `present_cost`, and recording it here
+        // would leave the two meters averaging different sets of frames.
+        if frame_seconds.is_some() && presented {
             self.cpu_cost.record(now.elapsed().as_secs_f32());
         }
-        drawn
+        Ok(())
     }
 }

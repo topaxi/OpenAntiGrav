@@ -55,6 +55,14 @@ impl Session {
 
     /// Acquires the surface, draws whatever stage is on screen, and presents.
     ///
+    /// Returns whether it got that far. A surface that is `Outdated`, `Lost`
+    /// or otherwise unavailable is reconfigured and the frame abandoned -
+    /// which is a frame nothing measured, and the caller's cue not to record
+    /// one either. Without that, `Session::cpu_cost` would carry frames
+    /// `Session::present_cost` does not and the `CPU` row - the difference
+    /// between their two means - would be a subtraction across two different
+    /// populations of frames after every window resize.
+    ///
     /// `now` and `frame_seconds` are [`Session::frame`]'s own readings, taken
     /// once at the top of the fixed timestep rather than re-read here: `now`
     /// feeds the memory probe's own timeline, and `frame_seconds` is `None`
@@ -64,7 +72,7 @@ impl Session {
         &mut self,
         now: std::time::Instant,
         frame_seconds: Option<f32>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Recomputed rather than threaded through from `Session::frame`:
         // `loading_progress` is a plain read of settled state, nothing
         // between the two call sites changes its answer, and passing it
@@ -84,11 +92,11 @@ impl Session {
                 self.gpu
                     .surface
                     .configure(&self.gpu.device, &self.gpu.config);
-                return Ok(());
+                return Ok(false);
             }
             other => {
                 debug!("skipping frame: {other:?}");
-                return Ok(());
+                return Ok(false);
             }
         };
 
@@ -706,6 +714,6 @@ impl Session {
                 ready_at.elapsed()
             );
         }
-        Ok(())
+        Ok(true)
     }
 }

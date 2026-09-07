@@ -564,6 +564,70 @@ fn every_mode_survives_a_round_trip_through_its_own_spelling() {
     assert!("graph".parse::<Overlay>().is_err());
 }
 
+/// The wall-clock rows join the GPU panel under the timed ones, indented under
+/// their own `FRAME` parent, and the panel grows to hold all ten rather than
+/// clipping the last of them.
+///
+/// Two assertions that matter. The row count - five timed readings, `OTHER`,
+/// `FRAME` and its three children - because every other test in this file
+/// passes a `CpuCost::default()`, which draws nothing, so without this one the
+/// panel is never exercised past six rows. And **which row the indent hangs
+/// off**: the three sum to the frame time and not to `OTHER`, so indenting
+/// them under `OTHER` would put a visibly wrong sum on screen.
+#[test]
+fn the_wall_clock_rows_join_the_gpu_panel_and_fit_inside_it() {
+    let mut meter = Meter::new();
+    steady(&mut meter, 8, 1.0 / 120.0);
+    let gpu = GpuCost {
+        scene: Some(0.004_2),
+        blur: Some(0.001_2),
+        bloom: Some(0.003_1),
+        upscale: Some(0.001_8),
+        upscale_presented: Some(0.000_6),
+    };
+    let cpu = CpuCost {
+        frame: Some(0.005),
+        present: Some(0.001),
+    };
+    let draws = draw_list(&meter, Overlay::Dev, 120, None, None, None, None, gpu, cpu);
+    let panel = draws
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Fill { rect, .. } if rect[0] == super::GPU_LEFT => Some(*rect),
+            _ => None,
+        })
+        .expect("the GPU panel is drawn");
+    let rows: Vec<(f32, &str)> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { x, y, text, .. } if *x == super::GPU_LEFT + super::PAD => {
+                Some((*y, text.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        rows.len(),
+        10,
+        "five timed readings, OTHER, FRAME and its three parts: {rows:?}"
+    );
+    assert!(rows[5].1.starts_with("OTHER "), "{rows:?}");
+    assert!(rows[6].1.starts_with("FRAME "), "{rows:?}");
+    for (_, text) in &rows[7..] {
+        assert!(text.starts_with("  "), "{text:?} is not indented");
+    }
+    assert!(rows[7].1.trim_start().starts_with("CPU "), "{rows:?}");
+    assert!(rows[8].1.trim_start().starts_with("PRESENT "), "{rows:?}");
+    assert!(rows[9].1.trim_start().starts_with("OUTSIDE "), "{rows:?}");
+    // The last row's own line has to end inside the panel, or the three new
+    // rows are drawn over whatever the stage put there.
+    let (last_y, _) = rows[9];
+    assert!(
+        last_y + super::LINE <= panel[1] + panel[3] + 0.001,
+        "the last row at {last_y} runs past the panel {panel:?}"
+    );
+}
+
 /// The GPU panel is `Dev`-only, like the two rows above it, and it is its own
 /// panel - a separate `Fill` at [`super::GPU_LEFT`], not folded into the
 /// frame-time panel at `RIGHT`.

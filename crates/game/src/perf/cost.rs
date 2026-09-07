@@ -13,10 +13,11 @@
 //! by an amount nothing here can measure. Adding a GPU row to a CPU row would
 //! be adding two spans that ran at the same time.
 //!
-//! What *does* add up is [`CpuCost`]'s own three rows. `CPU`, `PRESENT` and
-//! `SLEEP` partition the interval between one redraw and the next - the very
-//! interval `perf::Meter` reports as the frame time - so they sum to it by
-//! construction and each one names a different thing to fix:
+//! What *does* add up is [`CpuCost`]'s own three rows, which is why they are
+//! drawn indented under a `FRAME` row and the GPU's are not. `CPU`, `PRESENT`
+//! and `OUTSIDE` partition the interval between one redraw and the next - the
+//! very interval `perf::Meter` reports as the frame time - so they sum to it
+//! by construction and each one names a different thing to fix:
 //!
 //! - **`CPU`** is work on this thread: the ticks, the stage update, building
 //!   the frame's draw lists, encoding, and mapping last frame's timestamp
@@ -24,14 +25,24 @@
 //! - **`PRESENT`** is `Surface::get_current_texture` plus `Queue::present`.
 //!   Under [`super::Vsync::On`] the wait for the refresh lands here, which is
 //!   what makes a blocked loop tell itself apart from a busy one.
-//! - **`SLEEP`** is everything outside `frame()`: the frame limiter's
-//!   `ControlFlow::WaitUntil` above all, which is idle time and not cost at
-//!   all.
+//! - **`OUTSIDE`** is everything between one frame's clock read and the next:
+//!   the frame limiter's `ControlFlow::WaitUntil` above all, but also the
+//!   event loop's own dispatch and the handful of calls `Session::frame` makes
+//!   before it reads the clock.
+//!
+//! **The third row is spelled `OUTSIDE` and not `SLEEP` deliberately.** A
+//! limiter with headroom does sleep there and that is what a large one usually
+//! is - but `App::about_to_wait` only waits while the deadline is still ahead,
+//! and a loop that is already at or behind its limit takes the `Poll` branch
+//! instead, where the same gap is event-loop dispatch and no sleep at all. A
+//! row that said `SLEEP` would be asserting which branch ran, which this
+//! measurement cannot see.
 //!
 //! # Why `OTHER` is still its own row
 //!
 //! [`GpuCost::residual_ms`] - `frame - (the timed passes)` - overlaps all
-//! three of the rows above and is not replaced by them. It is the reading
+//! three of the rows above, is not replaced by them, and is deliberately
+//! *not* the row they are indented under: they sum to the frame, not to it. It is the reading
 //! [`crate::drs::Residual`] learns from, so the overlay showing exactly what
 //! the controller is fed is the point of it, and the three rows below it are
 //! what say **which** of sleep, CPU work and untimed GPU passes a large one is
@@ -170,6 +181,14 @@ impl GpuCost {
     }
 }
 
+/// What a child row is indented by.
+///
+/// Spaces rather than a second `Draw::Text` x-offset: the panel's rows are
+/// one string each and the font's space carries a real advance
+/// (`font::GLYPHS`), so the indent survives measurement and alignment without
+/// the row layout having to learn about nesting.
+const INDENT: &str = "  ";
+
 /// Where a frame's **wall clock** went, in seconds, on the frame thread.
 ///
 /// The half of the panel that needs no device feature at all: two
@@ -201,10 +220,21 @@ pub struct CpuCost {
 }
 
 impl CpuCost {
-    /// `CPU`, `PRESENT` and `SLEEP`, which partition `frame_ms` between them.
+    /// A `FRAME` row and the three indented rows that partition it: `CPU`,
+    /// `PRESENT` and `OUTSIDE`.
     ///
-    /// Empty until [`Self::frame`] has a reading: a `SLEEP` row derived from
-    /// no measurement would read as the whole frame being idle.
+    /// **The parent is `FRAME` and not `OTHER`, and the indent is why that
+    /// matters.** An indented block claims its rows add up to the row above
+    /// it, and these three add up to the wall-clock frame time - the same
+    /// number the frame-time panel's own top line carries, repeated here so
+    /// the sum can be checked on screen without looking away. They do *not*
+    /// add up to `OTHER`, which has the timed GPU passes subtracted out of it
+    /// and overlaps all three; nesting them there would put a visibly wrong
+    /// sum on an instrument.
+    ///
+    /// Empty until [`Self::frame`] has a reading: an `OUTSIDE` row derived
+    /// from no measurement would read as the whole frame being spent
+    /// somewhere the loop cannot see.
     #[must_use]
     pub fn rows(self, frame_ms: f32) -> Vec<String> {
         let Some(frame) = self.frame else {
@@ -212,27 +242,33 @@ impl CpuCost {
         };
         let frame_body_ms = frame * 1000.0;
         let present_ms = self.present.map(|present| present * 1000.0);
-        let mut rows = vec![format!(
-            "CPU {:.2} MS",
-            frame_body_ms - present_ms.unwrap_or(0.0)
-        )];
+        let mut rows = vec![
+            format!("FRAME {frame_ms:.1} MS"),
+            format!(
+                "{INDENT}CPU {:.2} MS",
+                frame_body_ms - present_ms.unwrap_or(0.0)
+            ),
+        ];
         if let Some(present_ms) = present_ms {
-            rows.push(format!("PRESENT {present_ms:.2} MS"));
+            rows.push(format!("{INDENT}PRESENT {present_ms:.2} MS"));
         }
-        rows.push(format!("SLEEP {:.1} MS", frame_ms - frame_body_ms));
+        rows.push(format!(
+            "{INDENT}OUTSIDE {:.1} MS",
+            frame_ms - frame_body_ms
+        ));
         rows
     }
 
     /// What the loop spent outside `Session::frame` - the frame limiter's own
-    /// wait, and the event loop around it - or `None` before a frame has been
-    /// measured.
+    /// wait, the event loop around it, and that function's own preamble - or
+    /// `None` before a frame has been measured.
     ///
     /// Passed through unclamped for the same reason
     /// [`GpuCost::residual_ms`] is: the two means are one frame out of phase,
     /// so a small negative reading is the two signals disagreeing by a frame
-    /// rather than a loop that slept for less than no time.
+    /// rather than a gap shorter than no time.
     #[must_use]
-    pub fn sleep_ms(self, frame_ms: f32) -> Option<f32> {
+    pub fn outside_ms(self, frame_ms: f32) -> Option<f32> {
         self.frame.map(|frame| frame_ms - frame * 1000.0)
     }
 }

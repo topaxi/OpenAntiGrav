@@ -128,14 +128,15 @@ fn the_residual_is_the_frame_time_minus_the_gpu_row() {
     assert!(heavy.residual_ms(8.0).unwrap() < 0.0);
 }
 
-/// `CPU`, `PRESENT` and `SLEEP` add up to the frame time exactly - that is
+/// `CPU`, `PRESENT` and `OUTSIDE` add up to the frame time exactly - that is
 /// what makes them a split rather than three more numbers beside it.
 ///
 /// The example is the one a 120 Hz limiter produces on a machine with
 /// headroom: an 8.33 ms wall clock, 5 ms of it inside the frame, 1 ms of
-/// *that* waiting on the swapchain, and the rest asleep in
-/// `App::about_to_wait`. Before this split all 8.33 ms of it read as one
-/// `OTHER` row, which is exactly the reading that cannot be acted on.
+/// *that* waiting on the swapchain, and the rest outside the frame entirely -
+/// asleep in `App::about_to_wait`, on a run with the headroom to be. Before
+/// this split all 8.33 ms of it read as one `OTHER` row, which is exactly the
+/// reading that cannot be acted on.
 #[test]
 fn the_wall_clock_rows_partition_the_frame_time() {
     let cost = CpuCost {
@@ -145,27 +146,30 @@ fn the_wall_clock_rows_partition_the_frame_time() {
     assert_eq!(
         cost.rows(8.33),
         vec![
-            "CPU 4.00 MS".to_string(),
-            "PRESENT 1.00 MS".to_string(),
-            "SLEEP 3.3 MS".to_string(),
-        ]
+            "FRAME 8.3 MS".to_string(),
+            "  CPU 4.00 MS".to_string(),
+            "  PRESENT 1.00 MS".to_string(),
+            "  OUTSIDE 3.3 MS".to_string(),
+        ],
+        "the parent, then its three parts, each indented under it"
     );
     // The property the rows claim, asserted rather than left to the reader of
     // three rounded strings: 4.00 + 1.00 + 3.33 is the 8.33 ms frame.
-    let sleep = cost.sleep_ms(8.33).expect("a frame was measured");
-    assert!((4.0 + 1.0 + sleep - 8.33).abs() < 1e-4, "{sleep}");
+    let outside = cost.outside_ms(8.33).expect("a frame was measured");
+    assert!((4.0 + 1.0 + outside - 8.33).abs() < 1e-4, "{outside}");
 }
 
 /// Nothing is claimed until a frame has been measured, the same discipline
 /// every GPU row above already follows.
 ///
-/// A `SLEEP 8.3 MS` row derived from no reading would say the loop spent the
-/// whole frame idle, which is the most misleading thing this panel could
-/// print on a machine that has simply not finished its first frame yet.
+/// An `OUTSIDE 8.3 MS` row derived from no reading would say the loop spent
+/// the whole frame somewhere it cannot see, which is the most misleading
+/// thing this panel could print on a machine that has simply not finished its
+/// first frame yet.
 #[test]
 fn the_wall_clock_rows_say_nothing_until_a_frame_has_been_measured() {
     assert_eq!(CpuCost::default().rows(8.33), Vec::<String>::new());
-    assert_eq!(CpuCost::default().sleep_ms(8.33), None);
+    assert_eq!(CpuCost::default().outside_ms(8.33), None);
 }
 
 /// A present reading that never came back is left out rather than counted as
@@ -182,19 +186,23 @@ fn a_present_that_never_reported_is_left_out_rather_than_zeroed() {
     };
     assert_eq!(
         cost.rows(8.33),
-        vec!["CPU 5.00 MS".to_string(), "SLEEP 3.3 MS".to_string()]
+        vec![
+            "FRAME 8.3 MS".to_string(),
+            "  CPU 5.00 MS".to_string(),
+            "  OUTSIDE 3.3 MS".to_string(),
+        ]
     );
 }
 
-/// Sleep can read negative, and is passed through rather than clamped, for
+/// The gap can read negative, and is passed through rather than clamped, for
 /// the reason [`super::GpuCost::residual_ms`] can: the frame-time mean and
 /// the CPU mean are one frame out of phase, so a frame time that has just
 /// fallen can be shorter than the body measured before it.
 #[test]
-fn a_negative_sleep_is_reported_rather_than_clamped() {
+fn a_negative_gap_is_reported_rather_than_clamped() {
     let cost = CpuCost {
         frame: Some(0.010),
         present: None,
     };
-    assert!(cost.sleep_ms(8.33).expect("measured") < 0.0);
+    assert!(cost.outside_ms(8.33).expect("measured") < 0.0);
 }

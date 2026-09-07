@@ -576,6 +576,10 @@ const GPU_LEFT: f32 = 4.0;
 /// digits - picked to stay legible, the same way [`PANEL_W`] was. It was
 /// `SCENE 100.00 MS` and 90 until the FSR 3.1 chain became two rows rather
 /// than one (ADR-0045).
+///
+/// The *height* is not a constant: the panel is sized to however many rows
+/// have readings, which is up to nine now that [`CpuCost`]'s three wall-clock
+/// rows sit under the five timed ones and `OTHER`.
 const GPU_PANEL_W: f32 = 110.0;
 
 /// The panel, the text, and the three bands a frame time can fall in.

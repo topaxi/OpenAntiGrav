@@ -216,11 +216,13 @@ with two rows where it says `FSR3`: `FSR3 REN` and `FSR3 OUT`.
 
 Landed 2026-09-07, from a question about the `dev` overlay rather than from
 this thread: `OTHER` reading 6.1 ms while every timed row read far lower, on a
-run with `vsync = smooth` and `frame_limit = 120`. Three rows now sit under it
-- `CPU`, `PRESENT` and `SLEEP` (`perf::CpuCost`, fed by `Session::cpu_cost`
-and `Session::present_cost`) - and they partition the wall-clock frame time
-exactly: the frame body, the two swapchain calls inside it that may block, and
-everything outside it including the limiter's own `WaitUntil`.
+run with `vsync = smooth` and `frame_limit = 120`. A `FRAME` row and three
+indented under it now sit below it - `CPU`, `PRESENT` and `OUTSIDE`
+(`perf::CpuCost`, fed by `Session::cpu_cost` and `Session::present_cost`) -
+and they partition the wall-clock frame time exactly: the frame body, the two
+swapchain calls inside it that may block, and everything outside it including
+the limiter's own `WaitUntil`. They are indented under `FRAME` and not under
+`OTHER` because that is the row they sum to; `OTHER` overlaps all three.
 
 **This is the mechanism the Open section above says does not exist** ("only a
 real CPU-side timer closes that. Still no mechanism to reuse - `PassTimer`
@@ -229,7 +231,8 @@ machine with no `TIMESTAMP_QUERY` at all.
 
 **It is not wired into `drs` and that is deliberate, not an oversight.**
 `residual::observe` gates on an inequality that treats sleep as an unmeasured
-non-negative term; with `CpuCost::sleep_ms` that term is measurable, and
+non-negative term; with `CpuCost::outside_ms` that term is measurable (an upper bound on it,
+strictly: the gap also holds event-loop dispatch), and
 subtracting it would change the gate ADR-0044 derived rather than tune it -
 a new ADR's worth of decision, not an edit. `Cost` is also a GPU-cost split by
 what the extent moves, which a wall-clock reading is not.
@@ -245,9 +248,10 @@ what the extent moves, which a wall-clock reading is not.
 2. If `OTHER` is still large with `BLOOM` small, decide the CPU-floor design
    question above before building it - this is a real design decision, not a
    measurement. **Now readable rather than inferred**: ask for the `CPU`,
-   `PRESENT` and `SLEEP` rows in the same reading as step 1, and a large
+   `PRESENT` and `OUTSIDE` rows in the same reading as step 1, and a large
    `OTHER` sorts itself into idle, CPU-bound or untimed-GPU without any
-   further instrumentation.
+   further instrumentation. The rows to ask for are `FRAME`, `CPU`,
+   `PRESENT` and `OUTSIDE`.
 3. Decide whether the vsync-at-target hole in ADR-0044 should be closed with
    the measured sleep term, in a new ADR. The evidence it says is destroyed -
    "under vsync at the target rate the sleep destroys the evidence once the
