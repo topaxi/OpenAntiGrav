@@ -109,3 +109,11 @@ __pycache__/
 
 # Agents
 .claude/
+
+# A Ghidra project holds the executable's own bytes, so it is game content by
+# ADR-0006 and must never be tracked. `data/ghidra/` was already covered by the
+# blanket `/data/` rule; this covers a project copied in from another machine.
+/vimes-ghidra/
+*.rep/
+*.gpr
+*.lock
