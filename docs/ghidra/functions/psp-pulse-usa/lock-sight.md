@@ -61,10 +61,89 @@ batches rather than by looking. What makes them a reticle is the texture:
 - `missile_sight_inner.vex` is a **closed rounded box** outline.
 - `leachbeam_sight.vex` is a **hollow triangle**, an arrowhead.
 
+**Both sets are driven as of 2026-09-07**, and the difference between them is
+the whole of what a title has to author: four names and, for the Missile alone,
+a fifth. **Where the LeachBeam's four go is inferred, not read** - see
+[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_game::race::sight::Held` carries which of the two is up and
+`oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
+for a title that authors no such widget. What had kept the LeachBeam's four dark
+was entirely upstream - `oag_formats::weapons` parsed no
+`<Weapon type="LeachBeam">`, so `Ship_AcquireLock`'s second pair of offsets had
+nothing behind them. See [The LeachBeam's own window](#the-leachbeams-own-window).
+
 So the Missile's reticle is four brackets around a box with a closed box at its
 centre, and the LeachBeam's is four arrowheads pointing inward. That the same
 model appears four times is why the placement below writes a **rotation** per
 instance.
+
+## The LeachBeam's own window
+
+`Ship_AcquireLock` (`0x08844784`) selects `stats+0x114`/`+0x118` when the held
+weapon id is 10 and `stats+0x50`/`+0x54` when it is 1 - see
+[missile.md](missile.md#the-lock) for the switch itself. **Everything after that
+selection is shared**: the same `0.9` cone, the same 1.4 along-track screen, the
+same nearest-by-longitudinal-distance tie-break, the same "not the firer, and
+racing" skip. So the two lockable weapons differ by **two numbers and nothing
+else**, which is why `oag_gameplay::projectile::missile::lock_window` takes the
+numbers rather than a second stats type.
+
+**And the two numbers differ, which is the finding.** Measured 2026-09-07
+against `WeaponStats_Race.xml` and `WeaponStats_Elimination.xml` on both the USA
+and the EU pressing: the LeachBeam's near bound equals the Missile's on all
+four, and its **far bound is shorter on all four**. So the LeachBeam reaches
+less far than the Missile does and its reticle takes a target later. No value is
+quoted here or asserted anywhere, per
+[ADR-0006](../../../architecture/adr/0006-no-copyrighted-content.md); the
+*relation* is what `crates/formats/tests/weapons_ground_truth.rs` pins, and it
+is the assertion that would catch a decoder reading one block for both.
+
+Two further things the block says:
+
+- **It authors no `slowdown_time`**, alone among the blocks
+  `oag_formats::weapons` decodes, on all four tables. A weapon that fastens onto
+  a craft and drains it is not one that charges a fixed slowdown on impact, so
+  the absence reads as design; recorded because the module's own docs had
+  claimed the attribute was universal.
+- **It authors a `range` at the same figure as this page's own `250.0` draw
+  range**, and that is a coincidence rather than the same number twice: the
+  `250.0` above is a code literal in `HudSight_Update` and the `range` is
+  tuning data for a beam nothing here fires. `LeachBeamStats` deliberately does
+  not decode it, so nothing can grow a dependency between the two.
+
+### Who places the LeachBeam's four is unrecovered
+
+`HudSight_Update` is read end to end below and it writes **five** widgets:
+`sight[0]` … `sight[3]` and the inner. Those are the Missile's. **Nothing yet
+read writes the bind's `+0x108` … `+0x114`**, so what moves the LeachBeam's four
+and at what angles is not recovered, and this page should not be read as saying
+it is.
+
+`oag_game::race::sight` gives them the Missile's four corners and the Missile's
+four quarter-turn rotations. That is **chosen, not measured**, and carries no
+confidence score. The grounds are structural rather than read: the two sets are
+the same shape - four widgets, one model each, one shared `(-240, 136)`
+placeholder - and one arrowhead makes four corners no other way, exactly as one
+bracket does. A capture at 480x272 shows the picture that arrangement produces,
+which is a check on the *result* and not on the rule. If the original places
+these on a rule of their own, this is where the port is wrong, and finding the
+writer of `+0x108` is what settles it.
+
+**HD authors the block too, and that is measured**, contrary to what this page
+implied until 2026-09-07: its weapon table carries a `<Weapon type="LeachBeam">`
+with a lock window, so a held LeachBeam is reachable on HD as well as on Pulse.
+Its own four sprites are `LeachBeamSightBG`, `LeachBeamSightOuter`,
+`LeachBeamSightMiddle` and `LeachBeamSightInner` - the same four-part naming
+`MissileSight*` uses - off `HUD_Components_01.gtf`. They are **not** drawn:
+`Sights::Concentric` carries one set of names and nothing has read which of the
+four is up when, so `oag_game::hud::sight_draw` draws nothing for a LeachBeam on
+that dialect rather than lending it `MissileSight*`. Both halves are pinned by
+`crates/game/tests/lock_sight_ground_truth.rs`.
+
+**Pure authors neither.** Its `Data\XML\weaponstats.xml` carries no
+`<Weapon type="LeachBeam">` and its `Data\XML\Arcade_HUD.xml` no
+`leachbeam_sight_*` - measured on `pure-psp-usa.chd`, not inferred from the
+Missile - so `oag_pure::hud::ART` names `leach: None` and a LeachBeam there
+would draw nothing rather than borrow the Missile's brackets.
 
 ## `HudSight_Update`, the whole law
 
@@ -326,7 +405,12 @@ one is read **off the names**, at confidence 70: they are unambiguous about what
 each widget is and silent about whether the seeking set stays up underneath.
 `oag_game` draws them additively, which shows every authored widget rather than
 hiding some on a guess. HD also authors four `LeachBeamSight*` off
-`HUD_Components_01.gtf`, unwired for the same reason Pulse's are.
+`HUD_Components_01.gtf` - `BG`, `Outer`, `Middle`, `Inner` - and its weapon
+table authors the `<Weapon type="LeachBeam">` block to go with them, measured
+2026-09-07. They are still unwired, but no longer for Pulse's old reason: what
+is missing is a second widget set on `Sights::Concentric` and a reading of which
+of the four is up when. Until then a held LeachBeam draws nothing here. See
+[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered).
 
 **The placeholder idiom is what says the reading is right.** Every sight widget
 on every title is authored centred on `(-width/2, +height/2)` of that title's own

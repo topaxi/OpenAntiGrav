@@ -121,6 +121,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "missile_sight_4",
         ],
         inner: "missile_sight_inner",
+        // **`None`, measured.** `Data\XML\Arcade_HUD.xml` on `pure-psp-usa.chd`
+        // authors these five sight widgets and no `leachbeam_sight_*`, which
+        // agrees with `Data\XML\weaponstats.xml` authoring no `<Weapon
+        // type="LeachBeam">`: the disc agrees that is a Pulse weapon. So a
+        // LeachBeam here would draw nothing rather than borrow the Missile's
+        // brackets - and nothing hands one out in the first place.
+        leach: None,
     },
     // Moot for the same reason - this disc authors no `PickupBackground` - and
     // recorded as Pulse's answer rather than as `None`, because `None` here

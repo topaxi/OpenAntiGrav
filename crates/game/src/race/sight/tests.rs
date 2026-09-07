@@ -301,3 +301,43 @@ fn the_reticle_closes_on_a_distant_target_over_several_frames() {
     }
     panic!("the reticle never caught up with a stationary target");
 }
+
+/// The reticle starts on the Missile's art, which is what a title with no
+/// LeachBeam draws for every lock it ever takes.
+#[test]
+fn a_fresh_reticle_wears_the_missiles_art() {
+    assert_eq!(Sight::default().held(), Held::Missile);
+}
+
+/// And the art is **sticky**: it holds through the frames the brackets spend
+/// easing back open after a target is lost.
+///
+/// The original keeps all four widgets up while the extent is still moving -
+/// [`Sight::visible`] is that rule - so a set swapped out the moment the pickup
+/// slot emptied would finish a LeachBeam's closing arrowheads as the Missile's
+/// brackets. Nothing sets `held` back; `Race::update_sight` only ever writes it
+/// for a weapon that locks.
+#[test]
+fn the_art_holds_while_the_brackets_ease_back_open() {
+    let mut sight = Sight::default();
+    sight.set_held(Held::LeachBeam);
+
+    let target = Projected {
+        screen: [240.0, 136.0],
+        distance: 60.0,
+    };
+    for _ in 0..120 {
+        sight.update(DT, Some(target));
+    }
+    assert_eq!(sight.held(), Held::LeachBeam);
+
+    // Target gone, and the extent has not finished opening: still drawn, and
+    // still drawn as arrowheads.
+    sight.update(DT, None);
+    assert!(sight.visible(), "the brackets stopped being drawn at once");
+    assert_eq!(
+        sight.held(),
+        Held::LeachBeam,
+        "the art changed under a reticle that is still closing"
+    );
+}

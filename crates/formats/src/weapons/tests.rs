@@ -21,6 +21,7 @@ const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Shuriken"><Stats absorb="60" rhicochetForce="61" blastForce="62" blastradius="63" rhicochetdamage="64" blastdamage="65" slowdown_time="66" venomspeed="1300" flashspeed="1400" rapierspeed="1500" phantomspeed="1600" launchSpeed="67" fuse="68"/></Weapon>
 <Weapon type="Bomb"><Stats absorb="40" blastforce="41" blastradius="42" damage="43" damageradius="44" slowdown_time="45" timetodie="46" trigger_radius="47"/></Weapon>
 <Weapon type="Mine"><Stats absorb="30" blastforce="31" blastradius="32" damage="33" slowdown_time="34" timetodie="35" trigger_radius="36"/></Weapon>
+<Weapon type="LeachBeam"><Stats repair="70" absorb="71" damage="72" lock_max_dist="74" lock_min_dist="73" slowShipFactor="75" range="76" active_time="77" energy_multiplier="78"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
 <Weapon type="Shield"><Stats absorb="6" time="7"/></Weapon>
 <Weapon type="Autopilot"><Stats absorb="8" time="9"/></Weapon>
@@ -578,5 +579,71 @@ fn a_shuriken_missing_its_fuse_is_absent_rather_than_defaulted() {
     assert!(
         stats.rocket().is_some(),
         "one undecodable weapon must not cost the file its others"
+    );
+}
+
+#[test]
+fn the_leachbeam_reads_its_lock_window_and_its_absorb() {
+    let stats = parse(FIXTURE).expect("the fixture parses");
+    assert_eq!(
+        stats.leach_beam(),
+        Some(LeachBeamStats {
+            absorb: 71.0,
+            lock_min_dist: 73.0,
+            lock_max_dist: 74.0,
+        })
+    );
+}
+
+/// The block authors no `slowdown_time` on any shipped table, so the parser
+/// must not ask for one - and the fixture mirrors that absence deliberately.
+///
+/// Without this the failure is quiet and wide: `optional_block` would put the
+/// LeachBeam in `skipped` and every Pulse race would lose its reticle with
+/// nothing but a loader line to say why.
+#[test]
+fn the_leachbeam_is_not_skipped_for_want_of_a_slowdown_time() {
+    assert!(
+        !FIXTURE
+            .lines()
+            .any(|line| line.contains("LeachBeam") && line.contains("slowdown_time")),
+        "the fixture must keep authoring no slowdown_time on this block"
+    );
+    let stats = parse(FIXTURE).expect("the fixture parses");
+    assert!(
+        !stats.skipped.iter().any(|(w, _)| *w == Weapon::LeachBeam),
+        "the LeachBeam was skipped: {:?}",
+        stats.skipped
+    );
+}
+
+/// A file with no LeachBeam keeps the rest of its table, which is Pure's case.
+#[test]
+fn a_file_with_no_leachbeam_loses_only_the_leachbeam() {
+    let without: Vec<&str> = FIXTURE
+        .lines()
+        .filter(|line| !line.contains("type=\"LeachBeam\""))
+        .collect();
+    let stats = parse(&without.join("\n")).expect("a table without a LeachBeam still parses");
+    assert_eq!(stats.leach_beam(), None);
+    assert!(stats.missile().is_some(), "the Missile survives");
+    assert!(
+        !stats.skipped.iter().any(|(w, _)| *w == Weapon::LeachBeam),
+        "an absent block is not a skipped one"
+    );
+}
+
+/// A LeachBeam missing a lock bound is *skipped*, not fatal - the Bomb's rule.
+#[test]
+fn a_leachbeam_without_a_lock_window_is_skipped_rather_than_fatal() {
+    let broken = FIXTURE.replace(" lock_max_dist=\"74\"", "");
+    let stats = parse(&broken).expect("one unreadable block does not fail the file");
+    assert_eq!(stats.leach_beam(), None);
+    assert!(
+        stats
+            .skipped
+            .contains(&(Weapon::LeachBeam, "lock_max_dist")),
+        "the skip names the attribute: {:?}",
+        stats.skipped
     );
 }

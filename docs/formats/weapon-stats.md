@@ -100,7 +100,7 @@ a union:
 | **`Plasma`** | **`0x0880cc2c`** | the rocket's, less `spread`, plus `charge_time` - **decoded**, offsets and all, on [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md) |
 | `Bomb` | `0x0880cef0` | `absorb blastforce blastradius damage damageradius slowdown_time trigger_radius timetodie` |
 | `Mine` | `0x0880d124` | the bomb's, less `damageradius` |
-| `LeachBeam` | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` |
+| **`LeachBeam`** | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` - **`absorb` and the lock window decoded**, nothing else, as `oag_formats::weapons::LeachBeamStats`. The window is the second pair `Ship_AcquireLock` reads (`stats+0x114`/`+0x118`, against the Missile's `+0x50`/`+0x54`) and its consumer is the reticle; see [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md). **This block authors no `slowdown_time`** - the only one of the seven that does not |
 | `Repulser` | `0x0880d58c` | `blastforce blastradius absorb damage slowdown_time blast_time wave_time` |
 | **`Shuriken`** | **`0x0880d790`** | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` - **decoded** but for the ricochet pair and `slowdown_time`, offsets and all, on [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md) |
 
@@ -110,8 +110,11 @@ field decoded with no consumer is a field nobody has checked. The Rocket is
 partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
 eleven attributes, and the one left plain is `spread`.
 
-**`slowdown_time` moved out of that list on 2026-09-06** and is decoded on all
-seven decoded blocks now that the Cannon's has joined them. It stayed out for
+**`slowdown_time` moved out of that list on 2026-09-06** and is decoded on
+every decoded block that authors it. **The LeachBeam is the one that does
+not**, on all four shipped tables - Pulse's race and Eliminator files, USA and
+EU - which is why `LeachBeamStats` has no such field rather than a defaulted
+zero. Measured 2026-09-07. It stayed out for
 a year because the slowdown mechanic had
 no consumer; the mechanic's law is now recovered end to end -
 `Ship_AddSlowdown` (`0x08848690`) adds a hit's `slowdown_time` to a timer and

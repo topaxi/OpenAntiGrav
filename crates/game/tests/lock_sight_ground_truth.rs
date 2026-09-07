@@ -218,6 +218,137 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     );
 }
 
+/// The LeachBeam's four are four instances of **one** model, and there is no
+/// fifth.
+///
+/// The Missile's four-to-one instancing is asserted above and it does not
+/// follow that the LeachBeam's is the same shape - four widgets naming four
+/// models, or three plus an inner, would be a different reticle wearing the
+/// same slot run. Measured off the disc's own layout rather than assumed from
+/// the Missile: `HudSight_Bind` (`0x0881b604`) binds `+0x108` … `+0x114` and
+/// **no** inner slot for this weapon.
+///
+/// It also pins the model apart from the Missile's. Four widgets sharing one
+/// model would still pass the first half of this if that model happened to be
+/// `missile_sight_outer.vex`, which is exactly what a layout read through the
+/// wrong name would give.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_leachbeams_four_widgets_share_one_model_and_have_no_inner() {
+    use oag_game::race::sight;
+
+    let Some(loaded) = single_race() else { return };
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("the arcade layout parsed");
+
+    let model_of = |name: &str| -> String {
+        layout
+            .models
+            .iter()
+            .find(|m| m.name == name)
+            .unwrap_or_else(|| panic!("{name} is not in the layout"))
+            .src
+            .clone()
+    };
+
+    let leach: Vec<String> = sight::LEACHBEAM_BRACKETS
+        .iter()
+        .map(|name| model_of(name))
+        .collect();
+    assert!(
+        leach.windows(2).all(|pair| pair[0] == pair[1]),
+        "the four leachbeam sights name different models: {leach:?}"
+    );
+    assert_ne!(
+        leach[0],
+        model_of(sight::MISSILE_BRACKETS[0]),
+        "the LeachBeam's arrowhead and the Missile's bracket are one model, \
+         which would mean one of the two names was read wrong"
+    );
+    assert_ne!(
+        leach[0],
+        model_of(sight::MISSILE_INNER),
+        "the LeachBeam's arrowhead is the Missile's inner box"
+    );
+    assert!(
+        !layout
+            .models
+            .iter()
+            .any(|m| m.name.starts_with("leachbeam_sight_inner") || m.name == "leachbeam_sight_5"),
+        "the disc authors a fifth LeachBeam sight widget, which nothing here \
+         drives: {:?}",
+        layout
+            .models
+            .iter()
+            .map(|m| &m.name)
+            .filter(|n| n.starts_with("leachbeam"))
+            .collect::<Vec<_>>()
+    );
+
+    // And the title table names exactly those four, which is what the draw path
+    // reaches for once `Sight::held` says LeachBeam.
+    let oag_title::hud::Sights::Brackets { leach: named, .. } = oag_pulse::hud::ART.sights else {
+        panic!("Pulse's sights are not the bracket dialect");
+    };
+    assert_eq!(
+        named.expect("Pulse authors a LeachBeam sight set"),
+        sight::LEACHBEAM_BRACKETS
+    );
+}
+
+/// Racing with a **LeachBeam** in hand puts its own reticle up and locks.
+///
+/// The Missile's version of this is above; this is the second lockable weapon
+/// going through the same recovered law off its own authored window
+/// (`stats+0x114`/`+0x118` against the Missile's `+0x50`/`+0x54`) and its own
+/// four widgets. The window is authored **shorter** at the far end than the
+/// Missile's on both shipped tables - see
+/// `crates/formats/tests/weapons_ground_truth.rs` - so this is not the Missile's
+/// test with a different enum in it: a grid that locks for one need not lock for
+/// the other, and asserting it does is the point.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
+    use oag_game::race::sight;
+
+    let Some(loaded) = single_race() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::LeachBeam);
+
+    let mut seeking = false;
+    let mut locked_at = None;
+    for tick in 0..240u32 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        match race.sight_state() {
+            sight::State::Seeking => seeking = true,
+            sight::State::Locked if locked_at.is_none() => locked_at = Some(tick),
+            _ => {}
+        }
+    }
+
+    assert_eq!(
+        race.sight().held(),
+        sight::Held::LeachBeam,
+        "the reticle is still wearing the Missile's art with a LeachBeam in hand"
+    );
+    assert!(
+        seeking,
+        "a LeachBeam on the shipped starting grid put no reticle on screen"
+    );
+    let locked = locked_at.expect("the LeachBeam's reticle never locked on a real grid");
+    let seconds = f64::from(locked) / 60.0;
+    assert!(
+        seconds >= 0.8,
+        "it locked after {seconds}s, inside the recovered 0.8s hold"
+    );
+}
+
 /// Wipeout Pure locks and draws its reticle, in the PSP dialect.
 ///
 /// **Pure was authored for this all along and could not reach it**, for two
@@ -279,6 +410,88 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
     assert!(
         locks_within(&mut race, 240),
         "Pure never locked a craft on its own starting grid"
+    );
+    assert_eq!(
+        race.leach_beam_stats(),
+        None,
+        "Pure authors a LeachBeam block after all, which would mean its \
+         `leach: None` sight set is now reachable and draws nothing"
+    );
+}
+
+/// Which titles author a `<Weapon type="LeachBeam">` at all, printed and pinned.
+///
+/// **The reason this is a test and not a note, and it caught something.**
+/// `Race::sight_held` returns `Some(Held::LeachBeam)` for any title whose table
+/// authors the block, and the widget set that answers it is per title. Pulse
+/// names four. Pure names none *and authors no block*, so its `leach: None` is
+/// belt and braces. **HD authors the block** - measured here, and it was assumed
+/// otherwise - while its `Sights::Concentric` dialect carries **one** set of
+/// widget names and no second one to reach for. Without a guard a held LeachBeam
+/// on HD would draw `MissileSight*`: another weapon's reticle, which is exactly
+/// the plausible-looking stand-in `CLAUDE.md` forbids. `hud::sight_draw` draws
+/// nothing there instead, and this is what stops that pairing drifting.
+///
+/// Shape only, never values - ADR-0006. `--no-capture` prints which is which.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn only_pulse_and_hd_author_a_leachbeam_block() {
+    let mut checked = 0;
+    for (name, image, expected) in [
+        ("Pulse", "pulse-psp-usa.chd", true),
+        ("Pure", "pure-psp-usa.chd", false),
+        ("HD/Fury", "hdfury-ps3-eu-dec.iso", true),
+    ] {
+        let Some(path) = image_named(image) else {
+            continue;
+        };
+        let race = race::Race::start(race_on(&path).setup);
+        let authored = race.leach_beam_stats().is_some();
+        println!("{name}: authors a LeachBeam block = {authored}");
+        assert_eq!(
+            authored, expected,
+            "{name} disagrees with what `oag_title::hud::Sights` was built \
+             against - a title that authors the block but no widget set for it \
+             draws another weapon's reticle for a held LeachBeam unless \
+             `hud::sight_draw` refuses"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "no image present to check");
+}
+
+/// And HD's four `LeachBeamSight*` sprites really are there, waiting.
+///
+/// The other half of the finding above: HD authors the weapon *and* art for it,
+/// and what is missing is only a reading of which of the four is up when. Pinned
+/// so "unwired" stays a statement about this engine rather than about the disc -
+/// a future pass looking for them should find them named here, not go hunting.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_authors_four_leachbeam_sight_sprites_that_nothing_draws() {
+    let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("HD's arcade layout parsed");
+
+    let found: Vec<&str> = layout
+        .sprites
+        .iter()
+        .map(|s| s.name.as_str())
+        .filter(|name| name.starts_with("LeachBeamSight"))
+        .collect();
+    println!("HD LeachBeam sight sprites: {found:?}");
+    assert_eq!(
+        found.len(),
+        4,
+        "HD authors {} LeachBeamSight* sprite(s), not four - which changes what \
+         wiring them would mean: {found:?}",
+        found.len()
     );
 }
 

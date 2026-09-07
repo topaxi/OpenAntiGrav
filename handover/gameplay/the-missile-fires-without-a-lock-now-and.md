@@ -1,4 +1,4 @@
-# The Missile fires without a lock, and the lock-on reticle and its tone are in
+# Both lockable weapons draw their reticle now; the sight quads have a black background
 
 2026-08-26, [missile.md](../../docs/ghidra/functions/psp-pulse-usa/missile.md) - the
 page to read, not this row. **A press with no lock used to do nothing and keep the
@@ -111,11 +111,38 @@ reticle is render-only state on `Race`.
   `Ship_FireHeldWeapon`'s and `HudSight_Update`'s callers resolved, and both
   currently return no xrefs from Ghidra's static analysis (probably reached
   through a function-pointer table).
-- **The LeachBeam's reticle is not driven.** Its four widgets are bound and its
-  model is in the sheet; what is missing is upstream - `oag_formats::weapons`
-  parses no `<Weapon type="LeachBeam">`, so there are no `lock_min_dist` /
-  `lock_max_dist` at `stats+0x114`/`+0x118` to run the window against. Parsing
-  that block and adding an arm to `Race::sight_target` is the whole job.
+- **HD authors a LeachBeam and cannot draw its reticle.** Measured 2026-09-07
+  and it was assumed the other way: HD's weapon table carries a
+  `<Weapon type="LeachBeam">` with a lock window, so `Race::sight_held` returns
+  that weapon on HD too, and its layout carries four sprites for it -
+  `LeachBeamSightBG`, `LeachBeamSightOuter`, `LeachBeamSightMiddle`,
+  `LeachBeamSightInner`, the same four-part naming `MissileSight*` uses. What is
+  missing is a second widget set on `oag_title::hud::Sights::Concentric` and a
+  reading of which of the four is up when. `hud::sight_draw` draws **nothing**
+  for a LeachBeam on that dialect rather than lending it `MissileSight*`;
+  without that guard HD would have shown the Missile's rings for the wrong
+  weapon. Wiring it belongs to whoever owns `crates/hd`.
+- **Where the LeachBeam's four widgets go is inferred, not read.**
+  `HudSight_Update` is read end to end and writes **five** widgets - the
+  Missile's four plus its inner. Nothing yet read writes the bind's
+  `+0x108` … `+0x114`. `oag_game::race::sight` gives the LeachBeam's four the
+  Missile's corners and rotations, which is **chosen, not measured** and carries
+  no confidence score: the grounds are that the two sets are the same shape and
+  that one arrowhead makes four corners no other way. A capture checks the
+  result, not the rule. Finding the writer of `+0x108` settles it.
+- **The sight quads draw on an opaque black square, and always have.** Seen on
+  2026-09-07 in `--race --mode single_race --opponents --give <weapon>` captures
+  at 480x272: every reticle piece is its white shape on a solid black `8x8`
+  background rather than on the track. **Both weapons alike**, so it predates
+  the LeachBeam and was not noticed when the Missile's half landed - that pass
+  looked at one capture and read the shape rather than the background.
+  Unfixed and out of the LeachBeam's scope. **A hypothesis, not a reading**:
+  `oag_formats::vex` already decodes a per-batch blend mode (`pass_mask & 0x100`
+  ordinary alpha blend, `& 0x200` additive), and the HUD's 2D sprite path draws
+  these models with a plain alpha blend without consulting it - an additive
+  batch would make the black vanish and the shape glow. Nobody has read these
+  three models' own `pass_mask`, so that is where to start rather than in the
+  shader.
 - **`HudSight_Update`'s gate is read and not understood** - `hud->view->0x48 == 2`
   or "one of my missiles is homing". Taken literally the reticle would never
   appear while merely holding a Missile. `oag-game` gates on "the held weapon
@@ -154,10 +181,30 @@ primed the same way so its self-lock invariant still gets exercised against
 slot 0 and not only against the opponents. The other three needed no change -
 neither fires expecting a *specific* lock outcome from slot 0's shot.
 
+**The LeachBeam's reticle landed on 2026-09-07** and its four widgets are
+driven off its own authored window. `oag_formats::weapons::LeachBeamStats`
+decodes `absorb` and the lock pair at `stats+0x114`/`+0x118` and nothing else -
+the beam's other six attributes have no consumer, and `range` is deliberately
+left alone because it is authored at the same figure as `HudSight_Update`'s own
+code literal and conflating the two would manufacture a finding.
+`missile::lock_window` takes the window directly, `lock` is a one-line wrapper
+over it, and no call site moved: the two weapons differ by **two numbers**, the
+`0.9` cone and the 1.4 screen being shared. `sight::Held` carries which weapon
+the reticle wears so the draw path picks art off the *held weapon* and never off
+its target; Pulse's `Sights::Brackets` gained a `leach` set and Pure's is `None`,
+measured against its own layout rather than inferred. **Two findings**: the
+LeachBeam's far bound is shorter than the Missile's on all four shipped tables
+(near bounds agree), and it is the only decoded block authoring no
+`slowdown_time` - a claim `RocketStats::slowdown_time` had made universally and
+now qualifies. The world hash did not move: no `World` field, no `Projectile`
+change, the reticle is still render-only state on `Race`.
+
 ## Next Steps
 
-- Parse `<Weapon type="LeachBeam">` and give its four sight widgets the same
-  treatment the Missile's five just got.
+- **Read the three sight models' `pass_mask`** and give the HUD's `<Mode3D>`
+  quads the blend mode their own batch declares. That is the black square in the
+  `## Open` list above, it is the most visible thing wrong with the reticle
+  today, and it is one decode away from settled rather than a design question.
 
 **Pure and HD both lock and draw now** - see
 [pure-and-hd-lock-on-too-and-two-axes.md](pure-and-hd-lock-on-too-and-two-axes.md),

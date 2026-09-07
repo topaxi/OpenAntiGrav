@@ -515,6 +515,66 @@ fn the_pickup_tables_cover_the_speed_classes() {
     );
 }
 
+/// Claim 1d: the LeachBeam authors a lock window of its own, and it is **not**
+/// the Missile's.
+///
+/// `Ship_AcquireLock` (`0x08844784`) is one function serving two weapons off
+/// two pairs of offsets - `stats+0x50`/`+0x54` for the Missile,
+/// `stats+0x114`/`+0x118` for the LeachBeam - so the failure this guards
+/// against is a decoder that reads one block and hands it to both. Shape and
+/// relation only, never values, per this file's header:
+///
+/// - the LeachBeam's own window is non-empty, the same claim the Missile's gets;
+/// - its **far bound is strictly shorter than the Missile's** on both shipped
+///   tables, which is what says the two blocks are genuinely two. It is the
+///   same trick `the_missile_authors_a_lock_window_and_its_own_speeds` plays
+///   with the Rocket's speeds, and it works for the same reason: two blocks
+///   read off one would be identical, and these are not.
+/// - it authors **no** `slowdown_time`, which is the finding that qualified
+///   `RocketStats::slowdown_time`'s "every block authors it". Asserted through
+///   `skipped`: a parse arm that started requiring the attribute would drop the
+///   whole block, and the reticle with it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_leachbeam_authors_its_own_lock_window_and_no_slowdown_time() {
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let leach = stats
+            .leach_beam()
+            .unwrap_or_else(|| panic!("{name}: no LeachBeam authored"));
+        let missile = stats
+            .missile()
+            .unwrap_or_else(|| panic!("{name}: no Missile authored"));
+
+        println!(
+            "{name}: leachbeam lock window {}..{} against the missile's {}..{}",
+            leach.lock_min_dist, leach.lock_max_dist, missile.lock_min_dist, missile.lock_max_dist
+        );
+        assert!(
+            leach.lock_min_dist >= 0.0 && leach.lock_min_dist < leach.lock_max_dist,
+            "{name}: a lock window nothing can sit inside - {leach:?}"
+        );
+        assert!(
+            leach.absorb > 0.0,
+            "{name}: a LeachBeam worth nothing to absorb - {leach:?}"
+        );
+        assert!(
+            leach.lock_max_dist < missile.lock_max_dist,
+            "{name}: the LeachBeam reaches as far as the Missile, which is what a decoder \
+             reading one block for both would also report - leach {leach:?}, missile \
+             min {} max {}",
+            missile.lock_min_dist,
+            missile.lock_max_dist
+        );
+        assert!(
+            !stats.skipped.iter().any(|(w, _)| *w == Weapon::LeachBeam),
+            "{name}: the LeachBeam was skipped - {:?}",
+            stats.skipped
+        );
+    }
+}
+
 /// Claim 4: every decoded weapon authors a positive `slowdown_time`, and every
 /// one of them sits **at or under** `<Global slowdown_limit>` on both shipped
 /// tables.

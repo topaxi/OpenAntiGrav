@@ -48,8 +48,15 @@ pub const SCREEN: [f32; 2] = [480.0, 272.0];
 ///
 /// **Recovered, confidence 90** - `HudSight_Update` tests
 /// `length(eye_space) < 250.0` before it projects. It is a range on the *sight*
-/// and not on the lock: the Missile's authored `lock_max_dist` is longer, so a
-/// craft can be locked and have no reticle drawn over it.
+/// and not on the lock, and the two are not comparable numbers: this is a
+/// straight-line distance in eye space, while `Ship_AcquireLock`'s window is
+/// **longitudinal**, so a craft inside either weapon's authored far bound can
+/// still be further than this away and have no reticle drawn over it.
+///
+/// **It is a code literal, not an authored one**, which is worth saying here
+/// because the LeachBeam's block authors a `range` attribute at the very same
+/// figure. That is a coincidence of tuning, not the same number twice, and
+/// `oag_formats::weapons::LeachBeamStats` deliberately does not decode it.
 pub const DRAW_RANGE: f32 = 250.0;
 
 /// How long a target must stay on screen before the lock takes, in seconds.
@@ -174,18 +181,55 @@ pub const MISSILE_INNER: &str = "missile_sight_inner";
 
 /// The LeachBeam's four, which are hollow arrowheads rather than brackets.
 ///
-/// **Bound by the original and not drawn here**, and the reason is upstream of
-/// the reticle: `oag_formats::weapons` parses no `<Weapon type="LeachBeam">`
-/// block, so there are no `lock_min_dist`/`lock_max_dist` to run
-/// `Ship_AcquireLock`'s window against. Listed anyway so
-/// [`is_sight_widget`] pulls their model into the sheet with the rest -
-/// the art is on the disc and reaching it is not the blocker.
+/// **Four instances of one model, exactly as the Missile's four are** -
+/// `Data\HUD\leachbeam_sight.vex` on all four, at the same `(-240, 136)`
+/// placeholder, measured off `pulse-psp-usa.chd`'s own `Arcade_HUD.xml`.
+///
+/// **There is no LeachBeam inner.** `HudSight_Bind` (`0x0881b604`) binds nine
+/// widgets over three models and only the Missile gets a closed box; the
+/// LeachBeam's reticle is four arrowheads pointing inward and nothing in the
+/// middle.
+///
+/// # That these four take [`BRACKET_ROTATIONS`] is **chosen, not measured**
+///
+/// No confidence score, deliberately. `HudSight_Update` (`0x0881dbcc`) is read
+/// end to end and it writes **five** widgets - `sight[0]` … `sight[3]` and the
+/// inner, which are the Missile's. Nothing yet read writes the bind's
+/// `+0x108` … `+0x114`, so *what places the LeachBeam's four, and at what
+/// angles, is unrecovered.*
+///
+/// What is taken here is the obvious reading and it is an inference: the two
+/// sets are the same shape - four widgets, one model each, one shared
+/// placeholder - and one arrowhead makes four corners no other way, exactly as
+/// one bracket does. The picture it produces is right in a capture. It is still
+/// an inference, and if the original places these on their own rule this is
+/// where it will be wrong.
 pub const LEACHBEAM_BRACKETS: [&str; 4] = [
     "leachbeam_sight_1",
     "leachbeam_sight_2",
     "leachbeam_sight_3",
     "leachbeam_sight_4",
 ];
+
+/// Which of the two lockable weapons the reticle is being drawn for.
+///
+/// **Recovered as a distinction the original makes, not one added here.**
+/// `Ship_AcquireLock` (`0x08844784`) switches on the held weapon id to pick
+/// which pair of `<Stats>` offsets its window comes from - `+0x50`/`+0x54` for
+/// the Missile, `+0x114`/`+0x118` for the LeachBeam - and `HudSight_Bind`
+/// (`0x0881b604`) binds a separate set of four widgets for each. Everything
+/// between those two ends is shared, which is why this is an enum on one
+/// [`Sight`] rather than two sights.
+///
+/// It is what picks the *art*: [`MISSILE_BRACKETS`] plus [`MISSILE_INNER`], or
+/// [`LEACHBEAM_BRACKETS`] and no inner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Held {
+    /// Four corner brackets around a closed box.
+    Missile,
+    /// Four hollow arrowheads pointing inward, and nothing in the middle.
+    LeachBeam,
+}
 
 /// Whether a `<Mode3D><Model>` widget is one of the nine lock-on sights.
 ///
@@ -296,6 +340,15 @@ pub struct Sight {
     /// The title's own, off `oag_game::hud::Assets::space` - see [`SCREEN`] for
     /// why it is a field rather than a constant.
     screen: [f32; 2],
+    /// Which weapon's art the reticle is wearing.
+    ///
+    /// **Sticky on purpose.** The brackets are drawn while the extent is still
+    /// easing back open after a target is lost - the original's own rule, see
+    /// [`Self::visible`] - and swapping the art out from under that would make
+    /// the closing arrowheads finish as brackets. So this holds its last value
+    /// until another lockable weapon is picked up, and [`Self::visible`] is what
+    /// decides whether anything is drawn at all.
+    held: Held,
 }
 
 impl Default for Sight {
@@ -320,6 +373,7 @@ impl Sight {
             alpha: 0.0,
             blink_timer: 0.0,
             blink: false,
+            held: Held::Missile,
         }
     }
 
@@ -327,6 +381,25 @@ impl Sight {
     #[must_use]
     pub fn screen(&self) -> [f32; 2] {
         self.screen
+    }
+
+    /// Which weapon's art the reticle is wearing.
+    ///
+    /// The draw path picks its widget set off this and **not** off whatever the
+    /// sight happens to be pointing at: the reticle belongs to the weapon in the
+    /// player's slot, and a target is a target whichever weapon found it.
+    #[must_use]
+    pub fn held(&self) -> Held {
+        self.held
+    }
+
+    /// Records which lockable weapon the reticle is now being drawn for.
+    ///
+    /// Called once a tick from `Race::update_sight`, and only when the held
+    /// weapon is one of the two that lock - see [`Sight::held`] for why it is
+    /// sticky the rest of the time.
+    pub fn set_held(&mut self, held: Held) {
+        self.held = held;
     }
 
     /// One frame of the reticle, given where its target projected.

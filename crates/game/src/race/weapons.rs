@@ -642,14 +642,18 @@ impl Race {
     /// same answer without putting a lock on `World`, which would move a
     /// determinism hash for something only the screen reads.
     ///
-    /// **Only the Missile drives it today**, and the LeachBeam is the reason
-    /// that is worth stating rather than assuming: it locks too - it is the
-    /// other weapon `Ship_AcquireLock` reads distances for, at `stats+0x114`
-    /// and `+0x118`, and it has its own four `leachbeam_sight_*` widgets over a
-    /// hollow-triangle model. What stops it here is that
-    /// `oag_formats::weapons` does not parse a `<Weapon type="LeachBeam">`
-    /// block at all, so there are no distances to run the window against.
-    /// Wiring it is parsing that block and adding an arm here, not new geometry.
+    /// **Both lockable weapons drive it.** `Ship_AcquireLock` (`0x08844784`) is
+    /// one function serving two: it takes the Missile's window from
+    /// `stats+0x50`/`+0x54` and the LeachBeam's from `+0x114`/`+0x118`, and
+    /// everything after that switch - the `0.9` cone, the along-track screen,
+    /// the nearest-by-longitudinal-distance tie-break - is shared. So the two
+    /// differ by two numbers, and this reaches them through
+    /// `oag_gameplay::projectile::missile::lock_window`.
+    ///
+    /// The **art** differs too, and that is carried on the reticle rather than
+    /// here: [`sight::Sight::set_held`] records which of the two is up, and the
+    /// HUD draws the Missile's four brackets plus its inner box, or the
+    /// LeachBeam's four arrowheads and no inner.
     ///
     /// # The gate is ours
     ///
@@ -658,6 +662,9 @@ impl Race {
     /// read". This uses "the held weapon locks, and something is lockable",
     /// which is what the weapon plays like.
     pub(super) fn update_sight(&mut self) {
+        if let Some(held) = self.sight_held() {
+            self.sight.set_held(held);
+        }
         let target = self.sight_target();
         let projected = target.and_then(|slot| {
             let world = self.world.ships[slot as usize].physics.body.position;
@@ -685,36 +692,77 @@ impl Race {
         self.sight_state = self.sight.update(self.dt, projected);
     }
 
+    /// Which of the two lockable weapons the player is holding, or `None`.
+    ///
+    /// **`None` for a weapon this title's table does not author**, not only for
+    /// one that cannot lock: Pure ships no `<Weapon type="LeachBeam">` and no
+    /// `leachbeam_sight_*` widgets, so a LeachBeam there has no window to run
+    /// and gets no reticle rather than borrowing the Missile's.
+    pub(super) fn sight_held(&self) -> Option<sight::Held> {
+        let stats = self.weapons.as_ref()?;
+        match self.world.ships[0].pickup.weapon? {
+            oag_formats::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
+            oag_formats::weapons::Weapon::LeachBeam => {
+                stats.leach_beam().map(|_| sight::Held::LeachBeam)
+            }
+            _ => None,
+        }
+    }
+
     /// Which craft the reticle is over, or `None`.
     ///
     /// Split out so the choice can be asserted without a camera. Returns
     /// `None` whenever the player is holding something that does not lock,
     /// which is every weapon but the Missile and the LeachBeam.
+    ///
+    /// # The two arms differ by their window and by where they measure from
+    ///
+    /// The window is the original's own, off two pairs of `<Stats>` offsets.
+    /// The **origin** is not: `Ship_AcquireLock` uses one weapon-independent
+    /// origin for both branches, and this engine already moved the Missile's to
+    /// the craft's *nose* - a deliberate deviation argued at
+    /// [`Race::fire_missile`], where the missile actually starts. The LeachBeam
+    /// has no recovered launch offset to move to, so its arm measures from the
+    /// craft's own position. **Ours, and the absence of an invention rather
+    /// than one**: borrowing the Missile's nose offset for a weapon with no
+    /// projectile would be putting a number where the disc authors none. The
+    /// two origins are a hull's length apart against a window that starts ten
+    /// units out, so nothing visible turns on it.
     pub(super) fn sight_target(&self) -> Option<u8> {
-        if self.world.ships[0].pickup.weapon != Some(oag_formats::weapons::Weapon::Missile) {
-            return None;
-        }
-        let stats = self
-            .weapons
-            .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::missile)?;
+        let held = self.sight_held()?;
+        let stats = self.weapons.as_ref()?;
         let count = self.world.ship_count as usize;
         let ship = &self.world.ships[0];
-        // From the nose and along the craft's forward, the same two the fire
-        // path takes the lock from - see [`Race::fire_missile`] on why the nose
-        // and not the centre.
-        let (origin, _, _) = oag_gameplay::projectile::missile::launch(
-            &ship.physics,
-            &ship.handling.dimensions,
-            &stats,
-            &self.class,
-        );
-        oag_gameplay::projectile::missile::lock(
+        let (origin, min, max) = match held {
+            sight::Held::Missile => {
+                let missile = stats.missile()?;
+                // From the nose and along the craft's forward, the same two the
+                // fire path takes the lock from - see [`Race::fire_missile`] on
+                // why the nose and not the centre.
+                let (origin, _, _) = oag_gameplay::projectile::missile::launch(
+                    &ship.physics,
+                    &ship.handling.dimensions,
+                    &missile,
+                    &self.class,
+                );
+                (origin, missile.lock_min_dist, missile.lock_max_dist)
+            }
+            sight::Held::LeachBeam => {
+                let leach = stats.leach_beam()?;
+                (
+                    ship.physics.body.position,
+                    leach.lock_min_dist,
+                    leach.lock_max_dist,
+                )
+            }
+        };
+        oag_gameplay::projectile::missile::lock_window(
             &self.world.ships[..count],
             0,
             origin,
             ship.physics.body.forward(),
-            &stats,
+            min,
+            max,
             self.course.as_ref().map(oag_race::Course::length),
         )
     }
