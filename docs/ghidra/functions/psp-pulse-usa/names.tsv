@@ -378,6 +378,9 @@
 0x0898c7e8	function	Sas_CommitVoices	85	sound.md
 0x08a2aebc	function	Sas_SetVoice	95	sound.md
 0x08a2ae08	function	Sas_SetVolume	92	sound.md
+0x08a2ae6c	function	Sas_SetPitch	90	sound.md
+0x08a2af18	function	Sas_SetNoise	90	sound.md
+0x08a2b03c	function	Sas_SetSL	90	sound.md
 0x08995224	function	SoundVoice_Unlink	65	sound.md
 0x08b893d0	data	g_sas_voices	92	sound.md
 0x0898bf4c	function	Sas_QueueSetVoice	92	sound.md
