@@ -656,3 +656,42 @@ detonating projectile rather than reading which file each weapon authors.
 - Measure `CLUSTER` against the running original and retire the invented number.
 - **Re-read the five undefined `<Stats>` parsers** once the Ghidra bridge can
   read `.text` again - see Open.
+
+## The Quake's "no track deformation" finding is about the fire handler only
+
+**2026-09-07, from the maintainer's own play experience:** *"In the originals,
+the wave at least looks like it does track deformation, like a concrete wave."*
+
+That is a play observation of the original, and this project treats those as a
+reliable oracle. It does **not** contradict
+[cannon-quake-leachbeam.md](../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
+reading, and the distinction matters for whoever builds this:
+
+- What was actually read is **`Weapon_FireQuake` (`0x0886c600`)**, the *fire
+  handler*. It stores a travelling spline position (segment, `t`, direction)
+  and touches no mesh or vertex data. That is a claim about **one function**.
+- The same pass recorded that **the wave's own per-frame travel is unlocated**.
+  A deforming visual would live there, or in the render path that update
+  drives - not in the code that spawns the projectile.
+
+So the open question is not "does it deform" but **where the deformation is
+produced**, and there are at least three shapes it could take, none of which the
+fire handler would show:
+
+1. A per-frame vertex displacement applied to track geometry near the wave's
+   spline position, which is what "concrete wave" most directly suggests.
+2. A separate authored mesh or effect drawn *over* the road and travelling with
+   it, deforming nothing - visually similar, structurally unrelated.
+3. A shader-side displacement keyed off the wave's position, with no CPU-side
+   geometry write at all - which would explain the absence of mesh access in
+   every function anyone has read so far.
+
+**Do not build the Quake's visual on a guess between those three.** Per this
+project's rule against inventing what the assets already author: locate the
+per-frame travel first, see what it drives, and if it will not resolve, draw
+nothing and say so rather than authoring a plausible-looking wave. An invented
+stand-in that reads as legible is exactly how a wrong picture survives review
+here - it has already happened twice.
+
+The hit and slowdown remain buildable now: they reuse the shared channel the
+Missile and Mine already use.
