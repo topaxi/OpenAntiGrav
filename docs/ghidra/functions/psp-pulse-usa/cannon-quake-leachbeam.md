@@ -251,6 +251,33 @@ already documents.
    `Options_ButtonForAction`; they are `controller+0x64` and `+0x68`, copied
    straight off `g_input`.
 
+### `rate` is authored per second and stored as its reciprocal
+
+**Read 2026-09-07, and it is the second half of why the weapon read as
+unfireable.** `WeaponStats_ParseCannon` (`0x0880c774`) is five attribute arms,
+and the `rate` one is not a plain store:
+
+```c
+rounds            -> *(int   *)(stats + 0x70) = (int)value;
+absorb            -> *(float *)(stats + 0x74) = value;
+rate              -> *(float *)(stats + 0x78) = 1.0 / value;   // <- the reciprocal
+damage_per_bullet -> *(float *)(stats + 0x7c) = value;
+slowdown_time     -> *(float *)(stats + 0x80) = value;
+```
+
+`stats + 0x78` is exactly the field `Cannon_UpdateReload` adds to `craft+0x158`
+above, so the file's `rate="20"` is **twenty rounds per second** and the
+countdown reloads with `0.05` seconds. Both shipped tables author `rate="20"`
+beside `rounds="30"`: a second and a half of continuous fire, not the one round
+every twenty seconds a literal reading gives. That literal reading is what
+`oag_formats::weapons::CannonStats::rate` carried until this pass, and it
+shipped - a player holding fire for a whole race would have seen about twenty
+rounds leave, which is indistinguishable from a broken weapon.
+
+This also settles the offsets `weapon-stats.md` recorded as unchecked, and it
+is the one place on this page where the *parser* rather than the *handler* was
+the missing read.
+
 ### Only a human can fire a Cannon, and that is measured rather than assumed
 
 `FUN_0883f540` wraps the whole per-craft weapon block in a null check on the

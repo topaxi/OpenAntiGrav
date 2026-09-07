@@ -555,20 +555,25 @@ pub struct CannonStats {
     /// is also what picks which of the two muzzles the next round leaves
     /// from - see `Weapon_FireCannon`'s own reading on the evidence page.
     pub rounds: f32,
-    /// Seconds between rounds.
+    /// Seconds between rounds - **the reciprocal of the `rate` attribute,
+    /// because the original's own parser stores it that way.**
     ///
-    /// **Read literally, not as a reciprocal.** `Cannon_UpdateReload`
-    /// (`0x0883f424`) does `craft->reload += stats->rate` on the branch that
-    /// just fired - the same shape `oag_gameplay::pickup::Held::advance_drop`
-    /// reloads a mine's timer with a literal constant - so this is read the
-    /// same way rather than inventing a `1.0 / rate` division the evidence
-    /// page does not show. Measured at `20` alongside `rounds="30"` on both
-    /// shipped tables, which reads as an oddly slow "cannon" - one round
-    /// every twenty seconds - until it is read beside
-    /// [`Self::damage_per_bullet`], the smallest single-hit figure any
-    /// weapon authors: the two together describe a low-pressure weapon a
-    /// craft holds for most of a race rather than a burst gun. See
-    /// `oag_gameplay::projectile::cannon`.
+    /// `WeaponStats_ParseCannon` (`0x0880c774`) reads the attribute and
+    /// stores `1.0 / value` at `stats+0x78`, and `stats+0x78` is exactly the
+    /// field `Cannon_UpdateReload` (`0x0883f424`) adds to `craft+0x158` on
+    /// the branch that just fired. So the file authors rounds **per second**
+    /// and this field carries seconds per round.
+    ///
+    /// **An earlier revision read it literally and said so at length**, on
+    /// the grounds that the evidence page showed no `1.0 / rate` division.
+    /// The page had not read the parser. The consequence shipped and a player
+    /// found it: both tables author `rate="20"`, so a literal reading gave
+    /// one round every twenty seconds against a magazine of thirty - a
+    /// weapon that, held down for a whole race, fires about twenty times and
+    /// reads as broken. The reciprocal gives twenty rounds a second and
+    /// empties a thirty-round magazine in a second and a half, which is what
+    /// a cannon is. See `oag_gameplay::projectile::cannon` and
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     pub rate: f32,
     /// Energy one round costs a craft it hits directly.
     ///

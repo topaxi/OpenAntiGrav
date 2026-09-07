@@ -160,9 +160,12 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     let cannon = race.cannon_stats().expect("the disc authors a Cannon");
     race.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
 
-    // Long enough that a self-firing countdown would have gone off several
-    // times over, with fire never held. Nothing may leave the barrel.
-    let quiet = (cannon.rate * 60.0).ceil() as u64 * 3 + 120;
+    // Long enough that a self-firing countdown would have gone off many times
+    // over, with fire never held. Nothing may leave the barrel. A flat
+    // 600 ticks rather than a multiple of `rate`, because `rate` is now the
+    // reciprocal the disc authors - about a sixtieth of a second - and three
+    // of those is not a window anything could be caught in.
+    let quiet = 600u64;
     for _ in 0..quiet {
         race.tick(&throttle);
         assert!(
@@ -188,6 +191,10 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     fire.buttons = buttons;
 
     let ticks = (cannon.rate * 60.0).ceil() as u64 + 120;
+    println!(
+        "cannon rate {:.4}s per round, magazine {}",
+        cannon.rate, cannon.rounds
+    );
     let mut ever_fired = false;
     for _ in 0..ticks {
         race.tick(&fire);
