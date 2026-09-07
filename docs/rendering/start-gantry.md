@@ -1258,3 +1258,44 @@ both are here.
 change this pass makes to the blocker: the six-pass conclusion that unblocking
 required a PPSSPP breakpoint on `func_0x00140bd4` during a track load rested on
 the premise that the billboard system places the gantry, and it does not.
+
+## The board's background is black on the original and transparent here
+
+**Reported from play by the maintainer, 2026-09-07, on `pulse-psp-eu` - not
+fixed, deliberately, and recorded so it is not rediscovered.**
+
+> *"the gantry does have a black background, while ours is transparent"*
+
+Visible in the side-by-side capture taken the same day
+(`scratch/gantry-compare/side-by-side-countdown.png`, ours left, original
+right): the original's countdown board is an opaque dark panel that the
+digits sit on, so the arch reads as a screen. Ours lets the environment
+through behind the glyphs, which is why the board picks up the red-brown of
+the structure behind it and reads as a tint rather than a display.
+
+**This is not the placeholder bug and must not be confused with it.** The
+8x8 `billboard1..8.tga` stubs were being drawn as a white blur and are now
+suppressed (`oag_render::gantry::strip_slot_placeholders`); that was
+confirmed correct against the original, which shows nothing in those slots
+either. The background is a separate question about the board's *own*
+surface.
+
+**Do not paint it black to make it match.** The rule that governed the
+placeholder fix governs this one: suppressing an unbound slot is faithful,
+choosing a colour is an invention. Two candidates are worth checking before
+anything is authored:
+
+1. **`321backplate.tga`'s own alpha.** The arch attaches to this surface, and
+   if the texture authors an opaque dark backing that we are drawing with the
+   wrong blend mode - or sampling alpha from the palette byte rather than the
+   separate alpha channel - the black is already in the file and we are
+   discarding it. `oag_render::psys` had exactly this class of bug in August,
+   where a whitening term overrode an emitter's own colour table.
+2. **The `<Mode3D>` widget's blend state.** The countdown glyphs are geometry
+   drawn through the perspective dialect; if the backing quad is drawn
+   `AlphaOver` where the original uses an opaque pass, the difference is in
+   the blend class rather than the asset.
+
+Neither has been checked. Whoever picks this up should parse the backplate
+first and only then look at the blend state - the cheaper answer is that the
+asset already says what to draw.
