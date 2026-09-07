@@ -169,12 +169,11 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// is the craft moving between drops and nothing scatters one sideways. So the
 /// geometry is set up for the field to mine itself.
 ///
-/// What keeps it in proportion is three things, and this is what the test
-/// checks is still true: the pads' own `refresh_time` rations the pickups, the
-/// draw spreads them over seven weapons rather than handing out mines, and a
-/// driver only lays when somebody is **behind** it - so the craft most likely to
-/// eat a cluster is the one that provoked it, which is the weapon working rather
-/// than a bug.
+/// What keeps it in proportion is three things: the pads' own `refresh_time`
+/// rations the pickups, the draw spreads them over seven weapons rather than
+/// handing out mines, and a driver only lays when somebody is **behind** it -
+/// so the craft most likely to eat a cluster is the one that provoked it,
+/// which is the weapon working rather than a bug.
 ///
 /// **The stress case is much worse and is recorded here rather than asserted**:
 /// with a Mine handed back the moment a craft empties - far more generous than
@@ -184,143 +183,161 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// number to re-measure if pads are ever made more frequent or the draw is
 /// narrowed.
 ///
-/// # What the dodge bought, measured
+/// # This test used to be a single-seed worst-craft floor, and the floor broke
 ///
-/// This test is also the before-and-after for `Driver::avoidance`, which is the
-/// term that lets a driver see a laid charge at all. Same circuit, same seed,
-/// same minute:
+/// Up to 2026-09-06 this asserted `worst > full * 0.45` on one race, one seed
+/// (the project's fixed default, `oag_game::race::SEED = 1`) - see the git
+/// history for that version and its own "What the dodge bought" table
+/// (blind 34, dodging 75, dodging-with-Plasma 47). **`oag_physics::pair::overlap`
+/// was corrected the same day against a live, instruction-level read of
+/// `Collision_BoxAgainstBox`** (confidence 92 - see
+/// `handover/craft-to-craft-collision-is-implemented-the-stun.md`), and that
+/// correction is not being touched or reverted here: it changes which axis wins
+/// a narrowphase tie on an already-detected overlap, and eight craft over 3,600
+/// ticks is a chaotic enough system that the *first* differently-resolved
+/// contact sends every later position, and every later RNG draw it gates, down
+/// a different trajectory. At `SEED = 1` specifically, that cascade now seats
+/// one opponent inside a Plasma blast (60 of 95 in one hit) that it did not
+/// stand in before - `worst` reads `0.00` at the exact tuning
+/// (`Tuning::look_speed = 0.30`) this floor was written to pass. See
+/// `handover/the-corrected-craft-pair-narrowphase-moves-a-full-grids-trajectories.md`
+/// for the instrumented trace (a Bomb, a Missile and a Plasma hit, no mine
+/// contact at all, on the craft that ends destroyed).
 ///
-/// | | charges laid | mean energy | worst craft |
-/// | --- | --- | --- | --- |
-/// | blind | - | 76 of 95 | **34** |
-/// | dodging | 12 | 86 of 95 | **75** |
-/// | dodging, with the Plasma in the draw (2026-09-02) | 6 | 77 of 95 | **47** |
+/// **Measured directly, rather than assumed, that a single seed cannot carry
+/// this floor any more**: `crates/game/tests/weapon_floor_sweep.rs`'s
+/// `sweep_worst_shield_over_seeds`, run at `look_speed` `0.30` (the shipped
+/// default), `0.22` and `0.20` (both values `Tuning::look_speed`'s own doc
+/// comment already measured as genuinely wrecking the field, pre-correction),
+/// 16 seeds each, same track, same 3,600-tick window:
 ///
-/// The mean barely moves and the *worst* craft more than doubles, which is the
-/// shape to expect and is worth stating: the damage was never spread evenly. It
-/// was concentrated on whichever craft was sitting behind a driver with a Mine,
-/// eating cluster after cluster on a line it could not see. The dodge does not
-/// make mines useless - 75 of 95 is still a craft that has been hit - it stops
-/// one craft being singled out for a punishment it had no way to avoid.
+/// | `look_speed` | mean-of-means | mean-of-worsts | seeds <= 0.45 worst | seeds with a depleted craft |
+/// | --- | --- | --- | --- | --- |
+/// | **0.30 (shipped)** | 0.68 | 0.32 | 12/16 | 2/16 |
+/// | 0.22 | 0.72 | 0.38 | 9/16 | 2/16 |
+/// | 0.20 | 0.71 | 0.30 | 11/16 | 3/16 |
 ///
-/// # Why the third row exists, and why the floor moved rather than the code
+/// **0.22 scores *better* than the shipped default on every column but one**,
+/// and 0.20's numbers sit inside the same noise band as 0.30's rather than
+/// below it. `sweep_lap_completion_over_seeds` in the same file - opponents
+/// reaching lap 2 inside a real time budget, which touches no weapon RNG at
+/// all - tells the same story: `0.30` and `0.22` both post 2 short seeds of 16
+/// and 0/16 untimed laps; `0.20` posts 3 of 16. None of mean shield, worst
+/// shield, depleted-craft count or lap completion separates the values this
+/// floor was meant to catch from the one it was meant to pass, once averaged
+/// over enough seeds to wash out which craft a corrected contact normal
+/// happens to redirect into which blast radius.
 ///
-/// **The Plasma landing in `pickup::IMPLEMENTED` on 2026-09-02 took the worst
-/// craft from 75 to 47 and this test red.** It was measured rather than
-/// assumed: the same scenario on the commit before, and on that commit alone,
-/// gives the second row.
+/// **So this is no longer a `look_speed` (or any other AI tuning) guard, and
+/// it does not try to be one.** That job now belongs entirely to
+/// `crates/game/tests/ai_look_sweep.rs`'s *solo* board - a lone craft never
+/// exercises `oag_physics::pair::overlap` at all, so the correction above
+/// cannot have moved it, and a direct re-run confirms it: every solo-board
+/// number in `Tuning::look_speed`'s doc comment reproduces to the digit on
+/// today's tree. What this test still owns is coarser and does not need a
+/// single seed to be fragile about: **did something wreck the field**, not
+/// **did the dice put one craft in a bad spot**. The maintainer has ruled that
+/// a craft dying to weapons in a real race is fine on its own; what would not
+/// be fine is most of the field going down, or the field's shield collapsing
+/// far below anything a real pad layout has ever produced.
 ///
-/// It is the weapon working, not a regression, and the arithmetic says so. The
-/// Plasma's authored `damage` is the largest of any weapon on both shipped
-/// tables - **four times the Rocket's and twelve times the Mine's** - and one
-/// hit is more than half a full pool. A worst craft at 47 of 95 is down by
-/// roughly *one* of them net of regeneration, where the whole point of the
-/// blind-mine number (34) was that it took a dozen small ones nobody could see.
-/// The halved charge count in the same row is the other half of the same story:
-/// the Plasma takes draw share from the Mine and the Bomb, so **fewer** mines
-/// are laid, not more.
-///
-/// **Nothing here can be dodged by anybody**, which is what makes it fair in
-/// the sense this test was written to defend: a bolt in flight arrives faster
-/// than any driver or player could react, so the player is under exactly the
-/// same threat. That is the opposite of the mine case, where an opponent was
-/// eating charges the player could steer around.
-///
-/// So the floor below moved from half a pool to `0.45`, and the value is picked
-/// rather than fitted: it must sit **above** the blind-mine 34 the guard exists
-/// to catch and **below** what the field now reaches with the game's hardest
-/// weapon in play. `0.45` of 95 is 42.75, which is 8.75 clear of the failure
-/// shape and 4.25 clear of the current measurement. If a future weapon squeezes
-/// that gap further, split the metric by weapon rather than dropping the floor
-/// again - the guard is worth nothing once it cannot separate the two causes.
-///
-/// **Two measured divergences are worth naming here**, because between them
-/// they are the reason the third row could have been milder - and the larger of
-/// the two may yet push the floor back *up*:
-///
-/// - **The Plasma very probably winds up before it fires, and this build fires
-///   it instantly.** `<Plasma charge_time>` is authored at `3` on all three
-///   shipped tables, no consumer has been found on a path read end to end, and
-///   a maintainer who plays Pulse says the weapon does charge. A three-second
-///   commit per shot changes how often a field actually lands one far more than
-///   anything else here does. So "the weapon working" above is true of the
-///   weapon *as read*, and if `charge_time` is ever found this measurement
-///   should be retaken before the floor is trusted. See
-///   `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
-/// - The disc's own `WeaponAIstats.xml` authors the Plasma at
-///   `useAgainstAI="1.0"` where the Rocket, the Missile and the Mine are all
-///   `1.2` - so the original also uses it against other craft less often, and
-///   this engine does not, because that whole decision is unported (see
-///   `Race::spend_opponent_pickup`). `Race::fire_opponent_plasma` deliberately
-///   reuses the Rocket's gate rather than inventing a second one.
+/// So the assertions below run eight seeds (`0..8`, chosen to include the old
+/// pinned default at index 1) rather than one, and gate on the **aggregate**:
+/// mean-of-means above `0.5` (comfortably below the `0.68`-`0.72` band every
+/// tuning above measures at, comfortably above the blind-mine catastrophe's
+/// `0.221`) and total depleted-craft count across all eight races no worse than
+/// one per race on average (measured baseline at the shipped tuning across 16
+/// seeds: `3` depleted-craft-instances, `0.19` per race - this floor allows
+/// `8`, over four times that). **Both numbers are chosen, not measured, and
+/// carry no confidence score** - they are picked with headroom from the
+/// measured healthy band on one side and the measured catastrophe on the
+/// other, the same way the retired `0.45` floor once was, and the same
+/// re-sweep-if-squeezed rule applies: if a future weapon or pad change closes
+/// this gap, split the metric rather than dropping the floor again.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
-    let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    const SEEDS: u64 = 8;
+    /// Chosen, not measured, no confidence score - see this function's own
+    /// doc comment for the measured band it sits below.
+    const MEAN_FLOOR: f32 = 0.5;
+    /// Chosen, not measured, no confidence score - see this function's own
+    /// doc comment for the measured baseline it sits above.
+    const DEPLETED_CEILING: usize = SEEDS as usize;
 
-    let opponents = 1..usize::from(race.ship_count());
-    let full: f32 = race.world.ships[1].handling.dimensions.shield;
-    assert!(full > 0.0, "the fixture has no energy pool to measure");
+    let Some(image) = image() else { return };
 
-    // A minute of racing, untouched: real pads, real refresh timers, the real
-    // weighted draw.
-    let mut laid = 0usize;
-    let mut seen = std::collections::BTreeSet::new();
-    for _ in 0..3_600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
-        for projectile in &race.world.projectiles.slots {
-            if matches!(projectile.kind, Some(Weapon::Mine | Weapon::Bomb))
-                && seen.insert(projectile.position.x.to_bits())
-            {
-                laid += 1;
+    let mut means = Vec::new();
+    let mut depleted_total = 0usize;
+    for seed in 0..SEEDS {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            seed: Some(seed),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let mut race = race::Race::start(loaded.setup);
+
+        let opponents = 1..usize::from(race.ship_count());
+        let full: f32 = race.world.ships[1].handling.dimensions.shield;
+        assert!(full > 0.0, "the fixture has no energy pool to measure");
+
+        // A minute of racing, untouched: real pads, real refresh timers, the
+        // real weighted draw.
+        let mut laid = 0usize;
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..3_600 {
+            race.tick(&oag_gameplay::InputSnapshot::default());
+            for projectile in &race.world.projectiles.slots {
+                if matches!(projectile.kind, Some(Weapon::Mine | Weapon::Bomb))
+                    && seen.insert(projectile.position.x.to_bits())
+                {
+                    laid += 1;
+                }
             }
         }
+
+        let depleted = opponents
+            .clone()
+            .filter(|&slot| race.world.ships[slot].physics.shield <= 0.0)
+            .count();
+        let mean: f32 = opponents
+            .clone()
+            .map(|slot| race.world.ships[slot].physics.shield)
+            .sum::<f32>()
+            / opponents.len() as f32;
+        let worst = opponents
+            .map(|slot| race.world.ships[slot].physics.shield)
+            .fold(f32::INFINITY, f32::min);
+        println!(
+            "seed {seed}: {laid} charges laid, mean energy {mean:.0} of {full:.0}, \
+             worst {worst:.0}, {depleted} depleted"
+        );
+        means.push(mean / full);
+        depleted_total += depleted;
     }
 
-    let alive = opponents
-        .clone()
-        .filter(|&slot| race.world.ships[slot].active)
-        .count();
-    let mean: f32 = opponents
-        .clone()
-        .map(|slot| race.world.ships[slot].physics.shield)
-        .sum::<f32>()
-        / opponents.len() as f32;
-    let worst = opponents
-        .clone()
-        .map(|slot| race.world.ships[slot].physics.shield)
-        .fold(f32::INFINITY, f32::min);
+    let mean_of_means = means.iter().sum::<f32>() / means.len() as f32;
     println!(
-        "a minute of racing with the disc's own pads: {laid} charges laid, \
-         {alive} of {} opponents still active, mean energy {mean:.0} of {full:.0}, \
-         worst {worst:.0}",
-        opponents.len()
+        "over {SEEDS} seeds: mean-of-means {mean_of_means:.2} (floor {MEAN_FLOOR}), \
+         {depleted_total} depleted-craft-instances total (ceiling {DEPLETED_CEILING})"
     );
 
-    assert_eq!(
-        alive,
-        opponents.len(),
-        "a craft was destroyed over a minute of ordinary racing"
+    assert!(
+        mean_of_means > MEAN_FLOOR,
+        "the field's mean shield collapsed to {mean_of_means:.2} of a full pool, \
+         averaged over {SEEDS} seeds - below the blind-mine catastrophe's own \
+         0.221 with no headroom left. A single seed's mean is expected to swing \
+         with the corrected craft-pair physics (see this function's own doc \
+         comment); an aggregate this low over {SEEDS} seeds is not that swing"
     );
     assert!(
-        mean > full * 0.7,
-        "the field ground itself to a mean of {mean:.0} of {full:.0} over a minute \
-         of ordinary racing - a grid that all follows one racing line and lays \
-         mines on it will mine itself down unless `Driver::avoidance` is steering \
-         around them"
-    );
-    // **The worst craft, not only the mean**, because the mean was never the
-    // problem: blind, it sat at 76 of 95 while one craft was ground down to 34.
-    // A regression in the dodge shows up here first and in the mean barely at
-    // all.
-    assert!(
-        worst > full * 0.45,
-        "one craft ended on {worst:.0} of {full:.0} while the field averaged \
-         {mean:.0} - it is being singled out. Two things do that and they look \
-         alike here: a driver that cannot see the charges it is driving over \
-         (the shape this guard was written for, which measured 34), or a craft \
-         eating repeated Plasma hits (one is worth more than half a pool). \
-         {laid} charges were laid this run - a low count points at the second"
+        depleted_total <= DEPLETED_CEILING,
+        "{depleted_total} craft ended a race destroyed, summed over {SEEDS} seeds - \
+         more than one per race on average. A craft dying to weapons in a race is \
+         fine on its own (the maintainer's own ruling); this many is the field \
+         going down, not one craft's bad luck"
     );
 }

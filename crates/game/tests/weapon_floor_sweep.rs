@@ -101,6 +101,106 @@ fn field_run(seed: u64, tuning: oag_ai::Tuning) -> Option<FieldRun> {
     })
 }
 
+/// The other candidate metric: not shield at all, but whether a craft gets
+/// round the circuit twice inside a real time budget - `ai_look_sweep.rs`'s
+/// own `lap_times` scenario, seed-varied the same way [`field_run`] is.
+///
+/// **Ace, not Elite** - the same difficulty `ai_look_sweep.rs::field_run`
+/// times laps at, so this is directly comparable to that file's own
+/// `lapped`/`untimed` columns rather than a new scenario. 9,000 ticks (150s),
+/// also unchanged from there.
+///
+/// Returns `(lapped, untimed)`: how many opponents reached lap 2 at all, and
+/// of those, how many have no recorded `best_lap_ticks` - a lap that was
+/// crossed without ever being timed, which is the failure
+/// `lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` exists
+/// for. Neither number touches weapons or shield, so this is the candidate
+/// for a metric a wrecked *steering* tuning would move without the weapon
+/// RNG this file's other sweep found to be the dominant noise source.
+fn lap_completion_run(seed: u64, tuning: oag_ai::Tuning) -> Option<(usize, usize)> {
+    let image = image()?;
+    let options = race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(race::DEFAULT_TRACK.to_string()),
+        seed: Some(seed),
+        ..race::Options::default()
+    };
+    let level = options.difficulty;
+    let loaded = race::load(&options).ok()?;
+    let mut race = race::Race::start(loaded.setup);
+    race.set_ai_tuning(level.tune(&tuning));
+    for _ in 0..9_000 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
+        .filter(|&slot| race.world.ships[slot].standing.lap >= 2)
+        .collect();
+    let untimed = lapped
+        .iter()
+        .filter(|&&slot| race.world.ships[slot].standing.best_lap_ticks.is_none())
+        .count();
+    Some((lapped.len(), untimed))
+}
+
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP_SEEDS and OAG_SWEEP_LOOK, read the table"]
+fn sweep_lap_completion_over_seeds() {
+    let Some(seed_count) = std::env::var_os("OAG_SWEEP_SEEDS") else {
+        return;
+    };
+    let seed_count: u64 = seed_count.to_string_lossy().parse().expect("a seed count");
+    let Some(look_list) = std::env::var_os("OAG_SWEEP_LOOK") else {
+        return;
+    };
+    let variants: Vec<(String, oag_ai::Tuning)> = look_list
+        .to_string_lossy()
+        .split(',')
+        .map(|word| {
+            let value: f32 = word.trim().parse().expect("a look_speed value");
+            (
+                format!("{value}"),
+                oag_ai::Tuning {
+                    look_speed: value,
+                    ..oag_ai::Tuning::default()
+                },
+            )
+        })
+        .collect();
+
+    if image().is_none() {
+        return;
+    }
+
+    for (name, tuning) in variants {
+        let mut report = format!(
+            "\n=== lap_completion look_speed {name} over {seed_count} seeds, 16_Track ===\n"
+        );
+        report.push_str("seed  lapped  untimed\n");
+        let mut short_seeds = 0usize;
+        let mut untimed_seeds = 0usize;
+        for seed in 0..seed_count {
+            let Some((lapped, untimed)) = lap_completion_run(seed, tuning) else {
+                continue;
+            };
+            report.push_str(&format!("{seed:<5} {lapped:<7} {untimed}\n"));
+            if lapped < 7 {
+                short_seeds += 1;
+            }
+            if untimed > 0 {
+                untimed_seeds += 1;
+            }
+        }
+        report.push_str(&format!(
+            "seeds with fewer than 7/7 lapped: {short_seeds}/{seed_count}  \
+             seeds with an untimed lap: {untimed_seeds}/{seed_count}\n"
+        ));
+        println!("{report}");
+    }
+}
+
 #[test]
 #[ignore = "a scratch sweep: set OAG_SWEEP_SEEDS and OAG_SWEEP_LOOK, read the table"]
 fn sweep_worst_shield_over_seeds() {
