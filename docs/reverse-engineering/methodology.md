@@ -48,6 +48,21 @@ just unpack extract data/images/pulse-psp-usa.chd \
     -o data/extracted/psp 'PSP_GAME/SYSDIR/BOOT.BIN'
 ```
 
+**This still extracts the USA disc, even though EU is the Ghidra target of
+record** ([ADR-0048](../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)).
+`data/extracted/psp` is not region-tagged, and `scripts/resolve-psp-imports.py`,
+`just resolve-imports` and `scripts/mine-names.py` all read or write that exact
+path assuming it holds the USA build - see `justfile`'s `resolve-imports`
+recipe and `apply-ghidra-names.py`'s own comment that its output,
+`psp-imports.tsv`, "has always been USA-specific". Extracting the EU
+`BOOT.BIN` over the top of it would silently break that chain rather than
+migrate it. Import the EU disc's `BOOT.BIN` into Ghidra as its own program
+(`/psp-pulse-eu/BOOT.BIN` - already done, see `source-images.md`) for the
+actual investigation; only re-point this worked example and its downstream
+scripts at a region-tagged extraction path in the same change that gives
+`resolve-imports` an EU-specific output, which this pass left as a documented
+design note rather than executing.
+
 The PS2 main executable, `54748/../SCES_547.48`, is likewise a plain ELF.
 
 See [toolchain](toolchain.md) for setting up Ghidra and the emulators.

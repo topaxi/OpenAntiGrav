@@ -246,12 +246,17 @@ get_xrefs_to 08ab1af0   (g_vex_class_table)
   -> From 08908508 in Vex_FindClassDescriptor_q [READ]
 ```
 
+**Update, same day: all four PSP databases are reimported and relocated now**,
+per the table above (108,729-111,698 relocations each, all reading zero
+before) - `psp-pulse-usa` included. Checked directly on it the same way, not
+assumed from the table alone: `get_xrefs_to 08848b78` (`Ship_ApplyLateralGrip`)
+returns `From 08849bf8 in Ship_UpdateCraft [UNCONDITIONAL_CALL]`, a real caller.
 **So the standing advice to treat an empty PSP xref result as meaningless no
-longer applies to `psp-pulse-eu`.** It still applies to every PSP database that
-has not been reimported yet - as of this measurement that is `psp-pulse-usa`,
-`psp-pure-usa` and `psp-pure-eu`, which remain unrelocated and on which
-`search_instructions` and `scripts/psp-relocate.py` are still the only reliable
-route.
+longer applies to any of the four PSP databases** - `search_instructions` and
+`scripts/psp-relocate.py` are no longer the only reliable route on any of
+them. Treat any note elsewhere in this project (including, until this edit,
+the paragraph above) that still says otherwise as describing a state that has
+since moved on, and prefer whichever section carries the latest date.
 
 **The import order that worked**, which is the GUI one this page already
 documents rather than the loader-options one: import, `Analysis > Auto Analyze`
@@ -646,10 +651,12 @@ import is the actual fix and is nobody's task yet.
 
 Two different answers, and conflating them wastes a session either way.
 
-**Code xrefs work, and this is worth knowing** - the PSP databases return
-nothing from `get_xrefs_to` because Ghidra applies no Allegrex relocation, and
-that defect does **not** carry over to the PS3 PowerPC database.
-`get_xrefs_to 0x00054628` (`RaceManager_GetInstance`) returns 20 call sites,
+**Code xrefs work, and this is worth knowing** - the PSP databases used to
+return nothing from `get_xrefs_to` because Ghidra applied no Allegrex
+relocation (fixed project-wide as of 2026-09-07, see "The full set is
+relocated" above - this section is left as the PS3-specific record it always
+was, not evidence PSP still has the defect). `get_xrefs_to 0x00054628`
+(`RaceManager_GetInstance`) returns 20 call sites,
 several landing in independently named functions. A `bl` displacement is encoded
 in the instruction with no TOC involved, so call resolution never depended on
 the TOC being right. **Use it. Tracing callers and parents directly is available
@@ -686,9 +693,14 @@ other. Agreement raises confidence sharply. Disagreement is a finding: record
 whether it is an implementation difference, a platform limitation or an
 intentional change, in [comparisons](../comparisons/).
 
-**Remember the region confound.** Our PSP copy is US and our PS2 copy is EU, so
-every cross-platform difference is also a cross-region difference until proven
-otherwise. See [source images](../reverse-engineering/source-images.md).
+**The region confound this used to name is resolved for the two targets of
+record**: `psp-pulse-eu` is now the PSP target, matching the PS2 target's
+region, per [ADR-0048](../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md).
+A cross-platform comparison that pulls in the USA disc as its corroboration
+source is still a cross-region comparison against the PS2 side, so the
+underlying caution has not vanished - only the specific "our two targets of
+record are two different regions" case has. See
+[source images](../reverse-engineering/source-images.md).
 
 ## Exporting
 

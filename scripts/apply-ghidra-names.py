@@ -83,12 +83,24 @@ BINARY_PROGRAMS = {
 # resolve-imports' own output and has always been USA-specific (see its
 # `boot` default in the justfile), so it stays pinned to that one program
 # rather than joining the generic per-binary loop.
+#
+# psp-imports-eu.tsv is the same idea for the EU binary - ADR-0048 made
+# psp-pulse-eu the Ghidra target of record, but `just resolve-imports`'s own
+# default still reads the USA-only `data/extracted/psp` path (see
+# docs/reverse-engineering/methodology.md), so an EU imports table does not
+# exist yet anywhere on a fresh checkout. It is paired here, additively,
+# against the day someone runs `just resolve-imports boot=<eu boot.bin>
+# out=data/ghidra/psp-imports-eu.tsv` - both files live under gitignored
+# `data/`, so `present`'s `path.is_file()` filter below silently drops
+# whichever one a given checkout does not have, the same as every other
+# binary's names.tsv already does.
 def default_inputs() -> list[tuple[Path, str]]:
     pairs = [
         (FUNCTIONS_DIR / binary / "names.tsv", program)
         for binary, program in BINARY_PROGRAMS.items()
     ]
     pairs.append((ROOT / "data" / "ghidra" / "psp-imports.tsv", BINARY_PROGRAMS["psp-pulse-usa"]))
+    pairs.append((ROOT / "data" / "ghidra" / "psp-imports-eu.tsv", BINARY_PROGRAMS["psp-pulse-eu"]))
     return pairs
 
 
@@ -391,14 +403,18 @@ def main() -> int:
         "--program",
         default=None,
         help="program path in the Ghidra project - only used with explicit input paths, "
-        "since the default run maps each binary's names.tsv to its own program",
+        "since the default run maps each binary's names.tsv to its own program; "
+        "defaults to /psp-pulse-eu/BOOT.BIN (ADR-0048) when not given",
     )
     ap.add_argument("--dry-run", action="store_true", help="print what would change, send nothing")
     ap.add_argument("--no-save", action="store_true", help="leave the program unsaved")
     args = ap.parse_args()
 
     if args.inputs:
-        program = args.program or "/psp-pulse-usa/BOOT.BIN"
+        # Default to the Ghidra target of record (ADR-0048) when an explicit
+        # TSV is given with no --program; `--program` still overrides for a
+        # one-off run against a different binary, USA included.
+        program = args.program or "/psp-pulse-eu/BOOT.BIN"
         return apply_group(args.inputs, program, args)
 
     present = [(path, program) for path, program in default_inputs() if path.is_file()]

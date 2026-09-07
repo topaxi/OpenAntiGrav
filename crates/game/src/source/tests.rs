@@ -122,20 +122,23 @@ fn a_known_name_wins_over_an_alphabetically_earlier_image() {
 }
 
 /// `IMAGE_NAMES[0]` is interpolated into the not-found hint text, and the
-/// module doc's "PSP first" rationale depends on this order.
+/// module doc's "PSP first" rationale depends on this order. `[1]` pins that
+/// adding `pulse-psp-eu.chd` (2026-09-07) landed right after the USA name
+/// rather than reordering it ahead - see [`IMAGE_NAMES`]'s own doc comment.
 #[test]
 fn image_names_starts_with_pulse_psp_matching_the_hint_text() {
     assert_eq!(IMAGE_NAMES[0], "pulse-psp-usa.chd");
-    assert_eq!(IMAGE_NAMES[1], "pulse-ps2-eu.chd");
+    assert_eq!(IMAGE_NAMES[1], "pulse-psp-eu.chd");
+    assert_eq!(IMAGE_NAMES[2], "pulse-ps2-eu.chd");
 }
 
-/// The maintainer's actual `data/images/` holds all four documented
-/// names at once - this is the check that extending `IMAGE_NAMES` to
-/// recognise Pure and HD/Fury by name does not change which file that
-/// directory resolves to.
+/// The maintainer's actual `data/images/` holds every documented name at
+/// once - this is the check that extending `IMAGE_NAMES` to recognise Pure,
+/// HD/Fury and, since 2026-09-07, Pulse's EU disc by name does not change
+/// which file that directory resolves to.
 #[test]
 fn a_known_pulse_name_still_wins_when_every_documented_name_is_present() {
-    let directory = temp_dir("all-four-names");
+    let directory = temp_dir("all-names");
     for name in IMAGE_NAMES {
         std::fs::write(directory.join(name), b"").unwrap();
     }

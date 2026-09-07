@@ -218,9 +218,10 @@ impl std::fmt::Display for MusicSource {
 /// # The counterpart is confirmed by its soundtrack, not by its serial
 ///
 /// **Neither a file name nor a disc serial is enough here, and both were tried
-/// first.** `crate::source::IMAGE_NAMES` does not cover every regional
-/// pressing - `pulse-psp-eu.chd` is not on it - and a file somebody renamed is
-/// still a valid source. `oag_assets::Layout::resolve` looked like the
+/// first.** `crate::source::IMAGE_NAMES` does not, and cannot, cover every
+/// regional pressing this game ever shipped - it names the ones this project
+/// has a copy of, not every territory's release - and a file somebody renamed
+/// is still a valid source regardless. `oag_assets::Layout::resolve` looked like the
 /// answer, but its deny-list is deliberately *positive-only*: it rules out the
 /// one Pure serial this project has verified (`UCUS-98612`) and gives an
 /// unlisted serial no verdict, because allow-listing would hard-reject a

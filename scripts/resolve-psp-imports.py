@@ -23,6 +23,22 @@ Layout, all of it from the ELF's own section headers:
 Pointers in the file are unrelocated, so `--base` is added on output to match the
 address the binary is analysed at.
 
+This is region-blind by design - a NID is a hash of a *function name*, not of
+which disc it shipped on, so the same candidate list matches any PSP build.
+What is region-specific is the *addresses* a run reports, which belong to
+whichever `BOOT.BIN` was actually pointed at. The conventional
+`data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN` path is not itself region-tagged
+and has always held the USA disc's extract in practice, matching `justfile`'s
+`psp_image` default and `apply-ghidra-names.py`'s pairing of its output,
+`psp-imports.tsv`, with `psp-pulse-usa` specifically - unaffected by
+[ADR-0048](../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)
+making `psp-pulse-eu` the Ghidra target of record, since nothing here forces
+that path to mean "the target of record's binary". Point this script at the
+EU `BOOT.BIN` instead (`just resolve-imports boot=<eu path>
+out=data/ghidra/psp-imports-eu.tsv`) to build the EU-addressed counterpart;
+see `docs/reverse-engineering/methodology.md#where-to-start` for why that is
+not simply the new default.
+
 Usage:
     scripts/resolve-psp-imports.py data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN
     scripts/resolve-psp-imports.py <boot.bin> -o data/ghidra/psp-imports.tsv

@@ -36,8 +36,10 @@ publisher      SCEE
 contents       23 files in 9 directories, 354 MiB
 ```
 
-The primary reverse-engineering target. `PSP_GAME/SYSDIR/BOOT.BIN` is an
-unencrypted ELF.
+**Corroboration source, not the target of record** - see `pulse-psp-eu.chd`
+below and [ADR-0048](../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md).
+It held that role until 2026-08-05; `PSP_GAME/SYSDIR/BOOT.BIN` is an
+unencrypted ELF either way.
 
 Note the publisher: **SCEE**, Sony Computer Entertainment *Europe*, on a US
 disc. Combined with the [`UCES00465` directory](../psp/pulse-disc-layout.md)
@@ -74,11 +76,15 @@ primary target. One hypothesis, unconfirmed: the difference is mostly in
 networking code, since PSP Wipeout Pulse's multiplayer used region-specific
 services. Not yet checked against the binary.
 
-Not the reverse-engineering target of record - `pulse-psp-usa.chd` keeps that
-role, and this project's whole Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`)
-is address-keyed to it. This disc's `BOOT.BIN` is imported into Ghidra as a
-**separate, second program** (`/psp-pulse-eu/BOOT.BIN`, 10,671 functions) for
-corroboration and future diffing, not as a replacement.
+**The reverse-engineering target of record as of 2026-08-05** - see
+[ADR-0048](../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md).
+`pulse-psp-usa.chd` is now the corroboration source; the bulk of this
+project's Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`) still
+carries far more named functions than `psp-pulse-eu/` does (656 rows against
+301, measured 2026-09-07), which is the cost the ADR is explicit about, not a
+sign the roles are reversed from what this paragraph now says. This disc's
+`BOOT.BIN` is imported into Ghidra as its own program (`/psp-pulse-eu/BOOT.BIN`,
+10,671 functions).
 
 ### `pulse-ps2-eu.chd` - Wipeout Pulse, PS2
 
@@ -195,20 +201,20 @@ the decrypted image is committed.
 
 ## Region asymmetry
 
-**The PSP copy used as the reverse-engineering target is US and the PS2 copy
-is EU.** Every PSP-versus-PS2 comparison is therefore also a US-versus-EU
-comparison. `pulse-psp-eu.chd` (acquired 2026-08-04, see above) is a second
-PSP copy, but it is EU too, so it does not by itself resolve this - a
-PSP-versus-PS2 comparison still has no matching-region pair to compare from.
-What it does give: a same-platform US-versus-EU pair (`pulse-psp-usa.chd` vs
-`pulse-psp-eu.chd`) to isolate region-only differences from platform-only
-ones, which was not previously possible at all.
+**Resolved for the two targets of record, as of** [ADR-0048](../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md).
+Until 2026-08-05, the PSP target was US and the PS2 target was EU, so every
+PSP-versus-PS2 comparison was also a US-versus-EU one. Flipping the PSP target
+to `pulse-psp-eu.chd` puts both platform targets in the same region - one of
+that ADR's own stated reasons for the flip. A same-platform US-versus-EU pair
+(`pulse-psp-usa.chd` vs `pulse-psp-eu.chd`) still exists and is still useful
+for isolating a region-only difference from a platform-only one; it is just no
+longer the *only* pairing available where PSP and PS2 are concerned.
 
-Before attributing any difference to the platform, rule out the region. A
-matching-region pair, or a second copy of either release, would remove the
-confound and is worth acquiring before the comparison work in M2 gets serious.
-
-This warning belongs in every document under [comparisons](../comparisons/).
+The general warning still applies wherever a comparison mixes a corroboration
+binary of one region with a target of record from another - check which
+region each side of any comparison is before attributing a difference to the
+platform rather than the region. This warning belongs in every document under
+[comparisons](../comparisons/).
 
 ## Out of scope
 
