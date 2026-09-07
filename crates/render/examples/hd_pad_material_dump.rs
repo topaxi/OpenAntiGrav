@@ -1,5 +1,5 @@
-//! Scratch probe for `handover/rendering/hd-pads-author-an-emissive-mask-nothing-reads.md`
-//! step 1: dump a pad chunk's own material record out of `track.rcsmodel`,
+//! Scratch probe behind [`pads.md`](../../../docs/rendering/pads.md)'s "What
+//! binds the `_ne` file": dump a pad chunk's own material record out of `track.rcsmodel`,
 //! in full - every sampler entry, not just the two this project currently
 //! reads - and say whether it is an inline record or names a separate
 //! `.rcsmaterial` file the chunk's own samplers do not carry.
