@@ -386,7 +386,7 @@ pub(crate) struct Cli {
     pub(crate) menu_anim_phase: Option<f32>,
 
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
-    /// `rename-note`, `delete` or `delete-built-in`.
+    /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///
     /// The same argument `--menu-anim-phase` makes, one step stronger. A
     /// prompt is on screen because a row was **activated**, and this path runs
@@ -399,7 +399,10 @@ pub(crate) struct Cli {
     ///
     /// `rename-note` and `delete-built-in` are the two worst cases for the
     /// layout: the live note under the buffer, and the longest message
-    /// anything asks a player to read.
+    /// anything asks a player to read. `binding` is the CONTROLS page's own
+    /// key-capture prompt - `--menu-page controls --menu-prompt binding`
+    /// draws it over whichever row's `button` its own page opens on first,
+    /// since a still has no selected row to prefer over another.
     #[arg(long, value_name = "PROMPT", requires = "menu_page")]
     pub(crate) menu_prompt: Option<String>,
 

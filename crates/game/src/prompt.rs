@@ -1,5 +1,6 @@
-//! Modal overlays over the menus: an on-screen [`Keyboard`], and a yes/no
-//! [`Confirm`].
+//! Modal overlays over the menus: an on-screen [`Keyboard`], a yes/no
+//! [`Confirm`], and [`message_draw`] for a status line neither of those two
+//! fit - see its own doc for why a third shape exists.
 //!
 //! Like [`crate::menu`], this holds no GPU handles, opens no files and reads
 //! no clock. It takes an [`Input`] snapshot in and emits an [`Outcome`] and a
@@ -541,6 +542,53 @@ impl Confirm {
         }
         out
     }
+}
+
+/// A one-line status message over the menus, with no input model of its own.
+///
+/// **The third shape this module draws, and the only one nothing accepts.**
+/// [`Keyboard`] and [`Confirm`] both end in an [`Outcome`] a caller reacts
+/// to; this is drawn and nothing else, because the screen it is for is not
+/// asking a question, only saying what state the page behind it is already
+/// in. The CONTROLS page's own key-capture prompt - `Session::
+/// awaiting_binding` in the binary, over a `binding` row's confirm press -
+/// is the first caller, and the reason: the raw key that resolves a capture
+/// is decided upstream of this crate entirely, by `crate::rebind::decide` in
+/// `crates/game/src/main/rebind.rs`, off the shared `Input` before it ever
+/// reaches an abstract button - so there is nothing here for a model to
+/// consume. `text` arrives already resolved, English or a translation, the
+/// same rule [`Keyboard::draw`]'s own doc names for its labels: this module
+/// holds no string table of its own.
+///
+/// Reuses [`SCRIM`] rather than a tint of its own: the point of both is
+/// identical - a page the player must not mistake for the one still taking
+/// input - so a second colour to keep in step with the first would be a
+/// distinction with no difference.
+#[must_use]
+pub fn message_draw(skin: &Skin, text: &str) -> Vec<Draw> {
+    let (width, height) = skin.space().size;
+    vec![
+        Draw::Fill {
+            // Far larger than the screen rather than sized to it - see
+            // `Panel::frame`'s own [`Draw::Fill`] for why: `Renderer`
+            // letterboxes this list into the window, and a scrim sized to
+            // exactly the grid would leave live menu showing in the bars
+            // whenever the player's ASPECT setting disagrees with the
+            // title's own shape.
+            rect: [-4000.0, -4000.0, 8000.0, 8000.0],
+            color: SCRIM,
+        },
+        Draw::Text {
+            x: width * 0.5,
+            y: height * 0.5 - skin.row_pitch() * 0.5,
+            scale: skin.row_scale(),
+            color: [1.0, 1.0, 1.0, 1.0],
+            border: None,
+            align: Align::Centre,
+            text: text.to_string(),
+            wrap_width: Some(width * 0.9),
+        },
+    ]
 }
 
 /// What everything outside the panel is dimmed with.

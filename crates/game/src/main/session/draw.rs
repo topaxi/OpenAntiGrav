@@ -555,6 +555,20 @@ impl Session {
         // parked, or nothing when the presentation target was never touched
         // this frame (`has_scene` is `false`) - either way `MenuStage::render`
         // itself decides whether to clear or load, off `suspended_race`.
+        // The CONTROLS page's own key-capture prompt, resolved here rather
+        // than carried on `MenuStage` itself: the text names the button
+        // being rebound, off `Session::awaiting_binding`, and `MenuStage`
+        // holds no session state to read that from - the same reason
+        // `bound_keys` two lines down is a closure built at this call site
+        // rather than a field on the stage. `crate::rebind::prompt` is the
+        // pure half of this, under its own unit test - this method needs a
+        // live `Gpu` to reach at all, which is exactly why that lookup does
+        // not live inline here. See `docs/architecture/menus.md`'s Rebinding
+        // section for why this prompt exists at all and `MenuStage::render`'s
+        // own doc for how it is drawn.
+        let binding_prompt = self
+            .awaiting_binding
+            .map(|button| crate::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings)));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.render(
                 &self.gpu,
@@ -564,6 +578,7 @@ impl Session {
                 self.backdrop.as_mut(),
                 &|button| self.controls.bound_keys(button),
                 self.suspended_race.is_some(),
+                binding_prompt.as_deref(),
             )?;
         }
 

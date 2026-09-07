@@ -174,6 +174,7 @@ STRING_CONSUMERS = [
     "crates/game/src/capture/menu_page.rs",
     "crates/game/src/main/hints.rs",
     "crates/game/src/loading/wording.rs",
+    "crates/game/src/main/rebind.rs",
 ]
 
 ID_LITERAL = re.compile(r'"(OAG_[A-Z0-9_]+)"')

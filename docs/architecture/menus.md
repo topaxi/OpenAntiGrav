@@ -399,17 +399,61 @@ keyboard event then goes to `crate::rebind::decide` instead of
 not the menus' own back key) or leaves the capture open for anything else,
 including a key off the closed candidate set.
 
-**Nothing on screen says a capture is open.** Confirming a row changes
-nothing drawn, and every other row is frozen for as long as
-`Session::awaiting_binding` is `Some` - so for however long it takes to press
-the next key, the CONTROLS page looks like it has stopped responding rather
-than like it is waiting for one. It always resolves itself (any candidate key
-binds it, Escape cancels), so this is a rough edge rather than a stuck state,
-but it is a real gap: a "press a key..." prompt would need either a `menu.rs`
-change - the file sits at its 1,000-line size-gate ceiling with no headroom,
-see `scripts/check-file-size.py`'s `BASELINE` - or a new `Draw` the
-composition root overlays itself, and neither was in scope for what this
-thread asked for (a table, persistence, conflict handling).
+**Confirming a row now says so.** While `Session::awaiting_binding` is `Some`,
+`Session::draw` calls `crate::rebind::prompt` - `OAG_BINDING_CAPTURE_PROMPT`
+resolved against the button's own `Display` name, upper-cased (`THRUST`,
+`BRAKE`, and so on) - and hands the result to `MenuStage::render` as one more
+parameter, the same way
+`bound_keys` and `frozen_race` already cross that seam: this stage holds no
+session state of its own, so anything it draws that depends on one has to
+arrive already resolved. `MenuStage::render` draws it last, over everything
+else - even the pause overlay and the pilot-editor prompt, neither of which
+can actually be `Some` at the same time as a capture the way this build
+reaches the menus today, but there is no invariant enforcing that - with
+`oag_game::prompt::message_draw`, a small third shape `crate::prompt` now
+draws alongside `Keyboard` and `Confirm`: a status line with no input model
+of its own, since the raw key that resolves a capture is decided upstream of
+the whole crate, in `crate::rebind::decide`.
+It reuses `crate::prompt`'s own `SCRIM` tint rather than a colour of its own -
+**chosen, not authored, the same footing `PAUSE_OVERLAY` and `SCRIM` are
+already on**: neither PSP title's front-end XML defines a rebind prompt to
+read one off, and there is nothing else on the disc to check either - a PSP
+has no keyboard, so a raw-key capture is not a feature the original has a
+version of at all, on-screen or otherwise (see "What this does not touch"
+below for the one rebinding the original *does* have, which is a different
+axis). See `OAG_BINDING_CAPTURE_PROMPT`'s own doc comment in
+`assets/ui/strings/english.toml`.
+
+This landed as a `main/`-side change rather than the `menu.rs` one this
+section used to say was blocked, exactly per the option this paragraph named
+before it landed: `MenuStage::render` (in `crates/game/src/main/menu_stage.rs`,
+not baselined and nowhere near its own 1,000-line ceiling) gained the
+parameter, and `crate::prompt::message_draw` (in `crates/game/src/prompt.rs`,
+also not baselined) is the shared drawing code - `crates/game/src/menu.rs`,
+which really does sit at its own `BASELINE` ceiling with no headroom, was
+never touched.
+
+`crate::rebind::prompt` sits in `crates/game/src/main/rebind.rs`, next to
+`decide`, and for the same reason `decide` is a free function at all rather
+than inline in `app.rs`'s winit handler: `Session::draw` needs a live `Gpu` to
+reach, so the one piece of the lookup that is pure - a button and an
+`Option<&StringTable>` in, a line of text out - lives here under its own unit
+tests rather than only inside the closure nothing can drive headlessly.
+
+Both the button-name text and the layout it is drawn with are reachable
+headlessly, but through two different mechanisms, worth keeping straight: the
+*text* is `crate::rebind::prompt` under its own unit tests (a table entry
+overriding English and still substituting; no table falling back to English
+and still naming the button). The *drawing* - the scrim, the centring, the
+wrap - is `oag_game::prompt::message_draw`, and `--menu-page controls
+--menu-prompt binding` reaches that same function through
+`crate::capture::menu_page::prompt_draws`'s own new `"binding"` arm, off
+whichever row's `button` the CONTROLS page opens on first (not off
+`crate::rebind::prompt`, since a still capture opens no row and confirms no
+key) - so a live capture and this flag cannot draw two different *layouts*
+for the same text, the same guarantee `rename`/`rename-note`/`delete`/
+`delete-built-in` already gave the pilot editor's prompts, even though the two
+paths derive the text itself independently.
 
 Three choices worth stating outright, since none of them are the only
 defensible one:

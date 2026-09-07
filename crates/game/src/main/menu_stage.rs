@@ -315,6 +315,15 @@ impl MenuStage {
         // invisible on the two titles this build actually plays, but it is
         // real and undocumented anywhere else; see this thread's `## Open`.
         frozen_race: bool,
+        // The CONTROLS page's key-capture prompt, already resolved to text
+        // and off `Session::awaiting_binding` - `Session::draw`'s call site
+        // again, for the same reason `bound_keys` and `frozen_race` both
+        // are: this stage holds no session state of its own. `Some` draws
+        // `oag_game::prompt::message_draw` over everything else, last, so a
+        // capture reads as the page being frozen rather than broken - the
+        // gap `docs/architecture/menus.md`'s Rebinding section names as this
+        // project's own, not the disc's.
+        binding_prompt: Option<&str>,
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -415,6 +424,25 @@ impl MenuStage {
         // through is a still picture of where the player will land back.
         let list: Vec<Draw> = match &self.prompt {
             Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
+            None => list,
+        };
+        // The key-capture prompt, last of all - even over a page mid-tween or
+        // a pilot-editor prompt, neither of which can be open at the same
+        // time as a capture in practice (a capture only opens from the
+        // CONTROLS page's own confirm, off the raw `Input` `Session::
+        // maybe_begin_binding` reads ahead of `Menu::update`), but there is
+        // no invariant enforcing that here, so "last" is the same safe
+        // default the pilot-editor prompt above picked for itself.
+        // `oag_game::prompt::message_draw` is the shared drawing code -
+        // `--menu-page --menu-prompt binding`'s own headless capture calls
+        // the same function, off `crate::capture::menu_page::prompt_draws`,
+        // so this and that flag cannot draw two different pictures for the
+        // same state.
+        let list: Vec<Draw> = match binding_prompt {
+            Some(text) => list
+                .into_iter()
+                .chain(oag_game::prompt::message_draw(&self.skin, text))
+                .collect(),
             None => list,
         };
         // `LoadOp::Load` over a parked race - `Session::draw` already

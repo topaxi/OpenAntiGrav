@@ -10,6 +10,7 @@
 
 use winit::keyboard::{Key, NamedKey};
 
+use oag_game::language::StringTable;
 use oag_gameplay::input::Button;
 use oag_input::keys;
 
@@ -48,6 +49,31 @@ pub(crate) fn decide(awaiting: Button, key: &Key, pressed: bool, repeat: bool) -
         Some(name) => Capture::Bind(awaiting, name),
         None => Capture::Ignore,
     }
+}
+
+/// The CONTROLS page's own key-capture prompt, for `button` - what
+/// `session::draw` shows over the page for as long as `Session::
+/// awaiting_binding` names it.
+///
+/// **Pulled out for the same reason [`decide`] is a free function at all**:
+/// `Session::draw` needs a live `Gpu` to reach, so the one piece of it that
+/// is pure - turning a button and a string table into the line a player
+/// reads - lives here instead, under a unit test, rather than only inside
+/// the one closure nothing can drive without a window and a device.
+/// `strings` is `None` on a `--race` run with no shell, the same case
+/// `session::pilot_editor::say`'s own doc names.
+///
+/// `OAG_BINDING_CAPTURE_PROMPT` and its English fallback are documented
+/// together in `assets/ui/strings/english.toml`; `%s` is `button`'s own
+/// `Display` name, upper-cased to match every other value this page draws.
+#[must_use]
+pub(crate) fn prompt(button: Button, strings: Option<&StringTable>) -> String {
+    const ID: &str = "OAG_BINDING_CAPTURE_PROMPT";
+    const ENGLISH: &str = "PRESS A KEY FOR %s - ESCAPE CANCELS";
+    strings
+        .and_then(|table| table.get(ID))
+        .unwrap_or(ENGLISH)
+        .replace("%s", &button.to_string().to_ascii_uppercase())
 }
 
 #[cfg(test)]
@@ -100,5 +126,23 @@ mod tests {
             decide(Button::Up, &Key::Named(NamedKey::Escape), true, true),
             Capture::Ignore
         );
+    }
+
+    #[test]
+    fn with_no_table_the_prompt_names_the_button_in_english() {
+        let text = prompt(Button::Circle, None);
+        assert!(text.contains("CIRCLE"), "{text:?} does not name the button");
+        assert!(!text.contains("%s"), "{text:?} left a %s unsubstituted");
+    }
+
+    #[test]
+    fn a_table_entry_overrides_english_and_still_substitutes() {
+        let mut table = StringTable::default();
+        table.merge(std::collections::HashMap::from([(
+            "OAG_BINDING_CAPTURE_PROMPT".to_string(),
+            "APPUYEZ SUR %s".to_string(),
+        )]));
+        let text = prompt(Button::Square, Some(&table));
+        assert_eq!(text, "APPUYEZ SUR SQUARE");
     }
 }
