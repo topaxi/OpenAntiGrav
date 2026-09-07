@@ -453,10 +453,23 @@ pub(super) fn untextured_note(model: &Model) -> Option<String> {
 /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
 /// itself is shared there - only the livery painted on it still varies by team.
 /// On the other two there is no per-team Zone hull to share.
+///
+/// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
+/// `oag_title::race::HullVariant::stem` names a file inside the *same*
+/// directory `Ship.vex` already resolves in, so a Zone run ignores it: Zone's
+/// own hull selection is a title fact of its own
+/// ([`oag_title::ZoneCraft`]), unaffected by which model variant the RACE
+/// page has picked, and every Pulse team's `Zone.vex` is one shared hull
+/// regardless. `None` keeps today's behaviour - [`ships::HULL`] - exactly.
 #[must_use]
-pub fn ship_entry_name(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> String {
+pub fn ship_entry_name(
+    paths: oag_title::race::ShipPaths,
+    team: &str,
+    mode: Mode,
+    hull_variant: Option<&str>,
+) -> String {
     if mode != Mode::Zone {
-        return ships::entry_name_in(paths.dir, team, ships::HULL);
+        return ships::entry_name_in(paths.dir, team, hull_variant.unwrap_or(ships::HULL));
     }
     ships::entry_name_in(
         paths.dir,

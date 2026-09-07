@@ -64,6 +64,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_sky: None,
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&GUEST_ROSTER),
+    // 2048's own reskins are `team_variants`' own measured shape too - a
+    // numbered subdirectory, not a second file inside one. See
+    // `oag_title::race::HullVariant`.
+    hull_variants: None,
     // **Unread, not empty.** This title ships no race box at all - no
     // `Track Creation`, no settings page, racing entered from the campaign
     // event grid instead (`docs/formats/race-setup.md`) - so there is no menu

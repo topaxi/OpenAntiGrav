@@ -89,7 +89,7 @@ mod announcer;
 mod variants;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
-pub use variants::{GuestRoster, TeamVariant, TeamVariants, VariantJoin};
+pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,6 +208,22 @@ pub struct RaceDefaults {
     /// `None` on every title but Wipeout 2048, whose twelve HD-derived teams
     /// are the one measured case.
     pub guest_roster: Option<&'static GuestRoster>,
+    /// A team's own alternate hull **file**, universal across the whole
+    /// roster rather than scoped to a subset - see [`HullVariant`].
+    ///
+    /// A third, structurally different axis from [`Self::team_variants`] and
+    /// [`Self::guest_roster`], both of which combine a suffix into the
+    /// team's own *identity* (a second directory, carrying its own tuning).
+    /// This does not: Pulse authors no second directory for any team - the
+    /// doc comment above is correct as far as it goes - but it does author a
+    /// second hull *file* inside the team's own one, unlock-gated, and
+    /// [`Self::has_team_variants`] folds this source in beside the other two
+    /// for exactly that reason.
+    ///
+    /// `None` on Pure, which authors no `PI_TeamModel` at all - measured
+    /// against its own `Definition.xml`, zero occurrences - and on HD/2048,
+    /// whose reskins are [`Self::team_variants`]' own measured shape instead.
+    pub hull_variants: Option<&'static [HullVariant]>,
     /// The speed classes this title's **own data** authors, slowest first. See
     /// [`SpeedClasses`].
     ///

@@ -454,6 +454,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) team: Option<String>,
 
+    /// The player's own hull file, for a title whose
+    /// `oag_title::race::HullVariant` axis offers one - `"extra"` for
+    /// Pulse's Concept model, left out for the baseline `Ship.vex`. A team
+    /// with no such axis, or a stem the team does not offer, races the
+    /// baseline instead and says so in the load report.
+    #[arg(long)]
+    pub(crate) variant: Option<String>,
+
     /// A directory holding downloadable content: a pack's `.edat` files, or the
     /// `.zip` they were downloaded as. Repeatable.
     ///

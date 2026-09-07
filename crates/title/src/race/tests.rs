@@ -342,6 +342,9 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_sky: None,
     team_variants: Some(&NATIVE),
     guest_roster: Some(&GUEST_ROSTER),
+    // This fixture's own axis is `team_variants`' shape; nothing here
+    // exercises `hull_variants`, which has its own fixture below.
+    hull_variants: None,
     // A fixture, not a measurement: this crate holds no title's data, so the
     // ladder here is only shaped like one.
     speed_classes: None,
@@ -413,4 +416,49 @@ fn with_no_guest_roster_the_for_methods_are_the_plain_fields() {
     solo.guest_roster = None;
     assert_eq!(solo.ships_for("Assegai_c1").dir, solo.ship_dir);
     assert_eq!(solo.handling_dir_for("Assegai_c1"), solo.handling_dir);
+}
+
+/// Pulse's own shape: a fixture with neither `team_variants` nor
+/// `guest_roster`, only `hull_variants`.
+const HULL_VARIANTS: &[HullVariant] = &[
+    HullVariant {
+        stem: "Ship",
+        label: "Normal",
+    },
+    HullVariant {
+        stem: "extra",
+        label: "Concept",
+    },
+];
+
+/// `has_team_variants` is a three-way disjunction, not the two-way one it
+/// used to be - the case this crate's own change history got wrong once
+/// already, so it is worth pinning as three separate assertions rather than
+/// one combined "any axis" check.
+#[test]
+fn has_team_variants_is_true_for_each_of_the_three_sources_alone() {
+    let mut only_hull_variants = DEFAULTS;
+    only_hull_variants.team_variants = None;
+    only_hull_variants.guest_roster = None;
+    only_hull_variants.hull_variants = Some(HULL_VARIANTS);
+    assert!(only_hull_variants.has_team_variants());
+
+    let mut only_team_variants = DEFAULTS;
+    only_team_variants.guest_roster = None;
+    only_team_variants.hull_variants = None;
+    assert!(only_team_variants.has_team_variants());
+
+    let mut only_guest_roster = DEFAULTS;
+    only_guest_roster.team_variants = None;
+    only_guest_roster.hull_variants = None;
+    assert!(only_guest_roster.has_team_variants());
+
+    let mut none_at_all = DEFAULTS;
+    none_at_all.team_variants = None;
+    none_at_all.guest_roster = None;
+    none_at_all.hull_variants = None;
+    assert!(
+        !none_at_all.has_team_variants(),
+        "Wipeout Pure's own shape: none of the three"
+    );
 }

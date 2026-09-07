@@ -57,6 +57,17 @@ pub struct Options {
     /// Resolved by [`load`] once the source is open and its title known, from
     /// [`oag_title::RaceDefaults::team`], and the choice is reported.
     pub team: Option<String>,
+    /// The player's own alternate hull file, for a title whose
+    /// [`oag_title::RaceDefaults::hull_variants`] offers one - `None` for
+    /// [`Self::team`]'s own baseline hull, on every title including one with
+    /// no such axis at all.
+    ///
+    /// **Not a team-identity change**, unlike [`Self::team`]'s own RACE-page
+    /// VARIANT sibling on HD/2048: [`crate::livery::load`] applies this to
+    /// slot 0 alone, and everything else about the team - its tuning, its
+    /// label, its roster membership - stays exactly `team`'s. See
+    /// `oag_title::race::HullVariant`.
+    pub hull_variant: Option<String>,
     /// The team ids the *opponents* may fly, in the caller's own order.
     ///
     /// The caller supplies them because they come off the player's own disc -
@@ -229,6 +240,7 @@ impl Default for Options {
             dlc: Vec::new(),
             track: None,
             team: None,
+            hull_variant: None,
             // Empty for the same reason `dlc` is: the ids come off the
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.

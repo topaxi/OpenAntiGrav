@@ -82,6 +82,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Pure authors one roster and no numbered variant of anything in it.
     team_variants: None,
     guest_roster: None,
+    // Nor a second hull file: `Data\Plugins\PI001\Definition.xml` authors no
+    // `PI_TeamModel` at all - measured, zero occurrences. See
+    // `crates/game/examples/pulse_variant_probe.rs`, which the constant
+    // Pulse's own `HULL_VARIANTS` cites is the same probe run against this
+    // title's own disc.
+    hull_variants: None,
     // **Five**, and this is the disagreement that licenses the axis at all.
     // Measured 2026-09-05 on `pure-psp-eu.chd`: seven of Pure's eight race
     // teams' `Data\Ships\<Team>\handlingstats.xml` were read directly and

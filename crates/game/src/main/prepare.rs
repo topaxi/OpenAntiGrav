@@ -117,6 +117,12 @@ impl Pending {
             // which is the only place the title is known. See
             // `race::Options::team`.
             team: self.cli.team.clone(),
+            // Passed straight through, `None` included: a team with no
+            // `HullVariant` axis, or a stem it does not offer, is the same
+            // "unrecognised, race the baseline and say so" shape `team`
+            // and `track` already resolve at. See
+            // `race::Options::hull_variant`.
+            hull_variant: self.cli.variant.clone(),
             class: self.class.clone(),
             mode: self.mode,
             zone_stage: self.cli.zone_stage,

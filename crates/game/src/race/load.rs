@@ -15,6 +15,7 @@ mod global;
 mod pads;
 mod roster;
 mod surfaces;
+mod variant;
 mod weapon_models;
 use crate::remix::craft_of;
 use environment::{hd_sky_model, psp2_sky_model};
@@ -245,6 +246,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
+    // The player's own alternate hull file, resolved the same place `team`
+    // is and for the same reason: `HullVariant` is per-title, and this is
+    // the first point the title is known. See `variant::resolve`.
+    let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
+
     let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
     let stats_blob = read(craft_of(&mut craft, &mut archives), &stats_name)?;
     let stats =
@@ -325,10 +331,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let liveries = livery::load(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
-        craft_title.race,
-        options.mode,
-        craft_title.flare,
-        options.lod,
+        &livery::LoadContext {
+            race: craft_title.race,
+            mode: options.mode,
+            flare: craft_title.flare,
+            lod: options.lod,
+        },
+        hull_variant,
         &mut report,
     )?;
     report.push(format!(
