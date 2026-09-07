@@ -644,6 +644,8 @@
 0x0883f424	function	Cannon_UpdateReload	85	cannon-quake-leachbeam.md
 0x088648ec	function	Cannon_Init	80	cannon-quake-leachbeam.md
 0x08874b14	function	Quake_Init	82	cannon-quake-leachbeam.md
+0x0891d268	function	Quake_Update	85	cannon-quake-leachbeam.md
+0x0891c028	function	Quake_SampleSpan	76	cannon-quake-leachbeam.md
 0x08873d3c	function	LeachBeam_InitLocked	82	cannon-quake-leachbeam.md
 0x08872da8	function	LeachBeam_InitUnlocked	80	cannon-quake-leachbeam.md
 0x08866b08	function	LeachBeam_UpdatePool	85	cannon-quake-leachbeam.md

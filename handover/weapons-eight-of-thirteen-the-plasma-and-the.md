@@ -695,3 +695,46 @@ here - it has already happened twice.
 
 The hit and slowdown remain buildable now: they reuse the shared channel the
 Missile and Mine already use.
+
+## 2026-09-07, later still: the per-frame travel is found - shape 2, `WO_QUAKE`
+
+The three shapes above are resolved.
+[cannon-quake-leachbeam.md](../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)
+now names `Quake_Update` (`0x0891d268`) - dispatched indirectly, not by a plain
+`jal`, but readable at instruction level regardless - as the function that
+advances the wave's spline `t` every tick, and `Quake_SampleSpan`
+(`0x0891c028`) as the helper that turns `t` into two points across the track's
+width.
+
+**Shape 2**: `Quake_Update` uses those two points to build a transform and, the
+first time a wave instance's node id is zero, spawns the disc's own
+`WO_QUAKE` particle effect through `Psys_Spawn_q` - the effect name was read
+directly out of memory, not inferred from the fourcc tag - alongside a
+travelling positional sound (`Sound_Play`, `600.0`-unit falloff). Every frame
+after that it re-positions (to the midpoint of the two current track-edge
+points) and re-scales (to the track's own width, via an edge-to-edge distance)
+the same effect, rather than re-spawning it. A call into
+`AiTrack_LocatePosition` happens in the same block but before the orientation
+basis is built and its result feeds nothing that basis uses, so - unlike
+position and scale - **orientation tracking the track's own banking is not
+established** by this reading. Nothing here writes a vertex or a mesh handle.
+
+**Why that still fits "looks like it does track deformation"**: an authored
+effect that tracks the road's own width and follows its spline every frame
+reads as part of the road to a player, without the road's own geometry ever
+changing. That is a plausibility argument for reconciling the play observation
+with the reading, not a side-by-side comparison against the original - nobody
+has looked at what `WO_QUAKE.POB` itself draws, so if it turns out to look
+nothing like a wave,
+that specific claim (not the trigger recovery) is what would need revisiting.
+Shape 3 (shader-side displacement) isn't excluded by anything read in this
+function, but the PSP's GE has no programmable vertex stage to put one in -
+a hardware argument, not a code-reading one, against that shape on this
+platform.
+
+**Still not fully buildable**: the per-craft latch (`entity+0x860 & 0x40`) that
+ties the travelling wave to the shared hit channel was not found this pass -
+`field 0x860` alone is not a selective enough search (dozens of hits), and the
+more selective `masked`/`andi` subcommands of `scripts/psp-relocate.py` were
+not tried. The visual half and the hit-timing half are each independently
+buildable now, but not yet wired to each other.
