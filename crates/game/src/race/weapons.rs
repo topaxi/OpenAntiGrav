@@ -431,9 +431,11 @@ impl Race {
             // already been spent, so the cluster goes on laying the rest rather
             // than stalling. That matches `Projectiles::spawn`'s own rule -
             // a shot that cannot be taken is lost, not queued.
+            let orientation =
+                oag_gameplay::projectile::mine::frozen_pose(ship.physics.body.orientation);
             self.world
                 .projectiles
-                .lay(weapon, point, slot as u8, drop.fuse);
+                .lay(weapon, point, slot as u8, drop.fuse, orientation);
             // **The Mine only.** `Weapon_DropMines` calls `Mine_Init`, which
             // plays `MINELAUNCH`, once per charge; `Weapon_FireBomb` never
             // calls the play function at all - see `Cue::MineLaunch`'s own

@@ -222,6 +222,44 @@ weapon and a rear one against an empty field.
 doc comment was stranded 270 lines above it, attached to `Driver::wants_to_fire`.
 Put back.
 
+## 2026-09-07: the Cannon, the Quake and the LeachBeam checked and still blocked; the Mine's and the Bomb's pose built instead
+
+**Checked all three of the remaining unbuilt weapons against the committed
+docs alone, with no Ghidra session, per this pass's own constraint - and all
+three are still genuinely blocked, not merely under-read.** `plasma.md`'s
+sixteen-bit table (2026-09-02) already says so and nothing has been added to
+it since: the Cannon's fire bit `0x2000` is dispatched by **nothing** in
+`Weapons_DispatchFire`, and bit `0x4000`'s handler (`0x088537ac`,
+`world+0x58`) - the one candidate for where it actually fires - is itself
+unread past being reachable, and is not even confirmed to be the Cannon's;
+the Quake's handler (`Weapon_FireQuake`, `0x0886c600`) and the LeachBeam's
+(`Weapon_FireLeachBeam`, `0x08866658`) are each named only from the dispatch
+table and a bit map, at confidence 82, with **no body read at all** -
+`plasma.md`'s own words, "do not assume anything about what they do."
+Addresses anyone picking this up next would need to read:
+
+- `0x088537ac` (`world+0x58`) - the Cannon's own candidate, and whether it is
+  the Cannon at all is itself unsettled.
+- `0x0886c600` - `Weapon_FireQuake`'s body.
+- `0x08866658` - `Weapon_FireLeachBeam`'s body.
+
+**Checked `docs/ghidra/functions/ps3-hdfury-eu/weapons.md` for a cross-title
+shortcut, per this pass's own instruction to look before declaring a block -
+it is not one.** HD/Fury's PS3 binary does carry real, `__FILE__`-tagged
+`CannonManager` and `LeachBeamManager` classes (`weapons.md`'s own finding,
+independent of this pass), which is a pleasing confirmation that the Cannon
+and the LeachBeam are real weapons in this engine lineage rather than cut
+content - but it says nothing about how Pulse's PSP binary dispatches or
+flies either one, being a different binary from a later console generation.
+A lead worth naming, not a licence to port HD's shape onto Pulse's - doing
+that would be exactly the plausible-reading-across-titles this pass was
+told not to do.
+
+**So the pass went to the best weapons-area improvement available without
+Ghidra**: a laid mine or bomb now draws the pose it landed in rather than a
+bare translation - see the "Open" list below, where that item is now marked
+done, for the reading and its confidence split.
+
 ## Open
 
 - **`<Plasma charge_time>` is authored and nothing read spends it, and play
@@ -341,14 +379,61 @@ Put back.
   dodge nobody has verified.
 - ~~**A mine and a bomb both draw no model.**~~ **Done 2026-09-05** - see
   Next Steps.
-- **A laid mine's or bomb's own drop orientation is recovered and unwired.**
-  `Mine_Init` copies the firing craft's anchor matrix into the entity once,
-  at drop, and nothing found updates it afterward - a frozen heading, not a
-  velocity. `oag_gameplay::Projectile` carries no field to hold that pose in,
-  so `oag_game::race::Race::mine_model_matrices`/`bomb_model_matrices` draw
-  both translation-only for now. Adding the field touches the determinism
-  hash for a value nothing else in the simulation reads, which is why this
-  is recorded rather than done on the spot.
+- ~~**A laid mine's or bomb's own drop orientation is recovered and
+  unwired.**~~ **Done 2026-09-07.** `Projectile` now carries `orientation:
+  Quat`, set at drop from the firing craft's own body orientation and read
+  back by `mine_model_matrices`/`bomb_model_matrices`. Kept out of
+  `crate::hash`'s reference on purpose - it is presentation state nothing in
+  the simulation reads back, so hashing it would only make the reference move
+  the day the field started being set, for a value that cannot be the reason
+  two runs diverge. See `oag_gameplay::projectile::mine::frozen_pose`'s doc
+  comment for the two-part reading it carries: that a laid charge freezes a
+  pose at drop is recovered from `Mine_Init` (`0x08859ac8`, confidence 90,
+  `entity+0x60..0x9c`); that the pose is the craft's *body* orientation rather
+  than the rear emitter's own local rotation is chosen, not measured, and
+  carries no confidence score - `Mine_Init` actually copies `craft->anchor`
+  (`craft+0xa0`), and this engine has no located rear-emitter transform to
+  read instead. Applied to the Bomb too, on the same "one weapon in two
+  sizes" footing this module already applies to `at_rest`, even though the
+  Bomb's own spawn helper (`0x0885f188`) is unresolved and does not confirm
+  the same matrix copy happens there.
+- **Whether `Pulse_Mine.vex` needs a `MODEL_YAW`-style per-model axis
+  correction, checked the same way `MODEL_YAW` itself was measured, and
+  mostly closed rather than open.** `MODEL_YAW` (`race.rs`) exists because
+  `Ship.vex`'s own hull was measured wider at one end than the other and is
+  authored nose-along a different axis than `oag_physics::Body::forward`
+  uses - a **per-model** fact, not a `.vex`-format universal. `oag-view
+  --mesh` on `Pulse_Mine.vex` (`just view
+  "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" --mesh
+  'Data\Weapons\Pulse_Mine.vex' --screenshot ...`) shows a caltrop - three
+  spikes at roughly 120° about one axis, confirmed from three yaw/pitch
+  angles - not a directional hull like the ship's. A yaw error about that
+  axis has no "wrong way round" to fall into: any of the three spikes reads
+  as the front equally well, unlike a ship's nose and tail. **Left open, and
+  genuinely unmeasured**: whether the caltrop's own axis - which way its
+  points face - agrees with `Body::orientation`'s convention, a coarser and
+  lower-stakes question than the ship's. A live-race screenshot was tried to
+  settle even that and could not: the chase camera sits almost exactly where
+  a charge is dropped, so a freshly-laid mine is occluded by the firing
+  craft's own hull in every framing tried (stock chase view, `--camera-view
+  far`/`close`, a dozen `--camera-pose` placements at the grid and moving).
+  `Pulse_Bomb.vex` was not separately viewed - worth five minutes for whoever
+  next touches this, on the same recipe.
+- **A player mashing the fire button lays mines three times faster than the
+  authored rate, and it was caught by this session's own `--give` telemetry
+  rather than looked for.** `DROP_INTERVAL` is `0.1 s` and `CLUSTER` is `5`,
+  which cap a *sustained* drop at one every six ticks - but a capture driven
+  by `--press square` (one rising edge every two ticks) logged 30/60/90/120
+  mines in the air at ticks 60/120/180/240: exactly one mine per press-edge,
+  three times the authored ceiling. Also laid throughout the whole start-line
+  countdown, while the craft cannot move. Likely cause, not confirmed:
+  `Race::spend_pickup`'s Mine arm calls `begin_drop(drop.count)` on every
+  press with no `pickup.is_dropping()` guard, so a re-press mid-cluster
+  re-arms the drop and lays immediately rather than being ignored until the
+  cluster finishes. **Not fixed here** - it moves mine positions and
+  therefore the world hash, so it needs a change (and a hash regen) of its
+  own; recorded so the next person driving weapons with `--give` does not
+  mistake it for their own bug.
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the

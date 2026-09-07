@@ -364,6 +364,14 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         target,
         bounces,
         launch_speed_kmh,
+        // Deliberately excluded. `orientation` is a laid charge's frozen
+        // drawing pose - `Projectile::orientation`'s own doc comment - and
+        // nothing in this crate reads it back on a later tick, so it cannot
+        // be the reason two runs diverge. Hashing it would only make this
+        // reference move the day the field started being set, for a value the
+        // determinism check exists to catch divergence *in*, not one that
+        // stays the same on every re-run of the same input by construction.
+        orientation: _,
     } = projectile;
 
     // Every field of every slot, free or not - the same argument the inactive

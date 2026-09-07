@@ -82,7 +82,7 @@ pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
-use oag_core::math::Vec3;
+use oag_core::math::{Quat, Vec3};
 use oag_formats::weapons::Weapon;
 use oag_physics::params::Dimensions;
 use oag_physics::{Ray, Raycaster};
@@ -206,6 +206,12 @@ pub struct Projectile {
     /// per-shot rather than per-weapon because it carries the firing craft's own
     /// speed at the moment of launch.
     pub launch_speed_kmh: f32,
+    /// The pose a laid charge is drawn with, frozen at the moment it landed.
+    ///
+    /// Presentation only, so excluded from [`crate::hash`]'s reference -
+    /// `Quat::IDENTITY` for a flying projectile, which draws from
+    /// [`Self::velocity`] instead. See [`mine::frozen_pose`].
+    pub orientation: Quat,
 }
 
 /// What a projectile did when it stopped.
@@ -323,6 +329,7 @@ impl Projectiles {
                 target: None,
                 bounces: 0,
                 launch_speed_kmh: 0.0,
+                orientation: Quat::IDENTITY,
             }; MAX_PROJECTILES],
         }
     }
@@ -392,6 +399,7 @@ impl Projectiles {
             launch_speed_kmh,
             MAX_FLIGHT_SECONDS,
         )
+        .is_some()
     }
 
     /// Throws one blade, with its own authored `fuse` instead of the safety net.
@@ -410,6 +418,7 @@ impl Projectiles {
     /// `oag_formats::weapons::ShurikenStats`.
     pub fn throw(&mut self, position: Vec3, velocity: Vec3, owner: u8, fuse: f32) -> bool {
         self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)
+            .is_some()
     }
 
     /// Lays one mine or bomb, with its own authored fuse instead of the safety
@@ -425,11 +434,26 @@ impl Projectiles {
     /// **detonates** a mine rather than what reaps it - see
     /// [`Self::advance`]'s expiry branch, which is the one place in this module
     /// where the countdown means two different things depending on the weapon.
-    pub fn lay(&mut self, kind: Weapon, position: Vec3, owner: u8, fuse: f32) -> bool {
-        self.place(kind, position, mine::at_rest(), owner, None, 0.0, fuse)
+    /// `orientation` is the pose it is drawn with from here on - see
+    /// [`mine::frozen_pose`].
+    pub fn lay(
+        &mut self,
+        kind: Weapon,
+        position: Vec3,
+        owner: u8,
+        fuse: f32,
+        orientation: Quat,
+    ) -> bool {
+        let Some(slot) = self.place(kind, position, mine::at_rest(), owner, None, 0.0, fuse) else {
+            return false;
+        };
+        slot.orientation = orientation;
+        true
     }
 
-    /// The one place a slot is filled.
+    /// The one place a slot is filled. Returns the slot itself rather than a
+    /// bare `bool`, so [`Self::lay`] can set [`Projectile::orientation`]
+    /// afterward without a second scan.
     #[allow(clippy::too_many_arguments)]
     fn place(
         &mut self,
@@ -440,23 +464,23 @@ impl Projectiles {
         target: Option<u8>,
         launch_speed_kmh: f32,
         lifetime: f32,
-    ) -> bool {
-        let Some(slot) = self.slots.iter_mut().find(|p| p.kind.is_none()) else {
-            return false;
-        };
+    ) -> Option<&mut Projectile> {
+        let slot = self.slots.iter_mut().find(|p| p.kind.is_none())?;
         *slot = Projectile {
             kind: Some(kind),
             position,
             velocity,
             owner,
             lifetime,
+            // A flying projectile draws its basis from `velocity` instead; see the field.
+            orientation: Quat::IDENTITY,
             // World up until the first probe corrects it - see the field.
             surface: Vec3::Y,
             target,
             bounces: 0,
             launch_speed_kmh,
         };
-        true
+        Some(slot)
     }
 
     /// Flies every projectile one tick and reports what stopped.
