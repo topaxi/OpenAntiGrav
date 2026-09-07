@@ -1,5 +1,30 @@
 //! Which teams the grid may fly, when the caller named none itself.
 
+/// The team the player races as, resolved to `craft_title`'s own default
+/// when the caller named none - the first point the title is known, and
+/// craft content, so it follows `craft_title` rather than the track's own
+/// title. See `race::Options::team`.
+///
+/// Here rather than in `load.rs` under the 1,000-line rule in
+/// `scripts/check-file-size.py`; a move, with no behaviour change, and this
+/// is the file that already answers "which team".
+pub(super) fn resolve_team(
+    asked: Option<&str>,
+    craft_title: &'static oag_title::Title,
+    report: &mut Vec<String>,
+) -> String {
+    match asked {
+        Some(asked) => asked.to_string(),
+        None => {
+            report.push(format!(
+                "no team named: {}'s own default, {}",
+                craft_title.name, craft_title.race.team
+            ));
+            craft_title.race.team.to_string()
+        }
+    }
+}
+
 /// One hull, plume and nozzle per grid slot, each off its own team's
 /// directory - see [`crate::livery`], which also records what is recovered
 /// here (the paths) and what is this project's (which team flies which
