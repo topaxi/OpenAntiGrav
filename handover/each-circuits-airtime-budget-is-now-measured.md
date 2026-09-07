@@ -100,6 +100,22 @@ tiers) and belongs there rather than duplicated here.
   one is outside this pass's grant (measurement-only, `handover/` files
   only); the orchestrator should add it when this thread's file is filed.
 
+## Gates (confirmed 2026-09-07)
+
+- `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`:
+  passed, unaffected - all twelve circuits clean, `01_Track`'s one respawn
+  still at index 794.
+- `cargo nextest run -p oag-game airtime_budget` (no `--run-ignored`): 0
+  tests run - every test in the new file is `#[ignore]`d.
+- Full `just`: **EXIT:0** - 3220 tests passed, 671 skipped, every check OK.
+- `OAG_REQUIRE_GAME_DATA=1 just test-data`: **EXIT:100, exactly 5 failures**
+  - the *current* baseline on `main` (revised since this thread started, to
+  include `lap_times_ground_truth` alongside `opponent_weapons_ground_truth`,
+  both other members' in-flight work): `lap_times_ground_truth`,
+  `opponent_weapons_ground_truth`, `pure_dlc_ground_truth` x2,
+  `shuriken_ground_truth`. No 6th failure. All three new tests pass as fast
+  no-ops (`OAG_SWEEP` unset in this run).
+
 ## Next Steps
 
 1. The maintainer reads the scratch table and decides what, if anything,
