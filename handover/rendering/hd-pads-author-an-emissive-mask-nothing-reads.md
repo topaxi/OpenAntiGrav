@@ -37,9 +37,42 @@ is complete and this file is only what it did **not** close.
 ## Open
 
 **Does an HD weapon pad look different while it is cooling down, and what
-draws that?** The maintainer's recollection from play is that it goes dark and
-then relights, offered explicitly as memory rather than measurement. Nothing
-read in the executable says so yet.
+draws that? There is a state change - the maintainer reports it from play,
+2026-09-07, and it is more specific than the recollection this row used to
+carry.** Verbatim: HD weapon pads **light up red**, **go dark when they give a
+weapon**, then **relight when arming** - and asked whether it is the whole pad
+or only the bars, the maintainer's answer is **only the light bars**. That is a
+report from play, not a
+measurement off the original, and nothing may be tuned to match it - but it is
+this project's most reliable class of lead and it names a trigger, which the
+earlier "goes dark and then relights" did not.
+
+Three things it changes:
+
+0. **"Only the light bars" and "the emissive layer toggles" are the same
+   statement.** The `_ne` mask's alpha is already established as covering
+   exactly the light bars and nothing else, so a state change confined to the
+   bars is a state change confined to what that mask selects. This is the
+   strongest evidence yet that the emissive layer measured below is the whole
+   mechanism, and it is why the questions below are worth their cost.
+1. **The trigger is the grant, and the relight is the refresh.** That maps onto
+   a `WeaponPad_UpdateRefreshTimer`-shaped per-frame update, which is exactly
+   what step 2's vtable diff is for. It also means the play capture the old
+   version of this row asked for is no longer the cheapest way to establish
+   *whether* there is a state change - there is one.
+2. **"Red" is checkable asset-side, right now.** The `_ne` mask's **alpha** is
+   established as covering the light bars; **its RGB has never been looked
+   at**. If the bars are red in the `_ne` file's own colour channels, the lit
+   state is just the emissive layer measured above, drawing at `emissive`'s
+   default white tint over red texels - and the dark state is that layer being
+   switched off, not a recolour.
+3. **It does not contradict "a speed pad is never recoloured on any title".**
+   That closed bullet is about *speed* pads and about *recolouring*. An
+   emissive layer toggling on and off is a different mechanism, and the two can
+   both be true. Do not reopen the closed bullet on the strength of this;
+   settle which mechanism it is first.
+
+Nothing read in the executable says so yet.
 
 Three things the disc authors that this project does not touch:
 
