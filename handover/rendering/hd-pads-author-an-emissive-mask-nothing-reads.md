@@ -33,6 +33,37 @@ is complete and this file is only what it did **not** close.
   measurement and `crates/render/examples/hd_pad_material_dump.rs` for the
   probe. **Do not re-derive this**; the next open question is whether it is
   worth wiring, not whether it exists.
+- **The `_ne` file's RGB is a normal map, not paint - answered, asset-side,
+  2026-09-07.** Not red, not white, not any flat colour: `ds_weaponup_ne.gtf`
+  and `ds_speedup_ne.gtf` both have a whole-texture RGB mean of
+  `[127, 129, 243]`/`[127, 128, 244]` - almost exactly the canonical
+  tangent-space normal-map neutral `[128, 128, 255]` - over 32,770/35,360
+  distinct RGBA values across ~1.05M texels each, a continuous gradient, not
+  a handful of painted colours. The rendered PNG is an unmistakable embossed
+  blue/purple bump map. Confirmed a second way, off the shader itself rather
+  than the pixels: the instruction right after each pad's unit-1 `TEX` is
+  `MAD R#, R#, {2.0, -1.0, ...}, ...`, the standard `x*2-1` unpack of a
+  `[0,1]`-packed normal. **Neither pad's fragment program carries a tint
+  either** - `emissive`'s tint parameter (`0xe8bcd7f5`) is absent from both
+  programs' declared-parameter lists and patches zero code slots in either,
+  so it never reaches the microcode at all; the only non-zero inline
+  constants in either 50-instruction program are the normal-decode pair and
+  a Blinn-Phong specular trick's literals. **So nothing measured, asset-side,
+  explains "light up red" for the light bars.** A second, separate tension:
+  `mesh.wgsl`'s already-implemented generic version of this accumulate shape
+  gates by the *diffuse's* alpha, and `_cs`'s own alpha covers 93% of the
+  texture (fully opaque only at the cross/chevron outline) - nothing like
+  the ~7%, bars-only mask `_ne`'s alpha carries. Which alpha channel and
+  which of {RGB, RGB×alpha, alpha-alone} actually governs a pad material is
+  unresolved: the pad's own unit-1 sample lands in `R0`, gets unpacked as a
+  normal and is threaded through a specular chain before the program's final
+  blend, so register-tracing this pass did not confirm the canonical shape
+  end to end for either pad. See `docs/rendering/pads.md`'s "The `_ne` file's
+  RGB is a normal map, not paint" section for the full measurement,
+  `crates/render/examples/hd_pad_ne_colour_probe.rs` and
+  `hd_pad_ne_tint_probe.rs` for the probes. **Do not re-derive this** - the
+  question left open is where the red the maintainer saw actually comes
+  from, not whether this file's colour explains it.
 
 ## Open
 
@@ -49,23 +80,35 @@ earlier "goes dark and then relights" did not.
 
 Three things it changes:
 
-0. **"Only the light bars" and "the emissive layer toggles" are the same
-   statement.** The `_ne` mask's alpha is already established as covering
-   exactly the light bars and nothing else, so a state change confined to the
-   bars is a state change confined to what that mask selects. This is the
-   strongest evidence yet that the emissive layer measured below is the whole
-   mechanism, and it is why the questions below are worth their cost.
+0. **"Only the light bars" and "the emissive layer toggles" are still a
+   plausible statement, but weaker than it looked before the colour check
+   below.** The `_ne` mask's alpha is established as covering exactly the
+   light bars, so a state change confined to the bars is *consistent with* a
+   state change confined to what that mask selects. It is no longer the
+   strongest read, though: the mask's own RGB is a normal map and neither
+   pad's shader carries any tint at all (see "What is closed" above), so if
+   the emissive layer is the whole mechanism, its lit colour cannot come from
+   this material record or this file - it would have to come from somewhere
+   else the runtime feeds in, which is exactly what steps 2-3 below would
+   find.
 1. **The trigger is the grant, and the relight is the refresh.** That maps onto
    a `WeaponPad_UpdateRefreshTimer`-shaped per-frame update, which is exactly
    what step 2's vtable diff is for. It also means the play capture the old
    version of this row asked for is no longer the cheapest way to establish
    *whether* there is a state change - there is one.
-2. **"Red" is checkable asset-side, right now.** The `_ne` mask's **alpha** is
-   established as covering the light bars; **its RGB has never been looked
-   at**. If the bars are red in the `_ne` file's own colour channels, the lit
-   state is just the emissive layer measured above, drawing at `emissive`'s
-   default white tint over red texels - and the dark state is that layer being
-   switched off, not a recolour.
+2. **"Red" is asset-side settled, and it is a negative result.** The `_ne`
+   mask's alpha covers the light bars; its RGB is a tangent-space normal map,
+   not paint, and no tint - baked in the microcode or driven by a material
+   parameter - exists anywhere in either pad's own shader (see "What is
+   closed" above for the numbers). So the lit state is **not** "the emissive
+   layer measured below, drawing at `emissive`'s default white tint over red
+   texels" - that hypothesis is closed. Either an unmeasured runtime state
+   feeds a colour in from outside this material record (the vtable diff,
+   step 2 below, is the way to find it), or the red the maintainer describes
+   comes from a different mechanism than this emissive layer entirely, or -
+   the possibility this project's own history warns to keep live - the
+   recollection is of a different title's pad. Nothing here decides between
+   those three.
 3. **It does not contradict "a speed pad is never recoloured on any title".**
    That closed bullet is about *speed* pads and about *recolouring*. An
    emissive layer toggling on and off is a different mechanism, and the two can
@@ -125,6 +168,30 @@ Three things the disc authors that this project does not touch:
 In order of cost, cheapest first. Step 1 (finding the binding) is done; what
 is left is deciding whether to spend on wiring it, and the two RE leads.
 
+0. **Resolve the accumulate instruction's own swizzle/mask, for a pad
+   material specifically, before spending on step 1.** 2026-09-07 found a
+   real tension that step 1's cost estimate does not yet account for:
+   `mesh.wgsl`'s generic version of this shape gates by the *diffuse's*
+   alpha, and `_cs`'s own alpha covers 93% of the pad texture - not the
+   ~7%, bars-only mask `_ne`'s alpha carries. If that generic shape is what
+   a pad material's own fragment program actually executes, wiring it would
+   spread a normal-map-coloured glow across nearly the whole plate, not the
+   light bars - a materially different (and worse) result than step 1
+   currently assumes. Settling it needs tracing the pad's own final `MAD`
+   instructions' source registers back to the unit-1 `TEX` and reading their
+   swizzles/masks - `rcsmaterial::fragment::Instruction` already carries
+   `mask` and `swizzles`, `crates/render/examples/hd_pad_ne_tint_probe.rs`
+   just doesn't print them yet. Cheap (extend the existing probe), asset-side,
+   no Ghidra needed - do this before step 1's third-texture-slot work, not
+   after. **Account for the alpha test when reading the result**: these pads
+   are alpha-tested (surface role `0x59`, `pad_alpha_test_ground_truth.rs`),
+   so `_cs`'s 93%-non-zero/4%-opaque alpha is a cutout mask, not a blend
+   weight - after the test, surviving fragments skew toward the near-opaque
+   4% (the cross/chevron outline), not spread evenly across the plate. That
+   changes the shape of "the diffuse-alpha gate" reading but not the
+   conclusion: outline-only and bars-only are still two different masks, so
+   whichever this turns out to be, it does not by itself resolve to "matches
+   `_ne`'s bars mask" without the trace this step asks for.
 1. **Wire the emissive layer - and read the trap before touching it.** This is
    *not* the cheap step it looks like. The naive fix - make `skin::picks`'s
    `aux` slot land on sampler entry `[1]` instead of `[2]` for a pad material -
@@ -169,13 +236,19 @@ is left is deciding whether to spend on wiring it, and the two RE leads.
    since Pulse's texture is neutral and HD's is painted. And per step 1's
    measurement: the material's own shader accumulates the light-bar layer
    unconditionally on every chunk read, with no parameter that looks like a
-   gate - so if 2-3 do find a cooldown state, it is not sitting in this
-   material record and the light bars wired per step 1 would need to run
-   always-on regardless, with whatever 2-3 find layered on top rather than
-   replacing it.
+   gate, and (2026-09-07) neither its RGB nor any tint anywhere in either
+   pad's shader is red - so if 2-3 do find a cooldown state, it is not
+   sitting in this material record, this file or this shader, and it is not
+   yet clear it is the same mechanism as the emissive layer at all. Wire
+   whatever colour 2-3 find as its own thing rather than assuming it slots
+   into `emissive`'s tint.
 
-A play capture would settle the *observable* half quickly and is worth doing
-first if RPCS3 is already up: race on `12_sol_2`, cross a weapon pad, and
-compare the pad in the frame before and a second after. That answers "is there
-a state change at all" without reading a single instruction, and it decides
-whether steps 2-3 are worth their cost.
+A play capture would settle the *observable* half quickly, but is not this
+project's cheap step right now: this desktop has no working GUI windows and
+RPCS3 screenshots are known to come back black here (see the memory note on
+verifying headless), so a capture needs a machine with a working display -
+recommend it to whoever picks this thread up next with one, rather than
+attempting it blind. Race on `12_sol_2`, cross a weapon pad, and compare the
+pad in the frame before and a second after: that answers "is there a state
+change at all" without reading a single instruction, and decides whether
+steps 2-3 are worth their cost.
