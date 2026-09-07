@@ -1,0 +1,13 @@
+# address	symbol_type	name	namespace
+8148a4a0	Label	g_zone_speed_class_names	Global
+8151faf8	Label	g_zone_speed_class_thresholds	Global
+816af070	Label	g_zone_blended_stage_colour	Global
+fff00000	Label	SceLibc_36878958	Global
+fff01000	Label	SceLibc_3CE6109D	Global
+fff02000	Label	SceLibc_5D8C1282	Global
+fff03000	Label	SceLibc_66B7406C	Global
+fff04000	Label	SceLibc_D662E07C	Global
+fff05000	Label	SceLibc_DDF9BB09	Global
+fff06000	Label	SceLibstdcxx_064ADA35	Global
+fff07000	Label	SceLibstdcxx_82A84E5E	Global
+fff08000	Label	SceLibstdcxx_DDAE7CBE	Global

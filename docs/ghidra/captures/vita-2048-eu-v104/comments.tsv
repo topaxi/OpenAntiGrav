@@ -1,0 +1,20 @@
+# address	kind	function	text (\n escaped)
+813f61d0	PLATE		Relocation table for SceLibstdcxx_82A84E5E @ 0xFFF07000
+813f6604	PLATE		Relocation table for SceLibstdcxx_064ADA35 @ 0xFFF06000
+813f69c8	PLATE		Relocation table for SceLibc_DDF9BB09 @ 0xFFF05000
+813f6a5c	PLATE		Relocation table for SceLibc_D662E07C @ 0xFFF04000
+813f6b40	PLATE		Relocation table for SceLibc_3CE6109D @ 0xFFF01000
+813f6e14	PLATE		Relocation table for SceLibc_36878958 @ 0xFFF00000
+813f6f38	PLATE		Relocation table for SceLibstdcxx_DDAE7CBE @ 0xFFF08000
+813f6fac	PLATE		Relocation table for SceLibc_5D8C1282 @ 0xFFF02000
+813f6fe0	PLATE		Relocation table for SceLibc_66B7406C @ 0xFFF03000
+8151faf8	PLATE		Zone speed-class ladder: 17 records of 0x10 bytes. Word +0 is a descending zone-number threshold, +4 a pointer into g_zone_speed_class_names, +8/+0xc a ZoneSpeedLogo sprite cell. Record 0 (9999) is an unreachable sentinel sharing record 1's name. Walked by Hud_UpdateZoneSpeedClassWidget (0x81197d6c), which writes 0x11 - i as the speed class. See docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md
+fff00000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0x36878958\n--- SceLibc_36878958 ---
+fff01000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0x3CE6109D\n--- SceLibc_3CE6109D ---
+fff02000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0x5D8C1282\n--- SceLibc_5D8C1282 ---
+fff03000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0x66B7406C\n--- SceLibc_66B7406C ---
+fff04000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0xD662E07C\n--- SceLibc_D662E07C ---
+fff05000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibc (NID 0xBE43BB07)\nVariable NID: 0xDDF9BB09\n--- SceLibc_DDF9BB09 ---
+fff06000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibstdcxx (NID 0xF7629240)\nVariable NID: 0x064ADA35\n--- SceLibstdcxx_064ADA35 ---
+fff07000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibstdcxx (NID 0xF7629240)\nVariable NID: 0x82A84E5E\n--- SceLibstdcxx_82A84E5E ---
+fff08000	PLATE		--- IMPORTED VARIABLE ---\nImported from libc.suprx\nLibrary: SceLibstdcxx (NID 0xF7629240)\nVariable NID: 0xDDAE7CBE\n--- SceLibstdcxx_DDAE7CBE ---
