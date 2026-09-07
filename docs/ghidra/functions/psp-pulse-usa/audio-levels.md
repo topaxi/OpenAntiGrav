@@ -807,3 +807,219 @@ does not touch, and the gate result for this change live in the project's
 own work-in-flight tracker, per this project's rule that a `docs/` page never
 references it - the thread citing this page's own section anchor is the one
 to read for that.
+
+## The SFX-side gap does not need summing at all - it is there at one voice (2026-09-07)
+
+With the music path settled, this pass isolated the SFX bus the same way the
+music bus was isolated above: mute music at the source, dump the rest, and
+compare like for like. **The result overturns this page's own
+"several honestly-scaled voices summing 2-6x" framing as the explanation.**
+The gap is present, at nearly the same size in dB, with **one voice**.
+
+### Method: mute `g_music_player_ptr`'s volume live, instead of the options menu
+
+Rather than navigate the options menu (which would persist a profile change
+and cost a screenshot-driven walk for no reason), this pass wrote zero
+directly to the already-recovered fields from the section above:
+`g_music_player_ptr` (`0x08ac1dd8`) dereferenced to `mgr`, then
+`memory.write_u32(mgr+0x40, 0)` and `memory.write_u32(mgr+0x44, 0)` - the same
+`vol_current`/`vol_target` pair the options-menu slider writes, set to the
+same value muting the slider would produce. Confirmed by reading them back
+(`100, 100` -> `0, 0`) before resuming. This is a measurement technique, not a
+mixer change: it isolates the SFX bus at its own existing volume input, the
+same way pinning `music_volume = 0` in our own settings isolates it on the
+port side, and it touches no persisted PPSSPP profile.
+
+### Measurement 1: full eight-craft grid, SFX only
+
+24 s window (tick-bracketed, same method as the section above), `pulse-psp-usa`,
+Single Race, full grid, thrust held, music muted live:
+
+| | Peak | RMS | Clipped |
+| --- | --- | --- | --- |
+| Original, SFX alone (music muted live) | 0 dBFS | **-16.61 dBFS** | 633 / 2,117,378 (**0.030%**) |
+| Original, whole mix (for reference, from the section above) | 0 dBFS | -15.27 dBFS | 0.044% |
+| Our port, SFX alone (`sfx_volume=100`, `music_volume=0`, 30 s, `--race --mode single_race --autopilot`) | 0 dBFS | **-8.46 dBFS** | 47,115 / 2,880,000 (**1.636%**) |
+
+**Muting the original's music barely moves its own clip rate (0.044% ->
+0.030%)** - confirming music was never a meaningful contributor to the
+original's clip count, consistent with the music-alone measurement above
+(2 samples in 30 s). The gap between the two sides is **8.15 dB of RMS** and
+close to two orders of magnitude in clip rate, and it is entirely on the SFX
+side - exactly what this thread's title already suspected, now isolated
+rather than inferred from the whole mix.
+
+### Measurement 2: one craft, one engine voice, no summing possible at all
+
+If the gap above were the "2-6x sum" mechanism this page already measured
+(the per-voice SAS section, above), it should shrink sharply with only one
+voice able to sound. It does not.
+
+**The two captures are not the same scenario, and that matters more than the
+RMS number below - said plainly rather than left to be noticed.** The
+original side is `menu`'s own hold-`cross`-and-release, no steering: on
+Talon's Junction that free-runs into the first wall rather than following the
+racing line, the shape `ppsspp-debugger.md` already documents for an
+open-loop hold. Our side is `--autopilot`, which stays on the line at
+110-167 speed with real airtime and landings. Different trajectories, and a
+different population of one-off cues (wall scrapes on one side, landing
+thumps on the other) riding on top of the steady engine tone either way.
+
+**What makes the engine-tone half of the comparison legitimate anyway:
+`exhaust.md`'s own law saturates intensity within about four seconds,
+regardless of speed.** `i += dt * 0.25` clamped to `[0, 1]` reaches `1.0`
+`4/0.25 = 4` ticks... no - `1 / 0.25 = 4` seconds after the engine comes on,
+and speed only ever moves *pitch*, never `i`. So past the first four seconds
+of a 24 s window, both sides' engine voice sits at the law's own ceiling,
+`0.6 * 1.0 + 0.4 = 1.0`, for the rest of the capture - the steady-tone half
+of each capture is comparable even though the two trajectories are not,
+which is a read off `exhaust.md`, not an assumption this pass is making to
+paper over the mismatch.
+
+Time Trial, one craft, full throttle, music muted the same way, 24 s
+tick-bracketed window on the original; our own port run with `--mode
+time_trial` (no opponents, no weapon pads - `main/cli.rs`'s own doc comment:
+"`single_race` is the only one that races with weapons"), same settings pin:
+
+| | Peak | RMS | Clipped |
+| --- | --- | --- | --- |
+| Original, one craft, engine alone (music muted live), un-steered hold-`cross` | **-4.14 dBFS** | **-19.65 dBFS** | 0 / 2,117,446 (**0.000%**) |
+| Our port, one craft (`--mode time_trial --autopilot`, on the racing line, otherwise identical pin) | 0 dBFS | **-11.15 dBFS** | 4,534 / 2,880,000 (**0.157%**) |
+
+**Lead with the peak, which is scenario-proof in a way the RMS delta is
+not: the original's one craft never reaches 0 dBFS anywhere in 24 s of
+full-throttle engine, and our port hits full scale 4,534 times in the same
+window shape.** No trajectory difference explains a single voice never
+touching the ceiling on one side and routinely pinning it on the other. The
+RMS gap (**8.50 dB**) is corroborating, not load-bearing on its own, and it
+is the same size, to within 0.35 dB, as the eight-craft gap above despite the
+two captures' different cue populations. **A gap that does not shrink when
+the voice count drops from eight to one is not a summing effect.** This
+retires "several honestly-scaled voices summing 2-6x, no reserved headroom"
+(this page's own 2026-09-06 section) as the saturation's cause: that
+mechanism is real - the per-voice SAS values do sum 2-6x, measured - but it
+cannot be *the* reason our port clips, because the same-sized gap exists with
+only one voice able to sum with anything.
+
+### What actually scales it: a pipeline stage this port has never had
+
+[`positional-audio.md`](positional-audio.md#the-two-hardware-volumes-and-the-table-that-makes-them)
+already documents, from a 2026-09-01 pass unrelated to this thread, a stage
+between `SoundEmitter_ComputeVolumeAndAngle`'s `0..1024` output (which *is*
+faithfully ported - `oag_audio::spatial::Emitter::place`'s `volume_curve`,
+runtime-verified 1,610/1,610 against the original) and the two hardware
+channel volumes: `Scream_PanVolumePair` (`0x08995a9c`) recombines **four**
+terms, `p1 * p2 * p4 * p6 * 0x102 / 0x7f^3`, **some of them squared under a
+mode mask** the page already reads (mask `10`) but does not yet know the
+*meaning* of - only that two of the four terms get squared and two do not.
+
+**This entire stage is absent from the port.** `crates/audio/src/spatial.rs`
+takes `SoundEmitter_ComputeVolumeAndAngle`'s output (`volume_curve(atten *
+volume)`) and hands it to the mixer as the *final* linear gain; `grep` across
+`crates/audio` and `crates/game/src/audio` for `Scream`/`PanVolumePair` finds
+nothing. The original does not stop at that `0..1024` value - it is one of
+(at least) four inputs multiplied together, with two of them squared, before
+the result divides by `0x3fff` into the actual channel gain. A product of
+several sub-unity terms is systematically quieter than any single term alone,
+which is the shape of exactly what Measurements 1 and 2 above show: a gap
+that is there per-voice, before any summing, and consistent in size whether
+one voice sounds or eight do.
+
+**Confirmed live, not left as a maybe: at real full-throttle engine values,
+this stage attenuates by 4-13 dB, not gains.** `combined`'s theoretical
+ceiling (`0x7ffe`, all four terms at `0x7f`) divides to `2.0` - a gain, if
+every term happened to sit at its own maximum, which would have made this
+stage the *wrong* lead entirely. It doesn't happen. `Scream_PanVolumePair`
+(`0x08995a9c`) was read live with `memory.disasm` (PPSSPP's own disassembly
+API, not Ghidra) while broken on its entry, during an actual full-grid Single
+Race with thrust held: the stack word at `sp+0` is the mode mask (read as
+`10`, matching `positional-audio.md`'s static decompile exactly, now
+independently confirmed from the running binary), and the instruction
+sequence resolves the four terms and which two the mask squares:
+
+```text
+combined = a0 * (a3 * ((t1_sq * (a1_sq * 0x102)) / 0x7f)) / 0x7f) / 0x7f
+  where a1_sq = mask&2 ? a1*a1/0x7f : a1   (squared: mask bit 1 is set)
+        t1_sq = mask&8 ? t1*t1/0x7f : t1   (squared: mask bit 3 is set)
+  a0 and a3 are used unsquared (mask bits 0 and 2 are clear)
+```
+
+`a0`-`a3` are the standard MIPS o32 register arguments; `t1` is a fifth value
+already resident in a callee-saved-by-convention register at the function's
+own entry, not one of the four visible arguments - who sets it up is exactly
+the caller-side question left below. Ten breakpoint hits at
+`Scream_PanVolumePair`'s entry, full throttle, full grid, read
+`(a0, a1, a3, t1)` directly off `cpu.getAllRegs` and ran through this exact
+sequence:
+
+| `(a0, a1, a3, t1)` | `combined` | gain (`combined/0x3fff`) | dB |
+| --- | ---: | ---: | ---: |
+| `(126, 50, 127, 110)` | 3,637 | 0.222 | -13.07 |
+| `(127, 50, 127, 110)` | 3,666 | 0.224 | -13.00 |
+| `(77, 90, 127, 127)` | 9,854 | 0.602 | -4.42 |
+| `(79, 67, 127, 110)` | 4,201 | 0.256 | -11.82 |
+
+Mean **-11.7 dB** across these ten hits (four distinct value tuples, several
+repeats) - the same size, within the noise a ten-hit sample carries, as the
+8.15-8.50 dB RMS gap Measurements 1 and 2 above already isolated. **`a3` read
+`127` (max, unsquared) on every single hit** - consistent with the
+already-established finding that the group-volume table sits at ceiling
+throughout a race, so this term is not the mystery; **`a0`, `a1` and `t1` all
+varied** and are the ones actually doing the attenuating.
+
+**This settles the direction, which the theoretical ceiling alone could not:
+`Scream_PanVolumePair` is a genuine, currently-unported attenuation on the
+SFX path, of about the right size, not merely a stage that happens to exist.**
+It is not ported here anyway - what remains unread is **where `a0`, `a1` and
+`t1` are set on the caller side**, i.e. what each one physically represents
+in terms this port already computes (`SoundEmitter_ComputeVolumeAndAngle`'s
+`0..1024`? a per-bank or per-cue base volume? something read back from a SAS
+voice?). Without that, wiring the same arithmetic into
+`oag_audio::spatial::Emitter::place` would mean *guessing* which of the
+port's own values maps to which of these three terms - exactly the invented
+mapping `CLAUDE.md` forbids, even though the arithmetic itself is now
+exactly known. **Nothing is changed in `crates/audio` or
+`crates/game/src/audio` by this pass.** The next step is tracing
+`Scream_PanVolumePair`'s callers (`Scream_SetSoundVolume` and neighbours,
+reached from `SoundInstance_UpdateSpatial`) to learn what feeds `a0`/`a1`/`t1`
+- either with the Ghidra bridge once it is available again, or with more of
+the same live-breakpoint technique this section used, walked one call frame
+further out.
+
+**Confidence 85** on the diagnosis (mechanism is per-voice, not summing -
+two independent live measurements agreeing to 0.35 dB) and **82** on
+`Scream_PanVolumePair` being a real, measured attenuation of roughly the
+right size at real gameplay values (ten live hits, one binary, one session;
+not yet corroborated against a second capture or against `pulse-psp-eu`) -
+up from no confidence score, now that the direction is read rather than
+bounded.
+
+### Whole mix, unchanged, because nothing was changed
+
+30 s capture, `pulse-psp-eu.chd`, `--race --autopilot --ticks 1800`, all
+volumes at 100, same recipe as every prior row in this table - measured fresh
+this pass to confirm nothing drifted, not because anything was expected to:
+
+| | Peak | RMS | Clipped |
+| --- | --- | --- | --- |
+| Original's whole race mix (`pulse-psp-usa`, live, for reference) | 0 dBFS | -15.27 dBFS | 0.044% |
+| Our port, whole mix (previously measured) | 0 dBFS | -7.87 dBFS | 2.312% |
+| **Our port, whole mix (this pass, unchanged code)** | 0 dBFS | **-8.11 dBFS** | **2.001%** |
+
+The small differences from the previously-recorded row (0.24 dB, 0.31 points)
+are **not attributed to a code effect - no line in `crates/audio` or
+`crates/game/src/audio` changed this pass** - but the exact cause of the
+drift itself is not pinned down either: candidates include a different
+debug-profile build, a fresh settings file resolving a different default
+track than the prior pass's own pin directory, and ordinary autopilot/AI
+variance. Not chased further since 0.3 points is noise against the 8+ dB
+finding above. The whole mix still clips at essentially the same rate this
+thread's table has shown since the music trim landed, because the diagnosis
+above is a *pipeline stage identified as missing*, not yet a port.
+
+**Listening check**: waveform-shape only, no audio device in this sandbox.
+The one-craft capture (Measurement 2) never reaches full scale on the
+original at all and reaches it routinely on our port; nothing in either
+capture drops to silence or loops on itself. This is the same shape as every
+prior listening check on this thread - "louder than it should be," not
+"broken" or "missing."
