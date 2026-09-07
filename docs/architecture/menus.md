@@ -401,8 +401,10 @@ including a key off the closed candidate set.
 
 **Confirming a row now says so.** While `Session::awaiting_binding` is `Some`,
 `Session::draw` calls `crate::rebind::prompt` - `OAG_BINDING_CAPTURE_PROMPT`
-resolved against the button's own `Display` name, upper-cased (`THRUST`,
-`BRAKE`, and so on) - and hands the result to `MenuStage::render` as one more
+resolved against the button's own `Display` name, upper-cased (`CROSS`,
+`CIRCLE`, and so on - `rebind::prompt` does `button.to_string()`, the
+button's own name, not the row's `label`) - and hands the result to
+`MenuStage::render` as one more
 parameter, the same way
 `bound_keys` and `frozen_race` already cross that seam: this stage holds no
 session state of its own, so anything it draws that depends on one has to
@@ -493,17 +495,32 @@ implied by anything above.
 ### The row set names what a button actually does
 
 Every `binding` row's label was checked against
-`oag_gameplay::controls::ship_controls` (the eight driving axes),
-`Race::spend_pickup` (`crates/game/src/race/weapons.rs`, the two weapon
-buttons) and `oag_gameplay::input` (the button/`InputSnapshot` wiring) rather
-than trusted by eye, after `circle`'s row was found reading "BRAKE" when
-circle does not brake - there is no brake action anywhere in
-`ship_controls`, braking being the airbrakes (`l`/`r`) already on their own
-rows. Circle absorbs a pickup and `square`, which had no row at all, fires
-one; both now read "ABSORB PICKUP" and "FIRE PICKUP", matching the verbs
+`oag_gameplay::controls::ship_controls`, `Race::spend_pickup`
+(`crates/game/src/race/weapons.rs`, the two weapon buttons) and
+`oag_gameplay::input` (the button/`InputSnapshot` wiring) rather than
+trusted by eye, after `circle`'s row was found reading "BRAKE" when circle
+does not brake - there is no brake action anywhere in `ship_controls`,
+braking being the airbrakes (`l`/`r`) already on their own rows. Circle
+absorbs a pickup and `square`, which had no row at all, fires one; both now
+read "ABSORB PICKUP" and "FIRE PICKUP", matching the verbs
 `OAG_HINTS_RACE_KEYS` already used for the same two buttons. `cross`
 (thrust), `left`/`right` (steer), `up`/`down` (pitch) and `l`/`r` (airbrakes)
 were all confirmed correct against the same functions.
+
+The check also went the other way - not just "does every row say the truth"
+but "does every recovered action have a row". `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`
+(confidence 90) names eight original actions; **seven have a row here and
+one does not.** Action 3, `OPT_CTRL_LBACK` ("look back"), is bound to
+`TRIANGLE`, and `Button::Triangle` genuinely reaches nothing beyond the
+button-name tables, the pad mapping and its default keyboard key (`V`) -
+grepped directly, no consumer anywhere in `oag_gameplay`, `oag_physics` or
+`oag_ai`. So there is no row for it because there is nothing yet for a row
+to name; a LOOK BACK row bound to a button nothing reads would be exactly
+the "plausible-looking stand-in" this project's own root doc warns against,
+not a fix. `steer`/`pitch` are not among the eight actions at all (they are
+the original's analog axes, not action-table entries), which is why this
+page carries ten `binding` rows against eight recovered actions rather than
+a one-to-one count.
 
 Two rows this page deliberately does not add:
 

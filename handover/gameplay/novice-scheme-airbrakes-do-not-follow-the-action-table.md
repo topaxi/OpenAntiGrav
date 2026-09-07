@@ -48,12 +48,18 @@ looks at labels, not scheme-conditional behaviour.
 ## Next Steps
 
 - If confirmed, the fix is scheme-aware in `ship_controls` (it already takes
-  `scheme`): when `novice`, `airbrake_left` should read `0.0` regardless of
-  `L`, and `airbrake_right` should read `snapshot.airbrake_left.max(snapshot.
-  airbrake_right)` (either shoulder held drives both) rather than
-  `snapshot.airbrake_right` alone. Update `ship_controls`'s own doc comment,
-  which currently only calls out `shift_modifier`/`shift_tap_left`/
-  `shift_tap_right` as scheme-filtered.
+  `scheme`): when `novice`, both `airbrake_left` and `airbrake_right` should
+  read `snapshot.airbrake_right` (`R` alone drives both, per action 4 =
+  `R`), and `snapshot.airbrake_left` (`L`) should be ignored entirely for
+  airbrake purposes - `L` in novice only arms the sideshift
+  (`shift_modifier`), it contributes no airbrake per action 7 = `L`. Update
+  `ship_controls`'s own doc comment, which currently only calls out
+  `shift_modifier`/`shift_tap_left`/`shift_tap_right` as scheme-filtered.
 - `crates/gameplay/src/controls.rs`'s own test module is the place for a
-  case pinning "novice + R held only -> both airbrakes; novice + L held only
-  -> no airbrake, `shift_modifier` true".
+  case pinning "novice + `R` held only -> both airbrakes; novice + `L` held
+  only -> no airbrake at all, `shift_modifier` true".
+- `sideshift-has-no-runtime-leg.md`'s opening line, "Both control schemes
+  are implemented," is true of the *gesture* halves only (the double-tap and
+  the flick's arm/fire logic) - this thread is the airbrake half of novice
+  that line does not cover, and is worth a cross-reference from there once
+  this lands.
