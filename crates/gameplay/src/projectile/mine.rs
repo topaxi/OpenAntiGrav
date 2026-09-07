@@ -232,11 +232,19 @@ pub const fn at_rest() -> Vec3 {
 /// [`oag_physics::Body::orientation`] is what it uses - the closest available
 /// reading, not the recovered one.
 ///
-/// **A second, separate open question lives at the draw site, not here**:
-/// whether `Pulse_Mine.vex`/`Pulse_Bomb.vex` need a `MODEL_YAW`-style
-/// per-model axis correction the way `Ship.vex` does. Unmeasured for these
-/// two; see `oag_game::race::weapons::visuals::projectile_model_matrices`'s
-/// own doc comment.
+/// **A second, separate question lives at the draw site, not here, and it is
+/// mostly closed by the model's own shape.** `Pulse_Mine.vex` (viewed with
+/// `oag-view --mesh`, the same way `MODEL_YAW`'s own measurement of
+/// `Ship.vex` was made) is a caltrop - three spikes at roughly 120° around
+/// one axis - not a directional hull, so a `MODEL_YAW`-style yaw error about
+/// that axis has nothing to be wrong *relative to*: any of the three spikes
+/// reads as "the front" equally well. What that measurement does not reach
+/// is whether the axis itself - which way the caltrop's own points face
+/// versus [`oag_physics::Body::forward`]'s convention - agrees, a coarser
+/// and lower-stakes question than the ship's nose/tail one. `Pulse_Bomb.vex`
+/// was not separately viewed. See
+/// `oag_game::race::weapons::visuals::projectile_model_matrices`'s own doc
+/// comment.
 #[must_use]
 pub const fn frozen_pose(orientation: Quat) -> Quat {
     orientation

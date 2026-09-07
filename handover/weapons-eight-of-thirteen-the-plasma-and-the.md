@@ -397,30 +397,43 @@ done, for the reading and its confidence split.
   sizes" footing this module already applies to `at_rest`, even though the
   Bomb's own spawn helper (`0x0885f188`) is unresolved and does not confirm
   the same matrix copy happens there.
-- **Whether `Pulse_Mine.vex`/`Pulse_Bomb.vex` need a `MODEL_YAW`-style
-  per-model axis correction is unmeasured, and worth closing before trusting
-  a laid charge's picture at a glance.** `MODEL_YAW` (`race.rs`) exists
-  because `Ship.vex`'s own hull was measured wider at one end than the
-  other and is authored nose-along a different axis than
-  `oag_physics::Body::forward` uses - a **per-model** fact about that one
-  file, not a `.vex`-format universal. The only precedent this engine has for
-  a *weapon* model is the Rocket's, which needs no correction
-  (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down` measures
-  `Pulse_Rocket.vex` against its own flight direction and passes as drawn);
-  nothing equivalent has measured the Mine's or the Bomb's own model against
-  `Body::orientation`'s convention. A live-race screenshot was attempted to
-  settle it empirically and could not: the chase camera sits almost exactly
-  where a charge is dropped, so a freshly-laid mine is occluded by the firing
+- **Whether `Pulse_Mine.vex` needs a `MODEL_YAW`-style per-model axis
+  correction, checked the same way `MODEL_YAW` itself was measured, and
+  mostly closed rather than open.** `MODEL_YAW` (`race.rs`) exists because
+  `Ship.vex`'s own hull was measured wider at one end than the other and is
+  authored nose-along a different axis than `oag_physics::Body::forward`
+  uses - a **per-model** fact, not a `.vex`-format universal. `oag-view
+  --mesh` on `Pulse_Mine.vex` (`just view
+  "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" --mesh
+  'Data\Weapons\Pulse_Mine.vex' --screenshot ...`) shows a caltrop - three
+  spikes at roughly 120° about one axis, confirmed from three yaw/pitch
+  angles - not a directional hull like the ship's. A yaw error about that
+  axis has no "wrong way round" to fall into: any of the three spikes reads
+  as the front equally well, unlike a ship's nose and tail. **Left open, and
+  genuinely unmeasured**: whether the caltrop's own axis - which way its
+  points face - agrees with `Body::orientation`'s convention, a coarser and
+  lower-stakes question than the ship's. A live-race screenshot was tried to
+  settle even that and could not: the chase camera sits almost exactly where
+  a charge is dropped, so a freshly-laid mine is occluded by the firing
   craft's own hull in every framing tried (stock chase view, `--camera-view
-  far`/`close`, and a dozen `--camera-pose` attempts from the side, above and
-  behind, at the stationary grid and moving); only a mine already left well
-  behind by a moving craft is visible, and by then its pose reflects
-  wherever the track had banked to, not a controlled level baseline. If this
-  is wrong the failure mode is specific and checkable: a laid charge would
-  read as lying on its side or nose-down relative to the track it is
-  sitting on, in a screenshot from a hand-placed camera or `oag-view --mesh
-  Data\Weapons\Pulse_Mine.vex` measured the way `MODEL_YAW`'s own doc comment
-  measured `Ship.vex`.
+  far`/`close`, a dozen `--camera-pose` placements at the grid and moving).
+  `Pulse_Bomb.vex` was not separately viewed - worth five minutes for whoever
+  next touches this, on the same recipe.
+- **A player mashing the fire button lays mines three times faster than the
+  authored rate, and it was caught by this session's own `--give` telemetry
+  rather than looked for.** `DROP_INTERVAL` is `0.1 s` and `CLUSTER` is `5`,
+  which cap a *sustained* drop at one every six ticks - but a capture driven
+  by `--press square` (one rising edge every two ticks) logged 30/60/90/120
+  mines in the air at ticks 60/120/180/240: exactly one mine per press-edge,
+  three times the authored ceiling. Also laid throughout the whole start-line
+  countdown, while the craft cannot move. Likely cause, not confirmed:
+  `Race::spend_pickup`'s Mine arm calls `begin_drop(drop.count)` on every
+  press with no `pickup.is_dropping()` guard, so a re-press mid-cluster
+  re-arms the drop and lays immediately rather than being ignored until the
+  cluster finishes. **Not fixed here** - it moves mine positions and
+  therefore the world hash, so it needs a change (and a hash regen) of its
+  own; recorded so the next person driving weapons with `--give` does not
+  mistake it for their own bug.
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the
