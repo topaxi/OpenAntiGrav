@@ -18,12 +18,20 @@
 # Edit it and run `cargo nextest run -p oag-game menu::` to check it, or pass
 # `--menu <path>` to try a copy without rebuilding.
 #
-# Labels are literal text on purpose. A row may also carry `string_id`, an id
-# `crate::menu::definition::resolve` looks up in a project-owned
-# `assets/ui/strings/<language>.toml` and shows in place of `label` when found
-# - see `crate::strings`. **This build's own labels below still don't name
-# one**: nothing yet ships a translation for them to look up, so adding
-# `string_id` rows here is a later, separate step from the mechanism itself.
+# A row may carry `string_id`, and a page may carry `title_string_id` -  an id
+# `crate::menu::definition::resolved` looks up in a project-owned
+# `assets/ui/strings/<language>.toml` and shows in place of `label`/`title`
+# when found, falling back to the literal text otherwise - see
+# `crate::strings`.
+#
+# **A new row or page needs its `string_id`/`title_string_id` and the
+# matching English entry in `assets/ui/strings/english.toml`, in the same
+# change.** `just check-strings` (`scripts/check-strings.py`) enforces this at
+# gate time: a label or title with no id is a hard failure unless it is one of
+# the rows this script's own `BASELINE_LABELS`/`BASELINE_TITLES` names, which
+# is the pre-existing debt most of this file still is - a ratchet, the same
+# shape `check-size`'s file-length ceiling already is, so old debt is bounded
+# and visible rather than blocking, and *new* UI cannot add to it silently.
 #
 # Identifiers in `values` are archive path components, never display names:
 # `Assegai` is a directory on the disc. Anything a player should read in their
@@ -1029,6 +1037,7 @@ label = "BACK"
 [[page]]
 id = "pilots"
 title = "AI PILOTS"
+title_string_id = "OAG_PILOT_PAGE_TITLE"
 
 # Ours, start to finish - see `crates/game/src/pilots.rs`'s own module doc.
 # No disc's front end has anything like it: pilots are ranges this project
@@ -1043,6 +1052,7 @@ title = "AI PILOTS"
 [[page.entry]]
 kind = "choice"
 label = "PILOT"
+string_id = "OAG_PILOT_PILOT"
 setting = "pilot.selected"
 values_from = "pilots"
 
@@ -1051,6 +1061,7 @@ values_from = "pilots"
 [[page.entry]]
 kind = "choice"
 label = "AXIS"
+string_id = "OAG_PILOT_AXIS"
 setting = "pilot.axis"
 values_from = "pilot_axes"
 
@@ -1063,12 +1074,14 @@ values_from = "pilot_axes"
 [[page.entry]]
 kind = "choice"
 label = "LOW"
+string_id = "OAG_PILOT_LOW"
 setting = "pilot.low"
 values_from = "pilot_axis_low"
 
 [[page.entry]]
 kind = "choice"
 label = "HIGH"
+string_id = "OAG_PILOT_HIGH"
 setting = "pilot.high"
 values_from = "pilot_axis_high"
 
@@ -1081,6 +1094,7 @@ values_from = "pilot_axis_high"
 [[page.entry]]
 kind = "action"
 label = "SAVE"
+string_id = "OAG_PILOT_SAVE"
 action = "save_pilot"
 
 # Auto-named (`pilot-1`, `pilot-2`, ...) rather than asking for a name.
@@ -1127,3 +1141,4 @@ action = "delete_pilot"
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"

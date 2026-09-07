@@ -2,21 +2,20 @@
 //!
 //! The disc's localisation works and is already read - see
 //! [`crate::boot::load_strings`] - but it covers only the disc's own ids.
-//! Everything this project has added on top (`assets/ui/menu.toml`'s labels,
-//! [`oag_race::Mode::fallback_label`]-style fallbacks, the loading screen's
-//! prose, ...) is plain English with no id-based indirection at all, and the
-//! disc's own table has no way to be *overridden* either - a wrong or missing
-//! entry can currently only be fixed by shipping different disc data, which
-//! this project cannot do (ADR-0006). See
-//! `handover/invented-ui-text-has-no-translation-and-the.md`.
+//! Everything this project has added on top of it (`assets/ui/menu.toml`'s
+//! `label`/`title`, [`oag_race::Mode::fallback_label`]-style fallbacks, the
+//! loading screen's prose, ...) is wired through this module's [`overlay`]
+//! now, project entries winning over a matching disc id. See
+//! `handover/invented-ui-text-has-no-translation-and-the.md` for how that
+//! landed.
 //!
-//! This module is the file format and the merge, not the fix: nothing yet
-//! looks up a project-invented string by id (that is still literal `&str` at
-//! every one of the four call sites the handover thread names), so what lands
-//! here only starts mattering once something does. What it already does for
-//! free, because [`crate::boot::load_strings`] wires it in: a project file
-//! can **override** a disc idstring an existing widget already resolves - see
-//! [`overlay`].
+//! **`just check-strings` (`scripts/check-strings.py`) is the gate that keeps
+//! it wired.** It fails if a `string_id`/`title_string_id` referenced
+//! anywhere resolves to nothing in this file, or if a *new*
+//! `assets/ui/menu.toml` row or page names none at all - offline, at gate
+//! time, the same shape `check-size`'s file-length ceiling already is for a
+//! different kind of debt. English text with no id is only tolerated on the
+//! rows that script's own `BASELINE` names.
 //!
 //! # Format
 //!
@@ -33,6 +32,17 @@
 //! language with no file yet - every language but English, today - overlays
 //! nothing, which is the honest state of a translation not yet written rather
 //! than something to guess at.
+//!
+//! # A translation that has not caught up yet
+//!
+//! English is the base language: every id used anywhere must have real text
+//! here, and `check-strings.py` enforces that with no exception. A *second*
+//! language's file is allowed to lag - a translator has not reached an id
+//! yet - but only by **naming the gap**, under its own `[untranslated]` table
+//! (`ids = ["OAG_...", ...]`), never by omitting the id silently. See
+//! `assets/ui/strings/english.toml`'s own doc comment for the worked example,
+//! and never fill either kind of gap with a machine translation - a marked
+//! placeholder is honest, an invented one is not.
 
 use std::collections::HashMap;
 

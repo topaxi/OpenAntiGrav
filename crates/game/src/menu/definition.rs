@@ -9,15 +9,23 @@
 //!
 //! # `string_id`
 //!
-//! A row's `label` is resolved once, here, rather than wherever it is drawn:
-//! [`resolve`] takes the same [`StringTable`] `menu::mode_label` already
-//! reads, and looks a row's `string_id` up in it when it names one, falling
-//! back to the literal `label` otherwise. **This is only ever the caller's
-//! own project-owned table, never the disc's** - `Definition::parse` runs
-//! before any disc is open (`prepare::definition`, called from `main()`
-//! before `source::resolve`), so a real disc-merged table is never in hand
-//! here. See `crate::strings::project_table` for the one this build passes,
-//! and the invented-UI-text handover thread for why that split exists.
+//! A row's `label` and a page's `title` are each resolved once, here, rather
+//! than wherever they are drawn: [`resolved`] takes the same [`StringTable`]
+//! `menu::mode_label` already reads, and looks `string_id` (or a page's own
+//! `title_string_id`) up in it when one is named, falling back to the
+//! literal `label`/`title` otherwise. **This is only ever the caller's own
+//! project-owned table, never the disc's** - `Definition::parse` runs before
+//! any disc is open (`prepare::definition`, called from `main()` before
+//! `source::resolve`), so a real disc-merged table is never in hand here.
+//! See `crate::strings::project_table` for the one this build passes, and
+//! the invented-UI-text handover thread for why that split exists.
+//!
+//! **`just check-strings` (`scripts/check-strings.py`) is what stops a new
+//! screen shipping without one of these**, the same way this file's own
+//! `check()` stops a dangling `target`: it is a hard failure at gate time,
+//! not a runtime one, because nothing here can see the whole tree of pages
+//! at once and neither can a player watching one screen ever tell that a
+//! *different* screen forgot.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -119,6 +127,11 @@ mod raw {
         pub id: String,
         #[serde(default)]
         pub title: String,
+        /// An id [`super::resolved`] looks up in place of `title` - the same
+        /// mechanism an entry's own `string_id` uses, one level up. See this
+        /// module's own `# string_id` doc.
+        #[serde(default)]
+        pub title_string_id: Option<String>,
         #[serde(default, rename = "entry")]
         pub entries: Vec<Entry>,
     }
@@ -215,7 +228,7 @@ impl Definition {
             }
             pages.push(Page {
                 id: page.id.clone(),
-                title: page.title.clone(),
+                title: resolved(strings, page.title_string_id.as_deref(), &page.title),
                 entries,
             });
         }
@@ -327,6 +340,28 @@ impl Definition {
     }
 }
 
+/// Looks `string_id` up in `strings`, falling back to `literal` when it names
+/// none or the table has nothing for it - not to the id itself.
+///
+/// **This used to fall back to the id** (`StringTable::get_or_id`), on the
+/// argument that the id space is the disc's own, so showing the id beat
+/// silently drawing a literal the row had moved away from. That argument
+/// held while nothing in `assets/ui/menu.toml` named an id. It stopped
+/// holding on 2026-09-06, when the pilot editor's rows became the first
+/// that do: those ids are **ours**, `assets/ui/strings/english.toml` is
+/// the only file that carries them, and every other language overlays
+/// nothing - so a French player was shown `OAG_PILOT_RENAME` where the row
+/// says `RENAME`. Caught in a `--menu-page` capture on the EU disc, which
+/// is exactly the machine a developer working in English would not have.
+///
+/// Shared between a row's own `label`/`string_id` and a page's `title`/
+/// `title_string_id` - one lookup, two callers, the same fallback rule.
+fn resolved(strings: &StringTable, string_id: Option<&str>, literal: &str) -> String {
+    string_id
+        .and_then(|id| strings.get(id))
+        .map_or_else(|| literal.to_string(), ToString::to_string)
+}
+
 /// Turns one raw entry into a resolved one, or says exactly what is wrong.
 fn resolve(
     entry: &raw::Entry,
@@ -334,29 +369,10 @@ fn resolve(
     index: &HashMap<String, usize>,
     strings: &StringTable,
 ) -> Result<Entry, Error> {
-    // A row with no `string_id` keeps its literal label untouched. One that
-    // names an id gets the table's answer, and **falls back to its own
-    // `label` when the table has nothing** - not to the id.
-    //
-    // **This used to fall back to the id** (`StringTable::get_or_id`), on the
-    // argument that the id space is the disc's own, so showing the id beat
-    // silently drawing a literal the row had moved away from. That argument
-    // held while nothing in `assets/ui/menu.toml` named an id. It stopped
-    // holding on 2026-09-06, when the pilot editor's rows became the first
-    // that do: those ids are **ours**, `assets/ui/strings/english.toml` is
-    // the only file that carries them, and every other language overlays
-    // nothing - so a French player was shown `OAG_PILOT_RENAME` where the row
-    // says `RENAME`. Caught in a `--menu-page` capture on the EU disc, which
-    // is exactly the machine a developer working in English would not have.
-    //
     // A `label` is required on every entry the loader accepts, so there is
     // always one to fall back to, and for a project-owned id it *is* the
     // English source text rather than a guess at the disc's.
-    let label = entry
-        .string_id
-        .as_deref()
-        .and_then(|id| strings.get(id))
-        .map_or_else(|| entry.label.clone(), ToString::to_string);
+    let label = resolved(strings, entry.string_id.as_deref(), &entry.label);
     let missing = |field: &str| Error::BadEntry {
         context: context.to_string(),
         problem: format!("a {:?} entry needs {field}", entry.kind),

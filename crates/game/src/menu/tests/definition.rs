@@ -64,6 +64,35 @@ string_id = "MENU_BACK"
     );
 }
 
+/// A page's own `title_string_id` is resolved the same way a row's
+/// `string_id` is - one shared fallback rule, `resolved`, for both.
+#[test]
+fn a_title_string_id_is_resolved_against_the_table_parse_is_given() {
+    let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+title = "IGNORED"
+title_string_id = "PAGE_TITLE"
+[[page.entry]]
+kind = "back"
+label = "BACK"
+"#;
+    let found = crate::language::StringTable::from_xml(
+        r#"<StringTable><Entry ID="PAGE_TITLE" String="TITRE"></Entry></StringTable>"#,
+    );
+    let definition = Definition::parse(text, &found).expect("parse");
+    assert_eq!(definition.pages[0].title, "TITRE");
+
+    let absent = crate::language::StringTable::default();
+    let definition = Definition::parse(text, &absent).expect("parse");
+    assert_eq!(
+        definition.pages[0].title, "IGNORED",
+        "no table has this id, so the page's own title is what a player sees"
+    );
+}
+
 /// Every page except the root must offer a way out, or a player who opens
 /// it with a keyboard that has no cancel key is stuck in it. The root's way
 /// out is `quit`, which is an action rather than a `back`.

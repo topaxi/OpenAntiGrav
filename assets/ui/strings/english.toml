@@ -6,35 +6,74 @@
 #   - overriding a disc idstring an existing widget already resolves (a
 #     wrong or missing entry the project cannot fix by shipping different
 #     disc data - see ADR-0006);
-#   - giving a translatable home to text this project invented, once
-#     `assets/ui/menu.toml`'s `string_id`, `oag_race::Mode::fallback_label`,
-#     `crates/game/src/loading/wording.rs` and `crates/game/src/main/hints.rs`
-#     are wired to look one up instead of holding a literal `&str`.
+#   - giving a translatable home to text this project invented:
+#     `assets/ui/menu.toml`'s `string_id`/`title_string_id`,
+#     `oag_race::Mode::fallback_label`, `crates/game/src/loading/wording.rs`
+#     and `crates/game/src/main/hints.rs` all look an id up here instead of
+#     holding a literal `&str`.
 #
-# **The first of those four now has a caller.** The pilot editor's own CRUD
-# rows and the on-screen keyboard it opens are the first screen in this build
-# whose text is looked up by id rather than written into the widget - the
-# `OAG_PILOT_*` and `OAG_KEYBOARD_*` entries below. Everything else is still
-# a literal `&str` at the site that draws it; see
-# `handover/invented-ui-text-has-no-translation-and-the.md`, which this does
-# not close.
+# **This is the base language, and it is enforced, not aspirational.**
+# `just check-strings` (`scripts/check-strings.py`) fails the gate if a
+# `string_id`/`title_string_id` used anywhere resolves to nothing here, or if
+# a *new* row or page in `assets/ui/menu.toml` names no id at all - a literal
+# English label is only allowed on the rows `check-strings.py`'s own
+# `BASELINE_LABELS`/`BASELINE_TITLES` name, which is the debt that predates
+# this rule. See that script's own module doc for the ratchet, and
+# `handover/invented-ui-text-has-no-translation-and-the.md` for how this
+# started.
 #
 # **These ids are ours, not the disc's.** The `OAG_` prefix is what keeps them
 # from ever colliding with an idstring off a real string table, since this file
 # shares one id space with the disc's own by design.
 #
-# A row falls back to its literal `label` when its id is missing here, so a
-# language with no file yet reads English rather than reading nothing - which
-# is why adding an id is safe on its own and removing one is not.
+# A row falls back to its literal `label`/`title` when its id is missing here,
+# so a language with no file yet reads English rather than reading nothing -
+# which is why adding an id is safe on its own and removing one is not.
+#
+# # A language other than English
+#
+# No second language file exists yet, but the convention for one is decided
+# ahead of needing it: a translation lands under `[strings]`, exactly like
+# here, and an id this build has but that file's translator has not reached
+# yet is named, explicitly, under a second table:
+#
+#     [untranslated]
+#     ids = ["OAG_PILOT_SAVE"]
+#
+# **A missing entry and a marked-untranslated one are not the same thing.**
+# `check-strings.py` hard-fails the first - a silent gap nobody can grep for -
+# and passes the second, because the gap is now visible, countable, and the
+# same shape as `check-file-size.py`'s own `BASELINE`. Deleting an id from
+# `[untranslated]` the moment it is translated is the same discipline that
+# script's `graduated` list asks for. **Never machine-translate to clear a
+# row here** - an invented translation is worse than an honest gap, because a
+# reviewer who does not speak the language cannot tell the two apart.
 
 [strings]
 
-# The AI PILOTS page's own rows. `PILOT`, `AXIS`, `LOW` and `HIGH` are not
-# here yet: this change wired the three that were touched, and doing the rest
-# of the tree is the separate, larger step the handover thread describes.
+# The AI PILOTS page's own rows and title.
+OAG_PILOT_PAGE_TITLE = "AI PILOTS"
+OAG_PILOT_PILOT = "PILOT"
+OAG_PILOT_AXIS = "AXIS"
+OAG_PILOT_LOW = "LOW"
+OAG_PILOT_HIGH = "HIGH"
+OAG_PILOT_SAVE = "SAVE"
 OAG_PILOT_NEW = "NEW FROM PILOT"
 OAG_PILOT_RENAME = "RENAME"
 OAG_PILOT_DELETE = "DELETE"
+
+# Appended to a `PILOT` row's own choice when the name is a built-in with no
+# file of its own yet - see `oag_game::pilots::Entry::from_file`. Read by
+# Rust (`pilot_editor::pilot_choice`), not by a `menu.toml` `string_id`: the
+# suffix is glued onto a filename the row already holds, not a whole row's
+# label.
+OAG_PILOT_BUILT_IN_SUFFIX = " (built-in)"
+
+# The `back` row every page ends on. Shared rather than one id per page,
+# because it is one word in every language regardless of which page it is
+# leaving - the first page to actually name it is `pilots`, but any other
+# page's own `back` row may reuse it once it is converted.
+OAG_MENU_BACK = "BACK"
 
 # The on-screen keyboard. Unlike the rows above, these are read by Rust rather
 # than by a `string_id` in `menu.toml` - `crate::prompt` holds no string table
@@ -73,3 +112,36 @@ OAG_PILOT_DELETE_ASK = "DELETE %s? THIS CANNOT BE UNDONE."
 OAG_PILOT_DELETE_BUILT_IN = "%s IS BUILT IN AND YOUR FILE REPLACES IT. DELETING THE FILE RESTORES THE BUILT-IN INSTEAD OF REMOVING %s."
 OAG_PILOT_DELETE_YES = "DELETE"
 OAG_PILOT_DELETE_NO = "KEEP"
+
+# Window titles and the key hints printed under them - `crates/game/src/main/hints.rs`.
+# Read by Rust, not by a `menu.toml` `string_id`: none of these has a disc
+# idstring to override, so what they needed was somewhere translatable to
+# live rather than an override.
+OAG_HINTS_TITLE = "OpenAntiGrav"
+OAG_HINTS_MENU_KEYS = "arrow keys or the left stick move, return, X or cross selects, space or start skips, escape quits"
+OAG_HINTS_SHELL_TITLE = "OpenAntiGrav - menu"
+OAG_HINTS_SHELL_KEYS = "up and down move, left and right change a setting, return, X or cross selects, backspace, circle or escape goes back"
+OAG_HINTS_RACE_TITLE = "OpenAntiGrav - race"
+OAG_HINTS_RACE_KEYS = "arrow keys or the left stick steer, X, return or R2 thrusts, Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it, space or start pauses"
+OAG_HINTS_ESC_TO_MENU = ", escape returns to the menus"
+OAG_HINTS_ESC_QUITS = ", escape quits"
+
+# The loading screen's prose - `crates/game/src/loading/wording.rs`. `{done}`,
+# `{total}`, `{cached}` and `{failed}` are placeholders `wording::resolved`
+# substitutes after the lookup, so a translation is free to move them but
+# must keep the names themselves.
+OAG_LOADING_READING_ARCHIVES = "READING THE ARCHIVES"
+OAG_LOADING_GENERIC = "LOADING"
+OAG_LOADING_READY = "READY"
+OAG_LOADING_TRANSCODING_MOVIES = "TRANSCODING MOVIES"
+OAG_LOADING_LOADING_MOVIES = "LOADING MOVIES"
+OAG_LOADING_CONVERTING_ASSETS = "CONVERTING ASSETS"
+OAG_LOADING_STEP_CACHED = "already converted, reading the cache"
+OAG_LOADING_STEP_DECODING = "decoding"
+OAG_LOADING_STEP_TRANSCODING_TOTAL = "transcoding - frame {done} of {total}"
+OAG_LOADING_STEP_TRANSCODING = "transcoding - frame {done}"
+OAG_LOADING_COUNTING = "counting what needs converting"
+OAG_LOADING_COUNTS_LOADED = "{done} / {total} loaded"
+OAG_LOADING_COUNTS_CONVERTED = "{done} / {total} converted"
+OAG_LOADING_COUNTS_CACHED_SUFFIX = ", {cached} already cached"
+OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} failed"
