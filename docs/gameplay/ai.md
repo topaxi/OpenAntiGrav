@@ -869,6 +869,7 @@ lap 1-3 rather than 4, all with zero rolls armed - a Novice-tuned craft simply
 cannot get through `13_Track`'s authored jump at `grip_believed` 0.30. That is
 `Difficulty::grip_believed`'s territory, not the roll axes', and is flagged
 here rather than chased, since chasing it is outside this pass's scope.
+Chased in [a follow-up below](#the-13_track-novice-pathology-chased).
 
 **Two things the original measurement changed, and they still hold.** The
 invented `0.20` shield floor that `oag_physics` carried as a bare constant is
@@ -930,6 +931,155 @@ single craft (`elite`, one opponent) is destroyed outright (`0.0`, lap 3 of
 4), which is wall contact and lap-time pressure rather than the roll mechanic
 - it never armed one. No craft anywhere in the full-grid runs rolled itself
 below the 10-shield floor `no_tier_rolls_itself_down_to_nothing` guards.
+
+### The `13_Track` Novice pathology, chased
+
+Flagged and left for later two sections up: a lone Novice craft respawns
+**221 to 349 times** on `13_Track` and never gets past lap 1-3 of 4. Followed
+up 2026-09-07, one circuit and one tier at a time, with
+`crates/game/tests/novice_respawn_ground_truth.rs`.
+
+**It is one location, not many.** Bucketing every respawn's driver-line-index
+by 25-sample ranges, all 347 of 347 respawns in a fresh 18,000-tick run fired
+with the driver at index 25-49 - inside `13_Track`'s own authored jump
+(indices 19-49, from `the_racing_line_has_track_under_it_where_it_is_known_to`
+in `race_ground_truth.rs`). A craft respawning 221-349 times scattered across
+a circuit would be a driving-quality question; one respawning that many times
+in one place is a single failure repeating, and the airborne-window log says
+which one: liftoff at index 22, a 0.88s flight that comes down short at index
+44, and then every subsequent window is `liftoff 46, landing 46, duration
+~0.75s` - the craft is respawned back into the gap, falls straight through it
+again, and repeats for the rest of the run. It never reaches index 50, so it
+never completes the jump even once.
+
+**It is the jump, confirmed by a grip sweep rather than by reading the
+geometry.** Holding every other Novice axis fixed (`turn_allowed` 0.60,
+`mistake_rate`, `reaction_ticks`) and sweeping only `lateral_accel`'s scale -
+the same one `Difficulty::grip_believed` sets - on `13_Track` alone:
+
+| `grip_believed` | respawns | laps completed | shield, end-of-run |
+| --- | --- | --- | --- |
+| 0.30 (Novice) | 347 | 1 | 0.00/95.00 |
+| 0.40 | 350 | 1 | 0.00/95.00 |
+| **0.48 (Skilled)** | **0** | **4** | 0.00/95.00 |
+| 0.60 | 0 | 4 | 2.91/95.00 |
+| 0.70 (Elite) | 0 | 4 | 0.00/95.00 |
+| 0.85 | 0 | 4 | 0.00/95.00 |
+| 1.00 (Ace) | 0 | 4 | 0.00/95.00 |
+
+The threshold sits between 0.40 and 0.48, sharply: nothing in between was
+swept, but the jump is either uncleared or clean, with no middle ground seen
+at the six points measured. Since `turn_allowed` never moved in this sweep,
+the failure is a raw-speed one - a Novice-grip craft's approach to this jump
+is too slow to clear it, not a steering or braking artifact from the gap's
+geometry confusing the pursuit controller.
+
+**The shield column is end-of-run, not per-lap - per-lap shield was not
+measured in this pass**, and it qualifies the headline: six of the seven rows
+finish the run destroyed. Clearing the jump stops the respawn loop; it does
+not mean the rest of the circuit goes unpunished, the same wall-contact
+pressure the S-bend section already measured at Ace. And **`1.00` here is not
+a real Ace run** - only `lateral_accel`'s scale moved, so `turn_allowed` and
+`mistake_rate` are still Novice's (0.60, `MISTAKE_BASE`). That is why this row
+reads `0.00` while the S-bend section's real Ace ends `13_Track` at `39.07`:
+different tuning under the same grip number, not a contradiction between the
+two tables.
+
+**It is not `Tuning::look_speed`.** Built as `Difficulty::Novice.tune()` would
+from a `measured` `Tuning` with `look_speed` set to the pre-2026-09-07 value
+of 0.35 and to the current 0.30, both give the same failure: 346 respawns at
+0.35, 347 at 0.30. That single-respawn difference is a real effect of a
+different trajectory in a deterministic sim, not stochastic noise - but
+unchanged either way means "against a healthy 0", not "identical", and 346 is
+exactly as broken as 347. The pathology predates the S-bend fix and is
+untouched by it either direction.
+
+**It is specific to this one tier-circuit pairing**, not a general Novice
+weakness. A fresh sweep, four tiers by all twelve circuits, one lone craft
+each, respawns per run:
+
+| circuit | novice | skilled | elite | ace |
+| --- | --- | --- | --- | --- |
+| 16_Track | 0 | 0 | 0 | 0 |
+| 03_Track | 0 | 0 | 0 | 0 |
+| 02_Track | 0 | 0 | 0 | 0 |
+| 10_Track | 0 | 0 | 0 | 0 |
+| 05_Track | 1 | 2 | 3 | 0 |
+| 04_Track | 0 | 0 | 0 | 0 |
+| 09_Track | 0 | 0 | 0 | 0 |
+| 14_Track | 0 | 0 | 0 | 0 |
+| 01_Track | 2 | 7 | 1 | 1 |
+| **13_Track** | **347** | 0 | 0 | 0 |
+| 06_Track | 1 | 0 | 0 | 0 |
+| 07_Track | 0 | 0 | 0 | 0 |
+
+Every other cell in the table is single digits - `01_Track`'s own known
+respawns (the regression gate's own index-794 one is the `ace` cell here) and
+`05_Track`/`06_Track`'s occasional ones, none of them new. `13_Track` at
+`novice` is a three-order-of-magnitude outlier sitting alone in an otherwise
+unremarkable table, which is what "one authored jump, one tier too slow to
+clear it" looks like from above.
+
+**The pilot is unforced in this table** - `run()` never calls
+`set_ai_pilot`, so each cell is whichever character `pilot_for_slot` deals
+slot 1, the same trap `ai_roll_ground_truth.rs`'s own docs name ("an unforced
+lone-craft benchmark measures one of the four and reads as the field's"). It
+does not change the conclusion here: the barrel-roll pass that first flagged
+this already saw 221-349 respawns on `13_Track` at Novice across *all four*
+forced pilots, and `grip_believed` is a shared `Tuning` axis no pilot axis
+touches - but a single-pilot table is a narrower claim than "every character",
+and it is recorded as one.
+
+**No axis was moved.** Raising `Difficulty::grip_believed(Novice)` from 0.30
+to something past 0.48 would clear this jump, but that constant is not free
+to spend on one circuit: it is the same one calibrated against the 2026-08-11
+play report ("my craft is faster than the AI, first place within a few
+seconds"), and 0.30 *is* that report's own number - see
+[Difficulty](#difficulty). Moving it to Skilled's value would not be a Novice
+fix, it would be deleting the Novice tier's defining trait everywhere else on
+the disc for the sake of one circuit's one jump - a number-justified change
+serving one row of a twelve-row table, exactly what this project's own rule
+warns against. Nothing here justifies it *mechanistically* either: the sweep
+shows a threshold, not a reason a threshold that low is wrong in general.
+
+**A separate mechanism question, outside `oag-ai` and left for whoever owns
+`crates/game/src/race/` - measured in part, inferred for the rest, and
+labelled accordingly.** `Race::respawn` zeroes velocity and teleports the
+craft back onto the racing line nearest where it was lost - which, for a
+craft that falls straight through an authored gap, reads as a sample *inside*
+the gap. From there, with no speed, it falls straight through again. That
+part is read off `crates/game/src/race/respawn.rs`'s own doc comments, not
+observed directly.
+
+What **is** measured: 18,000 ticks over 347 respawns average **51.9 ticks per
+respawn cycle**. `RESPAWN_COOLDOWN_TICKS` is 30, so on that average roughly 22
+ticks of every cycle run with the cooldown already expired. `respawn()`
+zeroes `lost_ticks` on every teleport and `RESCUE_TICKS` (the dwell
+`lost_off_the_circuit` requires before it fires) is 90 - nearly double the
+51.9-tick average cycle - so the "lost" trigger cannot mathematically
+complete its own dwell inside one average cycle here; whatever ends each
+cycle, it is something other than that dwell timing out.
+
+The rest is read off the source and **not observed in this pass**:
+`respawns_in_a_row` and `respawn_disabled` are private to `Race`, and nothing
+in this crate's own tests reaches them without leaving the `oag-ai` lane.
+Reading `field.rs`'s tick loop, `respawns_in_a_row` is zeroed the moment the
+cooldown reaches 0 and none of `lost_off_the_circuit`/`stalled`/
+`reset_zone_touched` are true *that tick* - and since the measured 51.9-tick
+average cycle is barely past the 30-tick cooldown when the craft is still
+airborne (the 0.75s/45-tick airborne windows are a different interval, timed
+from loss of contact rather than from the respawn itself, but consistent with
+the fall still being in progress once the cooldown has expired), the zeroing
+condition plausibly holds every cycle, which would mean `RESPAWN_GIVE_UP` (5
+in a row) never accumulates and every respawn reads as a fresh, non-consecutive
+one. **This is a hypothesis from reading the code, not a measurement** - chosen,
+not measured, no confidence score - and whoever owns that file should confirm
+it before treating it as fact. Fixing the *symptom's cost* (347 down to
+something like `01_Track`'s single-digit norm, if the hypothesis holds) is a
+`crates/game/src/race/` question, not this crate's; fixing the *underlying*
+jump-clearing failure, if it is worth fixing at all rather than accepted as
+"Novice does not clear this jump", is a question for whoever owns that call,
+since it trades against the grip calibration above.
 
 ### What a driver can see of the grid
 
