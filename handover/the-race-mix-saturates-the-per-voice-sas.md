@@ -246,6 +246,15 @@ see the pass's own scratch note for the exact run.
   left to chase on this specific question; the SFX-side summing-headroom
   saturation (see "Resolved" above) is the remaining, separate open item on
   this thread's original subject, not touched by this pass.
+- **New, from this pass: whether a movie's own audio should carry
+  `MUSIC_MASTER_TRIM` is unverified.** A movie's sound plays on `Bus::Music`
+  in this port (pre-existing design - no separate movie bus on the original
+  either), so it now also carries the trim as a side effect. The original's
+  movie audio decodes through `sceMpegAtracDecode`, a different path from the
+  `MusicPlayer` object `MUSIC_MASTER_TRIM` was measured on - whether the
+  original attenuates a movie's own audio the same way, differently, or not
+  at all was not read this pass. Only worth chasing if a movie is ever heard
+  or measured to be at the wrong level.
 - Decide and apply a naming convention for the remaining three wrapper
   functions, then add their `names.tsv` rows. Optional and separate from the
   volume question: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance

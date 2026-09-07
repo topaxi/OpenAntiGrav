@@ -67,8 +67,9 @@ pub enum Bus {
 /// Read live from `_DAT_002bde18` (absolute `0x08ac1e18`), a plain `f32`
 /// (`0x3ee147ae` = `0.44`, about -7.13 dB) set once in `MusicPlayer_Init`
 /// (`0x08938428`) and read by both copies of the function that turns the
-/// music player's `+0x40` volume field into the 16-bit gain handed to the
-/// PCM-scaling call before a decoded `sceAtrac3plus` buffer is queued
+/// music player's `+0x40` volume field into the panned-volume argument
+/// (`0`-`0x8000`, the `sceAudio` HAL's own `PSP_AUDIO_VOLUME_MAX`) handed to
+/// the call that stages a decoded `sceAtrac3plus` buffer for hardware output
 /// (`0x08938090` and `0x0893c208` - the same law, twice, for what look like
 /// two playback paths). Corroborated live, mid-race, full eight-craft grid:
 /// six samples 4 s apart all read exactly `0.44`, unchanged through the
@@ -85,6 +86,18 @@ pub enum Bus {
 /// exactly the kind of invention this project's rules forbid. The caller
 /// (`Audio::apply` in `crates/game/src/audio.rs`) folds it into the gain it
 /// hands [`Mixer::set_bus_gain`] for [`Bus::Music`] alone.
+///
+/// **A movie's own sound also lands on [`Bus::Music`]** (`Audio::start_movie`
+/// in `crates/game/src/audio.rs`, by this port's own pre-existing design -
+/// there is no separate movie bus on the original either) and so now also
+/// carries this trim. That is unverified for movies specifically: the
+/// original's movie audio decodes through `sceMpegAtracDecode`, a
+/// completely different path from the `MusicPlayer`/`sceAtrac3plus` object
+/// this constant was measured on (`frontend-video.md`), and whether the
+/// original attenuates a movie's own audio the same way, differently, or not
+/// at all was not read this pass. If a movie's audio is ever found to need
+/// its own answer, it needs its own measurement - this constant should not
+/// be assumed to cover it just because the port's own bus does.
 pub const MUSIC_MASTER_TRIM: f32 = 0.44;
 
 impl Bus {

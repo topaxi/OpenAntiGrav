@@ -658,10 +658,20 @@ int MusicPlayer_ComputeStreamGain(void)
   int gain = (int)((float)(int)((float)g_music_player_ptr->vol_current *  // +0x40, 0-100
                               g_music_player_ptr->blend) *                 // +0xb0, 1.0 outside a crossfade
                   0.01 * g_music_master_gain * 32768.0);
-  // ... a separate one-shot fade-in ramp, then clamp to [0, 0x8000]
+  // ... a fade-*out* toward zero, armed by a Stop(fade: bool) call and
+  // decaying 0.05 per invocation until it clamps at 0.0, not a fade-in -
+  // then clamp the whole result to [0, 0x8000]
   return gain;
 }
 ```
+
+The correction matters: `DAT_002bddd0` (armed) and `DAT_002bddd4` (the decaying
+multiplier) are set by the stop path, not a start path - `FUN_089385b4`
+(`0x089385b4`) writes `DAT_002bddd0` from its own `fade: bool` parameter on a
+stop, and `DAT_002bddd4` only ever counts down toward `0.0` here, never up.
+This is the music player winding itself down on `Stop`, unrelated to
+`g_music_master_gain` or the slider - noted here because an earlier draft of
+this section called it "a separate one-shot fade-in ramp," backwards.
 
 `MusicPlayer_ComputeCallbackGain` (`0x0893c208`) is byte-for-byte the same
 expression, called from two sites near the channel-open function
@@ -669,10 +679,46 @@ expression, called from two sites near the channel-open function
 (`0x089381f0`) `MusicPlayer_ComputeStreamGain`'s one caller sits in - two
 playback paths, the same gain law. `MusicPlayer_ComputeStreamGain`'s own
 caller is unambiguous: it decodes into a buffer (`func_0x00134164` x2) then
-calls `func_0x0018864c(gain, gain, sampleCount, buffer)` - an in-place
-stereo PCM volume-scale, gain in the same `[0, 0x8000]` 16-bit range this
-function returns - immediately before the result is queued
-(`imports.md`'s `sceAtrac3plus` row is what decodes the buffer being scaled).
+calls `func_0x0018864c` (`0x0898c64c`) as `(gain, gain, sampleCount, buffer)`
+immediately before the result is queued (`imports.md`'s `sceAtrac3plus` row
+is what decodes the buffer being handed in).
+
+**`0x0898c64c` (named `Audio_EnqueuePannedOutput` below, confidence 78) was
+decompiled, not assumed, to check what `[0, 0x8000]` actually means to it.**
+It gates on a channel-ready flag
+(`_DAT_002bf238`), then - for exactly the two sample counts this caller ever
+passes (`0x100`, `0x900`, both a multiple of `0x100`) - stores `param_1 >> 3`
+and `param_2 >> 3` (the two gain arguments, right-shifted by 3) alongside the
+unshifted sample count and buffer pointer into a small fixed staging area
+(`_DAT_000afc10`..`_DAT_000afc1c`), and returns the SDK-shaped error code
+`0x80440011` on the gated-off path. That is the shape of `sceAudio`'s own
+panned-output call being fed - `sceAudioOutputPannedBlocking`'s volume
+parameter is documented PSP SDK-wide as `0`-`0x8000` (`PSP_AUDIO_VOLUME_MAX`),
+and `0x8000 >> 3 = 0x1000` is exactly that hardware's known 12-bit volume
+register width. So `[0, 0x8000]` is not an in-place PCM sample multiply this
+page invented a plausible reading of - it is the software volume clamped to
+the audio HAL's own documented maximum, which is unity by that API's own
+definition. This also means the two identical gain-law copies are not
+scaling *samples*, they are computing the *panned-volume argument* handed to
+the hardware output call once per buffer - same conclusion for
+`g_music_master_gain`'s effect either way.
+
+**Two things corroborate `0x8000` as unity independently of this decompile,
+worth citing since the one function this leans on is a single reading:**
+
+- `0x0898c64c` sits about 1 KiB before `Audio_OutputThread` (`0x0898ca54`,
+  same translation unit), which this page already documented as handing
+  `master << 5` to the DAC - `Audio_Init`'s master ceiling `0x400` shifted
+  by `5` is `0x8000` too, the same convention on the DAC-facing side of the
+  mixer as on this music-facing side.
+- The arithmetic floors it independently: at any trim much weaker than
+  `0.44` the original's own music-alone RMS would not fit under its measured
+  whole-mix RMS of `-15.27` dBFS. A trim of `0.88` (half as strong, `-1.1`
+  dB less than half of `0.44`'s effect), for instance, would put music alone
+  at roughly `-12.6` dBFS off the same raw track - already louder than the
+  *whole mix* including engines, the exact contradiction this thread opened
+  with. `0.44` is comfortably inside the range the measurement itself
+  requires, not merely the range one decompile suggests.
 
 **`g_music_master_gain` (`0x08ac1e18`, previously `_DAT_002bde18`) is a plain
 `f32`, set once, in `MusicPlayer_Init` (`0x08938428`), to the bit pattern
