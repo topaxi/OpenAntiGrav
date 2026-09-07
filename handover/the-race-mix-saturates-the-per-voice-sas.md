@@ -211,8 +211,93 @@ see the pass's own scratch note for the exact run.
   table above. It does not touch the RMS argument, which is entirely within
   our own port plus a raw disc decode and is release-independent.
 
+**2026-09-07, fourth pass the same thread: the SFX-side gap isolated, and it
+is not the summing-headroom mechanism after all.** With the music trim landed,
+the whole mix still clips (2.0-2.3%, run to run). This pass muted the
+original's music live (writing zero to `g_music_player_ptr`'s `+0x40`/`+0x44`,
+the same fields the options slider moves, confirmed by reading them back) and
+compared the SFX bus alone against our own port's SFX-alone capture, the same
+way the music bus was isolated in the third pass:
+
+| | RMS | Clipped |
+| --- | --- | --- |
+| Original, SFX alone, full 8-craft grid | -16.61 dBFS | 0.030% |
+| Our port, SFX alone, full 8-craft grid | -8.46 dBFS | 1.636% |
+| Original, SFX alone, **one craft** (Time Trial) | -19.65 dBFS | 0.000% |
+| Our port, SFX alone, **one craft** (Time Trial) | -11.15 dBFS | 0.157% |
+
+**The gap is 8.15 dB at eight craft and 8.50 dB at one craft - the same size
+whether summing is possible or not.** That retires this thread's own
+2026-09-06 "several honestly-scaled voices summing 2-6x, no reserved
+headroom" framing as *the* cause: the summing is real (measured, previous
+pass) but it cannot be what makes our port clip, because the same-sized gap
+exists with only one voice able to sound at all. **Lead with the peak, which
+is the scenario-proof half of that claim**: the original's single engine
+never reaches 0 dBFS anywhere in a 24 s window; ours hits full scale 4,534
+times in the same window shape. (The two 1-craft captures are not identical
+scenarios - the original side is an un-steered hold-`cross` that free-runs
+into a wall, ours is `--autopilot` on the racing line - but `exhaust.md`'s own
+law saturates engine intensity to its ceiling about 4 s after the engine
+comes on regardless of speed, so the steady-tone half of each 24 s capture is
+comparable even though the trajectories are not.)
+
+**What scales it, read rather than chosen, and now with the direction
+confirmed live rather than left as a maybe**:
+[`positional-audio.md`](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#the-two-hardware-volumes-and-the-table-that-makes-them)
+already documents (2026-09-01, an unrelated pass) a pipeline stage between the
+volume/angle computation this port *does* have
+(`oag_audio::spatial::Emitter::place`, runtime-verified 1,610/1,610) and the
+actual hardware channel volumes: `Scream_PanVolumePair` multiplies **four**
+terms together, two of them squared, before dividing into the final gain.
+**This stage does not exist anywhere in `crates/audio` or
+`crates/game/src/audio`** - confirmed by grep, not inferred.
+
+The theoretical ceiling of that stage (all four terms maxed) is a *gain* of
+2.0, not an attenuation - so which way it actually points at real gameplay
+values was not obvious from the formula alone, and needed a live check
+rather than an assumption. It was read: `memory.disasm` on
+`Scream_PanVolumePair`'s own body (PPSSPP's disassembly API, not Ghidra) at a
+live breakpoint resolved the exact instruction sequence and which two of the
+four terms the mode mask squares (mask `10`, read directly off the stack at
+the function's own entry - matching `positional-audio.md`'s static decompile
+independently). Ten breakpoint hits during full-throttle engine play, running
+the actual captured register values through that sequence, gave **-4.4 to
+-13.1 dB, mean -11.7 dB** - a real attenuation, of about the size the RMS gap
+above already measured, not the gain the ceiling alone would have suggested.
+See `audio-levels.md`'s new section for the exact register values, the
+reconstructed instruction sequence and the per-hit table.
+
+**Not ported anyway.** What settled is the arithmetic and its direction, not
+where its three varying inputs (`a0`, `a1`, `t1` - the fourth, `a3`, read
+`127`/max on every hit) come from on the caller side. Wiring the same formula
+into `oag_audio::spatial::Emitter::place` without knowing which of the port's
+own values maps to which of those three would be guessing the mapping, which
+is the same invented-number problem `CLAUDE.md` forbids one level further in.
+Tracing `Scream_PanVolumePair`'s callers to learn that needs the Ghidra
+bridge, unavailable this pass (a concurrent maintainer pass was reimporting
+the PSP databases), or more of the same live-breakpoint technique walked one
+call frame further out.
+
+**Gate: no `.rs` file changed.** This pass's own conclusion is "identified,
+not yet portable" - nothing in `crates/audio` or `crates/game/src/audio`
+moved. `just check-docs`, `just check-handover` both pass; the full gate was
+not re-run since no code changed (per `CLAUDE.md`'s docs-only carve-out) -
+`just fmt-check`/`just lint` were not re-run either since the two `.rs` files
+touched by the third pass are unchanged by this one.
+
 ## Open
 
+- **The SFX-side pipeline gap named above (`Scream_PanVolumePair`'s missing
+  multi-term recombination, now confirmed live to attenuate by 4-13 dB at
+  real gameplay values) is the standing open item on this thread now.**
+  Concrete next step: with a Ghidra bridge available again, decompile
+  `Scream_PanVolumePair`'s callers (`Scream_SetSoundVolume` and neighbours,
+  reached from `SoundInstance_UpdateSpatial`) far enough to learn what each of
+  `a0`/`a1`/`t1` (the three terms that varied live; `a3` read `127`/max on
+  every hit) is read from. That is what turns "a stage that measurably
+  attenuates per-voice loudness by about the right amount, unported" into a
+  portable number - the arithmetic and its direction are now known; only the
+  caller-side mapping is not.
 - **Resolved 2026-09-07, third pass (above): the music path's attenuation was
   `g_music_master_gain` (`0x08ac1e18`), a fixed `0.44` read by
   `MusicPlayer_ComputeStreamGain`/`MusicPlayer_ComputeCallbackGain` and now
@@ -238,6 +323,17 @@ see the pass's own scratch note for the exact run.
 
 ## Next Steps
 
+- **New, fourth pass 2026-09-07: trace `Scream_PanVolumePair`'s callers.**
+  The SFX-side saturation is isolated to a per-voice gap (~8-8.5 dB, present
+  with one voice or eight), and `Scream_PanVolumePair`'s own arithmetic is now
+  read live (not just statically) and confirmed to attenuate by 4-13 dB at
+  real full-throttle values - about the right size, and the right direction,
+  which its own theoretical ceiling (a 2x *gain* if every term were maxed)
+  did not settle on its own. What is not yet read is what feeds its three
+  varying inputs (`a0`, `a1`, `t1`) on the caller side - that is the whole
+  remaining question, and it needs either a Ghidra bridge this pass did not
+  have, or more of the same live-breakpoint technique one call frame further
+  out.
 - **Done 2026-09-07 (above): where `g_music_player_ptr+0x40`/`+0x44` reach
   the decoded audio.** `MusicPlayer_ComputeStreamGain` (`0x08938090`) and
   `MusicPlayer_ComputeCallbackGain` (`0x0893c208`) turn `+0x40` into the
