@@ -265,6 +265,13 @@ damage_per_bullet -> *(float *)(stats + 0x7c) = value;
 slowdown_time     -> *(float *)(stats + 0x80) = value;
 ```
 
+**The `rate` arm matches an unlabelled `DAT_08a78ae4`**, where the other four
+match named string symbols, so it is read off the bytes rather than by
+elimination: `read_memory 0x08a78ad8 48` gives
+`75 73 00 00 | 72 6F 75 6E 64 73 00 00 | 72 61 74 65 00 00 00 00 | 64 61 6D 61 67 65 5F 70 65 72 5F 62 75 6C 6C 65 74 00`
+- `"rounds"` at `0x08a78adc`, **`"rate"` at `0x08a78ae4`**, `"damage_per_bullet"`
+at `0x08a78aec`, each 4-byte aligned.
+
 `stats + 0x78` is exactly the field `Cannon_UpdateReload` adds to `craft+0x158`
 above, so the file's `rate="20"` is **twenty rounds per second** and the
 countdown reloads with `0.05` seconds. Both shipped tables author `rate="20"`
