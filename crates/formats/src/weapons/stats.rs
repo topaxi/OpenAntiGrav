@@ -580,6 +580,45 @@ pub struct CannonStats {
     pub slowdown_time: f32,
 }
 
+/// The Quake's `<Stats>`: four attributes, and no speed at all - the wave's
+/// own travel rate is not authored, see
+/// `oag_gameplay::projectile::quake::SPEED_UNITS_PER_SECOND`.
+///
+/// `WeaponStats_ParseQuake` (`0x0880c60c`), offsets `+0x60`..`+0x6c` measured
+/// off the parser itself. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
+/// whole reading: `Weapon_FireQuake` copies `damage`/`radius`/`slowdown_time`
+/// onto the *firing craft*, not onto the wave instance, the same shape the
+/// Repulser's own fields already have - this crate's port keeps them on the
+/// wave instead, since only one Quake instance ever exists at once and there
+/// is nothing to gain by round-tripping through the craft.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct QuakeStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// Energy the wave costs a craft it passes over.
+    pub damage: f32,
+    /// **The wave's own hit radius, not a blast radius.** Nothing in the
+    /// fire handler, `Quake_Init` or `Quake_Update` reads this attribute -
+    /// `radius` has exactly one candidate consumer anywhere in the chain,
+    /// the proximity test `FUN_088418e0`'s wave branch runs every craft
+    /// every frame to decide whether `entity+0x860 & 0x40`'s latch sets. See
+    /// that page's "The latch setter, found 2026-09-07" section: the
+    /// original's own gate is a smoothed intensity value against a flat
+    /// `0.1` threshold, fed by two engine-side helpers
+    /// (`Quake_ProximityToCraft`, `Quake_SpanIntensityAt`) whose own
+    /// constants (`200.0`, `0.1`) are not authored anywhere this project has
+    /// found - `radius` being the *only* authored number in the whole
+    /// mechanism is why this crate's port spends it as the proximity gate
+    /// rather than inventing a second, unauthored one.
+    pub radius: f32,
+    /// Seconds of slowdown this weapon charges a craft it passes over.
+    ///
+    /// See [`RocketStats::slowdown_time`] for the law it feeds and its
+    /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
+    pub slowdown_time: f32,
+}
+
 /// The Bomb's `<Stats>`, less the two attributes nothing consumes.
 ///
 /// # The Bomb is the Mine one size up, and that is the shipped data's shape

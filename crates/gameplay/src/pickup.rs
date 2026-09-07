@@ -163,6 +163,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Plasma,
     Weapon::Shuriken,
     Weapon::Cannon,
+    Weapon::Quake,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

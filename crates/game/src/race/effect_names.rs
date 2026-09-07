@@ -187,3 +187,16 @@ pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
 /// Re-exported from where the rest of HD's exhaust constants live, because
 /// that is what they are - see [`Race::advance_trail_hits`] for the trigger.
 pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
+
+/// The Quake's own travelling wave - the disc's authored effect, not a
+/// stand-in for one.
+///
+/// **Read directly out of `.rodata` at confidence 88**, not inferred from the
+/// fourcc `'QUAK'` alongside it - `inspect_memory_content` at the name
+/// pointer's address returns the ASCII bytes `WO_QUAKE\0` verbatim. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s "What
+/// `Quake_Update` builds from those two points" section: this is spawned once
+/// per wave instance, then re-positioned to the midpoint and re-scaled to the
+/// track's own width every later frame - see
+/// [`Race::advance_quake_visual`].
+pub const QUAKE_EFFECT: &str = "WO_QUAKE";

@@ -120,7 +120,6 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ),
     ("WO_REPULSER", "the Repulser is not built."),
     ("WO_REPULSER_BLAST", "the Repulser is not built."),
-    ("WO_QUAKE", "the Quake is not built."),
     (
         "WO_BOMB_SMOKERING",
         "the Bomb is built and detonates, the same way the Mine does - but \

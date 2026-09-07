@@ -359,6 +359,52 @@ impl Race {
                     self.world.ships[0].pickup.begin_drop(drop.count);
                     return;
                 }
+                oag_formats::weapons::Weapon::Quake => {
+                    let Some(stats) = weapons.quake() else {
+                        // No authored Quake, so nothing to launch - the same
+                        // "keep the pickup" rule the Rocket's and the
+                        // Plasma's arms follow for a missing table.
+                        return;
+                    };
+                    // **The busy check, first - matching `Weapon_FireQuake`'s
+                    // own `if (q->active != 0) return;`, which runs before
+                    // the original ever clears the held slot.** Only one
+                    // wave can be in flight in the whole race at once, so a
+                    // press while one is already travelling keeps the
+                    // pickup rather than spending it on nothing. See
+                    // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+                    if self.world.quake.is_some() {
+                        return;
+                    }
+                    let ship = &self.world.ships[0];
+                    let Some(progress) = ship.standing.progress else {
+                        // Not yet located on the course - nowhere on the
+                        // track's own spline to launch a travelling wave
+                        // from. Keep the pickup; this is a startup edge case
+                        // a moving craft clears within a tick or two.
+                        return;
+                    };
+                    // The direction sign: dot the firing craft's own forward
+                    // against the track's own tangent where it currently
+                    // stands, the same dot product `Quake_Init` reads to
+                    // pick which way the wave travels. `unwrap_or(1.0)` is
+                    // the same "forward, not stalled" default
+                    // `oag_gameplay::projectile::quake::Wave::launch` itself
+                    // takes for an exactly-perpendicular dot - see that
+                    // function's own doc comment for why.
+                    let forward_dot_tangent = ship
+                        .standing
+                        .course_index
+                        .and_then(|index| self.course.as_ref()?.tangent(index as usize))
+                        .map(|tangent| tangent.dot(ship.physics.body.forward()))
+                        .unwrap_or(1.0);
+                    self.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+                        0,
+                        progress,
+                        forward_dot_tangent,
+                        &stats,
+                    ));
+                }
                 oag_formats::weapons::Weapon::Cannon => {
                     // **Recovered as a non-event, not an oversight.**
                     // `Weapon_RequestFire`'s bit `0x2000` - the Cannon's own -
@@ -539,6 +585,47 @@ impl Race {
                 slot as u8,
             );
         }
+    }
+
+    /// One tick of the Quake's own travelling wave: advances it along the
+    /// course, and applies its hit/slowdown to every craft its own radius
+    /// currently spans.
+    ///
+    /// A no-op with no course loaded (nothing for the wave to travel round)
+    /// and a no-op with no wave in flight - see `Race::spend_pickup`'s own
+    /// Quake arm for what launches one. See
+    /// `oag_gameplay::projectile::quake` for the recovered advance rate and
+    /// the hit test this reuses whole.
+    ///
+    /// Called from the tick after `Race::advance_cannons`, on this tick's own
+    /// standings - so a wave that just passed over a craft credits the hit
+    /// the same tick the craft's position moved into and out of its radius,
+    /// the same "this tick, not last tick's stale reading" rule every other
+    /// per-craft weapon update in this module follows.
+    pub(super) fn advance_quake(&mut self) {
+        let Some(course) = self.course.as_ref() else {
+            return;
+        };
+        let Some(mut wave) = self.world.quake else {
+            return;
+        };
+        let length = course.length();
+        wave.advance(length, self.dt);
+        let rules = oag_gameplay::damage_rules(self.world.race.mode);
+        let mut absorbed = [false; MAX_SHIPS];
+        wave.apply_hits(
+            &mut self.world.ships,
+            self.world.ship_count,
+            length,
+            rules,
+            &mut absorbed,
+        );
+        for (slot, hit) in absorbed.iter().enumerate() {
+            if *hit {
+                self.shield[slot].hit();
+            }
+        }
+        self.world.quake = Some(wave);
     }
 
     /// One tick of the lock-on reticle, and the tone state that goes with it.

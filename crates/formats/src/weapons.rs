@@ -201,8 +201,8 @@ impl Weapon {
 mod stats;
 
 pub use stats::{
-    BombStats, CannonStats, MineStats, MissileStats, PlasmaStats, RocketStats, ShurikenStats,
-    Simple,
+    BombStats, CannonStats, MineStats, MissileStats, PlasmaStats, QuakeStats, RocketStats,
+    ShurikenStats, Simple,
 };
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
@@ -299,6 +299,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::cannon`].
     cannon: Option<CannonStats>,
+    /// The Quake's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::quake`].
+    quake: Option<QuakeStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -386,6 +390,15 @@ impl WeaponStats {
     #[must_use]
     pub fn cannon(&self) -> Option<CannonStats> {
         self.cannon
+    }
+
+    /// The Quake's `<Stats>`, or `None` when the file authors no Quake.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped tables do author one.
+    #[must_use]
+    pub fn quake(&self) -> Option<QuakeStats> {
+        self.quake
     }
 
     /// The Shuriken's `<Stats>`, or `None` when the file authors no Shuriken.
@@ -506,6 +519,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut mine = None;
     let mut bomb = None;
     let mut cannon = None;
+    let mut quake = None;
     let mut absorb = Vec::new();
     let mut skipped = Vec::new();
 
@@ -664,6 +678,20 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             })?;
             continue;
         }
+        if weapon_kind == Weapon::Quake {
+            // Optional for the Bomb's reason: a title that tunes the Quake on
+            // attributes this build does not read loses the Quake and keeps
+            // the rest of its table.
+            quake = optional_block(&mut skipped, weapon_kind, || {
+                Ok(QuakeStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    damage: number(block, "Stats", "damage")?,
+                    radius: number(block, "Stats", "radius")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
+                })
+            })?;
+            continue;
+        }
         let index = match weapon_kind {
             Weapon::Turbo => 0,
             Weapon::Shield => 1,
@@ -719,6 +747,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         mine,
         bomb,
         cannon,
+        quake,
         absorb,
         pickups,
         skipped,

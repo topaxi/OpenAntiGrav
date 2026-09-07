@@ -475,6 +475,20 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   See `crates/gameplay/src/hash.rs`'s `write_held` and
 ///   `handover/weapons-eight-of-thirteen-the-plasma-and-the.md`.
 ///
+/// - **Moved again 2026-09-07, for the Quake's new `World::quake` field.**
+///   `hash::write_quake` writes a discriminant byte for `Option<Wave>` every
+///   tick whether or not a Quake is in flight, the same "always in the
+///   stream" shape the Cannon's two `Held` fields added above. **Isolated the
+///   way this comment requires**: with `write_world`'s `write_quake` call
+///   removed (and `quake` destructured as `quake: _`), both rows reproduced
+///   the previous constants - `0x8bbe_7452_37aa_a9d8` /
+///   `0x71ae_5fa3_1894_6b8a` at 60 ticks and `0xf25a_43fe_dd1b_5219` /
+///   `0xde90_bd8b_7c5a_4d17` at 600 - bit for bit. Neither scenario in this
+///   file ever launches a Quake, so the movement is the hash primitive's own
+///   shape and not a behaviour change to what either scenario's craft do.
+///   See `crates/gameplay/src/hash.rs`'s `write_quake` and
+///   `handover/weapons-eight-of-thirteen-the-plasma-and-the.md`.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -482,8 +496,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x8bbe_7452_37aa_a9d8, 0x71ae_5fa3_1894_6b8a),
-    (600, 0xf25a_43fe_dd1b_5219, 0xde90_bd8b_7c5a_4d17),
+    (60, 0x1f49_7fb4_96fe_9a08, 0x08cd_936e_e73d_b4d8),
+    (600, 0xeab3_a311_b56c_807b, 0xcebe_2c5c_6232_1c5d),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -631,11 +645,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0x4a5b_1790_59a4_23c0` / `0x4e62_4203_11e0_9078` at 60 ticks and
 ///   `0x2e86_2b63_f59d_657b` / `0x606e_fd2e_04e5_d9ce` at 600.
 ///
+/// - **Moved again 2026-09-07**, the same `World::quake` field addition
+///   [`REFERENCE`]'s own history records, inherited through the same
+///   `write_world` call and not re-isolated here for the same reason.
+///   Replaces `0x9a80_b71f_63a4_d274` / `0xefd7_1d09_2752_84ac` at 60 ticks
+///   and `0x0d5f_98f8_61a6_7ab3` / `0xeb2e_415f_80cc_c0ea` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x9a80_b71f_63a4_d274, 0xefd7_1d09_2752_84ac),
-    (600, 0x0d5f_98f8_61a6_7ab3, 0xeb2e_415f_80cc_c0ea),
+    (60, 0x2d89_9e56_5111_9b1c, 0x0cc3_9764_975f_5852),
+    (600, 0x5feb_a10d_ede2_7e29, 0xb54d_97c5_c287_eb16),
 ];
 
 #[test]

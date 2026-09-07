@@ -155,6 +155,33 @@ fn the_ring_is_about_as_long_as_the_shape_it_was_built_from() {
 }
 
 #[test]
+fn the_tangent_points_toward_the_next_ring_point() {
+    let course = Course::from_track(&square_track(2), None).expect("a ring");
+    let tangent = course.tangent(0).expect("in range");
+    assert!(
+        (tangent.length() - 1.0).abs() < 1e-4,
+        "tangent is not unit length"
+    );
+    let expected = (course.position(1).unwrap() - course.position(0).unwrap()).normalize();
+    assert!((tangent - expected).length() < 1e-4);
+}
+
+#[test]
+fn the_tangent_wraps_at_the_last_point() {
+    let course = Course::from_track(&square_track(2), None).expect("a ring");
+    let last = course.len() - 1;
+    let tangent = course.tangent(last).expect("in range");
+    let expected = (course.position(0).unwrap() - course.position(last).unwrap()).normalize();
+    assert!((tangent - expected).length() < 1e-4);
+}
+
+#[test]
+fn the_tangent_is_none_out_of_range() {
+    let course = Course::from_track(&square_track(2), None).expect("a ring");
+    assert_eq!(course.tangent(course.len()), None);
+}
+
+#[test]
 fn the_start_line_moves_to_the_point_nearest_the_grid_slot() {
     let ai = square_track(2);
     let plain = Course::from_track(&ai, None).expect("a ring");

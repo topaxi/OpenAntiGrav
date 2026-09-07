@@ -332,6 +332,12 @@ impl Race {
         // rather than inside it because this walks the whole ship array.
         self.update_standings();
 
+        // **After the standings**, so the wave's own proximity test reads
+        // every craft's freshest `Standing::progress` rather than last
+        // tick's. See `Race::advance_quake`'s own doc comment.
+        self.advance_quake();
+        self.advance_quake_visual();
+
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It
         // takes a snapshot and touches no simulation state, which is what lets

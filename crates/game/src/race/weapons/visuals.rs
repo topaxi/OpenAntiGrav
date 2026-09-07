@@ -10,6 +10,72 @@
 use super::*;
 
 impl Race {
+    /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
+    /// wave, one instance for the whole race.
+    ///
+    /// Needs `self.course` (to place the wave along the ring) and
+    /// `self.spline` (to read the track's own width there), which is why this
+    /// cannot live in `oag_gameplay::projectile::quake` at all - see that
+    /// module's own doc comment on the split.
+    ///
+    /// **Recovered position and scale, chosen orientation.** `Quake_Update`
+    /// builds its transform from two edge points sampled across the track at
+    /// the wave's own position: position is their midpoint, scale is their
+    /// separation divided by `50.0` -
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s "What
+    /// `Quake_Update` builds from those two points" section. This engine has
+    /// no per-progress edge-point record of its own the way the original's
+    /// `SplinePt` does; it recovers the same two points from
+    /// [`Spline`]'s own sample at the ring point nearest the wave's own
+    /// progress - `pos`/`lateral`/`half_width_left`/`half_width_right`, the
+    /// same fields [`oag_render::track::build_model`] already draws the
+    /// ribbon's own edges from. **Orientation is not established by anything
+    /// read** - the original's own basis build never consumes its
+    /// `AiTrack_LocatePosition` call, confirmed independently this pass by
+    /// re-deriving `Quake_Update` rather than only quoting the earlier read -
+    /// so this draws the effect axis-aligned at the recovered position and
+    /// scale alone, which is **chosen, not measured; no confidence score**.
+    ///
+    /// Detaches the instance the tick the wave goes away (`self.world.quake`
+    /// becomes `None`), the same "hand the slot back, let the particles fade"
+    /// shape [`Race::advance_projectile_flares`] already takes.
+    pub(in crate::race) fn advance_quake_visual(&mut self) {
+        let Some(wave) = self.world.quake else {
+            if let Some(playing) = self.quake_effect.take() {
+                self.stage.detach(playing);
+            }
+            return;
+        };
+        let Some(course) = self.course.as_ref() else {
+            return;
+        };
+        let Some(index) = course_index_near_progress(course, wave.progress) else {
+            return;
+        };
+        let Some(position) = course.position(index) else {
+            return;
+        };
+        let Some((_, sample, _)) = self.spline.nearest(position) else {
+            return;
+        };
+        let lateral = Vec3::from_array(sample.lateral);
+        let centre = Vec3::from_array(sample.pos);
+        let left = centre - lateral * sample.half_width_left;
+        let right = centre + lateral * sample.half_width_right;
+        let midpoint = (left + right) * 0.5;
+        let scale = (right - left).length() / 50.0;
+
+        match (self.effects.get(QUAKE_EFFECT).cloned(), self.quake_effect) {
+            (Some(effect), None) => {
+                self.quake_effect = self.stage.attach(&effect, midpoint, scale);
+            }
+            (Some(_), Some(playing)) => {
+                self.stage.follow(playing, midpoint);
+                self.stage.rescale(playing, scale);
+            }
+            (None, _) => {}
+        }
+    }
     /// Plays the explosion a weapon that just went off authored - its own,
     /// not another weapon's.
     ///
@@ -629,4 +695,34 @@ pub(in crate::race) fn bounce_effect_for(
         oag_formats::weapons::Weapon::Shuriken => Some(SHURIKEN_BOUNCE_EFFECT),
         _ => None,
     }
+}
+
+/// The course ring point whose own progress is nearest `progress`, by
+/// circular distance.
+///
+/// A full scan rather than a binary search: `Course::progress_at` wraps at
+/// the ring's own start index and is not monotonic in ring-index order
+/// across that wrap, so a search that assumed monotonicity would find the
+/// wrong point near the start line. The same "flat scan rather than a
+/// spatial index" shape `Course::locate`'s own module doc comment argues
+/// for, determinism aside: an occasional per-tick walk over a few thousand
+/// points is cheap next to a wrong answer at a wrap, and this runs once a
+/// tick for the one Quake wave that can ever exist, not once per craft.
+///
+/// `None` for an empty course.
+fn course_index_near_progress(course: &Course, progress: f32) -> Option<usize> {
+    let length = course.length();
+    (0..course.len())
+        .filter_map(|index| {
+            let at = course.progress_at(index)?;
+            let raw = (at - progress).abs();
+            let delta = if length > 0.0 {
+                raw.min(length - raw)
+            } else {
+                raw
+            };
+            Some((index, delta))
+        })
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(index, _)| index)
 }

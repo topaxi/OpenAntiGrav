@@ -31,17 +31,22 @@ fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
 /// The stand-in for "weighted, and not implemented". **It has to be a weapon
 /// that stays out of [`IMPLEMENTED`]**, or the tests below invert silently
 /// the day it lands - which is exactly what happened to the `Rocket` these
-/// two used before. Quake needs track deformation and is a long way off.
-const UNIMPLEMENTED: Weapon = Weapon::Quake;
+/// two used before, and to `Quake` after it: both were reasonable picks when
+/// chosen and both were built out from under this constant. The LeachBeam
+/// needs its own two drain-rate functions and their consumer, none of which
+/// is read - see
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s own Open
+/// list, which is a longer way off than either retired pick was.
+const UNIMPLEMENTED: Weapon = Weapon::LeachBeam;
 
 #[test]
 fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
-    // A quake is weighted and a quake cannot be handed out, so this is the
-    // real shape of the restriction rather than an empty table.
-    let quakes_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
+    // A LeachBeam is weighted and a LeachBeam cannot be handed out, so this
+    // is the real shape of the restriction rather than an empty table.
+    let leachbeams_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
     let mut rng = Rng::new(1);
     assert_eq!(
-        draw(&mut rng, &quakes_only, Driver::HUMAN_UNPLACED, None),
+        draw(&mut rng, &leachbeams_only, Driver::HUMAN_UNPLACED, None),
         None
     );
 }

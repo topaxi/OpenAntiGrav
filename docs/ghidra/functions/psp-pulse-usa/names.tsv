@@ -685,3 +685,5 @@
 0x08938090	function	MusicPlayer_ComputeStreamGain	85	audio-levels.md
 0x0893c208	function	MusicPlayer_ComputeCallbackGain	82	audio-levels.md
 0x0898c64c	function	Audio_EnqueuePannedOutput	78	audio-levels.md
+0x0891c7e0	function	Quake_ProximityToCraft	60	cannon-quake-leachbeam.md
+0x0891c82c	function	Quake_SpanIntensityAt	55	cannon-quake-leachbeam.md

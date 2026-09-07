@@ -37,6 +37,7 @@ use oag_formats::weapons::Weapon;
 use oag_race::{LapGate, Mode, RaceState};
 
 use crate::pickup::Held;
+use crate::projectile::quake::Wave;
 use crate::projectile::{Projectile, Projectiles};
 use crate::world::{Ship, World};
 
@@ -64,6 +65,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         ship_count,
         race,
         projectiles,
+        quake,
     } = world;
 
     hasher.write_u64(*tick);
@@ -87,6 +89,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
 
     write_race(hasher, race);
     write_projectiles(hasher, projectiles);
+    write_quake(hasher, quake);
 }
 
 fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
@@ -353,6 +356,35 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
     hasher.write_u8(u8::from(*zone_dirty));
     hasher.write_u8(u8::from(*finished));
     write_option_u32(hasher, *course_index);
+}
+
+/// A discriminant byte first, the same shape [`write_option_u32`] and every
+/// other `Option` here takes - see that function's own doc comment for why.
+fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
+    match quake {
+        None => hasher.write_u8(0),
+        Some(wave) => {
+            hasher.write_u8(1);
+            let Wave {
+                owner,
+                progress,
+                direction,
+                damage,
+                radius,
+                slowdown_time,
+                hit,
+            } = wave;
+            hasher.write_u8(*owner);
+            hasher.write_f32(*progress);
+            hasher.write_f32(*direction);
+            hasher.write_f32(*damage);
+            hasher.write_f32(*radius);
+            hasher.write_f32(*slowdown_time);
+            for latch in hit {
+                hasher.write_u8(u8::from(*latch));
+            }
+        }
+    }
 }
 
 fn write_projectiles(hasher: &mut StateHasher, projectiles: &Projectiles) {

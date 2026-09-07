@@ -222,6 +222,15 @@ pub struct World {
     /// tick, so it is covered by [`crate::hash::hash_world`] rather than left to
     /// reach the determinism gate indirectly.
     pub projectiles: crate::projectile::Projectiles,
+    /// The single travelling Quake wave, or `None` when none is in flight.
+    ///
+    /// Not part of [`Self::projectiles`] - see `crate::projectile::quake`'s
+    /// module doc comment for why: the original's own pool is a single slot,
+    /// not an array, and it carries a travelling *distance* rather than a
+    /// position and a velocity. Simulation state all the same, so it is
+    /// covered by [`crate::hash::hash_world`] exactly as [`Self::projectiles`]
+    /// is.
+    pub quake: Option<crate::projectile::quake::Wave>,
 }
 
 impl World {
@@ -235,6 +244,7 @@ impl World {
             ship_count: 0,
             race: RaceState::default(),
             projectiles: crate::projectile::Projectiles::new(),
+            quake: None,
         }
     }
 

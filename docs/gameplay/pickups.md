@@ -119,7 +119,7 @@ what it can be given next, so it is simulation state.
 **Three things about the port are ours, and each is labelled where it lives.**
 The *sequence* still cannot match the original, for the reason the next paragraph
 gives. The retry behind the no-repeat rule is **bounded** where the original's
-loop is not: `IMPLEMENTED` holds ten weapons, so a table weighting only one of
+loop is not: `IMPLEMENTED` holds eleven weapons, so a table weighting only one of
 them would spin for ever, and after `pickup::REDRAW_ATTEMPTS` a repeat is
 accepted - about one grant in twenty thousand on the shipped odds. And an
 *unplaced* craft spends the `human` column alone, because the original always has
@@ -382,9 +382,9 @@ the first time this build has drawn any part of Pure's pickup on screen.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma, Shuriken and,
-as of 2026-09-07, the Cannon**. **Being on this list is necessary but not
-sufficient** - see
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma, Shuriken, the
+Cannon and, later the same day, the Quake**. **Being on this list is necessary
+but not sufficient** - see
 "Shuriken and Repulser are gated by mode, not by the pool" below for the two
 weapons the *pool* would hand out and the authored *odds* never do.
 
@@ -443,17 +443,30 @@ weapons the *pool* would hand out and the authored *odds* never do.
   a wall costs nobody anything and one that hits a craft costs that craft
   alone, through `oag_gameplay::projectile::cannon::direct_hit`. See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-- **The Quake and the LeachBeam are read but not built** (2026-09-07) - see
-  the same page. The Quake needs no track deformation at all: it is a
-  travelling point along the track's own spline (a segment plus a parametric
-  `t` and a direction sign), and its hit on a craft reuses the same generic
-  pending-damage channel the Missile and Mine/Bomb already share - buildable
-  for the hit itself, not yet for the wave's own per-frame travel, which was
-  not located. The LeachBeam reuses the Missile's own lock-on for target
-  selection outright and drains continuously while connected, crediting one
-  accumulator on the victim and a second, symmetric one on the shooter every
-  tick - buildable for selection and the connect/disconnect gate, not yet for
-  the actual drain amount. The **Repulser** stays the one true "field the
+- ~~**Quake** needs its per-frame travel and its hit latch, neither
+  located.~~ **Built 2026-09-07**, the same day the latch was found inside a
+  function this page already had part of the reading of - the "wave has
+  reached me" test (`entity+0x860 & 0x40`) sits a dozen lines above the
+  damage branch `cannon-quake-leachbeam.md` had already quoted. It needs no
+  track deformation at all: a single travelling instance
+  (`oag_gameplay::projectile::quake::Wave`) advances at a fixed, unauthored
+  `270.0` units a second along the course, tracked as a plain distance-along
+  rather than the original's segment-plus-parametric-`t` pair, and its hit on
+  a craft reuses the same generic pending-damage channel the Missile and
+  Mine/Bomb already share - gated on the Quake's own authored `radius`, the
+  one attribute with no other consumer anywhere in the fire chain. The
+  visual is the disc's own `WO_QUAKE`, re-positioned and re-scaled every tick
+  to the midpoint and width of the track's own two edges nearest the wave -
+  orientation is not established by anything read, so it draws
+  axis-aligned, chosen rather than measured. See
+  [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+- **The LeachBeam is read but not built** (2026-09-07) - see the same page.
+  It reuses the Missile's own lock-on for target selection outright and
+  drains continuously while connected, crediting one accumulator on the
+  victim and a second, symmetric one on the shooter every tick - buildable
+  for selection and the connect/disconnect gate, not yet for the actual
+  drain amount, whose two rate functions and whose consumer of the two
+  accumulators are unread. The **Repulser** stays the one true "field the
   craft *is in* rather than a projectile" - its handler copies four of its
   own `<Stats>` onto the firing craft before it spawns anything - and is
   still deferred as Eliminator-only, per `HANDOVER.md`.
@@ -464,7 +477,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   work.
 
 **This is a departure and a deliberate one.** The authored table weights
-thirteen weapons and the draw sees ten of them, so what a player gets is the
+thirteen weapons and the draw sees eleven of them, so what a player gets is the
 authored distribution *conditioned on* the implemented set. It narrows to
 nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
 - and it beats handing out a mine that cannot be dropped.
@@ -749,13 +762,11 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Three of the thirteen weapons**, now that the Cannon has joined the built
-  set - see
+- **Two of the thirteen weapons**, now that the Cannon and the Quake have
+  joined the built set - see
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-  The Quake needs no track deformation - it is a travelling spline position,
-  not a mesh edit, though its own per-frame travel is still unlocated. The
-  LeachBeam's beam is a resolved link to whatever the Missile's own lock-on
-  already picked, drained continuously while connected; the two rate
+  The LeachBeam's beam is a resolved link to whatever the Missile's own
+  lock-on already picked, drained continuously while connected; the two rate
   functions and the health/shield consumer are still unread. The Repulser
   remains the one weapon needing a genuine craft-state field, and is
   deferred as Eliminator-only regardless.
