@@ -242,7 +242,7 @@
 0x08815c1c	function	Collision_GetContact	90	collision.md
 0x08816eac	function	Collision_DispatchPair	85	collision.md
 0x08815cd4	function	Collision_BoxAgainstMesh	88	collision.md
-0x0881702c	function	Collision_BoxAgainstBox	75	collision.md
+0x0881702c	function	Collision_BoxAgainstBox	92	collision.md
 0x0881894c	function	Collider_BoxShapeKind	92	collision.md
 0x088188a0	function	Collider_InitBox	80	collision.md
 0x0881585c	function	Collision_AddBoxCollider	80	collision.md
