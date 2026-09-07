@@ -19,11 +19,20 @@
 //! 1. **That the disc's own Cannon block decodes at all.** `absorb`, `rounds`,
 //!    `rate` and `damage_per_bullet` are the four this weapon authors that no
 //!    earlier weapon does under those exact names.
-//! 2. **That a round leaves with no `SQUARE` ever pressed.** This is the
-//!    weapon's whole distinguishing shape - see
+//! 2. **That rounds leave while `SQUARE` is held, and none leaves while it is
+//!    not.** This is the weapon's whole distinguishing shape - it is driven by
+//!    the *held* half of the fire button rather than the press edge every
+//!    other weapon consumes, see
 //!    `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` - and a
 //!    hand-built fixture cannot exercise `Race::advance_cannons` running
 //!    against a real per-craft reload countdown the way a loaded race does.
+//!
+//!    **This assertion used to be its own negation**, and that is worth
+//!    recording rather than quietly fixing: until 2026-09-07 this file
+//!    asserted that a round leaves with `SQUARE` never pressed, because the
+//!    countdown's gate had been read as a track weapon-pad flag. A player
+//!    reported the weapon as unfireable, the gate turned out to be the fire
+//!    button, and the test had been holding the bug in place.
 //! 3. **That the round survives the real collision soup**, riding the
 //!    floor-follower every other unread projectile weapon here shares as a
 //!    placeholder.
@@ -134,50 +143,61 @@ fn the_discs_cannon_block_decodes() {
     println!("cannon: {cannon:?}");
 }
 
-/// A picked-up Cannon fires itself, with `SQUARE` never pressed once - the
-/// whole point of this weapon, per its own evidence page.
+/// A picked-up Cannon fires while `SQUARE` is held and stays silent while it
+/// is not - the whole point of this weapon, per its own evidence page.
 ///
-/// **`SQUARE` is pressed once anyway, deliberately, to prove the negative
-/// half too**: `Race::spend_pickup`'s Cannon arm is a recovered non-event, so
-/// pressing fire must not spend the pickup or change anything a round's own
-/// reload countdown does not already account for.
+/// **The silent half runs first, and it is the half that used to be
+/// inverted.** `Race::spend_pickup`'s Cannon arm is still a recovered
+/// non-event, so a press must not spend the pickup; but the *held* button is
+/// what advances the countdown, so a long stretch with fire up must produce
+/// nothing at all.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_picked_up_cannon_fires_itself_with_no_press() {
+fn a_held_fire_button_is_what_fires_a_cannon() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
     let cannon = race.cannon_stats().expect("the disc authors a Cannon");
     race.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
 
-    // One press, one tick in, that must do nothing: no bit this weapon reads
-    // is dispatched by it, so the pickup must still be held afterward and no
-    // round must have left on account of it specifically - only the reload
-    // countdown decides that, and it runs regardless. `Cross` rides along so
-    // the craft keeps accelerating on the one tick that also presses fire,
-    // the same shape `plasma_ground_truth.rs`'s own combined press takes.
-    let mut buttons = Input::new();
-    buttons.begin_frame(0);
-    let mut fire = oag_gameplay::InputSnapshot::new();
-    fire.buttons = buttons;
-    fire.buttons
-        .begin_frame(Button::Square.bit() | Button::Cross.bit());
-    race.tick(&fire);
+    // Long enough that a self-firing countdown would have gone off many times
+    // over, with fire never held. Nothing may leave the barrel. A flat
+    // 600 ticks rather than a multiple of `rate`, because `rate` is now the
+    // reciprocal the disc authors - about a sixtieth of a second - and three
+    // of those is not a window anything could be caught in.
+    let quiet = 600u64;
+    for _ in 0..quiet {
+        race.tick(&throttle);
+        assert!(
+            rounds(&race).is_empty(),
+            "a Cannon round left with SQUARE never held - the countdown is \
+             running unpressed, which is the 2026-09-07 bug"
+        );
+    }
     assert_eq!(
         race.ship_pickup(),
         Some(Weapon::Cannon),
-        "a press on the Cannon's own request bit must not spend the pickup - \
-         nothing in the original dispatches it"
+        "an unfired Cannon must still be in the slot after {quiet} ticks"
     );
 
-    // Long enough that the reload countdown must have gone off at least
-    // once, with a healthy margin for the immediate-first-round choice this
-    // build makes (see `Held::advance_cannon_reload`'s doc comment) either
-    // being right or wrong.
+    // Now hold it. `Cross` rides along so the craft keeps accelerating while
+    // fire is down, the same shape `plasma_ground_truth.rs`'s own combined
+    // press takes.
+    let mut fire = oag_gameplay::InputSnapshot::new();
+    let mut buttons = Input::new();
+    let mask = Button::Square.bit() | Button::Cross.bit();
+    buttons.begin_frame(mask);
+    buttons.begin_frame(mask);
+    fire.buttons = buttons;
+
     let ticks = (cannon.rate * 60.0).ceil() as u64 + 120;
+    println!(
+        "cannon rate {:.4}s per round, magazine {}",
+        cannon.rate, cannon.rounds
+    );
     let mut ever_fired = false;
     for _ in 0..ticks {
-        race.tick(&throttle);
+        race.tick(&fire);
         if !rounds(&race).is_empty() {
             ever_fired = true;
             break;
@@ -185,8 +205,8 @@ fn a_picked_up_cannon_fires_itself_with_no_press() {
     }
     assert!(
         ever_fired,
-        "no Cannon round appeared in {ticks} ticks with SQUARE never held - \
-         the reload countdown is not firing on its own"
+        "no Cannon round appeared in {ticks} ticks with SQUARE held down - \
+         the reload countdown is not advancing on a held button"
     );
 
     let round = rounds(&race)[0];

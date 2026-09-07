@@ -64,6 +64,8 @@
 0x0894ebd0	function	Input_ReadAnalog	88	input.md
 0x0894eec4	function	Input_BuildState	90	input.md
 0x0894f1cc	function	Input_IsPressed	92	input.md
+0x0894f158	function	Input_IsHeld	90	input.md
+0x0894f198	function	Input_GetAxis	85	input.md
 0x0894f22c	function	Input_ConsumePress	70	input.md
 0x0894f2a0	function	Input_ParseButtonName	88	input.md
 0x08b059f0	data	g_pad_buffer	90	input.md
@@ -645,6 +647,8 @@
 0x08877280	function	Shuriken_Init	88	shuriken.md
 0x088577ac	function	Weapon_FireCannon	85	cannon-quake-leachbeam.md
 0x0883f424	function	Cannon_UpdateReload	85	cannon-quake-leachbeam.md
+0x0883c74c	function	PlayerInput_Construct	85	cannon-quake-leachbeam.md
+0x0883c870	function	PlayerInput_Update	85	cannon-quake-leachbeam.md
 0x088648ec	function	Cannon_Init	80	cannon-quake-leachbeam.md
 0x08874b14	function	Quake_Init	82	cannon-quake-leachbeam.md
 0x0891d268	function	Quake_Update	85	cannon-quake-leachbeam.md

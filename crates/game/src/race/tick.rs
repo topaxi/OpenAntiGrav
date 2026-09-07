@@ -70,12 +70,12 @@ impl Race {
         // pressed. A mine never moves again, so this is the only tick that can
         // place it correctly.
         self.lay_mines();
-        // Right after, for the same reason: a Cannon's own countdown is
-        // per-craft state that has to see every tick, and a round fired this
-        // tick has to leave from where the craft started it. Unlike the
-        // drop above, nothing here reads the snapshot at all - see
-        // `Race::advance_cannons`'s own doc comment for why.
-        self.advance_cannons();
+        // Right after, for the same reason: a Cannon's own countdown has to
+        // see every tick the button is down, and a round fired this tick has
+        // to leave from where the craft started it. It reads the snapshot for
+        // the *held* state of fire rather than the press edge `spend_pickup`
+        // above consumes - see `Race::advance_cannons`'s own doc comment.
+        self.advance_cannons(snapshot);
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here

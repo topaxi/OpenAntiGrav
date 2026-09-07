@@ -702,8 +702,20 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             cannon = optional_block(&mut skipped, weapon_kind, || {
                 Ok(CannonStats {
                     absorb: number(block, "Stats", "absorb")?,
-                    rounds: number(block, "Stats", "rounds")?,
-                    rate: number(block, "Stats", "rate")?,
+                    // Truncated, not rounded: `WeaponStats_ParseCannon`
+                    // stores `(int)Xml_AttributeAsFloat(...)` at
+                    // `stats+0x70`. Both shipped tables author a whole
+                    // number, so this cannot currently differ - it is
+                    // written the original's way so it never starts to.
+                    rounds: number(block, "Stats", "rounds")?.trunc(),
+                    // **The reciprocal, and it is the file's own.**
+                    // `WeaponStats_ParseCannon` (`0x0880c774`) stores
+                    // `1.0 / Xml_AttributeAsFloat(...)` at `stats+0x78`,
+                    // which is the field `Cannon_UpdateReload` adds to its
+                    // countdown. So the attribute is rounds *per second* and
+                    // what the countdown reloads with is seconds per round.
+                    // See `CannonStats::rate` for what a literal reading did.
+                    rate: 1.0 / number(block, "Stats", "rate")?,
                     damage_per_bullet: number(block, "Stats", "damage_per_bullet")?,
                     slowdown_time: number(block, "Stats", "slowdown_time")?,
                 })
