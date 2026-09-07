@@ -262,3 +262,105 @@ That is a visible absence - a collected pad looks the same as an uncollected
 one - and it is deliberately preferred to inventing a cooldown grey or a
 regression dressed as a fix, per [`CLAUDE.md`](../../CLAUDE.md)'s "never
 invent what the assets already author".
+
+### The `_ne` file's RGB is a normal map, not paint - measured, 2026-09-07
+
+A maintainer report from play (verbatim): HD weapon pads light up red, go
+dark when they give a weapon, then relight when arming - and only the light
+bars, not the whole pad. Since the `_ne` mask's alpha is already established
+to cover exactly the bars, the cheapest open question was whether the same
+file's RGB is red - which would make the lit state just this additive layer
+at a red texel, drawn at the module's own white default tint. **It is not
+red.** Decoded `12_sol_2`'s `ds_weaponup_ne.gtf` and `ds_speedup_ne.gtf`
+through `oag_formats::gtf::Texture::to_rgba`
+(`crates/render/examples/hd_pad_ne_colour_probe.rs`):
+
+| File | Whole-texture RGB mean | Alpha-selected (bars) RGB mean | Alpha>0 coverage |
+| --- | --- | --- | --- |
+| `ds_weaponup_ne.gtf` | `[127, 129, 243]` | `[128, 71, 235]` | 6.8% of texels, 92% of those at alpha==255 |
+| `ds_speedup_ne.gtf` | `[127, 128, 244]` | `[126, 63, 230]` | 7.3% of texels, 92% of those at alpha==255 |
+
+Both files are blue-dominant everywhere (whole-texture blue channel never
+drops below 99 of 255) with 32,770 and 35,360 distinct RGBA values across
+~1.05M texels each - a continuous gradient, not a handful of flat painted
+colours. That, the whole-texture mean sitting almost exactly on
+`[128, 128, 255]` - the canonical tangent-space normal-map neutral - and the
+rendered PNG's unmistakable embossed blue/purple look (rivets, panel edges
+and the bars themselves in bas-relief) together read as a tangent-space
+normal map, not a colour mask. **Independently confirmed from the shader's
+own use, not just the pixel statistics**: disassembling both pads' fragment
+programs (`crates/render/examples/hd_pad_ne_tint_probe.rs`) shows the very
+first instruction after the unit-1 `TEX` is `MAD R#, R#, {2.0, -1.0, ...},
+...` on both pads - the standard `x*2-1` decode that turns a `[0,1]`-packed
+texture sample into a signed vector, applied to the same register the `_ne`
+sample landed in. The disc's own program treats this texture's colour as a
+normal to unpack, not a value to add.
+
+**This also rules out DXT5nm** (the "green-and-alpha-only" normal-map
+packing some engines use, where a texture's own RGB is throwaway and the
+real X channel lives in alpha): alpha here is not a smooth per-texel channel
+carrying geometry, it is binary-ish and sparse - 6.8-7.3% of texels non-zero,
+92% of *those* exactly 255 - which is a mask, matching what was already
+established (the mask covers exactly the light bars) and nothing else.
+
+**Neither pad's fragment program carries a baked-in tint either**, red or
+otherwise. `emissive`'s tint parameter (hash `0xe8bcd7f5`) does not appear
+in either program's declared-parameter list, and `Program::patches` finds it
+patching zero code slots in either - so it never reaches the microcode at
+all, not even as a draw-time overwrite of a placeholder literal. The only
+non-`[0,0,0,0]` inline constants in either 50-instruction program are the
+normal-decode pair (`2.0, -1.0`), the `1/ln2` and specular-exponent (`32.0`)
+literals a Blinn-Phong log/exp trick needs, and the placeholder zero
+constants sun colour/direction and ambient patch at draw time - none of
+which is a colour that could read as red.
+
+**So, asset-side, nothing measured explains "light up red" for the light
+bars specifically.** The `_ne` file's own colour channels are a normal map,
+not paint; no tint - baked or parameter-driven - exists anywhere in either
+pad's own shader; and the disc's declared default for this accumulate shape
+is white. What the maintainer describes from play remains a lead this pass
+could not close: settling it needs a Ghidra-side read of the pad importer's
+per-frame update, outside this pass's tools (no Ghidra bridge held here).
+
+**A second tension, found reading `mesh.wgsl` rather than the pad's own
+microcode.** The renderer already implements a generic version of this
+accumulate shape, for other materials on the disc: `glow = second.rgb *
+tint.rgb * first.a` - unit 1's own **RGB**, times a tint, gated by the
+**diffuse's** alpha (`first.a`, unit 0's fourth channel), not unit 1's own
+alpha. Measured what that gate would actually select here: `ds_weaponup_cs.gtf`
+and `ds_speedup_cs.gtf`'s own alpha is non-zero over **93%** of the texture,
+fully opaque (`255`) only at the red cross/blue chevron outline (4% of
+texels) - nothing like the tight ~7%, bars-only mask `_ne`'s alpha carries.
+**If that generic mechanism is what actually runs for a pad material, wiring
+it would spread a normal-map-coloured glow across nearly the whole plate**,
+gated by the diffuse's own opacity, not confined to the light bars at all -
+which would contradict the maintainer's "only the light bars" report even
+more directly than the tint question above, and would mean `_ne`'s own
+alpha (established to cover exactly the bars) is never even sampled by this
+path. **Which of the two actually governs a pad material is unresolved by
+this pass.** The generic shape is confirmed disc-wide for other materials,
+not specifically disassembled end-to-end for either pad: the pad's own unit-1
+sample lands in `R0`, gets unpacked as a normal (`x*2-1`) and is then
+threaded through a Blinn-Phong specular chain before the program's final
+`MAD`s, so by the time the program ends the register holding "unit 1's
+value" no longer holds the raw sample - whether the final blend is really
+this generic `second.rgb * tint * first.a` shape, some other shape reading
+`_ne`'s own alpha instead, or the specular contribution alone with no
+separate glow term at all, was not settled by tracing registers this pass.
+
+**One picture, chosen and not measured, to make one candidate shape
+concrete** - and, given the tension just found, this is not even the
+best-supported of the candidates: `crates/render/examples/hd_pad_emissive_composite_probe.rs`
+composites `_cs` (diffuse) plus white scaled by `_ne`'s own alpha, applied
+offline, entirely outside the renderer (no change to `Pick`, `skin()` or
+`mesh.wgsl`). The tint is `emissive`'s own fallback default, `[1,1,1]` -
+**not a disc measurement**; the disc authors no tint for this material at
+all, measured above. At that composite the bars turn white against a plate
+whose border and cross are already red at rest; they do not turn red. This
+is one candidate reading of at least four the microcode leaves open -
+`accumulates(1) == true` says a value from unit 1 reaches the output, not
+which of sampled RGB, RGB×alpha or alpha-alone it is, gated by which of two
+different alpha channels this page has now found in the disc's own code -
+and this pass did not resolve the accumulate instruction's own swizzle/mask
+to settle any of it. Do not treat the PNG as measured; the measured half is
+only the fallback tint value and each file's own alpha coverage.
