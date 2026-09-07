@@ -182,6 +182,54 @@ fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
     }
 }
 
+/// The RACE page's VARIANT row exists for a title with a variant axis and is
+/// dropped for one without - Wipeout Pure and Wipeout Pulse author neither
+/// `team_variants` nor `guest_roster` on any team, so the row would draw
+/// permanently empty and unusable there. RACE REMIX's own VARIANT row is
+/// untouched on every title: `remix.team` can still name an HD/Fury team
+/// regardless of what booted.
+#[test]
+fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
+    let variant_rows = |definition: &Definition, page_id: &str, setting: &str| {
+        definition
+            .pages
+            .iter()
+            .filter(|page| page.id == page_id)
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some(setting))
+            .count()
+    };
+
+    let mut pulse = built_in();
+    pulse.drop_unavailable_race_variant(oag_pulse::TITLE);
+    assert_eq!(
+        variant_rows(&pulse, "race", "race.variant"),
+        0,
+        "Wipeout Pulse has no variant axis on any team"
+    );
+    assert_eq!(
+        variant_rows(&pulse, "remix", "remix.variant"),
+        1,
+        "RACE REMIX offers variants for a mixed grid regardless of the booted title"
+    );
+
+    let mut pure = built_in();
+    pure.drop_unavailable_race_variant(oag_pure::TITLE);
+    assert_eq!(
+        variant_rows(&pure, "race", "race.variant"),
+        0,
+        "Wipeout Pure has no variant axis on any team"
+    );
+
+    let mut hd = built_in();
+    hd.drop_unavailable_race_variant(oag_hd::TITLE);
+    assert_eq!(
+        variant_rows(&hd, "race", "race.variant"),
+        1,
+        "Wipeout HD/Fury's twelve teams carry a variant axis"
+    );
+}
+
 /// The mode row is supplied rather than spelled, so what it must agree with
 /// is `mode_choices`, not a list in the definition file.
 #[test]
