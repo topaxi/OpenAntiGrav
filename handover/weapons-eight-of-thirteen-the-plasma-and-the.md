@@ -888,3 +888,26 @@ craft slot the original never emitted it from.
 **Twelve of thirteen weapons now do something.** Only the LeachBeam remains,
 blocked on its own two drain-rate functions and whatever consumes
 `entity+0x120`/`+0x128` - see `cannon-quake-leachbeam.md`'s own Open list.
+
+## 2026-09-07: the countdown weapon-gate call above is void - confirmed on pulse-psp-eu
+
+This thread's mine drop-rate pass left weapons deliberately **ungated during
+the countdown**, on the stated evidence that Time Trial's free Turbo was "the
+one reachable case that demonstrably worked" - i.e. that the original itself
+holds a Turbo through the countdown, so gating it here would diverge.
+
+**That evidence was our own build's behaviour, not the original's.** The
+maintainer tested `pulse-psp-eu` directly this session: the free Turbo is
+granted **after** the countdown releases the craft, not at the start line -
+so the original never holds anything to gate in the first place. See
+`handover/hud-icon-turbo-timing.md` for the full trace (the green-hexagon
+HUD comparison that surfaced this).
+
+**So a blanket countdown weapon gate may now be the correct call**, where it
+was rejected on the reasoning above. Revisit once
+`Race::grant_free_turbo`'s call site moves from `Race::start` (tick 0) to the
+release edge (`world.tick == oag_race::state::COUNTDOWN_TICKS`, i.e. the same
+tick `RaceState::thrust_gated` first reads `false`) - see the other thread for
+the exact change. Once that lands, check whether any *other* weapon-during-
+countdown path still needs a gate, or whether removing the early Turbo grant
+was the whole gap.
