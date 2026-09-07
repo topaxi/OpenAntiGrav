@@ -26,5 +26,40 @@ categories: [rendering, tooling]
 
 ## Next Steps
 
-- **Draw the ambient shadows.** The 9 `B8` textures decode; nothing places a quad under a craft. What size, what blend mode and what follows the ship's pitch/roll are renderer questions this format layer says nothing about - and the answers are on the disc (the ship's own `.rcsmodel`/material set) rather than inventable, per the project's never-invent rule. That is a new thread's worth of work, not this one's.
+- ~~**Draw the ambient shadows.**~~ **Landed 2026-09-04**, in
+  [original-on-pulse-is-the-tier-still-unbuilt.md](original-on-pulse-is-the-tier-still-unbuilt.md)
+  and `docs/rendering/shadows.md`'s `blob` tier; this row was just never
+  crossed off here. **2026-09-07: re-read at the source and confirmed still
+  true from the code alone** - `crates/render/src/shadow.rs`/`shadow.wgsl`,
+  `crates/game/src/race/shadow.rs` (which loads each team's
+  `ambient_shadow.gtf`) and `crates/game/src/race/scene/frame/shadow.rs`
+  (which calls it every frame `graphics.shadows` is not `off`), plus the
+  tier's own unit tests (`crates/render/src/shadow/tests.rs`, including
+  `a_banked_surface_tilts_the_quad_with_it`) - **but not visually**: no
+  screenshot was taken this session. The machine was at load ~35/16 cores
+  from other members' concurrent builds and the release build this needed
+  (`cargo run --release -p oag-game -- --race --shadows blob --screenshot
+  ...`) had not finished after ten minutes when the session wound down; it
+  was abandoned rather than left running unattended. `docs/rendering/shadows.md`
+  itself already says as much - "Nobody has looked at `blob` in a window" is
+  still an open line there. All three questions this row asked are answered
+  and cited from the code, not invented: size is the craft's own `<Misc>`
+  length/width off its `.rcsmodel`/`Ship.vex`, unscaled
+  (`crates/game/src/race/shadow.rs`, `Placement` construction) rather than the
+  physics hull's `0.75`-scaled one - the comment there cites Feisar's `13.0`
+  length against a drawn bounding radius of `6.45` as the check; blend is
+  alpha-over black, with the coverage read from the texture's own **red**
+  channel rather than alpha, because the `.gtf`'s own `remap` broadcasts the
+  stored `B8` byte to rgb and forces alpha opaque (`shadow.wgsl`'s comment,
+  cross-checked against `gtf_ground_truth.rs`); and the quad's plane follows
+  the surface normal the craft's own downward cast hits (banking with the
+  road) with its forward axis projected into that plane (turning with the
+  craft's yaw) - **not** the craft's own pitch/roll, which the module doc in
+  `crates/render/src/shadow.rs` says is deliberate for a contact shadow.
+  `HULL_DARKNESS` is the one number in the tier with no evidence behind it,
+  and it is labelled as such in the source rather than left silent. **Given
+  the code is real, tested and wired, and only the screenshot is missing,
+  this row is left crossed off rather than reopened** - but the "seen in a
+  window" gap is real and belongs to whoever next has GPU time free on this
+  machine, not a claim this session can make.
 - **Locate the texture-upload path in `EBOOT.elf`.** `Texture_BuildGcmRegisters`'s seven callers are the place to start - one of them has to be where a `.gtf`'s texels get tiled, and that is the last thing holding `morton_index` at 88.
