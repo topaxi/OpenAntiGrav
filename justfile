@@ -25,7 +25,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-handover check-link-data check-strings
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -745,6 +745,21 @@ check-size:
 # it needs to make them. CI has no Ghidra, so without this nothing reads the file
 check-names:
     python3 scripts/check-ghidra-names.py
+
+# docs/ghidra/captures/ is what a Ghidra database held that names.tsv does not:
+# labels, plate comments, and the structs and prototypes that turned out not to
+# exist. Offline, like check-names - it also catches a captured comment citing a
+# docs page nobody wrote, which check-docs never sees. See ADR-0047
+check-captures:
+    python3 scripts/check-ghidra-captures.py
+
+# Re-snapshot every program in the open Ghidra project. Two steps because only
+# the first needs Ghidra: run scripts/ghidra/DumpDatabaseState.java from the
+# Script Manager (or the MCP bridge) with a scratch directory as its argument,
+# then point this at the same directory. Not part of `just check` - it needs a
+# running Ghidra, which CI has not got
+capture-ghidra-state raw *ARGS:
+    python3 scripts/capture-ghidra-state.py {{raw}} {{ARGS}}
 
 # Assert the open PSP program actually had its relocations applied. Deliberately
 # not part of `just check`: it needs a running Ghidra, which CI does not have.
