@@ -23,9 +23,9 @@ the work in isolated worktrees.
    sonnet. You are excluded from the budget.
 
 2. **Ask how many slots to drive** with `AskUserQuestion`. Offer 2, 3 and 4, and
-   say what each means in practice (2 is conservative on disk and easy to
-   supervise; 3 is the usual working figure; 4 needs headroom - see the disk
-   section). Do not guess; wait for the answer.
+   say what each means in practice (2 is easy to supervise; 3 is the usual
+   working figure; 4 is the most that has been driven at once). Do not guess;
+   wait for the answer.
 
 3. **Set up the recurring check.** Invoke the `loop` skill with an interval of
    30 minutes and a prompt that re-enters this one, so the loop survives you
@@ -97,10 +97,10 @@ Members inherit none of your context. Every brief needs:
 1. **Step zero**: `git merge main`, then `just link-data`. Worktrees have been
    created from a stale base; members that skipped this reported numbers that did
    not reproduce.
-2. **Disk discipline**: build once, avoid `cargo build --release` unless needed,
+2. **Build discipline**: build once, avoid `cargo build --release` unless needed,
    and **stop and report** on `No space left on device` or `rustc-LLVM ERROR: IO
-   failure on output stream` - that is a disk problem masquerading as a compile
-   error.
+   failure on output stream` rather than retrying - those are not flaky compile
+   errors. Do not have members check or report free space.
 3. **The lane**, and who owns the lanes they may not touch.
 4. **What is already established**, with a "do not re-derive this" marker. Cite
    the scratch reports and doc pages by path.
@@ -143,8 +143,8 @@ Members inherit none of your context. Every brief needs:
 - **A negative result reported honestly is a good outcome.** Several of this
   project's best passes killed a theory and invented nothing.
 - **Be suspicious of a green claim you did not see.** Ask whether the member
-  watched the gate finish. Three members were misled by disk-full builds that
-  looked like flaky compile errors.
+  watched the gate finish. Three members were misled by builds that died on the
+  errors above and read as flaky.
 - **Check the diff against the claim.** A `docs(...)` subject with no docs in it
   means the findings are outside git.
 - **A member that says "I could not determine X, here is its address"** has done
