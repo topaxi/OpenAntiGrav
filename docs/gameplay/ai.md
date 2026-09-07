@@ -1081,6 +1081,195 @@ jump-clearing failure, if it is worth fixing at all rather than accepted as
 "Novice does not clear this jump", is a question for whoever owns that call,
 since it trades against the grip calibration above.
 
+### The jump-clearing failure: the mechanism, a real bug that turned out not to be it, and why this is where the chase stops
+
+Followed up further, same day, with `crates/game/tests/novice_jump_ground_truth.rs`.
+Three things came out of it: what `grip_believed`'s cliff is actually made of,
+a genuine bug the chase turned up that does **not** explain it (measured, not
+assumed - see below), and, once both were in hand, a precise answer to
+whether anything in this crate can close the remaining gap without moving
+`grip_believed`. It cannot, and this section says why rather than leaving that
+implicit.
+
+**`grip_believed` is a correlated lever, not a direct one - it works through a
+real corner, not through the gap itself.** `13_Track`'s racing line carries a
+genuine bend immediately before liftoff: curvature rises to a peak of `0.0125`
+at index 13, six indices before the gap starts at 19. That is well inside
+[`corner_target`](../../crates/ai/src/driver/pace.rs)'s ordinary territory, so
+`grip_believed` throttles the approach exactly the way it throttles every other
+corner on the disc - it has no idea a jump follows. Measured directly (not
+inferred from the respawn count): a lone Novice craft's actual forward speed at
+liftoff (driver-line index 22),
+
+| `grip_believed` | speed at index 22 (units/s) | speed at index 26, still airborne |
+| --- | --- | --- |
+| 0.30 (Novice) | 87.85 | 87.60 |
+| 0.48 (Skilled) | 108.38 | 107.65 |
+
+a 23 per cent difference that reproduces the grip sweep's cliff without
+touching the jump at all. **The cliff itself is not a discontinuous grip
+effect** - the corner's own target speed is the same smooth `sqrt` function of
+`grip_believed` it is everywhere else. What is discontinuous is the *landing*:
+the flight this liftoff speed buys lasts about the same span of time whichever
+speed it starts from (0.88 s measured at 0.30), so the horizontal distance
+covered is continuous in speed while "lands past the gap" versus "lands inside
+it and falls through" is a step function of that distance against the gap's
+own fixed length. A continuous cause with a binary consequence is exactly what
+a sharp cliff looks like from outside - and it is a genuinely sharp one,
+**measured, not estimated**, with a fine sweep at `0.01` steps
+(`novice_13_track_grip_fine_sweep`) between the coarse sweep's two bracketing
+points:
+
+| `grip_believed` | respawns | laps | liftoff speed | first landing index |
+| --- | --- | --- | --- | --- |
+| 0.41 | 1 | 1 | 101.01 | 42 |
+| 0.42 | 1 | 1 | 103.07 | 45 |
+| **0.43** | **0** | **4** | **103.76** | **47** |
+| 0.44 | 0 | 4 | 104.66 | 47 |
+| 0.45 | 0 | 4 | 106.53 | 47 |
+| 0.46 | 0 | 4 | 106.41 | 47 |
+| 0.47 | 0 | 4 | 107.31 | 47 |
+
+The threshold sits between **0.42 and 0.43**, not the coarse sweep's `0.40`
+and `0.48` - a liftoff-speed gap of under one unit per second (`103.07` versus
+`103.76`) decides it. Every clean row lands at the same index, 47: past the
+threshold, extra grip buys the craft nothing more on this jump, which is the
+first sign of a second limit below - see the ceiling test.
+
+**This is not a reason to raise `grip_believed`.** The corner producing the
+87.85-vs-108.38 split is ordinary cornering physics, correctly scaled by the
+axis that is calibrated against play - see the sweep two sections up. Moving
+it would still be spending a constant that governs every corner on every
+circuit to fix one gap on one of them.
+
+**The ceiling test: is the corner even capable of the speed this jump needs,
+independent of grip?** `Tuning::max_turn_rate` is scaled by `turn_allowed`
+too (`0.6` at Novice), and the coarse sweep held it fixed while only
+`lateral_accel` moved - so a sweep that never sees a plateau cannot rule out
+the yaw term becoming the binding constraint at some grip past what was
+tried. `novice_13_track_grip_ceiling` answers it directly: `lateral_accel`
+scaled far past anything the fine sweep needed (`1.0`, `5.0`, `20.0`,
+`100.0`, all with `turn_allowed` still Novice's own `0.6`),
+
+| `grip_believed` | liftoff speed | first landing index |
+| --- | --- | --- |
+| 0.48 | 108.38 | 47 |
+| 1.00 | 111.21 | 47 |
+| 5.00 | 111.21 | 47 |
+| 20.00 | 111.21 | 47 |
+| 100.00 | 111.21 | 47 |
+
+Speed plateaus at `111.21` from `1.0` on - the yaw term has taken over, and no
+further grip buys another unit of speed through this corner while
+`turn_allowed` stays at Novice's `0.6`. But `111.21` clears the jump with
+7.5 units/s to spare over the `103.76` the fine sweep found sufficient, so
+**the yaw ceiling is not what is stopping Novice.** The corner is
+geometrically capable, at Novice's own turn-rate degradation, of every speed
+this jump needs. What is missing is entirely the **34-unit gap** between
+Novice's calibrated liftoff speed (`87.85`, at `grip_believed = 0.30`) and the
+`103.76` the threshold needs - a gap `grip_believed` alone closes, and nothing
+else in this corner's physics does.
+
+**A genuine bug turned up in the same pass, found first and ruled out
+second - reported in that order because that is the order it was learned
+in.** `ShipState::time_airborne` was read nowhere in `Driver::drive`. Proven,
+not inferred - a unit test (`a_craft_mid_flight_never_brakes_for_the_corner_ahead`,
+written before the fix below) built one fixture at `time_airborne = 0.0` and a
+second identical in every other respect at `time_airborne = 0.3`, on a corner
+tight enough to brake hard on the ground, and the two produced **byte-identical
+controls**. The driver braked mid-flight exactly as hard as it braked on the
+track, for a corner it had no lateral grip left to use the brake on -
+[`pace::throttle`](../../crates/ai/src/driver/pace.rs)'s own doc says what the
+symmetric brake buys: "how much cornering grip the deceleration is bought
+with". Off the ground there is no cornering grip to buy, so every tick of that
+brake was a pure loss of the forward speed a landing needs, for nothing - in
+general. **The fix**: when `state.time_airborne > 0.0`, hold full thrust and
+skip the corner-based brake entirely, the same way the existing
+mistake-injection branch already does for a driver "sailing through" a missed
+braking point. Chosen, not measured, no confidence score - this is the
+driver's own behaviour, not a recovered one, and defensible on mechanism
+alone: a brake that buys cornering grip is not a sensible command to issue
+when there is no cornering grip in play.
+
+**It does not touch `13_Track`'s own pathology, and that is measured rather
+than assumed.** Before and after this exact fix, same seed, same tuning,
+same 18,000 ticks: `347` respawns both times, the *same* first liftoff
+(index 22) and the *same* first landing (index 44, 0.88 s flight). The
+symmetric brake this fix removes was never actually engaging during this
+particular flight - the look-ahead window during those ticks never reached
+a curvature the reduced Novice speed was already under, so there was nothing
+for the fix to remove here. The bug is real and the fix is kept (it is a
+correctness fix independent of this pathology, and the regression gate below
+confirms it costs nothing), but it answers a different question than the one
+this section is chasing.
+
+**Tier x circuit table, before and after the airborne fix** (respawns per
+run, four tiers by twelve circuits - the coarse grid, pilot unforced, same
+caveat as before):
+
+| circuit | before (n/s/e/a) | after (n/s/e/a) |
+| --- | --- | --- |
+| 16,03,02,10,04,09,14,07_Track | 0/0/0/0 | 0/0/0/0 |
+| 05_Track | 1/2/3/0 | 1/**3**/3/0 |
+| 01_Track | 2/7/1/1 | **3**/**5**/1/1 |
+| 13_Track | 347/0/0/0 | 347/0/0/0 |
+| 06_Track | 1/0/0/0 | 1/0/0/0 |
+
+Two single-digit cells moved (`05_Track` skilled `2->3`, `01_Track` novice
+`2->3` and skilled `7->5`) - a real behaviour change from removing a bug that
+*was* live somewhere on those two circuits, even though it is inert on
+`13_Track`. Nothing moved outside the single digits the pre-existing table
+already had, and the tier that matters for the regression gate - Ace - is
+unchanged on every circuit, `01_Track` included.
+
+**The regression gate,
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`,
+before and after, quoted verbatim:** all twelve circuits clean lap both times;
+`01_Track`'s one respawn stays at index **794** both times; `13_Track` clean
+laps at `37.5s` both times (`0` respawns for the Ace tier this gate runs, same
+as always - the pathology is Novice-only).
+
+### Why the chase stops here: no lever left in `oag-ai` that is not `grip_believed` itself
+
+Three things are now measured, not assumed: the mechanism (a real corner,
+ordinary physics), the precise threshold (`grip_believed` between `0.42` and
+`0.43`, not the coarse `0.40`/`0.48`), and that the corner is geometrically
+capable of the needed speed at Novice's own turn-rate degradation (the
+ceiling test, `111.21` against a `103.76` requirement). What that leaves is a
+plain gap: Novice's calibrated liftoff speed through this corner is `87.85`;
+clearing the jump needs `103.76`. Nothing between those two numbers is a
+controller bug - the corner is driven correctly, just slower than this one
+jump wants, because that is what `grip_believed(Novice) = 0.30` is *for*.
+
+**A jump-aware rule was considered and not built, and the reason is
+concrete rather than a preference.** [Question 4 of the brief](#the-13_track-novice-pathology-chased)
+asks whether a driver that "knows it is approaching an authored jump" would
+be defensible. It would be, in principle - but `oag_ai::Line` carries no
+signal to build it from. Checked directly, not assumed: the racing line's
+own height barely changes across the whole gap (`20.36` to `20.64` world
+units over indices 19 to 49, out of a full circuit that climbs and descends
+far more than that everywhere else) and the corridor stays a normal width the
+entire way across (`left`/`right` within a unit of the samples either side).
+There is nothing in the geometry `oag-ai` can see that marks this stretch as
+a jump rather than an ordinary straight, and the collision-based test that
+*does* know (`the_racing_line_has_track_under_it_where_it_is_known_to`) lives
+outside this crate's dependency graph by design - `oag-ai` depends on
+`oag-core` and `oag-physics` and nothing that can run a raycast against
+loaded track collision. Wiring that signal through would mean adding a
+producer in `crates/game/src/race/spline.rs`, which is this pass's another
+lane, not this crate's. A `Line` field with nothing to populate it is a dead
+API, not a fix.
+
+**So: accepted as "Novice does not clear this jump", per the brief's own
+allowance for that outcome.** `Difficulty::grip_believed` is untouched at
+every level - Novice keeps every other circuit's identity exactly as
+calibrated. The `crates/game/src/race/` respawn-cooldown hypothesis flagged
+above is also untouched - it was never load-bearing for either finding here,
+and whoever owns that file should still confirm or refute it on its own
+terms; fixing it would very likely take `347` down toward the single-digit
+norm every other cell in the table already shows, without touching why the
+first landing falls short.
+
 ### What a driver can see of the grid
 
 `oag_ai::Field` is three optional rivals - the nearest **ahead**, the nearest

@@ -1,5 +1,14 @@
 //! Follow-up to `novice_respawn_ground_truth.rs`: **why** the grip sweep's
-//! cliff between 0.40 and 0.48 exists, not just that it does.
+//! cliff between 0.40 and 0.48 exists, not just that it does - and, once that
+//! is measured, whether anything in `oag-ai` closes it without moving
+//! `Difficulty::grip_believed` itself. See
+//! `docs/gameplay/ai.md`, "The jump-clearing failure" for the full writeup;
+//! the short version is a real corner (not the gap) throttles the approach,
+//! the threshold is `0.42..0.43` rather than the coarse sweep's `0.40..0.48`,
+//! and the corner is geometrically capable of the needed speed at Novice's
+//! own turn-rate degradation - so the shortfall is entirely
+//! `grip_believed(Novice) = 0.30` being lower than this one jump needs, not a
+//! controller bug.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -138,5 +147,112 @@ fn what_the_jumps_approach_looks_like() {
             }
         }
         println!("  ({logged} indices logged before landing or a respawn)");
+    }
+}
+
+/// One lone Novice-tuned craft on `13_Track`, with `lateral_accel` scaled by
+/// `grip` (everything else - `max_turn_rate`, `mistake_rate`,
+/// `reaction_ticks` - held at Novice's own value), for 18,000 ticks. Returns
+/// `(respawns, laps, liftoff_speed, first_landing_index)`, where
+/// `liftoff_speed` is the forward speed at the first tick the driver is found
+/// airborne and `first_landing_index` is the driver-line index where the
+/// first airborne window ends.
+fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
+    let novice = oag_ai::Difficulty::Novice.tune(&oag_ai::Tuning::default());
+    let tuning = oag_ai::Tuning {
+        lateral_accel: oag_ai::Tuning::default().lateral_accel * grip,
+        ..novice
+    };
+    let mut race = race::Race::start(setup.clone());
+    race.set_ai_tuning(tuning);
+    for slot in 2..8 {
+        race.world.ships[slot].active = false;
+    }
+    race.world.ships[0].active = false;
+
+    let mut liftoff_speed = -1.0f32;
+    let mut landing_index = 0u32;
+    let mut was_airborne = false;
+    for _tick in 0..18_000u32 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        let ship = &race.world.ships[LONE];
+        let airborne_now = ship.physics.time_airborne > 0.0;
+        if airborne_now && !was_airborne && liftoff_speed < 0.0 {
+            let forward = ship.physics.body.forward();
+            liftoff_speed = ship.physics.body.linear_velocity.dot(forward);
+        }
+        if !airborne_now && was_airborne && landing_index == 0 {
+            landing_index = ship.driver.index;
+        }
+        was_airborne = airborne_now;
+        if race.respawns_of(LONE) > 0 {
+            break;
+        }
+    }
+    (
+        race.respawns_of(LONE),
+        race.world.ships[LONE].standing.lap,
+        liftoff_speed,
+        landing_index,
+    )
+}
+
+/// Question 2, the discriminating case the grip sweep alone cannot answer:
+/// **is the jump reachable by raising grip at all**, or does
+/// `Tuning::max_turn_rate` (scaled by `turn_allowed`, untouched by this
+/// sweep) put a lower ceiling under the corner regardless of grip? If the
+/// craft still lands short of index 50 once `lateral_accel` is scaled so far
+/// past the sweep's clean rows that the grip term cannot possibly bind, the
+/// yaw term is what is actually limiting the approach, and no amount of
+/// throttle-side change in `oag-ai` reaches this jump.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn novice_13_track_grip_ceiling() {
+    let Some(entry) = entry_for(TRACK_ID) else {
+        return;
+    };
+    let Some(image) = image() else { return };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Novice,
+        track: Some(entry.clone()),
+        ..race::Options::default()
+    })
+    .expect("loading 13_Track");
+    println!("\ngrip  respawns  laps  liftoff_speed  first_landing_index");
+    for grip in [0.48f32, 1.0, 5.0, 20.0, 100.0] {
+        let (respawns, laps, liftoff_speed, landing_index) = run_grip(&loaded.setup, grip);
+        println!("{grip:<6}{respawns:<10}{laps:<6}{liftoff_speed:<15.2}{landing_index}");
+    }
+}
+
+/// Question 2, the fine sweep the prior pass left unswept: `0.41..=0.47`, at
+/// `0.01` steps, between the two points the coarse sweep already measured
+/// (`0.40` at 350 respawns, `0.48` at 0). Turns "somewhere in that interval"
+/// into an actual number.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn novice_13_track_grip_fine_sweep() {
+    let Some(entry) = entry_for(TRACK_ID) else {
+        return;
+    };
+    let Some(image) = image() else { return };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Novice,
+        track: Some(entry.clone()),
+        ..race::Options::default()
+    })
+    .expect("loading 13_Track");
+    println!("\ngrip  respawns  laps  liftoff_speed  first_landing_index");
+    let mut grip = 0.41f32;
+    while grip <= 0.470_001 {
+        let (respawns, laps, liftoff_speed, landing_index) = run_grip(&loaded.setup, grip);
+        println!("{grip:<6.2}{respawns:<10}{laps:<6}{liftoff_speed:<15.2}{landing_index}");
+        grip += 0.01;
     }
 }
