@@ -14,24 +14,57 @@ green.
 Links inside fenced code blocks are skipped: those are examples, not
 navigation.
 
-Also enforced: a `docs/` page must never reference `handover/` at all, link or
-plain text - CLAUDE.md's own rule. A thread file under `handover/` is deleted
-the moment its work lands, so a link from a permanent page into one is a dead
-link waiting to happen with nothing else to catch it once the anchor check
-above stops seeing it (the target file is just gone, not malformed). The
-reverse direction is fine and unchecked: a `handover/` thread citing a `docs/`
-page as its evidence is how every thread here is written.
+Also enforced, two rules from CLAUDE.md:
+
+1. A `docs/` page must never reference `handover/` at all, link or plain text.
+   A thread file under `handover/` is deleted the moment its work lands, so a
+   link from a permanent page into one is a dead link waiting to happen with
+   nothing else to catch it once the anchor check above stops seeing it (the
+   target file is just gone, not malformed).
+2. Nothing else outside `handover/` and `HANDOVER.md` - a doc comment, a
+   script, a test, an asset file - may cite a *specific* thread file either,
+   for the same reason. This one is path-shaped (`handover/<name>.md`), not a
+   substring match like rule 1: the project keeps a few prose mentions of the
+   `handover/` directory itself (no filename), and those describe a
+   convention, not a citation that can go dangling.
+
+Both are one-directional: a `handover/` thread citing a `docs/` page, or one
+thread citing another, is how every thread here is written, and is unchecked.
+
+`docs/ghidra/captures/*.tsv` is exempt from rule 2: it is a verbatim capture
+of what a Ghidra database held on a date, governed by its own check
+(`check-ghidra-captures.py`'s `KNOWN_DANGLING`), where a dangling reference is
+a finding to record, not a defect to fix. `scripts/check-ghidra-captures.py`
+and `scripts/patches/*.patch` are exempt too - the first stores that same
+known-dangling path as data, the second is a diff hunk body nobody here wrote
+and editing it risks breaking `git apply`.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+# A citation of a *specific* thread file, not a bare mention of the directory:
+# `handover/foo.md` and `handover/rendering/foo.md` both match, `handover/`
+# alone does not. Deliberately looser than a full path grammar - this only
+# has to be right about where the `.md` sits, not validate every character a
+# filename could legally contain.
+HANDOVER_CITATION = re.compile(r"handover/[A-Za-z0-9_./-]+\.md")
+# Rule 2's exemptions - see the module docstring for why each exists. This
+# script is its own fourth exemption, undocumented there because the reason
+# is purely mechanical: its own comments above illustrate the pattern with a
+# real-shaped example, which the pattern then matches.
+HANDOVER_CITATION_EXEMPT = {
+    "scripts/check-doc-links.py",
+    "scripts/check-ghidra-captures.py",
+    "scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch",
+}
 # Directories whose Markdown is not this project's to check.
 #
 # **`.claude` is the one that is easy to leave out and bites.** It holds this
@@ -190,9 +223,47 @@ def check(root: Path) -> list[str]:
     return problems
 
 
+def tracked_files(root: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True
+    )
+    return result.stdout.splitlines()
+
+
+def handover_citations(root: Path) -> list[str]:
+    """Rule 2: nothing outside `handover/` and `HANDOVER.md` cites a thread by
+    name. See the module docstring for the exemptions and why each exists.
+    """
+    problems = []
+
+    for rel in tracked_files(root):
+        parts = Path(rel).parts
+        if parts[0] == "handover" or rel == "HANDOVER.md":
+            continue
+        if parts[:3] == ("docs", "ghidra", "captures"):
+            continue
+        if rel in HANDOVER_CITATION_EXEMPT:
+            continue
+
+        path = root / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+
+        for number, line in strip_code_fences(text):
+            for match in HANDOVER_CITATION.finditer(line):
+                problems.append(
+                    f"{rel}:{number}: cites {match.group(0)} from outside "
+                    f"handover/ - {line.strip()}"
+                )
+
+    return problems
+
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
-    problems = check(root)
+    problems = check(root) + handover_citations(root)
 
     if problems:
         print(f"{len(problems)} broken link(s):\n", file=sys.stderr)
