@@ -54,7 +54,8 @@ Read, in this order — read-only, per the rule above:
 ## 2. Pick a thread at random
 
 List the real files, not just the index (a file can lag or lead `HANDOVER.md`'s Open
-threads list by a commit):
+threads list by a commit). Threads are sorted into `handover/{rendering,gameplay,
+frontend,tooling,audio}/`; `fd` recurses by default, so this still finds every one:
 
 ```sh
 fd . handover -e md
