@@ -233,6 +233,21 @@ impl Race {
             .and_then(oag_formats::weapons::WeaponStats::missile)
     }
 
+    /// The LeachBeam's authored `<Stats>`, or `None` when the table did not
+    /// load or authors no LeachBeam.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/lock_sight_ground_truth.rs`, which asks it of **each**
+    /// title: whether a disc authors this block is what decides whether its
+    /// reticle can be driven for the second lockable weapon at all, and the
+    /// answer differs across the three.
+    #[must_use]
+    pub fn leach_beam_stats(&self) -> Option<oag_formats::weapons::LeachBeamStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::leach_beam)
+    }
+
     /// The Mine's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Mine.
     ///

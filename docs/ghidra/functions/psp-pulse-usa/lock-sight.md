@@ -63,7 +63,8 @@ batches rather than by looking. What makes them a reticle is the texture:
 
 **Both sets are driven as of 2026-09-07**, and the difference between them is
 the whole of what a title has to author: four names and, for the Missile alone,
-a fifth. `oag_game::race::sight::Held` carries which of the two is up and
+a fifth. **Where the LeachBeam's four go is inferred, not read** - see
+[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_game::race::sight::Held` carries which of the two is up and
 `oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
 for a title that authors no such widget. What had kept the LeachBeam's four dark
 was entirely upstream - `oag_formats::weapons` parsed no
@@ -108,6 +109,35 @@ Two further things the block says:
   `250.0` above is a code literal in `HudSight_Update` and the `range` is
   tuning data for a beam nothing here fires. `LeachBeamStats` deliberately does
   not decode it, so nothing can grow a dependency between the two.
+
+### Who places the LeachBeam's four is unrecovered
+
+`HudSight_Update` is read end to end below and it writes **five** widgets:
+`sight[0]` … `sight[3]` and the inner. Those are the Missile's. **Nothing yet
+read writes the bind's `+0x108` … `+0x114`**, so what moves the LeachBeam's four
+and at what angles is not recovered, and this page should not be read as saying
+it is.
+
+`oag_game::race::sight` gives them the Missile's four corners and the Missile's
+four quarter-turn rotations. That is **chosen, not measured**, and carries no
+confidence score. The grounds are structural rather than read: the two sets are
+the same shape - four widgets, one model each, one shared `(-240, 136)`
+placeholder - and one arrowhead makes four corners no other way, exactly as one
+bracket does. A capture at 480x272 shows the picture that arrangement produces,
+which is a check on the *result* and not on the rule. If the original places
+these on a rule of their own, this is where the port is wrong, and finding the
+writer of `+0x108` is what settles it.
+
+**HD authors the block too, and that is measured**, contrary to what this page
+implied until 2026-09-07: its weapon table carries a `<Weapon type="LeachBeam">`
+with a lock window, so a held LeachBeam is reachable on HD as well as on Pulse.
+Its own four sprites are `LeachBeamSightBG`, `LeachBeamSightOuter`,
+`LeachBeamSightMiddle` and `LeachBeamSightInner` - the same four-part naming
+`MissileSight*` uses - off `HUD_Components_01.gtf`. They are **not** drawn:
+`Sights::Concentric` carries one set of names and nothing has read which of the
+four is up when, so `oag_game::hud::sight_draw` draws nothing for a LeachBeam on
+that dialect rather than lending it `MissileSight*`. Both halves are pinned by
+`crates/game/tests/lock_sight_ground_truth.rs`.
 
 **Pure authors neither.** Its `Data\XML\weaponstats.xml` carries no
 `<Weapon type="LeachBeam">` and its `Data\XML\Arcade_HUD.xml` no
@@ -375,10 +405,12 @@ one is read **off the names**, at confidence 70: they are unambiguous about what
 each widget is and silent about whether the seeking set stays up underneath.
 `oag_game` draws them additively, which shows every authored widget rather than
 hiding some on a guess. HD also authors four `LeachBeamSight*` off
-`HUD_Components_01.gtf`, still unwired - but no longer for Pulse's old reason,
-which was the missing `<Weapon>` block and is gone. HD's are unwired because
-`Sights::Concentric` has no second set to name and nothing has read which of
-its six sprites the LeachBeam would use.
+`HUD_Components_01.gtf` - `BG`, `Outer`, `Middle`, `Inner` - and its weapon
+table authors the `<Weapon type="LeachBeam">` block to go with them, measured
+2026-09-07. They are still unwired, but no longer for Pulse's old reason: what
+is missing is a second widget set on `Sights::Concentric` and a reading of which
+of the four is up when. Until then a held LeachBeam draws nothing here. See
+[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered).
 
 **The placeholder idiom is what says the reading is right.** Every sight widget
 on every title is authored centred on `(-width/2, +height/2)` of that title's own

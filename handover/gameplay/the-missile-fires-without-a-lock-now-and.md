@@ -111,6 +111,25 @@ reticle is render-only state on `Race`.
   `Ship_FireHeldWeapon`'s and `HudSight_Update`'s callers resolved, and both
   currently return no xrefs from Ghidra's static analysis (probably reached
   through a function-pointer table).
+- **HD authors a LeachBeam and cannot draw its reticle.** Measured 2026-09-07
+  and it was assumed the other way: HD's weapon table carries a
+  `<Weapon type="LeachBeam">` with a lock window, so `Race::sight_held` returns
+  that weapon on HD too, and its layout carries four sprites for it -
+  `LeachBeamSightBG`, `LeachBeamSightOuter`, `LeachBeamSightMiddle`,
+  `LeachBeamSightInner`, the same four-part naming `MissileSight*` uses. What is
+  missing is a second widget set on `oag_title::hud::Sights::Concentric` and a
+  reading of which of the four is up when. `hud::sight_draw` draws **nothing**
+  for a LeachBeam on that dialect rather than lending it `MissileSight*`;
+  without that guard HD would have shown the Missile's rings for the wrong
+  weapon. Wiring it belongs to whoever owns `crates/hd`.
+- **Where the LeachBeam's four widgets go is inferred, not read.**
+  `HudSight_Update` is read end to end and writes **five** widgets - the
+  Missile's four plus its inner. Nothing yet read writes the bind's
+  `+0x108` … `+0x114`. `oag_game::race::sight` gives the LeachBeam's four the
+  Missile's corners and rotations, which is **chosen, not measured** and carries
+  no confidence score: the grounds are that the two sets are the same shape and
+  that one arrowhead makes four corners no other way. A capture checks the
+  result, not the rule. Finding the writer of `+0x108` settles it.
 - **The sight quads draw on an opaque black square, and always have.** Seen on
   2026-09-07 in `--race --mode single_race --opponents --give <weapon>` captures
   at 480x272: every reticle piece is its white shape on a solid black `8x8`

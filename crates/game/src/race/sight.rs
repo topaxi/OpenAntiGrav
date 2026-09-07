@@ -183,14 +183,27 @@ pub const MISSILE_INNER: &str = "missile_sight_inner";
 ///
 /// **Four instances of one model, exactly as the Missile's four are** -
 /// `Data\HUD\leachbeam_sight.vex` on all four, at the same `(-240, 136)`
-/// placeholder, measured off `pulse-psp-usa.chd`'s own `Arcade_HUD.xml`. So the
-/// two dialects are one dialect with two textures, and the four rotations in
-/// [`BRACKET_ROTATIONS`] index this set the same way.
+/// placeholder, measured off `pulse-psp-usa.chd`'s own `Arcade_HUD.xml`.
 ///
 /// **There is no LeachBeam inner.** `HudSight_Bind` (`0x0881b604`) binds nine
 /// widgets over three models and only the Missile gets a closed box; the
 /// LeachBeam's reticle is four arrowheads pointing inward and nothing in the
 /// middle.
+///
+/// # That these four take [`BRACKET_ROTATIONS`] is **chosen, not measured**
+///
+/// No confidence score, deliberately. `HudSight_Update` (`0x0881dbcc`) is read
+/// end to end and it writes **five** widgets - `sight[0]` … `sight[3]` and the
+/// inner, which are the Missile's. Nothing yet read writes the bind's
+/// `+0x108` … `+0x114`, so *what places the LeachBeam's four, and at what
+/// angles, is unrecovered.*
+///
+/// What is taken here is the obvious reading and it is an inference: the two
+/// sets are the same shape - four widgets, one model each, one shared
+/// placeholder - and one arrowhead makes four corners no other way, exactly as
+/// one bracket does. The picture it produces is right in a capture. It is still
+/// an inference, and if the original places these on their own rule this is
+/// where it will be wrong.
 pub const LEACHBEAM_BRACKETS: [&str; 4] = [
     "leachbeam_sight_1",
     "leachbeam_sight_2",

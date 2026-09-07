@@ -68,6 +68,26 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
                 None => Vec::new(),
             }
         }
+        // **`MissileSight*` is the Missile's, and this dialect has no second
+        // set**, so a held LeachBeam draws nothing here rather than the
+        // Missile's rings. That is not a hypothetical: HD's own weapon table
+        // *does* author a `<Weapon type="LeachBeam">` with a lock window - it is
+        // pinned by `only_pulse_and_hd_author_a_leachbeam_block` in
+        // `crates/game/tests/lock_sight_ground_truth.rs` - so
+        // `crate::race::sight::Held::LeachBeam` is reachable on this title and
+        // would otherwise put the wrong weapon's reticle on screen.
+        //
+        // HD authors four `LeachBeamSight*` sprites of its own off
+        // `HUD_Components_01.gtf`. Wiring them needs a second widget set on
+        // `oag_title::hud::Sights::Concentric` and a reading of which of the
+        // four is up when, and neither exists; drawing nothing is this
+        // project's answer for art it cannot place. See
+        // `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+        oag_title::hud::Sights::Concentric { .. }
+            if sight.held() == crate::race::sight::Held::LeachBeam =>
+        {
+            Vec::new()
+        }
         oag_title::hud::Sights::Concentric { seeking, locked } => {
             let names = seeking
                 .iter()

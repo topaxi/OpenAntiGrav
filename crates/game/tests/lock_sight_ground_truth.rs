@@ -411,6 +411,88 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
         locks_within(&mut race, 240),
         "Pure never locked a craft on its own starting grid"
     );
+    assert_eq!(
+        race.leach_beam_stats(),
+        None,
+        "Pure authors a LeachBeam block after all, which would mean its \
+         `leach: None` sight set is now reachable and draws nothing"
+    );
+}
+
+/// Which titles author a `<Weapon type="LeachBeam">` at all, printed and pinned.
+///
+/// **The reason this is a test and not a note, and it caught something.**
+/// `Race::sight_held` returns `Some(Held::LeachBeam)` for any title whose table
+/// authors the block, and the widget set that answers it is per title. Pulse
+/// names four. Pure names none *and authors no block*, so its `leach: None` is
+/// belt and braces. **HD authors the block** - measured here, and it was assumed
+/// otherwise - while its `Sights::Concentric` dialect carries **one** set of
+/// widget names and no second one to reach for. Without a guard a held LeachBeam
+/// on HD would draw `MissileSight*`: another weapon's reticle, which is exactly
+/// the plausible-looking stand-in `CLAUDE.md` forbids. `hud::sight_draw` draws
+/// nothing there instead, and this is what stops that pairing drifting.
+///
+/// Shape only, never values - ADR-0006. `--no-capture` prints which is which.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn only_pulse_and_hd_author_a_leachbeam_block() {
+    let mut checked = 0;
+    for (name, image, expected) in [
+        ("Pulse", "pulse-psp-usa.chd", true),
+        ("Pure", "pure-psp-usa.chd", false),
+        ("HD/Fury", "hdfury-ps3-eu-dec.iso", true),
+    ] {
+        let Some(path) = image_named(image) else {
+            continue;
+        };
+        let race = race::Race::start(race_on(&path).setup);
+        let authored = race.leach_beam_stats().is_some();
+        println!("{name}: authors a LeachBeam block = {authored}");
+        assert_eq!(
+            authored, expected,
+            "{name} disagrees with what `oag_title::hud::Sights` was built \
+             against - a title that authors the block but no widget set for it \
+             draws another weapon's reticle for a held LeachBeam unless \
+             `hud::sight_draw` refuses"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "no image present to check");
+}
+
+/// And HD's four `LeachBeamSight*` sprites really are there, waiting.
+///
+/// The other half of the finding above: HD authors the weapon *and* art for it,
+/// and what is missing is only a reading of which of the four is up when. Pinned
+/// so "unwired" stays a statement about this engine rather than about the disc -
+/// a future pass looking for them should find them named here, not go hunting.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_authors_four_leachbeam_sight_sprites_that_nothing_draws() {
+    let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("HD's arcade layout parsed");
+
+    let found: Vec<&str> = layout
+        .sprites
+        .iter()
+        .map(|s| s.name.as_str())
+        .filter(|name| name.starts_with("LeachBeamSight"))
+        .collect();
+    println!("HD LeachBeam sight sprites: {found:?}");
+    assert_eq!(
+        found.len(),
+        4,
+        "HD authors {} LeachBeamSight* sprite(s), not four - which changes what \
+         wiring them would mean: {found:?}",
+        found.len()
+    );
 }
 
 /// Wipeout HD locks too, and draws its reticle the other way.
