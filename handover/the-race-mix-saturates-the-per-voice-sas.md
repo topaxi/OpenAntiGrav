@@ -404,16 +404,20 @@ is a stronger check on this exact change than a ground-truth suite would be).
   **What replaces them: ask the SFX bus the question that found the music
   bus's `0.44`.** The third pass found `MUSIC_MASTER_TRIM` by asking what
   multiplies the volume field on its way to the buffer. The symmetric question
-  was never asked on the SFX side, because "every group volume reads `1024`"
-  got read as *no attenuation* - which only follows if `1024` is the scale's
-  unity, and nothing has established that. **A voice volume's absolute scale
-  is unrecovered, and `audio-levels.md` says so in its own words**: the
-  commonly-cited `0`-`0x1000` range for `sceSasSetVolume` is flagged there as
-  "unverified recall, not a measurement", `Sas_Init`'s `0x1000` is a *pitch*
-  argument on a different scale, and the only nearby bounds check rejects
-  above `0x8000`. If a committed engine voice at `1125` is `1125` of some
-  ceiling above it, "at ceiling" is a fixed trim - the same finding-shape as
-  `MUSIC_MASTER_TRIM`, one bus over.
+  was never asked on the SFX side - and the reason it was not is a scale
+  confusion worth stating so the next pass does not repeat it. "Every group
+  volume reads `1024`" is a fact about `Audio_SetGroupVolume`'s **software**
+  table, which is a different object from the per-voice `sceSasSetVolume`
+  value, on a different scale, and it settles nothing about the latter. **A
+  voice volume's absolute scale is unrecovered, and `audio-levels.md` says so
+  in its own words**: the commonly-cited `0`-`0x1000` range for
+  `sceSasSetVolume` is flagged there as "unverified recall, not a
+  measurement", `Sas_Init`'s `0x1000` is a *pitch* argument on a different
+  scale, and the only nearby bounds check rejects above `0x8000`. So the sharp
+  form of the candidate is: **the original's per-voice values are in unknown
+  units, so this port's own per-voice gains have never been checked against
+  them at all**, and the residual 5.83 dB could sit entirely in that unit
+  mismatch rather than in any missing stage.
 
   Two ways to settle it, in preference order:
 
@@ -424,7 +428,21 @@ is a stronger check on this exact change than a ground-truth suite would be).
      waveform's own raw PCM. The ratio *is* the scale factor, empirically, on
      the same footing as the raw-PCM check the third pass already used to
      confirm the music decode. Every technique it needs is in this thread
-     already.
+     already. Three things to get right, each a trap this thread has already
+     paid for once:
+     - **Do not calibrate on the engine.** `exhaust.md`'s law modulates engine
+       intensity over the capture, so its `+0x40` moves and there is no stable
+       value to divide by. Use a one-shot with a fixed authored volume (a
+       pickup chime, a pad) - its authored byte is one of the two `sblk`
+       fields the fifth pass wired in, so it is known independently.
+     - **Filter on the dirty bit and confirm the voice index.** A stale slot
+       reads nonzero forever and is indistinguishable from a driven voice; a
+       calibration off the wrong slot returns a confidently wrong ratio with
+       nothing to flag it.
+     - **Report it as what it is**: the end-to-end product of every stage
+       downstream of the raw PCM, not the per-voice term alone. That is the
+       portable number and the one worth having, but calling it "the ceiling"
+       would be wrong by whatever the DAC stage contributes.
   2. **PPSSPP's own `sceSas` HLE source for the clamp constant** - a source
      read, not an emulator boot, and no PPSSPP checkout exists on this machine
      (checked). Weaker than (1) because it establishes the *emulator's*
