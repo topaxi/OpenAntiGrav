@@ -490,6 +490,38 @@ onto the eight actions, not a keyboard's keys onto twelve abstract buttons.
 That is a different axis with no menu row here, and building one is not
 implied by anything above.
 
+### The row set names what a button actually does
+
+Every `binding` row's label was checked against
+`oag_gameplay::controls::ship_controls` (the eight driving axes),
+`Race::spend_pickup` (`crates/game/src/race/weapons.rs`, the two weapon
+buttons) and `oag_gameplay::input` (the button/`InputSnapshot` wiring) rather
+than trusted by eye, after `circle`'s row was found reading "BRAKE" when
+circle does not brake - there is no brake action anywhere in
+`ship_controls`, braking being the airbrakes (`l`/`r`) already on their own
+rows. Circle absorbs a pickup and `square`, which had no row at all, fires
+one; both now read "ABSORB PICKUP" and "FIRE PICKUP", matching the verbs
+`OAG_HINTS_RACE_KEYS` already used for the same two buttons. `cross`
+(thrust), `left`/`right` (steer), `up`/`down` (pitch) and `l`/`r` (airbrakes)
+were all confirmed correct against the same functions.
+
+Two rows this page deliberately does not add:
+
+- **No `start` (pause) row.** Unlike the camera cycle - added above for
+  being "the one control a player has no other way to discover" - pause is a
+  near-universal convention a player finds without a hint, it is a
+  system-level action rather than a driving or weapon control, and it is
+  already named in the general key hints (`OAG_HINTS_RACE_KEYS`'s "space or
+  start pauses"). Adding a row would not fix a discoverability gap the way
+  FIRE PICKUP/ABSORB PICKUP did.
+- **No separate sideshift-button row.** The SIDESHIFT row already on this
+  page picks the *gesture* (`controls.scheme`, veteran double-tap vs. novice
+  hold-and-flick, see `oag_gameplay::controls::ControlScheme`'s own doc
+  comment) - it is not a key binding and needs no key of its own. The
+  physical button the gesture uses either way is `l` or `r`, which already
+  has its own AIRBRAKE LEFT/AIRBRAKE RIGHT row; a third row naming the same
+  key for the same gesture would repeat information rather than add it.
+
 ## What is not built
 
 - **Localised labels.** Row labels are literal text, and `string_id` **is**

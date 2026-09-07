@@ -92,6 +92,18 @@ OAG_MENU_BACK = "BACK"
 # screen which is a different axis entirely.
 OAG_BINDING_CAPTURE_PROMPT = "PRESS A KEY FOR %s - ESCAPE CANCELS"
 
+# CONTROLS page rows for `square` and `circle`. Chosen, not measured - neither
+# PSP title's front-end XML authors this page - and picked to match the
+# game's own vocabulary rather than invent new words: `OAG_HINTS_RACE_KEYS`
+# below already says "C fires a pickup and Z absorbs it", matching what
+# `Race::spend_pickup` (`crates/game/src/race/weapons.rs`) actually reads off
+# `Button::Square`/`Button::Circle`. `circle`'s row used to read "BRAKE",
+# which was wrong: there is no brake action in
+# `oag_gameplay::controls::ship_controls`, and circle absorbs a pickup, it
+# does not brake.
+OAG_CONTROLS_FIRE_PICKUP = "FIRE PICKUP"
+OAG_CONTROLS_ABSORB_PICKUP = "ABSORB PICKUP"
+
 # The on-screen keyboard. Unlike the rows above, these are read by Rust rather
 # than by a `string_id` in `menu.toml` - `crate::prompt` holds no string table
 # of its own and takes every label already resolved, so the lookup happens
