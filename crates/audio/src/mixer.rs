@@ -61,6 +61,45 @@ pub enum Bus {
     Speech,
 }
 
+/// The original's own fixed trim on the music bus alone, applied after the
+/// `"Music Volume"` slider and independent of it.
+///
+/// Read live from `_DAT_002bde18` (absolute `0x08ac1e18`), a plain `f32`
+/// (`0x3ee147ae` = `0.44`, about -7.13 dB) set once in `MusicPlayer_Init`
+/// (`0x08938428`) and read by both copies of the function that turns the
+/// music player's `+0x40` volume field into the panned-volume argument
+/// (`0`-`0x8000`, the `sceAudio` HAL's own `PSP_AUDIO_VOLUME_MAX`) handed to
+/// the call that stages a decoded `sceAtrac3plus` buffer for hardware output
+/// (`0x08938090` and `0x0893c208` - the same law, twice, for what look like
+/// two playback paths). Corroborated live, mid-race, full eight-craft grid:
+/// six samples 4 s apart all read exactly `0.44`, unchanged through the
+/// window, alongside the slider fields themselves (`+0x40`/`+0x44`) sitting
+/// at their own ceiling (`100`/`100`) the whole time - so this is not
+/// something the slider or a duck ever moves, on this evidence. Confidence
+/// 92 (static decompile plus live memory read, single binary,
+/// `pulse-psp-usa`, not yet corroborated against `pulse-psp-eu`). See
+/// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#the-4-db-gap-is-a-fixed-044-trim-on-the-music-bus-alone-found-and-measured-live-2026-09-07).
+///
+/// This is a trim on [`Bus::Music`] specifically, not on [`Mixer`] as a
+/// whole - `Audio_SetSfxFadeTarget`'s chain (the SFX/Speech side) never
+/// touches this global at all, so multiplying it into every bus would be
+/// exactly the kind of invention this project's rules forbid. The caller
+/// (`Audio::apply` in `crates/game/src/audio.rs`) folds it into the gain it
+/// hands [`Mixer::set_bus_gain`] for [`Bus::Music`] alone.
+///
+/// **A movie's own sound also lands on [`Bus::Music`]** (`Audio::start_movie`
+/// in `crates/game/src/audio.rs`, by this port's own pre-existing design -
+/// there is no separate movie bus on the original either) and so now also
+/// carries this trim. That is unverified for movies specifically: the
+/// original's movie audio decodes through `sceMpegAtracDecode`, a
+/// completely different path from the `MusicPlayer`/`sceAtrac3plus` object
+/// this constant was measured on (`frontend-video.md`), and whether the
+/// original attenuates a movie's own audio the same way, differently, or not
+/// at all was not read this pass. If a movie's audio is ever found to need
+/// its own answer, it needs its own measurement - this constant should not
+/// be assumed to cover it just because the port's own bus does.
+pub const MUSIC_MASTER_TRIM: f32 = 0.44;
+
 impl Bus {
     /// Number of buses, for array sizing.
     pub const COUNT: usize = 3;

@@ -35,6 +35,79 @@ ceiling live, mid-race, under a stock profile. See
 [audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#music-does-not-go-through-this-chain---it-has-its-own-volume-measured-live-2026-09-07)
 for the full call chain, the live table and the new next candidate.
 
+**2026-09-07, third pass the same day: found and ported. The music path's
+missing attenuation is `g_music_master_gain` (`0x08ac1e18`, previously
+`_DAT_002bde18`), a plain `f32` fixed at `0.44` (about -7.13 dB), set once in
+`MusicPlayer_Init` and read by two identically-derived gain-computation
+functions (now named `MusicPlayer_ComputeStreamGain` and
+`MusicPlayer_ComputeCallbackGain`) that turn the music player's `+0x40`
+volume field into the 16-bit gain scaled into a decoded `sceAtrac3plus`
+buffer before it is queued.** Found by `create_function` on two address
+ranges `get_function_by_address` had never boundaried (reached only through a
+function pointer, invisible to Ghidra's own analysis), then decompiled and
+cross-checked against `scripts/psp-relocate.py xrefs` for both the music
+player pointer and the new global - three references total to the constant,
+one write, two reads, nothing else in the binary touches it. Corroborated
+live, mid-race, full eight-craft grid, PPSSPP under its own Xvfb: six samples
+4 s apart all read exactly `0.44`, alongside the slider fields sitting at
+their own ceiling (`100`/`100`) throughout, matching the static decompile
+exactly. Confidence 92. Full derivation, the live table and both function
+plate comments: [audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#the-4-db-gap-is-a-fixed-044-trim-on-the-music-bus-alone-found-and-measured-live-2026-09-07).
+
+**Ported**: `oag_audio::mixer::MUSIC_MASTER_TRIM` (`crates/audio/src/mixer.rs`,
+`= 0.44`, documented with the same evidence), folded into `Bus::Music`'s gain
+alone in `Audio::apply` (`crates/game/src/audio.rs`) - `settings.music_volume
+.gain() * MUSIC_MASTER_TRIM`, leaving SFX and Speech untouched, matching the
+original's own chain (`Audio_SetSfxFadeTarget`'s side never reaches this
+constant either).
+
+**Re-measured**, 30 s capture, `pulse-psp-eu.chd`, `--race --autopilot
+--ticks 1800`, all volumes at 100:
+
+| | Peak | RMS | Clipped |
+| --- | --- | --- | --- |
+| Original's whole race mix (`pulse-psp-usa`, live, for reference) | 0 dBFS | -15.27 dBFS | 0.044% |
+| Our port, whole mix, before this trim | 0 dBFS | -7.52 dBFS | 2.783% |
+| **Our port, whole mix, after this trim** | 0 dBFS | **-7.87 dBFS** | **2.312%** |
+| Our port, music bus alone, before this trim | 0 dBFS | -11.53 dBFS | 0.000% |
+| **Our port, music bus alone, after this trim** | **-7.13 dBFS** | **-18.66 dBFS** | **0.000%** |
+
+Both music-side numbers moved by exactly `-7.13` dB, and nothing else moved -
+the trim reached the right place. **The contradiction this whole thread
+started from is gone**: the music bus alone is no longer louder than the
+original's entire race mix (`-18.66` vs `-15.27` dBFS); it is now the quieter
+of the two, the relationship an uncorrelated engine mix on top of it should
+produce.
+
+**The whole mix barely moved (`2.783%` -> `2.312%` clipped), and that is
+expected, not a sign this is incomplete.** The clipping this thread opened
+with was already isolated to the SFX side before this pass started - see
+"Resolved" below, several honestly-scaled voices summing two to six times a
+single voice's own value with no reserved headroom - which this pass does not
+touch and was not asked to. The music bus was never the majority contributor
+to the *clip count*, only to the RMS gap this thread was chasing, and that gap
+is now closed. **This thread's own question is answered; the SFX-side
+summing-headroom saturation is real, separate, already diagnosed above, and
+is not reopened or claimed fixed by this pass.**
+
+**Listening check** (waveform-shape, no audio device in this sandbox): before
+this trim the music bus alone (`-11.53` dBFS) sat close enough to the whole
+mix (`-7.52` dBFS) to plausibly mask the engines under it; after, the whole
+mix's RMS (`-7.87` dBFS) sits `10.8` dB above the music bus alone (`-18.66`
+dBFS) - "engines and effects in front, music behind" rather than "music
+competing with everything else." Nothing drops to silence or a stuck loop in
+either capture, and the music bus's own clip count went from 2 samples to 0 -
+quieter, not gone.
+
+**Gate**: `.rs` changed (`crates/audio/src/mixer.rs`,
+`crates/game/src/audio.rs`, `crates/game/src/settings.rs` doc comment,
+`crates/game/src/audio/tests/volumes.rs`), so the full gate applies. `just
+fmt-check`, `just lint` and `just test` all pass; `OAG_REQUIRE_GAME_DATA=1
+just test-data` gives the same 5 pre-existing failures this pass's own
+instructions named as baseline (`pure_dlc` x2, `shuriken`,
+`lap_times_ground_truth`, `opponent_weapons_ground_truth`) plus none new -
+see the pass's own scratch note for the exact run.
+
 ## Resolved
 
 - **The ordering fix landed.** `Engine::tick` (`crates/game/src/audio/sfx/engine.rs`)
@@ -140,21 +213,17 @@ for the full call chain, the live table and the new next candidate.
 
 ## Open
 
-- **The music path attenuates on the original during a race and does not on
-  ours - mechanism unlocated, and it is confirmed now to be entirely
-  outside the SAS group-volume chain.** Closed as far as
-  `Audio_UpdateGroupVolumes` goes (see the 2026-09-07 second-pass entry
-  above and `audio-levels.md`): read live, mid-race, all sixteen groups sit
-  at `1024`, the SFX Volume slider is the only thing that ever moves them
-  (including group `0`'s duck, whose trigger is now also recovered - a
-  race/game-state flag, not speech), and the Music Volume slider was found
-  to write to a completely different, previously-undocumented object
-  (`g_music_player_ptr`) that this mechanism never touches. **The gap is
-  real, still unlocated, and now known to live somewhere between
-  `g_music_player_ptr+0x40`/`+0x44` (confirmed live at their own ceiling,
-  `100`/`100`) and the DAC** - most plausibly wherever the decoded
-  `sceAtrac3plus`/`sceMp3` stream picks up a gain, which no pass so far has
-  found.
+- **Resolved 2026-09-07, third pass (above): the music path's attenuation was
+  `g_music_master_gain` (`0x08ac1e18`), a fixed `0.44` read by
+  `MusicPlayer_ComputeStreamGain`/`MusicPlayer_ComputeCallbackGain` and now
+  ported as `oag_audio::mixer::MUSIC_MASTER_TRIM`.** Kept here, struck rather
+  than deleted, so the "gap is real, still unlocated" language the prior two
+  passes left is not read as still true: it is not still open, and the
+  re-measurement above closes it. What remains genuinely open is the
+  SFX-side summing-headroom saturation this thread's own "Resolved" section
+  already diagnosed (several honestly-scaled voices summing two to six times
+  a single voice's own value, no reserved headroom) - a separate mechanism,
+  not touched by this pass, and not this bullet's subject.
 - **Three `Sas_CommitVoices` wrapper functions are still unnamed** -
   `FUN_08a2ae6c` (`__sceSasSetPitch`), `FUN_08a2af18` (`__sceSasSetNoise`)
   and `FUN_08a2b03c` (`__sceSasSetSL`), all resolved with confidence 90 -
@@ -169,15 +238,23 @@ for the full call chain, the live table and the new next candidate.
 
 ## Next Steps
 
-- **Find where `g_music_player_ptr+0x40`/`+0x44` reach the decoded audio.**
-  This is now the whole open question: the setting is traced end to end
-  from the options menu to the music player object and confirmed live at
-  its own unattenuated default, but nothing yet shows where those two
-  `0`-`100` fields turn into an actual gain on the `sceAtrac3plus`/`sceMp3`
-  stream, or whether they do at all before the DAC. `imports.md` and
-  `frontend-video.md` both point at `sceAtrac3plus` as music's own decode
-  path (distinct from the movie player's `sceMpegAtracDecode`), which is
-  where to start looking.
+- **Done 2026-09-07 (above): where `g_music_player_ptr+0x40`/`+0x44` reach
+  the decoded audio.** `MusicPlayer_ComputeStreamGain` (`0x08938090`) and
+  `MusicPlayer_ComputeCallbackGain` (`0x0893c208`) turn `+0x40` into the
+  16-bit gain scaled into a decoded `sceAtrac3plus` buffer, both carrying
+  `g_music_master_gain` (`0.44`) as an unconditional extra factor. Nothing
+  left to chase on this specific question; the SFX-side summing-headroom
+  saturation (see "Resolved" above) is the remaining, separate open item on
+  this thread's original subject, not touched by this pass.
+- **New, from this pass: whether a movie's own audio should carry
+  `MUSIC_MASTER_TRIM` is unverified.** A movie's sound plays on `Bus::Music`
+  in this port (pre-existing design - no separate movie bus on the original
+  either), so it now also carries the trim as a side effect. The original's
+  movie audio decodes through `sceMpegAtracDecode`, a different path from the
+  `MusicPlayer` object `MUSIC_MASTER_TRIM` was measured on - whether the
+  original attenuates a movie's own audio the same way, differently, or not
+  at all was not read this pass. Only worth chasing if a movie is ever heard
+  or measured to be at the wrong level.
 - Decide and apply a naming convention for the remaining three wrapper
   functions, then add their `names.tsv` rows. Optional and separate from the
   volume question: tracing `SoundInstance_UpdateSpatial`'s SCREAM-instance

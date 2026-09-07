@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use log::{info, warn};
+use oag_audio::mixer::MUSIC_MASTER_TRIM;
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
@@ -731,9 +732,16 @@ impl Audio {
     /// Separate from [`Self::open`] because the menus change these while the
     /// game runs and the change should be audible on the row the player is
     /// standing on, the way `BRIGHTNESS` is visible on it.
+    ///
+    /// **The music bus alone also carries [`MUSIC_MASTER_TRIM`]**, folded in
+    /// here rather than into [`crate::audio::Volume::gain`] because it is a
+    /// fact about the original's music path specifically - the SFX and
+    /// Speech sliders reach `Audio_SetSfxFadeTarget`, a completely separate
+    /// chain that never touches this constant. See `MUSIC_MASTER_TRIM`'s own
+    /// doc comment for the evidence.
     pub fn apply(&self, settings: &crate::settings::Audio) {
         self.output.with_mixer(|mixer| {
-            mixer.set_bus_gain(Bus::Music, settings.music_volume.gain());
+            mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
             mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
             mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
             // After both buses, which is the order the original's own chain

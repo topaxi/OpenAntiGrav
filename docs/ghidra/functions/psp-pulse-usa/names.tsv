@@ -679,3 +679,7 @@
 0x08ac1dd8	data	g_music_player_ptr	85	audio-levels.md
 0x0893a938	function	Audio_SetSfxFadeTarget	85	audio-levels.md
 0x08938428	function	MusicPlayer_Init	75	audio-levels.md
+0x08ac1e18	data	g_music_master_gain	92	audio-levels.md
+0x08938090	function	MusicPlayer_ComputeStreamGain	85	audio-levels.md
+0x0893c208	function	MusicPlayer_ComputeCallbackGain	82	audio-levels.md
+0x0898c64c	function	Audio_EnqueuePannedOutput	78	audio-levels.md

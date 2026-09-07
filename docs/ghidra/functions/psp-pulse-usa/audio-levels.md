@@ -629,3 +629,181 @@ separately ruled out in [sound.md](sound.md). **No number is ported from this
 pass** - nothing here was found to be anything other than unity, so there is
 nothing measured to apply, and inventing one now would be exactly the
 plausible-looking stand-in `CLAUDE.md` forbids.
+
+## The 4 dB gap is a fixed 0.44 trim on the music bus alone, found and measured live (2026-09-07)
+
+Picking up exactly where the section above left off: "where
+`g_music_player_ptr+0x40`/`+0x44` reach the actual decoded audio." They do not
+reach it directly - a third field does, on a third global entirely, and it is
+a plain constant, not a fader.
+
+**`scripts/psp-relocate.py xrefs 0x08ac1dd8`** (the `member`/`field`
+subcommands and `get_xrefs_to` all being either the wrong shape for this or
+broken - see this page's own earlier notes) turns up every `lui`/`lo16` pair
+that loads `g_music_player_ptr`'s own address, 35 sites across 27 functions.
+Two of those sites - `0x08938090` and `0x0893c208` - sat in address gaps
+Ghidra had never boundaried as functions at all (`get_function_by_address`
+returned nothing for either, even though the bytes were already disassembled)
+because nothing reaches them by a direct `jal` Ghidra's own analysis found -
+they are called through a function pointer, the same indirect shape this
+page's `Sas_CommitVoices` callers already showed. `create_function` at both
+addresses (Ghidra MCP, `dry_run` first) carved out two real, complete
+functions immediately - not data, not padding.
+
+Both decompile to the same law:
+
+```c
+int MusicPlayer_ComputeStreamGain(void)
+{
+  int gain = (int)((float)(int)((float)g_music_player_ptr->vol_current *  // +0x40, 0-100
+                              g_music_player_ptr->blend) *                 // +0xb0, 1.0 outside a crossfade
+                  0.01 * g_music_master_gain * 32768.0);
+  // ... a fade-*out* toward zero, armed by a Stop(fade: bool) call and
+  // decaying 0.05 per invocation until it clamps at 0.0, not a fade-in -
+  // then clamp the whole result to [0, 0x8000]
+  return gain;
+}
+```
+
+The correction matters: `DAT_002bddd0` (armed) and `DAT_002bddd4` (the decaying
+multiplier) are set by the stop path, not a start path - `FUN_089385b4`
+(`0x089385b4`) writes `DAT_002bddd0` from its own `fade: bool` parameter on a
+stop, and `DAT_002bddd4` only ever counts down toward `0.0` here, never up.
+This is the music player winding itself down on `Stop`, unrelated to
+`g_music_master_gain` or the slider - noted here because an earlier draft of
+this section called it "a separate one-shot fade-in ramp," backwards.
+
+`MusicPlayer_ComputeCallbackGain` (`0x0893c208`) is byte-for-byte the same
+expression, called from two sites near the channel-open function
+(`0x0893bb5c`) rather than from the streaming decode-fill loop
+(`0x089381f0`) `MusicPlayer_ComputeStreamGain`'s one caller sits in - two
+playback paths, the same gain law. `MusicPlayer_ComputeStreamGain`'s own
+caller is unambiguous: it decodes into a buffer (`func_0x00134164` x2) then
+calls `func_0x0018864c` (`0x0898c64c`) as `(gain, gain, sampleCount, buffer)`
+immediately before the result is queued (`imports.md`'s `sceAtrac3plus` row
+is what decodes the buffer being handed in).
+
+**`0x0898c64c` (named `Audio_EnqueuePannedOutput` below, confidence 78) was
+decompiled, not assumed, to check what `[0, 0x8000]` actually means to it.**
+It gates on a channel-ready flag
+(`_DAT_002bf238`), then - for exactly the two sample counts this caller ever
+passes (`0x100`, `0x900`, both a multiple of `0x100`) - stores `param_1 >> 3`
+and `param_2 >> 3` (the two gain arguments, right-shifted by 3) alongside the
+unshifted sample count and buffer pointer into a small fixed staging area
+(`_DAT_000afc10`..`_DAT_000afc1c`), and returns the SDK-shaped error code
+`0x80440011` on the gated-off path. That is the shape of `sceAudio`'s own
+panned-output call being fed - `sceAudioOutputPannedBlocking`'s volume
+parameter is documented PSP SDK-wide as `0`-`0x8000` (`PSP_AUDIO_VOLUME_MAX`),
+and `0x8000 >> 3 = 0x1000` is exactly that hardware's known 12-bit volume
+register width. So `[0, 0x8000]` is not an in-place PCM sample multiply this
+page invented a plausible reading of - it is the software volume clamped to
+the audio HAL's own documented maximum, which is unity by that API's own
+definition. This also means the two identical gain-law copies are not
+scaling *samples*, they are computing the *panned-volume argument* handed to
+the hardware output call once per buffer - same conclusion for
+`g_music_master_gain`'s effect either way.
+
+**Two things corroborate `0x8000` as unity independently of this decompile,
+worth citing since the one function this leans on is a single reading:**
+
+- `0x0898c64c` sits about 1 KiB before `Audio_OutputThread` (`0x0898ca54`,
+  same translation unit), which this page already documented as handing
+  `master << 5` to the DAC - `Audio_Init`'s master ceiling `0x400` shifted
+  by `5` is `0x8000` too, the same convention on the DAC-facing side of the
+  mixer as on this music-facing side.
+- The arithmetic floors it independently: at any trim much weaker than
+  `0.44` the original's own music-alone RMS would not fit under its measured
+  whole-mix RMS of `-15.27` dBFS. A trim of `0.88` (half as strong, `-1.1`
+  dB less than half of `0.44`'s effect), for instance, would put music alone
+  at roughly `-12.6` dBFS off the same raw track - already louder than the
+  *whole mix* including engines, the exact contradiction this thread opened
+  with. `0.44` is comfortably inside the range the measurement itself
+  requires, not merely the range one decompile suggests.
+
+**`g_music_master_gain` (`0x08ac1e18`, previously `_DAT_002bde18`) is a plain
+`f32`, set once, in `MusicPlayer_Init` (`0x08938428`), to the bit pattern
+`0x3ee147ae`.** That decodes to exactly **`0.44`, about -7.13 dB**. Nothing
+else in the whole binary writes to it -
+`scripts/psp-relocate.py xrefs 0x08ac1e18` finds exactly three references:
+the one write (the constructor) and the two reads (the two gain-law copies
+above). It is not a slider, not a duck, not a per-track table - a single
+hardcoded trim on the music bus alone, entirely separate from
+`Audio_SetSfxFadeTarget`'s SFX/Speech chain, which never touches this global.
+
+**Read live, mid-race, corroborating the static decompile exactly.** PPSSPP
+under its own Xvfb/port, `pulse-psp-usa.chd`, driven into a full-grid Single
+Race with `scripts/psp-drive.py`'s `menu()`, `cross` held through a 24 s
+window, six samples 4 s apart:
+
+| Field | Every sample |
+| --- | --- |
+| `g_music_master_gain` (`0x08ac1e18`) | `0.44` |
+| `g_music_player_ptr+0x40` (current volume, 0-100) | `100` |
+| `g_music_player_ptr+0x44` (target volume, 0-100) | `100` |
+| `g_music_player_ptr+0xb0` (crossfade blend) | `1.0` |
+
+Nothing moved through the window: the slider fields sit at their own ceiling
+exactly as the prior section already found, and the trim sits at its one
+hardcoded value throughout. **Confidence 92** (a clean, unambiguous static
+decompile - three references total, one write, two reads, both reads doing
+the same arithmetic - corroborated live with six agreeing samples; not yet
+corroborated against `pulse-psp-eu`, the release the port itself is measured
+against below).
+
+### Ported
+
+`crates/audio/src/mixer.rs` gains `pub const MUSIC_MASTER_TRIM: f32 = 0.44`,
+documented with this evidence and confidence, applied to `Bus::Music` alone -
+`Audio::apply` (`crates/game/src/audio.rs`) now sets
+`mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM)`,
+leaving the SFX and Speech buses untouched, matching the original's chain
+exactly: this trim has no analogue on the SFX/Speech side because the
+original's own code never puts it there either.
+
+### Re-measured: race mix after the trim
+
+30 s capture, `pulse-psp-eu.chd`, `--race --autopilot --ticks 1800`, default
+settings (all volumes at 100), same methodology as the pre-trim measurement
+this section corrects:
+
+| | Peak | RMS | Clipped |
+| --- | --- | --- | --- |
+| Original's whole race mix (`pulse-psp-usa`, live, for reference) | 0 dBFS | -15.27 dBFS | 0.044% |
+| Our port, whole mix, before this trim | 0 dBFS | -7.52 dBFS | 2.783% |
+| **Our port, whole mix, after this trim** | 0 dBFS | **-7.87 dBFS** | **2.312%** |
+| Our port, music bus alone, before this trim | 0 dBFS | -11.53 dBFS | 0.000% |
+| **Our port, music bus alone, after this trim** | **-7.13 dBFS** | **-18.66 dBFS** | **0.000%** |
+
+**The contradiction this whole thread started from is gone**: the music bus
+alone is no longer louder than the original's entire race mix (`-18.66` vs
+`-15.27` dBFS) - it is now the quieter of the two, which is the relationship
+adding an uncorrelated engine mix on top of it should produce. Both music-side
+numbers moved by exactly `-7.13` dB (peak `0` -> `-7.13`, RMS `-11.53` ->
+`-18.66`), matching `MUSIC_MASTER_TRIM`'s own dB value to the last digit
+`f32` arithmetic allows - the trim reached the right place and nothing else on
+the music path moved.
+
+**The whole mix barely moved (`2.783%` -> `2.312%` clipped), and that is
+expected, not a sign the trim did too little.** The clipping this thread
+opened with was already isolated to the SFX side before this pass ever
+started - several honestly-scaled voices summing two to six times a single
+voice's own value, with no reserved headroom - which this pass does not touch
+and was never asked to. The music bus was never the majority contributor to
+the *clip count* - only to the RMS gap this thread was actually chasing - and
+that gap is now closed.
+
+**Listening check**: a waveform-shape read, the same kind an earlier pass over
+this subject already used, since this sandbox has no audio device. Before
+this trim, the music bus alone (`-11.53` dBFS) sat close enough to the whole
+mix (`-7.52` dBFS) to plausibly mask the engines under it; after, the whole
+mix's RMS (`-7.87` dBFS) sits a clear `10.8` dB above the music bus alone
+(`-18.66` dBFS), which is the shape of "engines and effects in front, music
+behind" rather than "music competing with everything else" - nothing in
+either capture drops to silence or a stuck loop, and the music bus's own
+clip count went from 2 samples to 0, so quieter, not gone.
+
+The full re-measurement, the SFX-side summing-headroom mechanism this section
+does not touch, and the gate result for this change live in the project's
+own work-in-flight tracker, per this project's rule that a `docs/` page never
+references it - the thread citing this page's own section anchor is the one
+to read for that.
