@@ -80,10 +80,16 @@ pub struct RocketStats {
     ///
     /// **Required, not defaulted**, and that is checked against data rather
     /// than assumed: all four tables that reach this parser author it on every
-    /// decoded block - Pulse's race and Eliminator files on the USA and EU
-    /// pressings, and Pure's `weaponstats.xml` on both. A silent zero here is a
-    /// weapon that slows nobody, which is the failure the module's
-    /// no-defaults rule exists to prevent.
+    /// decoded block *that authors it at all* - Pulse's race and Eliminator
+    /// files on the USA and EU pressings, and Pure's `weaponstats.xml` on both.
+    /// A silent zero here is a weapon that slows nobody, which is the failure
+    /// the module's no-defaults rule exists to prevent.
+    ///
+    /// **[`LeachBeamStats`] is the one block that does not author it**, on any
+    /// of those four tables, which is why that struct has no such field and
+    /// why this sentence carries a qualification it did not carry before
+    /// 2026-09-07. The claim "every weapon authors `slowdown_time`" was true of
+    /// the blocks decoded until then and is not true of the file.
     pub slowdown_time: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,
@@ -674,4 +680,72 @@ pub struct BombStats {
     pub timetodie: f32,
     /// How close a craft must come before the bomb goes off.
     pub trigger_radius: f32,
+}
+
+/// The LeachBeam's `<Stats>`, cut down to the lock window and `absorb`.
+///
+/// # Why this block is decoded at all, and why so little of it
+///
+/// The module's rule is that an attribute earns a field when something reads
+/// it, and what reads these is the **lock-on reticle**. `Ship_AcquireLock`
+/// (`0x08844784`) is one function serving two weapons: it selects
+/// `stats+0x50`/`+0x54` when the held weapon is the Missile and
+/// `stats+0x114`/`+0x118` when it is the LeachBeam, and runs the *same* cone,
+/// the same along-track screen and the same nearest-by-longitudinal-distance
+/// tie-break either way. So the LeachBeam locks - and `HudSight_Bind`
+/// (`0x0881b604`) binds it four sight widgets of its own to show it doing so.
+/// See `docs/ghidra/functions/psp-pulse-usa/missile.md` and
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+///
+/// The other six attributes on the block are the *beam*, and this engine has no
+/// beam: nothing drains another craft's energy, nothing holds an attachment
+/// open for a duration, nothing slows the ship it is fastened to. They stay
+/// named on `docs/formats/weapon-stats.md` and undecoded, which is the same
+/// answer [`BombStats`]'s second radius gets.
+///
+/// **`range` is deliberately not decoded, and it is the trap on this block.**
+/// It is authored at the same figure as `oag_game::race::sight::DRAW_RANGE`,
+/// which is a *code* literal in `HudSight_Update` and has nothing to do with
+/// this weapon. Reading one as evidence for the other would manufacture a
+/// finding out of a coincidence.
+///
+/// # It authors no `slowdown_time`, and it is the only decoded block that does
+/// not
+///
+/// Every other block this module decodes carries `slowdown_time`, checked
+/// against all four shipped tables. This one does not carry it on any of them -
+/// Pulse's race and Eliminator files, on the USA and the EU pressing alike - so
+/// there is no field for it here and no default standing in for one. A weapon
+/// that fastens onto a craft and drains it is not a weapon that charges it a
+/// fixed slowdown on impact, so the absence reads as design rather than as an
+/// omission; it is recorded because [`RocketStats::slowdown_time`] claims the
+/// attribute is universal and, on the blocks this module had decoded until now,
+/// it was.
+///
+/// # Pure authors no LeachBeam at all
+///
+/// Measured, not assumed: `Data\XML\weaponstats.xml` on `pure-psp-usa.chd`
+/// carries no `<Weapon type="LeachBeam">`, and `Data\XML\Arcade_HUD.xml` on the
+/// same disc carries no `leachbeam_sight_*` widget. [`WeaponStats::leach_beam`]
+/// returns `None` there, which is the same "the file does not author it" the
+/// Cannon already gets on that title.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LeachBeamStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// How far ahead a target must be before it can be locked.
+    ///
+    /// **Measured along the firer's forward axis**, exactly as
+    /// [`MissileStats::lock_min_dist`] is - the same comparison in the same
+    /// function, off a different pair of offsets.
+    pub lock_min_dist: f32,
+    /// The far end of that same longitudinal window.
+    ///
+    /// **Shorter than the Missile's on both shipped tables**, which is the
+    /// finding this block was parsed for: the LeachBeam does not reach as far
+    /// as the Missile does, so its reticle takes a target later. The near
+    /// bounds agree. No value is quoted here for the reason
+    /// `crates/formats/tests/weapons_ground_truth.rs` gives - the relation is
+    /// the claim, and it is what that test asserts.
+    pub lock_max_dist: f32,
 }

@@ -58,16 +58,29 @@
 //!   is what `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s own doc
 //!   comment reads as evidence for rather than restates.
 //!
-//! Everything else - the other three weapons' blocks (the Quake, the
-//! LeachBeam, the Repulser) and the seven disturber effects - is named on
+//! - **The LeachBeam's lock window and `absorb` alone**, because the
+//!   LeachBeam is the *other* weapon `Ship_AcquireLock` reads distances for -
+//!   at `stats+0x114`/`+0x118` against the Missile's `+0x50`/`+0x54` - and the
+//!   consumer is `oag_game::race::sight`, which now draws the four
+//!   `leachbeam_sight_*` widgets the disc binds for it. The beam itself is not
+//!   decoded: nothing here drains a craft's energy or holds an attachment open,
+//!   so `repair`, `damage`, `slowShipFactor`, `range`, `active_time` and
+//!   `energy_multiplier` stay named and unread. See [`LeachBeamStats`], which
+//!   also records the one attribute this block does **not** author.
+//!
+//! Everything else - the other two weapons' blocks (the Quake's is decoded; the
+//! Repulser's is not) and the seven disturber effects - is named on
 //! `docs/formats/weapon-stats.md` and left undecoded,
 //! because a field decoded with no consumer is a field nobody has checked.
 //! The Bomb's second radius stays out for exactly that reason - see
 //! [`BombStats`], which is explicit about it because that one is easy to
 //! mistake for an oversight.
 //!
-//! **`slowdown_time` came in on 2026-09-06 and is now on all six decoded
-//! blocks.** It was the module's longest-standing "named but not read" field.
+//! **`slowdown_time` came in on 2026-09-06 and is on every decoded block that
+//! authors it.** It was the module's longest-standing "named but not read"
+//! field. **The LeachBeam is the exception and the only one**: its block
+//! carries no `slowdown_time` on any shipped table, so [`LeachBeamStats`] has
+//! no field for it rather than a zero standing in.
 //! What changed is not the file, which always authored it, but the *law*: the
 //! slowdown mechanic was traced out of the PSP executable end to end, so the
 //! attribute has a consumer to be decoded for. See
@@ -201,8 +214,8 @@ impl Weapon {
 mod stats;
 
 pub use stats::{
-    BombStats, CannonStats, MineStats, MissileStats, PlasmaStats, QuakeStats, RocketStats,
-    ShurikenStats, Simple,
+    BombStats, CannonStats, LeachBeamStats, MineStats, MissileStats, PlasmaStats, QuakeStats,
+    RocketStats, ShurikenStats, Simple,
 };
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
@@ -303,6 +316,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::quake`].
     quake: Option<QuakeStats>,
+    /// The LeachBeam's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::leach_beam`].
+    leach_beam: Option<LeachBeamStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -399,6 +416,20 @@ impl WeaponStats {
     #[must_use]
     pub fn quake(&self) -> Option<QuakeStats> {
         self.quake
+    }
+
+    /// The LeachBeam's `<Stats>`, or `None` when the file authors no LeachBeam.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is - and here it is the *usual* answer off this project's other disc:
+    /// Pure authors no LeachBeam block and no LeachBeam sight widgets, measured
+    /// against `pure-psp-usa.chd`. Both shipped Pulse tables do author one.
+    ///
+    /// Only the lock window and `absorb` are decoded; see [`LeachBeamStats`]
+    /// for what the rest of the block holds and why it is left alone.
+    #[must_use]
+    pub fn leach_beam(&self) -> Option<LeachBeamStats> {
+        self.leach_beam
     }
 
     /// The Shuriken's `<Stats>`, or `None` when the file authors no Shuriken.
@@ -520,6 +551,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut bomb = None;
     let mut cannon = None;
     let mut quake = None;
+    let mut leach_beam = None;
     let mut absorb = Vec::new();
     let mut skipped = Vec::new();
 
@@ -678,6 +710,24 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             })?;
             continue;
         }
+        if weapon_kind == Weapon::LeachBeam {
+            // Optional for the Bomb's reason, and this is the block that
+            // *needs* it: Pure authors no LeachBeam at all, so a required
+            // block here would cost that title its whole weapon table.
+            //
+            // **No `slowdown_time`.** This block does not author one on any
+            // shipped table, which makes it the only decoded block that does
+            // not - see `LeachBeamStats`. Asking for it here would fail the
+            // Pulse tables outright.
+            leach_beam = optional_block(&mut skipped, weapon_kind, || {
+                Ok(LeachBeamStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    lock_min_dist: number(block, "Stats", "lock_min_dist")?,
+                    lock_max_dist: number(block, "Stats", "lock_max_dist")?,
+                })
+            })?;
+            continue;
+        }
         if weapon_kind == Weapon::Quake {
             // Optional for the Bomb's reason: a title that tunes the Quake on
             // attributes this build does not read loses the Quake and keeps
@@ -748,6 +798,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         bomb,
         cannon,
         quake,
+        leach_beam,
         absorb,
         pickups,
         skipped,
