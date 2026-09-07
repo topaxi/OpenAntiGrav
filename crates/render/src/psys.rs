@@ -691,6 +691,20 @@ impl System {
         self.ignitions += 1;
     }
 
+    /// Changes this system's own severity - see [`Self::ignite`]'s own
+    /// `scale` argument for what it multiplies. Every particle already alive
+    /// keeps the size and speed it spawned with; only particles emitted
+    /// *after* this call read the new value, the same way [`Self::ignite`]'s
+    /// own assignment only ever affected what came after it.
+    ///
+    /// For an effect the caller re-scales every tick to something the
+    /// original itself recomputes continuously - the Quake's own wave, whose
+    /// width tracks the track's own as it travels - rather than one fixed at
+    /// spawn. See [`Stage::rescale`].
+    pub fn rescale(&mut self, scale: f32) {
+        self.scale = scale;
+    }
+
     /// Stops every emitter without touching the live particles.
     ///
     /// What the owner of an attached effect calls when it goes away: a
@@ -1299,6 +1313,15 @@ impl Stage {
     pub fn follow(&mut self, playing: Playing, point: Vec3) {
         if let Some(instance) = self.get_mut(playing) {
             instance.anchor = point;
+        }
+    }
+
+    /// Changes an attached instance's own severity - see [`System::rescale`].
+    ///
+    /// A no-op on a stale handle, the same shape [`Self::follow`] takes.
+    pub fn rescale(&mut self, playing: Playing, scale: f32) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.system.rescale(scale);
         }
     }
 

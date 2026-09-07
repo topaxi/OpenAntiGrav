@@ -271,6 +271,23 @@ impl Course {
         self.positions.get(index).copied()
     }
 
+    /// The ring's own direction of travel at `index`: the normalised step to
+    /// the next point, wrapping at the end back to the first.
+    ///
+    /// `None` for an out-of-range index or for the degenerate case of two
+    /// coincident points - a ring built by [`Self::from_track`] never has
+    /// either, but a caller holding a stale index from before a track swap
+    /// could.
+    #[must_use]
+    pub fn tangent(&self, index: usize) -> Option<Vec3> {
+        let count = self.positions.len();
+        if count == 0 || index >= count {
+            return None;
+        }
+        let next = self.positions[(index + 1) % count];
+        (next - self.positions[index]).try_normalize()
+    }
+
     /// Distance from the start line to the ring point at `index`.
     #[must_use]
     pub fn progress_at(&self, index: usize) -> Option<f32> {

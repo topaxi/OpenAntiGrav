@@ -660,6 +660,11 @@ pub struct Race {
     /// currently a live Missile; every other kind rides [`Self::projectile_flare`]
     /// alone.
     projectile_flare_orbit: [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// The [`weapons::visuals::QUAKE_EFFECT`] instance riding the travelling
+    /// wave, or `None` when no Quake is in flight. One slot, not an array,
+    /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
+    /// field's own doc comment for why.
+    quake_effect: Option<psys::Playing>,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     stage_rng: Rng,
