@@ -146,6 +146,18 @@ use oag_ai::probe::{self, Scenario};
 ///   `0.000036..0.026295`, exactly as before), which is what
 ///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures:
 ///   the line itself did not change, only what the driver does with it.
+/// - **The two `Field` rows regenerated 2026-09-07**, for
+///   [`oag_ai::Driver::social`] reading `ctx.field.alongside` (preferring it
+///   over `ctx.field.behind`) rather than `behind` alone - see that
+///   function's own doc comment for why. `Solo` never carries a rival at
+///   all, so `alongside` and `behind` are both always `None` there and that
+///   row reproduced bit for bit (`0x65d7_0dd3_7566_c624` unchanged) - only
+///   `Field` moved, on both the 600- and 1,800-tick rows, because both put
+///   more than one craft on the circuit. `oag-core`, `oag-physics` and
+///   `oag-gameplay`'s gates all still pass unchanged, and the scenario's own
+///   curvature spread is untouched, which is what
+///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures:
+///   the line did not change, only how a driver reacts to a touching rival.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
@@ -156,14 +168,14 @@ const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Field,
-        0xed4a_2b87_a645_e8ac,
-        0xa114_9b76_635f_735d,
+        0xbfb4_c122_f4b0_0961,
+        0xa546_2a0e_1623_a3c4,
     ),
     (
         1_800,
         Scenario::Field,
-        0x1f19_a31e_5f07_dbf8,
-        0xfecc_bcfa_ca88_fe4a,
+        0x12eb_c46e_56c1_82eb,
+        0xdd8e_33d4_eb50_4cd6,
     ),
 ];
 
