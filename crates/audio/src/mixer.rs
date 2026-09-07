@@ -61,6 +61,32 @@ pub enum Bus {
     Speech,
 }
 
+/// The original's own fixed trim on the music bus alone, applied after the
+/// `"Music Volume"` slider and independent of it.
+///
+/// Read live from `_DAT_002bde18` (absolute `0x08ac1e18`), a plain `f32`
+/// (`0x3ee147ae` = `0.44`, about -7.13 dB) set once in `MusicPlayer_Init`
+/// (`0x08938428`) and read by both copies of the function that turns the
+/// music player's `+0x40` volume field into the 16-bit gain handed to the
+/// PCM-scaling call before a decoded `sceAtrac3plus` buffer is queued
+/// (`0x08938090` and `0x0893c208` - the same law, twice, for what look like
+/// two playback paths). Corroborated live, mid-race, full eight-craft grid:
+/// six samples 4 s apart all read exactly `0.44`, unchanged through the
+/// window, alongside the slider fields themselves (`+0x40`/`+0x44`) sitting
+/// at their own ceiling (`100`/`100`) the whole time - so this is not
+/// something the slider or a duck ever moves, on this evidence. Confidence
+/// 92 (static decompile plus live memory read, single binary,
+/// `pulse-psp-usa`, not yet corroborated against `pulse-psp-eu`). See
+/// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md#the-4-db-gap-is-a-fixed-044-trim-on-the-music-bus-alone-found-and-measured-live-2026-09-07).
+///
+/// This is a trim on [`Bus::Music`] specifically, not on [`Mixer`] as a
+/// whole - `Audio_SetSfxFadeTarget`'s chain (the SFX/Speech side) never
+/// touches this global at all, so multiplying it into every bus would be
+/// exactly the kind of invention this project's rules forbid. The caller
+/// (`Audio::apply` in `crates/game/src/audio.rs`) folds it into the gain it
+/// hands [`Mixer::set_bus_gain`] for [`Bus::Music`] alone.
+pub const MUSIC_MASTER_TRIM: f32 = 0.44;
+
 impl Bus {
     /// Number of buses, for array sizing.
     pub const COUNT: usize = 3;

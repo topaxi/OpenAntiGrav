@@ -5,6 +5,8 @@
 //! [ADR-0027](../../../../../docs/architecture/adr/0027-three-mix-buses.md) for
 //! why there are four of them and which two are ours.
 
+use oag_audio::mixer::MUSIC_MASTER_TRIM;
+
 use super::*;
 
 #[test]
@@ -47,7 +49,10 @@ fn every_settings_volume_reaches_the_bus_it_names() {
         false,
     );
     audio.output().with_mixer(|mixer| {
-        assert_eq!(mixer.bus_gain(Bus::Music), 0.25);
+        // Music alone also carries `MUSIC_MASTER_TRIM` - the original's own
+        // fixed -7.13 dB trim on the music bus, independent of the slider.
+        // See `MUSIC_MASTER_TRIM`'s doc comment.
+        assert_eq!(mixer.bus_gain(Bus::Music), 0.25 * MUSIC_MASTER_TRIM);
         assert_eq!(mixer.bus_gain(Bus::Sfx), 0.5);
         assert_eq!(mixer.bus_gain(Bus::Speech), 0.75);
     });

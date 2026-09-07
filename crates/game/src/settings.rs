@@ -178,17 +178,25 @@ impl Default for Ai {
 pub struct Audio {
     /// How loud the music bus is, as a percentage. Defaults to 100.
     ///
-    /// **Full by default on purpose.** At 100 the mixer's gain is exactly 1.0,
-    /// so a `--dump-audio` capture of the PS2 archive round-trips the disc's own
-    /// PCM sample-for-sample and can be compared against it byte for byte; any
-    /// other default would make the only evidence this project can gather about
-    /// its own audio approximate. See [`crate::audio::DUMP_SAMPLE_RATE`].
+    /// **Full by default on purpose**, though "full" is no longer gain `1.0`.
+    /// At 100 the slider itself is unattenuated, but the music bus also
+    /// carries [`oag_audio::mixer::MUSIC_MASTER_TRIM`] - the original's own
+    /// fixed trim on music alone, `0.44`, found and confirmed live in
+    /// `MusicPlayer_Init` and its two gain-computation callers (see that
+    /// constant's doc comment and
+    /// [`audio-levels.md`](../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md)).
+    /// So a `--dump-audio` capture of the PS2 archive at this default is the
+    /// disc's own PCM scaled by exactly `0.44`, not a byte-for-byte match -
+    /// dividing the dump back out by `MUSIC_MASTER_TRIM` (or comparing at
+    /// `sfx_volume = 0`, `music_volume = 100 / 0.44`-equivalent is not
+    /// representable, so divide the samples instead) is what recovers the
+    /// old decode-fidelity check. See [`crate::audio::DUMP_SAMPLE_RATE`].
     ///
-    /// **[`Self::master_volume`] has to be 100 for that too**, and it did not
-    /// exist when the paragraph above was written. Both are read off the
-    /// player's own settings file on the dump path, so a byte-for-byte
-    /// comparison wants a pinned config rather than the machine's - the
-    /// command is on
+    /// **[`Self::master_volume`] has to be 100 for a comparison against the
+    /// original's own mix**, and it did not exist when the paragraph above
+    /// was first written. Both are read off the player's own settings file
+    /// on the dump path, so any such comparison wants a pinned config rather
+    /// than the machine's - the command is on
     /// [`audio-levels.md`](../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
     #[serde(default)]
     pub music_volume: crate::audio::Volume,
