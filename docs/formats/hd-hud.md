@@ -674,25 +674,113 @@ is the case no one-rung-per-zone reading could ever produce.
 
 ## What is not done
 
+**Re-checked 2026-09-07, still true, and with a stronger negative result than
+before.** `crates/game/examples/hd_hud_shield_census.rs` and
+`hd_hud_tint_census.rs` walk every one of the eighteen composed layouts and
+every raw fragment file each one reads (`cargo run -p oag-game --example
+hd_hud_shield_census|hd_hud_tint_census -- data/images/hdfury-ps3-eu-dec.iso`),
+through the same archive precedence a real load uses
+(`Archives::holder_of`, above). Because `DamageBarBg`, `HUD_lap_counters.xml`
+and `HUD_positions.xml` are exactly the kind of multi-copy path this page's
+[precedence section](#diffing-the-three-copies-directly-three-different-relations-not-one)
+warns can disagree, every fragment below was additionally pulled **archive by
+archive** with `scripts/psarc.py cat` and diffed by hand, not just read through
+the one copy precedence serves - so this is not "no constant happens to
+match", it is "no copy on the disc authors a `color=` attribute on the
+relevant widget", checked directly rather than inferred from resolved colours
+alone.
+
 - **Two runtime tints are unrecovered**, and both are visible in the frame:
-  - `DamageBarBg`'s striped hexagon is **saturated blue** on the original and
-    pale blue-grey in the atlas, with no layout constant matching. Its sibling
-    `DamageBar` carries the **same rect and the same source rectangle** and
-    differs only in colour (red), which is this dialect's own "at most one of
-    these is live" idiom - so it is a second *state* of the shield readout, not
-    a bar over a background, and cropping it the way Pulse's `ShieldBar` is
-    cropped would be an invention. Neither is drawn.
+  - `DamageBarBg` carries **no `color=` attribute in either of its two real
+    copies** (`DATA02` and `DATA06`, which differ from each other only by
+    `DATA06`'s extra `DamageBarShieldBg` layer below - `DATA00`, `DATA01`,
+    `DATA03`, `DATA04` and `DATA05` do not ship this path at all, checked with
+    `scripts/psarc.py cat` directly rather than `list`'s substring match, which
+    false-positives on the `wo3_hud`/`2097_hud` skin copies of the same
+    filename) - every one is a bare `<Values ... src="..."/>`, so its
+    resolved tint is always white (no modulation) and the hexagon draws exactly
+    the atlas's own pale blue-grey pixels, never the saturated blue the
+    reference frame shows. **`DATA06`'s copy alone adds a third widget,
+    `DamageBarShieldBg`, layered between the background and the fill, coloured
+    `0xFF00FF00` (opaque green)** - not blue, and not reached anyway: precedence
+    resolves this path to `DATA02` (`fe`), which does not carry
+    `DamageBarShieldBg` at all. Worth knowing as a genuinely-authored,
+    precedence-excluded tint layer, but it does not explain the frame's blue.
+    Its other sibling `DamageBar` **is** authored a literal colour in every
+    fragment that has one - `color="0xFFFF0000"` (opaque red), identical in
+    every copy of `HUD_damage_indicator.xml`/`HUD_Elim_damage_indicator.xml`
+    across every skin - and, distinctly, `color="0xFF1664FF"` (a saturated
+    blue), identical across all three copies of `zone_hud.xml`
+    (`DATA02`/`DATA03`/`DATA06`). That red/blue pairing is this dialect's own
+    "at most one of these is live" idiom - so `DamageBar` is a second *state*
+    of the shield readout, not a bar over a background, and cropping it the way
+    Pulse's `ShieldBar` is cropped would be an invention. **The reference frame
+    this section is written from is speed lap, not Zone** - the mode whose own
+    `DamageBar` authors blue - so the blue in the frame cannot be explained by
+    drawing Zone's `DamageBar` in the wrong mode; the speed-lap and arcade
+    fragments never author blue anywhere, in any copy. Neither is drawn.
+
+    **A second, unrelated finding surfaced looking for it**: `arcade_hud.xml`
+    composes **two** widgets both named `DamageBar` - the red one above, from
+    `HUD_damage_indicator.xml`, and a second, colourless one from
+    `HUD_pickups.xml` (`TxtrWidth="-78"`, a pickup-bar frame element that
+    happens to reuse the name). `oag_game::hud::draw_list`'s `drawn_once` guard
+    draws only the first widget of a repeated name, so wiring `DamageBar` by
+    name alone would silently pick whichever one composition order puts first
+    - worth a name check before anyone wires this widget on the strength of a
+    single `layout.sprite("DamageBar")` lookup.
   - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
-    two panels, are white in the layout and yellow in the frame.
+    two panels, carry **no `color=` attribute at all**, in any of the real
+    copies checked directly with `scripts/psarc.py cat` - `HUD_lap_counters.xml`
+    exists only in `DATA02`, and `HUD_positions.xml` in `DATA02`, `DATA05` and
+    `DATA06` (not `DATA00`/`DATA01`/`DATA03`/`DATA04`, which do not ship this
+    path at all despite `list`'s substring search reporting otherwise for the
+    same skin-directory reason as above) - or in
+    any of the four `FEConst`/`FEGlobals` names the composed layouts declare
+    anywhere (`HudBGColour`, `HudColour1`, `HudColour2`,
+    `HudColour3`/`HudColour3A` - none is yellow). `DATA05`/`DATA06`'s extra
+    copies of `HUD_positions.xml` do add colours - `0xFFFFFF00` (yellow) on the
+    big `Position` digit text and `0xB40048FF` on a `HeadToHeadBar` fill - but
+    neither is on a `PosBar*` arc, so the yellow the reference frame shows on
+    the *arcs* stays unexplained by any copy. White in the layout,
+    unconditionally; yellow in the frame.
+  - All three need the executable: nothing in `skin.xml`'s `FEGlobals` table is
+    loaded into a HUD layout's constant sweep either (`oag_game::hud::compose`
+    only collects `<Variable global=>` from the HUD's own fragment tree), so
+    there is no unread symbolic reference waiting to be wired up - the widgets
+    genuinely author no colour for this state, in every copy the disc ships.
+    **Needs the Ghidra bridge**, which nobody on this pass held (see this
+    thread's report); flagged rather than taken.
 - **`ShieldBarText` shows `100%` where the original shows `100`**, in the red the
   layout authors where the original shows grey. Both halves are Pulse's answer
   applied here and neither has a data-side signal to key off: **both discs
   author the placeholder as `string="+0"`**, so the `%` is an engine-side
   measurement off a Pulse reference frame, and the red is HD's own authored
-  colour with the runtime override unread. Recorded rather than fixed on a
-  guess.
+  colour with the runtime override unread. Reconfirmed 2026-09-07: HD's default
+  skin resolves `ShieldBarText`'s colour to `[1.0, 0.0, 0.0, 0.58]` (translucent
+  red) in every mode that authors a placeholder, against Pulse's own
+  `ShieldBarText`, which resolves to plain white - so the red is not a bug in
+  this build's constant resolution, it is what HD's own `Arcade_HUD.xml`
+  equivalent (`arcade_hud.xml` et al.) actually declares - checked directly in
+  both copies of `HUD_damage_indicator.xml` that carry it (`DATA02`, `DATA06`,
+  which resolve identically: `color="0x94FF0000"`, the same translucent red).
+  No widget anywhere
+  names a `%`-suffix companion the way `SpeedBarTextKMH` does for the speed
+  unit, so there is no layout-derived way to drop it either. **One frame at
+  full shield cannot distinguish "always grey" from "grey only when not
+  critical, red otherwise"** - the second reading is the more consistent one
+  with `ShieldBar`'s own already-measured threshold-plus-flash rule
+  (`Readout::shield_forced_red`), but applying that rule to `ShieldBarText`
+  without a second frame at low shield would be exactly the invention this
+  project's rules forbid. Recorded rather than fixed on a guess.
 - **`Lap1Image`-`Lap4Image`**, the per-lap time rows, appear as laps are set -
-  their labels are authored as empty strings - and nothing drives them.
+  their labels are authored as empty strings - and nothing drives them. Not a
+  data gap: `oag_race::RaceState`/`Standing` (`crates/race/src/state.rs`,
+  `crates/race/src/standing.rs`) track only a running `best_lap_ticks`, no
+  per-lap split history, so there is nothing for `Readout` to carry even if the
+  HUD side were wired. Populating that history is `crates/race` and
+  `crates/game/src/race/*`, outside this thread's HUD-only lane
+  (`crates/game/src/hud/*`, `crates/hd`, `docs/formats/hd-hud.md`).
 - **No skin selection.** Three skins ship; which one a race picks is a branch in
   a race-manager constructor and is unread.
 - **The split-screen family**, above.
