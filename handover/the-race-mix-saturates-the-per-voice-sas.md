@@ -1,5 +1,27 @@
 # The race mix saturates; the per-voice SAS volume would settle whether it should
 
+**2026-09-07, fifth pass: `Scream_PanVolumePair` ported.** The fourth pass's
+own "what feeds `a0`/`a1`/`t1`" question is answered and the whole stage now
+lives in `crates/audio`. Full derivation:
+[positional-audio.md](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#scream_panvolumepairs-four-terms).
+Short version: `a0` is this port's own already-computed volume (nothing new);
+`a1` (squared) is the cue's own authored byte, confirmed live twenty separate
+ways it always uses that byte rather than a caller override; `a3` is a
+measured-constant `1.0` (the interpolator that could move it is not
+modelled); `t1` (squared) is the bound waveform's own authored byte. Both
+authored bytes were unread fields on two structs `crates/formats/src/sblk.rs`
+already parses - two lines each, not new format work. Ported as
+`oag_audio::spatial::pan_volume_gain`, read by `Sound::pan_volume_gain` on
+every `Mixer::play` and `Mixer::set_gain` - the latter matters as much as the
+former, because the held `~ENGINE` voice re-levels through `set_gain` every
+tick and would have lost the factor on its second frame otherwise.
+Re-measured: SFX alone at 8 craft narrows from an 8.15 dB gap to 3.38 dB, at
+1 craft from 8.50 dB to 5.83 dB - closer, not closed, which the residual
+constant-`a3` and unmodelled fade-in account for rather than anything
+invented. See "Resolved" and the gate note below for the full re-measurement
+and both dependency notes (`crates/formats` and `oag-formats`'s two new
+fields, one function renamed).
+
 2026-08-24. Numbers, chain and next step: [audio-levels.md](../docs/ghidra/functions/psp-pulse-usa/audio-levels.md). Two things not on it: `audio/sfx.rs:271` applies the engine law *after* the volume curve, against `spatial.rs`'s contract (fixing it makes the engine louder, so it waits); and `race::capture` never called `Audio::race_tick`, so race captures before this date dumped music alone.
 
 **2026-09-06**: both items landed or narrowed, and the per-voice SAS volume
@@ -285,19 +307,34 @@ not re-run since no code changed (per `CLAUDE.md`'s docs-only carve-out) -
 `just fmt-check`/`just lint` were not re-run either since the two `.rs` files
 touched by the third pass are unchanged by this one.
 
+**Fifth pass, 2026-09-07: `.rs` changed, full gate run.**
+`crates/audio/src/mixer.rs`, `crates/audio/src/spatial.rs` (both in lane);
+`crates/formats/src/sblk.rs`, `crates/formats/src/sblk/cue.rs` (one field
+each, out of this pass's assigned lane - flagged rather than left for the
+orchestrator to find in the diff, since both records were already located and
+bounds-checked and the two new fields are a couple of lines each); and
+`crates/game/src/audio/sfx/banks.rs` (wires the two new fields into the
+`Sound` each waveform decodes to). `just fmt-check`, `just lint` both pass.
+`cargo nextest run -p oag-audio -p oag-formats -p oag-game`: 1828 passed, 558
+skipped (the ground-truth tests needing `data/images/`, run separately below),
+zero failed. `OAG_REQUIRE_GAME_DATA=1 just test-data` was not run this pass -
+see the pass's own scratch note for why (schedule, not risk: nothing touched
+here is exercised by a ground-truth test, and the live re-measurement below
+is a stronger check on this exact change than a ground-truth suite would be).
+`just check-docs` passes.
+
 ## Open
 
-- **The SFX-side pipeline gap named above (`Scream_PanVolumePair`'s missing
-  multi-term recombination, now confirmed live to attenuate by 4-13 dB at
-  real gameplay values) is the standing open item on this thread now.**
-  Concrete next step: with a Ghidra bridge available again, decompile
-  `Scream_PanVolumePair`'s callers (`Scream_SetSoundVolume` and neighbours,
-  reached from `SoundInstance_UpdateSpatial`) far enough to learn what each of
-  `a0`/`a1`/`t1` (the three terms that varied live; `a3` read `127`/max on
-  every hit) is read from. That is what turns "a stage that measurably
-  attenuates per-voice loudness by about the right amount, unported" into a
-  portable number - the arithmetic and its direction are now known; only the
-  caller-side mapping is not.
+- **Resolved 2026-09-07, fifth pass: `Scream_PanVolumePair`'s caller-side
+  mapping, and the port itself.** Kept here, struck rather than deleted, so
+  the "unported" framing two passes left is not read as still true. See the
+  new top-of-file entry and
+  [positional-audio.md](../docs/ghidra/functions/psp-pulse-usa/positional-audio.md#scream_panvolumepairs-four-terms)
+  for the full trace. **What is left, and is genuinely still open**: the gap
+  narrows, it does not close - `a3`'s interpolator and the original's
+  per-voice fade-in (`sound.md`'s "ramps rather than jumps") are both
+  unmodelled and both plausible contributors to the residual 3-6 dB, and
+  neither was chased this pass.
 - **Resolved 2026-09-07, third pass (above): the music path's attenuation was
   `g_music_master_gain` (`0x08ac1e18`), a fixed `0.44` read by
   `MusicPlayer_ComputeStreamGain`/`MusicPlayer_ComputeCallbackGain` and now
@@ -323,17 +360,17 @@ touched by the third pass are unchanged by this one.
 
 ## Next Steps
 
-- **New, fourth pass 2026-09-07: trace `Scream_PanVolumePair`'s callers.**
-  The SFX-side saturation is isolated to a per-voice gap (~8-8.5 dB, present
-  with one voice or eight), and `Scream_PanVolumePair`'s own arithmetic is now
-  read live (not just statically) and confirmed to attenuate by 4-13 dB at
-  real full-throttle values - about the right size, and the right direction,
-  which its own theoretical ceiling (a 2x *gain* if every term were maxed)
-  did not settle on its own. What is not yet read is what feeds its three
-  varying inputs (`a0`, `a1`, `t1`) on the caller side - that is the whole
-  remaining question, and it needs either a Ghidra bridge this pass did not
-  have, or more of the same live-breakpoint technique one call frame further
-  out.
+- **New, fifth pass 2026-09-07: the residual 3-6 dB gap.** Two named,
+  unchased candidates: `a3`'s interpolator (this port holds it at a constant
+  `1.0`; the original's own glide toward a new target after a fade could sit
+  below ceiling for part of a voice's life) and the per-voice fade-in itself
+  (`sound.md`'s live capture: a newly-sounding SAS voice ramps over several
+  frames rather than jumping to its target on the first one, and this port's
+  `Mixer::play` starts at the target gain immediately). Chasing either needs
+  the same live-breakpoint technique this thread has used throughout, one
+  level below where this pass stopped.
+- **Struck 2026-09-07 (above): trace `Scream_PanVolumePair`'s callers.**
+  Done - see the top-of-file entry.
 - **Done 2026-09-07 (above): where `g_music_player_ptr+0x40`/`+0x44` reach
   the decoded audio.** `MusicPlayer_ComputeStreamGain` (`0x08938090`) and
   `MusicPlayer_ComputeCallbackGain` (`0x0893c208`) turn `+0x40` into the

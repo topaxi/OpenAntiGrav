@@ -149,15 +149,24 @@ const RELEASE_FRAMES: u32 = 256;
 /// Interleaved 16-bit signed, the form both PS-ADPCM decode
 /// ([`oag_formats::sblk::decode_adpcm`]) and the PS2 PCM archives already
 /// produce, so nothing is converted on the way in.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// No longer `Eq`: [`Sound::pan_volume_gain`] made the struct carry an `f32`,
+/// and nothing in the tree compared a `Sound` for equality by way of `Eq`
+/// rather than `PartialEq` (checked before this change landed).
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sound {
     samples: Vec<i16>,
     channels: u16,
     sample_rate: u32,
+    pan_volume_gain: f32,
 }
 
 impl Sound {
     /// Wraps decoded interleaved samples.
+    ///
+    /// [`Sound::pan_volume_gain`] starts at `1.0`, unity - correct for every
+    /// existing caller, none of which has an SBLK cue/waveform pair to read it
+    /// from. [`Sound::with_pan_volume_gain`] is the builder that overrides it.
     ///
     /// # Errors
     ///
@@ -175,7 +184,35 @@ impl Sound {
             samples,
             channels,
             sample_rate,
+            pan_volume_gain: 1.0,
         })
+    }
+
+    /// Overrides [`Sound::pan_volume_gain`] on an already-built `Sound`.
+    ///
+    /// The one caller is `oag_game::audio::sfx::banks::load_named_cue`, which
+    /// has the SBLK cue and waveform this sound came from and therefore the
+    /// two bytes [`crate::spatial::pan_volume_gain`] needs - this crate itself
+    /// never reads an SBLK bank.
+    #[must_use]
+    pub fn with_pan_volume_gain(mut self, gain: f32) -> Self {
+        self.pan_volume_gain = gain;
+        self
+    }
+
+    /// The extra gain `Scream_PanVolumePair` (`0x08995a9c`) applies on top of
+    /// [`crate::spatial::Emitter::place`]'s own result, `1.0` for a `Sound`
+    /// nothing has called [`Sound::with_pan_volume_gain`] on.
+    ///
+    /// Read here rather than folded into `Play::gain` by the caller: every
+    /// caller of [`Mixer::play`] gets it applied uniformly this way, matching
+    /// the original, where `Scream_PanVolumePair` runs on every voice's
+    /// commit and not only the ones this port happens to place in the world.
+    /// See `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`'s
+    /// "`Scream_PanVolumePair`'s four terms" section.
+    #[must_use]
+    pub fn pan_volume_gain(&self) -> f32 {
+        self.pan_volume_gain
     }
 
     /// Frames, meaning sample groups, not individual samples.
@@ -446,12 +483,14 @@ impl Mixer {
         })?;
         self.generation = self.generation.wrapping_add(1);
         let generation = self.generation;
+        // Read before `play.sound` moves into the voice below.
+        let pan_volume_gain = play.sound.pan_volume_gain();
         self.voices[slot] = Voice {
             sound: Some(play.sound),
             bus: Some(play.bus),
             position: 0.0,
             pitch: play.pitch,
-            gain: play.gain.max(0.0),
+            gain: (play.gain * pan_volume_gain).max(0.0),
             pan: play.pan,
             looping: play.looping,
             generation,
@@ -500,9 +539,17 @@ impl Mixer {
     }
 
     /// Re-levels a live voice.
+    ///
+    /// **`gain` is the caller's positional level alone, not the final gain.**
+    /// [`Sound::pan_volume_gain`] is folded in here exactly as [`Self::play`]
+    /// folds it in at the start, so a held voice re-levelled every tick -
+    /// `~ENGINE`'s own per-frame update and a track emitter's, `sfx::engine`
+    /// and `sfx::track`'s callers - carries it for as long as it sounds and
+    /// not only on its first frame.
     pub fn set_gain(&mut self, id: VoiceId, gain: f32) {
         if let Some(voice) = self.voice_mut(id) {
-            voice.gain = gain.max(0.0);
+            let pan_volume_gain = voice.sound.as_ref().map_or(1.0, |s| s.pan_volume_gain());
+            voice.gain = (gain * pan_volume_gain).max(0.0);
         }
     }
 

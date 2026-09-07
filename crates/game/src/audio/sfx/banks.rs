@@ -294,8 +294,20 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
             skipped += 1;
             continue;
         }
+        // `record`'s own cue, not each waveform's - correct for every title
+        // this project measures the SFX gap on: `cue_tree_sounds` above is
+        // `cue_sounds` under the hood there, so `record` is the only cue
+        // involved. Wipeout HD's `.COLLISIONS` is the one case where a
+        // waveform's *own* binding cue differs from `record` (`c_CShipShip`
+        // and its Small/Medium/Large children), and using `record`'s byte for
+        // those too is a stated approximation - see
+        // `oag_audio::spatial::pan_volume_gain`'s doc comment.
+        let pan_volume_gain = oag_audio::spatial::pan_volume_gain(record.volume, sound.volume);
         waveforms.push((
-            Arc::new(Sound::new(pcm, 1, sblk::ASSUMED_SAMPLE_RATE)?),
+            Arc::new(
+                Sound::new(pcm, 1, sblk::ASSUMED_SAMPLE_RATE)?
+                    .with_pan_volume_gain(pan_volume_gain),
+            ),
             sound.is_looping(),
         ));
     }

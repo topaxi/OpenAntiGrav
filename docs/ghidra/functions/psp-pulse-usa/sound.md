@@ -159,7 +159,9 @@ previously-missed call to `__sceSasSetVolume`. **What is still not settled**
 is what numeric value lands there: nothing above traces `+0x40` back to a
 writer. `SoundInstance_UpdateSpatial` (`0x08939e58`,
 [positional-audio.md](positional-audio.md)) is the only known producer of a
-comparable pair - it calls `func_0x00189614` (`0x0898d614`) with the
+comparable pair - it calls `Scream_SetSoundVolume` (`0x0898d614`, named
+2026-09-07, see [positional-audio.md](positional-audio.md#scream_panvolumepairs-four-terms))
+with the
 `SoundEmitter_ComputeVolumeAndAngle` volume - but that function is SCREAM's
 own software fade/ramp engine over a *SCREAM instance*, not the SAS voice
 record `Sas_CommitVoices` walks, and nothing read here connects the two.

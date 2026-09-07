@@ -610,7 +610,7 @@
 0x0893a5ec	function	SoundManager_LinkEmitter	85	positional-audio.md
 0x0893a7e8	function	SoundManager_BuildVolumeCurve	94	positional-audio.md
 0x0893a87c	function	SoundManager_VolumeCurve	94	positional-audio.md
-0x08995a9c	function	Scream_PanVolumePair	85	positional-audio.md
+0x08995a9c	function	Scream_PanVolumePair	94	positional-audio.md
 0x08ac4a2c	data	g_scream_pan_table	94	positional-audio.md
 0x08925e18	function	VexSound_RegisterClass	95	track-sound-emitters.md
 0x08926058	function	VexSoundCone_RegisterClass	95	track-sound-emitters.md
@@ -687,3 +687,4 @@
 0x0898c64c	function	Audio_EnqueuePannedOutput	78	audio-levels.md
 0x0891c7e0	function	Quake_ProximityToCraft	60	cannon-quake-leachbeam.md
 0x0891c82c	function	Quake_SpanIntensityAt	55	cannon-quake-leachbeam.md
+0x0898d614	function	Scream_SetSoundVolume	88	positional-audio.md

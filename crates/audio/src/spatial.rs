@@ -258,5 +258,95 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
+/// `Scream_PanVolumePair`'s four terms, and the extra gain they contribute on
+/// top of everything above.
+///
+/// `Scream_PanVolumePair` (`0x08995a9c`) sits between
+/// [`Emitter::place`]'s own `0..1024` volume and the two hardware channel
+/// volumes, and multiplies **four** terms together, two of them squared under
+/// a mode mask read as `10` (mask bit 1 and bit 3): `p1 * p2 * p4 * p6 * 0x102
+/// / 0x7f^3`. **This whole stage was absent from this crate before it - grep
+/// found nothing** - and it is a real, measured attenuation: read live
+/// (`memory.disasm` on a PPSSPP breakpoint, full-throttle engine, full grid),
+/// it cost `4.4` to `13.1 dB`, mean `11.7 dB`, at real gameplay values - not
+/// the `2x` *gain* its own theoretical ceiling would have suggested.
+///
+/// # Which two terms are squared, and how that is known
+///
+/// **Confirmed two independent ways**, agreeing exactly: statically, reading
+/// `Scream_PanVolumePair`'s own instructions rather than its decompile (the
+/// project's own `lv.q`/`sv.q` trap does not apply here - this function is
+/// pure scalar `mult`/`div`, no VFPU at all) shows the mask bit for each of
+/// the four terms directly: bit 0 gates squaring the first argument, bit 1
+/// the second, bit 2 the fourth, bit 3 a fifth value already resident in a
+/// register at the function's own entry. Mask `10` is `0b1010`: bits 1 and 3
+/// set, bits 0 and 2 clear - so the **second and fifth** arguments are
+/// squared and the first and fourth are not. That matches a live capture from
+/// the same day, reading the same mask off the stack at a running
+/// breakpoint and the same four terms off `cpu.getAllRegs`.
+///
+/// # What each term is, traced to its caller
+///
+/// - **The first term (unsquared)** is `Emitter::place`'s own `0..1024`
+///   volume, scaled to `0..127` - the SCREAM voice's `+0x3a` field,
+///   traced through `Scream_SetSoundVolume` (`0x0898d614`) and
+///   `Scream_StartSound` (`0x0898f864`). Already computed by this crate; not
+///   a new input.
+/// - **The second term (squared)** is the SCREAM voice's `+0xc` field,
+///   traced to `Scream_StartSound`'s own third argument, which defaults
+///   (when `-1`) to the **cue's own authored byte at offset `0x00`** -
+///   [`oag_formats::sblk::Cue::volume`]. **Confirmed live**: a PPSSPP
+///   breakpoint on `Scream_StartSound`'s entry read that argument as exactly
+///   `-1` on 20 of 20 hits during a real Time Trial, and a second breakpoint
+///   at the voice's own `+0xc` read back an exact match against the cue's
+///   own byte on every hit taken - not inferred across sessions, the same
+///   tick.
+/// - **The fourth term (unsquared)** is the SCREAM voice's `+0x10` field,
+///   unconditionally initialised to `0x7f` (its ceiling) by
+///   `Scream_StartSound` and adjusted afterwards by an interpolator this
+///   project has not traced. Every live sample taken - twenty breakpoint hits
+///   across two sessions - read exactly `0x7f`. **Ported as the constant
+///   `1.0`**: measured at construction and in every sample since, with the
+///   stated gap that an explicit fade-out would move it and this port does
+///   not model that.
+/// - **The fifth value (squared)** is the waveform descriptor's own authored
+///   byte at offset `0x01` - [`oag_formats::sblk::Sound::volume`], traced
+///   through `Scream_OpKeyOn` (`0x0898fc78`).
+///
+/// # The constant collapses
+///
+/// In the original's fixed-point arithmetic the combine is
+/// `a0 * a3 * t1_sq * a1_sq * 0x102 / 0x7f^5`(three integer divisions folded
+/// into one exponent here; see the doc page for the instruction-level
+/// derivation). Normalising each `0..127` term to `0..1` and carrying the
+/// squaring through, `0x7f * 0x102 / 0x3fff` (the `Scream_PanVolumePair`
+/// caller's own final division into a hardware gain) is **exactly `2.0`,
+/// with no remainder** - matching the doc's independently-stated theoretical
+/// ceiling of `2.0` for all four terms at their own maximum. So the whole
+/// stage is
+///
+/// ```text
+/// extra_gain = 2 * cue_volume^2 * sound_volume^2
+/// ```
+///
+/// with the fourth (`+0x10`) term folded into the leading `2` as its
+/// measured-constant `1.0`, and [`Emitter::place`]'s own gain applied by the
+/// caller rather than here (it is the *first* term, unsquared, and this
+/// crate already produces it in `0..1` form with nothing left to convert).
+///
+/// See `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`'s
+/// "`Scream_PanVolumePair`'s four terms" section for the full derivation,
+/// the live capture tables and the corpus survey (36 banks, 582 cues, 880
+/// waveform bindings, `Cue::volume` in `20..=127` and `Sound::volume` in
+/// `60..=127` on every one of them - the `-1..=-5` sentinel codes the same
+/// page documents for both bytes are real but do not arise anywhere in this
+/// disc's own data).
+#[must_use]
+pub fn pan_volume_gain(cue_volume: i8, sound_volume: i8) -> f32 {
+    let a1 = f32::from(cue_volume.unsigned_abs()) / 127.0;
+    let t1 = f32::from(sound_volume.unsigned_abs()) / 127.0;
+    2.0 * a1 * a1 * t1 * t1
+}
+
 #[cfg(test)]
 mod tests;
