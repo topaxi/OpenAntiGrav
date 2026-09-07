@@ -39,7 +39,9 @@ struct Instance {
     @location(2) color: vec4<f32>,
     // What the glyph's baked outline is drawn in. Only the atlas path reads it.
     @location(3) border: vec4<f32>,
-    // 0 indexes the glyph atlas, 1 the sprite sheet.
+    // 0 indexes the glyph atlas, 1 the sprite sheet, 2 the sprite sheet added
+    // rather than blended over. Every `> 0.5` test below is therefore still
+    // exactly "is this a sheet quad".
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -141,5 +143,21 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let ink = mix(in.border, in.color, mask);
     let from_atlas = vec4<f32>(ink.rgb, ink.a * coverage);
     let from_sheet = sprite * in.color;
-    return select(from_atlas, from_sheet, in.mode > 0.5);
+    let straight = select(from_atlas, from_sheet, in.mode > 0.5);
+
+    // **Premultiplied on the way out**, because the pipeline blends
+    // premultiplied alpha - see `render.rs`'s colour target. `src.rgb * src.a`
+    // here is exactly the `SrcAlpha` factor the ROP used to apply, so every
+    // quad that was drawn before this existed composites identically.
+    //
+    // An **additive** quad returns an alpha of zero instead, which leaves the
+    // destination factor `1 - 0` at one: `src.rgb * src.a + dst.rgb`. That is
+    // the `GU_ADD, GU_SRC_ALPHA / GU_FIX 0xffffff` the `pass_mask & 0x200`
+    // class programs on the original, and it is the whole difference between
+    // the lock-on reticle's brackets glowing on the track and sitting on
+    // opaque black tiles: their textures carry the shape in the colour
+    // channels over a black field, with alpha pinned at 250/255.
+    let is_additive = in.mode > 1.5;
+    let alpha = select(straight.a, 0.0, is_additive);
+    return vec4<f32>(straight.rgb * straight.a, alpha);
 }

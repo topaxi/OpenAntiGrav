@@ -103,20 +103,22 @@ fn sheet() -> crate::sprite::Sheet {
     crate::sprite::Sheet::build_with(
         &[],
         vec![
-            (
-                r"Data\HUD\missile_sight_outer.vex".to_string(),
-                8,
-                8,
-                vec![255u8; 8 * 8 * 4],
-                None,
-            ),
-            (
-                r"Data\HUD\missile_sight_inner.vex".to_string(),
-                8,
-                8,
-                vec![255u8; 8 * 8 * 4],
-                None,
-            ),
+            crate::sprite::DecodedImage {
+                src: r"Data\HUD\missile_sight_outer.vex".to_string(),
+                width: 8,
+                height: 8,
+                rgba: vec![255u8; 8 * 8 * 4],
+                quad_extent: None,
+                blend: None,
+            },
+            crate::sprite::DecodedImage {
+                src: r"Data\HUD\missile_sight_inner.vex".to_string(),
+                width: 8,
+                height: 8,
+                rgba: vec![255u8; 8 * 8 * 4],
+                quad_extent: None,
+                blend: None,
+            },
         ],
         &mut report,
     )
@@ -195,13 +197,14 @@ fn hd_sheet() -> crate::sprite::Sheet {
     let mut report = Vec::new();
     crate::sprite::Sheet::build_with(
         &[],
-        vec![(
-            "missile_reticule.gtf".to_string(),
-            256,
-            256,
-            vec![255u8; 256 * 256 * 4],
-            None,
-        )],
+        vec![crate::sprite::DecodedImage {
+            src: "missile_reticule.gtf".to_string(),
+            width: 256,
+            height: 256,
+            rgba: vec![255u8; 256 * 256 * 4],
+            quad_extent: None,
+            blend: None,
+        }],
         &mut report,
     )
 }
@@ -263,7 +266,7 @@ fn colours(frame: &Frame) -> Vec<[f32; 4]> {
         .sprites
         .iter()
         .filter_map(|draw| match draw {
-            Draw::RotatedSprite { color, .. } => Some(*color),
+            Draw::BlendedSprite { color, .. } => Some(*color),
             _ => None,
         })
         .collect()
@@ -274,7 +277,7 @@ fn rotated(frame: &Frame) -> Vec<(f32, f32, f32)> {
         .sprites
         .iter()
         .filter_map(|draw| match draw {
-            Draw::RotatedSprite { rect, rotation, .. } => Some((rect[0], rect[1], *rotation)),
+            Draw::BlendedSprite { rect, rotation, .. } => Some((rect[0], rect[1], *rotation)),
             _ => None,
         })
         .collect()

@@ -117,6 +117,44 @@ pub enum Draw {
         /// Clockwise turn about the rectangle's centre, in radians.
         rotation: f32,
     },
+    /// A `<Mode3D><Model>` widget's quad, composited the way the **model's own
+    /// `pass_mask`** asks rather than the way every other sprite is.
+    ///
+    /// **A separate variant rather than a `blend` on [`Self::Sprite`] and
+    /// [`Self::RotatedSprite`]**, for the reason those two and
+    /// [`Self::ChamferedFill`] already give: sprites are constructed in dozens
+    /// of places and every one of them would carry an "ordinary alpha blend"
+    /// for the handful of widgets whose art declares something else. It
+    /// subsumes the rotation too, so the sight brackets need one variant and
+    /// not two crossed with each other.
+    ///
+    /// **What declares it is the file.** Pulse's three lock-on sight models -
+    /// `missile_sight_outer.vex`, `missile_sight_inner.vex` and
+    /// `leachbeam_sight.vex` - all carry `pass_mask 0x120e`, whose `0x0200` bit
+    /// is [`oag_formats::vex::BlendClass::Additive`], and their embedded
+    /// textures put the bracket in the colour channels over black with alpha
+    /// pinned at 250/255. Drawn with the ordinary alpha blend every other
+    /// sprite uses, each piece of the reticle sat on an opaque black tile; the
+    /// blend the model asks for is what makes the black field vanish. Pure's
+    /// icon models reach this the same way, off their own reading. See
+    /// [`crate::sprite::Placed::blend`] and
+    /// [hud.md](../../../docs/ui/hud.md).
+    BlendedSprite {
+        /// Where it goes: `[x, y, width, height]`, `x`/`y` being the top-left of
+        /// the *unrotated* rectangle.
+        rect: [f32; 4],
+        /// Where it is in the sheet, in sheet pixels.
+        uv: [f32; 4],
+        /// Modulating colour.
+        color: [f32; 4],
+        /// Clockwise turn about the rectangle's centre, in radians. Zero for
+        /// the pickup icons, which do not turn.
+        rotation: f32,
+        /// The class the model's own batch declared, or `None` for a model
+        /// whose batches are opaque - which composites exactly as
+        /// [`Self::Sprite`] does.
+        blend: Option<oag_formats::vex::BlendClass>,
+    },
     /// A line of text with its baseline-less top-left at `x, y`.
     Text {
         /// Left or anchor edge, depending on `align`.
@@ -813,7 +851,8 @@ impl Draw {
             | Self::Fill { color, .. }
             | Self::ChamferedFill { color, .. }
             | Self::Sprite { color, .. }
-            | Self::RotatedSprite { color, .. } => Some(color),
+            | Self::RotatedSprite { color, .. }
+            | Self::BlendedSprite { color, .. } => Some(color),
             Self::Video { .. } => None,
         }
     }
@@ -854,7 +893,8 @@ impl Draw {
             Self::Fill { rect, color }
             | Self::ChamferedFill { rect, color, .. }
             | Self::Sprite { rect, color, .. }
-            | Self::RotatedSprite { rect, color, .. } => {
+            | Self::RotatedSprite { rect, color, .. }
+            | Self::BlendedSprite { rect, color, .. } => {
                 rect[0] = about(rect[0], origin.0);
                 rect[1] = about(rect[1], origin.1);
                 rect[2] *= scale;

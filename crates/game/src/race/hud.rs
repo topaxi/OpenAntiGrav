@@ -310,21 +310,74 @@ fn vex_model_art(
             ));
             continue;
         };
+        let blend = quad_blend(src, &model, report);
         report.push(format!(
-            "HUD model {src}: {}x{}, quad {:?}",
+            "HUD model {src}: {}x{}, quad {:?}, blend {blend:?}",
             texture.width,
             texture.height,
             quad_extent(&model)
         ));
-        out.push((
-            src.to_string(),
-            texture.width,
-            texture.height,
-            rgba.to_vec(),
-            quad_extent(&model),
-        ));
+        out.push(crate::sprite::DecodedImage {
+            src: src.to_string(),
+            width: texture.width,
+            height: texture.height,
+            rgba: rgba.to_vec(),
+            quad_extent: quad_extent(&model),
+            blend,
+        });
     }
     out
+}
+
+/// The blend equation a `<Mode3D>` model's own batch declares, for the sheet
+/// entry its texture becomes.
+///
+/// **Read off the file, not tabulated per model.** Every one of these widgets
+/// is a single flat quad, so "the model's blend" is well defined: whatever its
+/// one transparent batch put in `pass_mask`. All three of Pulse's sight models
+/// declare `0x120e`, whose `0x0200` bit is
+/// [`oag_formats::vex::BlendClass::Additive`] - and their textures are named
+/// `gunsight_ADD.tga`, `gunsightdot_ADD.tga` and `LeachBeamSight_ADD_nomip.tga`
+/// with alpha pinned at 250/255, so the shape lives in the *colour* channels
+/// over a black field and an ordinary alpha blend can only draw it on a black
+/// tile. Reading it here rather than naming the three models is what makes
+/// Pure's ten icon models right the day a Pure disc is present to measure.
+///
+/// `None` when the model's batches are all opaque, which draws exactly as
+/// before. A model whose batches **disagree** is reported and treated as
+/// opaque rather than having one of them picked for it: none of the widgets
+/// this walks is such a model, and guessing which batch speaks for a quad that
+/// is not a quad is the invention this project's asset rule forbids. See
+/// [`crate::sprite::Placed::blend`].
+fn quad_blend(
+    src: &str,
+    model: &oag_render::mesh::Model,
+    report: &mut Vec<String>,
+) -> Option<oag_formats::vex::BlendClass> {
+    let mut declared: Vec<oag_formats::vex::BlendClass> = Vec::new();
+    for draw in model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+    {
+        if let Some(blend) = draw.blend
+            && !declared.contains(&blend)
+        {
+            declared.push(blend);
+        }
+    }
+    match declared.as_slice() {
+        [] => None,
+        [one] => Some(*one),
+        several => {
+            report.push(format!(
+                "HUD model {src}: its batches declare {several:?}, which a single \
+                 sheet quad cannot honour; drawn with the pipeline's own blend"
+            ));
+            None
+        }
+    }
 }
 
 /// A model's own flat quad, read off its vertex positions rather than

@@ -181,6 +181,7 @@ mod tests {
                 width: 256,
                 height: 256,
                 quad_extent: None,
+                blend: None,
             },
         )]);
         let cx = Context {

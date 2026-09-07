@@ -154,10 +154,13 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
     );
     let frame = oag_game::hud::draw_list(&context, &readout);
 
+    // A `<Mode3D><Model>` widget, so a `BlendedSprite`: the quad carries the
+    // blend its own model declares rather than taking the pipeline's. See
+    // `oag_game::sprite::Placed::blend`.
     let icon_draw = frame
         .sprites
         .iter()
-        .find(|draw| matches!(draw, oag_game::frontend::Draw::Sprite { color, .. } if *color == expected_color))
+        .find(|draw| matches!(draw, oag_game::frontend::Draw::BlendedSprite { color, .. } if *color == expected_color))
         .unwrap_or_else(|| {
             panic!(
                 "no sprite drew in TURBO_icon's own colour {expected_color:?}; \
@@ -165,5 +168,19 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
                 frame.sprites
             )
         });
+    // **Measured on Pure's own disc, and it differs from Pulse's sights.**
+    // `TURBO_icon`'s model declares `AlphaOver` (`pass_mask & 0x100`), where
+    // all three of Pulse's lock-on sight models declare `Additive` (`& 0x200`)
+    // - which is exactly why the class is read off each model rather than
+    // tabulated per widget. Pinned so a change to that reading has to say so
+    // here.
+    let oag_game::frontend::Draw::BlendedSprite { blend, .. } = icon_draw else {
+        unreachable!("found by that pattern");
+    };
+    assert_eq!(
+        *blend,
+        Some(oag_formats::vex::BlendClass::AlphaOver),
+        "TURBO_icon's own model declares this blend"
+    );
     println!("{icon_draw:?}");
 }

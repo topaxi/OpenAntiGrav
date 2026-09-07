@@ -548,7 +548,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Weapons: nine of thirteen, and the dispatch table read whole](handover/gameplay/weapons-eight-of-thirteen-the-plasma-and-the.md)
 - [The Cannon cannot be fired, and the recovered reading says that is correct](handover/gameplay/the-cannon-cannot-be-fired.md) - **reported from play 2026-09-07**: the original fires the Cannon by holding or tapping fire, which contradicts the same-day conclusion that it is self-firing and a press is a non-event. Prime suspect is a naming assumption - `Cannon_UpdateReload`'s `ship->weapon_pad_flags->0x16` gate, read as a *track* pad flag, may be the **input** pad's fire button, which would make the weapon a press-gated auto-repeat and leave every other recovered fact intact. Needs the Ghidra bridge; do not wire press-to-fire before that read lands.
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/gameplay/projectiles-follow-the-floor-and-the-km-h.md)
-- [Both lockable weapons draw their reticle now; the sight quads have a black background](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
+- [Both lockable weapons draw their reticle now, and the black background behind it is gone](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/gameplay/pure-and-hd-lock-on-too-and-two-axes.md)
 - [The hull sparks are approximated in three named ways](handover/rendering/the-hull-sparks-are-approximated-in-three-named.md)
 - [The camera shake on impact reproduces its two-rotation shape now; two composition details are open](handover/rendering/the-originals-camera-hud-shake-on-impact-is.md)

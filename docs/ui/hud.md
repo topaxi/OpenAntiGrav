@@ -227,6 +227,52 @@ for the `(0, 0)` case every shipped layout actually authors, and why a future
 widget authored at a nonzero `x`/`y` in this dialect is a documented gap
 rather than a guess.
 
+#### A `<Mode3D><Model>` quad carries its own blend, and two titles disagree about it
+
+**Measured 2026-09-07 on `pulse-psp-usa.chd` and `pure-psp-usa.chd`,
+confidence 95.** A `<Mode3D>` widget's art is not in a texture file - it is
+embedded in a `.vex` model - and that model's batch declares a blend equation
+in its `pass_mask` exactly the way any other batch does (see
+[mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "Three
+`pass_mask` bits decoded"). The 2D sheet path drew every one of them with an
+ordinary alpha blend and never consulted it, which cost the lock-on reticle
+its whole appearance:
+
+| Model | `pass_mask` | class | embedded texture |
+| --- | --- | --- | --- |
+| `missile_sight_outer.vex` | `0x120e` | `Additive` (`0x200`) | `gunsight_ADD.tga`, 32x32 |
+| `missile_sight_inner.vex` | `0x120e` | `Additive` | `gunsightdot_ADD.tga`, 32x32 |
+| `leachbeam_sight.vex` | `0x120e` | `Additive` | `LeachBeamSight_ADD_nomip.tga`, 32x32 |
+| Pure's 10 `Weapon_*.vex` + `grid.vex` | - | `AlphaOver` (`0x100`) | one apiece, 128x16 / 64x64 |
+| `Pulse_Ready_Go.vex` | `0x1132` | `AlphaOver` | - |
+| `Cockpit_321GO.vex` | `0x1112` | `AlphaOver` | - |
+
+The three sight textures carry **no shape in their alpha channel at all** -
+`gunsight_ADD.tga` is 784 texels at alpha 250 and 240 at 255, and its bracket
+lives in the colour channels over a black field. Drawn with `SrcAlpha` over
+`OneMinusSrcAlpha` that can only produce an opaque black tile with a white
+bracket inside it, which is exactly what every reticle capture before this
+date shows. Additive makes the black field contribute nothing and the bracket
+glow, on both PSP titles.
+
+Two consequences worth carrying:
+
+- **The class is read per model, never tabulated per widget.** Pure's eleven
+  icon models declare `AlphaOver` where its *sight* models declare `Additive`,
+  in the same layout - so any table keyed on the widget's name would have been
+  wrong for one of them. `oag_game::race::hud::quad_blend` reads it off the
+  batch at load and `oag_game::sprite::Placed::blend` carries it to the draw;
+  `pickup_icon_ground_truth::a_held_turbo_draws_its_own_authored_green_on_a_real_race`
+  pins Pure's reading and `lock_sight_ground_truth` Pulse's.
+- **The countdown was never affected.** Both its models are `AlphaOver`, and
+  they reach the frame through the 3D mesh path, which has honoured
+  `Batch::blend_class` since it was recovered.
+
+`oag_game::frontend::Draw::BlendedSprite` is the variant that carries it. The
+UI pipeline blends *premultiplied* alpha so an additive quad is one emitting
+an alpha of zero - one pipeline, one pass, and the draw list's own
+back-to-front order untouched; `ui.wgsl`'s `fs_main` has the algebra.
+
 **`OriginX`/`OriginY` reads as a screen-space translation added to the
 projected result, not as the projected result itself, and `OriginX="0.0"`
 is the reason to believe that rather than the other way round.** The
@@ -836,8 +882,14 @@ Recorded so none of this reads as undiscovered work.
   models**: `missile_sight_1` ... `missile_sight_4` all instance
   `missile_sight_outer.vex`, `missile_sight_inner` has its own, and
   `leachbeam_sight_1` ... `leachbeam_sight_4` instance `leachbeam_sight.vex`.
-  Each model is a single 8-unit textured quad, so that block needs no projection
-  of its own - only a per-quad rotation. See
+  Each model is a single flat textured quad, so that block needs no projection
+  of its own - only a per-quad rotation. **The quad's size is a title
+  difference, not a constant**: Pulse's three measure `7.9978027` units square
+  and Pure's `missile_sight_inner.vex` measures `11.999471`, both read off the
+  vertices at load into `oag_game::sprite::Placed::quad_extent`.
+  `hud::sight_draw::SIGHT_SIZE` still draws all of them at Pulse's `8.0`,
+  which is a known flattening rather than a reading - `model_draw` already
+  takes the per-model extent and `bracket_draws` does not. See
   [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md), which also
   identifies the lock tone as `~ROCKLOCK`.
 - **Eliminator's HUD.** Its layout parses; nothing drives its own widgets yet.

@@ -12,7 +12,7 @@
 //! lookup below is already in pixels, so only this file has to change.
 
 use oag_formats::texture::Texture;
-use oag_formats::{gtf, gxt, ps2_texture};
+use oag_formats::{gtf, gxt, ps2_texture, vex};
 
 /// One decoded image, from any of the four sources' texture formats.
 ///
@@ -183,6 +183,19 @@ impl Image {
     }
 }
 
+/// One image on its way into a sheet, with the two model-only properties that
+/// travel beside it.
+///
+/// The blob path and the [`DecodedImage`] path converge here, which is the
+/// only reason it exists - a tuple of four said nothing about which `Option`
+/// was which.
+struct Staged {
+    src: String,
+    image: Image,
+    quad_extent: Option<[f32; 2]>,
+    blend: Option<vex::BlendClass>,
+}
+
 /// Transparent rows left between stacked images.
 ///
 /// Not optional. The sheet is sampled with linear filtering, so without a gutter
@@ -215,6 +228,21 @@ pub struct Placed {
     /// constant's own doc for why unifying the two was left alone rather
     /// than guessed at.
     pub quad_extent: Option<[f32; 2]>,
+    /// How a `.vex` model's own batch asked to be composited, straight off its
+    /// `pass_mask` - `None` for anything that is not a model, and `None` for a
+    /// model whose batch is not in the transparent class at all.
+    ///
+    /// **Read, never chosen.** All three of Pulse's lock-on sight models
+    /// declare `pass_mask 0x120e`, whose `0x0200` bit is
+    /// [`oag_formats::vex::BlendClass::Additive`], and their embedded textures
+    /// carry a black background with alpha pinned at 250/255 - so drawing them
+    /// with an ordinary alpha blend puts each bracket on an opaque black tile.
+    /// Carrying the declared class here is what lets the draw honour it
+    /// without any per-model table; Pure's ten icon models get the same
+    /// treatment from the same reading the day a Pure disc is present to read
+    /// them from. See `docs/ui/hud.md` and
+    /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
+    pub blend: Option<oag_formats::vex::BlendClass>,
 }
 
 /// Every front-end image, in one RGBA buffer.
@@ -254,9 +282,28 @@ impl Default for Sheet {
     }
 }
 
-/// One [`Sheet::build_with`] entry: name, pixel width, pixel height, RGBA8888
-/// pixels, and the quad extent that becomes [`Placed::quad_extent`].
-pub(crate) type DecodedImage = (String, u32, u32, Vec<u8>, Option<[f32; 2]>);
+/// One [`Sheet::build_with`] entry: an image somebody else already decoded,
+/// plus the two model-only properties that ride along with it.
+///
+/// A struct rather than the tuple this was, because both trailing fields are
+/// `Option`s of the same shape of thing - something read off a `.vex` model
+/// and carried to the draw - and a five-element tuple stopped saying which was
+/// which at the call site.
+#[derive(Debug, Clone)]
+pub struct DecodedImage {
+    /// The reference the layout spells, and the key the sheet is looked up by.
+    pub src: String,
+    /// Pixel width of `rgba`.
+    pub width: u32,
+    /// Pixel height of `rgba`.
+    pub height: u32,
+    /// RGBA8888, row-major from the top left.
+    pub rgba: Vec<u8>,
+    /// Becomes [`Placed::quad_extent`].
+    pub quad_extent: Option<[f32; 2]>,
+    /// Becomes [`Placed::blend`].
+    pub blend: Option<oag_formats::vex::BlendClass>,
+}
 
 impl Sheet {
     /// Decodes `blobs` and stacks them.
@@ -272,12 +319,12 @@ impl Sheet {
 
     /// [`Self::build`], plus images somebody else already decoded.
     ///
-    /// `extra` is `(name, width, height, RGBA8888, quad_extent)`, appended
-    /// after the blobs in the order given, so a sheet built the same way twice
-    /// is byte-identical and a screenshot stays comparable. `quad_extent`
-    /// carries straight through to the matching [`Placed::quad_extent`] - see
-    /// that field for what it is and why it travels separately from the pixel
-    /// dimensions beside it.
+    /// `extra` is a [`DecodedImage`] apiece, appended after the blobs in the
+    /// order given, so a sheet built the same way twice is byte-identical and a
+    /// screenshot stays comparable. Its `quad_extent` and `blend` carry
+    /// straight through to the matching [`Placed::quad_extent`] and
+    /// [`Placed::blend`] - see those fields for what they are and why they
+    /// travel separately from the pixel dimensions beside them.
     ///
     /// **It exists for art that is not in an image file.** The lock-on
     /// reticle's three pieces and Pure's ten weapon-icon pieces are `.vex`
@@ -291,18 +338,36 @@ impl Sheet {
         extra: Vec<DecodedImage>,
         report: &mut Vec<String>,
     ) -> Self {
-        let mut decoded: Vec<(String, Image, Option<[f32; 2]>)> = Vec::new();
+        let mut decoded: Vec<Staged> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
-                Ok(image) => decoded.push((src.clone(), image, None)),
+                Ok(image) => decoded.push(Staged {
+                    src: src.clone(),
+                    image,
+                    quad_extent: None,
+                    blend: None,
+                }),
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
 
-        for (src, width, height, rgba, quad_extent) in extra {
+        for image in extra {
+            let DecodedImage {
+                src,
+                width,
+                height,
+                rgba,
+                quad_extent,
+                blend,
+            } = image;
             match Image::from_rgba(width, height, rgba) {
-                Some(image) => decoded.push((src, image, quad_extent)),
+                Some(image) => decoded.push(Staged {
+                    src,
+                    image,
+                    quad_extent,
+                    blend,
+                }),
                 None => report.push(format!(
                     "image {src}: {width}x{height} does not match the pixels handed over"
                 )),
@@ -315,19 +380,25 @@ impl Sheet {
 
         let width = decoded
             .iter()
-            .map(|(_, t, _)| u32::from(t.width))
+            .map(|staged| u32::from(staged.image.width))
             .max()
             .unwrap_or(1);
         let height: u32 = decoded
             .iter()
-            .map(|(_, t, _)| u32::from(t.height) + GUTTER)
+            .map(|staged| u32::from(staged.image.height) + GUTTER)
             .sum();
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
         let mut pen = 0u32;
 
-        for (src, texture, quad_extent) in decoded {
+        for Staged {
+            src,
+            image: texture,
+            quad_extent,
+            blend,
+        } in decoded
+        {
             let (w, h) = (u32::from(texture.width), u32::from(texture.height));
             let bits_per_pixel = texture.bits_per_pixel;
             let pixels = texture.into_rgba();
@@ -350,6 +421,7 @@ impl Sheet {
                     width: w,
                     height: h,
                     quad_extent,
+                    blend,
                 },
             ));
             pen += h + GUTTER;
