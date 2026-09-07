@@ -113,6 +113,16 @@ impl std::str::FromStr for ControlScheme {
 /// path in the physics crate can carry both schemes without knowing what a
 /// scheme is.
 ///
+/// The airbrake fields are scheme-filtered too, not just the gesture fields.
+/// In novice, action 4 (`OPT_CTRL_AIRBRAKES`, "both airbrakes") is bound to
+/// `R` alone and action 7 (`OPT_CTRL_SS`, sideshift) to `L` alone - `L` is a
+/// dedicated sideshift button, not an airbrake at all. So
+/// [`ShipControls::airbrake_left`] and [`ShipControls::airbrake_right`] both
+/// read [`InputSnapshot::airbrake_right`] in novice, and
+/// [`InputSnapshot::airbrake_left`] is ignored for airbrake purposes -
+/// `L` only arms `shift_modifier`. See
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+///
 /// [`ShipControls::sideshift`] stays [`Sideshift::None`] here always. It is the
 /// *direct* request, for a test or a probe that wants a shift on a named tick;
 /// a real pilot's shift arrives through the gesture.
@@ -136,7 +146,16 @@ pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipCon
         // it ever becomes an option.
         steer_y: -snapshot.stick_y,
         thrust: f32::from(u8::from(snapshot.buttons.is_held(Button::Cross))),
-        airbrake_left: snapshot.airbrake_left,
+        // Action 4, `OPT_CTRL_AIRBRAKES`, bound to `R` alone in novice: `R`
+        // held drives both airbrakes at once, and `L` (action 7, the
+        // sideshift) contributes none. Veteran keeps the straight pass-
+        // through, actions 5/6 (`OPT_CTRL_LAB`/`OPT_CTRL_RAB`) bound to `L`
+        // and `R` respectively.
+        airbrake_left: if novice {
+            snapshot.airbrake_right
+        } else {
+            snapshot.airbrake_left
+        },
         airbrake_right: snapshot.airbrake_right,
         sideshift: Sideshift::None,
         // Action 7, `OPT_CTRL_SS`, bound to `L` by the shipped default mapping.
@@ -251,6 +270,37 @@ mod tests {
         assert!(!veteran.shift_modifier, "veteran has no sideshift button");
         assert!(veteran.shift_tap_left, "L is the veteran left airbrake");
         assert!(!veteran.shift_tap_right);
+    }
+
+    /// Novice's airbrake reads `R` alone, per action 4 (`OPT_CTRL_AIRBRAKES`)
+    /// in `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    ///
+    /// `L` is a dedicated sideshift button in novice (action 7,
+    /// `OPT_CTRL_SS`) and contributes no airbrake at all, while `R` alone
+    /// drives both. Veteran is untouched by this: its table binds `L`/`R` to
+    /// the two airbrakes directly, which `the_axes_pass_through_except_the_
+    /// inverted_pitch` already covers.
+    #[test]
+    fn novices_airbrake_reads_r_alone_and_l_arms_only_the_sideshift() {
+        let right_only = InputSnapshot {
+            buttons: held(Button::R),
+            airbrake_right: 1.0,
+            ..InputSnapshot::new()
+        };
+        let controls = ship_controls(&right_only, ControlScheme::Novice);
+        assert_eq!(controls.airbrake_left, 1.0, "R alone drives both");
+        assert_eq!(controls.airbrake_right, 1.0);
+        assert!(!controls.shift_modifier);
+
+        let left_only = InputSnapshot {
+            buttons: held(Button::L),
+            airbrake_left: 1.0,
+            ..InputSnapshot::new()
+        };
+        let controls = ship_controls(&left_only, ControlScheme::Novice);
+        assert_eq!(controls.airbrake_left, 0.0, "L is not an airbrake");
+        assert_eq!(controls.airbrake_right, 0.0);
+        assert!(controls.shift_modifier, "L arms the sideshift instead");
     }
 
     /// A held airbrake is one tap, not one per tick.
