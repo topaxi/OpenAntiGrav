@@ -15,8 +15,7 @@
 //! # Why this file exists
 //!
 //! A maintainer playing the game reported craft-to-craft contact reading as
-//! "sticking" and "almost magnetic". Two mechanisms were found and are
-//! recorded on `handover/craft-collision-feel-sticking-vs-spin.md`; this file
+//! "sticking" and "almost magnetic". Two mechanisms were found; this file
 //! is the acceptance test for the one this crate can fix -
 //! `oag_ai::Driver::social` reading only `Field::behind` and never
 //! `Field::alongside`, so a rival close enough to actually be touching had
@@ -51,7 +50,7 @@
 //! Left as a follow-up rather than folded in here, since it is a different
 //! question (whether *every* personality should get some minimal
 //! collision-avoidance floor) that the coordinator did not scope into this
-//! pass - see `handover/craft-collision-feel-sticking-vs-spin.md`.
+//! pass.
 //!
 //! The bound below is therefore a **regression tripwire, not a target**: set
 //! comfortably above the measured post-fix worst (46) so this still passes

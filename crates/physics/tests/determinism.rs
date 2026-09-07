@@ -241,9 +241,8 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   gained four fields for the barrel roll's gesture and phase - `roll_taps`,
 ///   `roll_tap_timer`, `roll_phase` and `roll_target` - see
 ///   `crate::barrel_roll` and `docs/ghidra/functions/psp-pulse-usa/
-///   input-bindings.md`. This is steps 2-4 of
-///   `handover/the-barrel-roll-is-read-and-unimplemented.md`: the tap history,
-///   the phase ramp and the shield-gated arm, all unit-tested directly against
+///   input-bindings.md`. This adds the barrel roll's tap history, phase ramp
+///   and shield-gated arm read-out, all unit-tested directly against
 ///   `ShipState` and none of it wired into `crate::forces::evaluate` yet - a
 ///   later commit does that alongside the landing payout, and regenerates
 ///   this again.
@@ -259,7 +258,7 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 /// - **Regenerated 2026-09-05, later the same day, and behaviour did not
 ///   change either.** `ShipState` gained a fifth barrel-roll field,
 ///   `roll_payout_timer`, ours for the original's `craft+0x1c0 & 0x400` -
-///   step 5 of `handover/the-barrel-roll-is-read-and-unimplemented.md`. Three
+///   the barrel roll's landing-payout read-out. Three
 ///   branches were wired into terms this gate exercises every tick -
 ///   `crate::airbrake::lateral_grip`'s `ROLL_GRIP_MULTIPLIER`,
 ///   `crate::hover::probe_from_hit`'s `barrel_roll::rebound_override`, and

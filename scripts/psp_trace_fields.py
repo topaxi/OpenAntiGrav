@@ -82,8 +82,7 @@ ENTITY_OWNER = 0x94
 # (`+0x8a4`/`+0x8a8`, the same pair the novice flick latch writes), and
 # `lockout` is the 1.0 s cooldown common to both schemes (`+0x8ac`). Recording
 # these gives a sideshift capture a runtime leg for the *timings themselves*,
-# not just the lateral displacement they produce - see
-# handover/sideshift-has-no-runtime-leg.md.
+# not just the lateral displacement they produce.
 #
 # The camera's additive fov term and its still-unidentified intercept, from
 # docs/ghidra/functions/psp-pulse-usa/camera.md's "Correction" section -
@@ -93,9 +92,8 @@ ENTITY_OWNER = 0x94
 # here, the same trap the shield field's own history (above) already
 # documents once. `fov_additive` (`+0x790`) has a *second* writer besides that
 # store - `Hud_Update`'s impact-shake path - so a nonzero value alone does not
-# say which one fired. `fov_intercept` (`+0x7c`) is what
-# handover/the-originals-fov-widens-with-speed-and-race.md's open item asks
-# for: measured at 0 to within +/-0.64 degrees on a clean run in both
+# say which one fired. `fov_intercept` (`+0x7c`) is open: measured at 0 to
+# within +/-0.64 degrees on a clean run in both
 # camera.md and projection-vs-the-original.md, but never yet sampled through
 # an actual impact, and camera.md is explicit that no writer for it has been
 # found at all.

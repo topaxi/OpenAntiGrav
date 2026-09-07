@@ -56,9 +56,8 @@ fn workspace(relative: &str) -> std::path::PathBuf {
 /// from the working tree means the checkout is broken, not that this test
 /// does not apply. Panics unconditionally, independent of
 /// `OAG_REQUIRE_GAME_DATA` - that variable escalates *optional* inputs (a
-/// disc image under `data/images/`), and a tracked trace is not optional. See
-/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md` for why
-/// this used to return `None` instead.
+/// disc image under `data/images/`), and a tracked trace is not optional.
+/// This used to return `None` instead.
 fn require_capture(relative: &str) -> std::path::PathBuf {
     let path = workspace(relative);
     assert!(

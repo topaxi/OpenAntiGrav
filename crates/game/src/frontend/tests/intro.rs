@@ -324,8 +324,7 @@ fn a_chain_with_steps_left_advances_through_them_as_before() {
 /// read *that* screen's placeholder rather than the reel's own flag - forcing
 /// the counter on for the whole boot even when `Studio Logo`'s own `.bik`
 /// decoded and drew a picture. Pulse and Pure never hit this because their
-/// first step already is the movie leg. See
-/// `handover/wipeout-hds-video-decodes-and-the-logo-reel.md`.
+/// first step already is the movie leg.
 #[test]
 fn the_overlay_does_not_default_on_when_the_reel_has_a_picture() {
     let mut frontend = hd(20, true);

@@ -149,8 +149,7 @@ pub const DEFAULT_TEAM: &str = "Assegai";
 /// directory each. **Not the whole roster** - see [`DLC_TEAMS`].
 ///
 /// **Moved from `oag_formats::handling::TEAMS`, 2026-09-01.** A format crate
-/// describing a game's own roster by name was the ADR-0022 smell
-/// `handover/raceable-composes-a-pulse-path-on-every-source.md` named and
+/// describing a game's own roster by name was the ADR-0022 smell, named and
 /// never acted on; `oag_hd::names::TEAMS` already keeps HD's roster the same
 /// way this keeps Pulse's. All eight files were located by hashing candidate
 /// names built from this list; none of them appears as a string in the

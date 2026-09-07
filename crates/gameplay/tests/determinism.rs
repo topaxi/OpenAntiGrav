@@ -472,8 +472,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   calls removed, both rows reproduce the previous constants bit for bit -
 ///   this scenario never grants a Cannon, so the movement is the hash
 ///   primitive's own shape, not a change to what this scenario's craft do.
-///   See `crates/gameplay/src/hash.rs`'s `write_held` and
-///   `handover/weapons-eight-of-thirteen-the-plasma-and-the.md`.
+///   See `crates/gameplay/src/hash.rs`'s `write_held`.
 ///
 /// - **Moved again 2026-09-07, for the Quake's new `World::quake` field.**
 ///   `hash::write_quake` writes a discriminant byte for `Option<Wave>` every
@@ -486,8 +485,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0xde90_bd8b_7c5a_4d17` at 600 - bit for bit. Neither scenario in this
 ///   file ever launches a Quake, so the movement is the hash primitive's own
 ///   shape and not a behaviour change to what either scenario's craft do.
-///   See `crates/gameplay/src/hash.rs`'s `write_quake` and
-///   `handover/weapons-eight-of-thirteen-the-plasma-and-the.md`.
+///   See `crates/gameplay/src/hash.rs`'s `write_quake`.
 ///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a

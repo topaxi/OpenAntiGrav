@@ -10,8 +10,7 @@ evidence. This script replaces it with a live read: `Sap_Insert`, `Sap_Update`
 and `Sap_QueryAabb` each `lv.q` these two addresses every call, so a *read*
 watchpoint on `g_sap_clamp_min` must fire during a running race - that is the
 positive control that proves the read below actually observed the clamp path
-executing, not a quiet or dead one. See
-handover/the-sap-clamp-globals.md.
+executing, not a quiet or dead one.
 
 Requires a PPSSPP already running with the debugger enabled and a race
 already loaded and moving (`psp-drive.py restart` gets you there).

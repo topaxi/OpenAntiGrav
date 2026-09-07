@@ -11,8 +11,7 @@
 //! rows of [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md)
 //! took this file past 1,000 lines - the other rule the same script keeps.
 //! [`source_switch`] is the same split, for the `MUSIC SOURCE` row's async
-//! fetch - see
-//! `handover/streaming-decode-for-audio-would-break-seek-and.md`.
+//! fetch.
 
 use super::*;
 

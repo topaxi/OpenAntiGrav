@@ -13,8 +13,7 @@
 //! falling back to the literal below it exactly the way `resolve()` does for
 //! `assets/ui/menu.toml`'s rows. A caller builds the table with
 //! `oag_game::strings::project_table`, the same primitive
-//! `loading::Screen::new` and `prepare::definition` both use - see
-//! `handover/invented-ui-text-has-no-translation-and-the.md`.
+//! `loading::Screen::new` and `prepare::definition` both use.
 
 use oag_game::language::StringTable;
 

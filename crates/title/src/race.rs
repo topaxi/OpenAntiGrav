@@ -740,9 +740,7 @@ pub enum ZoneCircuit {
     /// (`/data/environments/zonemode.effectsettings`, plus a
     /// `zonemodedlc3.effectsettings` revision) that nothing in this engine
     /// reads yet - the same "any circuit + a colour-grade effect" shape 2048
-    /// confirmed for its own `SameCircuit`. Neither is a decompiled selector;
-    /// see `handover/2048-and-hd-ship-an-unread-effectsettings-table.md`'s
-    /// Open item for what would close this.
+    /// confirmed for its own `SameCircuit`. Neither is a decompiled selector.
     Separate(&'static [&'static str], bool),
     /// A Zone race runs the exact circuit a race would have, and nothing is
     /// derived or substituted at all. 2048.

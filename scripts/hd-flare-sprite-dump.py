@@ -6,8 +6,7 @@ The sprite's own draw call is unlocated statically - `EngineFlare_Init`
 but neither `EngineFlare_PlaceShapes` (`0x002a1f00`) nor `EngineFlare_Update`
 (`0x002a3100`) reads `Flare Radius`'s storage back out, and no other function
 in the executable references the texture's string
-(`scripts/ps3-toc.py attrib 0x0079bdd8` names only the init). See
-`handover/hds-sprite-flare-reads-oversized-and-the-tuning.md`.
+(`scripts/ps3-toc.py attrib 0x0079bdd8` names only the init).
 
 This is the live half: dump the whole `EngineFlare` object (`craft + 0x5f70`,
 reached the same way `rpcs3-trail-dump.py` reaches it - through the trail

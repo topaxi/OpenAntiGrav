@@ -1,9 +1,8 @@
-//! Scratch probe for `handover/streaming-decode-for-audio-would-break-seek-and.md`:
+//! Scratch probe for a streaming-audio decode investigation:
 //! the longest race-music track on each disc, decoded through the same path
 //! [`MusicFetchWorker`](oag_game::audio::MusicFetchWorker) uses
 //! (`oag_game::music::load_entry`), and the process RSS delta that decode
-//! actually costs - the number that thread's own "Next Steps" says nothing
-//! has measured.
+//! actually costs.
 //!
 //! ```sh
 //! cargo run --release -p oag-game --example audio_memory_probe

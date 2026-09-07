@@ -312,9 +312,7 @@ impl EffectSettings {
 ///
 /// **Nothing calls this yet.** Which parsed `.effectSettings` key feeds
 /// which channel, which stage counts as "current" at a given moment, and
-/// what `weight` should read at runtime are all still unrecovered - see the
-/// thread file's `## Open`
-/// (`handover/2048-and-hd-ship-an-unread-effectsettings-table.md`). This is
+/// what `weight` should read at runtime are all still unrecovered. This is
 /// the confirmed blend arithmetic alone, ready to reuse once those are
 /// found - implementing it ahead of its trigger is not the same as wiring
 /// it into a race.

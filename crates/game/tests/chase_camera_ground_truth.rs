@@ -96,8 +96,7 @@ fn repo() -> PathBuf {
 /// to have - and a tracked file is not optional. Gating it there is precisely
 /// how five of the six reference captures went missing for weeks without a red
 /// build; see `5e940717`, which did this for the two `oag-trace` tests in the
-/// same lane, and
-/// `handover/five-reference-traces-are-gone-and-the-skip-hid-it.md`.
+/// same lane.
 fn require_capture(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| {
         panic!(

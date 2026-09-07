@@ -67,9 +67,7 @@ pub(super) fn locate(
 /// [`Audio::maybe_prefetch_next_race_track`] reuses it for a track boundary,
 /// and [`Audio::set_music_source`] for the `MUSIC SOURCE` row - a switch
 /// mid-menu or mid-race is exactly the same "decode one indexed track"
-/// question, just asked from a different caller. See
-/// `handover/streaming-decode-for-audio-would-break-seek-and.md` for the
-/// freeze this last one fixes.
+/// question, just asked from a different caller.
 ///
 /// Holds no [`Audio`] and hands none back: [`fetch_track`] produces a plain
 /// [`Loaded`], and the mixer only enters once a caller applies it on the

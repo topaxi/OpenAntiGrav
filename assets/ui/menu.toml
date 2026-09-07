@@ -58,8 +58,7 @@ target = "race"
 # or a `toggle` in the first place, which a `submenu` entry is neither. With
 # one title on this machine, TRACK TITLE and CRAFT TITLE on the `remix` page
 # each offer exactly one row and the page degrades to an ordinary custom
-# race - nothing broken, nothing misleading, the same page doing less. See
-# `handover/race-remix-backend-lands-menu-wiring-is-next.md`.
+# race - nothing broken, nothing misleading, the same page doing less.
 [[page.entry]]
 kind = "submenu"
 label = "REMIX"

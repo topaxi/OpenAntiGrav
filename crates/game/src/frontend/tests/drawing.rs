@@ -182,7 +182,6 @@ fn a_widthlimited_text_carries_its_wrap_width_into_the_draw_list() {
 /// Pure's `Title Screen->Press start button` and its neighbours author on the
 /// real disc: without `U`/`V` reaching the draw list, both would sample the
 /// same patch - the texture's own top-left corner - rather than their own.
-/// See `handover/pures-title-screen-is-missing-its-own-logo.md`.
 #[test]
 fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
     let screens = Screens::from_xml(
@@ -239,8 +238,7 @@ fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
 /// shared by both Pulse's and Pure's disc: a decorative underline, not a
 /// backdrop. One with neither still falls back to the whole screen, which is
 /// what every colour-only `Image` measured without one actually is (`Title
-/// Screen`'s and `Show Logo`'s own white/black background). See
-/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+/// Screen`'s and `Show Logo`'s own white/black background).
 #[test]
 fn a_colour_only_image_draws_its_own_rect_and_falls_back_to_the_whole_screen() {
     let screens = Screens::from_xml(

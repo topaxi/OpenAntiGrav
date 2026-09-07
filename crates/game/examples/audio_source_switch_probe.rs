@@ -1,4 +1,4 @@
-//! Scratch probe for `handover/streaming-decode-for-audio-would-break-seek-and.md`:
+//! Scratch probe for a streaming-audio decode investigation:
 //! does a real `MUSIC SOURCE` switch, against real discs and a real `ffmpeg`
 //! decode, actually return before the decode finishes - the freeze
 //! `Audio::set_music_source`'s fix targets - rather than the synthetic

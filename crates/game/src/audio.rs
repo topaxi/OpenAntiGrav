@@ -1000,7 +1000,6 @@ impl Audio {
     /// spot, since that path does no I/O, but a fresh one now goes through a
     /// [`MusicFetchWorker`], the same way [`Self::start_race_music`]'s own
     /// hand-off does, and [`Self::tick`] applies the result once it lands.
-    /// See `handover/streaming-decode-for-audio-would-break-seek-and.md`.
     pub fn set_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
         if self.race_voice.is_some() {
             self.set_race_music_source(discs, choice, cache_dir);
@@ -1138,8 +1137,7 @@ impl Audio {
     /// the picture is tick-clocked, not audio-clocked, per ADR-0019. Printing
     /// "clocking the picture" regardless would have been exactly the kind of
     /// misleading capture output that cost two wrong readings before
-    /// `--no-audio` existed - see
-    /// `handover/until-cannot-reach-a-late-movie-frame-on.md`'s history.
+    /// `--no-audio` existed.
     pub fn start_boot_movie(&mut self, what: &str, sound: Option<crate::at3::Pcm>) {
         let Some(pcm) = sound else {
             warn!("audio: {what} plays silently");

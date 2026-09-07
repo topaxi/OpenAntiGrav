@@ -2,8 +2,7 @@
 //!
 //! **`#[ignore]`d and never run in CI.** It needs the decrypted Vita package
 //! extracted with `oag-unpack`, which this project does not ship. See
-//! `docs/architecture/adr/0006-no-copyrighted-content.md` and
-//! `handover/2048s-vita-eboots-are-imported-re-not-started.md` for how
+//! `docs/architecture/adr/0006-no-copyrighted-content.md` for how
 //! `data/extracted/vita/PCSF00007` gets populated.
 //!
 //! ```sh

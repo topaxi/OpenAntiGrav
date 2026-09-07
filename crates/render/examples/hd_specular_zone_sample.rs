@@ -1,5 +1,4 @@
-//! Ad hoc sampler for the specular-exponent re-measurement thread
-//! (`handover/hd-specular-exponent-population-needs-re-measuring.md`): dumps
+//! Ad hoc sampler for the specular-exponent re-measurement work: dumps
 //! a handful of Zone-declaring blocks from the `32` and `0` buckets by hand,
 //! since `hd_specular_population_recheck.rs`'s own histogram split shows the
 //! 64% Zone-declaring jump is concentrated there (`32`: 1444 -> 5134
