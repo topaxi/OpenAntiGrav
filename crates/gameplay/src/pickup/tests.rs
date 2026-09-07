@@ -288,6 +288,68 @@ fn a_held_slot_gives_up_what_it_holds_exactly_once() {
     assert_eq!(held.take(), None);
 }
 
+/// **A re-press mid-cluster does nothing**, which is what stops a mashed fire
+/// button from laying mines faster than [`crate::projectile::mine::CLUSTER`]
+/// charges per [`crate::projectile::mine::DROP_INTERVAL`] - see
+/// [`Held::begin_drop`]'s own doc comment for the mechanism this closes and
+/// for why the guard is chosen rather than measured.
+#[test]
+fn a_re_press_mid_cluster_does_not_restart_the_drop() {
+    let mut held = Held::empty();
+    held.grant(Weapon::Mine);
+    held.begin_drop(5);
+    assert_eq!(held.dropping, 5);
+
+    // Advance one charge out, the way `Race::lay_mines` would over a handful
+    // of ticks, so a re-arm would be visible as the counter jumping back up
+    // rather than merely failing to move.
+    held.dropping = 3;
+    held.drop_reload = 0.05;
+
+    held.begin_drop(5);
+    assert_eq!(
+        held.dropping, 3,
+        "a re-press mid-cluster must not top the counter back up"
+    );
+    assert_eq!(
+        held.drop_reload, 0.05,
+        "a re-press mid-cluster must not reset the reload timer either"
+    );
+}
+
+/// A fresh grant, with nothing dropping, is unaffected by the guard above.
+#[test]
+fn begin_drop_still_arms_a_cluster_from_empty() {
+    let mut held = Held::empty();
+    held.grant(Weapon::Mine);
+    held.begin_drop(5);
+    assert_eq!(held.dropping, 5);
+    assert_eq!(held.drop_reload, 0.0);
+}
+
+/// **Taking a pickup mid-drop ends the drop too**, not just the visible
+/// weapon - see [`Held::take`]'s own doc comment for why a stale counter left
+/// behind would silently swallow a later grant's first press.
+#[test]
+fn taking_a_pickup_mid_drop_clears_the_drop_state_too() {
+    let mut held = Held::empty();
+    held.grant(Weapon::Mine);
+    held.begin_drop(5);
+    held.dropping = 3;
+    held.drop_reload = 0.05;
+
+    assert_eq!(held.take(), Some(Weapon::Mine));
+    assert_eq!(held.dropping, 0);
+    assert_eq!(held.drop_reload, 0.0);
+    assert!(!held.is_dropping());
+
+    // And the slot is immediately usable for a fresh cluster - the guard
+    // above must not see the old drop as still in progress.
+    held.grant(Weapon::Mine);
+    held.begin_drop(5);
+    assert_eq!(held.dropping, 5);
+}
+
 /// **Every rear weapon can be both laid and tripped.**
 ///
 /// `mine::Drop::for_weapon` says how many charges a press lays and

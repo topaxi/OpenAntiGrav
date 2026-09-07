@@ -425,7 +425,11 @@ impl Race {
             let dimensions = self.world.ships[slot].handling.dimensions;
             oag_physics::damage::add(&mut self.world.ships[slot].physics, &dimensions, amount);
         }
-        self.world.ships[slot].pickup.weapon = None;
+        // `Held::take` for the same reason `Race::spend_pickup` uses it: the
+        // Mine/Bomb arm above always returns before here, so this is
+        // defensive rather than reachable today, but a direct field write
+        // would silently stop being safe the day that stops being true.
+        self.world.ships[slot].pickup.take();
     }
 }
 
