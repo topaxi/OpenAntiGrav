@@ -266,7 +266,25 @@ rather than deleted. The one cheap check that would settle it outright is
 someone playing the original and reporting whether `GO` appears as the craft
 becomes drivable or about a second before.
 
-## One asset, the whole race
+**A first live pass at that check, 2026-09-07, corroborates rather than
+settles.** `pulse-psp-usa.chd`, PPSSPP v1.20.4 (SDL build, Xvfb, no window
+visible to anyone), Time Trial, Talon's Junction, via `scripts/psp-drive.py
+menu` into a real restart, screenshotting on a wall-clock schedule rather
+than at breakpoints (see
+[`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md) for why a
+countdown cannot be sat through under a breakpoint-driven capture). The
+in-frame HUD lap timer, not the wall clock, is what is comparable across
+screenshots: `GO` is already on the board, mid-strobe, in a frame whose timer
+still reads `0.00.0` (not yet counting - the craft is not yet released), and
+is fully solid white one screenshot later, where the timer has advanced to
+`0.00.5`. That is the same order this page's static argument already
+predicted - `GO` up before green - from an independent source. **This does
+not raise the 82**: the screenshots are on a wall-clock schedule roughly
+0.5 s apart with no tick-level correlation attempted (the run was software-
+rendered under `LIBGL_ALWAYS_SOFTWARE=1`, well below real time, so wall-clock
+offsets do not correspond to this page's own tick tables at all), and only
+one restart was captured this way. It is one corroborating data point, not
+the tick-accurate confirmation the open question above still asks for.
 
 The same file carries every state the gantry ever shows, as non-overlapping
 windows on one 60 Hz timeline. From the nine `Anim Transform` nodes' own keys:
