@@ -346,6 +346,16 @@ impl Race {
                     // Returning early therefore skips the `weapon = None` at the
                     // bottom of this function on purpose - it is the one arm
                     // here that must not spend the slot.
+                    //
+                    // **Called on every press while held, with no
+                    // `is_dropping()` guard here** - and none is needed, because
+                    // `Held::begin_drop` is itself a no-op mid-cluster. A
+                    // mash-fire capture used to log three times the authored
+                    // rate (one mine per press-edge instead of one per
+                    // `DROP_INTERVAL`) because this call re-armed the counter on
+                    // every re-press; see that method's doc comment for the
+                    // mechanism and for why the guard is chosen rather than
+                    // measured.
                     self.world.ships[0].pickup.begin_drop(drop.count);
                     return;
                 }
@@ -374,7 +384,9 @@ impl Race {
                 amount,
             );
         }
-        self.world.ships[0].pickup.weapon = None;
+        // `Held::take` rather than a direct write - see its doc comment for
+        // why an absorb mid-drop has to clear more than the visible weapon.
+        self.world.ships[0].pickup.take();
     }
 
     /// Lays whatever charge is due from every craft mid-drop, one tick's worth.

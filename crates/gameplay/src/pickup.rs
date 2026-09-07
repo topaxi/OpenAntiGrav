@@ -298,7 +298,34 @@ impl Held {
     /// initial value is one of the things `weapon-fire.md` lists as unread, so
     /// which of the two it does is genuinely open. Immediately is the reading
     /// that makes a fire press visibly do something on the tick it is pressed.
+    ///
+    /// **A no-op while a cluster is already coming out - chosen, not measured,
+    /// and deliberately given no confidence score.** A mashed fire button used
+    /// to call this on every press with no guard, which reset
+    /// [`Self::drop_reload`] to zero on a craft already mid-drop; the next
+    /// [`Self::advance_drop`] then fired immediately rather than waiting out
+    /// the remainder of the current interval, and [`Self::dropping`] never
+    /// reached zero, so [`Self::weapon`] never cleared either - one extra mine
+    /// per press-edge, indefinitely, three times the authored ceiling of one
+    /// every [`crate::projectile::mine::DROP_INTERVAL`].
+    ///
+    /// There is real evidence here and it is suggestive rather than
+    /// dispositive, which is why this stays a choice: the fire-request path
+    /// (`Weapon_RequestFire`'s bit-8 case, `docs/ghidra/functions/psp-pulse-usa/mine.md`)
+    /// `ori`s its bit into `craft+0x1b8` and nothing more, so a re-press while
+    /// that bit is already `1` is a no-op there, and the same page's
+    /// `search_instructions` sweep of every `sw` to `craft+0x1ac` (the round
+    /// counter) finds exactly one store in the whole binary, the handler's own
+    /// decrement. Neither closes the question: that sweep also finds no writer
+    /// that *arms* the counter to its starting value in the first place - the
+    /// same page lists that write as unread - and without it, whether that
+    /// unlocated write would fire again on a re-press is unknown rather than
+    /// ruled out. So the guard is this project's own reading of what a
+    /// press-and-hold should do, not the original's.
     pub const fn begin_drop(&mut self, count: u8) {
+        if self.is_dropping() {
+            return;
+        }
         self.dropping = count;
         self.drop_reload = 0.0;
     }
@@ -345,7 +372,22 @@ impl Held {
     ///
     /// [`Self::last`] survives, which is what makes the no-repeat rule outlast
     /// firing.
+    ///
+    /// **Also ends a drop in progress, and that part is chosen, not
+    /// measured.** Absorbing (`CIRCLE`) a Mine or a Bomb while its cluster is
+    /// still coming out used to clear only [`Self::weapon`], leaving
+    /// [`Self::dropping`] and [`Self::drop_reload`] stuck at whatever they were.
+    /// `Race::lay_mines` sees `is_dropping()` still true and `weapon` gone, so
+    /// it does nothing every tick after, forever. The counter then survives
+    /// into the *next* pickup this craft is granted: a later Mine grant reads
+    /// as still-dropping from the old cluster, so [`Self::begin_drop`]'s own
+    /// mid-cluster guard silently swallows the new press too. Nothing pins what
+    /// the original does when `CIRCLE` is pressed mid-drop - this project picks
+    /// "ends the drop", the reading that cannot leave the slot in a state no
+    /// future press can escape.
     pub const fn take(&mut self) -> Option<Weapon> {
+        self.dropping = 0;
+        self.drop_reload = 0.0;
         self.weapon.take()
     }
 }
