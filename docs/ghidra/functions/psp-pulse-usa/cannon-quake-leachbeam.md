@@ -20,6 +20,8 @@ produced it and the one that replaces it.
 | `0x088648ec` | `Cannon_Init` | 80 |
 | `0x0886c600` | `Weapon_FireQuake` | 88 (was 82) |
 | `0x08874b14` | `Quake_Init` | 82 |
+| `0x0891d268` | `Quake_Update` | 85 |
+| `0x0891c028` | `Quake_SampleSpan` | 76 |
 | `0x08866658` | `Weapon_FireLeachBeam` | 88 (was 82) |
 | `0x08873d3c` | `LeachBeam_InitLocked` | 82 |
 | `0x08872da8` | `LeachBeam_InitUnlocked` | 80 |
@@ -264,29 +266,170 @@ position plus a direction sign), not a deformation of the track**, and nothing
 found here needs new geometry-mutation machinery to build - the missing piece
 is purely the wave's own per-frame position update (below).
 
+### `Quake_Update` (`0x0891d268`) is the missing per-frame advance, found 2026-09-07
+
+This is the function `Quake_Init` leaves for. It was not reachable by a direct
+`jal` scan - `psp-relocate.py callers` returns zero for it, same as for the
+already-documented `FUN_088418e0` "wave branch" above - but it is reachable as
+data: `psp-relocate.py xrefs 0x0891d268` finds exactly one plain 32-bit
+reference, at `0x08ad1930`, sitting inside a table of eight-byte
+(function-pointer, padding) entries alongside several other small handlers and
+one null slot. `FUN_088418e0` has the identical one-reference, table-resident
+signature at its own table. Neither this page nor a live run confirms *which*
+driver walks that table or how often - the read below is call-site evidence
+that `Quake_Update` is dispatched indirectly the same way `FUN_088418e0` is,
+not a tick count observed running. **A live PPSSPP breakpoint on `0x0891d268`
+with `--give Quake`, per `docs/reverse-engineering/ppsspp-debugger.md`, would
+settle it outright and was not run this pass.**
+
+What it does, read at the instruction level (immune to the `lv.q`/`sv.q` trap
+below, since every operation here is scalar `lwc1`/`swc1`/`add.s`/`div.s`, one
+instruction at a time - see `0x0891d340`-`0x0891d384`):
+
+```
+0x08b3bfb4 (_DAT_0006281c, "time since launch") += dt
+0x08b3bfa8 (_DAT_00062810, the wave's own t)
+    += (0x08b3bfb0 (_DAT_00062818, ±270.0) * dt) / 0x08b3bfac (_DAT_00062814)
+0x08b3bfa8  = fmod(0x08b3bfa8 + 1.0, 1.0)     // wrap into [0, 1)
+```
+
+`0x08b3bfac` (`_DAT_00062814`) is set exactly once, in `Quake_Init`, from
+`func_0x00118a4c()` called with no arguments and never re-read after launch -
+this page reads that as "the wave's speed is normalized against the *launch*
+segment's own length, held fixed for the wave's whole life," but
+`func_0x00118a4c` itself (loaded address `0x0891ca4c`) was not decompiled this
+pass, so **do not take "segment length" as confirmed units** - it is a
+plausible reading of an unread callee, not a measurement. The magnitude at
+`0x08a7cca8` (`_DAT_00278ca8`), read directly as **270.0**, is what `Quake_Init`
+copies `±` into `0x08b3bfb0` (the sign coming from the dot product against the
+firing craft's forward vector) - a fixed engine constant, not one of
+`WeaponStats_ParseQuake`'s four attributes (`damage`, `radius`,
+`slowdown_time`, `absorb`), so the Quake's travel speed is not author-tunable
+per this reading. **The same 270.0 does double duty**: besides the `t`-rate
+divide above, `Quake_Update` also computes `ABS(0x08b3bfb0) * dt` at
+`0x0891d39c`-`0x0891d3c8` as a plain world-distance increment, spent against
+Euclidean segment lengths (`vsub_q`+`vdot_t`+`vsqrt_s` between consecutive
+`SplinePt` samples) by the segment-cursor walk below - which is one real
+constraint on what `0x08b3bfac` can be (a length in the same units 270.0 is a
+rate in), even though its exact identity is still unread. Confidence **85**
+for the advance formula itself (instruction-level, every global cross-checked
+against `Quake_Init`'s own writes); confidence **55** for calling
+`0x08b3bfac` a segment length specifically, which is why it carries no name
+here.
+
+The rest of the function (`0x0891d3cc` onward) walks a segment-index cursor
+per span (one or two, per `_DAT_002bb598`) against the distance travelled this
+frame, advancing to the next/previous track segment when the wave's progress
+exceeds the current one's length and handling the two-span (track-gap) case
+`Quake_Init` set up - the mechanism `Quake_Init`'s own comment already
+predicted ("a short, dedicated advance-the-quake-along-the-spline...loop").
+
+### `Quake_SampleSpan` (`0x0891c028`) turns `t` into two points across the track
+
+Called from `Quake_Update` alone (`psp-relocate.py callers` returns exactly
+one site, `0x0891d7f0`) - this is private machinery of the Quake, not a
+general track sampler. Given a span index, it walks the wave's current
+segment/cursor state and interpolates two points from the segment's own
+`SplinePt` record - the same struct `engine.md` names, read here at the
+offsets that page already assigns to the left/right track edges - one at each
+edge of the track, at the wave's current arc position. It returns those two
+points, a progress fraction, and a validity bool (false once the span has run
+off either end of its track-gap window). Confidence **76**: the scalar shape
+(two edge samples, a lerp, a validity gate) is unambiguous; several of the
+vector ops inside it (`vsub_q`/`vscl_q`/`vdot_t`) were read from
+`decompile_function`'s text rather than independently confirmed instruction by
+instruction the way the advance formula above was, so a `lv.q`/`sv.q`
+misattribution (see [workflow.md](../../workflow.md)) inside it is not fully
+excluded.
+
+### What `Quake_Update` builds from those two points: `WO_QUAKE`, not a mesh
+
+`Quake_Update` uses the two edge points from `Quake_SampleSpan` to build a
+transform: position is their midpoint, and the basis comes from their
+normalized separation crossed with a fixed reference vector
+(`0x0891dad8`-`0x0891dbc0`). **In the same block**, a call into
+`AiTrack_LocatePosition` (`0x0887ce78`, already named) is made with the
+midpoint slot as one argument (`0x0891da70`-`0x0891da90`) - but it runs
+*before* the basis is built and none of the cross-product/normalize
+instructions that build the basis consume its result, so **"orientation
+refined by the track" is not what this reading supports**; the call's purpose
+here is not established. And, the first time a given wave instance's node id
+is zero, calls:
+
+```
+Psys_Spawn_q(new_node, "WO_QUAKE", 'QUAK' /* 0x4b415551 */, transform, 1, 0);
+```
+
+Read directly: the name argument is a static pointer to `0x08a88580`, and
+`inspect_memory_content` at that address returns the ASCII bytes **`WO_QUAKE\0`**
+verbatim - not inferred from the fourcc, an independent string read. `WO_QUAKE`
+is already in `docs/formats/pob.md`'s 35-name authored-effect list, alongside
+every other weapon's own effect (`WO_PLASMA_HEAD`, `WO_SHURIKEN_BOUNCE`, etc.),
+and the calling shape - `Psys_Spawn_q(node, name, fourcc, transform, ...)` -
+matches `plasma.md`'s `WO_PLASMA_HEAD`/`'PLHE'` and `shuriken.md`'s
+`WO_SHURIKEN_BOUNCE`/`'SHBO'` exactly. **This settles "the Quake's own
+effect/trigger is unread" from this page's own Open list below**: the trigger
+is `Quake_Update`, firing once per wave instance, and the effect is the disc's
+own `WO_QUAKE`, not anything invented for this project.
+
+The same branch also builds a second, `0x70`-byte object attached to the same
+transform, sets its `+0x38` field to `600.0`, and passes it to
+`func_0x001352b0` - already named **`Sound_Play`** (`0x089392b0`) - as
+`Sound_Play(1.0, obj, _DAT_002bddf8, 0, _DAT_00284554, ...)`. Read as: the wave
+carries its own positional sound cue with a `600.0`-unit falloff, travelling
+with it the same way the particle effect does. Every frame after creation
+(the `if (existing_node_id != 0)` path, not re-entering `Psys_Spawn_q`), the
+transform is recomputed from the current two edge points and a scale value
+(edge-to-edge distance `/ 50.0`) is applied through two more calls,
+`func_0x000f043c`/`func_0x000f04d8` (loaded `0x088f443c`/`0x088f44d8` -
+`0x088f443c` falls in a gap between two analyzed functions and is
+**unanalyzed**, not merely unnamed; `0x088f44d8` is analyzed but unnamed). A
+further call, `func_0x000ec0c0` (`0x088f00c0`, analyzed, unnamed), passes one
+edge point and the literal `4` to an unidentified handler - possibly a
+camera-shake or screen-effect trigger; not chased this pass.
+
+**What this answers for the maintainer's play observation:** the wave is
+neither raw vertex displacement of the track mesh nor a shader-side
+displacement - it is the disc's own `WO_QUAKE` particle effect plus a
+travelling positional sound, both re-positioned (to the midpoint of the two
+current track-edge samples) and re-scaled (to the track's own width at that
+point, via the `/ 50.0` term) every frame to follow the wave along the spline.
+**That is very plausibly what reads as "a concrete wave" to a player** - an
+effect that tracks the road's own width and travels its own spline looks like
+it belongs to the road, without a single byte of the road's own mesh
+changing. (Whether it also tracks the track's *banking* is unestablished -
+see the `AiTrack_LocatePosition` correction above; the `SplinePt` fields
+`Quake_SampleSpan` reads at `pauVar16[3]`/`pauVar16[4]`, which `engine.md`
+already assigns, are where that would come from if it does.) This is a
+plausibility argument for reconciling the play observation, not a
+frame-by-frame visual comparison against the original - nobody has looked at
+what `WO_QUAKE.POB` itself draws.
+
+**Shape 3 (shader-side displacement) is not positively excluded by anything
+read in this function**, but the PSP's GE has no programmable vertex stage to
+put a position-keyed displacement in, which is a hardware constraint against
+that shape existing at all on this platform, independent of what this page
+did or didn't find in software.
+
 ### Open
 
-- **The function that advances the wave's stored `t` each frame, and the one
-  that sets `entity+0x860 & 0x40` (the "the wave has reached me" latch this
-  page's damage branch reads) were not found.** `Quake_Init` writes the wave's
-  launch state once and this page did not find where it is read again. Given
-  the shape already established (a scalar spline position with a direction
-  sign, and a generic per-craft damage application keyed off a plain flag bit),
-  the missing function is very likely a short, dedicated "advance the quake
-  along the spline and flag whichever craft's own spline position it currently
-  overlaps" loop - plausibly indexed by the same craft-position `SplinePt`
-  fields this page already reads, one per craft, but that comparison itself
-  was not located. **Do not guess a travel speed or a hit-window width for
-  it** - neither was measured.
-- **Whether the Quake has an authored travel speed at all is unread.**
-  `WeaponStats_ParseQuake`'s four attributes (`damage`, `radius`,
-  `slowdown_time`, `absorb` - `engine.md`'s own table) have no obvious "speed"
-  among them; `radius` is the only candidate left unexplained by this page and
-  might govern the hit window's width along the spline rather than a 3D blast
-  radius, but that is a guess, not a reading.
-- **The Quake's own effect/trigger is unread.** No `Psys_Spawn`-style call was
-  seen in `Weapon_FireQuake` or `Quake_Init`; if the original draws anything
-  for the wave's passage, its call site is still unlocated.
+- **`WO_QUAKE.POB` itself was not inspected.** The trigger and its transform
+  are recovered; whether the effect it draws looks like the maintainer's
+  "concrete wave" description is a separate, unchecked question. If it parses
+  and plays visually wrong for this reading, that is evidence against the
+  reconciliation above, not against the trigger recovery itself.
+- **The function that sets `entity+0x860 & 0x40`** (the "the wave has reached
+  me" latch `FUN_088418e0`'s damage branch reads) **was still not found.**
+  `field 0x860` is not a selective search on its own - it returned dozens of
+  hits across the binary this pass, so record that sweep as spent rather than
+  repeat it. The selective versions, `psp-relocate.py masked`/`andi`, were not
+  tried.
+- **`WO_QUAKE_DETONATOR_TRAILS`** (`docs/formats/pob.md:576`) **is a second,
+  unlocated Quake effect name** - distinct from `WO_QUAKE` above, plausibly an
+  impact/detonation burst rather than the travelling wave. Not chased.
+- **`func_0x00118a4c` (`0x0891ca4c`), the segment-length source `Quake_Update`
+  divides by, is unread.** Confirming or correcting "segment length in world
+  units" depends on it.
 - **The per-class base speed `Cannon_Init` reads (`0x00060af4`) is unread**, and
   so is whatever a Cannon round's collision does on a hit.
 
@@ -461,13 +604,19 @@ pass.
 - **The Quake is buildable for its hit/damage/slowdown half**, which reuses the
   Missile's and Mine/Bomb's own shared pending-hit channel outright - nothing
   new to build there beyond wiring the Quake's own `damage`/`slowdown_time` and
-  the self-exclusion/shield checks this page reads. **Not buildable yet is the
-  travelling half**: the wave's own per-frame advance along the spline and the
-  latch that flags "this craft is currently under it" were not found this
-  pass, and inventing a travel rule (a speed, a hit-window width) would be
-  exactly the kind of guess this project's rubric exists to prevent. **It does
-  not need track deformation of any kind** - that establishes the shape of the
-  work, even though the work itself is not finished.
+  the self-exclusion/shield checks this page reads. **The travelling half is
+  now buildable too, found 2026-09-07**: `Quake_Update` (`0x0891d268`) advances
+  the wave's spline `t` every tick at a fixed engine speed (`270.0`, not
+  authored) and drives `Quake_SampleSpan` (`0x0891c028`) to place and scale the
+  disc's own `WO_QUAKE` particle effect and a travelling positional sound along
+  it - see the new section above. **Still missing**: the per-craft latch that
+  flags "this craft is currently under the wave" (`entity+0x860 & 0x40`'s
+  setter), so the hit-timing half and the travelling-visual half are each
+  buildable on their own but not yet wireable to each other. **It does not need
+  track deformation of any kind** - the visual is an authored effect
+  re-transformed every frame, not a mesh or vertex write, which is a stronger
+  version of the same conclusion this page reached before the per-frame update
+  was found.
 - **The LeachBeam is buildable for target selection and the connect/disconnect
   gate** (all reused from the Missile's lock, plus the range/shield checks read
   above), **but not for the actual drain amount**, which needs the two rate
