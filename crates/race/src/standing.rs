@@ -168,6 +168,27 @@ impl Standing {
             // the line was last crossed forwards is not kept, and inventing a
             // value would put a wrong time on a results table. Driving backwards
             // over the line is already a wrong-way situation.
+            //
+            // **The gate has to go back too, and until 2026-09-07 it did not.**
+            // `self.gate` was already advanced above using *this* tick's
+            // (post-wrap) progress, which for a backward crossing sits past the
+            // far half - so a craft shoved backwards over the line landed on
+            // `LapGate::Ready` and stayed there, with nothing here to undo it.
+            // The very next forward crossing then read `Ready` as "the lap is
+            // earned" and completed it on the spot, against the clock still
+            // reading the lap this craft had *not* re-driven - a lap of a
+            // handful of ticks that never happened. `RaceState::uncomplete_lap`
+            // resets its own gate for exactly this reason; this arm has to
+            // match it, per this module's own rule that the two must not
+            // disagree about where a craft is. Found on a real race where the
+            // corrected craft-pair narrowphase
+            // (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`) threw
+            // a craft back across the line in one tick - see
+            // `crates/game/tests/lap_times_ground_truth.rs`'s
+            // `every_opponent_that_laps_has_a_lap_time`, which is what caught
+            // it, and `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`
+            // below, which pins the rule directly.
+            self.gate = LapGate::NeedsNearHalf;
             return false;
         }
         if !wrapped_forward(delta, half) {
