@@ -559,6 +559,7 @@ impl<'a> Bank<'a> {
                 command: index,
                 opcode,
                 descriptor: at,
+                volume: record[0x01] as i8,
                 mode: self.order.u16(record, 0x0e),
                 offset: self.order.u32(record, 0x10),
                 length: self.order.u32(record, 0x14),
@@ -633,6 +634,20 @@ pub struct Sound {
     pub opcode: u8,
     /// Offset of the 24-byte descriptor within the descriptor section.
     pub descriptor: u32,
+    /// The descriptor's own authored volume, `+0x01`, one signed byte.
+    ///
+    /// `Scream_OpKeyOn` (`0x0898fc78`) reads this waveform-level byte into the
+    /// value it passes as `Scream_PanVolumePair`'s (`0x08995a9c`) other
+    /// squared term - the cue's own [`Cue::volume`](super::cue::Cue::volume)
+    /// is the first, this is the second. See
+    /// `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`'s
+    /// "`Scream_PanVolumePair`'s four terms" section.
+    ///
+    /// **The `-1..=-5` sentinel codes documented there are not decoded
+    /// here**, the same gap [`Cue::volume`](super::cue::Cue::volume) carries.
+    /// Every one of the 880 key-on descriptors across all 36 banks on the PSP
+    /// USA disc reads `60..=127`.
+    pub volume: i8,
     /// The descriptor's `+0x0e` flags word.
     ///
     /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode,

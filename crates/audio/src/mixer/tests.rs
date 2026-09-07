@@ -209,6 +209,37 @@ fn a_bus_gain_only_moves_its_own_bus() {
     assert_eq!(sfx_energy, 0.0, "the SFX bus was set to zero");
 }
 
+/// The regression `Sound::pan_volume_gain`'s own doc comment names: `set_gain`
+/// has to fold it in exactly the way `play` does, or a voice re-levelled every
+/// tick - `~ENGINE`'s own held loop, `sfx::engine`'s only caller until
+/// `sfx::track` grew a second - carries the factor for one frame and then
+/// loses it. Nothing here can catch that by *measuring the gap*, since the
+/// gap this pass closed and the bug this test guards against look identical
+/// from a dB meter after the first frame; only comparing the two paths
+/// directly does.
+#[test]
+fn set_gain_folds_in_pan_volume_gain_the_same_way_play_does() {
+    let scaled = Arc::new((*tone(256, 1, 44_100)).clone().with_pan_volume_gain(0.5));
+
+    let mut via_play = Mixer::new(44_100);
+    via_play.play(Play::once(scaled.clone(), Bus::Sfx));
+    let mut out_play = vec![0.0f32; 64 * CHANNELS];
+    via_play.render(&mut out_play);
+
+    let mut via_set_gain = Mixer::new(44_100);
+    let id = via_set_gain
+        .play(Play::once(scaled, Bus::Sfx))
+        .expect("a free mixer has a slot");
+    via_set_gain.set_gain(id, 1.0);
+    let mut out_set_gain = vec![0.0f32; 64 * CHANNELS];
+    via_set_gain.render(&mut out_set_gain);
+
+    assert_eq!(
+        out_play, out_set_gain,
+        "set_gain(1.0) must land the voice at the same samples play() did"
+    );
+}
+
 /// The measured reason [`RELEASE_FRAMES`] exists: a held cue is loud where it
 /// is stopped, and clearing the slot there is a step from most of full scale to
 /// zero - which a speaker reproduces as a thump.

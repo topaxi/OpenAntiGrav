@@ -155,7 +155,10 @@ Nothing read yet traces `+0x40` back to a writer: `sound.md`'s correction
 names `SoundInstance_UpdateSpatial` (`0x08939e58`, this page's own
 `positional-audio.md` cross-reference) as the only known producer of a
 comparable volume pair, but it writes into a SCREAM software instance through
-its own fade/ramp engine (`func_0x0898d614`), not into the SAS voice record
+its own fade/ramp engine (`Scream_SetSoundVolume`, `0x0898d614`, named
+2026-09-07 - see
+[positional-audio.md](positional-audio.md#scream_panvolumepairs-four-terms)),
+not into the SAS voice record
 `Sas_CommitVoices` walks - and nothing read connects the two. **That link is
 the next thing to read**, not the four wrappers, which are now resolved.
 
@@ -226,9 +229,9 @@ excluded below:
   a live sighting of the missing link `sound.md` flagged: something reaching
   the SAS voice record gradually rather than in one write, consistent with
   `SoundInstance_UpdateSpatial`'s own software fade/ramp engine
-  (`func_0x0898d614`) - though nothing here re-derives the exact function
-  that bridges the two, so that specific connection is still not nailed
-  down to an address.
+  (`Scream_SetSoundVolume`, `0x0898d614`) - though nothing here re-derives
+  the exact function that bridges the two, so that specific connection is
+  still not nailed down to an address.
 - **Dry L and dry R usually differ, and by a consistent ratio while a voice
   holds one heading** - e.g. voice 5's committed readings climb from
   `(1080,770,0,0)` to `(1398,840,0,0)` across nineteen distinct samples with
@@ -984,7 +987,10 @@ exactly known. **Nothing is changed in `crates/audio` or
 reached from `SoundInstance_UpdateSpatial`) to learn what feeds `a0`/`a1`/`t1`
 - either with the Ghidra bridge once it is available again, or with more of
 the same live-breakpoint technique this section used, walked one call frame
-further out.
+further out. **Resolved 2026-09-07, a later pass the same day: see
+["`Scream_PanVolumePair`'s four terms"](positional-audio.md#scream_panvolumepairs-four-terms)
+and the re-measurement below** - kept here for the history rather than
+rewritten, since this section is what first read the arithmetic live.
 
 **Confidence 85** on the diagnosis (mechanism is per-voice, not summing -
 two independent live measurements agreeing to 0.35 dB) and **82** on
@@ -1023,3 +1029,61 @@ original at all and reaches it routinely on our port; nothing in either
 capture drops to silence or loops on itself. This is the same shape as every
 prior listening check on this thread - "louder than it should be," not
 "broken" or "missing."
+
+## `Scream_PanVolumePair` ported, and the gap narrows (2026-09-07, a later pass the same day)
+
+The caller-side mapping this section left open is now read and the stage is
+ported. Full derivation, the corpus survey and the confidence table:
+[positional-audio.md](positional-audio.md#scream_panvolumepairs-four-terms).
+Short version: `a0` is this port's own already-computed `0..1024` volume,
+nothing new; `a1` (squared) is the cue's own authored byte - confirmed live,
+twenty separate breakpoint hits at `Scream_StartSound`'s entry, that the
+`-1` ("use the cue's own default") branch fires every time in this corpus,
+not a caller override; `a3` is a measured constant `1.0` (unconditionally
+`0x7f` at construction, every live sample since agrees, the interpolator that
+could move it is not traced); `t1` (squared) is the bound waveform's own
+authored byte. Both authored bytes were unread fields on two structs
+`crates/formats/src/sblk.rs` already parses.
+
+Ported as `oag_audio::spatial::pan_volume_gain`, read by
+`oag_audio::mixer::Sound::pan_volume_gain` on every `Mixer::play` **and**
+`Mixer::set_gain` - the second matters as much as the first, because the
+held `~ENGINE` voice re-levels through `set_gain` every tick and would have
+lost the factor on its second frame if it only applied at `play`.
+
+Re-measured, same recipe as this page's own prior rows (`pulse-psp-eu.chd`,
+`--race --autopilot --ticks 1800`, pinned settings):
+
+| | RMS | Clipped |
+| --- | --- | --- |
+| Original, SFX alone, 8 craft | -16.61 dBFS | 0.030% |
+| Our port, SFX alone, 8 craft, before this port | -8.46 dBFS | 1.636% |
+| **Our port, SFX alone, 8 craft, after this port** | **-13.23 dBFS** | **0.077%** |
+| Original, SFX alone, 1 craft | -19.65 dBFS | 0.000% |
+| Our port, SFX alone, 1 craft, before this port | -11.15 dBFS | 0.157% |
+| **Our port, SFX alone, 1 craft, after this port** | **-13.82 dBFS** | **0.092%** |
+| Our port, whole mix, before this port | -8.11 dBFS | 2.001% |
+| **Our port, whole mix, after this port** | **-12.13 dBFS** | **0.132%** |
+
+**The gap narrows by 4-5 dB at every scenario measured and does not close**:
+8-craft from 8.15 to 3.38 dB, 1-craft from 8.50 to 5.83 dB. That is the
+expected shape given what is deliberately not modelled (`a3`'s interpolator,
+the per-voice fade-in `sound.md` already measured live), not a sign the port
+is wrong - see positional-audio.md's own re-measurement section for the
+longer version of this same argument.
+
+**Cross-check against a real cue, off the disc's own data rather than a
+register capture**: `~ENGINE`'s cue byte reads `50` in `ship.bnk` - the same
+`50` one of this section's own ten live hits read for its `a1` above, same
+cue, two different tools - and its bound waveforms' descriptor bytes read
+`70..127` across the corpus. `pan_volume_gain(50, 110)` is `-6.33 dB`,
+inside the `-4.4` to `-13.1 dB` range this section measured from the running
+binary's own registers.
+
+**Listening check**: waveform-shape only, no audio device in this sandbox.
+No dropped audio, no starved voices and no jump discontinuities in any of
+the three re-captures (`0 dropped, 0 jump(s), 0 voice(s) refused` in every
+per-buffer warning line). Nothing drops to silence or loops on itself - the
+same "quieter, not broken" shape every listening check on this thread has
+found, one step closer to the original's own -16.61 dBFS than before this
+port landed.

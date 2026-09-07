@@ -77,6 +77,23 @@ pub struct Cue {
     /// Kept so a survey can see the `0xfffffff8` an empty cue carries without
     /// re-reading the table.
     pub raw: u32,
+    /// The cue's own authored volume, `+0x00`, one signed byte.
+    ///
+    /// `Scream_StartSound` (`0x0898f864`) reads this as the fallback for the
+    /// voice's `+0xc` field - the term `Scream_PanVolumePair`
+    /// (`0x08995a9c`) squares - whenever its caller passes `-1` for "no
+    /// override", which is what every traced call site does (confirmed live,
+    /// PPSSPP breakpoint on `Scream_StartSound`'s entry, 20/20 hits reading
+    /// exactly `-1`; a second breakpoint at the voice struct's own `+0xc`
+    /// read back an exact match against this byte on every hit taken). See
+    /// `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`'s
+    /// "`Scream_PanVolumePair`'s four terms" section.
+    ///
+    /// **The `-1..=-5` sentinel codes documented there are not decoded here.**
+    /// Every one of the 582 cues across all 36 banks on the PSP USA disc reads
+    /// `20..=127`, so the gap is real but unexercised by this corpus - a bank
+    /// that used a sentinel would read this field wrong rather than erroring.
+    pub volume: i8,
 }
 
 impl Cue {
@@ -119,6 +136,7 @@ impl Bank<'_> {
             commands: usize::from(record[0x04]),
             flags: self.order.u16(record, 0x06),
             raw,
+            volume: record[0x00] as i8,
         })
     }
 

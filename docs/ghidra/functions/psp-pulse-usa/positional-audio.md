@@ -37,7 +37,8 @@ tool in the bridge, so callers here were found with
 | `0x0893a5ec` | `SoundManager_LinkEmitter` | 85 |
 | `0x0893a7e8` | `SoundManager_BuildVolumeCurve` | 94 |
 | `0x0893a87c` | `SoundManager_VolumeCurve` | 94 |
-| `0x08995a9c` | `Scream_PanVolumePair` | 85 |
+| `0x08995a9c` | `Scream_PanVolumePair` | 94 |
+| `0x0898d614` | `Scream_SetSoundVolume` | 88 |
 | `0x08ac4a2c` | `g_scream_pan_table` (data) | 94 |
 
 (`SoundInstance_StillPlaying` and `SoundEmitter_ServiceRequests` were found
@@ -327,6 +328,182 @@ with **zero deviation** on every entry - `floor`, not `round`; entry 1 is
 `(16382, 142)` where rounding would give `143`. So the pan is **equal-power**,
 and the 180 entries span a quarter turn.
 
+## `Scream_PanVolumePair`'s four terms
+
+**This is the stage that accounts for the whole SFX-side dB gap** between the
+original's SFX mix and this port's, isolated over several passes on a thread
+that mostly lives outside `docs/` (see `HANDOVER.md`'s own audio entry for
+that history):
+`Scream_PanVolumePair` multiplies four gain terms together, two of them
+squared, between the `0..1024` volume [`SoundEmitter_ComputeVolumeAndAngle`]
+already computes and the two hardware channel volumes. **Confirmed live to
+attenuate real engine voices by `4.4` to `13.1 dB`, mean `11.7 dB`** - about
+the size of the gap - and until this section, entirely absent from
+`crates/audio`.
+
+### Which two terms are squared, confirmed two independent ways
+
+Read directly off `Scream_PanVolumePair`'s own disassembly (`disassemble_function`,
+not the decompiler - this function is pure scalar `mult`/`div`, no VFPU, so the
+project's own `lv.q`/`sv.q` trap does not apply here):
+
+```asm
+08995a9c: lw    v1,0x0(sp)        ; v1 = mode mask, from the stack
+08995aa4: lw    t4,0x3340(v0)     ; a global override flag (see below)
+08995aa8: li    v0,0x7f
+08995ab4: andi  t4,v1,0x1         ; bit 0 -> square a0?
+08995ad8: beq   t4,zero,...       ; bit 1 -> square a1?
+08995af8: beql  t4,zero,...       ; bit 2 -> square a3?
+08995b1c: beq   v1,zero,...       ; bit 3 -> square t1?
+```
+
+Each branch, taken, runs `mult x,x; mflo x; div x,0x7f; mflo x` (`x*x/127`)
+on that one argument and falls through otherwise - so the mask's four low bits
+gate the four terms **in argument order**: bit 0 is the first argument
+(`a0`), bit 1 the second (`a1`), bit 2 the fourth (`a3`), bit 3 a fifth value
+already resident in a register at the function's own entry (`t1` - not one of
+the four *visible* arguments, which is why the earlier reading of this page
+called it "a fifth value"). `SoundInstance_UpdateSpatial`'s call passes mask
+`10` = `0b1010`: **bits 1 and 3 set, bits 0 and 2 clear - the second and
+fifth terms (`a1`, `t1`) are squared, the first and fourth (`a0`, `a3`) are
+not.**
+
+**Confirmed a second way, independently**: a live PPSSPP breakpoint at this
+same function's entry (`memory.disasm`, not Ghidra, during an actual
+full-throttle race) read the same mask (`10`) off the stack and the same four
+register values, and running them through this exact sequence reproduced the
+function's own output on every hit. Two different tools, two different
+sessions, the same mask and the same four terms - see
+[audio-levels.md](audio-levels.md#the-sfx-side-gap-does-not-need-summing-at-all---it-is-there-at-one-voice-2026-09-07)
+for that capture's own table.
+
+**A detail neither reading needed for the port, worth recording anyway**:
+`*(int*)0x08ac3340`, read at the function's own entry, forces the mask to
+`-1` (all four terms squared) when non-zero - a global mode this page has not
+traced a writer for. Every capture so far read it zero.
+
+### What each term is, traced to its caller
+
+- **`a0` (unsquared)** is `Emitter::place`'s own `0..1024` volume, scaled to
+  `0..127` - the SCREAM voice's `+0x3a` field. Traced through
+  `Scream_SetSoundVolume` (`0x0898d614`, named 2026-09-07 - see below) and
+  `Scream_StartSound` (`0x0898f864`). Already computed by this port; nothing
+  new to read.
+- **`a1` (squared)** is the SCREAM voice's `+0xc` field, traced to
+  `Scream_StartSound`'s own third argument. That argument is `-1` ("no
+  override") on every one of twenty live breakpoint hits taken at
+  `Scream_StartSound`'s entry across a real Time Trial - not inferred,
+  read directly off `cpu.getAllRegs` - so the fallback always fires:
+  `param_3 = (short)*pcVar9`, `pcVar9` being **the cue's own record**
+  (`bank + 0x1c + cue_index * 12`). That is byte `+0x00` of the 12-byte
+  cue table entry [`cue.rs`](../../../../crates/formats/src/sblk/cue.rs)
+  already locates - now [`Cue::volume`]. A second breakpoint, at the call
+  site inside `Scream_OpKeyOn` where the voice struct pointer is still live,
+  read the voice's own `+0xc` field back and it matched the cue's byte
+  **exactly**, same tick, on every hit taken (not across sessions).
+- **`a3` (unsquared)** is the SCREAM voice's `+0x10` field,
+  unconditionally initialised to `0x7f` (its own ceiling) by
+  `Scream_StartSound`, then adjusted by an interpolator this page has not
+  traced. Every live sample taken - twenty hits just now, ten in the earlier
+  capture - read exactly `0x7f`.
+- **`t1` (squared)** is the waveform descriptor's own byte at `+0x01` -
+  traced through `Scream_OpKeyOn` (`0x0898fc78`), which resolves
+  `parameter_block + (command_word & 0xffffff)` to the same 24-byte
+  descriptor [`Bank::sounds`](../../../../crates/formats/src/sblk.rs) already
+  locates (`Sound::descriptor`) and reads its `+0x01` byte - now
+  [`Sound::volume`].
+
+`Scream_SetSoundVolume` (`0x0898d614`) is named here, confidence 88: full
+decompile, and it is the function whose `+0xc`-scaled target this section's
+`a0` traces through (`param_2 = (param_2 * voice.+0xc) >> 10`, clamped to
+`0x7f`) - matching `sound.md`'s own working name for it before this pass
+made it formal.
+
+### The corpus: no sentinel codes, in this data
+
+Both `+0x00` (cue) and `+0x01` (descriptor) carry `-1..=-5` sentinel codes
+elsewhere in this page's reading (a per-voice override table,
+`DAT_08ac3240`, and a random draw) - **not decoded here**, because a full
+static-and-live survey of every `03000000` bank on the PSP USA disc found
+none: **582 cues across 36 banks, every `+0x00` byte in `20..=127`; 880
+key-on descriptors, every `+0x01` byte in `60..=127`.** The gap is real
+(documented on [`Cue::volume`] and [`Sound::volume`]) and unexercised by this
+corpus - a bank that used a sentinel would read these two fields wrong
+rather than erroring.
+
+### The constant collapses to exactly `2.0`
+
+The original's fixed-point combine, in the normalised `0..1` terms this port
+already works in (`A0`, `A1`, `A3`, `T1` for `a0/127` etc.), is
+
+```text
+extra_gain = A0 * A3 * T1^2 * A1^2 * (127 * 258) / 16383
+```
+
+`258` (`0x102`) is the constant folded into `a1` on its way through the
+function (`a1 + a1<<8 + a1`, read off the same disassembly above), and
+`127 * 258 / 16383` is **exactly `2.0`, no remainder** - matching this page's
+own already-stated theoretical ceiling ("all four terms at `0x7f` divides to
+`2.0`") from an entirely different derivation. With `A3` folded in as its
+measured constant `1.0` and `A0` being [`Emitter::place`]'s own gain
+(applied by the caller, not this stage), the whole port is
+
+```text
+extra_gain = 2 * cue_volume_normalised^2 * sound_volume_normalised^2
+```
+
+ported as [`oag_audio::spatial::pan_volume_gain`], read by
+[`oag_audio::mixer::Sound::pan_volume_gain`] on every voice `Mixer::play`
+and `Mixer::set_gain` commit - matching the original, where this stage runs
+on every SCREAM voice's commit and not only the ones this port places in the
+world.
+
+### Confidence
+
+| Claim | Score | Why not higher |
+| --- | --- | --- |
+| Which two of the four terms are squared (`a1`, `t1`) | **94** | static disassembly and an independent live capture agree exactly; capped short of the rubric's ceiling for a single binary |
+| `a0` traces to the already-ported `0..1024` volume | **90** | full call-chain decompile, `Scream_SetSoundVolume`'s own scaling matches exactly |
+| `a1` traces to the cue's own `+0x00` byte | **92** | twenty live hits reading the `-1` fallback, a second live cross-check matching the voice's own `+0xc` field exactly, same tick |
+| `a3` is `0x7f` at construction and in every live sample since | **88** | static initialiser plus thirty live samples across two sessions; the interpolator that could move it is not traced |
+| `t1` traces to the descriptor's own `+0x01` byte | **88** | single-function decompile, no cross-call ambiguity, not yet cross-checked live the way `a1` was |
+| The `127*258/16383 == 2.0` collapse | **96** | exact arithmetic, and it reproduces the page's independently-stated ceiling |
+
+### Re-measured after porting
+
+`pulse-psp-eu.chd`, `--race --autopilot --ticks 1800`, pinned settings (all
+volumes at 100 except where isolating a bus), 30 s captures:
+
+| | RMS | Clipped |
+| --- | --- | --- |
+| Original, SFX alone, 8 craft (for reference) | -16.61 dBFS | 0.030% |
+| Our port, SFX alone, 8 craft, before this port | -8.46 dBFS | 1.636% |
+| **Our port, SFX alone, 8 craft, after this port** | **-13.23 dBFS** | **0.077%** |
+| Original, SFX alone, 1 craft (for reference) | -19.65 dBFS | 0.000% |
+| Our port, SFX alone, 1 craft, before this port | -11.15 dBFS | 0.157% |
+| **Our port, SFX alone, 1 craft, after this port** | **-13.82 dBFS** | **0.092%** |
+| Our port, whole mix, before this port | -8.11 dBFS | 2.001% |
+| **Our port, whole mix, after this port** | **-12.13 dBFS** | **0.132%** |
+
+**The gap narrows by 4-5 dB at every scenario and does not close.** 8-craft
+narrowed from `8.15` to `3.38 dB`; 1-craft from `8.50` to `5.83 dB`. That is
+the expected shape, not a red flag: this port's `a3` is a constant `1.0`
+rather than the traced-but-unmodelled interpolator, and the original's own
+per-voice fade-in (`sound.md`'s "ramps rather than jumps", read live
+2026-09-06) is not ported either - a freshly-triggered voice in this port
+reaches its target gain on the frame it starts, where the original glides
+there over several. Both are plausible contributors to a residual few dB and
+neither is invented to close it.
+
+**Cross-check against a real cue**: `~ENGINE`'s own cue byte reads `50` (in
+`ship.bnk`) or `40` (in `ship_zone.bnk`), and its bound waveforms' descriptor
+bytes read `70..127` across the corpus - `pan_volume_gain(50, 110)` alone is
+`-6.33 dB`, in the same range the original live capture measured
+(`-4.4` to `-13.1 dB`) from the running binary's own registers, not this
+port's arithmetic. `50` is also the exact value one of that capture's ten
+hits read for its own `a1` - the same cue, the same byte, two different
+tools agreeing.
+
 ### The two rotations cancel, and the whole pan collapses
 
 Write `phi = degrees(acos(c))`, the angle produced above, so `phi` is in
@@ -551,9 +728,14 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
   sample** (2026-09-01) - but only against the engine note, the only
   continuously-queued cue in that capture, and no construction site was
   traced, so a collision or pickup cue may carry a different value.
-- **The mode mask.** `SoundInstance_UpdateSpatial`'s call passes `10`, which
-  squares two of the four gain terms in `Scream_PanVolumePair`. Which two are
-  which is read; *why* those two is not.
+- **Resolved 2026-09-07: the mode mask, which two terms it squares, and what
+  feeds all four.** See
+  ["`Scream_PanVolumePair`'s four terms"](#scream_panvolumepairs-four-terms)
+  above - kept here, struck rather than deleted, so a reader who remembers
+  this bullet from before does not read the old framing as still current.
+  *Why* mask `10` specifically (rather than some other pair) is still not
+  known - nothing traces a design reason for squaring the cue and waveform
+  bytes rather than, say, the fourth term.
 - **The `a > 179` sign bookkeeping**, unexercised on this path.
 - **EU cross-verification of the code.** The table is confirmed in
   `psp-pulse-eu`; none of the functions is.
