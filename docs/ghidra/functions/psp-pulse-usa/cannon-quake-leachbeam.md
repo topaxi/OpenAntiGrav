@@ -107,6 +107,31 @@ the base-speed lookup and the hit/damage path are not chased.
 
 ### What actually fires it: `craft+0x1bc == 3` drives a reload countdown, not the pickup bit
 
+> **CONTRADICTED BY PLAY, 2026-09-07. Do not implement against this section
+> until it is re-read.** The maintainer reports from playing the original that
+> the Cannon **shoots projectiles either by holding the fire button or by
+> tapping it repeatedly** - i.e. it is press-driven, not self-firing. That is
+> incompatible with the conclusion below, which says a press does nothing and
+> the countdown runs unconditionally. On this project a from-play report has
+> beaten static analysis before, and this one is specific and repeatable.
+>
+> **The likeliest reconciliation is the first line of the pseudocode below,
+> and it is a naming assumption rather than a measurement.**
+> `if (ship->weapon_pad_flags->0x16 == 0) return;` was read as a *track*
+> weapon-pad flag. If `ship+0x94+0x78` is instead the **input pad** and `0x16`
+> is the fire button, then everything else on this page stays true and only
+> the conclusion changes: bit `0x2000` really is dispatched by nothing, but
+> `Cannon_UpdateReload` only advances **while fire is held**, which is exactly
+> "hold to fire, or tap to fire" as reported. That would make the Cannon a
+> press-gated auto-repeat rather than a self-firing weapon.
+>
+> **What to do:** resolve what `ship+0x94+0x78` points at and what `+0x16`
+> holds, before changing any code. Confirm or refute the input-pad reading;
+> either answer settles it. `oag_game::race::weapons`'s Cannon arm and
+> `oag_gameplay::pickup`'s module docs both restate the conclusion below and
+> both need correcting with it.
+
+
 **Bit `0x2000` (the Cannon's own request bit per `Weapon_RequestFire`'s
 id-to-bit map) is dispatched by nothing, and that is expected, not broken.**
 The Cannon does not fire through the fire-request-word system the other twelve
