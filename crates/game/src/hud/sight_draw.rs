@@ -14,19 +14,6 @@
 use super::Draw;
 use super::draw::Context;
 
-/// Draws a sprite widget at its authored geometry, out of **its own** texture.
-///
-/// It exists so that no caller has to remember that `rect` is the destination
-/// and `uv` the source - getting those the wrong way round produces a picture
-/// rather than an error - and, since 2026-08-25, so that no caller has to
-/// remember that a layout may name more than one texture.
-///
-/// `None` when `sheet` does not hold the texture this sprite names, which is
-/// the honest outcome and not a guess: the alternative is offsetting by `(0, 0)`
-/// and sampling whichever texture the packer happened to put first, at
-/// coordinates meant for a different one. That is what an HD race did until the
-/// sheet learnt to hold six.
-#[must_use]
 /// The lock-on reticle, as sprites, in whichever dialect this title authors.
 ///
 /// **Two dialects over one law.** Both PSP titles instance a corner-bracket
