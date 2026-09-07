@@ -167,6 +167,88 @@ fn clipping_everything_clips_nothing() {
 }
 
 #[test]
+fn every_billboard_slot_name_is_a_placeholder_regardless_of_case() {
+    for n in 1..=8 {
+        assert!(is_slot_placeholder(&format!("billboard{n}.tga")));
+        assert!(is_slot_placeholder(&format!("Billboard{n}.TGA")));
+    }
+    assert!(!is_slot_placeholder("321backplate.tga"));
+    assert!(!is_slot_placeholder("billboard9.tga"));
+    assert!(!is_slot_placeholder("billboard.tga"));
+}
+
+/// A model with two textured draws - one bound to a placeholder slot, one to
+/// ordinary track art - built the same way [`two_draws`] is, so
+/// `strip_slot_placeholders` is checked against the same shape
+/// `clip_to_panel`'s own tests use.
+fn textured_draws(placeholder_label: &str) -> Model {
+    use crate::mesh::{Bounds, DrawCall, GpuVertex, ModelTexture, Texels};
+
+    let vertex = || GpuVertex {
+        position: [0.0; 3],
+        normal: [0.0, 0.0, 1.0],
+        colour: [1.0; 4],
+        texcoord: [0.0; 2],
+        lit: 0.0,
+        anim: 0,
+        lightmap_texcoord: [0.0; 2],
+        xform: 0,
+        sun_mask: 1.0,
+        slots: 0,
+        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+    };
+    let mut model = Model::none("placeholder + art");
+    model.vertices = vec![vertex(), vertex(), vertex(), vertex(), vertex(), vertex()];
+    model.indices = vec![0, 1, 2, 3, 4, 5];
+    let texture = |label: &str| {
+        Some(std::sync::Arc::new(ModelTexture {
+            label: label.to_string(),
+            width: 8,
+            height: 8,
+            texels: Texels::Rgba8(vec![0; 8 * 8 * 4]),
+        }))
+    };
+    model.textures = vec![
+        texture(placeholder_label),
+        texture("factory_floor_01_rp.tga"),
+    ];
+    let draw = |range: std::ops::Range<u32>, texture: usize| DrawCall {
+        range,
+        texture: Some(texture),
+        bounds: Bounds {
+            centre: [0.0; 3],
+            radius: 0.0,
+        },
+        moving: false,
+        culled: false,
+        blend: None,
+        blend_state: None,
+        layer: 0,
+        node: Some(74),
+        chunk: None,
+    };
+    model.draws = vec![draw(0..3, 0), draw(3..6, 1)];
+    model
+}
+
+#[test]
+fn strip_slot_placeholders_drops_only_the_placeholder_draw() {
+    let mut model = textured_draws("billboard8.tga");
+    assert_eq!(strip_slot_placeholders(&mut model), 1);
+    assert_eq!(model.draws.len(), 1);
+    assert_eq!(model.draws[0].texture, Some(1));
+}
+
+#[test]
+fn strip_slot_placeholders_is_case_insensitive_and_leaves_real_art_alone() {
+    let mut model = textured_draws("Billboard8.TGA");
+    assert_eq!(strip_slot_placeholders(&mut model), 1);
+    let mut untouched = textured_draws("321backplate.tga");
+    assert_eq!(strip_slot_placeholders(&mut untouched), 0);
+    assert_eq!(untouched.draws.len(), 2);
+}
+
+#[test]
 fn the_placement_matrix_never_mirrors_the_glyphs() {
     // **The question this answers, and why it is an assertion rather than a
     // screenshot.** Pulse's digits are squared-off enough that a `3` renders as
