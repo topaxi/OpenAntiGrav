@@ -24,7 +24,7 @@
 //! [`StageBlend`] is those three fields and nothing else. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
 //!
-//! **Recovered on 2048, and only there: the trigger.** 2048's Zone HUD widget
+//! **Recovered on both 2048 and HD/Fury: the trigger.** 2048's Zone HUD widget
 //! (`Hud_UpdateZoneSpeedClassWidget`, `0x81197d6c`) walks a seventeen-record
 //! table of descending **zone-number** thresholds and writes the matched
 //! record's index into the per-craft field `Zone_UpdateStage` (`0x81044cfc`)
@@ -36,19 +36,26 @@
 //! every five to `90` - so the grade steps every few zones rather than every
 //! zone.
 //!
-//! **Not recovered on HD/Fury.** `Environment_UpdateStageBlend` (`0x003da540`)
-//! dispatches on `g_GameState.mode`, and this session read all four of its
-//! branches out of the instruction stream: mode `0xe` takes
-//! `RaceManager->+0x2e10`, modes `0xd`/`0x15` take per-viewport entries of the
-//! same object, and **everything else - Zone included - falls through to
-//! `craftArray[n]->+0x640`**, whose writer was not found. Mode `0xe` turned out
-//! to be *Detonator*, not Zone: it selects the `Data/Tex/DetonatorMode*.gtf`
-//! filename table in `Environment_LoadStageTextures`, and `+0x2e10`'s only two
-//! non-incrementing writers are `SPDetonator`'s own two constructors. So HD
-//! carries no [`oag_title::RaceDefaults::zone_stages`] and a Zone race on it
-//! still rests where its loader leaves it - `Environment_LoadStageTextures`
-//! resets `+0x00` to `0` on every load. Per `CLAUDE.md`, 2048's thirteen-stage
-//! numbers are not transplanted onto HD's fifteen-stage ladder to fill that in.
+//! **HD/Fury's own writer of `craftArray[n]->+0x640` was found too, on the
+//! same search that recovered its HUD's speed-class table.**
+//! `Hud_UpdateZoneSpeedClass` (`0x00049718`) - the function that names the
+//! current speed class beside the zone number - walks a fourteen-record
+//! `{ u32 zoneThreshold, u32 stringIdPointer }` table
+//! (`g_ZoneSpeedClassTable`, `0x00860d44`) and its last instruction is
+//! `stw r3, 0x640(r29)`, exactly the field `Environment_UpdateStageBlend`
+//! (`0x003da540`) reads on every mode but the three it special-cases (mode
+//! `0xe`, which turned out to be *Detonator* rather than Zone, and modes
+//! `0xd`/`0x15`, which take a per-viewport entry instead). So HD has the same
+//! architecture 2048 does: the HUD widget drives the grade. This is
+//! [`oag_title::ZoneStages`] again, HD's own fourteen-record table rather than
+//! 2048's seventeen; [`oag_title::RaceDefaults::zone_stages`] is filled in for
+//! HD/Fury, and a Zone race on it escalates the same way 2048's does. Full
+//! evidence, the three checks against the running game and the reproduce
+//! script are in
+//! `docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md`; a
+//! 40,000-tick capture confirms the grade actually steps rung for rung in a
+//! long race (`docs/formats/psp-audio.md`'s "the two ladders can overlap"
+//! section links the same finding from the announcer side).
 //!
 //! **What still is not recovered on either title: the cross-fade's own rate.**
 //! 2048 fades the current stage toward the *next* one by a factor

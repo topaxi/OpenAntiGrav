@@ -560,7 +560,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/gameplay/zone-races-run-on-all-three-titles-now.md)
 - [Both titles' Zone grade escalates and draws now; two narrow render questions remain](handover/rendering/2048-and-hd-ship-an-unread-effectsettings-table.md)
 - [HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not](handover/rendering/hd-zone-stage-textures-are-grounded.md)
-- [HD's Zone ladder draws and its speed-class sound now plays; the class-change blend stays unwired on three unrecovered inputs](handover/frontend/hds-zone-ladder-draws-and-the-zone-to.md)
+- [HD's Zone ladder draws and its speed-class sound now plays; a 40,000-tick run confirms the grade escalates rung for rung but nothing survives past zone 54, and the class-change blend stays unwired on three unrecovered inputs](handover/frontend/hds-zone-ladder-draws-and-the-zone-to.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/gameplay/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the caption pair and opponent place are the open half](handover/frontend/the-hud-shows-a-place-measured-against-the.md) - the shield-bar-colour half resolved 2026-09-05 (threshold plus a one-shot post-hit flash, not a gradient - `Hud_UpdateEnergyBar`, confidence 82); wiring it into `oag_game::hud` is its own thread now
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/gameplay/the-field-drove-in-single-file-and-the.md)
