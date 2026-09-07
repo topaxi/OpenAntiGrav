@@ -829,33 +829,107 @@ chance, a *raised* floor and a *longer* minimum airborne time.
 
 One craft alone, 18,000 ticks, every forward circuit, each cell **arms /
 shield spent** out of a 95-unit pool. `crates/game/tests/ai_roll_ground_truth.rs`,
-`OAG_SWEEP=1`:
+`OAG_SWEEP=1`. **Re-measured 2026-09-07**, after `Tuning::curvature_span` and
+`Tuning::look_speed` moved (see the S-bend section above) - the original
+2026-09-06 table is superseded, not merely stale, since both knobs change how
+long a craft spends airborne and therefore how often it clears
+`roll_airtime` at all:
 
 | Pilot | Novice | Skilled | Elite | Ace |
 | --- | --- | --- | --- | --- |
-| `aggressive` | 2 / 15.2 | 4 / 30.4 | 20 / 152.0 | 42 / 319.2 |
-| `balanced` | 0 / 0.0 | 1 / 7.6 | 6 / 45.6 | 25 / 190.0 |
-| `passive` | 0 / 0.0 | 1 / 7.6 | 3 / 22.8 | 2 / 15.2 |
-| `shy` | 0 / 0.0 | 0 / 0.0 | 0 / 0.0 | 2 / 15.2 |
+| `aggressive` | 4 / 30.4 | 12 / 91.2 | 18 / 136.8 | 40 / 304.0 |
+| `balanced` | 1 / 7.6 | 7 / 53.2 | 6 / 45.6 | 22 / 167.2 |
+| `passive` | 0 / 0.0 | 1 / 7.6 | 0 / 0.0 | 5 / 38.0 |
+| `shy` | 0 / 0.0 | 0 / 0.0 | 2 / 15.2 | 1 / 7.6 |
 
-The lowest any craft finishes on, on a circuit it laps cleanly, is **21.7 of
-95** - an aggressive Ace on `09_Track`. `05_Track` and `07_Track` finish on
+Summed over all four pilots, the ordering the maintainer specified holds
+cleanly: **5 -> 20 -> 26 -> 68** rolls, novice to ace, monotonic. **Per pilot it
+does not always hold**, and the counts explain why rather than a design fault:
+`balanced` (7 skilled vs 6 elite), `passive` (1 skilled vs 0 elite) and `shy`
+(2 elite vs 1 ace) each show a one-roll inversion in the middle tiers. Every
+inversion sits on totals in the low single digits - a once-per-flight coin
+toss over twelve circuits is a small sample, and each tier draws its own
+`Personality` scalar from the same `Pilot` span per race, so a different
+circuit-tier pairing draws a different point in the range even though the
+range itself is fixed. `aggressive`, the only character with double-digit
+counts at every tier, is monotonic at every step - which is the tell that this
+is sampling noise on a rare event and not the propensity axes failing to
+degrade.
+
+The lowest any craft finishes on, on a circuit it laps cleanly, stays close to
+where it was: **09_Track remains the worst case**, though `aggressive` at Ace
+is now less extreme (34.2 left against the old 21.7, `Tuning::look_speed`
+having changed the driving under it). `05_Track` and `07_Track` finish on
 nothing at every tier *including the ones that armed no rolls at all*, so that
-is the circuits' own doing rather than this mechanic's.
+is the circuits' own doing rather than this mechanic's - unchanged from
+before. **A separate, pre-existing pathology surfaced in this re-run and is
+not this mechanic's either**: `13_Track` at `novice` respawns a lone craft
+**221 to 349 times** for every one of the four pilots, finishing the run on
+lap 1-3 rather than 4, all with zero rolls armed - a Novice-tuned craft simply
+cannot get through `13_Track`'s authored jump at `grip_believed` 0.30. That is
+`Difficulty::grip_believed`'s territory, not the roll axes', and is flagged
+here rather than chased, since chasing it is outside this pass's scope.
 
-**Two things the measurement changed.** The invented `0.20` shield floor that
-`oag_physics` carried as a bare constant is now a number no built-in uses: it
-was dormant for as long as the AI did not roll - identical per-circuit figures
-at `0.20` and at `0.00` - and the first race that actually exercised it put an
-aggressive Ace on `09_Track` on **6.5** shield. The hard floor held; what it had
-done was remove the buffer the walls then ate. And `shy` was tuned to roll
-*twice* across the disc rather than never, because never is the original's
-behaviour and not this one's.
+**Two things the original measurement changed, and they still hold.** The
+invented `0.20` shield floor that `oag_physics` carried as a bare constant is
+still a number no built-in uses, and `shy` still rolls a handful of times
+across the disc rather than never, because never is the original's behaviour
+and not this one's.
 
 The harness forces the pilot rather than letting the grid draw it, and that is
 not a detail: `pilot_for_slot` hands slot 1 the same character on every circuit,
 so an unforced lone-craft benchmark measures one of the four and reads as the
-field's.
+field's. **This is also why a lone-craft table alone cannot answer whether the
+mechanic fires in a real race** - see the full-grid measurement below.
+
+#### Does it fire on a full grid, not just in isolation?
+
+Everything above isolates one craft. `crates/game/tests/ai_roll_ground_truth.rs`'s
+`a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less` and
+`an_ace_pilot_rolls_more_than_a_novice_pilot_in_the_same_race` run `09_Track` -
+the worst-case circuit above - with nothing switched off: seven opponents,
+each drawing its own pilot, weapons and traffic live.
+
+**The airborne gate is the bottleneck, not the propensity axes.** Across all
+28 craft-tier combinations measured (seven opponents at each of four
+difficulty tiers), every jump on `09_Track` lands in a narrow band -
+**0.47 to 0.62 seconds**, one outlier at 5.07s from a respawn-relaunch rather
+than a driven jump. `Difficulty::roll_caution` raises `roll_airtime` for
+anything below Ace by 1.3x (Elite) to 2.4x (Novice), so a `BALANCED` pilot's
+raw 0.45-0.70s threshold becomes 0.59-0.91s at Elite and 1.08-1.68s at
+Novice - **above every ordinary jump this circuit produces**. Novice, Skilled
+and Elite armed **zero** rolls between them, all 21 craft, across the whole
+run; only Ace - whose threshold is the pilot's own, untouched - reached one
+craft that armed 4. That is the propensity axes working exactly as specified
+(a lower tier needs a longer jump before it will even consider rolling) run
+into a circuit that mostly does not offer one: on `09_Track` specifically,
+only Ace is structurally reachable at all for most pilots, which is a fact
+about this circuit's jumps rather than a bug in the tempering.
+
+**"Ace against the lower tiers" cannot be built as a physically mixed grid** -
+`race::Options::difficulty` is race-wide, so `Race::start` derives one shared
+`Tuning` (grip, turn allowance, mistakes, reaction) for the whole field; there
+is no per-slot difficulty to ask for. The honest substitute
+`an_ace_pilot_rolls_more_than_a_novice_pilot_in_the_same_race` runs instead:
+`Tuning` fixed at Ace for everybody (so nobody is slow because it cannot
+corner), each opponent's *pilot* separately tempered to a named tier
+(`BALANCED`, two of each tier). On `09_Track` this measured **zero arms at
+every tier**, Ace included - consistent with the uniform-grid finding above,
+since `BALANCED`'s own raw airtime (0.45-0.70s) already sits at the edge of
+what this circuit's ~0.5-0.6s jumps clear, and 0 vs 0 says nothing about
+ordering either way. **This is the airborne-window finding again, not a new
+one**: on a circuit whose jumps run short, `BALANCED` and every tier below Ace
+compete for a threshold the circuit rarely clears, and small per-race sample
+counts (12-14 jumps a race) make an all-zero outcome unremarkable rather than
+alarming.
+
+Shield economics on the full grid, `09_Track`, uniform tiers, end-of-run
+(**not per-lap** - see the per-lap figures in the section above, a different
+unit): 21 of 28 craft finish with more than half their 95-unit pool; the worst
+single craft (`elite`, one opponent) is destroyed outright (`0.0`, lap 3 of
+4), which is wall contact and lap-time pressure rather than the roll mechanic
+- it never armed one. No craft anywhere in the full-grid runs rolled itself
+below the 10-shield floor `no_tier_rolls_itself_down_to_nothing` guards.
 
 ### What a driver can see of the grid
 
