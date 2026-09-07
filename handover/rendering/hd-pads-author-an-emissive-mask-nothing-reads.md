@@ -64,6 +64,47 @@ is complete and this file is only what it did **not** close.
   `hd_pad_ne_tint_probe.rs` for the probes. **Do not re-derive this** - the
   question left open is where the red the maintainer saw actually comes
   from, not whether this file's colour explains it.
+- **Which alpha channel gates the accumulate - answered, asset-side,
+  2026-09-07.** `_ne`'s own alpha, not the diffuse's. Extended
+  `hd_pad_ne_tint_probe.rs` to print swizzles and write masks and traced
+  `R0.w` (the raw `_ne` alpha, written once by the unit-1 `TEX` and never
+  overwritten again) forward: it reaches an accumulate at instruction 41
+  (`Speedup Pad`)/43 (`Weapon Pad`), `MAD dst.xyz, R0.wwww, C.xyzw,
+  accumulated.xyzw`, identically shaped on both pad classes. The diffuse's
+  own alpha (`H5.w`/`H0.w`) is read too, one step later, but as a
+  **multiplier on the whole sum that already includes the `_ne`-gated
+  term**, not a second independent gate - so the "generic shape would spread
+  a glow across 93% of the plate" concern the previous pass raised does not
+  apply: the pad's real formula is not that shape on either channel. Neither
+  is it the generic `mesh.wgsl` shape at all - the pad's own program spends
+  roughly forty instructions on two separate power-curve chains (a
+  per-channel curve applied directly to unit 2's own sample, plus a genuine
+  `N·H` specular exponent, both sharing the `LG2`/`MUL(32.0)`/`EX2` idiom
+  `specular_exponent` already names elsewhere) between the `_ne` sample and
+  the program's end, and the true final instruction adds a third,
+  texture-free term built from constants and the specular scalar. **Unit 2
+  is not an unbound fourth texture** - `program.declared.samplers` names it
+  as `LIGHTMAP_SAMPLER`, the material's own already-known lightmap entry,
+  the same one `skin::picks` already routes into the renderer's
+  `aux`/`lightmap` binding today; the only genuinely unbound texture is
+  `_ne` itself. **The colour patched into the `_ne`-gated term is identified and it is not
+  red**: parameter hashes `0x7611a2d8` (`Speedup Pad`) and `0xce5c4410`
+  (`Weapon Pad`) - previously flagged only as "not `emissive`'s tint" -
+  both author the identical value on `12_sol_2`, `[0.0, 0.768628, 0.992157,
+  0.0]` (RGB `(0, 196, 253)`, a light cyan/blue), shared between two
+  otherwise-independent material files, which reads as a circuit rim/sky
+  tint rather than a pad-specific glow colour. **This does not identify a
+  cooldown state and does not need to**: the accumulate is still the same
+  unconditional one already established, on 18 of 18 chunks. See
+  `docs/rendering/pads.md`'s "Which alpha channel gates the accumulate"
+  section for the full trace, including its `Weapon Pad`-only register-alias
+  caveat (a `TEX H0` sits between `R0`'s write and its use there, where
+  `Speedup Pad`'s equivalent fetch is `TEX H5` and has no such caveat) and
+  the `Program::output_texels()` cross-check that agrees with the hand trace
+  on both programs' output-alpha lane. **Do not re-derive this** - the
+  question left open is still the same one: where the red the maintainer
+  saw comes from, which needs the Ghidra-side vtable diff, not another
+  asset probe.
 
 ## Open
 
@@ -165,40 +206,20 @@ Three things the disc authors that this project does not touch:
 
 ## Next Steps
 
-In order of cost, cheapest first. Step 1 (finding the binding) is done; what
-is left is deciding whether to spend on wiring it, and the two RE leads.
+In order of cost, cheapest first. Step 1 (finding the binding) is done; the
+old step 0 (which alpha channel gates the accumulate) is done too, and
+changed step 1's own cost estimate - see below. What is left is deciding
+whether to spend on wiring it at all, and the two RE leads.
 
-0. **Resolve the accumulate instruction's own swizzle/mask, for a pad
-   material specifically, before spending on step 1.** 2026-09-07 found a
-   real tension that step 1's cost estimate does not yet account for:
-   `mesh.wgsl`'s generic version of this shape gates by the *diffuse's*
-   alpha, and `_cs`'s own alpha covers 93% of the pad texture - not the
-   ~7%, bars-only mask `_ne`'s alpha carries. If that generic shape is what
-   a pad material's own fragment program actually executes, wiring it would
-   spread a normal-map-coloured glow across nearly the whole plate, not the
-   light bars - a materially different (and worse) result than step 1
-   currently assumes. Settling it needs tracing the pad's own final `MAD`
-   instructions' source registers back to the unit-1 `TEX` and reading their
-   swizzles/masks - `rcsmaterial::fragment::Instruction` already carries
-   `mask` and `swizzles`, `crates/render/examples/hd_pad_ne_tint_probe.rs`
-   just doesn't print them yet. Cheap (extend the existing probe), asset-side,
-   no Ghidra needed - do this before step 1's third-texture-slot work, not
-   after. **Account for the alpha test when reading the result**: these pads
-   are alpha-tested (surface role `0x59`, `pad_alpha_test_ground_truth.rs`),
-   so `_cs`'s 93%-non-zero/4%-opaque alpha is a cutout mask, not a blend
-   weight - after the test, surviving fragments skew toward the near-opaque
-   4% (the cross/chevron outline), not spread evenly across the plate. That
-   changes the shape of "the diffuse-alpha gate" reading but not the
-   conclusion: outline-only and bars-only are still two different masks, so
-   whichever this turns out to be, it does not by itself resolve to "matches
-   `_ne`'s bars mask" without the trace this step asks for.
-1. **Wire the emissive layer - and read the trap before touching it.** This is
-   *not* the cheap step it looks like. The naive fix - make `skin::picks`'s
-   `aux` slot land on sampler entry `[1]` instead of `[2]` for a pad material -
-   is a regression, not a fix: it drops the lightmap binding entirely, and
-   `docs/rendering/pads.md` already establishes what that does to an HD pad
-   lit only by its lightmap with `NO_AMBIENT` set - flat blue-looking-correct
-   turns near-black. **The existing guard would not catch it either**:
+1. **Wire the emissive layer - and read the trap before touching it, twice
+   over now.** This is *not* the cheap step it looks like, for two separate
+   reasons. First, the one already known: the naive fix - make
+   `skin::picks`'s `aux` slot land on sampler entry `[1]` instead of `[2]`
+   for a pad material - is a regression, not a fix: it drops the lightmap
+   binding entirely, and `docs/rendering/pads.md` already establishes what
+   that does to an HD pad lit only by its lightmap with `NO_AMBIENT` set -
+   flat blue-looking-correct turns near-black. **The existing guard would
+   not catch it either**:
    `crates/render/tests/pad_alpha_test_ground_truth.rs::an_hd_speedup_pad_draws_visible_pixels`
    counts *lit pixels*, and an added glow layer adds pixels even while the
    lightmap it silently traded away was worth more of them - a smaller,
@@ -211,9 +232,34 @@ is left is deciding whether to spend on wiring it, and the two RE leads.
    `Pick`, `skin()`'s return shape, `Model`, `mesh_render::build`'s bind
    group, `mesh.wgsl`, and a new `slots` flag so the shader knows a material
    has one - touching the bind-group layout every model in the crate uses,
-   not a pad-only change. Do it with a picture check at each step, not just a
-   pixel count: an isolated pad plate through `capture::capture_from`, at
-   player framing, before and after.
+   not a pad-only change.
+
+   **Second, and new as of 2026-09-07's channel trace: the pad's own
+   fragment program is not `mesh.wgsl`'s generic `glow = second.rgb *
+   tint.rgb * first.a` shape at all**, on either alpha channel - it reads
+   `_ne`'s alpha to gate one additive term that is itself scaled by the
+   diffuse's alpha and then by a specular scalar before reaching the
+   output, plus two separate power-curve chains (one against the lightmap
+   sample directly, one a genuine `N·H` specular exponent) - see
+   `docs/rendering/pads.md`'s "Which alpha channel gates the accumulate"
+   section. The "second texture" those curves read is **not a fourth,
+   unbound texture** - it is unit 2, and unit 2 is the material's own
+   already-known lightmap (`Material::lightmap_entry()`'s own
+   `LIGHTMAP_SAMPLER` hash, confirmed against the program's declared
+   samplers), the exact entry `skin::picks` already routes into the
+   renderer's `aux`/`lightmap` binding today. So the texture-slot count is
+   still three, not four: `_cs` (already bound), the lightmap (already
+   bound, just via the existing `aux` slot), and `_ne` (the one genuinely
+   missing binding). **What is bigger than step 1's original estimate is
+   the arithmetic, not the binding count**: landing the generic `emissive`
+   shape - even pointed at the right channel - would draw a materially
+   different picture than the disc's own formula, which needs the
+   lightmap-power curve and the specular-exponent chain reproduced in
+   `mesh.wgsl`, not just a third texture read. **If this is undertaken, say
+   explicitly which of the two (a generic third-slot glow, or the disc's
+   real formula) is being built, and prove it with pictures at each step** -
+   they are not the same feature, and building the first is not a step
+   toward the second.
 2. **Diff the `Pad_Importer` vtables.** `WeaponPad_Importer`'s object takes
    its vtable from `0x0086a730`, seventeen slots. The adjacent table at
    `0x0086a780` shares fourteen and differs at slots 0, 3 and 5. A
