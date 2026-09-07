@@ -214,9 +214,20 @@ fn model_art(cx: &Context<'_>, name: &str) -> Option<crate::sprite::Placed> {
 
 /// How big one piece of the reticle is drawn, in screen pixels.
 ///
-/// The model's own quad: `missile_sight_outer.vex` runs `-3.9989 .. 3.9989` on
-/// both axes, and its `<Mode3D>` block is orthographic over the 480x272 screen
-/// at one unit to the pixel. Rounded to the eight units the exporter plainly
-/// meant, rather than carrying the quantisation of a 16-bit position through to
-/// a screen rectangle.
+/// **Pulse's** model's own quad: its `missile_sight_outer.vex` runs
+/// `-3.9989 .. 3.9989` on both axes, and its `<Mode3D>` block is orthographic
+/// over the 480x272 screen at one unit to the pixel. Rounded to the eight units
+/// the exporter plainly meant, rather than carrying the quantisation of a
+/// 16-bit position through to a screen rectangle.
+///
+/// **It is not every title's number, and this constant flattens that.**
+/// Wipeout Pure authors the same widgets at twelve - its
+/// `missile_sight_inner.vex` measures `[11.999471, 11.999471]` where Pulse's
+/// measures `[7.9978027, 7.9978027]`, both read off the vertices into
+/// [`crate::sprite::Placed::quad_extent`] at load. So Pure's reticle draws two
+/// thirds the size the disc authors. Deliberately left rather than swapped
+/// blind: `model_draw` already takes the per-model extent and this is the one
+/// draw site that does not, but which of the two the *original* uses for a
+/// bracket has not been read, and a capture on Pure is what settles it. See
+/// `docs/ui/hud.md`.
 const SIGHT_SIZE: f32 = 8.0;

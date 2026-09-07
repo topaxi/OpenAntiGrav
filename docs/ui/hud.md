@@ -882,8 +882,14 @@ Recorded so none of this reads as undiscovered work.
   models**: `missile_sight_1` ... `missile_sight_4` all instance
   `missile_sight_outer.vex`, `missile_sight_inner` has its own, and
   `leachbeam_sight_1` ... `leachbeam_sight_4` instance `leachbeam_sight.vex`.
-  Each model is a single 8-unit textured quad, so that block needs no projection
-  of its own - only a per-quad rotation. See
+  Each model is a single flat textured quad, so that block needs no projection
+  of its own - only a per-quad rotation. **The quad's size is a title
+  difference, not a constant**: Pulse's three measure `7.9978027` units square
+  and Pure's `missile_sight_inner.vex` measures `11.999471`, both read off the
+  vertices at load into `oag_game::sprite::Placed::quad_extent`.
+  `hud::sight_draw::SIGHT_SIZE` still draws all of them at Pulse's `8.0`,
+  which is a known flattening rather than a reading - `model_draw` already
+  takes the per-model extent and `bracket_draws` does not. See
   [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md), which also
   identifies the lock tone as `~ROCKLOCK`.
 - **Eliminator's HUD.** Its layout parses; nothing drives its own widgets yet.
