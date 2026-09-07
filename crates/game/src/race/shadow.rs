@@ -219,7 +219,12 @@ pub fn hulls(
 ) -> Vec<Option<Occluder>> {
     let mut out = Vec::with_capacity(teams.len());
     for (slot, team) in teams.iter().enumerate() {
-        let name = crate::race::ship_entry_name(race.ships_for(team), team, mode);
+        // The baseline hull's own occluder regardless of a Normal/Concept
+        // pick: `oag_title::race::HullVariant` swaps the drawn model, not
+        // its shadow geometry, and threading the player's choice through
+        // here would only matter the day the two shapes are shown to
+        // disagree.
+        let name = crate::race::ship_entry_name(race.ships_for(team), team, mode, None);
         let found = archives.read_name(&name).ok().and_then(|blob| {
             let tree = vex::nodes(&blob).ok()?;
             let found: Vec<usize> = tree

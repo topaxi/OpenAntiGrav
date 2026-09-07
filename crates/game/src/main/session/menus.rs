@@ -147,54 +147,9 @@ pub(crate) fn backdrop_seed(
     })
 }
 
-/// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to
-/// `team` - the VARIANT row's supply, on both the RACE page and RACE REMIX.
-/// Empty when `team` names no such axis, or a team `team_variants_for`
-/// recognises through neither its own table nor a guest roster - the same
-/// idiom [`menu::ValueSource::MusicSources`] uses for a choice that cannot
-/// be made.
-pub(super) fn variant_choices(title: &'static oag_title::Title, team: &str) -> Vec<menu::Choice> {
-    let Some(team_variants) = title.race.team_variants_for(team) else {
-        return Vec::new();
-    };
-    team_variants
-        .variants
-        .iter()
-        .map(|variant| menu::Choice::labelled(variant.suffix, variant.label))
-        .collect()
-}
-
-/// Combines `team` with whichever variant `stored` names, for launching -
-/// `title`'s own [`oag_title::RaceDefaults::team_variants_for`] rule, or
-/// `team` unchanged when it names no team this axis applies to. The second
-/// value is a warning to log when `stored` no longer matches one of `team`'s
-/// own variants and the first one offered was raced instead - `Menu::supply`
-/// resets what the row *shows* without touching what `self.settings` holds
-/// until the player next moves it, so `stored` can be stale the moment
-/// `team` changes underneath it, the same way an unrecognised
-/// `race.track`/`race.team` already can be.
-pub(super) fn combine_variant(
-    title: &'static oag_title::Title,
-    team: &str,
-    stored: &str,
-) -> (String, Option<String>) {
-    let Some(team_variants) = title.race.team_variants_for(team) else {
-        return (team.to_string(), None);
-    };
-    let (suffix, warning) = match team_variants.variants.iter().find(|v| v.suffix == stored) {
-        Some(variant) => (variant.suffix, None),
-        None => (
-            team_variants
-                .variants
-                .first()
-                .map_or("", |variant| variant.suffix),
-            Some(format!(
-                "{team} does not offer variant {stored:?}; racing the first one it does offer"
-            )),
-        ),
-    };
-    (team_variants.join.combine(team, suffix), warning)
-}
+#[path = "menus/variant.rs"]
+mod variant;
+pub(super) use variant::{combine_variant, variant_choices};
 
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
@@ -688,12 +643,13 @@ impl Session {
                 });
                 match resolved_team {
                     Some((title, team)) => {
-                        let (combined, warning) =
+                        let (combined, hull_variant, warning) =
                             combine_variant(title, &team, &self.settings.race.variant);
                         if let Some(warning) = warning {
                             warn!("{warning}");
                         }
                         race_options.team = Some(combined);
+                        race_options.hull_variant = hull_variant.map(str::to_string);
                     }
                     None => warn!(
                         "this source does not offer team {:?}, racing as {} instead",

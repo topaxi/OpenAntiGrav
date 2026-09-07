@@ -183,11 +183,13 @@ fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
 }
 
 /// The RACE page's VARIANT row exists for a title with a variant axis and is
-/// dropped for one without - Wipeout Pure and Wipeout Pulse author neither
-/// `team_variants` nor `guest_roster` on any team, so the row would draw
-/// permanently empty and unusable there. RACE REMIX's own VARIANT row is
-/// untouched on every title: `remix.team` can still name an HD/Fury team
-/// regardless of what booted.
+/// dropped for one without. **Wipeout Pure authors neither `team_variants`
+/// nor `guest_roster` nor `hull_variants` on any team**, so the row would
+/// draw permanently empty and unusable there. **Wipeout Pulse authors none of
+/// the first two, but does author the third** - see
+/// `oag_title::race::HullVariant`'s own doc comment for the evidence - so its
+/// row stays. RACE REMIX's own VARIANT row is untouched on every title:
+/// `remix.team` can still name any title's team regardless of what booted.
 #[test]
 fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
     let variant_rows = |definition: &Definition, page_id: &str, setting: &str| {
@@ -204,8 +206,8 @@ fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
     pulse.drop_unavailable_race_variant(oag_pulse::TITLE);
     assert_eq!(
         variant_rows(&pulse, "race", "race.variant"),
-        0,
-        "Wipeout Pulse has no variant axis on any team"
+        1,
+        "Wipeout Pulse authors a real Normal/Concept hull_variants axis"
     );
     assert_eq!(
         variant_rows(&pulse, "remix", "remix.variant"),

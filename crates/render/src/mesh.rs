@@ -368,6 +368,7 @@ mod flap;
 pub use flap::Flap;
 
 pub mod rcs;
+pub mod ship_skin;
 pub mod sky_cube;
 
 /// Reads one named blob out of an archive inside a disc image.

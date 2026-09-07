@@ -15,6 +15,7 @@ mod global;
 mod pads;
 mod roster;
 mod surfaces;
+mod variant;
 mod weapon_models;
 use crate::remix::craft_of;
 use environment::{hd_sky_model, psp2_sky_model};
@@ -233,17 +234,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // **The team this source spells that way**, resolved here for the same
     // reason the circuit above is: this is the first point the title is known.
-    // Craft content, so it follows `craft_title` - see [`Options::team`].
-    let team = match &options.team {
-        Some(asked) => asked.clone(),
-        None => {
-            report.push(format!(
-                "no team named: {}'s own default, {}",
-                craft_title.name, craft_title.race.team
-            ));
-            craft_title.race.team.to_string()
-        }
-    };
+    // See `roster::resolve_team`.
+    let team = roster::resolve_team(options.team.as_deref(), craft_title, &mut report);
+
+    // The player's own alternate hull file, resolved the same place `team`
+    // is and for the same reason. See `variant::resolve`.
+    let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
 
     let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
     let stats_blob = read(craft_of(&mut craft, &mut archives), &stats_name)?;
@@ -325,10 +321,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let liveries = livery::load(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
-        craft_title.race,
-        options.mode,
-        craft_title.flare,
-        options.lod,
+        &livery::LoadContext {
+            race: craft_title.race,
+            mode: options.mode,
+            flare: craft_title.flare,
+            lod: options.lod,
+        },
+        hull_variant,
         &mut report,
     )?;
     report.push(format!(

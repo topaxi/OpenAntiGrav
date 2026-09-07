@@ -45,9 +45,13 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,
-    // Pulse authors one roster and no numbered variant of anything in it.
+    // Pulse authors one roster and no *second directory* for any team in it.
     team_variants: None,
     guest_roster: None,
+    // It does author a second hull *file* per team, inside that one
+    // directory - see `oag_title::race::HullVariant`'s own doc comment for
+    // the evidence (`crates/game/examples/pulse_variant_probe.rs`).
+    hull_variants: Some(HULL_VARIANTS),
     // Four rungs, and the four are the *per-team* file's, not the global
     // one's. Pulse's `Data\XML\HandlingStats.xml` authors five `<GlobalClass>`
     // blocks with `VECTOR` first, and every one of the eight teams'
@@ -203,6 +207,23 @@ pub const SHARED_SHIELD: &str = r"Data\Weapons\shield.vex";
 /// and because naming it is what stops the next reader concluding the shield has
 /// one model; nothing loads it until this engine has an internal camera.
 pub const COCKPIT_SHIELD: &str = r"Data\Weapons\vr_shield_cockpit.vex";
+
+/// Every team's own alternate hull *file* - `Ship.vex`, the baseline every
+/// mode but Zone draws, and `extra.vex`, the `PI_TeamModel name="Concept"`
+/// declares on every one of Pulse's eight base teams. See
+/// [`oag_title::race::HullVariant`]'s own doc comment for the evidence and for
+/// why `PI_TeamModel name="Zone"`'s own `zone01.vex` is deliberately not a
+/// third entry here.
+pub const HULL_VARIANTS: &[oag_title::race::HullVariant] = &[
+    oag_title::race::HullVariant {
+        stem: ships::HULL,
+        label: "Normal",
+    },
+    oag_title::race::HullVariant {
+        stem: "extra",
+        label: "Concept",
+    },
+];
 
 /// The four per-team `.vex` models a race can ask for, and how the path is built.
 pub mod ships {

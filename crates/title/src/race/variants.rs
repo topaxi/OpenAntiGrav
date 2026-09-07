@@ -120,6 +120,63 @@ impl VariantJoin {
     }
 }
 
+/// A team's own alternate hull **file**, inside its own directory - see
+/// [`RaceDefaults::hull_variants`].
+///
+/// **Not a [`TeamVariant`].** That type's `suffix` combines into a *new team
+/// identity* - a second directory carrying its own tuning, its own string-table
+/// entry, everything [`TeamVariants::recognizes`] and [`VariantJoin::combine`]
+/// exist for. A [`HullVariant`]'s `stem` does none of that: the team stays
+/// exactly who it was, at exactly the directory it always resolved to, and
+/// only the hull *file* inside it changes - `Ship.vex` for `extra.vex`, both
+/// siblings of the same `handlingstats.xml`. Reusing [`TeamVariant`] for this
+/// would make `combine`'s return value a lie for every other lookup a race
+/// makes off a team id (handling stats, the string-table label, the roster
+/// membership check `teams_for_slots` runs).
+///
+/// **Measured against Pulse's own `Data\Plugins\PI001\Definition.xml`,
+/// disc-shipped, not a DLC pack's**: every one of its eight base teams
+/// declares `PI_TeamModel name="Normal"` (`Ship.vex`, plus two nested
+/// `PI_ModelSkin`s that are a texture swap on this same hull - see
+/// `oag_formats::ship_skin` - not a second one) and `PI_TeamModel
+/// name="Concept"` (`Values location="extra"`), each `Unlock`-gated. Confirmed
+/// against the archive: `extra.vex` resolves for all eight.
+/// `crates/game/examples/pulse_variant_probe.rs` reproduces both counts and
+/// the file list without printing the `Unlock` loyalty numbers themselves,
+/// which are shipped tuning data.
+///
+/// **A third declared model, `PI_TeamModel name="Zone"` (`Values
+/// location="zone01"`), is deliberately not one of [`RaceDefaults::hull_variants`]'s
+/// entries.** `Data\Ships\<Team>\zone01.vex` really does exist for all eight
+/// teams, but it is not what a Zone race loads: that is `Zone.vex`, reached
+/// through a recovered selector
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`), and the two files
+/// are not identical. What `zone01.vex` is for is not established, so
+/// offering it here would be authoring a stand-in for something the disc
+/// already specifies differently - the rule `CLAUDE.md`'s "never invent what
+/// the assets already author" section states outright. Left as an open
+/// question on the handover thread instead.
+///
+/// **There is no save or progression system in this project**, so `Unlock`'s
+/// `loyalty` thresholds cannot be modelled - the same gap
+/// [`TeamVariant`]/[`GuestRoster`] already leave for HD's and 2048's own
+/// reskins. Every variant is offered unconditionally, the same stand-in
+/// footing `oag_game::livery::teams_for_slots` already stands on for which
+/// team flies which grid slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HullVariant {
+    /// The file stem inside the team's own directory, always spelled out -
+    /// `"Ship"` for the title's own baseline hull, or the `PI_TeamModel`'s
+    /// own `location` otherwise (`"extra"` for Pulse's Concept). Unlike
+    /// [`TeamVariant::suffix`], never empty: there is no identity to combine
+    /// into, so there is nothing for an empty string to mean here.
+    pub stem: &'static str,
+    /// What to call it to a player. Not shipped text - `PI_TeamModel`'s own
+    /// `name` attribute, the same convention [`TeamVariant::label`] follows
+    /// for HD's "Fury Concept"/"Fury Nitro".
+    pub label: &'static str,
+}
+
 impl RaceDefaults {
     /// Which [`TeamVariants`] table a **bare** team id is offered variants
     /// from - this title's own [`Self::team_variants`], or
@@ -143,18 +200,23 @@ impl RaceDefaults {
 
     /// Whether this title has a variant axis at all, for *any* team.
     ///
-    /// Wipeout Pure and Wipeout Pulse author neither [`Self::team_variants`]
-    /// nor [`Self::guest_roster`] - the feature does not exist on either
-    /// title, on any team, ever, not "exists but happens to be empty for the
-    /// team currently held". That distinction is what lets `oag_game` drop
-    /// the RACE page's VARIANT row entirely for those two rather than draw it
-    /// permanently unusable: see `oag_game`'s `boot::shell_definition`. The
-    /// same disjunction [`Self::team_variants_for`] already encodes ("own
-    /// table, then guest roster"), kept in one place so a third source added
-    /// later cannot be missed at one call site and not the other.
+    /// **Wipeout Pure authors none of the three sources below, on any team,
+    /// ever - measured against its own `Definition.xml`, zero `PI_TeamModel`
+    /// occurrences.** Wipeout Pulse was believed to be the same until
+    /// [`Self::hull_variants`] was measured: it authors no
+    /// [`Self::team_variants`] and no [`Self::guest_roster`], but does author
+    /// a real, disc-shipped `PI_TeamModel`/`PI_ModelSkin` axis, on every base
+    /// team - see [`HullVariant`]'s own doc comment for the evidence. So this
+    /// is a three-way disjunction rather than the two-way one it was: not
+    /// "exists but happens to be empty for the team currently held", true
+    /// three sources, checked in one place so a caller adding a fourth cannot
+    /// miss one of the earlier three the way this one was missed at first.
+    /// This is what lets `oag_game` drop the RACE page's VARIANT row entirely
+    /// on Pure - and only Pure - rather than draw it permanently unusable:
+    /// see `oag_game`'s `boot::shell_definition`.
     #[must_use]
     pub fn has_team_variants(&self) -> bool {
-        self.team_variants.is_some() || self.guest_roster.is_some()
+        self.team_variants.is_some() || self.guest_roster.is_some() || self.hull_variants.is_some()
     }
 
     /// Which directory an **already-combined** team id's guest roster lives

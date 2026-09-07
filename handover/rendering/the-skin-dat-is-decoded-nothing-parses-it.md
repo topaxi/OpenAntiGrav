@@ -49,15 +49,38 @@ arithmetic closes with nothing left over against all sixteen real files.
 
 ## Open
 
-- **Nothing parses the format.** `oag-formats` has no reader for it. This is
-  the smallest next piece and it is now fully specified - see
-  [`ship-skin.md`](../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s byte
-  table. A ground-truth test against `Data\Ships\Assegai\ship_alt.dat` is
-  cheap: entry 632 of `pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad`, 26912
-  bytes, header `Assegai\0` then `ms`.
-- **Nothing draws a livery.** Now that it is settled as a texture swap, this is
-  a variant selection on `Livery` rather than a second model path - the
-  question the previous thread could not answer.
+- **`oag_formats::ship_skin` parses the header and the four blocks, and
+  `oag_render::mesh::ship_skin::apply` overlays a parsed skin onto an
+  already-built `Model`'s texture slots - matched by name, case-insensitive,
+  the same rule `Skin_ApplyToModel` uses.** 2026-09-07, both tested (unit and
+  ground-truth against `Data\Ships\Assegai\ship_alt.dat`). **Nothing calls
+  `apply` from a race yet** - see Next Steps: `catalogue::Team` still does not
+  collect `PI_ModelSkin`, and no caller reads an Alternative/Eliminator pick.
+  **Deliberately not in scope**: `Skin_ComposeQuarterAtlas`'s fourth-slot
+  composite (the quadrant-mapping question below is still open).
+- **The other axis this thread's schema also describes - `PI_TeamModel`'s
+  Normal/Concept **hull** choice, not the skin - is recovered and wired end
+  to end, separately from the skin work above.** 2026-09-07: a session
+  merging in a same-day main-branch change (`9e4a2907`, "drop the RACE page's
+  VARIANT row on titles with no variant axis") found its premise wrong for
+  Pulse - every one of its eight base teams declares a real, disc-shipped
+  `PI_TeamModel name="Concept"` (`extra.vex`), confirmed against
+  `pulse-psp-usa.chd` by `crates/game/examples/pulse_variant_probe.rs`. Landed
+  as `oag_title::race::HullVariant` (a third, structurally different source
+  from `TeamVariants`/`GuestRoster` - see that type's own doc comment for why
+  it does not fit either), wired through `--variant`/the RACE page's VARIANT
+  row/RACE REMIX, and verified end to end on the real disc
+  (`livery_ground_truth.rs::a_hull_variant_swaps_the_players_own_hull_and_nobody_elses`).
+- **`PI_TeamModel name="Zone"` names a third file, `zone01.vex`, and it is
+  deliberately not offered as a `HullVariant`.** `Data\Ships\<Team>\zone01.vex`
+  really does exist for all eight base teams - confirmed by the same probe -
+  but it is not what a Zone race loads: that is `Zone.vex`, reached through a
+  recovered selector (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`), and
+  the two files are not byte-identical. **What `zone01.vex` is for is not
+  established.** Diffing it against `Zone.vex` and `Ship.vex` - vertex/triangle
+  counts first, geometry after - is the next real step here; until then,
+  offering it anywhere would be authoring a stand-in for something the disc
+  already specifies differently.
 - **The quadrant mapping of the composed fourth texture is conditional.** It is
   read as a linear layout; the format setter's trailing `1` argument may be a
   swizzle flag, which would move each tile. Settle it before drawing the
@@ -99,19 +122,26 @@ arithmetic closes with nothing left over against all sixteen real files.
   about the check.
 - **`catalogue::Team` still does not collect `PI_TeamModel`/`PI_ModelSkin`.**
   Deliberately, and the module's rule still applies: land the fields in the
-  same change as the consumer, not before.
+  same change as the consumer. `oag_title::race::HullVariant` sidesteps this
+  for the Normal/Concept hull axis (it needs no per-team catalogue data, since
+  every team offers the same two stems) - it is only the *skin* half
+  (Alternative/Eliminator) that still wants a real per-team `PI_ModelSkin`
+  path, which nothing collects yet.
 
 ## Next Steps
 
-- Write the `.dat` reader in `oag-formats` from the byte table, with an
-  `#[ignore]`d ground-truth test over `Assegai\ship_alt.dat`. Take dimensions
-  as a parameter or derive them from the total; do not invent a header field.
-- Then, in one change, extend `catalogue::Team` to collect
-  `PI_TeamModel`/`PI_ModelSkin` and give `Livery` a variant it can select.
-- Decide how a skin gets picked for a race - mode-gated the way the original
-  appears to do it, or a stand-in the way
-  [`livery::teams_for_slots`](../../crates/game/src/livery.rs) already is for slot
-  assignment. This is a design call, and it only needs making once the parser
-  and the collection above exist.
+
+- Give the skin axis (`ship_skin::parse` + `mesh::ship_skin::apply`, both
+  landed) a real caller: extend `catalogue::Team` to collect `PI_ModelSkin`
+  paths under `PI_TeamModel name="Normal"`, then decide how a race picks
+  Alternative/Eliminator - mode-gated the way the original appears to (see the
+  `0x12` trap below - do **not** build that gate without settling it first),
+  or an honest stand-in on the same footing
+  [`livery::teams_for_slots`](../../crates/game/src/livery.rs) already stands on.
+  This is a design call, and it only needs making once the collection exists.
+- Diff `Data\Ships\<Team>\zone01.vex` against `Zone.vex` and `Ship.vex` to
+  find out what the third `PI_TeamModel` declares - vertex/triangle counts
+  first. Independent of the skin work above.
 - Optional and independent: trace the six non-lobby callers of
-  `Skin_ApplyToModel` to confirm the mode-vs-unlock split above.
+  `Skin_ApplyToModel` to confirm the mode-vs-unlock split for
+  Alternative/Eliminator.

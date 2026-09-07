@@ -417,29 +417,32 @@ impl Session {
             Ok(catalogue) => match catalogue.team(&self.settings.remix.team) {
                 Some(team) => {
                     let team = team.to_string();
-                    race_options.team = Some(match variant_title {
+                    let (combined, hull_variant) = match variant_title {
                         Some(title) => {
-                            let (combined, warning) =
+                            let (combined, hull_variant, warning) =
                                 combine_variant(title, &team, &self.settings.remix.variant);
                             if let Some(warning) = warning {
                                 warn!("{warning}");
                             }
-                            combined
+                            (combined, hull_variant)
                         }
-                        // No title to check `team_variants` against - racing the
-                        // bare id, which fails the same way this crate's own
-                        // original bug report did if `team` is one that needs a
-                        // second directory. Warned rather than silent, so a
-                        // dead-end team picker names itself instead of surfacing
-                        // as `race::load`'s own "no entry at ..." error.
+                        // No title to check `team_variants`/`hull_variants`
+                        // against - racing the bare id, which fails the same
+                        // way this crate's own original bug report did if
+                        // `team` is one that needs a second directory. Warned
+                        // rather than silent, so a dead-end team picker names
+                        // itself instead of surfacing as `race::load`'s own
+                        // "no entry at ..." error.
                         None => {
                             warn!(
                                 "{team}: could not resolve its own title, so no \
                                  VARIANT was applied; this fails if {team} needs one"
                             );
-                            team
+                            (team, None)
                         }
-                    });
+                    };
+                    race_options.team = Some(combined);
+                    race_options.hull_variant = hull_variant.map(str::to_string);
                 }
                 None => warn!(
                     "this craft title does not offer team {:?}, racing as its own \

@@ -137,6 +137,25 @@ pub fn teams_for_slots(player: &str, available: &[String], slots: usize) -> Vec<
     out
 }
 
+/// The per-race context [`load`]/[`one`] need beyond the team list, the
+/// archives and the report - grouped so neither function's own parameter
+/// list grows past `clippy::too_many_arguments` every time a title fact
+/// joins it.
+#[derive(Debug, Clone, Copy)]
+pub struct LoadContext<'a> {
+    /// Where a team's hull, plume, shield and handling stats resolve - see
+    /// [`oag_title::RaceDefaults::ships_for`].
+    pub race: &'a oag_title::RaceDefaults,
+    /// Which mode's rules the race runs under - selects [`ship_entry_name`]'s
+    /// Zone/non-Zone branch.
+    pub mode: Mode,
+    /// This title's own engine-flare mechanism - geometry, a sprite, or
+    /// unread. See [`oag_title::flare::Flare`].
+    pub flare: &'a oag_title::flare::Flare,
+    /// Which level of detail to build each model at.
+    pub lod: mesh::Lod,
+}
+
 /// Loads one [`Livery`] per entry of `teams`, in that order.
 ///
 /// Each distinct team is read once however many slots fly it, because a
@@ -148,19 +167,24 @@ pub fn teams_for_slots(player: &str, available: &[String], slots: usize) -> Vec<
 /// Only if the **first** team's hull cannot be read or built. That one is the
 /// player's, and a race with no hull for the player is not a race; every other
 /// failure falls back to slot 0's hull and says so in `report`.
+///
+/// `hull_variant` is [`crate::race::ship_entry_name`]'s own override, applied
+/// to **slot 0 only**: it is the RACE page's own pick for the player's craft,
+/// and nothing offers an opponent a choice of their own - see
+/// `oag_title::race::HullVariant`'s doc comment for why there is no unlock
+/// model behind it either.
 pub fn load(
     archives: &mut oag_assets::Archives,
     teams: &[String],
-    race: &oag_title::RaceDefaults,
-    mode: Mode,
-    flare: &oag_title::flare::Flare,
-    lod: mesh::Lod,
+    ctx: &LoadContext,
+    hull_variant: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
     let mut out: Vec<Livery> = Vec::with_capacity(teams.len());
     for (slot, team) in teams.iter().enumerate() {
         // Already loaded for an earlier slot: clone rather than re-read, which
-        // is what makes a repeated livery cost nothing.
+        // is what makes a repeated livery cost nothing. Never true for slot 0
+        // itself, so a variant pick can only ever land once, on the player.
         if let Some(first) = out.iter().position(|other| &other.team == team) {
             let source = &out[first];
             let livery = Livery {
@@ -184,10 +208,9 @@ pub fn load(
         match one(
             archives,
             team,
-            race.ships_for(team),
-            mode,
-            flare,
-            lod,
+            ctx.race.ships_for(team),
+            ctx,
+            if slot == 0 { hull_variant } else { None },
             report,
         ) {
             Ok(livery) => out.push(livery),
@@ -220,12 +243,11 @@ fn one(
     archives: &mut oag_assets::Archives,
     team: &str,
     ships: oag_title::race::ShipPaths,
-    mode: Mode,
-    flare: &oag_title::flare::Flare,
-    lod: mesh::Lod,
+    ctx: &LoadContext,
+    hull_variant: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ship_entry_name(ships, team, mode);
+    let hull_name = ship_entry_name(ships, team, ctx.mode, hull_variant);
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
@@ -290,7 +312,7 @@ fn one(
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
-        let lit = authored_flare(archives, team, ships.dir, flare, nozzle, report);
+        let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
@@ -304,10 +326,10 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, ships.dir, lod, report),
+            shield: shell(archives, team, ships.dir, ctx.lod, report),
         });
     }
-    let mut hull = mesh::build_with_textures(&hull_name, &blob, None, lod)?;
+    let mut hull = mesh::build_with_textures(&hull_name, &blob, None, ctx.lod)?;
     // The PS2 signature: `Texture` nodes exist (the model wants textures) but
     // every one is missing (its embedded block was empty). Only then is the
     // directory-position heuristic worth trying - see `ps2_texture_set`.
@@ -315,7 +337,7 @@ fn one(
         && hull.textures.iter().all(Option::is_none)
         && let Some(external) = ps2_texture_set(archives, &hull_name)
     {
-        hull = mesh::build_with_textures(&hull_name, &blob, Some(&external), lod)?;
+        hull = mesh::build_with_textures(&hull_name, &blob, Some(&external), ctx.lod)?;
     }
     report.push(format!(
         "{hull_name}: {} triangle(s), model centre {:?}, radius {:.2}",
@@ -326,13 +348,13 @@ fn one(
 
     let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
 
-    let (boost, boost_uv) = plume(archives, team, ships, mode, lod, report);
-    let shield = shell(archives, team, ships.dir, lod, report);
+    let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, ctx.lod, report);
+    let shield = shell(archives, team, ships.dir, ctx.lod, report);
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
-    let lit = authored_flare(archives, team, ships.dir, flare, nozzle, report);
+    let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
     Ok(Livery {
         team: team.to_string(),
         hull,

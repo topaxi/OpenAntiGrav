@@ -53,6 +53,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: None,
+    // HD/Fury's own reskins are `team_variants`' own measured shape - a
+    // second directory, not a second file inside one - so there is nothing
+    // for this third axis to add. See `oag_title::race::HullVariant`.
+    hull_variants: None,
     // Four, the same shape Pulse has and for the same reason. HD's global
     // `handlingstats.xml` authors five `<GlobalClass>` rungs with `VECTOR`
     // first - identical to both Pulse pressings - and **no HD team file

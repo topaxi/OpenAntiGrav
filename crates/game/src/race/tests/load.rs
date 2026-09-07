@@ -15,7 +15,7 @@ use super::*;
 fn the_boost_plume_follows_the_hull_its_mode_selects() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
-        let hull = ship_entry_name(craft, "Feisar", mode);
+        let hull = ship_entry_name(craft, "Feisar", mode, None);
         let plume = boost_entry_name(craft, "Feisar", mode);
         let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
         assert!(
@@ -30,6 +30,35 @@ fn the_boost_plume_follows_the_hull_its_mode_selects() {
     assert_eq!(
         boost_entry_name(craft, "Feisar", Mode::TimeTrial),
         r"Data\Ships\Feisar\shipboost.vex"
+    );
+}
+
+/// `hull_variant` swaps the file stem inside the team's own directory, and
+/// leaves everything else about the path - the directory, the team - alone.
+#[test]
+fn a_hull_variant_override_replaces_only_the_file_stem() {
+    let craft = oag_pulse::race::DEFAULTS.ships();
+    assert_eq!(
+        ship_entry_name(craft, "Assegai", Mode::TimeTrial, Some("extra")),
+        r"Data\Ships\Assegai\extra.vex"
+    );
+    assert_eq!(
+        ship_entry_name(craft, "Assegai", Mode::TimeTrial, None),
+        r"Data\Ships\Assegai\Ship.vex",
+        "no override is exactly today's baseline"
+    );
+}
+
+/// A Zone run ignores the override - see [`ship_entry_name`]'s own doc
+/// comment for why: Zone's hull is a title fact of its own, unaffected by
+/// which model variant the RACE page picked.
+#[test]
+fn a_hull_variant_override_does_not_reach_zone_mode() {
+    let craft = oag_pulse::race::DEFAULTS.ships();
+    assert_eq!(
+        ship_entry_name(craft, "Assegai", Mode::Zone, Some("extra")),
+        ship_entry_name(craft, "Assegai", Mode::Zone, None),
+        "Zone's own hull selection does not consult the override at all"
     );
 }
 

@@ -349,18 +349,20 @@ impl Definition {
     /// because a row that vanishes mid-session leaves the player unable to
     /// find what took it away. Neither concern applies here - a title is
     /// fixed for the life of a boot, so this runs once before the row is ever
-    /// drawn, and the row does not exist on Wipeout Pure or Wipeout Pulse on
-    /// *any* team, not merely the one currently held, the way the
-    /// `disabled_by` machinery's "not now" is scoped to answer. Row count,
-    /// the scroll window and `Menu::held`'s page scan all read
-    /// [`Page::entries`] directly, so removing the entry here - once, before
-    /// any of the three ever sees it - is what keeps all three in agreement;
-    /// skipping it only at draw time would leave a gap in the strip with the
-    /// cursor still able to land on it.
+    /// drawn, and the row does not exist on Wipeout Pure on *any* team, not
+    /// merely the one currently held, the way the `disabled_by` machinery's
+    /// "not now" is scoped to answer. **Wipeout Pulse was believed to be the
+    /// same and is not** - see `oag_title::race::HullVariant`'s own doc
+    /// comment - so this only drops the row on Pure now. Row count, the
+    /// scroll window and `Menu::held`'s page scan all read [`Page::entries`]
+    /// directly, so removing the entry here - once, before any of the three
+    /// ever sees it - is what keeps all three in agreement; skipping it only
+    /// at draw time would leave a gap in the strip with the cursor still
+    /// able to land on it.
     ///
-    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name an
-    /// HD/Fury or Wipeout 2048 team regardless of which title booted, so it
-    /// keeps offering real variants even in a Pure- or Pulse-booted session.
+    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name any
+    /// title's team regardless of which one booted, so it keeps offering
+    /// real variants even in a Pure-booted session.
     pub fn drop_unavailable_race_variant(&mut self, title: &oag_title::Title) {
         if title.race.has_team_variants() {
             return;

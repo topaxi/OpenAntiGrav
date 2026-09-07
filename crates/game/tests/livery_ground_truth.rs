@@ -240,6 +240,64 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     );
 }
 
+/// **The RACE page's Normal/Concept axis, off the real disc.** `--variant
+/// extra` draws Assegai's `extra.vex` for the player alone - a different
+/// hull from the baseline `Ship.vex`, and different from what every
+/// opponent still wears, since nothing offered them a choice of their own.
+/// See `oag_title::race::HullVariant`.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_hull_variant_swaps_the_players_own_hull_and_nobody_elses() {
+    let Some(image) = image() else {
+        return;
+    };
+    let baseline = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: Some("Assegai".to_string()),
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading the baseline race");
+
+    let concept = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: Some("Assegai".to_string()),
+        hull_variant: Some("extra".to_string()),
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading the Concept race");
+
+    let triangles =
+        |loaded: &race::Loaded, slot: usize| loaded.liveries[slot].hull.indices.len() / 3;
+    assert_ne!(
+        triangles(&baseline, 0),
+        triangles(&concept, 0),
+        "extra.vex should decode to a different triangle count from Ship.vex \
+         for the player's own slot"
+    );
+    assert_eq!(
+        baseline.liveries[0].team, concept.liveries[0].team,
+        "the team's own identity is unaffected by the hull-file override"
+    );
+
+    // Slot 1's team was not asked for a variant, so its hull must be
+    // unaffected by the player's own pick - the property that says this is
+    // a per-slot override and not a global one.
+    if baseline.liveries[1].team == concept.liveries[1].team {
+        assert_eq!(
+            triangles(&baseline, 1),
+            triangles(&concept, 1),
+            "an opponent's own hull should not change when only the player's \
+             variant does"
+        );
+    }
+}
+
 /// **Wipeout HD keeps its locator nodes in a file of their own.** Pulse and
 /// the PS2 port put every `Engine Flare` and `Ship Collision Fx` node in the
 /// hull's own `.vex`; HD's `Ship.vex` carries the class ids and no nodes of
@@ -272,10 +330,13 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
     let liveries = oag_game::livery::load(
         &mut archives,
         &teams,
-        oag_hd::TITLE.race,
-        oag_race::Mode::SingleRace,
-        oag_hd::TITLE.flare,
-        oag_render::mesh::Lod::default(),
+        &oag_game::livery::LoadContext {
+            race: oag_hd::TITLE.race,
+            mode: oag_race::Mode::SingleRace,
+            flare: oag_hd::TITLE.flare,
+            lod: oag_render::mesh::Lod::default(),
+        },
+        None,
         &mut report,
     )
     .expect("the livery loads");
