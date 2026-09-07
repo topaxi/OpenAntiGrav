@@ -2,6 +2,17 @@
 
 Both control schemes are implemented. Note the scheme resolves once at startup and applies to the next race, not the running one.
 
+"Both control schemes are implemented" is true of the *gesture* halves only -
+the double-tap and the flick's arm/fire logic. Novice's *airbrake* half did
+not follow `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s
+recovered action table at all until fixed in
+`crates/gameplay/src/controls.rs`: `ship_controls` filled
+`airbrake_left`/`airbrake_right` straight from "is `L` held"/"is `R` held"
+regardless of scheme, so a novice player got a phantom left airbrake on `L`
+and only one airbrake on `R` where both were meant. Pinned by
+`crates/gameplay/src/controls.rs`'s
+`novices_airbrake_reads_r_alone_and_l_arms_only_the_sideshift` test.
+
 **The veteran double-tap now does have a runtime leg.** Captured 2026-08-27 off a real, booted `pulse-psp-usa.chd` (recipe: `docs/reverse-engineering/ppsspp-debugger.md`), with the trigger's own five timer floats added as new trace columns (`scripts/psp_trace_fields.py`'s `ENTITY_FIELDS`) so the capture reads the constants directly rather than inferring them from where the ship ended up. Against a committed control (`sideshift-double-tap-control.inputs`, the same script with the two `l` tokens dropped), the tap window and shift force read exactly `0.25 s`/`0.2 s` at the ticks the static reading in `docs/ghidra/functions/psp-pulse-usa/input-bindings.md` predicted - see that page's new runtime section for the tick-by-tick numbers, now confidence 95 for the left-hand offsets.
 
 **One correction the capture forced on the static reading itself: the gap between sideshifts is ~1.2 s, not 1.0 s.** `ss_lockout` is re-armed to `1.0` on every tick the shift force is still running (12 ticks, ~0.2 s), so it does not start counting down until the force expires - the two timers add rather than overlap. `input-bindings.md`'s old "one second between sideshifts" line undercounted by the shift duration. `crates/physics/src/airbrake.rs`'s `advance_sideshift` already ported the additive version correctly (re-arms `shift_lockout` the same way, and `airbrake/tests.rs` already asserted the `(SIDESHIFT_DURATION + SIDESHIFT_LOCKOUT)` total) - this was a doc-precision fix, not a port bug.
