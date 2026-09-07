@@ -47,6 +47,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 width: 64,
                 height: 64,
                 quad_extent: Some([50.0, 50.0]),
+                blend: None,
             },
         ),
         (
@@ -57,6 +58,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 width: 32,
                 height: 16,
                 quad_extent: Some([31.423_908, 6.484_658_2]),
+                blend: None,
             },
         ),
         (
@@ -67,6 +69,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 width: 32,
                 height: 16,
                 quad_extent: Some([56.622_99, 11.677_669]),
+                blend: None,
             },
         ),
     ])
@@ -117,7 +120,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
         "the grid and the icon, in that paint order: {drawn:?}"
     );
 
-    let Draw::Sprite {
+    let Draw::BlendedSprite {
         color: grid_color, ..
     } = drawn[0]
     else {
@@ -129,7 +132,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
         "the grid authors no colour of its own"
     );
 
-    let Draw::Sprite {
+    let Draw::BlendedSprite {
         color: icon_color,
         rect,
         ..
@@ -168,7 +171,7 @@ fn an_icon_model_with_no_authored_colour_draws_white() {
 
     let drawn = pickup_model_draws(&cx, Weapon::Quake);
     assert_eq!(drawn.len(), 2, "{drawn:?}");
-    let Draw::Sprite { color, .. } = drawn[1] else {
+    let Draw::BlendedSprite { color, .. } = drawn[1] else {
         panic!("expected a sprite draw: {:?}", drawn[1]);
     };
     assert_eq!(color, [1.0, 1.0, 1.0, 1.0]);

@@ -122,7 +122,7 @@ fn bracket_draws(
         let Some(placed) = model_art(cx, name) else {
             return;
         };
-        out.push(Draw::RotatedSprite {
+        out.push(Draw::BlendedSprite {
             // The model is a quad centred on its own origin, so the piece's
             // centre is the middle of the rectangle rather than its corner.
             rect: [
@@ -139,6 +139,10 @@ fn bracket_draws(
             ],
             color: colour,
             rotation: piece.rotation,
+            // The model's own declared class, never a choice made here. All
+            // three sight models declare `Additive`; see
+            // `crate::sprite::Placed::blend`.
+            blend: placed.blend,
         });
     };
 

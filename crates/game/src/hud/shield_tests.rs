@@ -53,6 +53,7 @@ fn sheet() -> crate::sprite::Sheet {
             width: 128,
             height: 128,
             quad_extent: None,
+            blend: None,
         },
     )])
 }

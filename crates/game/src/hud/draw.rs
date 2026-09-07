@@ -534,7 +534,7 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
     let placed = cx.sheet.get(&model.src)?;
     let [w, h] = placed.quad_extent?;
     let [x, y, _z] = model.position;
-    Some(Draw::Sprite {
+    Some(Draw::BlendedSprite {
         // Centred on its own authored position, the same convention the sight
         // brackets' quads use - see `bracket_draws`.
         rect: [x - w * 0.5, y - h * 0.5, w, h],
@@ -545,6 +545,15 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
             placed.height as f32,
         ],
         color,
+        // Neither the icon nor its grid turns - the sight brackets are the only
+        // `<Mode3D>` widget that does.
+        rotation: 0.0,
+        // The model's own declared class. **Unmeasured here**: no Pure disc is
+        // present in this worktree, so what Pure's eleven icon models declare
+        // is whatever their own `pass_mask` says, taken as read. A model whose
+        // batches are opaque carries `None` and draws exactly as it did before
+        // this variant existed. See `crate::sprite::Placed::blend`.
+        blend: placed.blend,
     })
 }
 

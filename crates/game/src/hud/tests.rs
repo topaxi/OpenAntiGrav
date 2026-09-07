@@ -584,6 +584,7 @@ fn a_sprite_is_offset_by_its_own_texture() {
         width: 64,
         height: 64,
         quad_extent: None,
+        blend: None,
     };
     let sheet =
         crate::sprite::Sheet::placed_at(&[("first.mip", placed(0)), ("second.mip", placed(200))]);
@@ -652,6 +653,7 @@ static SAMPLE_SHEET: std::sync::LazyLock<crate::sprite::Sheet> = std::sync::Lazy
             width: 256,
             height: 256,
             quad_extent: None,
+            blend: None,
         },
     )])
 });
