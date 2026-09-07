@@ -1204,6 +1204,37 @@ the gap [HANDOVER](../../HANDOVER.md) already names: eight probes taking only th
 deepest hit, and no `cross(r, impulse)` angular response. This run is the first
 measurement that says *when* that gap bites, rather than that it exists.
 
+> **Refuted 2026-09-07, and in the opposite direction.** The paragraph above is
+> kept as the historical reading; every load-bearing claim in it is now false.
+> Re-run against *this same capture* at `--script-lead 2` (this run was at lead
+> 0), single-seeded, 3,146 ticks: `grounded  max error 0.000e0 ... exact` -
+> exact on 3,146 of 3,146, and the craft never leaves the surface. The named gap
+> does not exist either: there are **two** hover probes rather than eight
+> (`oag_physics::hover::Hover::probes`), **both** are applied through
+> `Body::add_force_at_point`, and that function *is* the `cross(r, impulse)`
+> response. The deepest-of-eight test was always the wall path's hull sampling,
+> which went multi-contact separately.
+>
+> What the clean-lap capture does show is much narrower, and **only reseeded**.
+> `talons-junction-clean-lap.csv` has the original off the ground on 31 of its
+> 2,977 ticks. Under `--reseed 60` we match it on **18** of those, and the 19
+> that disagree go **both ways** - 6 are ours lifting off where the original is
+> grounded. The one bad event is a phase lag on a single crest: the original is
+> airborne 1595-1608, ours 1602-1614, nearly the same duration started about
+> seven ticks late.
+>
+> **Single-seeded, the same capture reads `grounded = 1.0` on all 2,977 ticks and
+> every disagreement points one way.** That is this page's own force-law drift -
+> by tick 432 the two craft are not on the same part of the track - and reading
+> it as a contact result is exactly the mistake the 2026-07-28 paragraph above
+> made in the other direction.
+
+**One reading trap in the table above, worth fixing in your head before you use
+it.** The `exceeded` column is `first_exceeded_tick` - **the tick of the first
+exceedance, not a count of them**, and `-` means never. See
+`ComparisonSummary::first_exceeded_tick` in `crates/trace/src/compare.rs`. Read
+as a count it turns a run with 31 bad ticks into one with "432 bad ticks".
+
 Two smaller readings from the same run:
 
 - The recorded lap's angular column scores `negated-local` best (31.98 rms
