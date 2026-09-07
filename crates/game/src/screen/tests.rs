@@ -531,6 +531,70 @@ fn collects_load_xml_sources() {
     );
 }
 
+/// `TitleFrame`'s own shape, off `pure-psp-usa.chd`'s `Skin.xml`: a widget
+/// with a rect and a texture size but no `src` at all, assigned
+/// programmatically on the original.
+const SRCLESS_IMAGE: &str = r#"
+<Screen>
+  <Screen name="Title Screen">
+    <Image name="TitleFrame" StartEnabled="false">
+      <Values width="480" x="0" y="76" height="128" TxtrWidth="480" TxtrHeight="128"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#;
+
+#[test]
+fn a_src_less_image_stays_dropped_with_no_fallback_table() {
+    // The behaviour before `fallback_images` existed, pinned so a title with
+    // an empty table (Pulse, HD) keeps it: nothing to sample, so nothing
+    // drawn, rather than a guess.
+    let screen = Screens::from_xml(SRCLESS_IMAGE)
+        .by_name("Title Screen")
+        .unwrap()
+        .clone();
+    assert!(screen.images.is_empty());
+    assert!(
+        screen.fills.is_empty(),
+        "there is no `color` to fall back to either"
+    );
+}
+
+#[test]
+fn a_src_less_image_is_resolved_by_name_against_the_fallback_table() {
+    let screens =
+        Screens::from_xml_with_fallbacks(SRCLESS_IMAGE, &[], &[("TitleFrame", "hash:3af18d90")]);
+    let image = &screens.by_name("Title Screen").unwrap().images[0];
+    assert_eq!(image.src, "hash:3af18d90");
+    assert_eq!((image.x, image.y), (0.0, 76.0));
+    assert_eq!((image.width, image.height), (Some(480.0), Some(128.0)));
+    assert_eq!(
+        (image.texture_width, image.texture_height),
+        (Some(480.0), Some(128.0))
+    );
+}
+
+#[test]
+fn a_real_src_in_the_xml_always_wins_over_the_fallback_table() {
+    // The same contract `fallback_globals` carries for a colour: a name in
+    // the table is consulted only where the widget's own XML is silent.
+    let screens = Screens::from_xml_with_fallbacks(
+        r#"
+<Screen>
+  <Screen name="Title Screen">
+    <Image name="TitleFrame">
+      <Values width="480" x="0" y="76" height="128" src="Data\FE\Images\Real.mip"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+        &[],
+        &[("TitleFrame", "hash:3af18d90")],
+    );
+    let image = &screens.by_name("Title Screen").unwrap().images[0];
+    assert_eq!(image.src, r"Data\FE\Images\Real.mip");
+}
+
 #[test]
 fn parses_argb() {
     assert_eq!(parse_argb("0xFF5FDBF6"), Some(0xff5f_dbf6));

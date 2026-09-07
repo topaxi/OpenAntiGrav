@@ -116,6 +116,8 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_backdrop_parent: None,
     // Pulse's own `Skin.xml` declares every global its screens name.
     fallback_globals: &[],
+    // No src-less widget found on this title yet.
+    fallback_images: &[],
 };
 
 /// How Pulse lays its menus out and moves between them.

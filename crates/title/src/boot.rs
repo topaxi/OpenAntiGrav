@@ -176,6 +176,18 @@ pub struct BootProfile {
     /// Merged in only for keys the disc does not declare; a real declaration
     /// always wins. Empty for a title that declares everything its screens name.
     pub fallback_globals: &'static [(&'static str, &'static str)],
+    /// `Image` widgets this title's own XML gives no `src` at all - assigned
+    /// programmatically on the original, the same class of gap
+    /// [`Self::fallback_globals`] fills for a colour - matched here by the
+    /// widget's own `name` attribute against an archive entry a content scan
+    /// found by its picture rather than its (unrecovered) name.
+    ///
+    /// Each value takes [`BootStep::movie`]'s own `hash:`-prefixed spelling,
+    /// for the same reason: a WAD directory holds only a name's hash, so an
+    /// entry nobody has named a string for is still addressable by it. Merged
+    /// in only where a widget's own XML leaves `src` unset; a real one always
+    /// wins. Empty for a title with no such gap found yet.
+    pub fallback_images: &'static [(&'static str, &'static str)],
 }
 
 impl BootProfile {
@@ -239,6 +251,7 @@ mod tests {
         menu_backdrop: None,
         picker_backdrop_parent: None,
         fallback_globals: &[],
+        fallback_images: &[],
     };
 
     #[test]

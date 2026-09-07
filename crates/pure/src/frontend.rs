@@ -193,6 +193,22 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
     ("FrameLineColor", "0xFFB3D7E2"),
 ];
 
+/// `Image` widgets Pure's own `Skin.xml` gives no `src` at all, matched by
+/// name to a content-scan hash - the same "assigned programmatically on the
+/// original" gap [`FALLBACK_GLOBALS`] fills for a colour, but for a texture.
+///
+/// **One entry today.** `Title Screen->TitleFrame`, the "wipEout pure"
+/// wordmark - see [`crate::hashes::TITLE_LOGO`] for the scan that found it and
+/// the evidence it is the right one. `FE Screen->BackgroundImage` is the same
+/// shape of gap and stays out of this table: no candidate for it has been
+/// checked against a captured frame yet, so adding it here would be a guess
+/// dressed as a measurement.
+///
+/// Consulted by `oag-game`'s own front-end XML loader the same way
+/// `fallback_globals` is: only where a widget's own XML leaves `src` unset,
+/// and a real `src` always wins.
+pub const FALLBACK_IMAGES: &[(&str, &str)] = &[("TitleFrame", "hash:3af18d90")];
+
 /// How Pure lays its menus out, as far as its own disc states it.
 ///
 /// **Deliberately thinner than Pulse's, and thin in the places Pure is
@@ -343,6 +359,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     menu_backdrop: None,
     picker_backdrop_parent: Some(states::INTRO_SCREEN),
     fallback_globals: FALLBACK_GLOBALS,
+    fallback_images: FALLBACK_IMAGES,
 };
 
 #[cfg(test)]

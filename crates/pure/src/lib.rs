@@ -141,6 +141,52 @@ pub mod frontend;
 pub mod hud;
 pub mod race;
 
+/// Name hashes for `Data.wad` entries whose names are not recovered.
+///
+/// A WAD directory stores only the hash of each name, so an entry nobody has
+/// named is still perfectly addressable. Recording the hash is what keeps such
+/// an entry usable without inventing a name for it - which the naming rules in
+/// `CLAUDE.md` forbid below 50 confidence. Mirrors `oag_pulse::hashes`, which
+/// this module's own doc comment there explains at more length.
+pub mod hashes {
+    /// `Title Screen->TitleFrame`'s own wordmark texture: orange "wipEout" over
+    /// a white-outlined "pure", `512x128`, 8bpp indexed.
+    ///
+    /// **`TitleFrame` names no `src` in `Skin.xml` at all** - `<?This is the
+    /// Title screen backdrop?> <Image name="TitleFrame" StartEnabled="false">
+    /// <Values width="480" x="0" y="76" height="128" TxtrWidth="480"
+    /// TxtrHeight="128">`, assigned programmatically on the original. Found by
+    /// a full image-content scan rather than a name guess: every entry across
+    /// `Data.wad`, `FE.wad` and `FEData.wad` that decodes as a `.mip` was
+    /// checked by eye against a real captured `Title Screen` frame. See
+    /// `docs/formats/pure-status.md` for the scan and every other candidate it
+    /// ruled out.
+    ///
+    /// **Entry 537 of `Data.wad`, `Data.wad`-only** - not in `FE.wad` or
+    /// `FEData.wad`, checked by hash across all three. Two siblings sit next to
+    /// it at the same size, entries 535/536 (`b6677aab`/`3f313472`,
+    /// byte-identical to each other): a second colourway of the same wordmark,
+    /// blue "wipEout" over orange "pure" rather than this one's orange over
+    /// white. Which screen draws the other colourway, if any does, is unread.
+    ///
+    /// **`TxtrWidth="480"` against a `512`-wide physical texture is the
+    /// corroborating measurement, not a coincidence.** PSP textures are
+    /// commonly padded to a power of two; the widget's own declared sample
+    /// width crops the rightmost 32 columns, which are opaque white and carry
+    /// no ink - trimming the decoded picture to its own opaque content lands a
+    /// `335x80` box entirely inside the `480`-wide crop, with room to spare on
+    /// both sides.
+    ///
+    /// Byte-identical on both pressings (`pure-psp-usa.chd` and
+    /// `pure-psp-eu.chd`), at the same hash. Confidence **85**: an exact visual
+    /// match to a real captured frame, a size and crop that agree with the
+    /// widget's own authored `TxtrWidth`/`TxtrHeight`, and agreement across
+    /// both pressings - short of 90 because the runtime mechanism that assigns
+    /// this hash to this widget is still unread (Ghidra territory, not taken
+    /// this pass).
+    pub const TITLE_LOGO: u32 = 0x3af1_8d90;
+}
+
 /// The archives a PSP Pure disc ships, relative to the image root.
 ///
 /// **Three, not four.** `Data.wad`, `FE.wad` and `FEData.wad` are all present

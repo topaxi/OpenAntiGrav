@@ -630,3 +630,48 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
         );
     }
 }
+
+/// `TitleFrame`, the "wipEout pure" wordmark - see
+/// `docs/formats/pure-status.md#the-title-screen-wordmark-titleframe` for how
+/// entry 537 of `Data.wad` was found and matched against a real captured
+/// frame.
+///
+/// **The disc's own XML gives this widget no `src` at all**, so this is
+/// exactly the case [`oag_pure::frontend::FALLBACK_IMAGES`] exists for: this
+/// test pins that the fallback resolves on both pressings, at the widget's own
+/// authored rect, to a texture that actually decodes - not just that a string
+/// made it into `Screen::images`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn title_screens_own_wordmark_gets_the_measured_texture() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let screen = loaded
+            .frontend
+            .screens()
+            .by_name("Title Screen")
+            .unwrap_or_else(|| panic!("{label}: Title Screen"));
+        let title_frame = screen
+            .images
+            .iter()
+            .find(|image| image.name.as_deref() == Some("TitleFrame"))
+            .unwrap_or_else(|| {
+                panic!("{label}: TitleFrame did not resolve through the fallback table")
+            });
+        assert_eq!(title_frame.src, "hash:3af18d90");
+        assert_eq!((title_frame.x, title_frame.y), (0.0, 76.0));
+        assert_eq!(
+            (title_frame.width, title_frame.height),
+            (Some(480.0), Some(128.0))
+        );
+        let placed = loaded
+            .sprites
+            .get(&title_frame.src)
+            .unwrap_or_else(|| panic!("{label}: hash:3af18d90 must decode as a texture"));
+        assert_eq!(
+            (placed.width, placed.height),
+            (512, 128),
+            "{label}: the physical texture is padded wider than the widget's own 480 TxtrWidth"
+        );
+    }
+}

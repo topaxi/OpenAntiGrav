@@ -750,6 +750,62 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   `crates/game/tests/font_roles_ground_truth.rs` re-derives it. Pure's menus
   draw in `Default`, which is why `MenuSkin::menu_font` stays `None`.
 
+### The Title screen wordmark, `TitleFrame`
+
+`Title Screen->TitleFrame` (`x="0" y="76" width="480" height="128"
+TxtrWidth="480" TxtrHeight="128"`, directly under an XML comment reading
+`<?This is the Title screen backdrop?>`) is the same class of gap
+`BackgroundImage` is above: no `src` at all, assigned programmatically on the
+original. Found by a full image-content scan rather than a name guess -
+`Data\FE\Images\Logo.mip` (hash `be900df4`) does resolve to a real entry, but
+at 2064 bytes it is far too small to be a 480x128 texture and is something
+else entirely.
+
+**The scan.** Every entry across all three PSP archives was extracted and
+tried against `oag_formats::texture::Texture::parse` (`oag-wad extract --png`):
+
+| Archive | Entries | Decoded as `.mip` |
+| --- | ---: | ---: |
+| `FE.wad` | 157 | 27 |
+| `FEData.wad` | 240 | 143 |
+| `Data.wad` | 832 | 191 |
+
+Filtering the 361 decoded textures to width >= 200px leaves mostly `256x128`/
+`256x256` track-select art and one `480x272` full-screen render (`498abb06`,
+a track background, not a wordmark - checked by eye and ruled out). Exactly
+three textures come out `512x128`: `Data.wad` entries 535 (`b6677aab`), 536
+(`3f313472`, byte-identical to 535) and 537 (`3af18d90`) - all three absent
+from `FE.wad` and `FEData.wad`, checked by hash. Decoded:
+
+- 535/536: blue "wipEout" over orange "pure".
+- **537: orange "wipEout" over a white-outlined "pure"** - an exact match to a
+  real `Title Screen` capture (PPSSPP, `pure-psp-usa.chd`): orange "WipEout"
+  over a white-outlined "pure", filling roughly the screen's own width.
+
+**The corroborating measurement.** `TitleFrame`'s own `TxtrWidth="480"`
+against entry 537's `512`-wide physical texture is not a coincidence - PSP
+textures are routinely padded to a power of two, and the rightmost 32 columns
+of this one are opaque white with no ink, so the widget's own authored sample
+width crops exactly the padding. Trimming the decoded picture to its own
+opaque content lands a `335x80` box entirely inside the `480`-wide crop.
+
+Byte-identical on both pressings (`pure-psp-usa.chd`, `pure-psp-eu.chd`), same
+hash, same 66,576-byte entry (512x128, 8bpp indexed: `512*128 + 256*4 palette
++ 16 header`). Recorded as `oag_pure::hashes::TITLE_LOGO`, consulted through
+`oag_pure::frontend::FALLBACK_IMAGES` the same way `FALLBACK_GLOBALS` fills an
+undeclared colour - see that constant's own doc comment. Confidence **85**: a
+visual match to a captured frame, a crop that agrees with the widget's own
+authored `TxtrWidth`/`TxtrHeight`, and agreement across both pressings - short
+of 90 because the runtime mechanism that assigns hash `3af18d90` to
+`TitleFrame` specifically is still unread (Ghidra territory, not taken this
+pass). `crates/game/tests/pure_boot_ground_truth.rs`'s
+`title_screens_own_wordmark_gets_the_measured_texture` pins the rect and the
+decoded size against both real discs.
+
+`FE Screen->BackgroundImage`/`BackgroundTopRightImage` are the same shape of
+gap and remain unresolved: no candidate for either has been checked against a
+captured frame, so nothing was added to `FALLBACK_IMAGES` for them.
+
 ### The language plugin id space is Pure's own, not Pulse's
 
 `oag_pure::FRONT_END::language_plugins` used to be Pulse's USA set copied
