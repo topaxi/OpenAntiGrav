@@ -47,6 +47,12 @@ fn default_table() -> Vec<(&'static str, Key, Button)> {
         ("D", Key::Character("d".into()), Button::Right),
         ("X", Key::Character("x".into()), Button::Cross),
         ("Z", Key::Character("z".into()), Button::Circle),
+        // Same button as `Z`, so the physical key next to `X` works on
+        // both layouts: QWERTZ swaps `Y` and `Z`, so a player reaching
+        // for the absorb key hits whichever letter their board prints
+        // there. Neither is bound to anything else, so this costs no
+        // other binding.
+        ("Y", Key::Character("y".into()), Button::Circle),
         ("C", Key::Character("c".into()), Button::Square),
         ("V", Key::Character("v".into()), Button::Triangle),
         ("Q", Key::Character("q".into()), Button::L),
@@ -201,6 +207,18 @@ mod tests {
             map_key(&Key::Named(NamedKey::ArrowRight)),
             Some(Button::Right)
         );
+    }
+
+    /// `Y` and `Z` are the same button so that absorbing a pickup works on a
+    /// QWERTZ board as well as a QWERTY one - the two layouts swap exactly
+    /// these two letters, so the key beside `X` prints differently depending
+    /// on which board the player has.
+    #[test]
+    fn y_and_z_both_absorb_so_qwertz_and_qwerty_agree() {
+        assert_eq!(map_key(&Key::Character("z".into())), Some(Button::Circle));
+        assert_eq!(map_key(&Key::Character("y".into())), Some(Button::Circle));
+        assert_eq!(map_key(&Key::Character("Y".into())), Some(Button::Circle));
+        assert_eq!(bound_keys(Button::Circle), ["BACKSPACE", "Z", "Y"]);
     }
 
     #[test]
