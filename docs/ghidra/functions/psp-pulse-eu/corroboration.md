@@ -805,6 +805,43 @@ floor) remain unmatched; so do 15 of the 25 data items, `_ctype_` among them
 (`get_xrefs_to` found nothing referencing it in USA, so there was no
 referencing-function trail to follow in EU at all).
 
+**Superseded in part, 2026-09-07**: three of this pass's own exclusions were
+independently resolved by
+[`exact-hash-transfer.md`](exact-hash-transfer.md)'s exact opcode-hash match,
+a stronger (uniqueness-on-both-sides, zero-diff-body) criterion than the tied
+fuzzy scores that excluded them here - `strtod`, `Xml_AttributeAsFloatLibc`
+and `Xml_AttributeAsOwnedString` all now carry applied EU names. A fourth,
+`Race_ResetCraftBoosts` (this page's `Race_ResetCraftBoosts_q`, below-floor
+and left un-renamed at the time), matched **the exact EU address this page's
+own fourth pass already named as its best candidate** (`0x08827080`,
+"a strong candidate... if anyone wants to revisit it with independent
+evidence") - the exact-hash pass is that independent evidence, arriving at
+the same address by an unrelated technique on a since-reimported database,
+and it is now applied at confidence 55. `Body_ClearAccumulators` (excluded
+above as a 1-collision drop under the fuzzy sweep) and `Xml_AttributeValueIs`
+(excluded as part of a 3-way fuzzy tie) were resolved the same way - a fuzzy
+collision does not imply a hash collision, since the two techniques fail on
+different axes. See `exact-hash-transfer.md` for the method and confidence
+rule; none of this page's own tables are edited to match, per this project's
+"record contradictions rather than quietly picking a side" rule - the tables
+below are left exactly as this pass wrote them, a record of what fuzzy
+matching alone could and could not do.
+
+**Also recorded here, a genuine unresolved naming disagreement, not a
+database defect**: exact-hash cross-referencing (2026-09-07) found that
+`psp-pulse-usa`'s `Mesh_SetBatchLighting` (`0x0890d3ac`, confidence 82,
+[`mesh-draw.md`](../psp-pulse-usa/mesh-draw.md)) and `psp-pulse-eu`'s
+`Mesh_ApplyMaterialLighting` (`0x0890cea8`, confidence 78,
+[`lighting.md`](lighting.md)) are **the same function** - identical
+normalized opcode hash, and both pages' independently-decompiled bodies show
+the same `Gu_Disable(LIGHTING)`/`Gu_Enable`+four-light-slot-disable+
+`Gu_Ambient` branch structure. Neither name was applied by this pass or is
+wrong on its own evidence; this is two independent investigations naming the
+same function differently, USA's read as a state setter and EU's as what the
+state actually accomplishes. Left unreconciled on purpose - picking a winner
+needs a judgement call neither page's own evidence settles by itself, and
+recording the disagreement is worth more than guessing at it.
+
 Total documented for `psp-pulse-eu` after this pass: **268** (213 before,
 45 functions + 10 data items added here). `psp-pulse-usa/names.tsv`
 documents 279 functions plus 25 data items (304 rows total); the remaining

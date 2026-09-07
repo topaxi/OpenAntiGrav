@@ -56,7 +56,10 @@ than a judgement call:
 
 ## Confidence
 
-**EU confidence = USA confidence minus 5**, applied uniformly. This is a
+**EU confidence = USA confidence minus 5**, applied uniformly. The `-5` itself
+is **chosen for this pass, not derived from the evidence** - the direction
+(lighter than the fuzzy tiers) follows from the evidence, the exact number
+does not. This is a
 tighter (less punitive) discount than [corroboration.md](corroboration.md)'s
 own fuzzy-based "clean" tier (USA confidence minus 8, for a diff ratio under
 2%), because every row here has a diff ratio of exactly zero and a match
