@@ -158,7 +158,10 @@ fn the_ring_is_about_as_long_as_the_shape_it_was_built_from() {
 fn the_tangent_points_toward_the_next_ring_point() {
     let course = Course::from_track(&square_track(2), None).expect("a ring");
     let tangent = course.tangent(0).expect("in range");
-    assert!((tangent.length() - 1.0).abs() < 1e-4, "tangent is not unit length");
+    assert!(
+        (tangent.length() - 1.0).abs() < 1e-4,
+        "tangent is not unit length"
+    );
     let expected = (course.position(1).unwrap() - course.position(0).unwrap()).normalize();
     assert!((tangent - expected).length() < 1e-4);
 }

@@ -64,10 +64,11 @@ pub const SPEED_UNITS_PER_SECOND: f32 = 270.0;
 
 /// The single travelling wave a fired Quake ever has.
 ///
-/// One instance for the whole race - `Weapon_FireQuake`'s own pool is a
-/// single slot, not an array (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`)
-/// - so [`crate::World`] carries `Option<Wave>` rather than a fixed array the
-/// way [`super::Projectiles`] does.
+/// One instance for the whole race, matching `Weapon_FireQuake`'s own pool -
+/// a single slot, not an array
+/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`) - so
+/// [`crate::World`] carries `Option<Wave>` rather than a fixed array the way
+/// [`super::Projectiles`] does.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Wave {
     /// Which ship slot fired it. Excluded from every hit test - the original
@@ -132,8 +133,8 @@ impl Wave {
         if length <= 0.0 {
             return;
         }
-        self.progress = (self.progress + self.direction * SPEED_UNITS_PER_SECOND * dt)
-            .rem_euclid(length);
+        self.progress =
+            (self.progress + self.direction * SPEED_UNITS_PER_SECOND * dt).rem_euclid(length);
     }
 
     /// The shortest distance around a ring of this `length` between the
@@ -181,12 +182,11 @@ impl Wave {
         rules: oag_physics::DamageRules,
         absorbed: &mut [bool],
     ) {
-        for slot in 0..ship_count as usize {
+        for (slot, ship) in ships.iter_mut().enumerate().take(ship_count as usize) {
             if slot as u8 == self.owner {
                 self.hit[slot] = false;
                 continue;
             }
-            let ship = &mut ships[slot];
             if !ship.active {
                 continue;
             }

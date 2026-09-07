@@ -704,8 +704,8 @@ pub(in crate::race) fn bounce_effect_for(
 /// the ring's own start index and is not monotonic in ring-index order
 /// across that wrap, so a search that assumed monotonicity would find the
 /// wrong point near the start line. The same "flat scan rather than a
-/// spatial index" shape `Course::locate`'s own module doc comment argues for
-/// - determinism aside, an occasional per-tick walk over a few thousand
+/// spatial index" shape `Course::locate`'s own module doc comment argues
+/// for, determinism aside: an occasional per-tick walk over a few thousand
 /// points is cheap next to a wrong answer at a wrap, and this runs once a
 /// tick for the one Quake wave that can ever exist, not once per craft.
 ///
@@ -716,7 +716,11 @@ fn course_index_near_progress(course: &Course, progress: f32) -> Option<usize> {
         .filter_map(|index| {
             let at = course.progress_at(index)?;
             let raw = (at - progress).abs();
-            let delta = if length > 0.0 { raw.min(length - raw) } else { raw };
+            let delta = if length > 0.0 {
+                raw.min(length - raw)
+            } else {
+                raw
+            };
             Some((index, delta))
         })
         .min_by(|(_, a), (_, b)| a.total_cmp(b))

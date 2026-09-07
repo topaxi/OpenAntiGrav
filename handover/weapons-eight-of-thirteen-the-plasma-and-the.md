@@ -799,3 +799,57 @@ ties the travelling wave to the shared hit channel was not found this pass -
 more selective `masked`/`andi` subcommands of `scripts/psp-relocate.py` were
 not tried. The visual half and the hit-timing half are each independently
 buildable now, but not yet wired to each other.
+
+## 2026-09-07, later again: the latch found, the Quake built - twelve of thirteen
+
+**The latch was inside the already-quoted function all along.** Reading
+`FUN_088418e0`'s wave branch past what the earlier prose summarised as
+"if (s2->0x860 & 0x40) goto apply" turns up the setter a dozen lines above:
+a per-craft proximity value, smoothed at a fixed `8.0`/s rate, crossing a flat
+`0.1` threshold. See
+[cannon-quake-leachbeam.md](../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
+"The latch setter, found 2026-09-07" section for the full mechanism and the
+two new functions it named (`Quake_ProximityToCraft`, `Quake_SpanIntensityAt`).
+**The Quake's own authored `radius` has no other consumer anywhere in the fire
+chain**, which is the strongest evidence yet that `radius` is this mechanism's
+authored gate rather than the unauthored `200.0`/`0.1` engine constants - so
+that is what the port spends.
+
+Built the same session, from that page and this thread in full:
+
+- `oag_formats::weapons::QuakeStats` - the four authored attributes.
+- `oag_gameplay::projectile::quake::Wave` - the single travelling instance,
+  tracked as a plain `f32` distance-along-course in
+  `oag_race::Standing::progress`'s own convention rather than the original's
+  segment+parametric-`t` pair. The two are equivalent on a closed ring and
+  this needed no new per-tick state beyond what standings already compute.
+  Advances at the recovered `270.0` units/second, wraps at the course length.
+- The hit/slowdown, wired to the shared pending-hit channel the Missile and
+  Mine/Bomb already spend - a flat in/out-of-`radius` test rather than the
+  original's smoothed debounce, edge-triggered the same way. **Chosen, not
+  measured**, and said so in the type's own doc comment.
+- `oag_race::Course::tangent` - new, small, what launch uses to pick the
+  wave's own direction (dotted against the firing craft's forward, matching
+  `Quake_Init`'s own dot product).
+- The visual: the disc's own `WO_QUAKE`, attached once and followed/rescaled
+  every tick to the midpoint and width of the track's own two edges nearest
+  the wave's current position - read off `Spline`'s own sample fields
+  (`pos`/`lateral`/`half_width_left`/`half_width_right`), the same ones
+  `oag_render::track::build_model` already draws the ribbon's edges from.
+  `psys::Stage::rescale` is new, mirroring `follow`. **Orientation is not
+  established by anything read** (the original's own `AiTrack_LocatePosition`
+  call is dead code in its own basis build, confirmed independently this pass
+  by re-deriving `Quake_Update` rather than only quoting the earlier read), so
+  the effect draws axis-aligned - **chosen, not measured, no confidence
+  score**.
+- `Weapon::Quake` added to `pickup::IMPLEMENTED` - a pad can hand one out now.
+
+**Not wired**: the wave's own positional sound cue and its distinct hit cue.
+This engine's `Cue`/`CueEvent` system is per-craft-slot only and has no
+concept of an arbitrary moving 3D emitter; extending it was out of scope for
+this pass. Silence is the honest state here rather than anchoring a cue to a
+craft slot the original never emitted it from.
+
+**Twelve of thirteen weapons now do something.** Only the LeachBeam remains,
+blocked on its own two drain-rate functions and whatever consumes
+`entity+0x120`/`+0x128` - see `cannon-quake-leachbeam.md`'s own Open list.

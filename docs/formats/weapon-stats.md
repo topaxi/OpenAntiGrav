@@ -92,7 +92,7 @@ a union:
 | `Global` | `0x0880dab0` | `slowdown_limit` |
 | **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage slowdown_time venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `spread` |
 | **`Missile`** | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` - **decoded**, offsets and all, on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
-| `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) |
+| **`Quake`** | `0x0880c60c` | **`absorb damage radius slowdown_time`** - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) - **decoded** in full as `oag_formats::weapons::QuakeStats`, `radius` now the hit-latch's own proximity gate per [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | **`Cannon`** | `0x0880c774` | **`absorb rounds rate damage_per_bullet slowdown_time`** - **decoded** in full, offsets unchecked, on [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |
 | **`Shield`** | **`0x0880ca2c`** | **`absorb time`** |
