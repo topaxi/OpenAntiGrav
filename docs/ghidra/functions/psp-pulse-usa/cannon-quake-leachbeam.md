@@ -22,6 +22,8 @@ produced it and the one that replaces it.
 | `0x08874b14` | `Quake_Init` | 82 |
 | `0x0891d268` | `Quake_Update` | 85 |
 | `0x0891c028` | `Quake_SampleSpan` | 76 |
+| `0x0891c7e0` | `Quake_ProximityToCraft_q` | 60 |
+| `0x0891c82c` | `Quake_SpanIntensityAt_q` | 55 |
 | `0x08866658` | `Weapon_FireLeachBeam` | 88 (was 82) |
 | `0x08873d3c` | `LeachBeam_InitLocked` | 82 |
 | `0x08872da8` | `LeachBeam_InitUnlocked` | 80 |
@@ -411,6 +413,122 @@ put a position-keyed displacement in, which is a hardware constraint against
 that shape existing at all on this platform, independent of what this page
 did or didn't find in software.
 
+### The latch setter, found 2026-09-07: it was inside the already-cited function all along
+
+**`entity+0x860 & 0x40`'s setter is not a separate, unlocated function - it sits
+a dozen lines above the damage branch this page already quoted, inside the
+same `FUN_088418e0` block (`0x08841e60`-`0x08842064`) that block's own prose
+had already summarised as "if (s2->0x860 & 0x40) goto apply".** Read at
+instruction level this pass:
+
+```c
+// still inside FUN_088418e0, s2 = this craft's entity, once per craft per frame
+fVar_smoothed = s2->0x870;                              // a per-craft smoothed intensity
+fVar_raw      = Quake_ProximityToCraft_q(s2->0x360);     // 0x0891c7e0, s2's own craft index
+s2->0x870 = fVar_smoothed + (fVar_raw - fVar_smoothed) * 8.0 * dt;   // exponential smoothing
+...
+if (s2->0x870 <= 0.1 || s2->0x360 == quake_owner) {
+    s2->0x860 &= ~0x40;                       // out of range, or this craft is the shooter: clear
+} else if (owner_craft == 0 || !(owner_craft->fire_flags & 0x10)) {   // not shielded
+    if ((s2->0x860 & 0x40) == 0) {            // rising edge only
+        owner_craft->pending_slowdown += QuakeStats.slowdown_time;    // entity+0x130
+        owner_craft->pending_attacker  = quake_owner;                  // entity+0x13c
+        owner_craft->pending_kind      = 5;                            // entity+0x138
+        Ship_Damage(QuakeStats.damage, s2, 2, 5, 0);                   // 0x088439ac
+        Sound_Play(1.0, owner_craft_cue_slot, _DAT_002bddf8, 0, <hit-cue-bank>, 0);  // 0x089392b0
+    }
+    s2->0x860 |= 0x40;                        // set/hold the latch
+} else {
+    s2->0x860 &= ~0x40;                       // shielded: clear
+}
+```
+
+So the latch is edge-triggered off a **smoothed proximity value**, not a bare
+in-range test: `Quake_ProximityToCraft_q` (`0x0891c7e0`, confidence 60) looks
+the craft up by index and delegates to `Quake_SpanIntensityAt_q` (`0x0891c82c`,
+confidence 55), which matches the craft's own current segment against the
+same small span table `Quake_Init`/`Quake_Update` maintain (`_DAT_...598a8`)
+and returns a per-span stored value when the craft's own parametric position
+falls inside a narrow window around the span's own recorded point, else `0`.
+That raw 0-or-something value is smoothed toward at a fixed `8.0/s` rate and
+compared against a flat `0.1` threshold - a debounce, so a craft on the
+threshold's edge does not chatter the hit on and off pixel to pixel.
+`Quake_SpanIntensityAt_q` also confirms a **coarse 200-unit world-distance
+prefilter** ahead of the finer span match (`ABS(wave_t - craft_t) *
+_DAT_00062814 <= 200.0`) - independent evidence that whatever `_DAT_00062814`
+is, it is a length in the same units 200.0 is, consistent with (not proving)
+"segment length".
+
+**What this resolves for the page's own Open list**: the hit and the
+travelling visual *are* wireable to each other, through a proximity test - the
+Quake's authored `radius` (`<Stats absorb damage radius slowdown_time>`,
+`docs/formats/weapon-stats.md`) has no other read consumer anywhere in this
+chain, which is the strongest evidence yet that `radius` **is** this
+mechanism's own gate, authored rather than the `200.0`/`0.1` engine constants
+above. Confidence **78** for the mechanism as a whole (block read at
+instruction level, cross-checked against `Quake_Init`'s and `Ship_Damage`'s
+already-established fields); the two new callees are lower (60 and 55) because
+their own field semantics (`+0x5c`, `+0x64`, `+0x6c`, `+0x40` on the span
+table's own 0x80-byte records) are read from shape alone, not confirmed
+independently.
+
+**A second, distinct sound cue.** The hit plays its own `Sound_Play` call,
+separate from the travelling wave's positional loop (`_DAT_00284554` in
+`Quake_Update`) - this one reads `_DAT_00277740` for its bank slot. Neither
+DAT literal was tracked down to a real cue name this pass; both are read as
+"a sound plays here", not "this sound plays here".
+
+### The three remaining helpers, read - and one correction
+
+- **`func_0x00118a4c` (`0x0891ca4c`) is *not* a segment-length getter, and the
+  page's own confidence-55 guess is now doubted rather than confirmed.**
+  Decompiled in full: it is a generic lazy-singleton resource loader -
+  `if (cache == null) { cache = load(0x58020, <a string literal>, ...); }
+  return *cache;` - shared plumbing with no Quake-specific shape at all, and
+  `Quake_Update` itself calls it a *second* time this pass revealed, feeding
+  its return straight into `AiTrack_LocatePosition` as an argument, which a
+  segment length has no business being. **The string literal argument could
+  not be resolved to confirm what resource this loads**: reading it at the
+  address this database's own `lui`/`addiu` pair appears to encode returned
+  HUD/front-end text (`"Custom"`, `"%s Bar"`, `"Info->Ship"`), which is either
+  the wrong resource entirely or - far more likely, given the zero-PSP-relocation
+  defect measured this same day at confidence 92 (see `docs/ghidra/workflow.md`
+  and the toolchain notes on `get_xrefs_to`) - a data address this database has
+  not relocated and therefore cannot be trusted at all. Not fixable until the
+  reimport lands; recorded as "unread, and the previous hypothesis about it is
+  now weaker" as the honest state rather than silently keeping a confidence-55
+  guess that this pass's own new evidence argues against.
+- **`func_0x000f043c`/`func_0x000f04d8` (`0x088f443c`/`0x088f44d8`) confirmed
+  as a get/set pair on a scene node's transform, one of which carries the
+  scale.** Read in place inside `Quake_Update` this pass, past what
+  `decompile_function`'s text alone gave before: `f043c(node, buffer)` then a
+  direct assignment of `edge_distance / 50.0` into a fixed slot of the same
+  `buffer`, then `f04d8(node, buffer)` - a read-modify-write on the node's own
+  state block, and the literal `/ 50.0` line is what this page already read
+  from `decompile_function`'s output, now seen inside its own load-bearing
+  read/write pair rather than a floating computation. Their true generic
+  name is not guessed at - both look like shared scene-node plumbing rather
+  than anything Quake-owns, so neither is renamed; see
+  [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)'s "below 50,
+  do not rename" rule, applied here to the *name* rather than the *shape*,
+  which this pass is confident of.
+- **`func_0x000ec0c0` (`0x088f00c0`) decompiled in full**: a generic dispatcher
+  taking a shared global handle, a small integer "kind" (`4` for the Quake's
+  own call site) and a position, storing both into the handle's own state and
+  then calling `kind_table[kind]()` through a twelve-entry function-pointer
+  table at a fixed base. The shape (state-then-dispatch) is confirmed; *which*
+  of the twelve handlers kind 4 is, and therefore whether this page's
+  "possibly a camera-shake or screen-effect trigger" guess is right, is not -
+  the table's own entries were not walked this pass. Not renamed, for the same
+  reason as the pair above.
+- **Orientation remains unestablished, now cross-checked rather than merely
+  read once.** `Quake_Update`'s own `AiTrack_LocatePosition` call was
+  independently re-derived this pass rather than only quoted from
+  `decompile_function`'s text: its output record is written and then never
+  read by anything that feeds the cross-product basis built two dozen lines
+  later, confirming (not merely repeating) "orientation refined by the track
+  is not what this reading supports". Nothing new narrows it.
+
 ### Open
 
 - **`WO_QUAKE.POB` itself was not inspected.** The trigger and its transform
@@ -418,18 +536,13 @@ did or didn't find in software.
   "concrete wave" description is a separate, unchecked question. If it parses
   and plays visually wrong for this reading, that is evidence against the
   reconciliation above, not against the trigger recovery itself.
-- **The function that sets `entity+0x860 & 0x40`** (the "the wave has reached
-  me" latch `FUN_088418e0`'s damage branch reads) **was still not found.**
-  `field 0x860` is not a selective search on its own - it returned dozens of
-  hits across the binary this pass, so record that sweep as spent rather than
-  repeat it. The selective versions, `psp-relocate.py masked`/`andi`, were not
-  tried.
 - **`WO_QUAKE_DETONATOR_TRAILS`** (`docs/formats/pob.md:576`) **is a second,
   unlocated Quake effect name** - distinct from `WO_QUAKE` above, plausibly an
   impact/detonation burst rather than the travelling wave. Not chased.
-- **`func_0x00118a4c` (`0x0891ca4c`), the segment-length source `Quake_Update`
-  divides by, is unread.** Confirming or correcting "segment length in world
-  units" depends on it.
+- **The two hit-cue and node-plumbing DAT literals above**, and the kind-4
+  table entry `func_0x000ec0c0` dispatches to - none resolved this pass, and
+  the string-literal trap makes any of them a bad use of time before the
+  reimport lands.
 - **The per-class base speed `Cannon_Init` reads (`0x00060af4`) is unread**, and
   so is whatever a Cannon round's collision does on a hit.
 
@@ -609,10 +722,11 @@ pass.
   the wave's spline `t` every tick at a fixed engine speed (`270.0`, not
   authored) and drives `Quake_SampleSpan` (`0x0891c028`) to place and scale the
   disc's own `WO_QUAKE` particle effect and a travelling positional sound along
-  it - see the new section above. **Still missing**: the per-craft latch that
-  flags "this craft is currently under the wave" (`entity+0x860 & 0x40`'s
-  setter), so the hit-timing half and the travelling-visual half are each
-  buildable on their own but not yet wireable to each other. **It does not need
+  it - see the new section above. **The per-craft latch that flags "this craft
+  is currently under the wave" (`entity+0x860 & 0x40`'s setter) is now found
+  too, 2026-09-07** - see "The latch setter, found 2026-09-07" above - so the
+  hit-timing half and the travelling-visual half are wireable to each other,
+  through the Quake's own authored `radius`. **It does not need
   track deformation of any kind** - the visual is an authored effect
   re-transformed every frame, not a mesh or vertex write, which is a stronger
   version of the same conclusion this page reached before the per-frame update
