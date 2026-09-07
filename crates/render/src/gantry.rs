@@ -56,6 +56,98 @@ pub const BACKPLATE_TEXTURE: &str = "321backplate.tga";
 /// circuit that authors the stub without the backplate.
 pub const SLOT8_TEXTURE: &str = "billboard8.tga";
 
+/// The whole billboard-slot placeholder family, `billboard1.tga` through
+/// `billboard8.tga`.
+///
+/// **A slot, not artwork.** HD's `Billboard_LoadModelAndBind` (`0x003a4da0`,
+/// confidence 84, `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`) reaches
+/// the world in exactly one way: it builds the string `"billboard" + num` and
+/// rebinds *that* material's texture. `16_Track`'s own art mesh embeds five of
+/// these eight (`billboard1/2/6/7/8.tga`), each an 8x8 icon of its own digit -
+/// the same "here is what a slot looks like before something is bound into
+/// it" shape [`SLOT8_TEXTURE`] alone used to describe. No rebind mechanism has
+/// been found for Pulse - `docs/rendering/start-gantry.md`'s "Pulse's own
+/// binding path" is still open, and `BOOT.BIN` ships no lowercase `billboard`
+/// base string for a `billboard%d`-shaped build, so the mechanism plainly
+/// differs from HD's even though the placeholder convention is identical -
+/// but "unfound" is not "absent": a draw bound to one of these eight names is
+/// never the original's own art on either title, so drawing it raw is drawing
+/// what a slot looks like with nothing bound in, not what a player sees.
+pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 8] = [
+    "billboard1.tga",
+    "billboard2.tga",
+    "billboard3.tga",
+    "billboard4.tga",
+    "billboard5.tga",
+    "billboard6.tga",
+    "billboard7.tga",
+    "billboard8.tga",
+];
+
+/// Whether `label` names one of [`SLOT_PLACEHOLDER_TEXTURES`], matched
+/// case-insensitively on the file name alone - the same match [`surface`]
+/// already uses, since a track's texture labels are file names and their
+/// case is not consistent across circuits.
+#[must_use]
+pub fn is_slot_placeholder(label: &str) -> bool {
+    SLOT_PLACEHOLDER_TEXTURES
+        .iter()
+        .any(|name| label.eq_ignore_ascii_case(name))
+}
+
+/// Drops every draw in `model` bound to a [`is_slot_placeholder`] texture, and
+/// says how many.
+///
+/// # Why this is "draw nothing", not an invented replacement
+///
+/// The maintainer's own report on the gantry landing: `3 2 1 GO` now plays,
+/// but the low-resolution `billboard8.tga` stub still shows through or beside
+/// it, and the fix should either paint it black or give whatever is drawn
+/// over it a black background. **Both of those invent content the disc does
+/// not author.** What the disc authors is a slot - a placeholder texture no
+/// version of the original ever shows raw, per [`SLOT_PLACEHOLDER_TEXTURES`]'s
+/// own doc comment - so painting it black or backing an overlay with black is
+/// exactly the "plausible-looking stand-in" `CLAUDE.md` warns against, not a
+/// fix. Suppressing the draw is not that: an unbound slot is honestly absent,
+/// the same as any other unrecovered trigger this project leaves unwired
+/// rather than fired on a guess.
+///
+/// **Not gated on whether a slot's own replacement was found.** Slot 8 gets
+/// one - `oag_game::race::gantry` stands `321Go_StartFinish.vex` on the mount
+/// this module measures - but slots 1-7
+/// stay unwired (`docs/formats/README.md`'s Track startup row: what a hoarding
+/// attaches to is unrecovered) and this drops their placeholder draws all the
+/// same. HD's own mechanism has no "leave the stub showing" case either: a
+/// slot with nothing to bind "simply binds nothing", per
+/// `docs/rendering/start-gantry.md`'s reading of `amphiseum`'s own five-of-eight
+/// placeholder count - the count mismatch refutes "every slot binds", not
+/// "the raw stub is never shown".
+pub fn strip_slot_placeholders(model: &mut Model) -> usize {
+    let slots: Vec<usize> = model
+        .textures
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.as_ref().is_some_and(|t| is_slot_placeholder(&t.label)))
+        .map(|(slot, _)| slot)
+        .collect();
+    if slots.is_empty() {
+        return 0;
+    }
+    let is_placeholder =
+        |draw: &crate::mesh::DrawCall| draw.texture.is_some_and(|slot| slots.contains(&slot));
+    let mut removed = 0;
+    for draws in [
+        &mut model.draws,
+        &mut model.alpha_tested_draws,
+        &mut model.transparent_draws,
+    ] {
+        let before = draws.len();
+        draws.retain(|d| !is_placeholder(d));
+        removed += before - draws.len();
+    }
+    removed
+}
+
 /// The mounting surface a circuit authors for its start gantry.
 ///
 /// All of it is measured off the track's own vertices, in track space, after

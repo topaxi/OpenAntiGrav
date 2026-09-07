@@ -429,7 +429,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         _ => (None, None),
     };
 
-    let track_model = if let Some(model) = rcs_model {
+    let mut track_model = if let Some(model) = rcs_model {
         model
     } else if ribbon {
         track_render::build_model(&label, &ai)
@@ -696,6 +696,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mount.height,
             mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
         ));
+    }
+    // The billboard slots are never artwork - see `strip_slot_placeholders`'s own doc.
+    let stripped = oag_render::gantry::strip_slot_placeholders(&mut track_model);
+    if stripped > 0 {
+        report.push(format!("{stripped} billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub"));
     }
     let visibility = if vex_geometry {
         TrackVisibility::build(&track_model, &track_blob, &ai)
