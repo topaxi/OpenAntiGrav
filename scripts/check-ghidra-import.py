@@ -19,7 +19,12 @@ hand-created functions, so it cannot discriminate.
 Three secondary probes run only against `psp-pulse-usa`, because they name
 addresses in that binary: a `lui` at 0x0894f6d8, the `jal` calls inside
 `Billboard_ConstructResource` (0x08900220), and `g_scream_opcode_table`
-(0x08ac326c).
+(0x08ac326c). Left pinned to USA rather than migrated to EU
+(ADR-0048's Ghidra target of record): re-deriving equivalent EU addresses for
+these three needs a live Ghidra session, out of scope for a tooling-defaults
+pass, and the primary check above (relocation-table population) already runs
+against whichever program is asked for - only these three specific spot-checks
+are USA-only.
 
 Needs a running Ghidra with the GhidraMCP bridge, started with
 GHIDRA_MCP_ALLOW_SCRIPTS=1 in *its own* environment - the script endpoint is

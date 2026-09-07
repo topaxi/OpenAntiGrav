@@ -9,6 +9,15 @@ mangohud_bin := env_var_or_default("MANGOHUD_BIN", "mangohud")
 
 # The PSP disc a scripted run reads its track and handling out of, and the ISO
 # PPSSPP itself wants (it will not open a CHD). Override with OAG_IMAGE / OAG_ISO.
+#
+# Deliberately left on USA, unlike `just play`'s own default - ADR-0048 makes
+# psp-pulse-eu the Ghidra *static-analysis* target of record, but every
+# scripted trace/watch recipe below (`trace-compare`, `pads`) pairs this image
+# with `scripts/psp-*.py`'s hardcoded memory addresses, which were all derived
+# by breakpointing the *running* USA build. Flipping this without re-deriving
+# every one of those addresses against a live EU session would have a scripted
+# run read the wrong offsets silently, not fail loudly - worse than leaving the
+# two policies decoupled and documented as such.
 psp_image := env_var_or_default("OAG_IMAGE", "data/images/pulse-psp-usa.chd")
 psp_iso := env_var_or_default("OAG_ISO", "data/cache/pulse-psp-usa.iso")
 
@@ -701,9 +710,18 @@ build-psvpfstools *ARGS:
 patch-ppc-cspec *ARGS:
     ./scripts/patch-ghidra-ppc-cspec.sh {{ARGS}}
 
-# Resolve the PSP import stubs from the binary's own NID tables
-resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
-    python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
+# Resolve the PSP import stubs from the binary's own NID tables.
+#
+# `boot`/`out` both default to the USA binary's own path/output, unchanged -
+# `data/extracted/psp` is not region-tagged and everything downstream
+# (`apply-ghidra-names.py`) still pairs the default `out` with `psp-pulse-usa`
+# specifically. Point both at an EU BOOT.BIN and `data/ghidra/psp-imports-eu.tsv`
+# once one is extracted, to build the EU counterpart ADR-0048 leaves open:
+#
+#     just resolve-imports boot=data/extracted/psp-eu/PSP_GAME/SYSDIR/BOOT.BIN \
+#         out=data/ghidra/psp-imports-eu.tsv
+resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN" out="data/ghidra/psp-imports.tsv":
+    python3 scripts/resolve-psp-imports.py {{boot}} --modules -o {{out}}
 
 # Recover a Vita title's klicensee from its zRIF - see scripts/zrif-to-klicensee.py.
 zrif-to-klicensee *ARGS:

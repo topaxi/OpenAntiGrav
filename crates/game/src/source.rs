@@ -62,8 +62,25 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// anyone has watched (ADR-0025) - though neither is played past the menus yet;
 /// see roadmap M8. Pure's EU image is listed before its USA one so a directory
 /// holding both auto-detects as EU, matching the default region elsewhere.
-pub const IMAGE_NAMES: [&str; 5] = [
+///
+/// **`pulse-psp-eu.chd` joined this list on 2026-09-07** - it used to be
+/// absent on purpose, back when it was read-only-for-Ghidra reference material
+/// and not a played-from source at all. That framing no longer holds: EU is
+/// now Pulse PSP's more complete disc (its DLC never shipped on USA, see
+/// `data/README.md`) as well as the Ghidra target of record
+/// ([ADR-0048](../../../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)),
+/// so a player whose only disc is the EU one deserves the same "known name"
+/// fast path Pure's EU image already gets, not just the generic
+/// any-other-`.chd` fallback [`images_in`] also matches on. **Left at index 1,
+/// after `pulse-psp-usa.chd` rather than before it** - unlike Pure, a real
+/// player with *both* Pulse discs today still gets the USA one they have
+/// always gotten; [`IMAGE_NAMES`]`[0]`'s own pinned test
+/// (`image_names_starts_with_pulse_psp_matching_the_hint_text`) and the
+/// not-found hint text both depend on that position, and reordering was not
+/// this pass's ask - only recognising the EU disc by name was.
+pub const IMAGE_NAMES: [&str; 6] = [
     "pulse-psp-usa.chd",
+    "pulse-psp-eu.chd",
     "pulse-ps2-eu.chd",
     "pure-psp-eu.chd",
     "pure-psp-usa.chd",

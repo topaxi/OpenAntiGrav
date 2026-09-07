@@ -160,11 +160,20 @@ filesystem at all. That is why the content-source layer is written against
 image containing WADs" - see
 [ADR-0022](../docs/architecture/adr/0022-title-packages.md).
 
-`pulse-psp-eu.chd` is not one of `oag-game`'s auto-detected `IMAGE_NAMES` (it
-is a reverse-engineering reference disc, not the played-from target) - point
-tools at it explicitly by path. It is a genuinely different `BOOT.BIN` from
-`pulse-psp-usa.chd`'s, not a re-labelled copy - see
-[source-images.md](../docs/reverse-engineering/source-images.md).
+**`pulse-psp-eu.chd` is one of `oag-game`'s auto-detected `IMAGE_NAMES`, as of
+2026-09-07.** It used to be excluded on the reasoning that it was a
+reverse-engineering reference disc rather than a played-from one; that
+reasoning no longer holds now that
+[ADR-0048](../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)
+makes it the Ghidra target of record too, and a player whose only copy is the
+EU disc was always able to play it (it still matched the generic
+any-`.chd`/`.iso` fallback `oag-game`'s directory scan also does), just without
+the "known name" priority its USA sibling and Pure's own EU image already get.
+A directory holding both Pulse discs still resolves to the USA one by default,
+unchanged - see `IMAGE_NAMES`'s own doc comment in
+`crates/game/src/source.rs` for why the order was left alone. It is a
+genuinely different `BOOT.BIN` from `pulse-psp-usa.chd`'s, not a re-labelled
+copy - see [source-images.md](../docs/reverse-engineering/source-images.md).
 
 **Pure and HD/Fury are read-only format targets today, not playable ones.**
 `oag-view`/`oag-unpack`/`oag-wad` read them opportunistically per

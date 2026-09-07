@@ -662,6 +662,10 @@ Any discrepancy is a bug in `oag-disc`.
 
 ```sh
 # PSP: BOOT.BIN is an unencrypted ELF, load it straight into Ghidra
+#
+# Still the USA disc, even though EU is now the Ghidra target of record
+# (ADR-0048) - the untagged data/extracted/psp path is wired to it throughout
+# resolve-psp-imports.py/mine-names.py; see methodology.md#where-to-start.
 just unpack extract data/images/pulse-psp-usa.chd \
     -o data/extracted/psp 'PSP_GAME/SYSDIR/BOOT.BIN'
 

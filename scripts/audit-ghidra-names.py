@@ -78,11 +78,20 @@ def sanctioned(binary: str) -> dict[str, tuple[str, int, str]]:
     is absent on a fresh checkout; treat a missing file as "no extra rows"
     rather than as an error, or the audit reports 300 kernel functions as
     unsanctioned on every machine that has not run `just resolve-imports`.
+    `psp-imports-eu.tsv` is the same idea for `psp-pulse-eu`, the Ghidra target
+    of record as of ADR-0048 - nothing generates it yet, so it is absent
+    everywhere today, treated the same way.
     """
     out: dict[str, tuple[str, int, str]] = {}
     sources = [FUNCTIONS_DIR / binary / "names.tsv"]
     if binary == "psp-pulse-usa":
         sources.append(ROOT / "data" / "ghidra" / "psp-imports.tsv")
+    if binary == "psp-pulse-eu":
+        # Mirrors apply-ghidra-names.py's own additive pairing: absent on a
+        # fresh checkout until `just resolve-imports` is run against the EU
+        # BOOT.BIN, per ADR-0048. `_read_table` treats a missing file as no
+        # extra rows, same as the USA branch above already relies on.
+        sources.append(ROOT / "data" / "ghidra" / "psp-imports-eu.tsv")
     for path in sources:
         out.update(_read_table(path))
     return out

@@ -6,14 +6,26 @@ address if confidence is below 50.
 
 | Directory | Binary |
 | --- | --- |
-| [`psp-pulse-usa/`](psp-pulse-usa/) | `PSP_GAME/SYSDIR/BOOT.BIN` from Pulse PSP (UCUS-98712) |
+| [`psp-pulse-eu/`](psp-pulse-eu/) | `PSP_GAME/SYSDIR/BOOT.BIN` from Pulse PSP EU (UCES-00465) - **the Ghidra target of record**, [ADR-0048](../../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md) |
+| [`psp-pulse-usa/`](psp-pulse-usa/) | `PSP_GAME/SYSDIR/BOOT.BIN` from Pulse PSP (UCUS-98712) - the corroboration source as of the same ADR; still carries far more named functions today (656 rows against `psp-pulse-eu`'s 301, measured 2026-09-07), the cost that ADR is explicit about |
 | [`ps2-pulse-eu/`](ps2-pulse-eu/) | `SCES_547.48` from Pulse PS2 (SCES-54748) |
 
-Both directories group their pages by subsystem rather than one file per
-function: a subsystem's evidence is mostly shared between its functions, and
-splitting it leaves every page asserting what its neighbour proves.
+All three group their pages by subsystem rather than one file per function: a
+subsystem's evidence is mostly shared between its functions, and splitting it
+leaves every page asserting what its neighbour proves. **`psp-pulse-eu/` is
+the one exception in shape, not in status**: most of its rows still arrived by
+transfer from `psp-pulse-usa` rather than independent investigation
+([`corroboration.md`](psp-pulse-eu/corroboration.md)'s four fuzzy sweeps,
+[`exact-hash-transfer.md`](psp-pulse-eu/exact-hash-transfer.md)'s exact-hash
+pass), which is why it still reads more like the corroboration-only
+directories below than like `psp-pulse-usa/`'s per-subsystem pages - a
+transitional shape while the name gap those two pages measure is still open,
+not a sign it is any less the target of record. [`camera.md`](psp-pulse-eu/camera.md)
+and [`lighting.md`](psp-pulse-eu/lighting.md) are this directory's own
+independent, per-subsystem findings, `lighting.md` the first one recovered
+under the EU-first policy rather than checked against it after the fact.
 
-Three more directories hold **corroboration-only** names, not reverse
+Two more directories hold **corroboration-only** names, not reverse
 engineering in their own right: each has a single `corroboration.md` page and
 a `names.tsv` of names carried over from `psp-pulse-usa` by cross-binary
 fuzzy matching (`find_similar_functions_fuzzy`), verified per function with
@@ -21,7 +33,6 @@ fuzzy matching (`find_similar_functions_fuzzy`), verified per function with
 
 | Directory | Binary |
 | --- | --- |
-| [`psp-pulse-eu/`](psp-pulse-eu/) | `PSP_GAME/SYSDIR/BOOT.BIN` from Pulse PSP EU (UCES-00465) |
 | [`psp-pure-usa/`](psp-pure-usa/) | `BOOT.BIN` from Pure PSP (UCUS-98612), format ancestor only |
 | [`psp-pure-eu/`](psp-pure-eu/) | `BOOT.BIN` from Pure PSP EU (UCES-00001), format ancestor only |
 

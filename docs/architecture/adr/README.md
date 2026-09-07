@@ -58,6 +58,7 @@ out to be wrong.
 | [0045](0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md) | FSR 3.1 is timed in two halves, and only one of them is fixed | Accepted; extends ADR-0042 |
 | [0046](0046-test-referenced-traces-are-tracked-in-git.md) | A trace a test names is tracked in git | Accepted; narrows ADR-0006 for one file class |
 | [0047](0047-database-state-beyond-names-is-captured-not-replayed.md) | Database state beyond names is captured, not replayed | Accepted; extends ADR-0005 |
+| [0048](0048-eu-is-the-psp-pulse-re-target-of-record.md) | `psp-pulse-eu` is the Ghidra target of record; `psp-pulse-usa` corroborates | Accepted |
 
 ## Format
 
