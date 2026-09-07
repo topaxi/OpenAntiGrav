@@ -691,9 +691,13 @@ relevant widget", checked directly rather than inferred from resolved colours
 alone.
 
 - **Two runtime tints are unrecovered**, and both are visible in the frame:
-  - `DamageBarBg` carries **no `color=` attribute in any of its three copies**
-    (`DATA02`/`DATA06`, byte-identical; `DATA00`/`DATA03` do not ship this
-    fragment at all) - every one is a bare `<Values ... src="..."/>`, so its
+  - `DamageBarBg` carries **no `color=` attribute in either of its two real
+    copies** (`DATA02` and `DATA06`, which differ from each other only by
+    `DATA06`'s extra `DamageBarShieldBg` layer below - `DATA00`, `DATA01`,
+    `DATA03`, `DATA04` and `DATA05` do not ship this path at all, checked with
+    `scripts/psarc.py cat` directly rather than `list`'s substring match, which
+    false-positives on the `wo3_hud`/`2097_hud` skin copies of the same
+    filename) - every one is a bare `<Values ... src="..."/>`, so its
     resolved tint is always white (no modulation) and the hexagon draws exactly
     the atlas's own pale blue-grey pixels, never the saturated blue the
     reference frame shows. **`DATA06`'s copy alone adds a third widget,
@@ -726,9 +730,12 @@ alone.
     - worth a name check before anyone wires this widget on the strength of a
     single `layout.sprite("DamageBar")` lookup.
   - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
-    two panels, carry **no `color=` attribute at all**, in any of the five
-    copies checked across `HUD_lap_counters.xml` (`DATA02` only) and
-    `HUD_positions.xml` (`DATA00`/`DATA02`/`DATA03`/`DATA05`/`DATA06`), or in
+    two panels, carry **no `color=` attribute at all**, in any of the real
+    copies checked directly with `scripts/psarc.py cat` - `HUD_lap_counters.xml`
+    exists only in `DATA02`, and `HUD_positions.xml` in `DATA02`, `DATA05` and
+    `DATA06` (not `DATA00`/`DATA01`/`DATA03`/`DATA04`, which do not ship this
+    path at all despite `list`'s substring search reporting otherwise for the
+    same skin-directory reason as above) - or in
     any of the four `FEConst`/`FEGlobals` names the composed layouts declare
     anywhere (`HudBGColour`, `HudColour1`, `HudColour2`,
     `HudColour3`/`HudColour3A` - none is yellow). `DATA05`/`DATA06`'s extra
