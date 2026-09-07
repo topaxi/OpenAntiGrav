@@ -400,9 +400,10 @@ not the menus' own back key) or leaves the capture open for anything else,
 including a key off the closed candidate set.
 
 **Confirming a row now says so.** While `Session::awaiting_binding` is `Some`,
-`Session::draw` resolves `OAG_BINDING_CAPTURE_PROMPT` (`%s` the captured
-button's own `Display` name, upper-cased - `THRUST`, `BRAKE`, and so on) and
-hands it to `MenuStage::render` as one more parameter, the same way
+`Session::draw` calls `crate::rebind::prompt` - `OAG_BINDING_CAPTURE_PROMPT`
+resolved against the button's own `Display` name, upper-cased (`THRUST`,
+`BRAKE`, and so on) - and hands the result to `MenuStage::render` as one more
+parameter, the same way
 `bound_keys` and `frozen_race` already cross that seam: this stage holds no
 session state of its own, so anything it draws that depends on one has to
 arrive already resolved. `MenuStage::render` draws it last, over everything
@@ -430,13 +431,29 @@ not baselined and nowhere near its own 1,000-line ceiling) gained the
 parameter, and `crate::prompt::message_draw` (in `crates/game/src/prompt.rs`,
 also not baselined) is the shared drawing code - `crates/game/src/menu.rs`,
 which really does sit at its own `BASELINE` ceiling with no headroom, was
-never touched. The same function is reachable headlessly:
-`--menu-page controls --menu-prompt binding` draws it over whichever row's
-`button` the CONTROLS page opens on first, off
-`crate::capture::menu_page::prompt_draws`'s own new `"binding"` arm - so this
-and a live capture cannot draw two different pictures for the same state, the
-same guarantee `rename`/`rename-note`/`delete`/`delete-built-in` already gave
-the pilot editor's prompts.
+never touched.
+
+`crate::rebind::prompt` sits in `crates/game/src/main/rebind.rs`, next to
+`decide`, and for the same reason `decide` is a free function at all rather
+than inline in `app.rs`'s winit handler: `Session::draw` needs a live `Gpu` to
+reach, so the one piece of the lookup that is pure - a button and an
+`Option<&StringTable>` in, a line of text out - lives here under its own unit
+tests rather than only inside the closure nothing can drive headlessly.
+
+Both the button-name text and the layout it is drawn with are reachable
+headlessly, but through two different mechanisms, worth keeping straight: the
+*text* is `crate::rebind::prompt` under its own unit tests (a table entry
+overriding English and still substituting; no table falling back to English
+and still naming the button). The *drawing* - the scrim, the centring, the
+wrap - is `oag_game::prompt::message_draw`, and `--menu-page controls
+--menu-prompt binding` reaches that same function through
+`crate::capture::menu_page::prompt_draws`'s own new `"binding"` arm, off
+whichever row's `button` the CONTROLS page opens on first (not off
+`crate::rebind::prompt`, since a still capture opens no row and confirms no
+key) - so a live capture and this flag cannot draw two different *layouts*
+for the same text, the same guarantee `rename`/`rename-note`/`delete`/
+`delete-built-in` already gave the pilot editor's prompts, even though the two
+paths derive the text itself independently.
 
 Three choices worth stating outright, since none of them are the only
 defensible one:

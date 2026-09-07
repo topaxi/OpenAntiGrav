@@ -560,20 +560,15 @@ impl Session {
         // being rebound, off `Session::awaiting_binding`, and `MenuStage`
         // holds no session state to read that from - the same reason
         // `bound_keys` two lines down is a closure built at this call site
-        // rather than a field on the stage. `say_of` is
-        // `session::pilot_editor`'s own helper, reused here rather than
-        // duplicated - see its doc comment. See
-        // `docs/architecture/menus.md`'s Rebinding section for why this
-        // prompt exists at all and `MenuStage::render`'s own doc for how it
-        // is drawn.
-        let binding_prompt = self.awaiting_binding.map(|button| {
-            super::pilot_editor::say_of(
-                self.shell.as_ref().map(|shell| &shell.strings),
-                "OAG_BINDING_CAPTURE_PROMPT",
-                "PRESS A KEY FOR %s - ESCAPE CANCELS",
-                &button.to_string().to_ascii_uppercase(),
-            )
-        });
+        // rather than a field on the stage. `crate::rebind::prompt` is the
+        // pure half of this, under its own unit test - this method needs a
+        // live `Gpu` to reach at all, which is exactly why that lookup does
+        // not live inline here. See `docs/architecture/menus.md`'s Rebinding
+        // section for why this prompt exists at all and `MenuStage::render`'s
+        // own doc for how it is drawn.
+        let binding_prompt = self
+            .awaiting_binding
+            .map(|button| crate::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings)));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.render(
                 &self.gpu,

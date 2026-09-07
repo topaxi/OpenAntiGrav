@@ -233,9 +233,10 @@ pub(super) fn menu_page(
     // this flag the on-screen keyboard's layout is reviewable only by playing
     // the game on a machine with a display, and this project's own rule is to
     // judge a screen by looking at it. The models are the live ones
-    // (`crate::prompt`) and the labels come from the same table
-    // `session::pilot_editor` resolves, so what this draws is what a player
-    // sees rather than a mock-up of it.
+    // (`crate::prompt`) and the labels come from the same lookup the live
+    // path resolves them with (`session::pilot_editor` for rename/delete,
+    // `crate::rebind::prompt` for `binding`), so what this draws is what a
+    // player sees rather than a mock-up of it.
     if let Some(kind) = prompt {
         // `binding` names a button, not a pilot: the CONTROLS page's own
         // key-capture prompt names whichever button a `binding` row's
@@ -285,11 +286,12 @@ pub(super) fn menu_page(
 /// **Every label goes through `strings` here too**, which is the half of this
 /// that is not merely convenience: the live path resolves them in
 /// `session::pilot_editor` for the pilot-editor prompts and in
-/// `session::draw` for `binding`, so a capture that spelled its own English
-/// would be the one place a translation could silently fail to show. `name`
-/// is the pilot a rename or delete confirm is about, or the button a
-/// `binding` capture is waiting on - both taken from the real data by the
-/// caller rather than invented here.
+/// `crate::rebind::prompt` for `binding` (called from `session::draw`, which
+/// has no pure lookup of its own to duplicate), so a capture that spelled its
+/// own English would be the one place a translation could silently fail to
+/// show. `name` is the pilot a rename or delete confirm is about, or the
+/// button a `binding` capture is waiting on - both taken from the real data
+/// by the caller rather than invented here.
 ///
 /// # Errors
 ///
