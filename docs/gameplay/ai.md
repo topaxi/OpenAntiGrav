@@ -2065,11 +2065,23 @@ along `up` by `dot(normal, forward) * 6.0` to follow the slope. The hit *flag*
 is copied with it.
 
 That last detail is the mechanism. **At speed, a front probe in contact
-guarantees a rear probe in contact**, so `grounded` cannot read `0.5` - the
-craft cannot shed half its suspension because one probe overran a lip. This
-crate cast two independent rays at every speed and did exactly that; the
-symptom is visible in a hand-driven capture as `grounded 1.0` then `0.5` then
-`0.0` over two seconds.
+guarantees a rear probe in contact**, so the craft cannot shed half its
+suspension because one probe overran a lip. This crate cast two independent rays
+at every speed and did exactly that; the symptom is visible in a hand-driven
+capture as `grounded 1.0` then `0.5` then `0.0` over two seconds.
+
+**The guarantee is one-directional, and this paragraph used to overstate it.**
+It said `grounded` "cannot read `0.5`" at speed. It can, and the original does:
+all **23** of the `0.5` ticks in `data/traces/talons-junction-clean-lap.csv` are
+above the threshold, with `speed_cached` - which *is* `craft+0x2ec`, the branch's
+own input - between **76.4 and 111.6**. The copy only runs when the front ray
+*hits*; when it misses, the fast path falls through to casting the rear for real,
+which is what `oag_physics::hover::probe_pair` does and what the original is
+doing on every one of those 23 ticks (front miss, rear hit). Measured by
+`crates/trace/tests/hover_contact_ground_truth.rs`, which reproduces the
+recording's whole `grounded` column - 2,976 of 2,976 ticks, `0.5` runs included -
+by asking our probes about the original's own poses. The branch, the flag copy
+and the `6.0` are unchanged; only the sentence was wrong.
 
 Every fall on this page happens between 115 and 160 units per second, which is
 to say entirely inside the branch this crate did not have.

@@ -172,6 +172,45 @@ where the coefficient is `1` and the term turns out to be what the spring's
 
 Confidence **91** for the force law.
 
+### The contact test itself is exact against a capture, 2026-09-07
+
+The force law's confidence is one thing; **whether our probes decide *contact*
+where the original's do is a separate question, and it is now measured rather
+than inferred.** `crates/trace/tests/hover_contact_ground_truth.rs` walks the
+recorded poses of `data/traces/talons-junction-clean-lap.csv` - the original's
+own position and basis, tick by tick - and asks `oag_physics::hover::evaluate`
+what it finds there. No integration, no accumulated error, so nothing about the
+trajectory can enter the answer.
+
+**It reproduces the recording's entire `grounded` column: 0 disagreements over
+all 2,976 comparable ticks**, including the 23 ticks of `0.5` and both airborne
+events. The comparison is our verdict at pose `t` against the recording's column
+at `t + 1`, which is the same frame ordering the replay harness already emits
+under - `oag_trace::replay::replay` pushes its row *before* stepping, so a replay
+row at `t` also carries the contact evaluated at pose `t - 1`, and `speed_cached`
+is documented as the previous frame's value at 199/199 for the same reason.
+
+Two things follow, and the second is the useful one:
+
+- The probe reach (`target_height`, which is also the ray length), the surface
+  classes accepted, the probe offsets and the fast-path branch are all right on
+  this circuit. **A residual that looks like the cushion holding on too long is
+  not the cushion.** The seven-tick liftoff lag the hover thread measured at
+  `--reseed 60` (measured: ours airborne 1603-1615 against the original's
+  1595-1608, liftoff eight ticks late) survives only until the pose is made
+  exact. `oag-trace run --reseed 2` on the same capture reports `grounded max
+  error 0.000e0 ... exact` with the integrator and the sweep in the loop, which a
+  pose walk does not exercise - though read that as half a column: at reseed 2 the
+  even rows are the reseed echo, and only the odd rows carry a stepped verdict.
+  They cover every transition on the crest. What is left is trajectory phase -
+  where the craft is on the crest by the time it gets there - which is the
+  force-law drift [oag-trace.md](../tools/oag-trace.md) already documents.
+- **The pose walk is the technique to reach for whenever a per-tick boolean
+  disagrees**, and it is cheap. It is the same method
+  `crates/trace/tests/wall_contact_ground_truth.rs` uses for the hull, and it
+  answers a question a whole-lap replay structurally cannot: a reseed restores
+  position, not the phase of the feature the craft is crossing.
+
 ### The cross-product signs: a contradiction here, resolved
 
 This page originally recorded that term as `-400 * cross(up, avgNormal)` *and*, in
