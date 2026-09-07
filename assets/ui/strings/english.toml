@@ -6,10 +6,10 @@
 #   - overriding a disc idstring an existing widget already resolves (a
 #     wrong or missing entry the project cannot fix by shipping different
 #     disc data - see ADR-0006);
-#   - giving a translatable home to text this project invented, once
+#   - giving a translatable home to text this project invented:
 #     `assets/ui/menu.toml`'s `string_id`/`title_string_id`,
 #     `oag_race::Mode::fallback_label`, `crates/game/src/loading/wording.rs`
-#     and `crates/game/src/main/hints.rs` are wired to look one up instead of
+#     and `crates/game/src/main/hints.rs` all look an id up here instead of
 #     holding a literal `&str`.
 #
 # **This is the base language, and it is enforced, not aspirational.**
@@ -17,8 +17,8 @@
 # `string_id`/`title_string_id` used anywhere resolves to nothing here, or if
 # a *new* row or page in `assets/ui/menu.toml` names no id at all - a literal
 # English label is only allowed on the rows `check-strings.py`'s own
-# `BASELINE` names, which is the debt that predates this rule. See that
-# script's own module doc for the ratchet, and
+# `BASELINE_LABELS`/`BASELINE_TITLES` name, which is the debt that predates
+# this rule. See that script's own module doc for the ratchet, and
 # `handover/invented-ui-text-has-no-translation-and-the.md` for how this
 # started.
 #
@@ -43,7 +43,7 @@
 # **A missing entry and a marked-untranslated one are not the same thing.**
 # `check-strings.py` hard-fails the first - a silent gap nobody can grep for -
 # and passes the second, because the gap is now visible, countable, and the
-# same shape as `check-size.py`'s own `BASELINE`. Deleting an id from
+# same shape as `check-file-size.py`'s own `BASELINE`. Deleting an id from
 # `[untranslated]` the moment it is translated is the same discipline that
 # script's `graduated` list asks for. **Never machine-translate to clear a
 # row here** - an invented translation is worse than an honest gap, because a

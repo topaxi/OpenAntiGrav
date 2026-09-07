@@ -111,6 +111,15 @@ order:
 - Pure's own `StringTable` loading empty is still a bug in the read side, not
   fixed and not papered over by the override layer above - see the next
   section.
+- **`english.toml` now carries its own copy of every `OAG_HINTS_*`/
+  `OAG_LOADING_*` literal, alongside `hints.rs`/`wording.rs`'s own fallback -
+  and the table wins.** Fixing a typo in either file's literal changes
+  nothing a player sees until `english.toml`'s copy is fixed too, which is
+  exactly backwards from what a developer reading only the `.rs` file would
+  expect. `check-strings.py`'s own byte-for-byte extractor is the check that
+  catches the two drifting apart (`STRING_CONSUMERS`'s doc comment says "kept
+  in step by hand"); nothing catches a *correct* edit to one side landing
+  without its pair.
 
 ## Next Steps
 

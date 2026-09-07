@@ -28,10 +28,10 @@
 # matching English entry in `assets/ui/strings/english.toml`, in the same
 # change.** `just check-strings` (`scripts/check-strings.py`) enforces this at
 # gate time: a label or title with no id is a hard failure unless it is one of
-# the rows this script's own `BASELINE` names, which is the pre-existing debt
-# most of this file still is - a ratchet, the same shape `check-size`'s file-
-# length ceiling already is, so old debt is bounded and visible rather than
-# blocking, and *new* UI cannot add to it silently.
+# the rows this script's own `BASELINE_LABELS`/`BASELINE_TITLES` names, which
+# is the pre-existing debt most of this file still is - a ratchet, the same
+# shape `check-size`'s file-length ceiling already is, so old debt is bounded
+# and visible rather than blocking, and *new* UI cannot add to it silently.
 #
 # Identifiers in `values` are archive path components, never display names:
 # `Assegai` is a directory on the disc. Anything a player should read in their
