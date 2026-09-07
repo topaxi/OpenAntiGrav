@@ -219,6 +219,7 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         finish_tick,
         lap_start_tick,
         best_lap_ticks,
+        lap_splits,
     } = standing;
 
     hasher.write_u32(*lap);
@@ -256,6 +257,9 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         }
     }
     write_option_u32(hasher, *best_lap_ticks);
+    for split in lap_splits {
+        write_option_u32(hasher, *split);
+    }
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
@@ -316,6 +320,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         progress,
         lap_start_tick,
         best_lap_ticks,
+        lap_splits,
         zone,
         zone_timer,
         score,
@@ -345,6 +350,9 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
     }
     hasher.write_u64(*lap_start_tick);
     write_option_u32(hasher, *best_lap_ticks);
+    for split in lap_splits {
+        write_option_u32(hasher, *split);
+    }
     hasher.write_u32(u32::from(*zone));
     hasher.write_f32(*zone_timer);
     hasher.write_i32(*score);

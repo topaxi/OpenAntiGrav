@@ -487,6 +487,23 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   shape and not a behaviour change to what either scenario's craft do.
 ///   See `crates/gameplay/src/hash.rs`'s `write_quake`.
 ///
+/// - **Moved again 2026-09-07, for `RaceState::lap_splits` and
+///   `Standing::lap_splits`.** Both are four `Option<u32>` slots hashed
+///   unconditionally per craft per tick and on the race itself, the per-lap
+///   split history `crates/race/src/state.rs`'s `MAX_RECORDED_LAPS` adds so
+///   HD's `Lap1Image`-`Lap4Image` have something to draw. **Isolated the way
+///   this comment requires**: with both new `for split in lap_splits` loops
+///   removed (and `lap_splits` destructured as `lap_splits: _` in
+///   `write_standing` and `write_race`), both rows reproduced the previous
+///   constants - `0x1f49_7fb4_96fe_9a08` / `0x08cd_936e_e73d_b4d8` at 60 ticks
+///   and `0xeab3_a311_b56c_807b` / `0xcebe_2c5c_6232_1c5d` at 600 - bit for
+///   bit. This scenario sets `world.race.lap` directly at tick 20 rather than
+///   through `RaceState::complete_lap`/`Standing::update`, so no slot in
+///   either array is ever written to anything but `None` here; the movement
+///   is the hash primitive's own shape, not a behaviour change to what this
+///   scenario's craft do. See `crates/gameplay/src/hash.rs`'s `write_standing`
+///   and `write_race`.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -494,8 +511,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x1f49_7fb4_96fe_9a08, 0x08cd_936e_e73d_b4d8),
-    (600, 0xeab3_a311_b56c_807b, 0xcebe_2c5c_6232_1c5d),
+    (60, 0x2321_c766_223d_0fc8, 0x3917_5149_7ee8_d198),
+    (600, 0xb9c2_9ac6_b8fe_010b, 0x34c7_a5fa_88c8_357d),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -649,11 +666,20 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   Replaces `0x9a80_b71f_63a4_d274` / `0xefd7_1d09_2752_84ac` at 60 ticks
 ///   and `0x0d5f_98f8_61a6_7ab3` / `0xeb2e_415f_80cc_c0ea` at 600.
 ///
+/// - **Moved again 2026-09-07**, the same `RaceState::lap_splits` /
+///   `Standing::lap_splits` addition [`REFERENCE`]'s own history records,
+///   inherited through the same `write_standing`/`write_race` calls and not
+///   re-isolated here for the same reason - this scenario never completes a
+///   lap either, so every new slot stays `None` and the movement is the same
+///   fixed run of bytes. Replaces `0x2d89_9e56_5111_9b1c` /
+///   `0x0cc3_9764_975f_5852` at 60 ticks and `0x5feb_a10d_ede2_7e29` /
+///   `0xb54d_97c5_c287_eb16` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x2d89_9e56_5111_9b1c, 0x0cc3_9764_975f_5852),
-    (600, 0x5feb_a10d_ede2_7e29, 0xb54d_97c5_c287_eb16),
+    (60, 0x89da_d0f0_bd19_2e0c, 0xea20_03ce_ebb3_2762),
+    (600, 0x62d3_802f_e05b_0fa9, 0xf440_21aa_cf59_fd86),
 ];
 
 #[test]

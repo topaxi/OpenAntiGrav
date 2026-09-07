@@ -184,6 +184,49 @@ fn the_best_lap_is_the_quickest_and_not_the_last() {
     );
 }
 
+/// **`lap_splits` is a history, not a second copy of the best.** The rig above
+/// proves `best_lap_ticks` keeps the quicker lap; this proves each lap's own
+/// slot keeps *its own* time regardless, the way `Lap1Time`/`Lap2Time` on HD's
+/// HUD read two different rows rather than the same number twice.
+#[test]
+fn each_lap_keeps_its_own_time_not_the_best() {
+    let course = course();
+    let mut standing = Standing::default();
+    drive(&mut standing, &course, 110.0, 200);
+    assert_eq!(
+        standing.lap_splits[0],
+        Some(120),
+        "lap 1's own slot holds its own time"
+    );
+    assert_eq!(
+        standing.lap_splits[1], None,
+        "lap 2 has not been driven yet"
+    );
+
+    // A second, slower lap - see `the_best_lap_is_the_quickest_and_not_the_last`
+    // for why this pace is driven by hand.
+    for (tick, step) in (200u64..).zip(0..300u32) {
+        let at = 20.0 + step as f32 * 0.5;
+        standing.update(&course, on_ring(at), tick, None);
+    }
+    assert_eq!(standing.lap, 3, "a second lap completed");
+    assert_eq!(
+        standing.best_lap_ticks,
+        Some(120),
+        "the best is still the quicker lap"
+    );
+    assert_eq!(
+        standing.lap_splits[0],
+        Some(120),
+        "lap 1's own slot is untouched by lap 2 finishing"
+    );
+    let second = standing.lap_splits[1].expect("lap 2 recorded its own time");
+    assert!(
+        second > 120,
+        "the second lap was driven at half speed and should read slower, got {second}"
+    );
+}
+
 /// **The two clocks must agree, because slot 0 has both of them.**
 ///
 /// [`crate::RaceState`] times the player's laps and a [`Standing`] now times

@@ -10,15 +10,28 @@
 
 Net: no guessed fix was implemented for any of the four, on purpose - each would have required inventing a value or a rule with no data or executable evidence behind it, which is exactly what this project's "never invent" rule and this doc's own prior reasoning already ruled out. The doc page carries the full evidence trail so the next pass does not have to re-derive it.
 
+**2026-09-07, the per-lap rows landed.** `oag_race::RaceState::lap_splits` and
+`Standing::lap_splits` (`[Option<u32>; MAX_RECORDED_LAPS]`, `MAX_RECORDED_LAPS
+= 4` - read off the disc's own four rows, not chosen) now carry the history,
+and `oag_game::hud::lap_splits` wires `Lap1Image`-`Lap4Image` and their
+`Lap{n}Text`/`Lap{n}Time` children, gated on which laps have a recorded
+split. Full writeup: [hd-hud.md#the-per-lap-history-draws-off-a-new-
+racestatestanding-field](../../docs/formats/hd-hud.md#the-per-lap-history-draws-off-a-new-racestatestanding-field).
+Along the way: 2048 ships the identical fragment but does not reach it from
+any played race (only the demo-only bare-root `TimeTrial_HUD.xml` loads it);
+Pulse and Pure author no equivalent at all - both checked directly, not
+inferred. Three of the four original items remain open below.
+
 ## Open
 
 - `DamageBar` and the lap arcs are missing their runtime tints - confirmed to need the Ghidra bridge, not more data reading (checked archive-by-archive, not just through precedence); no bridge was available this pass. `arcade_hud.xml` also composes two same-named `DamageBar` widgets - resolve which one before wiring it.
 - `ShieldBarText` reads `100%` in red where the original reads plain `100` in grey - confirmed the red is HD's own authored colour, not a bug; the grey/no-`%` runtime override needs a second reference frame at low shield to separate "always grey" from "grey only above the critical threshold" before it can be implemented without guessing.
-- The per-lap time rows are missing - needs `crates/race` to track per-lap splits first; out of this thread's HUD-only lane.
 - Comparison still covers only one state of one mode (speed lap) plus the separate Zone frame recorded elsewhere in `hd-hud.md`; a second race-state capture (mid-race, damaged) would settle the `ShieldBarText` question above.
+- The per-lap rows now draw, but on no reference frame at all: which digit `Lap{n}Text` shows and whether an unset row's background should be invisible (as implemented) rather than drawn empty are both inferred, confidence 70 against this page's usual 90 - see `hd-hud.md`'s new section for exactly what a two-or-more-lap capture would settle.
 
 ## Next Steps
 
 - Take the Ghidra bridge (when free) and find what writes `DamageBarBg`'s tint and the lap-arc colours - `Hud_UpdateEnergyBar`'s analogue on `ps3-hdfury-eu`, if one exists under that name.
 - Get a second capture of the running original at low/critical shield (`just rpcs3-race`) to check whether `ShieldBarText` ever draws red, before writing any colour rule for it.
-- Whoever owns `crates/race` next: a per-lap split history (`Vec<u32>` of tick counts, one per completed lap) on `RaceState`/`Standing` is the prerequisite for `Lap1Image`-`Lap4Image`; once it exists, wiring the HUD side is a `text_for`/`draw_list` allow-list addition in `crates/game/src/hud/draw.rs`, gated on which laps have a recorded split.
+- Get a capture of the running original with two or more laps completed on a mode that shows `Lap1Image`-`Lap4Image` (time trial, default skin) to check the digit-per-row reading and the "invisible until completed" gate against a real frame.
+- Whoever next holds `crates/2048`'s HUD reading: `HUD_lap_times.xml` ships in the `2048_hud` skin's archive but no played-race root loads it (`SpeedLap_TimeTrial_HUD.xml` loads `HUD_lap_counters.xml`/`HUD_target_time_total.xml` instead) - confirm that stays true once `oag_2048::hud::ALWAYS_ON` (currently empty) gets filled in, rather than assuming this cluster is reachable there.

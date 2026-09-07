@@ -143,6 +143,13 @@ impl Race {
                 self.world.tick
             },
             best_lap_ticks: race.best_lap_ticks,
+            // Gated the same as `lap`/`laps` above: a track with no closed ring
+            // has no lap history either.
+            lap_splits: if counted {
+                race.lap_splits
+            } else {
+                [None; oag_race::MAX_RECORDED_LAPS]
+            },
             wrong_way: self.wrong_way(),
             zone: race.zone.into(),
             score: race.score,
