@@ -11,7 +11,9 @@
 //! the same tick.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::Weapon;
+use oag_formats::weapons::{Weapon, WeaponStats};
+
+use super::cannon;
 
 /// What one weapon's blast is worth, read off the table the player's disc
 /// authors.
@@ -205,4 +207,32 @@ pub fn blast(
             .apply_impulse(direction * (falloff * stats.force));
     }
     reached
+}
+
+/// What [`super::step`] does with every impact one tick produced.
+///
+/// Split out of `step` itself under the parent module's own 1,000-line
+/// ceiling - a move, with no behaviour change. The Cannon takes its own arm
+/// because it has no radius to sweep at all; see [`cannon::apply_impact`].
+pub(super) fn apply_impacts(
+    ships: &mut [crate::world::Ship],
+    weapons: Option<&WeaponStats>,
+    impacts: &[Option<super::Impact>],
+    rules: oag_physics::DamageRules,
+    absorbed: &mut [bool],
+) {
+    for impact in impacts.iter().flatten() {
+        // A detonation that only shows an explosion - see [`super::Impact::blast`].
+        if !impact.blast {
+            continue;
+        }
+        if impact.kind == Weapon::Cannon {
+            cannon::apply_impact(ships, weapons, impact, rules, absorbed);
+            continue;
+        }
+        let Some(stats) = blast_stats(weapons, impact.kind) else {
+            continue;
+        };
+        blast(ships, impact.point, &stats, rules, absorbed);
+    }
 }

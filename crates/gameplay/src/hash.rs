@@ -261,6 +261,8 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
         last,
         dropping,
         drop_reload,
+        cannon_rounds,
+        cannon_reload,
     } = held;
     write_weapon(hasher, *weapon);
     // **The previous grant is state, not a convenience.** The draw refuses to
@@ -277,6 +279,13 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
     // tick. See `crate::pickup::Held::advance_drop`.
     hasher.write_u8(*dropping);
     hasher.write_f32(*drop_reload);
+    // **The Cannon's own countdown is state that spans ticks too**, for the
+    // same two reasons the drop's is: how many rounds are left decides how
+    // much longer this craft goes on firing, and the reload decides which
+    // tick the next one leaves on. See
+    // `crate::pickup::Held::advance_cannon_reload`.
+    hasher.write_u8(*cannon_rounds);
+    hasher.write_f32(*cannon_reload);
 }
 
 /// A weapon slot as a discriminant byte, with `0` reserved for "nothing".

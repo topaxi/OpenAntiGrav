@@ -283,6 +283,18 @@ impl Race {
             .and_then(oag_formats::weapons::WeaponStats::plasma)
     }
 
+    /// The Cannon's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Cannon.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/cannon_ground_truth.rs`.
+    #[must_use]
+    pub fn cannon_stats(&self) -> Option<oag_formats::weapons::CannonStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::cannon)
+    }
+
     /// `<Weapon type="Global"><Stats slowdown_limit>`, or `None` when the table
     /// did not load.
     ///
