@@ -125,6 +125,67 @@ impl Race {
         fired > 0
     }
 
+    /// Launches an opponent's travelling wave, if its driver wants a shot now
+    /// and none is already in flight.
+    ///
+    /// Returns whether the wave left, so the caller can leave the pickup in
+    /// the craft's hands rather than cashing it in - the same `&&`-chain
+    /// reason every other armed weapon here returns a `bool`.
+    ///
+    /// **The busy check comes first**, matching `Weapon_FireQuake`'s own -
+    /// only one Quake can be in flight in the whole race, so a driver that
+    /// wants to fire into an already-travelling wave simply keeps the
+    /// pickup, the same as a full projectile pool would. **The same
+    /// `Driver::wants_to_fire` gate the Rocket and the Plasma use beyond
+    /// that** - the Quake has no lock and no cone to aim through, so there
+    /// is nothing more to decide, and a second invented gate would be
+    /// inventing a difference rather than recovering one.
+    fn fire_opponent_quake(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        if self.world.quake.is_some() {
+            return false;
+        }
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if self.world.ships[slot]
+            .driver
+            .wants_to_fire(&context)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(stats) = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::quake)
+        else {
+            return false;
+        };
+        let ship = &self.world.ships[slot];
+        let Some(progress) = ship.standing.progress else {
+            return false;
+        };
+        // The direction sign, the same dot product `Race::spend_pickup`'s own
+        // Quake arm reads - see that arm's doc comment for the reasoning and
+        // the `unwrap_or(1.0)` default.
+        let forward_dot_tangent = ship
+            .standing
+            .course_index
+            .and_then(|index| self.course.as_ref()?.tangent(index as usize))
+            .map(|tangent| tangent.dot(ship.physics.body.forward()))
+            .unwrap_or(1.0);
+        self.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+            slot as u8,
+            progress,
+            forward_dot_tangent,
+            &stats,
+        ));
+        true
+    }
+
     /// Puts one plasma bolt in the air for an opponent, if its driver wants a
     /// shot now.
     ///
@@ -400,6 +461,10 @@ impl Race {
             }
         } else if weapon == oag_formats::weapons::Weapon::Shuriken {
             if !self.throw_opponent_shuriken(slot, field) {
+                return;
+            }
+        } else if weapon == oag_formats::weapons::Weapon::Quake {
+            if !self.fire_opponent_quake(slot, field) {
                 return;
             }
         } else if matches!(
