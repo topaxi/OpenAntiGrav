@@ -711,3 +711,5 @@
 0x088e9e5c	function	TeamSelection_OnExit	74	race-box-screens.md
 0x088e9ab8	function	TeamSelection_Destruct	72	race-box-screens.md
 0x088ea6b8	function	FEScreen_SetStatBar	82	race-box-screens.md
+0x0898dfd0	function	Scream_OpNop14	82	sound.md
+0x0898dfd8	function	Scream_OpNop15	82	sound.md

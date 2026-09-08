@@ -256,20 +256,29 @@ those nodes. `0x14` is in `moather~birds` and `dekonst~CRANE` - both named
 after sounds - and, decisively, in `talonsj~SETREG_01`/`_02` **beside** their
 `0x1e`, which is a cue that both sets a register and does something else.
 
-So `0x14` is the opcode worth decoding, and 9 of the 38 nodes are waiting on
-it: Moa Therma's five birds, De Konstruct's crane, and Talon's Junction's
-three. It is one of the 41 command opcodes
-[`psp-audio.md`](../../../formats/psp-audio.md) lists as unread, and its likely
-shapes are "bind a waveform another way" or "play a cue in another bank" -
-`oag_formats::sblk::child` already handles the second for HD's `0x0f`-style
-indirection and finds nothing here.
+**Decoded, 2026-09-08, and it refutes the hypothesis this section used to
+make.** `0x14` is a bare no-op -
+[`sound.md`](sound.md#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)
+found its handler (`Scream_OpNop14`, confidence 82) two instructions long,
+`jr ra; li v0,0`, and corroborated the same shape at the same opcode slot on
+`ps3-hdfury-eu`. It does not bind a waveform, does not play another cue, and
+ignores its own operand bytes. **The 9 nodes are not a decode gap**: Moa
+Therma's five birds, De Konstruct's crane and Talon's Junction's two
+`~SETREG` cues genuinely author no sound, on this disc and, by the HD
+corroboration, by design rather than a Pulse-specific omission. `talonsj`'s
+cues carrying `0x14` beside `0x1e` no longer needs the "not all just
+registers" reasoning below to explain why they resolve and stay silent - a
+cue can carry two commands that both do nothing.
 
-Confidence **88** that `0x14` binds something audible: the two-opcode split is
-exact across eight circuits with no exception, and the `talonsj` cues carrying
-both is what rules out "these cues are all just registers". What is **not**
-established is what `0x14` does - the handler has not been found in
-`Scream_StepCommandList`'s dispatch, and no waveform has been recovered through
-it.
+This section previously read: "So `0x14` is the opcode worth decoding... its
+likely shapes are 'bind a waveform another way' or 'play a cue in another
+bank'... Confidence 88 that `0x14` binds something audible." Kept here,
+struck through in spirit rather than deleted, because the reasoning that
+produced it was sound given what was known - the two-opcode split really is
+exact across eight circuits, and the `talonsj` cues carrying both really did
+rule out "`0x14` is just another register op like `0x1e`". It ruled out the
+wrong alternative: not "does nothing", but "does the same nothing as
+`0x1e`".
 
 Reproduce the table with
 `crates/game/tests/track_audio_ground_truth.rs`'s
@@ -345,10 +354,11 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
 
 ## What this does not answer
 
-- **Which undecoded opcode binds a waveform**, which is what leaves
-  `moather~birds` and 37 other nodes silent - see
+- ~~**Which undecoded opcode binds a waveform**~~ **Answered: none does.**
+  `0x14` decoded to a no-op, not a waveform bind - see
   ["A second, larger set"](#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
-  above.
+  above. The 38 nodes stay silent, but the reason is now that their command
+  lists genuinely author no sound, not that a handler is missing.
 - **`emitter+0x3c` has no meaning.** It is written from `+0x0c` and
   `positional-audio.md`'s three-way-pinned emitter table does not list it, so
   nothing observed so far reads it back.

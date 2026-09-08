@@ -686,13 +686,79 @@ the *name* built on top of it. This raises the same four rows on
 [`ps3-hdfury-eu/sound.md`](../ps3-hdfury-eu/sound.md#opcodes-read-so-far) from
 their prior 80/84/78/80.
 
+## Opcode `0x14` is a no-op, corroborated on HD, 2026-09-08
+
+[`track-sound-emitters.md`](track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
+recorded a confidence-88 hypothesis that `0x14` binds a waveform another way,
+built on 9 of its 38 silent-cue nodes sharing that opcode and none other.
+`g_scream_opcode_table[0x14]` (`0x08ac326c + 0x14*4` = `0x08ac32bc`) reads
+`0x0898dfd0` directly - no `+0x08804000` pseudo-address correction needed this
+time, and the read is cross-checked against the table's own already-confirmed
+`0x19` entry four slots later (`0x0898e178`, matching
+[the corroboration above](#four-opcodes-corroborated-against-hd-2026-09-04)
+exactly) rather than trusted alone. `create_function` was needed - the
+auto-analyzer had not walked this table either - and the result is two
+instructions:
+
+```
+0898dfd0  jr ra
+0898dfd4  li v0,0
+```
+
+**A bare no-op, the same shape as `0x23`/`Scream_OpMarker`.** HD's own table
+(`0x00927614 + 0x14*4` = `0x00927664`) resolves through the same OPD-address
+indirection [ps3-hdfury-eu/sound.md's dispatch table section](../ps3-hdfury-eu/sound.md#the-real-dispatch-table) describes,
+to `0x006234c0`, TOC `0x008bd3c4` confirmed with `scripts/ps3-toc.py toc`
+before trusting the decompile - `li r3,0; blr`, field for field the same
+shape on a different CPU, no shared analysis between the two reads. Named
+`Scream_OpNop14` (PSP) and `Scream_DoGrainNop14` (HD), matching this page's
+`Scream_Op*`/HD's `Scream_DoGrain*` convention.
+
+**This refutes the hypothesis rather than confirming it.** `0x14` does not
+bind a waveform, another cue, or anything else - it ignores its own operand
+bytes and returns unconditionally. The 9 nodes waiting on it
+(`moather~birds`, `dekonst~CRANE`, both `talonsj~SETREG` cues) are not a
+decode gap: their command list genuinely authors no sound, on this disc and,
+by the HD corroboration, apparently by design in the engine rather than a
+Pulse-specific omission. `talonsj~SETREG`'s cues carrying `0x14` *beside*
+`0x1e` no longer needs explaining as "these aren't all just registers" -
+a cue can validly carry two commands that both do nothing.
+
+Confidence **82** - the same figure `0x23` carries and for the same reason:
+two-instruction agreement across two binaries corroborates that the function
+does nothing, which is unambiguous, but does not by itself explain *why* the
+disc authors an opcode for it.
+
+**`0x14` is not an isolated stub - its neighbour `0x15` is the same shape, and
+that is where the discriminating check landed.** Reading the table's own
+`0x19` entry proved the base and stride are right, but not that index 20
+specifically is `0x14` rather than 19 or 21; the check that does is reading
+the *neighbours* and finding three distinct addresses 8 bytes apart
+(`0x0898dfd0`/`0898dfd8`/`0898dfe0`). The first two are both `jr ra; li v0,0`
+- `0x15` (`0x0898dfd8`, `Scream_OpNop15`, also corroborated on HD as
+`Scream_DoGrainNop15`, `0x006234c8`) does exactly what `0x14` does. The third,
+`0x16` (`0x0898dfe0`, not otherwise read this session), is not a stub: it
+scans the command list **backward** from the current program counter for a
+command whose opcode byte is `0x15`, sets a flag bit at `+0x16` (`0x40`) the
+first time it finds one, returns `1` if that bit was already set, and calls
+an unread error function (`FUN_08996708(8, ...)`) if the scan runs off the
+start without finding one. That is a marker-shaped role one direction removed
+from `0x24`/`Scream_OpGoto`'s forward scan for `0x23` - **`0x15` has a
+confirmed consumer, `0x14` does not.** No opcode found scanning for `0x14`
+specifically, so unlike `0x15` its "why does the disc author this" stays
+genuinely open rather than answered by a sibling opcode.
+
 ## Not determined
 
-- **39 of the 45 opcode handlers.** `0x01`, `0x09`, `0x19`, `0x22`, `0x23` and
-  `0x24` are read; the rest are not. The format page's other observed opcodes
-  (`0x05`, `0x06`, `0x15`, `0x16`, `0x1e`, `0x29`) are what a bank actually
-  uses, so they are the ones worth reading next, and eight of the 45 share one
-  handler.
+- **37 of the 45 opcode handlers, plus one read but not confidently named.**
+  `0x01`, `0x09`, `0x14`, `0x15`, `0x19`, `0x22`, `0x23` and `0x24` are named
+  and confidence-scored; `0x16`'s handler is decompiled (a backward scan for
+  `0x15`, see [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08))
+  but its *purpose* is not established well enough to name past the rubric's
+  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read. The
+  format page's other observed opcodes (`0x05`, `0x06`, `0x1e`, `0x29`) are
+  what a bank actually uses, so they are the ones worth reading next, and
+  eight of the 45 share one handler.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
 - ~~**The extraction itself.**~~ **Done.** Both rules are implemented in
