@@ -29,6 +29,9 @@ produced it and the one that replaces it.
 | `0x08872da8` | `LeachBeam_InitUnlocked` | 80 |
 | `0x08866b08` | `LeachBeam_UpdatePool` | 85 (was `FUN_08866b08` at 60-78, see [bad-memory-access-halt.md](bad-memory-access-halt.md)) |
 | `0x08866804` | `LeachBeam_Drain` | 78 |
+| `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
+| `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
+| `0x08834b14` | `AiManager_Update` | 80 (new 2026-09-08) |
 
 Read [weapon-fire.md](weapon-fire.md) first for the two traps every reading below
 depends on: `entity+0x1b8` is the fire-request word, and every `jal` operand and
@@ -285,10 +288,16 @@ This also settles the offsets `weapon-stats.md` recorded as unchecked, and it
 is the one place on this page where the *parser* rather than the *handler* was
 the missing read.
 
-### Only a human can fire a Cannon, and that is measured rather than assumed
+### The AI's fire-held byte is never written by anything, and its object is not zero-filled
+
+**Read 2026-09-08, and it replaces a section that said "only a human can fire a
+Cannon, and that is measured".** The maintainer reports from play that **AI
+craft do fire the Cannon, at the player and at each other**, so that conclusion
+was wrong. Its evidence was not wrong; the *search* was blind by construction,
+and this section is what the corrected search found.
 
 `FUN_0883f540` wraps the whole per-craft weapon block in a null check on the
-record:
+record, and AI craft do pass it:
 
 ```c
 if (*(int *)(*(int *)(entity + 0x94) + 0x78) != 0) {
@@ -298,48 +307,123 @@ if (*(int *)(*(int *)(entity + 0x94) + 0x78) != 0) {
 }
 ```
 
-AI craft **do** have a record - `WeaponAi_Update` (`0x08851550`) and
-`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) write `record+0x15` (fire press)
-and `record+0x17` (absorb) through `*(ai+0x10)`, which is how an opponent fires
-anything at all. **Neither ever writes `record+0x16`.**
+#### Why `field 0x16` could never have found a producer
 
-That is exhaustive rather than a sample. `scripts/psp-relocate.py field 0x16`
-over the whole relocated image finds **one** byte access at `+0x16` in the game
-range - `lbu a0, 0x16(a0)` at `0x0883f438`, the read above - and **zero** byte
-stores; `field 0x5a` finds exactly one store, `0x0883ccd0`, inside
-`PlayerInput_Update`. The human pad is the only producer of "fire held" in the
-image.
+`scripts/psp-relocate.py field 0x16` searches for accesses at **struct offset
+`0x16`**. No owner of a control record ever addresses it that way, because every
+owner *embeds* the record at its own offset and writes through that:
 
-So an AI holding a Cannon sets the press edge, `Weapon_RequestFire` sets bit
-`0x2000`, nothing reads it, and no round ever leaves.
+| Owner | Record embedded at | "fire held" byte is at |
+| --- | --- | --- |
+| `PlayerInput` (the human pad) | `controller + 0x44` | `controller + 0x5a` |
+| `Ai` (an opponent, or the player's autopilot) | **`Ai + 0x08`** | **`Ai + 0x1e`** |
 
-> **CONTRADICTED BY PLAY, 2026-09-08. The conclusion above is wrong; the
-> evidence for it is not.** The maintainer reports from playing the original
-> that **AI craft do fire the Cannon, at the player and at each other.** So a
-> producer of `record+0x16` exists and this search did not find it.
->
-> **The search's own shape is the prime suspect, and it is a known trap.**
-> `scripts/psp-relocate.py field 0x16` looks for **byte** accesses. `+0x15`
-> (fire press), `+0x16` (fire held) and `+0x17` (absorb) are three *adjacent*
-> bytes, so a single `sh` at `+0x16` or `sw` at `+0x14` would set the held flag
-> and be invisible to a byte-store search - as would a `memcpy`/struct
-> assignment of the whole record. "Zero byte stores" is not "zero stores", and
-> the two were conflated.
->
-> **What to do:** re-run the field search for halfword and word stores whose
-> range covers `+0x16`, and for bulk copies into the record, before touching
-> any code. `WeaponAi_Update` (`0x08851550`) and
-> `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) remain the right functions to
-> look in - they already write `+0x15` and `+0x17` through `*(ai+0x10)`, so
-> they hold a pointer to the record and a wider store there is the cheapest
-> explanation that fits both this evidence and the play report.
->
-> Everything else on this page stands: `+0x16` really is the held flag, the
-> countdown really is gated on it, and the human pad really does write it via
-> `PlayerInput_Update`. Only "the human pad is the *only* producer" is
-> refuted. `oag_game::race::weapons` currently reproduces the wrong
-> conclusion - an AI cannot fire a Cannon in this build - and that is now a
-> known deviation rather than a faithful copy.
+So "one byte read at `+0x16`, zero byte stores" was never evidence about
+producers at all - only the *consumer* `Cannon_UpdateReload` holds a bare
+record pointer. The `controller+0x44` half was already on this page (see
+[The gate is the fire button](#the-gate-is-the-fire-button-held-not-a-track-pad-flag));
+the `Ai + 0x08` half is new and is what the previous pass was missing.
+
+#### The AI's control record is `Ai + 0x08` (confidence 90)
+
+Four independent legs:
+
+1. **The binary names it.** `Ai_Construct` (`0x088536bc`) registers
+   `param_1 + 2` - that is `Ai + 0x08` - in the same named-resource registry
+   `DAT_08b317b8` that `PlayerInput_Construct` uses, under either the formatted
+   literal `"AI input %d"` (`0x08a7bf08`) or, when the ship is the human
+   player's, the stack-built literal `"autopilot input"`
+   (`local_50 = 0x6f747561 'auto'`, `0x6f6c6970 'pilo'`, `0x6e692074 't in'`,
+   `0x747570 'put'`). Which of the two is chosen by
+   `*(bool *)(Ai + 0xa8) = (entity + 0x368 == 0)`.
+2. **`Ai_Update` (`0x08853a80`) writes the record's own fields, at
+   `PlayerInput_Update`'s exact layout**: `param_2[2]` = steer (`Ai+0x08` =
+   record `+0x00`), `param_2[3]` = throttle (`+0x04`), `param_2[4]`/`param_2[5]`
+   = left/right airbrake (`+0x08`/`+0x0c`), `param_2[6] = 0` = pitch (`+0x10`).
+   It is a per-frame update, not a one-shot: `AiManager_Update` (`0x08834b14`)
+   loops the whole `Ai` list (`manager+0x44`, count `manager+0x40`) calling it,
+   then loops the `WeaponAi` list (`manager+0x78`, count `manager+0x74`) through
+   their vtable.
+3. **`Ai_Construct` seeds `param_1[3] = 0x42c80000`** - `100.0f`, record `+0x04`,
+   on the same `+/-100` scale `PlayerInput_Update` writes the accelerator at. An
+   AI craft is constructed with the throttle already down.
+4. **The weapon half resolves the same name.** `FUN_0883e820` (`0x0883e820`)
+   formats `"AI input %d"` (`0x08a7b944`) and passes it through `FUN_08834d58`
+   to `WeaponAi_Construct` (`0x0885077c`), whose `FUN_08850494` looks it up into
+   `WeaponAi + 0x10` - the pointer `WeaponAi_Update` and
+   `WeaponAi_DecideFireOrAbsorb` write `+0x15`/`+0x17` through. Matching that,
+   `Ai_Construct` byte-zeroes `Ai + 0x1d` (= record `+0x15`) and `Ai + 0x1f`
+   (= record `+0x17`) and nothing else in that span.
+
+#### Nothing writes `Ai + 0x1e`, at any width (confidence 85)
+
+- `field 0x1e` over the game range (`< 0x08a00000`) finds six `sb` sites and
+  none is an `Ai`: four are the network object `FUN_08962088` returns
+  (`0x0883ce50` in `FUN_0883ce3c`, `0x0886127c` and `0x08861294` in
+  `FUN_08861228`, `0x088617a4` in `FUN_088616cc`), one is in the front end
+  (`0x088243d8`, `FUN_08824268`) and one is `Weapon_FireQuake`'s own instance
+  flag (`0x0886c738`). No site in the `Ai` module (`0x08853xxx`) or the
+  `WeaponAi` module (`0x08850xxx`-`0x08852xxx`).
+- `field 0x1c` finds **no `sw` in either module**. That is the wide-store trap
+  this page itself warned about: a single `sw ?,0x1c(Ai)` would have written
+  record `+0x14`..`+0x17` at once. There isn't one. `field 0x1d` and
+  `field 0x1f` show only `Ai_Construct`'s two zeroing stores.
+- `Ai_Update` **clears record `+0x14`** (`Ai + 0x1c`) on every frame it races,
+  and still never touches `+0x16`.
+- The only 40-byte record copy in the image is `Ship_UpdateCraft`'s autopilot
+  blend (`sw` at record `+0x14`/`+0x18`/`+0x1c`, `0x088496f8` onward) and its
+  *source* is another `Ai` record with the same hole.
+
+#### The `Ai` object is allocated without a zero-fill
+
+`FUN_08834c5c` does `FUN_08946ce4(0x890)` - which is
+`FUN_08946e20` - `FUN_08946e40(0x890, 0, 0)`, a plain heap allocation - and
+calls `Ai_Construct` straight after. Thirty lines away in `Craft_Construct_q`
+(`0x08840c74`) the craft object is allocated the same way and then **explicitly
+memset**: `FUN_08946e40(0x360, ...)` followed immediately by
+`FUN_08946db8(ptr, 0, 0x360)`. This allocator does not zero; callers that want
+zero ask for it, and the `Ai` allocation does not.
+
+#### What that means
+
+**The AI's fire-held byte is uninitialised heap.** Where it comes up non-zero,
+`Cannon_UpdateReload`'s countdown advances on *every* frame that AI holds a
+Cannon, so the craft empties its `rounds="30"` at the authored `rate="20"` per
+second as soon as it picks the weapon up - about a second and a half of
+continuous fire, with **no fire decision involved at all**. The WeaponAi's own
+decision writes `+0x15`, which reaches `Weapon_RequestFire`, which sets bit
+`0x2000`, which nothing reads.
+
+Two supporting facts make this the only surviving reading rather than a
+convenient one:
+
+- **`Weapon_FireCannon` has exactly one caller** - `Weapons_DispatchFire`
+  (`0x08861814`), gated on bit `0x4000` of `craft+0x1b8`. (`get_function_callers`
+  became usable on this program with the 2026-09-07 PSP relocation patch; the
+  previous pass predates it.)
+- **Bit `0x4000` of `craft+0x1b8` has exactly one producer image-wide** -
+  `0x0883f4d4 ori r5,r5,0x4000` / `0x0883f4d8 sw r5,0x1b8(r4)`, inside
+  `Cannon_UpdateReload`. That is from a scan correlating *every* `sw`/`sh` at
+  `+0x1b8` in the game range with its value producer, covering `ori`/`andi` with
+  any immediate carrying bit `0x4000` and R-type `or`/`and`, not just the exact
+  immediate `0x4000`. Every other `+0x1b8` store is another weapon's `ori` or an
+  `and` that clears. Correspondingly `masked 0x1b8 0x2000` returns **zero**
+  masked reads, so the Cannon's own request bit really is dispatched by nothing.
+
+So the route to an AI cannon round is forced through that byte, and the byte has
+no writer. A race's allocation sequence is deterministic, so whatever the block
+holds is reproducible run to run and per grid slot - which is what reads to a
+player as systematic AI cannon fire.
+
+**This makes a prediction worth checking from play**: AI cannon fire should look
+*automatic and continuous on pickup*, not aimed or intermittent. If it is aimed
+and intermittent, this reading is wrong and something else sets that byte.
+
+**Implementation status.** `oag_game::race::weapons` fires AI cannons on the
+recovered gate above, but the *value* of the byte is undefined behaviour and so
+cannot be measured: treating it as non-zero for every AI craft is **chosen, not
+measured, and carries no confidence score**. The mechanism is recovered; the
+value it terminates in is not a fact about the disc.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 

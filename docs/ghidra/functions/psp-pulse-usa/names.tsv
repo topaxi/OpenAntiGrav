@@ -649,6 +649,9 @@
 0x0883f424	function	Cannon_UpdateReload	85	cannon-quake-leachbeam.md
 0x0883c74c	function	PlayerInput_Construct	85	cannon-quake-leachbeam.md
 0x0883c870	function	PlayerInput_Update	85	cannon-quake-leachbeam.md
+0x08853a80	function	Ai_Update	85	cannon-quake-leachbeam.md
+0x0885077c	function	WeaponAi_Construct	85	cannon-quake-leachbeam.md
+0x08834b14	function	AiManager_Update	80	cannon-quake-leachbeam.md
 0x088648ec	function	Cannon_Init	80	cannon-quake-leachbeam.md
 0x08874b14	function	Quake_Init	82	cannon-quake-leachbeam.md
 0x0891d268	function	Quake_Update	85	cannon-quake-leachbeam.md
