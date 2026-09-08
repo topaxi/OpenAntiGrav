@@ -76,13 +76,77 @@ asked for.
 countdown weapon gate is now warranted elsewhere, now that the one case
 that argued against it (this bug) is understood and fixed.
 
+## The advert-board blur: two known causes ruled out, mip-chain depth landed but measured inert, cause still open
+
+2026-09-08. Identified the exact board and texture, ruled out two
+`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`-documented mechanisms, and
+landed a real (but confirmed non-fixing) gap the same doc already flagged.
+
+**The board is `hub_banner_GLOW.tga`** (128x128, 8bpp indexed, authored path
+reads `Data\Environments\12_Track\Textures\...` even though it draws on
+`16_Track` - a shared asset), on mesh node 1125 at track-space `(-63, -47,
+-209)`, right beside the start line. Confirmed by `oag-view --only
+hub_banner_GLOW` against `16_Track/track.vex` - the isolated draw matches the
+small red/black board visible top-left in every gantry-area capture. Repro:
+`cargo run -p oag-game --release -- data/images/pulse-psp-eu.chd --race
+--mode time_trial --track 'Data\Environments\16_Track\track.vex' --size
+960x540 --screenshot out.png --ticks 130` (`--until` takes a state name to
+wait for, not a tick count - `--ticks` is the plain counter; the board is
+visible from the grid at tick 0 regardless, which is enough to reproduce
+this).
+
+**Two mechanisms `mesh-draw.md` already covers were re-checked against this
+specific texture and both are still negatives:**
+
+- **Filter mode**: `Gu_TexFilter` (`0x088113f0`) is a single global
+  `(min=7 GU_LINEAR_MIPMAP_LINEAR, mag=1 GU_LINEAR)` for the whole game, no
+  per-material override exists anywhere to emit one, and `oag_render`'s
+  shared albedo sampler already uses `Linear`/`Linear`/`Linear` at
+  `Anisotropy::X16` by default - same state, not a candidate.
+- **Mip chain depth**: `Texture::mip_count` (the PSP `.vex` texture object's
+  own `+0x05` byte) was parsed by `oag_formats::vex::textures` but silently
+  dropped by every consumer - `mesh_render`'s uploader always synthesised a
+  full box-filtered chain down to 1x1 regardless of what the asset declared.
+  **Wired through** (`ModelTexture::mip_count: Option<u32>`, threaded from
+  `mesh.rs`'s vex-embedded-texture path, capping `mesh_render::texture`'s
+  synthesised chain when known): `hub_banner_GLOW.tga` declares `mip_count =
+  5` (128x128 down to 8x8) against a synthesised chain that ran to 1x1.
+  **Measured, not assumed, and it is inert here too**: capping at the
+  authored depth changed 24 of 518,400 pixels between two otherwise-identical
+  captures, mean difference 4.7e-5 - the same "measured inert" shape
+  `mesh-draw.md` already found for the exhaust textures on 2026-08-10. Landed
+  anyway as its own fix (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`'s
+  own "worth fixing on its own account" note asked for exactly this), but it
+  does not explain the blur.
+
+**What is not yet checked**: `Gu_TexLevelMode` (`0x088114b0`, `TEXLEVEL`),
+the other half of `mesh-draw.md`'s finding. `Texture_BuildBindList` emits
+either mode `2` with a *computed* LOD bias or mode `0` with none, gated on
+the texture object's `+0x06 & 0x18` bits - which of the two applies to
+`hub_banner_GLOW.tga` specifically is unread, and `oag_render`'s sampler sets
+no LOD bias at all (`SamplerDescriptor::default()`'s zero). A systematic bias
+difference here - rather than a per-texture chain-depth one - would explain a
+blur that mip-depth capping did not touch. Reading `Texture_BuildBindList`'s
+bias computation and this texture's own `+0x06` byte needs a Ghidra project
+open on `psp-pulse-usa`; not attempted this session.
+
+Also unchecked: whether bloom or another post-process pass amplifies this
+additive-blend (`ADD`/`GLOW`-named) texture's inherent softness beyond what
+the original's own compositing does - not traced this session either.
+
 ## Next Steps
 
-- The advert-board blur: unstarted. The same maintainer comparison flagged
-  our left-side advert boards rendering blurred where the original's are
-  legible - may be a mip/filtering or texture-resolution difference, not
-  chased this session or the one before it.
+- Open a Ghidra project on `psp-pulse-usa`, read `Texture_BuildBindList`'s
+  `+0x06 & 0x18` branch for `hub_banner_GLOW.tga` specifically, and compare
+  its computed LOD bias (if mode 2) against what `oag_render`'s sampler
+  applies (currently none).
+- If bias is a dead end too, capture `--anti-aliasing off --upscaler off`
+  (bloom's own flag, whichever `graphics.*` row names it) against the same
+  tick-130 repro above and diff against the enabled-bloom capture, to rule
+  post-processing in or out before looking anywhere else.
 
 ## Open
 
-- The advert-board blur, entirely unstarted.
+- The advert-board blur's actual cause - two mechanisms ruled out
+  (filter mode, mip-chain depth), TEXLEVEL bias and post-processing
+  unchecked.

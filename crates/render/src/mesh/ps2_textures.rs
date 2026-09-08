@@ -82,6 +82,7 @@ impl Ps2TextureSet {
                     u32::from(texture.width),
                     u32::from(texture.height),
                     texture.to_rgba(),
+                    None,
                 )),
             );
         }

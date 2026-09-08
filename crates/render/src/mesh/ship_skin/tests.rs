@@ -39,6 +39,7 @@ fn texture(label: &str) -> Option<std::sync::Arc<ModelTexture>> {
         2,
         2,
         vec![9, 9, 9, 255, 9, 9, 9, 255, 9, 9, 9, 255, 9, 9, 9, 255],
+        None,
     )))
 }
 

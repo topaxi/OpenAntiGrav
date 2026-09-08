@@ -220,6 +220,7 @@ fn the_texture_table_scrolls_a_surface() {
         2,
         1,
         vec![0, 0, 0, 255, 255, 255, 255, 255],
+        None,
     );
     // A quad that samples only the black texel, until a `u` offset slides it.
     let corner = |y: f32, z: f32, u: f32| GpuVertex {

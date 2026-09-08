@@ -77,6 +77,7 @@ pub(super) fn skin(
                 1,
                 1,
                 super::isolate::tint(slot).to_vec(),
+                None,
             ))));
             seconds.push(None);
             continue;

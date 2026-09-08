@@ -849,7 +849,7 @@ pub fn build(
     });
 
     let make = |width: u32, height: u32, rgba: &[u8], label: &str| {
-        texture::upload_rgba(device, queue, width, height, rgba, label)
+        texture::upload_rgba(device, queue, width, height, rgba, label, None)
     };
 
     // One bind group per material slot: its albedo and its lightmap, which the

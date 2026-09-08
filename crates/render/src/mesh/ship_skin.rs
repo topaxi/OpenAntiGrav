@@ -71,6 +71,7 @@ pub fn apply(hull: &mut Model, skin: &ship_skin::Skin) -> usize {
             block.width as u32,
             block.height as u32,
             block.to_rgba(),
+            None,
         )));
         applied += 1;
     }

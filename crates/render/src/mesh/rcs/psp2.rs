@@ -124,6 +124,7 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
         u32::from(texture.width),
         u32::from(texture.height),
         rgba.into_iter().flatten().collect(),
+        None,
     ))
 }
 

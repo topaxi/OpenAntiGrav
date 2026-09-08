@@ -57,6 +57,11 @@ pub(super) fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, 
 pub(super) const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Uploads straight RGBA8 with a box-filtered mip chain, and returns its view.
+///
+/// `max_levels` caps the synthesised chain at the source asset's own declared
+/// depth, where known - see [`crate::mesh::ModelTexture::mip_count`]. `None`
+/// keeps the full chain down to 1x1, today's behaviour for every path that
+/// has not measured its own asset's depth yet.
 pub(super) fn upload_rgba(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -64,8 +69,12 @@ pub(super) fn upload_rgba(
     height: u32,
     rgba: &[u8],
     label: &str,
+    max_levels: Option<u32>,
 ) -> wgpu::TextureView {
-    let mips = mip_chain(width, height, rgba);
+    let mut mips = mip_chain(width, height, rgba);
+    if let Some(max_levels) = max_levels {
+        mips.truncate(max_levels as usize);
+    }
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
         size: wgpu::Extent3d {
@@ -125,6 +134,7 @@ pub(super) fn upload(
             texture.height,
             rgba,
             &texture.label,
+            texture.mip_count,
         );
     };
     if !blocks {
@@ -149,7 +159,15 @@ pub(super) fn upload(
         // `mip_chain` off the end of an empty buffer.
         let full = u64::from(texture.width) * u64::from(texture.height) * 4;
         if rgba.len() as u64 != full {
-            return upload_rgba(device, queue, 1, 1, &[255, 255, 255, 255], &texture.label);
+            return upload_rgba(
+                device,
+                queue,
+                1,
+                1,
+                &[255, 255, 255, 255],
+                &texture.label,
+                None,
+            );
         }
         return upload_rgba(
             device,
@@ -158,6 +176,7 @@ pub(super) fn upload(
             texture.height,
             &rgba,
             &texture.label,
+            texture.mip_count,
         );
     }
     let gpu = device.create_texture(&wgpu::TextureDescriptor {

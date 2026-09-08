@@ -138,6 +138,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
             width,
             height,
             rgba.into_iter().flatten().collect(),
+            None,
         ))));
 
         let base = vertices.len() as u32;
