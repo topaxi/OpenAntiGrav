@@ -57,6 +57,41 @@
 //! today, and comfortably below the pre-fix pathology (90) so a change that
 //! walks it back that far fails here rather than needing another play
 //! report to notice.
+//!
+//! # 2026-09-08: this test is RED, and the bound was deliberately left alone
+//!
+//! Letting an opponent fire a Cannon - `Race::advance_cannons` running every
+//! slot, landed with the recovered gate on the same day - puts the worst
+//! streak at **95**, over the bound. **The cause was measured rather than
+//! guessed, and it is not sticking.** Three controls on this exact scenario:
+//!
+//! | opponent's Cannon behaviour | worst streak | pairs sticking |
+//! | --- | --- | --- |
+//! | held forever, never fired, never absorbed (the old behaviour) | 46 | 4 |
+//! | countdown runs, no round spawns | 68 | 6 |
+//! | absorbed instead of held (the most conservative alternative) | 68 | 6 |
+//! | fired (what landed) | 95 | 7 |
+//!
+//! All eight craft finish the run `Racing` and active in every case, so no
+//! craft is being wrecked and no pair is being pushed together by a round.
+//! **Any change that stops opponents sitting on a useless Cannon for the whole
+//! race moves this number**, including absorbing it - the old 46 was measured
+//! in a regime where several opponents were frozen out of the weapon economy.
+//!
+//! **The bound is not raised, because raising it would retire the tripwire.**
+//! Re-measuring the pathology *under the new regime* - the same run with
+//! `Driver::social` reverted to reading only `Field::behind` - gives **90**,
+//! against 95 for the fixed driver. So on this statistic the fix now reads as
+//! very slightly *worse* than the bug, and no bound can separate them. Where
+//! the fix still shows plainly is the distribution: pre-fix leaves 10 sticking
+//! pairs with five over 25 ticks (90, 48, 47, 46, 29, 27, 25, 19, 9, 4);
+//! post-fix leaves 7 with two (95, 72, 37, 16, 11, 8, 5).
+//!
+//! **So the work this file needs is a better statistic, not a bigger number** -
+//! total overlapped pair-ticks, or the count of pairs over some floor, both of
+//! which separate the two regimes cleanly. Changing it was out of scope for the
+//! Cannon pass that found this, and doing it from outside would be redesigning
+//! an acceptance test to make a change pass. Left red and reported instead.
 
 use std::path::{Path, PathBuf};
 
