@@ -30,18 +30,25 @@
   evidence, the same bar `NO_TRIGGER_RECOVERED`'s existing 27 entries hold to.
 
 - **2026-09-08: `numbers.pob` and `test_bombspikes.pob` confirmed.** Their
-  internal `SYSP` names are their own, not a leftover copy -  `NUMBERS` and
-  `TEST_BOMBSPIKES`, both `DATA02`-only (`just psarc list`). Neither string
-  occurs anywhere in `EBOOT.elf`, bare or as the `Data\Psys\<NAME>.POB` load
-  path every wired effect's name takes, checked two independent ways -
-  `strings -a` + case-insensitive grep, and Ghidra's own defined-string
-  table once a live instance became available mid-session - both zero hits
-  for both names and both hitting the expected two matches for
-  `WO_ROCKET_FLARE` as a positive control. Confidence 82 disc-authored
-  debug/test assets with no shipped trigger - see `docs/formats/pob.md`'s HD
-  corpus section for the full writeup. That's 2 of the 75 down, 73 to go;
-  still no code-side change, since a two-entry list doesn't justify
-  assembling an HD-side `NO_TRIGGER_RECOVERED` const yet (see
+  internal `SYSP` names (read at the `0x10 + slots * 4` name field, `just
+  psarc cat … | xxd`) are their own, not a leftover copy - `NUMBERS` and
+  `TEST_BOMBSPIKES`, both `DATA02`-only. Neither string occurs anywhere in
+  `EBOOT.elf`, bare or as the `Data\Psys\<NAME>.POB` load path, checked two
+  independent ways - `strings -a` + case-insensitive grep, and Ghidra's own
+  defined-string table once a live instance became available mid-session -
+  both zero hits for both names. **The control that matters**: this isn't
+  just "unwired means no string" - a `Data\Psys\...POB` scan finds 46 of the
+  82 disc names as a load path, including plenty this engine hasn't built at
+  all (`WO_LEACHBEAM_CHARGING`, `WO_BOMB_EXPLO_DETONATOR`, every
+  `WO_DAMAGE_*` tier), so the original executable's string table tracks its
+  own load paths, not OAG's wiring - `NUMBERS`/`TEST_BOMBSPIKES` sitting
+  outside that 46 says something about the original game. Confidence 82
+  disc-authored debug/test assets with no shipped trigger (not higher: 36
+  authored names are *also* missing from that 46, so absence alone isn't
+  proof) - see `docs/formats/pob.md`'s HD corpus section for the full
+  writeup. That's 2 of the 75 down, 73 to go; still no code-side change,
+  since a two-entry list doesn't justify assembling an HD-side
+  `NO_TRIGGER_RECOVERED` const yet (see
   `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment).
 
 ## Next Steps

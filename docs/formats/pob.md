@@ -503,20 +503,30 @@ belong to.
 
 **Two of the 82 are genuinely their own name, not a leftover copy, and
 `DATA02`-only**: `numbers.pob` names itself `NUMBERS` and
-`test_bombspikes.pob` names itself `TEST_BOMBSPIKES` (`just psarc list`,
-2026-09-08). Neither string - bare name or as a `Data\Psys\...POB` load
-path, the shape every wired effect's name takes in the executable
-(`WO_ROCKET_FLARE`, `WO_BOMB_SMOKERING`, etc. all appear that way) - occurs
-anywhere in `EBOOT.elf`, checked two independent ways: `strings -a` over the
-whole binary (both names, case-insensitive) and Ghidra's own defined-string
-table (`search_strings`) against the imported program. Both come back zero
-for both names; both come back the two expected hits (bare name and load
-path) for `WO_ROCKET_FLARE` used as a positive control. **Confidence 82**
+`test_bombspikes.pob` names itself `TEST_BOMBSPIKES` - read off the name
+field at `0x10 + slots * 4` the same way as every other row in this table
+(`just psarc cat <image>:DATA02.PSARC /data/psys/numbers.pob | xxd`, or
+`ParticleSystem::parse`), 2026-09-08. Neither string - bare name or as a
+`Data\Psys\...POB` load path - occurs anywhere in `EBOOT.elf`'s string
+table, checked two independent ways: `strings -a` over the whole binary
+(both names, case-insensitive) and Ghidra's own defined-string table
+(`search_strings`) against the imported program; both agree, zero hits for
+both names. **The control that makes this null result mean something**:
+this is not merely "unwired effects have no string" - `strings -a … | rg -o
+'Data.Psys.[A-Z0-9_]+\.POB' | sort -u | wc -l` finds **46 of the 82** disc
+names as a load-path string, well past the 11 `RACE_EFFECTS` wires,
+including effects this engine has not built at all (`WO_LEACHBEAM_CHARGING`,
+`WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*` tier) - so the original
+executable's own string table tracks *its* load paths, not OAG's wiring, and
+`NUMBERS`/`TEST_BOMBSPIKES` sitting outside that 46 is evidence about the
+original game, not an artifact of this project's scope. **Confidence 82**
 that both are disc-authored debug/test assets with no shipped trigger: the
-name and the null result are directly read off the disc and the binary
-through two independently-implemented string scans agreeing, but neither
-proves no code path could reach them by a route that never puts the name in
-the string table (a hash, a constructed string, an index). Two of the 75
+36 authored names *also* missing from that load-path scan (some are
+sub-effects reached from inside a parent tree rather than by a top-level
+load, per this file's `embedded` bucket) mean absence from the 46 alone
+isn't proof, and neither scan proves no code path reaches these two by a
+route that never puts the name in the string table (a hash, a constructed
+string, an index). Two of the 75
 unwired HD systems this project owes a bucketing pass
 over (see `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc
 comment); the other 73 are unread.
