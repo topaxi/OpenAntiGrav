@@ -24,9 +24,11 @@ pub enum Font {
     /// `font="Default"`.
     ///
     /// Used by exactly eight widgets across all five layouts, `PosTag0` to
-    /// `PosTag7` - the floating opponent name tags. Nothing draws those yet,
-    /// since a race has one ship, but the variant exists so the parser does not
-    /// silently fold them into a font they are not.
+    /// `PosTag7` - a fixed on-screen column of opponent rows, not the
+    /// per-craft floating tags an earlier reading took them for; see
+    /// `docs/ui/hud.md`. Nothing draws them yet, since what each row's text
+    /// is meant to say is unread, but the variant exists so the parser does
+    /// not silently fold them into a font they are not.
     Default,
 }
 

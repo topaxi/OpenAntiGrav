@@ -47,6 +47,52 @@ Screenshots (not committed, per ADR-0006):
 row 0), `_down.png` (row 1 selected, fine), `_down4.png` (row 3 selected,
 fine), `_wrap.png` (wrapped back to row 0, blank again).
 
+## Confirmed 2026-09-08: it is row-0-plus-selected, and it is not the shared draw loop
+
+Two things settled by fresh captures (`--until "Language Selection" --hold
+start --press down[,down...] --screenshot`, `pure-psp-usa.chd`), before this
+thread's own "Next Steps" instrumentation was reached:
+
+- **Row 0 is blank only while it is *also* selected - not "whichever row is
+  selected".** Selecting row 1 (`--press down`) leaves row 0 (`English`,
+  unselected) rendering fine *and* row 1 (`Français`, selected) rendering
+  fine. Selecting row 2 (`--press down,down`) leaves rows 0 and 1 fine
+  unselected and row 2 fine selected. Only row 0 selected (`--ticks 0`, no
+  press, or wrapped back via five downs) is blank. This was checked because a
+  second read of the original repro proposed "the selected row in general is
+  blank" as an alternative - it is not; the original characterization in
+  `## Open` above is the one the evidence supports.
+- **Pulse's own picker does not reproduce it, and its row 0 is a different
+  language.** Pulse's list order is `Français, Deutsch, Español, Italiano,
+  English` - French at index 0, English last - and French renders fine while
+  selected at index 0 (`pulse-psp-usa.chd`, same `--ticks 0` capture shape).
+  So this is not "index 0 breaks in the shared draw loop"
+  (`crates/game/src/frontend/draw.rs`, `DisplayLanguages`/`Menu`, the same
+  code both titles run): the loop treats every index identically and Pulse's
+  index 0 is fine. What differs between the two discs at row 0 is the
+  *language object* - Pure's is `English`/`PI000`, Pulse's is
+  `French`/`PI008` - which points at something about Pure's own `PI000`
+  entry rather than at position in the list. Confirmed by reading the loop
+  itself too: no `index == 0` or `self.selected == 0` branch exists anywhere
+  in `frontend.rs` or `frontend/draw.rs`.
+
+**A live lead, not yet checked**: `docs/formats/pure-status.md` recently
+corrected a claim that `PI000` inlines its strings - the correction being
+that *none* of Pure's five languages name an external `entries.xml`, on
+either pressing. Whatever is special about `PI000` in the string/plugin
+read path is worth checking against this draw bug before assuming they are
+unrelated: "the selected row draws no glyphs" and "this language's own text
+resolves differently" could be the same defect seen from the string side and
+the draw side. The instrumentation `## Next Steps` already asks for - dump
+the queued `Draw::Text` for row 0 selected against row 1 selected - is still
+the fastest way to tell "row 0 is given no string" apart from "row 0 is
+given a string that fails to rasterise", and it would show which of the two
+this is in one step.
+
+Screenshots (not committed, per ADR-0006): `/tmp/oag-shots/pure_row0.png`,
+`pure_row1.png`, `pure_row2.png` (Pure, rows 0/1/2 selected in turn),
+`/tmp/oag-shots/pulse_lang_row0.png` (Pulse, its own row 0 selected, fine).
+
 ## Hypothesis, not yet a finding
 
 `crates/game/src/frontend/draw.rs`, the `DisplayLanguages`/`Menu` loop
@@ -64,23 +110,27 @@ the first place. Both are guesses; neither is verified. No confidence score
 
 ## Next Steps
 
+- **Settled 2026-09-08, so skip straight to instrumenting the string, not the
+  loop**: it is not a shared-code index-0 bug (Pulse's own row 0 is fine, a
+  different language), so reading `frontend/draw.rs`'s loop for an
+  `index == 0` branch is a dead end - there isn't one, checked directly.
 - Add a `println!`/report line (or a unit test against `PickerFrame`/whatever
   builds this `Draw::Text` list directly, without a screenshot) that dumps
   the exact string and colour queued for row 0 when it is selected, and
   compare against row 1 selected - settles "empty string" against "string
   present, colour/paint wrong" against "draw call never queued" in one step,
-  cheaper than another screenshot pass.
-- If the string is present and non-empty: read what differs about `index ==
-  0` specifically in the loop at `crates/game/src/frontend/draw.rs`'s
-  `DisplayLanguages` handling - check for anything above it in the same
-  function keying off `self.selected == 0` or `index == 0` that could emit a
-  second, overriding draw command (a title-adjacent widget, a "current
-  language" indicator, anything sharing row 0's rect).
-- Try the same probe on `pure-psp-eu.chd` and on Pulse's own language picker
-  (same draw path, `crates/game/src/frontend/draw.rs` is shared, not
-  per-title) - if Pulse's row 0 (also its own first language) shows the same
-  blank, this is a shared-code bug rather than a Pure-only one, which changes
-  where the fix belongs.
+  cheaper than another screenshot pass. Given the loop reading above, "empty
+  string" is now the better-supported guess - check `Language::native_name`
+  for Pure's `PI000` entry specifically before assuming the draw side at all.
+- **Check alongside `PI000`'s string/plugin read path**, not only the draw
+  path - see the "A live lead, not yet checked" note above. If `PI000`
+  resolves its own name or its string table differently from every other
+  Pure language (the same plugin `pure-status.md` already flagged for a
+  different, corrected claim), that is a stronger candidate than anything in
+  the draw loop, which reads uniform across rows.
+- Try the same probe on `pure-psp-eu.chd` once the cause is narrowed further -
+  not done yet, since the USA pressing already settled "row 0 plus selected,
+  language-specific" without it.
 - Not the same bug as the `first_row_y`/row-pitch gap already open in
   `docs/formats/pure-status.md` - keep the two separate; that one is about
   *position*, this one is about a *missing draw*, and Italiano's clipping in

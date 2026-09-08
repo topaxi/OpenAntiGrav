@@ -164,3 +164,52 @@ fn the_frames_text_widgets_are_left_alone() {
     );
     assert_eq!(drawn, 1, "the clear alone, on an empty sheet");
 }
+
+/// [`Frame::content_bottom`] takes the lowest mark in the screen's lower
+/// half - Pulse's own two footer strips, at `y=236` and `y=249` of a
+/// 272-tall screen (`docs/ui/menus-original.md`'s "The top bar and the
+/// footer's two strips") - and ignores the top bar sitting at `y=0`, upper
+/// half or not.
+#[test]
+fn content_bottom_is_the_lowest_mark_below_the_midline() {
+    let sprite = |y: f32| Draw::Sprite {
+        rect: [12.0, y, 454.0, 14.0],
+        uv: [0.0, 0.0, 0.0, 0.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let frame = Frame {
+        marks: vec![sprite(0.0), sprite(236.0), sprite(249.0)],
+        ..Frame::default()
+    };
+    assert_eq!(
+        frame.content_bottom(crate::frontend::Space::PSP),
+        Some(236.0),
+        "the higher of the two footer strips, not the top bar"
+    );
+}
+
+/// A frame with nothing in the lower half - no frame at all, or one whose
+/// marks sit entirely above the midline - answers `None` rather than the
+/// screen's own edge, so a caller falls back to whatever it used before
+/// this existed.
+#[test]
+fn content_bottom_is_none_with_nothing_below_the_midline() {
+    assert_eq!(
+        Frame::default().content_bottom(crate::frontend::Space::PSP),
+        None,
+        "no marks at all"
+    );
+    let top_bar_only = Frame {
+        marks: vec![Draw::Sprite {
+            rect: [20.0, 0.0, 224.0, 24.0],
+            uv: [0.0, 0.0, 0.0, 0.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        }],
+        ..Frame::default()
+    };
+    assert_eq!(
+        top_bar_only.content_bottom(crate::frontend::Space::PSP),
+        None,
+        "the one mark is above the midline"
+    );
+}

@@ -325,12 +325,36 @@ colour-only convention the front end already uses for backdrops
 sprite it is a widget with no texture, and it vanishes. One widget across all
 five layouts, in arcade and eliminator.
 
-**`PosTag0`-`PosTag7` and `PlrTag0`-`PlrTag7` are not screen-positioned.** They
-are anchored to a rival's projected screen position at runtime, and their authored
-`x`/`y` plus the enclosing `<Item>` offset are a nudge from that anchor. The
-arcade layout nests them in `<Item OffsetX="-40">`, so they resolve to **negative
-coordinates** - correct for an offset, nonsense for a position. Any "is it on
-screen" check has to skip them, which is what `hud::is_screen_positioned` is for.
+**`PosTag0`-`PosTag7` are a fixed on-screen column, not a runtime anchor -
+corrected 2026-09-08.** An earlier reading of this page said they resolve to
+negative coordinates, off the arcade layout's inner `<Item OffsetX="-40">`
+read alone. `<Item>` offsets compose (`Layout::collect`'s `x = offset_x +
+OffsetX`), and the outer `<Item OffsetX="445" OffsetY="5">` around it
+composes to `(405, 5)` - measured, not argued:
+`postag_is_a_fixed_column_not_a_runtime_anchor` in
+`crates/game/tests/hud_layout_ground_truth.rs` pins `PosTag0` at `(405, 25)`
+through `PosTag7` at `(405, 165)`, one column, twenty pixels a row, both on
+screen and evenly spaced by index - which eight independent per-craft
+anchors would have no reason to be. `Elimination_HUD.xml` corroborates at
+its own `x=460`, needing no composing at all since its `PosTag` block sits
+in a single, unnested `<Item OffsetX="460" OffsetY="5">`.
+
+**What is still unread is what the eight rows draw.** Neither carries an
+`idstring` or a `string`, so the content is runtime-supplied and this page
+does not know whether a row shows a name, a place number, or both -
+filling it in would be inventing what the asset does not author. Until that
+is read, `hud::RUNTIME_ANCHORED`/`hud::is_screen_positioned` keep skipping
+`PosTag` in the on-screen check, on the conservative half of this finding:
+the *anchor* is confirmed on screen, but `align="left"` at `x=405` on a
+480-wide screen leaves only 75 px before the edge - narrower than
+`TotalTime`'s own measured 92 px overflow two paragraphs up - and a label's
+own text width cannot be checked without knowing what fills it.
+
+**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
+multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
+carry no `x`/`y` at all, unlike `PosTag`. That is the one case
+`hud::is_screen_positioned`'s exemption still describes correctly: nothing
+to compose, nothing to check.
 
 ## The reader is shared with HD/Fury, and HD is what corrected it
 
@@ -558,7 +582,8 @@ geometry - the geometry is 95 throughout.
 | Wrong way | `WrongWay` | 70 | `dot(forward, tangent)` is a sufficient source |
 | Zone | `Zone`, `Score`, `Zone_Bar_*` | 50 | Zone mode is a separate scope item |
 | Eliminator | kill counters | 50 | |
-| Tags | `PosTag0-7`, `PlrTag0-7`, `HeadToHeadBar` | 50 | runtime-anchored, multiplayer |
+| Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 50 content | a fixed column (`405/460, 25..165`), not runtime-anchored - see above; what fills each row is unread |
+| Tags | `PlrTag0-7` | 50 | genuinely runtime-anchored, multiplayer only (`MPTag_HUD.xml`) |
 | Debug | `VersionTextOnHUD`, `Info1`-`Info4`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
 
 ### The pickup icon is found by name, and there are thirteen of them

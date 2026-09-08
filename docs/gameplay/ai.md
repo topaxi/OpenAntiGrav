@@ -2622,9 +2622,11 @@ against the code on 2026-08-17; check it again before trusting it.
 What is still missing, and it is now a short list:
 **adaptation between races**, which was blocked on per-opponent lap times and is
 not any more; and **anything at all happening when a craft is eliminated**. The
-player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`,
-the floating name tags, are runtime-anchored to a rival's projected screen
-position and nothing computes that.
+player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`
+are eight fixed-position rows meant to list the field, not the runtime-anchored
+per-craft tags an earlier reading of this line took them for (corrected
+2026-09-08, see [hud.md](../ui/hud.md)). The anchor is not the gap: what each
+row is meant to say is - no `idstring`, no `string`, content unread.
 
 **What left this list, with what to look at instead of re-deriving it:**
 
