@@ -288,6 +288,36 @@ impl RaceState {
         true
     }
 
+    /// Ends an Eliminator event once *any* craft's kill count reaches
+    /// `target`.
+    ///
+    /// **Both arguments are the caller's to supply, deliberately.** `target`
+    /// is a `PI_Cell`'s own gold-medal figure on the real campaign grid -
+    /// `10`, `7` or `5`, never one flat number - so this crate does not
+    /// choose it; see [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`] for what a
+    /// caller with no cell to read falls back to. `kills` is the **highest**
+    /// [`crate::Standing::kills`] across the whole field, not only the
+    /// player's own - `progress`'s Ghidra pass reads the original's own
+    /// ending off `entity+0x8d8` on any craft, so the first ship to the
+    /// target ends the event whichever one it is. Neither number is
+    /// discovered here, which is what keeps this crate from needing to know
+    /// which slot is the player, or which slot is a `PI_Cell`.
+    ///
+    /// A no-op outside Eliminator - callers checking `self.mode` first is a
+    /// second, redundant guard against ending a race that has no kill count
+    /// to reach, not a load-bearing one, since a non-Eliminator race's `kills`
+    /// stays `0` for the whole race and never reaches a positive target.
+    ///
+    /// Same shape as [`Self::eliminate`]: idempotent, returns whether *this*
+    /// call is the one that ended it.
+    pub fn eliminator_finished(&mut self, target: u32, kills: u32) -> bool {
+        if self.finished || self.mode != Mode::Eliminator || kills < target {
+            return false;
+        }
+        self.finished = true;
+        true
+    }
+
     /// Whether the start-line countdown still gates thrust at `tick`.
     ///
     /// `tick` is the caller's own "ticks elapsed since the race began" counter
@@ -500,5 +530,29 @@ mod elimination_tests {
         let mut state = RaceState::new(Mode::TimeTrial);
         state.finished = true;
         assert!(!state.eliminate());
+    }
+
+    #[test]
+    fn eliminator_ends_when_a_craft_reaches_the_given_target() {
+        let target = 7; // one of the real, non-flat cell values - see `Mode`.
+        let mut state = RaceState::new(Mode::Eliminator);
+        assert!(!state.eliminator_finished(target, target - 1));
+        assert!(!state.finished);
+        assert!(state.eliminator_finished(target, target));
+        assert!(state.finished);
+        assert!(
+            !state.eliminator_finished(target, target + 1),
+            "already finished, must not re-fire"
+        );
+    }
+
+    /// A kill count means nothing outside Eliminator - the field stays `0`
+    /// there and nothing feeds it, but the method itself must refuse too, so
+    /// a future caller cannot end the wrong mode by passing a stray number.
+    #[test]
+    fn a_kill_count_does_not_end_a_different_mode() {
+        let mut state = RaceState::new(Mode::SingleRace);
+        assert!(!state.eliminator_finished(10, 10));
+        assert!(!state.finished);
     }
 }

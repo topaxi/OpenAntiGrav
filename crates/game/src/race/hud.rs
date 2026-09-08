@@ -26,9 +26,8 @@ use super::*;
 /// presentation side with what [`Mode::weapons_enabled`] reads out of the code.
 /// See `docs/gameplay/pickups.md`.
 ///
-/// Layouts no mode here reaches - Eliminator's on every title, and HD's
-/// Detonator, Duel and MPTag - stay in their own title crate waiting for the
-/// mode that uses them.
+/// Layouts no mode here reaches - HD's Detonator, Duel and MPTag - stay in
+/// their own title crate waiting for the mode that uses them.
 #[must_use]
 pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'static str {
     match mode {
@@ -36,6 +35,7 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
         Mode::SpeedLap => title.hud.speed_lap,
         Mode::Zone => title.hud.zone,
         Mode::SingleRace => title.hud.arcade,
+        Mode::Eliminator => title.hud.elimination,
     }
 }
 

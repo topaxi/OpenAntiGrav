@@ -663,14 +663,39 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// broken file a reported line on every run rather than one nobody sees until
 /// they pick the mode that needs it.
 ///
+/// **`Mode::Eliminator` opens [`oag_title::weapons::Weapons::elimination`]
+/// instead, from 2026-09-08.** That is the recovered mechanism behind the
+/// disc's own *"weapons do more damage"* in `MSC_EVENT_ELIM` - a whole second
+/// table, not a multiplier this build would have to invent - and it is the
+/// field `Weapons::elimination`'s own doc comment already named as unread. A
+/// title with no second table (`None`, Pure) falls back to
+/// [`oag_title::weapons::Weapons::race`] and says so in the report, the same
+/// "reported gap, not a silent substitution" shape the rest of this function
+/// already uses.
+///
 /// Two failures, two lines, and a third kind that is neither - see
 /// `oag_formats::weapons::WeaponStats::skipped`.
 pub(super) fn load_weapons(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
+    mode: Mode,
     report: &mut Vec<String>,
 ) -> Option<oag_formats::weapons::WeaponStats> {
-    let entry = title.weapons.race;
+    let entry = if mode == Mode::Eliminator {
+        match title.weapons.elimination {
+            Some(entry) => entry,
+            None => {
+                report.push(format!(
+                    "{}: this title ships no Eliminator weapon table; racing on \
+                     its ordinary one instead",
+                    title.weapons.race
+                ));
+                title.weapons.race
+            }
+        }
+    } else {
+        title.weapons.race
+    };
     let blob = match archives
         .read_name(entry)
         .with_context(|| format!("reading {entry} out of {}", archives.layout.describe()))

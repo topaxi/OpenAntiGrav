@@ -43,6 +43,19 @@ pub enum Mode {
     /// This build races it with AI too: [`Self::has_opponents`] answers `true`,
     /// and a full grid of seven driven opponents takes the start.
     SingleRace,
+    /// Race for kills, not position: a full grid, weapons on, no lap target.
+    ///
+    /// **Recovered from the disc's own event text**, `MSC_EVENT_ELIM`:
+    /// *"Eliminator: race for kills, not position, against a full grid of
+    /// trigger happy contenders in a weapons-heavy environment. Weapons do
+    /// more damage, and you cannot absorb pickups, but you regain health
+    /// after each lap. The lap count is not fixed, and the race will end
+    /// when the kill count is reached."* Three mechanics follow directly
+    /// from that sentence and none of them was known before the
+    /// 2026-09-08 campaign scoping pass: no pickup absorption, scaled
+    /// weapon damage, and a kill-count ending. See
+    /// `docs/gameplay/race-modes.md#eliminator`.
+    Eliminator,
 }
 
 impl Mode {
@@ -52,11 +65,12 @@ impl Mode {
     /// enumerates them, rather than a silently short list. The same reason
     /// `menu::Action::all` and `perf::FrameLimit::OFFERED` are arrays in the
     /// composition root.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::TimeTrial,
         Self::SpeedLap,
         Self::Zone,
         Self::SingleRace,
+        Self::Eliminator,
     ];
 
     /// Laps in a time trial.
@@ -80,6 +94,39 @@ impl Mode {
     /// SINGLE RACE would replace it.
     pub const SINGLE_RACE_LAPS: u32 = 3;
 
+    /// Kills that end an Eliminator event, **when nothing more specific is
+    /// available**.
+    ///
+    /// **Not the flat, measured number this constant used to claim.** It read
+    /// `FEData.wad`'s 24-entry per-track family as authoring an identical
+    /// `<Targets Elimination="10">` on every one and called that a flat
+    /// census; `progress`'s Ghidra pass (2026-09-08, after this constant was
+    /// first written) found the number was never flat at all -
+    /// `Data\Plugins\grids\grid_00..15.xml` authors 236 `PI_Cell` records,
+    /// each with its **own** gold-medal kill target, and the values actually
+    /// used are **10, 7 and 5**, not one figure. `FEData.wad`'s `10` was one
+    /// sample of three read as the whole population. See
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
+    ///
+    /// **So this is a chosen default, not a recovery, kept only because the
+    /// campaign grid this number actually lives on is not wired into this
+    /// engine at all** - there is no `PI_Cell` for a `--mode eliminator` race
+    /// started outside the campaign to read a target from. `10` is one of the
+    /// three real values rather than an invented one, which is the one thing
+    /// that keeps this from being the kind of number `CLAUDE.md` forbids
+    /// authoring - but it carries no confidence score, because a default is
+    /// not a measurement. `oag_game::race::Options::eliminator_kill_target`
+    /// is where a caller overrides it; wiring the campaign grid to supply the
+    /// cell's own value is the fix that retires this constant outright.
+    ///
+    /// **Whose kill count ends the race is measured, and it is not only the
+    /// player's.** `progress`'s same pass reads the ending off `entity+0x8d8`
+    /// on *any* craft - the race ends the moment one ship's own tally reaches
+    /// the target, whichever ship that is. [`RaceState::eliminator_finished`]
+    /// takes the target and the highest count across the whole field for
+    /// exactly this reason, rather than the player's own alone.
+    pub const ELIMINATOR_KILL_TARGET_DEFAULT: u32 = 10;
+
     /// The token this mode is stored and configured as.
     ///
     /// Lowercase with underscores, matching the speed-class and team rows the
@@ -92,6 +139,7 @@ impl Mode {
             Self::SpeedLap => "speed_lap",
             Self::Zone => "zone",
             Self::SingleRace => "single_race",
+            Self::Eliminator => "eliminator",
         }
     }
 
@@ -106,12 +154,18 @@ impl Mode {
     }
 
     /// Laps the mode finishes after, or `None` when it never ends on its own.
+    ///
+    /// **`None` for Eliminator, measured rather than assumed from "no lap
+    /// target here either".** `MSC_EVENT_ELIM` says outright: *"The lap count
+    /// is not fixed, and the race will end when the kill count is reached"* -
+    /// a kill count ends it instead, and that ending is not this method's to
+    /// report; see [`crate::RaceState::eliminator_finished`].
     #[must_use]
     pub const fn laps_target(self) -> Option<u32> {
         match self {
             Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS),
             Self::SingleRace => Some(Self::SINGLE_RACE_LAPS),
-            Self::SpeedLap | Self::Zone => None,
+            Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }
     }
 
@@ -135,6 +189,7 @@ impl Mode {
             Self::SpeedLap => "MSC_EVENT_SL",
             Self::Zone => "MSC_EVENT_ZONE",
             Self::SingleRace => "MSC_EVENT_SR",
+            Self::Eliminator => "MSC_EVENT_ELIM",
         }
     }
 
@@ -150,6 +205,7 @@ impl Mode {
             Self::SpeedLap => "SPEED LAP",
             Self::Zone => "ZONE",
             Self::SingleRace => "SINGLE RACE",
+            Self::Eliminator => "ELIMINATOR",
         }
     }
 
@@ -185,9 +241,14 @@ impl Mode {
     /// `oag_game::race::Options::opponents` remains the escape hatch the grid's
     /// own ground-truth test uses to place all eight from a mode that does not
     /// ask for them.
+    ///
+    /// **`true` for Eliminator too, and this one needs no escape hatch to be
+    /// honest about it**: `MSC_EVENT_ELIM` promises *"a full grid of trigger
+    /// happy contenders"*, stronger wording than a single race's "optional"
+    /// opponents.
     #[must_use]
     pub const fn has_opponents(self) -> bool {
-        matches!(self, Self::SingleRace)
+        matches!(self, Self::SingleRace | Self::Eliminator)
     }
 
     /// Whether the original arms `Weapon Pad`s for this mode.
@@ -219,9 +280,32 @@ impl Mode {
     /// "optional". **This build takes the default rather than offering the
     /// choice** - there is no `WEAPONS` row on the race menu, so a single race
     /// always has them on. That is a missing setting, not a different rule.
+    ///
+    /// **`true` for Eliminator too** - it is the mode `MSC_EVENT_ELIM` calls
+    /// *"a weapons-heavy environment"*, and `Race_ReadSetupOptions`' own
+    /// weapons-off set (modes `5`/`10`, time trial and speed lap) does not
+    /// include it.
     #[must_use]
     pub const fn weapons_enabled(self) -> bool {
-        matches!(self, Self::SingleRace)
+        matches!(self, Self::SingleRace | Self::Eliminator)
+    }
+
+    /// Whether the mode lets a hit pickup pad refill the shield pool.
+    ///
+    /// **`true` everywhere except Eliminator, and that one is measured
+    /// rather than assumed from "an Eliminator craft has other things to
+    /// worry about".** `MSC_EVENT_ELIM` says outright: *"you cannot absorb
+    /// pickups, but you regain health after each lap"* - two mechanics in one
+    /// sentence, and this method is the first of them. The second - a lap
+    /// completion refilling the pool instead - touches [`ShipState::shield`],
+    /// which this crate cannot see (`oag-race`'s `Cargo.toml` says why); it is
+    /// `oag_game::race::Race::tick`'s to apply, on the same `lap_completed`
+    /// edge the free Time Trial/Speed Lap turbo already reads.
+    ///
+    /// [`ShipState::shield`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/physics/src/lib.rs
+    #[must_use]
+    pub const fn pickups_absorb(self) -> bool {
+        !matches!(self, Self::Eliminator)
     }
 }
 
@@ -247,7 +331,12 @@ mod tests {
 
     #[test]
     fn an_unknown_token_is_none_rather_than_a_default() {
-        assert_eq!(Mode::from_name("eliminator"), None);
+        // `eliminator` is a real mode from 2026-09-08 and belongs in
+        // `every_mode_round_trips_through_its_token` instead - kept here as
+        // `elimination` (Eliminator's own descriptive token in the disc's
+        // string table is `MSC_EVENT_ELIM`, not this crate's `name()`) so
+        // the "unknown token" shape this test checks is not lost.
+        assert_eq!(Mode::from_name("elimination"), None);
         assert_eq!(Mode::from_name(""), None);
         assert_eq!(Mode::from_name("TIME_TRIAL"), None);
     }
@@ -264,6 +353,10 @@ mod tests {
         assert_eq!(Mode::SingleRace.laps_target(), Some(3));
         assert_eq!(Mode::SpeedLap.laps_target(), None);
         assert_eq!(Mode::Zone.laps_target(), None);
+        // Eliminator has no lap target either, and for a different reason
+        // from Speed Lap's or Zone's: it has one, a kill count, that this
+        // method does not report. See `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`.
+        assert_eq!(Mode::Eliminator.laps_target(), None);
     }
 
     #[test]
@@ -275,10 +368,12 @@ mod tests {
     }
 
     /// The three single-ship modes are the original's own answer, measured on
-    /// the running game; the single race is the one mode that fields a grid.
+    /// the running game; single race and Eliminator are the two that field a
+    /// grid.
     #[test]
-    fn only_the_single_race_fields_a_grid() {
+    fn single_race_and_eliminator_field_a_grid() {
         assert!(Mode::SingleRace.has_opponents());
+        assert!(Mode::Eliminator.has_opponents());
         assert!(!Mode::TimeTrial.has_opponents());
         assert!(!Mode::SpeedLap.has_opponents());
         assert!(!Mode::Zone.has_opponents());
@@ -288,13 +383,26 @@ mod tests {
     /// thing about a weapon pad in the original: a weapons-off race hides the
     /// pads and empties the trigger list rather than ignoring a crossing.
     #[test]
-    fn the_single_race_is_the_only_mode_that_arms_weapon_pads() {
+    fn single_race_and_eliminator_are_the_only_modes_that_arm_weapon_pads() {
         assert!(Mode::SingleRace.weapons_enabled());
+        assert!(Mode::Eliminator.weapons_enabled());
         for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
             assert!(
                 !mode.weapons_enabled(),
                 "{mode:?} should race with weapons off"
             );
+        }
+    }
+
+    /// The mechanic `MSC_EVENT_ELIM` states outright: Eliminator is the one
+    /// mode where a crossed pickup pad cannot be absorbed for health.
+    #[test]
+    fn only_eliminator_refuses_pickup_absorption() {
+        assert!(!Mode::Eliminator.pickups_absorb());
+        for mode in Mode::ALL {
+            if mode != Mode::Eliminator {
+                assert!(mode.pickups_absorb(), "{mode:?} should absorb pickups");
+            }
         }
     }
 }

@@ -78,6 +78,20 @@ pub struct Standing {
     ///
     /// [`RaceState::lap_splits`]: crate::RaceState::lap_splits
     pub lap_splits: [Option<u32>; MAX_RECORDED_LAPS],
+    /// Eliminator kills this craft has scored. Zero on every other mode.
+    ///
+    /// **This crate does not credit one.** `oag_game::race` is the only layer
+    /// that knows which craft's weapon struck which - `struck`/`owner` on
+    /// `oag_gameplay::projectile::Impact` - so it is the one that increments
+    /// this; this crate only carries the count and orders by it nowhere,
+    /// because place in Eliminator is not what `places` computes. See
+    /// `docs/gameplay/race-modes.md#eliminator`.
+    pub kills: u32,
+    /// Times this craft has been destroyed and come back. Zero on every other
+    /// mode - a craft destroyed outside Eliminator does not return, so
+    /// nothing here ever increments it. `ER_DEATHS` ("Deaths:") is this
+    /// field's own row on the results screen.
+    pub deaths: u32,
 }
 
 impl Default for Standing {
@@ -93,6 +107,8 @@ impl Default for Standing {
             lap_start_tick: None,
             best_lap_ticks: None,
             lap_splits: [None; MAX_RECORDED_LAPS],
+            kills: 0,
+            deaths: 0,
         }
     }
 }

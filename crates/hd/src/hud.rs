@@ -60,6 +60,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     time_trial: layouts::TIME_TRIAL,
     speed_lap: layouts::SPEED_LAP,
     zone: layouts::ZONE,
+    elimination: layouts::ELIMINATION,
 };
 
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
