@@ -416,9 +416,20 @@ impl Skin {
 
     /// Room under the last row for the noted-row message. Ours; see
     /// [`MESSAGE_GAP`].
+    ///
+    /// **`pub`, not `pub(super)`**: [`crate::prompt::axis_preview_draw`]
+    /// reuses this same gap to sit above [`super::Frame::content_bottom`]
+    /// rather than inventing a second margin for the same purpose.
     #[must_use]
-    pub(super) fn message_gap(&self) -> f32 {
+    pub fn message_gap(&self) -> f32 {
         MESSAGE_GAP * self.from_ours.1
+    }
+
+    /// The reserved note/preview line's own scale, as a multiple of a row's.
+    /// Ours; see [`MESSAGE_SCALE`].
+    #[must_use]
+    pub fn message_scale(&self) -> f32 {
+        MESSAGE_SCALE
     }
 
     /// This build's own leading, in the grid being drawn in. See
@@ -596,19 +607,56 @@ pub struct Strip {
     pub color: [f32; 4],
 }
 
-/// How many rows are on screen at once, given the pitch in use.
+/// How many rows are on screen at once, given the pitch in use, `frame`'s own
+/// chrome, and whether the page about to show needs a line reserved under
+/// the rows.
 ///
 /// Derived rather than picked: rows start at the skin's first row and are one
-/// pitch apart, and the noted-row message under them needs a line of its own at
-/// `0.8` scale. The last row plus that message must clear the 272-pixel screen.
+/// pitch apart, and the block must clear [`super::Frame::content_bottom`] -
+/// **not the screen's own edge**, which is what this used to clear and is not
+/// where a title's own chrome actually starts. Pulse's footer sits at `236`
+/// of a 272-pixel screen; drawing rows all the way to `272` is what let the
+/// AI PILOTS page's own axis preview land on top of it. See
+/// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section for
+/// the capture that found the gap between the two, and [`Skin::message_gap`]
+/// for why [`crate::prompt::axis_preview_draw`] reads the same figures this
+/// reserves room for rather than a tuned offset of its own.
 ///
-/// At Pulse's measured 28-pixel pitch that is seven rows, which is exactly what
-/// the original's own main menu shows.
+/// `reserve_note` adds one more line, at [`Skin::message_scale`], plus
+/// [`Skin::message_gap`], under the last row - for a page whose rows can
+/// carry a warning or restart mark, or (today, the one caller that sets
+/// this) draws [`crate::prompt::axis_preview_draw`]'s own line underneath
+/// them. **This has to be a fact about the page, not about a row's live
+/// value**: reserving room only once a note happens to be showing would
+/// resize the grid on the very keystroke that makes one appear, which is
+/// the jump this reservation exists to avoid - see [`super::Menu::warning`]
+/// and [`crate::pilots::page_reserves_axis_preview`].
+///
+/// At Pulse's measured 28-pixel pitch and `reserve_note` false, that is
+/// seven rows, which is exactly what the original's own main menu shows -
+/// `236 - 32 = 204`, `204 / 28` floors to seven, so nothing here moved for
+/// a page with nothing reserved under it. AI PILOTS is the one page today
+/// that sets `reserve_note`, and six is what leaves its own preview line
+/// room to sit above the footer instead of on it.
+///
+/// **A title with no frame at all keeps the old budget exactly**, note
+/// reserved unconditionally against the screen's own edge - the same shape
+/// this whole function had before [`super::Frame`] was threaded through.
+/// `reserve_note` only *adds* to that when there is real chrome to weigh it
+/// against; there is nothing for it to subtract from otherwise, and every
+/// test fixture and [`super::DEFAULT_VISIBLE_ROWS`] were both written against that
+/// number, seven for Pulse's own skin.
 #[must_use]
-pub fn visible_rows(skin: &Skin) -> usize {
+pub fn visible_rows(skin: &Skin, frame: &super::Frame, reserve_note: bool) -> usize {
     let pitch = skin.row_pitch().max(1.0);
-    let room =
-        skin.space().size.1 - skin.first_row_y() - skin.line_height * 0.8 - skin.message_gap();
+    let note_line = skin.line_height * MESSAGE_SCALE + skin.message_gap();
+    let room = match frame.content_bottom(skin.space()) {
+        Some(bottom) => {
+            let reserve = if reserve_note { note_line } else { 0.0 };
+            bottom - skin.first_row_y() - reserve
+        }
+        None => skin.space().size.1 - skin.first_row_y() - note_line,
+    };
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -621,6 +669,15 @@ pub fn visible_rows(skin: &Skin) -> usize {
 /// Room left under the last row for the noted-row message, **written in
 /// 480x272**; read through [`Skin::message_gap`].
 const MESSAGE_GAP: f32 = 6.0;
+
+/// The reserved note/preview line's own scale, as a multiple of a row's -
+/// read through [`Skin::message_scale`] and shared by [`super::rows::draw`]'s
+/// own warning/restart message and [`crate::prompt::axis_preview_draw`],
+/// since [`visible_rows`]'s reserved room is sized for exactly one line at
+/// this scale: a caller drawing at a different one would either waste the
+/// reservation or overflow it, the latter being how the axis preview ended
+/// up on Pulse's own footer in the first place.
+const MESSAGE_SCALE: f32 = 0.8;
 
 /// A packed `0xAARRGGBB` as the renderer's straight-alpha RGBA.
 fn argb(value: oag_title::menu::Argb) -> [f32; 4] {

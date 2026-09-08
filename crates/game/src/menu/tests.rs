@@ -64,9 +64,10 @@ fn skin() -> Skin {
 /// reading it back out of `Atlas::from_font`.
 const PULSE_MENU_LINE_HEIGHT: f32 = 22.0;
 
-/// How many rows that skin fits, which is what the window logic uses.
+/// How many rows that skin fits with nothing reserved under them, which is
+/// what the window logic uses on every page but AI PILOTS.
 fn visible() -> usize {
-    visible_rows(&skin())
+    visible_rows(&skin(), &Frame::default(), false)
 }
 
 /// The definition this build actually ships. Every test that can use it

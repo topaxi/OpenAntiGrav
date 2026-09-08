@@ -228,7 +228,8 @@ fn a_skin_authored_at_1080p_is_drawn_at_its_own_numbers() {
     // And the rows still fit: HD measures no leading of its own, so the pitch is
     // a 33-pixel face plus ours scaled up, in a screen four times as tall.
     assert!(
-        visible_rows(&hd) >= visible_rows(&skin()),
+        visible_rows(&hd, &Frame::default(), false)
+            >= visible_rows(&skin(), &Frame::default(), false),
         "a 1080-line screen must not fit fewer rows than a 272-line one"
     );
 }

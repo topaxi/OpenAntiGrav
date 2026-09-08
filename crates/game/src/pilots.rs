@@ -423,6 +423,23 @@ fn axis_gloss(axis: &str) -> Option<(&'static str, String)> {
 /// capture rather than by the type system: `Definition::pages` and `Menu::page`
 /// are both `&[Entry]`-shaped and the compiler cannot tell "the wrong page's
 /// rows" from "the right one's".
+/// Whether `page` carries the `AXIS` row [`axis_preview_for`] reads - the
+/// AI PILOTS page, and today only it.
+///
+/// **Structural, off the page's own definition, never a row's live value.**
+/// `crate::menu::visible_rows`'s `reserve_note` argument reads this to decide
+/// how many rows a page's own window shows, and that decision has to be
+/// stable for the whole time a page is open: reserving room only once
+/// `pilot.axis` actually holds a value would resize the grid on the
+/// keystroke that gives it one, which is exactly the jump the reservation
+/// exists to avoid. See [`menu::visible_rows`]'s own doc.
+#[must_use]
+pub fn page_reserves_axis_preview(page: &menu::Page) -> bool {
+    page.entries
+        .iter()
+        .any(|entry| entry.setting() == Some("pilot.axis"))
+}
+
 #[must_use]
 pub fn axis_preview_for(model: &menu::Menu, strings: Option<&StringTable>) -> Option<String> {
     let axis = model

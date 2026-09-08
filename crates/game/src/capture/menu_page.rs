@@ -211,8 +211,11 @@ pub(super) fn menu_page(
     }
     model.open(page);
     // The same window the live menus use, so a captured page scrolls where a
-    // played one does rather than where a default happened to put it.
-    model.set_visible_rows(crate::menu::visible_rows(skin));
+    // played one does rather than where a default happened to put it - the
+    // AI PILOTS page's own reservation included, off the page just opened
+    // rather than a live `AXIS` value. See `pilots::page_reserves_axis_preview`.
+    let reserve_note = crate::pilots::page_reserves_axis_preview(model.page());
+    model.set_visible_rows(crate::menu::visible_rows(skin, frame, reserve_note));
     // The file's own table, not the built-in default: a settings file that
     // rebound a key should show that key here too. See
     // `crate::settings::Controls::live_bindings`.

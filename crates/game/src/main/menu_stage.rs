@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use oag_game::frontend::Draw;
 use oag_game::input::Button;
 use oag_game::render::{Renderer, letterbox_in};
-use oag_game::{font, marquee, menu, movie};
+use oag_game::{font, marquee, menu, movie, pilots};
 
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
@@ -359,6 +359,18 @@ impl MenuStage {
             // over the menu rather than a missing picture.
             _ => None,
         };
+        // Refreshed every frame, off whichever page is current, rather than
+        // once when the menus opened: a player can navigate to a page with a
+        // different reservation need (AI PILOTS today, see
+        // `pilots::page_reserves_axis_preview`) without anything else in the
+        // frame loop calling back into `menu::visible_rows` for it. Keeping
+        // `self.menu`'s own cached figure in step with the page on screen is
+        // what lets `rows::draw` read it straight off `Menu::visible_rows`
+        // instead of recomputing a second, possibly-disagreeing answer of
+        // its own - see that method's doc.
+        let reserve_note = pilots::page_reserves_axis_preview(self.menu.page());
+        self.menu
+            .set_visible_rows(menu::visible_rows(&self.skin, &self.frame, reserve_note));
         let arriving = menu::draw_list(
             &self.menu,
             &self.skin,

@@ -81,6 +81,44 @@ impl Frame {
         self.clear.is_none() && self.marks.is_empty()
     }
 
+    /// Where this frame's own chrome begins, measured up from the bottom of
+    /// `space`: the smallest `y` among the marks sitting in the screen's
+    /// lower half.
+    ///
+    /// **The real answer to "where does the content area end and the chrome
+    /// begin"** - [`super::visible_rows`] and [`crate::prompt::axis_preview_draw`]
+    /// both read this instead of assuming a page's own rows may use the whole
+    /// screen down to `space.size.1`, which is what let a menu draw straight
+    /// through Pulse's own footer strips. See `docs/architecture/menus.md`'s
+    /// "AI PILOTS: the axis preview" section for the capture that found it -
+    /// Pulse's footer sits at `y=236` of 272, well short of the screen's own
+    /// edge.
+    ///
+    /// **The lower half only**, not every mark: a title's frame can carry
+    /// chrome above the rows too - Pulse's own top bar, Wipeout HD's upper
+    /// rule - and folding those in as well would read a mark at `y=0` as
+    /// "content ends immediately", collapsing the content area to nothing.
+    /// Nothing this build draws sits above the title anyway, so only the
+    /// marks below the midline can be *this* boundary.
+    ///
+    /// `None` for a frame with no mark in the lower half - every title with
+    /// no frame at all, and any future one whose chrome sits entirely above
+    /// the rows - so a caller with nothing to clear keeps using whatever
+    /// bound it read before this existed.
+    #[must_use]
+    pub fn content_bottom(&self, space: Space) -> Option<f32> {
+        let midline = space.size.1 * 0.5;
+        self.marks
+            .iter()
+            .filter_map(|mark| match mark {
+                Draw::Sprite {
+                    rect: [_, y, _, _], ..
+                } if *y >= midline => Some(*y),
+                _ => None,
+            })
+            .reduce(f32::min)
+    }
+
     /// One line saying what this frame came out as.
     ///
     /// The colours are the point: they are the only things in the frame that

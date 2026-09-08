@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, settings, strings};
+use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, pilots, settings, strings};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;
@@ -181,7 +181,14 @@ impl Session {
         // another console's coordinates. `Space::PSP` on both PSP titles, where
         // the ratio is exactly 1.0 and nothing moves. See `menu::Skin::new`.
         let skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
-        model.set_visible_rows(menu::visible_rows(&skin));
+        // Just the first frame's own value - `MenuStage::render` refreshes
+        // this every frame off whichever page is actually current, since a
+        // player can navigate to a page with a different reservation need
+        // (AI PILOTS today) without this method running again. See
+        // `menu::visible_rows`'s own doc for why the reservation has to
+        // track the page rather than the frame's live row values.
+        let reserve_note = pilots::page_reserves_axis_preview(model.page());
+        model.set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
         // And which way a page steps, for the disc that draws one of them as a
         // strip: left and right along the entries rather than up and down a
         // column. Set from the same skin the drawing side reads, so what is on

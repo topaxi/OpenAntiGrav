@@ -604,28 +604,36 @@ pub fn message_draw(skin: &Skin, text: &str) -> Vec<Draw> {
 /// **Positioned under whichever row is actually last on screen, not a fixed
 /// row count** - [`Menu::scroll`] and [`Menu::visible_rows`] rather than
 /// `menu::rows::draw`'s own `pub(super)` internals, because the AI PILOTS
-/// page has nine rows and only seven show at once on Pulse's own measured
-/// pitch. Both are `pub`, so this is a second, independent computation of
-/// the same "how many rows are actually drawn" fact `menu::rows::draw` makes
-/// for itself, not a shared one reached through a new dependency between two
-/// otherwise separate modules.
+/// page has nine rows and [`Menu::visible_rows`] shows fewer at once on
+/// Pulse's own measured pitch. Both are `pub`, so this is a second,
+/// independent computation of the same "how many rows are actually drawn"
+/// fact `menu::rows::draw` makes for itself, not a shared one reached
+/// through a new dependency between two otherwise separate modules -
+/// `Menu::visible_rows` is the one number both read, kept correct by
+/// whoever drives the menu (see that method's own doc).
 ///
-/// **Pulled up off `menu::rows::draw`'s own warning/restart slot, and drawn
-/// smaller - both empirically, off a real capture.** That slot is sized for
-/// one line at [`NOTE_SCALE`] clearing the bottom of the 272-pixel screen; it
-/// says nothing about Pulse's own bottom-of-screen mark (`frame.marks`,
-/// drawn on every page regardless of content), which a capture of this page
-/// showed sitting in most of that same room. [`AXIS_PREVIEW_SCALE`] and the
-/// upward nudge below are this function's own answer to a gap that turned
-/// out to be under one line tall - see that constant's own doc for the
-/// capture that found it.
+/// **The same slot `menu::rows::draw`'s own warning/restart message uses,
+/// not a tuned position of its own.** [`Skin::message_gap`] and
+/// [`Skin::message_scale`] are the two figures `menu::visible_rows` reserves
+/// room for under the rows, and this draws exactly one line at that gap and
+/// that scale - so a page whose window already leaves room for a note
+/// leaves the same room for this. **A first cut placed this a fixed nudge
+/// above the row block instead**, tuned against one capture, and it still
+/// put the line on top of Pulse's own footer strips (`frame.marks`, drawn on
+/// every page regardless of content): the nudge assumed the room to clear
+/// was the screen's own edge, and Pulse's footer sits well short of it. The
+/// fix was not a better nudge - [`crate::menu::Frame::content_bottom`] answers
+/// where the chrome actually starts, `menu::visible_rows`'s own `reserve_note`
+/// argument (set by [`crate::pilots::page_reserves_axis_preview`]) shows one
+/// fewer row on a page that needs this line so there is somewhere to put it,
+/// and this function stopped needing a position of its own. See
+/// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.
 ///
 /// **Chosen, not measured**, on the same footing as [`SCRIM`] and
 /// `menu_stage`'s own `PAUSE_OVERLAY`: nothing on either disc has an axis to
 /// preview, so there is nothing to recover a position from. Reuses [`NOTE`],
 /// the same amber a live remark already draws in [`Keyboard::draw`]'s own
-/// note, rather than inventing a second colour. See
-/// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.
+/// note, rather than inventing a second colour.
 #[must_use]
 pub fn axis_preview_draw(menu: &Menu, skin: &Skin, text: &str) -> Draw {
     let entries = menu.page().entries.len();
@@ -634,8 +642,8 @@ pub fn axis_preview_draw(menu: &Menu, skin: &Skin, text: &str) -> Draw {
         .min(entries.saturating_sub(menu.scroll()));
     Draw::Text {
         x: skin.menu_x() - 18.0,
-        y: skin.first_row_y() + shown as f32 * skin.row_pitch() - skin.row_pitch() * 0.18,
-        scale: skin.row_scale() * AXIS_PREVIEW_SCALE,
+        y: skin.first_row_y() + shown as f32 * skin.row_pitch() + skin.message_gap(),
+        scale: skin.row_scale() * skin.message_scale(),
         color: NOTE,
         border: None,
         align: Align::Left,
@@ -667,19 +675,6 @@ const NOTE: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// How small a note is drawn, as a multiple of a row's own scale.
 const NOTE_SCALE: f32 = 0.66;
-
-/// How small [`axis_preview_draw`]'s own line is drawn, smaller again than
-/// [`NOTE_SCALE`].
-///
-/// **Tuned against a real capture, not derived.** The AI PILOTS page's own
-/// gap between its last visible row and Pulse's own bottom-of-screen mark
-/// (`frame.marks`, drawn regardless of page - a real capture of a page with
-/// no note at all still shows it, at the same position) is under one line
-/// tall at [`NOTE_SCALE`], which is why this is its own, smaller constant
-/// rather than a reuse: see `docs/architecture/menus.md`'s "AI PILOTS: the
-/// axis preview" section for the capture that found it and the margin this
-/// was chosen against.
-const AXIS_PREVIEW_SCALE: f32 = 0.5;
 
 /// How many lines of pitch the note is given, wrapped or not.
 ///

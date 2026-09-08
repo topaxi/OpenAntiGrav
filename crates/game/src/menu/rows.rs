@@ -14,7 +14,7 @@ use oag_gameplay::input::Button;
 
 use crate::frontend::{Align, Draw};
 
-use super::{DIMMED, Entry, Menu, Skin, WARNING, visible_rows};
+use super::{DIMMED, Entry, Menu, Skin, WARNING};
 
 /// The rows of `menu`'s current page, top to bottom.
 ///
@@ -31,7 +31,13 @@ pub(super) fn draw(
     let row_height = skin.row_pitch();
     let row_scale = skin.row_scale();
     let first_row_y = skin.first_row_y();
-    let visible = visible_rows(skin);
+    // The cached figure `Menu::scroll`'s own window math already used to
+    // place this window, not a fresh recompute off `skin` alone: the two
+    // disagreeing is how a row `Menu::scroll` counted as on screen could
+    // still go undrawn. Whoever is driving the menu is responsible for
+    // keeping it fresh - see `menu::visible_rows`'s own doc for who that is
+    // and why it takes `reserve_note`.
+    let visible = menu.visible_rows();
 
     let mut out = Vec::new();
 
@@ -142,7 +148,7 @@ pub(super) fn draw(
         out.push(Draw::Text {
             x: margin_x - 18.0,
             y: first_row_y + shown as f32 * row_height + skin.message_gap(),
-            scale: row_scale * 0.8,
+            scale: row_scale * skin.message_scale(),
             color: WARNING,
             border: None,
             align: Align::Left,

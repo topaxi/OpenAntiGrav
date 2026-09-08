@@ -278,18 +278,25 @@ maintainer call, not one to make here.
   deliberately did not invent, since "describe the numbers that are there,
   do not invent a scale" was the brief for the per-axis line. A whole-pilot
   summary is the next, harder step if the maintainer still wants it.
-- **A real layout bug the axis preview's own capture found**:
-  `menu::visible_rows`'s "clear the 272-pixel screen" budget for the
-  warning/restart note slot (`crates/game/src/menu/skin.rs`) never accounts
-  for Pulse's own `frame.marks` - the bottom-of-screen mark drawn on every
-  page regardless of content. On a page that scrolls to exactly its own
-  `visible_rows` (AI PILOTS has nine rows, seven show at once), a note in
-  that slot lands on top of the mark. Worked around locally for the axis
-  preview in `prompt::axis_preview_draw` (a smaller scale and a nudge, tuned
-  against a real capture - see `docs/architecture/menus.md`'s "AI PILOTS:
-  the axis preview" section), but the general fix belongs in
-  `menu/rows.rs`/`menu/skin.rs`, which any future warning or restart note on
-  a similarly-scrolled page will need too.
+- **Landed 2026-09-08: the real layout bug the axis preview's own capture
+  found is fixed, generally, not just worked around.** `menu::visible_rows`'s
+  "clear the 272-pixel screen" budget never accounted for Pulse's own
+  `frame.marks` - the bottom-of-screen mark drawn on every page regardless of
+  content - so a note landed on top of it on any page that scrolled to
+  exactly its own `visible_rows` (AI PILOTS has nine rows, seven showed at
+  once under the old budget). `Frame::content_bottom` (`crates/game/src/menu/frame.rs`)
+  now answers "where does the chrome begin" off the mark itself, and
+  `menu::visible_rows` clears that instead of the screen's own edge; a page
+  reserves one line under its rows for a moment like this by calling it with
+  `reserve_note: true`, decided structurally per page
+  (`pilots::page_reserves_axis_preview` for AI PILOTS, off the page's own
+  `pilot.axis` row) so the window does not resize on a keystroke. AI PILOTS
+  shows six rows now, not seven, with room for its own preview line above the
+  footer instead of on it; every page with nothing reserved still gets seven,
+  matching before. The tuned scale and upward nudge that used to live in
+  `prompt::axis_preview_draw` are gone - it draws in the same slot, at the
+  same scale, `menu::rows::draw`'s own warning/restart message does. See
+  `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.
 - **Landed 2026-09-07, and the ratchet it named is now cleared.** Every row
   on the AI PILOTS page named a `string_id`, the page itself a
   `title_string_id` (new mechanism, resolved the same way a row's `label`

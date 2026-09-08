@@ -574,23 +574,38 @@ the matching draw-side split - not modal, drawn straight over the page, in the
 established amber `NOTE` colour a live remark already uses for
 `Keyboard`'s own note.
 
-**Its position is not `menu::rows::draw`'s reserved note slot, on purpose.**
-That slot is sized for one line clearing the bottom of the 272-pixel screen;
-it says nothing about Pulse's own bottom-of-screen mark (`frame.marks`, drawn
-on every page regardless of content, at a fixed position). A first capture of
-this page put the preview line squarely on top of that mark - legible, amber
+**Its position is `menu::rows::draw`'s own reserved note slot, and that slot
+now knows where the chrome actually starts.** A first capture of this page
+put the preview line squarely on top of Pulse's own bottom-of-screen mark
+(`frame.marks`, drawn on every page regardless of content) - legible, amber
 against both the mark's dark and bright halves, but visibly cluttered. Found
 by capturing the real page and looking, the way this project's own rule says
-to, not by the arithmetic passing. `prompt::AXIS_PREVIEW_SCALE` (smaller than
-the note scale `Keyboard`'s own remark uses) and a small upward nudge in
-`axis_preview_draw` are the fix, tuned against that capture rather than
-derived - the gap between the AI PILOTS page's last visible row and the mark
-is under one line tall at the note scale. This is one page's own layout
-fact, not a general one: `menu::visible_rows`'s "clear the 272-pixel screen"
-budget has never accounted for `frame.marks`, and any future warning or
-restart note on a page that scrolls to exactly its own `visible_rows` would
-find the same mark waiting in the same place. That is `menu/rows.rs`'s own
-budget to fix, not this feature's.
+to, not by the arithmetic passing. The first fix was a tuned scale and an
+upward nudge in `axis_preview_draw`, scoped to this one page - the slot
+itself, `menu::visible_rows`'s "clear the 272-pixel screen" budget, had never
+accounted for `frame.marks`, so any future warning or restart note on a page
+that scrolled to exactly its own `visible_rows` would have found the same
+mark waiting in the same place.
+
+**That general fix has landed.** [`Frame::content_bottom`](../../crates/game/src/menu/frame.rs)
+reads the lowest mark in the screen's lower half - Pulse's footer sits at
+`y=236` of 272 - and `menu::visible_rows` clears *that*, not the screen's own
+edge. A page whose rows can carry a note reserves one line's worth of room
+under them by calling `visible_rows` with `reserve_note: true` -
+`pilots::page_reserves_axis_preview` is what decides that for AI PILOTS,
+off the page's own `pilot.axis` row rather than the row's live value, so the
+window does not resize on the keystroke that gives `AXIS` a value. Pulse's
+own skin still fits seven rows with nothing reserved - `236 - 32 = 204`,
+`204 / 28` floors to seven, matching every page that has no note to show -
+and six with the reservation on, which is what leaves AI PILOTS' own preview
+line room to sit above the footer instead of on it.
+`prompt::axis_preview_draw` no longer carries a tuned scale or offset of its
+own: it draws in the same slot, at the same scale, `menu::rows::draw`'s own
+warning/restart message uses, off `Menu::visible_rows` (kept fresh every
+frame by `MenuStage::render`, since a player can navigate onto AI PILOTS
+without anything else in the frame loop recomputing it). See
+`crates/game/src/menu/skin.rs`'s own doc on `visible_rows` for the
+arithmetic and `crates/game/src/menu/frame.rs`'s on `content_bottom`.
 
 `--menu-page pilots --screenshot <path>` is how to look at it without a
 window.
