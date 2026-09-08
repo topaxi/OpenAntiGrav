@@ -134,3 +134,19 @@
   which case an HD-sourced race is currently playing the wrong asset. Needs a
   Ghidra read of whatever spawns the flare on HD specifically, not an
   inference from the PS2 disc's own trigger.
+- **Whether HD's environment four (`WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`,
+  `WO_DustMotes`, `WO_UNDERWATER_GODRAYS`) are live content or dead authored
+  assets is unasked and unanswered.** 2026-09-08: put to the user directly -
+  they play the games, and a from-play sighting is a reliable oracle this
+  project has used before (see the trail-hit burst sighting this thread
+  opened with) - whether they've noticed ambient dust motes or underwater
+  god-ray shafts on an HD circuit; answer was "not sure / haven't looked."
+  Doesn't change the bucket
+  - `NO_TRIGGER_RECOVERED` means "nothing read says when," true regardless -
+  but it does change whether hunting the placement mechanism
+  (`.effectsettings`, `aurora.xml`, or a `track.vex` node, all still
+  undecoded for this) is worth a session: a "yes" would confirm the
+  mechanism exists and is findable, a "no" would raise the odds these are
+  dead content and the search speculative. Worth a deliberate play-test
+  (a wet or dust-heavy circuit, watched for the effect) before spending RE
+  time on the placement format, rather than guessing which case this is.
