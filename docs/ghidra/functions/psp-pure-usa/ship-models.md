@@ -154,13 +154,60 @@ object registration call. `DAT_08b174fc` is non-null only once that object
 exists, and `DAT_08b173e4` (the same struct's `+0x1c` field, thresholded `> 8`
 here) is compared elsewhere against 5, 6, 7 and `0xb` (11) in
 `FUN_0892195c` - too many distinct values for a boolean, reads as a mode/session
-kind enum, not a class count. **Reading together: the Phantom swap plausibly
-only ever fires in a network (Link) session**, gated on both "session kind
-`> 8`" and "the NetGlobals object is live." Not proven - the three remaining
-writers (`FUN_0889ac74`, `FUN_0889aecc`, `FUN_0889dcec`) are unread, and
-`DAT_08b173e4`'s actual enum values are unnamed. Do not act on this beyond
-"probably networking," and do not name `DAT_08b173e4`/`DAT_08b174fc`/
-`DAT_08b173c8` off it.
+kind enum, not a class count.
+
+**The other three writers confirm it, rather than just corroborating it -
+`DAT_08b174fc` is ad-hoc (Link) multiplayer state, not a hedge any more.**
+
+- `FUN_0889dcec` **is** the ad-hoc bring-up routine: it logs `"::InitAdhoc()"`
+  and its own step names (`"InitAdhoc - sceNetInit()"`,
+  `"...sceNetAdhocInit()"`, `"...sceNetAdhocctlInit()"`,
+  `"...sceNetAdhocctlAddHandler()"`, `"...sceNetAdhocctlConnect()"`) around
+  literal `sceNet*` PSP ad-hoc Wi-Fi calls, and zeroes `DAT_08b174fc` at entry.
+  There is no reading of this as anything but network-session setup.
+- `FUN_0889aecc` registers the synced object by name -
+  `FUN_08901efc(&DAT_08b5c6bc, "NetObjectGlobalsStructure", 0xb0)` - then binds
+  two callbacks to it, `FUN_08901f8c(DAT_08b5c6bc, FUN_0889ac74, FUN_0889ad1c,
+  &LAB_0889aeb4)`. Before that it declares fourteen named fields inside the
+  0xb0-byte block via a `FUN_0890192c(&field_id, offset, ...)` pattern - among
+  them `DAT_08aac7bc` at offset `0xc` and `DAT_08aac7c0` at offset `0x90`,
+  the two offsets the read side actually touches.
+- `FUN_0889ac74` and `FUN_0889ad1c` are the two registered callbacks, and both
+  do the same copy: `FUN_08804c38(&DAT_08b173c8, slot, *(int*)(DAT_08b174fc +
+  0xc + slot*4))` for `slot` in `0..8` - `FUN_08804c38(base, idx, val) =
+  *(base + idx*4 + 0x230) = val`, the exact setter counterpart of the getter
+  the Phantom check calls (`FUN_08804bf8`). `FUN_0889ad1c` additionally takes
+  a `param_3` field-id and only re-copies when it is `-1` (full sync) or equal
+  to `DAT_08aac7bc` (the `+0xc` field specifically) - i.e. this is a
+  per-network-object-field change handler, and the 8-slot table is one field
+  of it.
+
+**Reading the whole chain together**: an ad-hoc session broadcasts a 176-byte
+`NetObjectGlobalsStructure`; its `+0xc..+0x2c` holds one 4-byte value per of
+(at least) 8 player slots, which every participant copies into a local table
+at `&DAT_08b173c8+0x230` on every full or partial sync. A `Ship`'s own
+`+0x480` field (set from the constructor's third argument, so per-craft/slot)
+indexes that table to get an offset, which is then added to `+0x90` in the
+*synced block itself* (not the local table) to read one flag byte. **`+0x90`
+sits inside a second 8-long span the same registration names**
+(`DAT_08aac7c0`, also offset `0x90`) - consistent with one Phantom-flag byte
+per slot, packed at `DAT_08b174fc+0x90 .. +0x97`, looked up via the `+0xc`
+table's per-slot value rather than the slot index directly.
+
+**What is still open, narrower than before**: nothing read so far writes this
+byte on the *local* player's own slot before the object is broadcast - every
+function on this trail is a receive/apply path (`FUN_0889ac74`/`FUN_0889ad1c`
+fire when a remote update arrives, or the local session's own copy of a field
+it just set is echoed back). Whatever decides "this player has Phantom" -
+an unlock check, `handlingstats.xml`'s `PhantomTweak`/class threshold, or
+something else - is a **send-side** write to `DAT_08b174fc+0x90+n` that has
+not been located. Confidence for the read chain above: 85 (every offset and
+call cross-checked against a second, independent source - the field
+registration in `FUN_0889aecc`). Confidence for "the swap is Link-only": 80 -
+`DAT_08b174fc` is null outside a session (every read site null-checks it) and
+`DAT_08b173e4 > 8` is a second, independent gate, but the enum's own values
+are still unnamed so "every value `> 8` really is a Link submode" is not
+individually confirmed.
 
 **`FUN_0892195c`'s own call sites to `FUN_08927dac` are a next/prev craft
 cycler reading `strcasecmp` against a list, gated on `DAT_08b173e0` walking
