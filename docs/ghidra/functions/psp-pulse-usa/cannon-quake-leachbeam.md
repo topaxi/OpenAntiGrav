@@ -481,12 +481,51 @@ draw function binds a texture in the decompile; both call
 `soundcone` (see [vex.md](../../../formats/vex.md)), so the pair reads as a tag,
 not a class.
 
-**Consequence for this project**: an implementer needs `pulse_muzzleflash.vex`
-and the two `.mip` textures out of `Data.wad`, not `psys::Library`. The WAD is
-hash-keyed with no recovered names for these, so the first step is
-`just wad hash 'Data\Weapons\pulse_muzzleflash.vex'` and the two textures, then
-looking the hashes up in `PSP_GAME/USRDIR/Data.wad`'s 1142 entries. Nothing is
-drawn today and nothing invented stands in - see the visuals thread.
+#### All three resolve in `Data.wad`, and the directory layout is the trap
+
+Confirmed 2026-09-08 by hashing each executable-side name and matching it
+against `PSP_GAME/USRDIR/Data.wad`'s 1142 hash-keyed entries - the archive
+carries no recovered names for any of them, so a name is only "present" once its
+hash lands on an entry. All three hit on **both** PSP pressings, one entry each:
+
+| Asset | Path | Name hash | Entry | Bytes |
+| --- | --- | --- | --- | --- |
+| Round/muzzle-flash mesh | `Data\Weapons\pulse_muzzleflash.vex` | `b94a2a6c` | 1048 | 6,608 |
+| Bolt texture | `Data\Weapons\Textures\Cannon_bolt.mip` | `ee06a033` | 1057 | 2,064 |
+| Flash texture | `Data\Weapons\Textures\Cannon_muzzle_flash.mip` | `1762ad77` | 1058 | 5,136 |
+
+**The layout is worth keeping, because the obvious guess is wrong.** The mesh is
+in `Data\Weapons\`, but the textures are one level deeper in
+`Data\Weapons\Textures\`. `Data\Weapons\Cannon_bolt.mip` and
+`Data\Effects\Cannon_bolt.mip` both hash to entries that do not exist. The same
+split very likely holds for the other weapons' assets.
+
+Two corroborations: the two texture entries are **adjacent** (1057, 1058), which
+is what a pair loaded back to back by `Cannon_LoadTextures` should look like -
+and their order in the archive is an independent cross-check on which global is
+which, should anyone read the two display lists; and the mesh sits well away from
+them at 1048, matching its separate load path through `Vex_LoadModel`.
+
+To re-run or extend the method - single backslashes through `cargo run` directly,
+doubled if going through `just`, which eats one layer:
+
+```sh
+cargo run -q -p oag-tools --bin oag-wad -- hash 'Data\Weapons\Textures\Cannon_bolt.mip'
+cargo run -q -p oag-tools --bin oag-wad -- list 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad'
+```
+
+#### What this project draws, and what it deliberately does not
+
+`oag_game::race::CANNON_MODEL_ENTRY` is the mesh above, loaded the same way the
+Rocket's, Mine's and Bomb's are, and `Race::cannon_model_matrices` puts one
+matrix on each live round. **The mesh is named `muzzleflash` and is the bolt**:
+`the_discs_cannon_round_carries_its_own_model` measures it at 20 vertices, 18
+triangles, spanning `1.200 x 1.200 x 3.599` - a dart, longest along the +Z the
+matrix aims down the velocity, which is not the shape of a flash at a barrel.
+
+**The two display lists are not drawn**, because which of them is the bolt and
+which the flash is unread and a guess would be an invention. That is an honest
+absence per CLAUDE.md, and it is bounded: the round itself is now visible.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 

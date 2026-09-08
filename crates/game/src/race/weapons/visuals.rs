@@ -456,9 +456,32 @@ impl Race {
         self.projectile_model_matrices(oag_formats::weapons::Weapon::Bomb)
     }
 
+    /// Where each live Cannon round is, for the model draw.
+    ///
+    /// **The model is the one the original hangs on the round, and nothing
+    /// beside it.** `Cannon_Construct` (`0x088651d8`) loads
+    /// [`CANNON_MODEL_ENTRY`] into every round instance's own scene node, so
+    /// this is playing the disc's data rather than standing in for it. Each
+    /// round *also* builds two display lists of hand-written quads textured
+    /// from the disc's `Cannon_bolt.mip` and `Cannon_muzzle_flash.mip`, and
+    /// **which list is which is not read**, so none of that is drawn: an honest
+    /// absence, not an invented billboard. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    ///
+    /// Velocity-oriented like the Rocket's rather than pose-oriented like the
+    /// Mine's, for the reason the shared helper below gives: a round is a body
+    /// in flight with a direction of travel, and
+    /// `oag_gameplay::projectile::cannon::launch` gives it no independent
+    /// orientation to read.
+    #[must_use]
+    pub fn cannon_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_formats::weapons::Weapon::Cannon)
+    }
+
     /// Where each live projectile of one `kind` is and how it is oriented, for
     /// the model draw - shared by [`Self::rocket_model_matrices`],
-    /// [`Self::mine_model_matrices`] and [`Self::bomb_model_matrices`].
+    /// [`Self::mine_model_matrices`], [`Self::bomb_model_matrices`] and
+    /// [`Self::cannon_model_matrices`].
     ///
     /// **Filters on `kind` specifically, which is the fix over what this did
     /// before 2026-09-05.** Before, the filter was `kind.is_some()` - any live

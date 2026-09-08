@@ -426,11 +426,10 @@ impl Scene {
             );
             sphere.tint(queue, state.colour(), recoloured);
         }
-        // One matrix per live projectile, for each of the three kinds that draw
-        // as their own model - see `weapon_models::Scene::write_weapon_models`
-        // for the shared write loop and why each list is bounded independently.
+        // One matrix per live projectile, for each of the four kinds that draw as
+        // their own model - see `weapon_models::Scene::write_weapon_models`.
         oag_render::perfprobe::mark("ship+shield-write");
-        let (rocket_matrices, mine_matrices, bomb_matrices) =
+        let (rocket_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
@@ -645,15 +644,15 @@ impl Scene {
                 exhaust.extend_trail_vertices(trail, right, up);
             }
         }
-        // Only the billboard *fallback*, per kind: a Rocket, Mine or Bomb
-        // whose own model did not load, or a Missile, Plasma or Shuriken,
-        // which has none at all - the flare around a modelled kind is an
-        // asset now, and goes through the particle pipeline below with
-        // everything else.
+        // Only the billboard *fallback*, per kind: a Rocket, Mine, Bomb or
+        // Cannon round whose own model did not load, or a Missile, Plasma or
+        // Shuriken, which has none at all - the flare around a modelled kind is
+        // an asset now, through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
             oag_formats::weapons::Weapon::Rocket => !self.rockets.is_empty(),
             oag_formats::weapons::Weapon::Mine => !self.mines.is_empty(),
             oag_formats::weapons::Weapon::Bomb => !self.bombs.is_empty(),
+            oag_formats::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             _ => false,
         }));
         oag_render::perfprobe::mark("exhaust-gather");
@@ -831,20 +830,21 @@ impl Scene {
             }
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        // Rockets, with the hulls: an opaque painted model that occludes and is
-        // occluded, not an effect. Bounded by how many matrices were written
-        // this frame, for the same reason the plumes are - a drawable whose
-        // uniform buffer went unwritten would draw at last frame's pose.
+        // The Rocket's, Mine's, Bomb's and Cannon round's own bodies, with the
+        // hulls: opaque painted models that occlude and are occluded, not
+        // effects, so none belongs in the additive pass below. Each is bounded by
+        // how many matrices were written this frame, for the same reason the
+        // plumes are - an unwritten uniform buffer draws last frame's pose.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        // The Mine's and the Bomb's own drawables, same reasoning: an opaque
-        // laid charge, drawn and occluded with the hulls rather than in the
-        // additive pass below.
         for drawable in self.mines.iter().take(mine_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         for drawable in self.bombs.iter().take(bomb_matrices.len()) {
+            stats.add(drawable.draw(&mut pass, None, None, None, None));
+        }
+        for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         // After the ships, so the hulls' depth is already in the buffer: a

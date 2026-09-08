@@ -352,6 +352,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let rocket_model = body_model(ROCKET_MODEL_ENTRY, "a rocket");
     let mine_model = body_model(MINE_MODEL_ENTRY, "a laid mine");
     let bomb_model = body_model(BOMB_MODEL_ENTRY, "a laid bomb");
+    let cannon_model = body_model(CANNON_MODEL_ENTRY, "a cannon round");
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -981,6 +982,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         zone_grade,
         liveries,
         rocket_model,
+        cannon_model,
         mine_model,
         bomb_model,
         shield_cockpit,

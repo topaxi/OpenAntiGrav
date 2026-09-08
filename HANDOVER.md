@@ -546,8 +546,8 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Magfloor gfx/sfx: two real `.vex` effects found, the trigger is read, sfx and the other two titles are open](handover/rendering/magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md)
 - [Frame comparison: three residuals](handover/tooling/frame-comparison-three-residuals.md)
 - [Weapons: nine of thirteen, and the dispatch table read whole](handover/gameplay/weapons-eight-of-thirteen-the-plasma-and-the.md)
-- [The AI Cannon's gate is an uninitialised byte, and its value is chosen](handover/gameplay/the-ai-cannons-gate-is-an-uninitialised-byte.md) - landed 2026-09-08, replacing "An AI craft cannot fire a Cannon here". `field 0x16` was blind by construction: no owner addresses the control record at offset `0x16`, because `PlayerInput` embeds it at `controller+0x44` and `Ai` embeds it at **`Ai+0x08`**, so the held byte is `controller+0x5a` and **`Ai+0x1e`**. Nothing writes `Ai+0x1e` at any width, and the `Ai` object is allocated with no zero-fill while the craft object beside it is explicitly memset - the gate is uninitialised heap. `Race::advance_cannons` now runs every slot; taking that byte as non-zero is **chosen, not measured, no confidence score**. Open: one from-play check - an AI Cannon should be an unaimed ~1.5s burst on pickup, not aimed fire - and `craft_sticking_ground_truth` is **red** at 95 against its bound of 60, deliberately left alone: measured controls show absorbing the Cannon instead gives 68 and the pre-fix pathology under the same regime gives 90, so that test needs a better statistic rather than a bigger number.
-- [A fired Cannon round is drawn by nothing](handover/gameplay/a-fired-cannon-round-is-drawn-by-nothing.md) - still true, and 2026-09-08 refuted the premise: the round is **not** a particle effect. `BOOT.BIN` names its assets outright - `Data\Weapons\pulse_muzzleflash.vex`, `Data\Weapons\Textures\Cannon_bolt.mip` and `Cannon_muzzle_flash.mip`, loaded by `Cannon_Construct` (`0x088651d8`) and `Cannon_LoadTextures` (`0x08864b00`) - and each round replays two hand-built GU display lists. The only `.POB` on the path is `WO_CANNON_SPARKS`, on the *impact*. So `cannon_flash` `0x3eb` and `Ship Muzzle` `0x3e2` were both false leads. Next: hash the three names against `Data.wad`'s 1142 hash-keyed entries, then draw the real mesh.
+- [The AI Cannon's gate is an uninitialised byte, and its value is chosen](handover/gameplay/the-ai-cannons-gate-is-an-uninitialised-byte.md) - landed 2026-09-08, replacing "An AI craft cannot fire a Cannon here". `field 0x16` was blind by construction: no owner addresses the control record at offset `0x16`, because `PlayerInput` embeds it at `controller+0x44` and `Ai` embeds it at **`Ai+0x08`**, so the held byte is `controller+0x5a` and **`Ai+0x1e`**. Nothing writes `Ai+0x1e` at any width, and the `Ai` object is allocated with no zero-fill while the craft object beside it is explicitly memset - the gate is uninitialised heap. `Race::advance_cannons` now runs every slot, and the trigger is **tuned rather than copied** under the standing ruling that opponent behaviour is a design axis: an opponent holds fire while `oag_ai::Driver::holds_fire` finds a target ahead, so the weapon reads as an opponent leaning on you down a straight rather than spraying thirty rounds at empty track. Chosen, not measured, no confidence score. `Driver::social` gained `CONTACT_FLOOR` in the same pass - the minimum yield every driver gives a rival it is already alongside, which the neutral personality used to skip entirely. `craft_sticking_ground_truth`'s statistic was **replaced** (worst single streak no longer separated bug from fix - 90 against 95; total overlapped pair-ticks gives 1,756 against 978) and it is green.
+- [A fired Cannon round: the body is drawn, the muzzle flash is not](handover/gameplay/a-fired-cannon-round-is-drawn-by-nothing.md) - the round is **not** a particle effect, and both psys candidates (`cannon_flash` `0x3eb`, `Ship Muzzle` `0x3e2`) are dead. `BOOT.BIN` names its assets outright and all three resolve in `Data.wad` on both PSP pressings: the mesh `Data\Weapons\pulse_muzzleflash.vex` (entry 1048) - which is the **bolt** despite the name, a 1.2x1.2x3.6 dart - plus `Cannon_bolt.mip` (1057) and `Cannon_muzzle_flash.mip` (1058), the latter two one level deeper in `Data\Weapons\Textures\` than the obvious guess. The round now draws as that mesh. Still open: the two hand-built display lists (which is bolt and which is flash is unread, so neither is drawn), the hit path, and nobody has looked at it on a screen.
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/gameplay/projectiles-follow-the-floor-and-the-km-h.md)
 - [Both lockable weapons draw their reticle now, and the black background behind it is gone](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/gameplay/pure-and-hd-lock-on-too-and-two-axes.md)
@@ -736,6 +736,29 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**`oag-game::ps2_source_ground_truth an_uncapped_transcode_still_reports_a_total_to_divide_by`
+fails under load and passes alone, and it looks like a real regression when it
+does.** 2026-09-08. It transcodes the PS2's loose intro through ffmpeg, and on a
+quiet machine it takes about 100 seconds and passes. Run inside a full
+`just test-data` alongside `craft_sticking_ground_truth`'s 8-craft, 7,200-tick
+simulation it took **254 seconds and failed**, panicking on
+`movie.frames.as_ref().expect("a picture")` - it produced no frames at all
+rather than the wrong ones. Verified in both directions on the same tree: failed
+twice under load, passed alone at 103 s.
+
+**So a red here is not automatically yours.** Before chasing it, re-run it on its
+own:
+
+```sh
+OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+    an_uncapped_transcode_still_reports_a_total_to_divide_by
+```
+
+The underlying cause is unfixed and not diagnosed past "starves": whether the
+encode has an internal deadline, or ffmpeg is being killed, or the probe's
+duration estimate degrades, has not been read. What is established is that the
+failure tracks machine load rather than the tree.
 
 **A `Data\Psys\<NAME>.POB` load-path string search discriminates for weapon
 and debug particle-effect names on HD's executable, and is blind to
