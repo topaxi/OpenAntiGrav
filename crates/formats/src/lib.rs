@@ -60,6 +60,7 @@ pub mod psarc;
 pub mod pure_dlc;
 mod pvrtc;
 pub mod pvs;
+pub mod race_campaign;
 pub mod rcsmaterial;
 pub mod rcsmodel;
 pub mod sblk;
