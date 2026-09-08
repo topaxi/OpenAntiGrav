@@ -54,15 +54,19 @@ eleven unevenly-spaced discrete levels, enough to rule out a linear ramp, not
 enough to name the real curve.
 
 **The easing curve itself (this thread's third item) was not attempted this
-session, and here is why, for whoever picks it up next.** `names.tsv` has
-zero front-end/menu functions on `psp-pulse-usa` - the closest anchor is
-`Xml_AttributeAsFloat` (`0x0895379c`), and its callers are unnamed `FUN_*`
-territory with nothing to recognise a tween by. Direct `jal` calls do survive
-the missing-relocations problem (unlike data loads), so a call-graph walk from
-there is still the right *route* - it just did not fit in the same session as
-the period/depth measurement above, and starting it without a plan for how to
-recognise the right function once found would have been an open-ended Ghidra
-session on a guess. `Tween::eased` is untouched.
+session, and here is why, for whoever picks it up next.** At the time,
+`names.tsv` had zero front-end/menu functions on `psp-pulse-usa` - the closest
+anchor was `Xml_AttributeAsFloat` (`0x0895379c`), and its callers were unnamed
+`FUN_*` territory with nothing to recognise a tween by. That anchor point is
+now stale: `psp-pulse-usa` has front-end/menu-adjacent names as of 2026-09-08
+(`TrackSelection`/`TeamSelection`'s screen classes,
+[`race-box-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/race-box-screens.md)),
+though none of them is `Tween`-related specifically. **The relocation defect
+that made a call-graph walk the only viable route is also fully resolved** -
+the 2026-09-07 patch fixed data loads too, not just `jal` calls, so
+`get_xrefs_to`/`get_function_callers` should work directly on both now rather
+than needing the `search_instructions` workaround. `Tween::eased` is
+untouched.
 
 ## Next Steps
 

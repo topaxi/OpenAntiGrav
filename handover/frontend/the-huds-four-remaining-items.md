@@ -29,5 +29,7 @@ The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD
   blocker, and its "Medal targets" deferred item).
 - If picked up again: `Hud_UpdateTimeCluster_q` has no confirmed caller (see its
   evidence page) - reads on `param_1 + 0x30`/`+ 0x34`/`+ 0x5a` and on what widgets
-  land at `+ 0x200`/`+ 0x204` are the next things to chase, ideally after the
-  PSP relocation patch lands so xrefs and callers stop being invisible.
+  land at `+ 0x200`/`+ 0x204` are the next things to chase. **The PSP relocation
+  patch landed 2026-09-07** (`HANDOVER.md`, "Traps that are live") - `get_xrefs_to`
+  and `get_function_callers` should no longer be invisible on `psp-pulse-usa`,
+  so this is unblocked and not yet retried.
