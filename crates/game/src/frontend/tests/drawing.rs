@@ -325,6 +325,57 @@ fn the_picker_draws_one_row_per_language() {
     assert!(rows.iter().any(|t| *t == "English"), "{rows:?}");
 }
 
+/// Regression for the picker's own row-blank bug: the selected row used to
+/// be recoloured to opaque white, which Pure's white picker backdrop
+/// (`Intro Screen`'s own `Image`, see `insert_backdrop_parent_fills`)
+/// swallows completely - proven on the real disc by dumping the queued
+/// `Draw::Text` and watching the text disappear at *every* row once it was
+/// selected, not only the one a fresh boot lands on.
+#[test]
+fn the_selected_row_keeps_the_menus_own_colour_rather_than_turning_white() {
+    let mut frontend = pure(60);
+    assert!(frontend.machine().is(pure_states::LANGUAGE_SELECTION));
+    assert_eq!(frontend.selected(), 0, "a fresh boot lands on row 0");
+
+    let draws = frontend.draw_list();
+    let selected_color = draws
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text { text, color, .. } if text == "English" => Some(*color),
+            _ => None,
+        })
+        .expect("the selected row still queues its own text");
+    // `PURE_XML`'s own `Menu` colour, not an invented "selected" one - see
+    // the draw loop's own comment for why there is no second colour to use.
+    assert_eq!(
+        selected_color,
+        argb_to_rgba(0xFF88D6E8),
+        "opaque white here is exactly the invisible-on-white regression"
+    );
+
+    input_down(&mut frontend);
+    assert_eq!(frontend.selected(), 1);
+    let draws = frontend.draw_list();
+    let now_unselected = draws
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text { text, color, .. } if text == "English" => Some(*color),
+            _ => None,
+        })
+        .expect("row 0 still queues its text once it is no longer selected");
+    assert_eq!(
+        selected_color, now_unselected,
+        "selected and unselected must share one colour: the highlight fill \
+         is the only signal a row is picked"
+    );
+}
+
+fn input_down(frontend: &mut Frontend) {
+    let mut input = Input::new();
+    input.begin_frame(Button::Down.bit());
+    frontend.update(FRAME, &mut input, None);
+}
+
 #[test]
 fn the_intro_draws_no_video_quad_without_a_picture() {
     let frontend = frontend(300);
