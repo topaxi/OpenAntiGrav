@@ -468,8 +468,14 @@ weapons the *pool* would hand out and the authored *odds* never do.
   located.~~ **Built 2026-09-07**, the same day the latch was found inside a
   function this page already had part of the reading of - the "wave has
   reached me" test (`entity+0x860 & 0x40`) sits a dozen lines above the
-  damage branch `cannon-quake-leachbeam.md` had already quoted. It needs no
-  track deformation at all: a single travelling instance
+  damage branch `cannon-quake-leachbeam.md` had already quoted. **This engine
+  draws no track deformation** - and note the reason changed on 2026-09-08:
+  the original *does* deform the road (`Quake_UpdateSpan`, `0x0891cab8`,
+  rewrites the road mesh's own packed vertex positions under a `vcos_q`
+  profile), but the deformation is decorative and the damage path needs none
+  of it. The earlier "the Quake is not a track deformation" reading was drawn
+  from the three functions that pass it by; see that page's own 2026-09-08
+  correction. A single travelling instance
   (`oag_gameplay::projectile::quake::Wave`) advances at a fixed, unauthored
   `270.0` units a second along the course, tracked as a plain distance-along
   rather than the original's segment-plus-parametric-`t` pair, and its hit on
@@ -479,7 +485,12 @@ weapons the *pool* would hand out and the authored *odds* never do.
   visual is the disc's own `WO_QUAKE`, re-positioned and re-scaled every tick
   to the midpoint and width of the track's own two edges nearest the wave -
   orientation is not established by anything read, so it draws
-  axis-aligned, chosen rather than measured. See
+  axis-aligned, chosen rather than measured. **The wave lives 5.0 seconds from
+  launch and is then dropped** (`oag_gameplay::projectile::quake::LIFETIME_SECONDS`,
+  recovered 2026-09-08 at confidence 85), which is also what re-opens the
+  once-at-a-time guard so a second Quake can be fired in the same race. Before
+  that landed the wave circled the ring forever and a player got exactly one
+  Quake a race. See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
 - ~~**The LeachBeam is read but not built** (2026-09-07)~~ **Built
   2026-09-08**, and what unblocked it was three reads the 2026-09-07 pass had

@@ -27,6 +27,15 @@ impl Race {
     /// `oag_gameplay::projectile::quake` for the recovered advance rate and
     /// the hit test this reuses whole.
     ///
+    /// **Retires the wave once it outlives
+    /// `oag_gameplay::projectile::quake::LIFETIME_SECONDS`**, which is what
+    /// re-opens `Race::spend_pickup`'s `world.quake.is_some()` guard for the
+    /// next Quake in the race. In the original that guard is a byte on the
+    /// weapon instance (`q+0x48`) and `Quake_UpdateSpans` (`0x08874a30`) clears
+    /// it on the first frame no road span updates - the same "the apparatus is
+    /// empty, so the weapon is free again" edge. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    ///
     /// Called from the tick after `Race::advance_cannons`, on this tick's own
     /// standings - so a wave that just passed over a craft credits the hit
     /// the same tick the craft's position moved into and out of its radius,
@@ -41,6 +50,10 @@ impl Race {
         };
         let length = course.length();
         wave.advance(length, self.dt);
+        if wave.expired() {
+            self.world.quake = None;
+            return;
+        }
         let rules = oag_gameplay::damage_rules(self.world.race.mode);
         let mut absorbed = [false; MAX_SHIPS];
         wave.apply_hits(

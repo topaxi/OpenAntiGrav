@@ -67,6 +67,57 @@ fn advancing_a_degenerate_course_is_a_no_op() {
     assert_eq!(wave.progress, 5.0);
     wave.advance(-1.0, 1.0);
     assert_eq!(wave.progress, 5.0);
+
+    // The *age* is not a no-op, on purpose: a wave that cannot move still has
+    // to expire, or the once-per-race guard never re-opens. See
+    // `Wave::advance`'s own doc comment.
+    assert_eq!(wave.age, 2.0);
+}
+
+#[test]
+fn a_wave_expires_after_the_recovered_lifetime_and_not_before() {
+    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+    assert!(!wave.expired(), "a wave is not born expired");
+
+    // One tick short of the bound, at the tick rate the simulation actually
+    // runs at, is still alive.
+    let dt = 1.0 / 60.0;
+    let ticks = (LIFETIME_SECONDS / dt) as u32;
+    for _ in 0..ticks {
+        wave.advance(1000.0, dt);
+    }
+    assert!(
+        !wave.expired(),
+        "expired at {:.4}s, inside the recovered {LIFETIME_SECONDS}s",
+        wave.age
+    );
+
+    wave.advance(1000.0, dt);
+    assert!(
+        wave.expired(),
+        "still alive at {:.4}s, past the recovered {LIFETIME_SECONDS}s",
+        wave.age
+    );
+}
+
+#[test]
+fn a_live_wave_outlives_a_full_lap_of_a_short_ring_but_not_the_bound() {
+    // The defect this bound closes: on a ring shorter than
+    // `SPEED_UNITS_PER_SECOND * LIFETIME_SECONDS` the wave gets all the way
+    // round, and before the bound existed it kept going for the whole race,
+    // re-hitting the field once a lap.
+    let length = SPEED_UNITS_PER_SECOND * LIFETIME_SECONDS / 2.0;
+    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+    let dt = 1.0 / 60.0;
+    let mut ticks = 0u32;
+    while !wave.expired() {
+        wave.advance(length, dt);
+        ticks += 1;
+        assert!(ticks < 10_000, "the wave never expired");
+    }
+    // Two laps' worth of travel, then gone - not an unbounded circuit.
+    assert!((wave.age - (f64::from(ticks) * f64::from(dt)) as f32).abs() < 1e-3);
+    assert!(wave.age > LIFETIME_SECONDS);
 }
 
 #[test]

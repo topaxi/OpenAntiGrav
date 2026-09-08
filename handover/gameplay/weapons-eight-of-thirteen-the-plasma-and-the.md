@@ -656,13 +656,41 @@ player-visible consequences, both live on `main`:
    kept and unusable.
 2. The wave circles the ring forever, re-hitting the whole field once a lap.
 
-The original does terminate - `Quake_SampleSpan` returns a validity bool that goes
-false once the span runs off its track-gap window - but that mechanism has no
-analogue in this port's progress-along-a-ring representation, so **the fix is a
-chosen lifetime rather than a measured one** and was left rather than invented in
-a pass that was about a different weapon. The cheapest honest fix is an age on
-`Wave` plus a bound of one full course length, labelled chosen; the better one is
-reading what actually retires the original's instance.
+**Fixed 2026-09-08, and the lifetime is measured rather than chosen.** The
+prediction in this section - that the mechanism had no analogue in a
+progress-along-a-ring representation and the fix would have to be a chosen bound
+- was wrong, and pleasantly so. The original's terminator is not
+`Quake_SampleSpan`'s validity bool; it is a **fixed 5.0 seconds from launch**,
+and it is a single scalar that ports exactly.
+
+The apparatus neither `Quake_Init` nor `Quake_Update` reaches is a table of
+*road span* records. `Quake_UpdateSpan` (`0x0891cab8`) ages each armed span by
+`dt` and sets its retire byte the frame `age + dt` exceeds `5.0` - the literal
+is a `lui a0, 0x40a0` at `0x0891cafc`, read at instruction level. What makes
+that one wave lifetime rather than one per span is that `Quake_ArmSpan`
+(`0x0891b714`) *inherits* its caller's age into the new span rather than zeroing
+it, and both propagators pass the parent's own. `Quake_Init` starts the chain at
+`0`. `Quake_UpdateSpans` (`0x08874a30`) then clears the busy byte (`q+0x48`) on
+the first frame no span rippled, which is what re-opens `Weapon_FireQuake`'s own
+gate. Confidence 85; nine names landed with the evidence. See
+[cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
+2026-09-08 section.
+
+`oag_gameplay::projectile::quake::LIFETIME_SECONDS` is that 5.0, `Wave::age`
+accumulates it on every path including the degenerate-course one, and
+`Race::advance_quake` drops the wave before applying hits on the tick it
+expires.
+
+**By-catch, and it is a correction to a documented conclusion**: the page's
+"the Quake is a travelling impulse ..., not a deformation of the track" was
+drawn from the three functions that pass the deformation by.
+`Quake_UpdateSpan` rewrites the road mesh's own packed `short3` vertex
+positions in place under a `vcos_q` profile. **The original does deform the
+track.** The narrower claim the port rests on survives whole - the damage and
+slowdown are a scalar impulse through the shared pending-hit channel with no
+geometry in the path - but "does the Quake deform the track" now answers yes,
+and this engine draws none of it. That is a new, unbuilt visual, not a
+regression.
 
 ## 2026-09-08: adding a weapon to `IMPLEMENTED` reddened an AI test, and the test was the problem
 

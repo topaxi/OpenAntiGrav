@@ -62,6 +62,25 @@ use oag_formats::weapons::QuakeStats;
 /// it is a fixed engine literal, not one of [`QuakeStats`]'s four attributes.
 pub const SPEED_UNITS_PER_SECOND: f32 = 270.0;
 
+/// Seconds a fired Quake lives, measured from launch.
+///
+/// **Recovered, confidence 85** (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+/// "The lifetime is 5.0 seconds from launch, and the age is inherited"). The
+/// original does not carry the wave as one object with one clock: it arms a
+/// *road span* record, each of which ages by `dt` and sets its own retire byte
+/// (`+0x7d`) the frame `age + dt` exceeds `5.0` - the literal is a `lui a0,
+/// 0x40a0` at `0x0891cafc`, read at instruction level rather than off the
+/// decompiler. What makes that one wave lifetime rather than a per-span one is
+/// that `Quake_ArmSpan` (`0x0891b714`) copies its caller's *age* into the new
+/// span (`+0x74 = param_2`) instead of zeroing it, and both propagation
+/// functions pass the parent span's own `+0x74` along. `Quake_Init` starts the
+/// chain at `0`, so every span the ripple ever spreads to shares one clock
+/// begun at launch and the whole apparatus retires together.
+///
+/// Not authored: like [`SPEED_UNITS_PER_SECOND`] it is a fixed engine literal,
+/// not one of [`QuakeStats`]'s four attributes.
+pub const LIFETIME_SECONDS: f32 = 5.0;
+
 /// The single travelling wave a fired Quake ever has.
 ///
 /// One instance for the whole race, matching `Weapon_FireQuake`'s own pool -
@@ -98,6 +117,13 @@ pub struct Wave {
     /// every tick a craft dawells inside the gate. Mirrors `entity+0x860 &
     /// 0x40` - see the module doc comment on how the two gates differ.
     pub hit: [bool; MAX_SHIPS],
+    /// Seconds since launch, against [`LIFETIME_SECONDS`].
+    ///
+    /// **The one piece of per-wave state the original keeps per road span**, on
+    /// the reasoning [`LIFETIME_SECONDS`]'s own doc comment gives: the original's
+    /// spans inherit each other's age, so a single scalar here is the same
+    /// clock, not an approximation of several.
+    pub age: f32,
 }
 
 impl Wave {
@@ -122,19 +148,37 @@ impl Wave {
             radius: stats.radius,
             slowdown_time: stats.slowdown_time,
             hit: [false; MAX_SHIPS],
+            age: 0.0,
         }
     }
 
-    /// Advances the wave one tick along a course of this `length`, wrapping.
+    /// Advances the wave one tick along a course of this `length`, wrapping,
+    /// and ages it.
     ///
-    /// A no-op on a non-positive length - a course this degenerate has
-    /// nothing for the wave to travel around.
+    /// **The age advances on every path, including the degenerate one.** A
+    /// non-positive length leaves [`Self::progress`] alone - a course that
+    /// short has nothing for the wave to travel around - but a wave that cannot
+    /// move still has to expire, or the guard against firing a second Quake
+    /// never opens again.
     pub fn advance(&mut self, length: f32, dt: f32) {
+        self.age += dt;
         if length <= 0.0 {
             return;
         }
         self.progress =
             (self.progress + self.direction * SPEED_UNITS_PER_SECOND * dt).rem_euclid(length);
+    }
+
+    /// Whether the wave has outlived [`LIFETIME_SECONDS`] and its caller should
+    /// drop it.
+    ///
+    /// Read *after* [`Self::advance`] and *before* [`Self::apply_hits`], so the
+    /// tick a wave expires on lands no hit - matching the original, where the
+    /// span's retire byte (`+0x7d`) short-circuits both its own ripple and its
+    /// propagation on the frame it is set.
+    #[must_use]
+    pub fn expired(&self) -> bool {
+        self.age > LIFETIME_SECONDS
     }
 
     /// The shortest distance around a ring of this `length` between the
