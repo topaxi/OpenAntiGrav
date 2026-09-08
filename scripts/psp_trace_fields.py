@@ -102,6 +102,27 @@ ENTITY_OWNER = 0x94
 # 2026-09-01 live capture read `0` on the human-controlled craft and `2` on
 # all seven AI opponents in a single race, with no other value seen; what `1`
 # and `3` select is unconfirmed (multiplayer? a second local pad?).
+#
+# The barrel roll's own fields, from
+# docs/ghidra/functions/psp-pulse-usa/input-bindings.md's "The roll is drawn"
+# section - added for the roll-sign capture (rollsign-pass, 2026-09-08), and
+# on the **entity**, not the craft, despite that section's own prose calling
+# them `craft+0x87c` etc. throughout. That is the same trap `shield`'s history
+# above already caught once for a different offset and `fov_additive`/
+# `fov_intercept` caught for `FUN_088455ec`'s offsets: `FUN_088418e0` is
+# reached through the same `craft->0x78` child dispatch `ENTITY_POINTER`'s own
+# comment names as one of `FUN_088418e0`'s callers, so its own "craft" local is
+# this entity. Confirmed live 2026-09-08: `entity+0x794` read back exactly the
+# body pointer `craft+0x1cc` (`BODY_POINTER` in `psp-drive.py`) already holds,
+# while `craft+0x794` itself (Ship_UpdateCraft's own a0 base) read `0`.
+# `roll_phase` (`+0x87c`) is the linear phase `Ship_UpdateSideshiftInput_q`
+# ramps; `roll_eased` (`+0x880`) is `FUN_088418e0`'s one-writer eased copy that
+# the display matrix and the internal camera's up vector both read; `steer_lean`
+# (`+0x854`) is `FUN_0883fab4`'s steering lean, the angle's *other* term
+# (`angle = entity[0x854] * 0.5 + entity[0x880] * 6.28`) - recorded so a capture
+# taken while steering (a d-pad roll gesture *is* steering input) can still
+# predict the exact angle the original drew, even though this term is
+# deliberately not ported (confidence 0 for what it means physically).
 ENTITY_FIELDS = [
     ("shield", 0x88),
     ("fov_intercept", 0x7C),
@@ -112,6 +133,9 @@ ENTITY_FIELDS = [
     ("ss_shift_l", 0x8A4),
     ("ss_shift_r", 0x8A8),
     ("ss_lockout", 0x8AC),
+    ("steer_lean", 0x854),
+    ("roll_phase", 0x87C),
+    ("roll_eased", 0x880),
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.
@@ -212,6 +236,24 @@ CAMERA_FIELDS = [
 RACER_POINTER = ENTITY_POINTER
 FLARE_POINTER = 0x78
 FLARE_OWNER = 0xC0
+
+# The barrel roll's own two pointer walks, both off the entity, from the
+# rollsign capture (2026-09-08). `BODY_POINTER` (`entity+0x794`) is the rigid
+# body `Ship_UpdateCraft`'s own `craft+0x1cc` also points at - confirmed live
+# by reading both and comparing, since a wrong base here reads as a plausible
+# but different structure the same way the shield and camera traps above did.
+# `DISPLAY_NODE_POINTER` (`entity+0x8b0`) is **not** the display matrix
+# itself: `FUN_08945220(entity[0x8b0])` (disassembled live via
+# `memory.disasm`) reads `v0 = *(a0 + 0x3c) + 0x40`, so the matrix is a
+# double indirection, `*(*(entity + 0x8b0) + 0x3c) + 0x40` -
+# `DISPLAY_MATRIX_INNER_OFFSET` then `DISPLAY_MATRIX_OFFSET`. Self-validated
+# live: the resolved matrix's own row 3 reproduces the rigid body's position
+# to the tick, the same style of check `FLARE_OWNER`'s reciprocal pointer
+# gives above.
+BODY_POINTER = 0x794
+DISPLAY_NODE_POINTER = 0x8B0
+DISPLAY_MATRIX_INNER_OFFSET = 0x3C
+DISPLAY_MATRIX_OFFSET = 0x40
 
 # `colour` is deliberately absent: it is a packed ABGR8888 word, not a float,
 # and the alpha is re-randomised every frame anyway, so a column of it would

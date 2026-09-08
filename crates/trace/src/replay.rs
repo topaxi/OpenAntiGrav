@@ -787,6 +787,15 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         ss_shift_l: None,
         ss_shift_r: None,
         ss_lockout: None,
+        // `ShipState::roll_phase` is simulated and compared directly.
+        // `roll_eased` is `oag_render::roll::ease` of it, and this crate must
+        // not depend on `oag-render` (`just check-deps`), so it is reported
+        // absent rather than reimplemented a second place; `steer_lean` is
+        // `FUN_0883fab4`'s output, confidence 0 and deliberately not ported,
+        // so there is nothing to compare it against either.
+        roll_phase: Some(state.roll_phase),
+        roll_eased: None,
+        steer_lean: None,
         // The replay simulates the ship, not the original's camera rig, so the
         // camera pose is not compared rather than reported as agreement.
         camera_row0: None,

@@ -44,8 +44,7 @@ pub struct ModelTexture {
     /// the GE has nowhere to sample a level past what was uploaded. Wired for
     /// the PSP `.vex` embedded-texture path first.
     ///
-    /// **This alone does not close the advert-board blur**
-    /// (`handover/frontend/hud-icon-turbo-timing.md`): capping
+    /// **This alone does not close the advert-board blur**: capping
     /// `hub_banner_GLOW.tga` (128x128, `mip_count = 5`) at its authored depth
     /// changed 24 of 518,400 pixels in a Talon's Junction Time Trial capture,
     /// mean difference 4.7e-5 - the same "measured inert" shape this file's

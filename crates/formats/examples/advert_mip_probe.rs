@@ -1,8 +1,8 @@
 //! Scratch probe: what `mip_count` Talon's Junction's advert-board textures
 //! declare. Found `hub_banner_GLOW.tga` at `mip_count = 5`, which is what
-//! `ModelTexture::mip_count`'s doc measured a synthesised-chain cap against -
-//! see `handover/frontend/hud-icon-turbo-timing.md`'s advert-board-blur
-//! thread.
+//! `ModelTexture::mip_count`'s doc measured a synthesised-chain cap against.
+//! Written for the open question of what blurs Talon's Junction's advert
+//! boards; capping the chain at the authored depth turned out not to be it.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = "data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/Data.wad";
