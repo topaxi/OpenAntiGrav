@@ -62,6 +62,7 @@ pub mod placeholder;
 pub mod prefetch;
 pub mod prompt;
 pub mod race;
+pub mod records;
 pub mod remix;
 pub mod render;
 pub mod scoreboard;

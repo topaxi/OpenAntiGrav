@@ -59,6 +59,7 @@ out to be wrong.
 | [0046](0046-test-referenced-traces-are-tracked-in-git.md) | A trace a test names is tracked in git | Accepted; narrows ADR-0006 for one file class |
 | [0047](0047-database-state-beyond-names-is-captured-not-replayed.md) | Database state beyond names is captured, not replayed | Accepted; extends ADR-0005 |
 | [0048](0048-eu-is-the-psp-pulse-re-target-of-record.md) | `psp-pulse-eu` is the Ghidra target of record; `psp-pulse-usa` corroborates | Accepted |
+| [0049](0049-race-records-are-a-chosen-schema-captured-outside-the-tick.md) | Race records are a chosen schema, captured outside the tick, at two sites | Accepted |
 
 ## Format
 

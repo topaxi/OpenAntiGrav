@@ -304,6 +304,14 @@ impl Stage {
         autopilot: bool,
         autopilot_pilot: Option<oag_ai::Pilot>,
         autopilot_skill: Option<oag_ai::Difficulty>,
+        // The entry name `loaded` was actually built from, for
+        // `oag_game::records::Key` - see `build_race_stage`'s own parameter
+        // of the same name. Not on `race::Loaded` itself: that is the
+        // *result* of a load, and the request is what a record has to be
+        // keyed against, the same distinction `race::Options::track` and
+        // `race::Loaded::title` already draw for "what was asked" against
+        // "what came back".
+        track_entry: Option<&str>,
     ) -> Result<Self> {
         Ok(Self::Race(Self::build_race_stage(
             gpu,
@@ -316,6 +324,7 @@ impl Stage {
             autopilot,
             autopilot_pilot,
             autopilot_skill,
+            track_entry,
         )?))
     }
 
@@ -368,9 +377,17 @@ impl Stage {
         // `oag_ai::Difficulty`'s `FromStr`, so this is never a string to
         // reject, only a choice to apply or not.
         autopilot_skill: Option<oag_ai::Difficulty>,
+        // The circuit `loaded` was actually requested with - `None` on the
+        // one path `race::Options::track` itself can be `None` on. Read here
+        // rather than re-derived from `loaded`: `race::Loaded` carries no
+        // `.vex` entry name of its own, only the geometry it resolved to, and
+        // `oag_game::records::Key` wants the disc's own path. See
+        // `oag_game::records::Key::track`'s own doc.
+        track_entry: Option<&str>,
     ) -> Result<Box<RaceStage>> {
         let race::Loaded {
             setup,
+            title,
             hud,
             track_model,
             liveries,
@@ -399,6 +416,31 @@ impl Stage {
             shadow_hulls,
             ..
         } = loaded;
+        // Read before `setup` moves into `race::Race::start` below - `mode`
+        // is `Copy` and would survive that move, but `class` would not.
+        //
+        // **`track_entry.or(Some(title.race.track))`, not `track_entry`
+        // alone.** `race::Options::track` is `None` on the ordinary `--race`
+        // invocation with no `--track` flag - confirmed live: a real
+        // `--race --mode time_trial --autopilot` run with no `--track`
+        // wrote `track = "(no circuit)"` before this fallback existed,
+        // because `race::load` resolves its own default *internally* and
+        // never hands the resolved name back to the caller. `title.race`
+        // (`&'static oag_title::race::RaceDefaults`) is the same fallback
+        // `race::load` itself falls back to - `RaceDefaults::track`'s own
+        // doc calls it "archive entry of the `.vex` a race loads when the
+        // caller names none" - so this reads the disc's own stated default
+        // rather than re-deriving or inventing one. Not exact for a Zone
+        // race, whose own further remap (`ZoneCircuit::variant_of`) lives in
+        // `race::load` and is not replicated here - the record still lands
+        // on a real, disc-authored circuit id rather than [`NO_CIRCUIT`],
+        // just not always the exact zone variant `race::load` actually drew.
+        let result_key = oag_game::records::Key::new(
+            title.name,
+            track_entry.or(Some(title.race.track)),
+            setup.mode.name(),
+            &setup.class,
+        );
         let scene = race::Scene::new(
             &gpu.device,
             &gpu.queue,
@@ -492,6 +534,8 @@ impl Stage {
             hud: overlay,
             scoreboard,
             countdown,
+            result_key,
+            result_saved: false,
         }))
     }
 }

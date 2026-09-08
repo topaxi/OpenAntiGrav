@@ -4,7 +4,9 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, pilots, settings, strings};
+use oag_game::{
+    audio, boot, catalogue, display, marquee, menu, movie, pilots, records, settings, strings,
+};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;
@@ -759,9 +761,21 @@ impl Session {
     /// `handle_menu`'s own guard but is cheap to make true unconditionally
     /// rather than only where it is currently checked.
     fn resume_race(&mut self) {
-        let Some(stage) = self.suspended_race.take() else {
+        let Some(mut stage) = self.suspended_race.take() else {
             return;
         };
+        // **Cleared, not left as `escape` set it.** `result_saved` means
+        // "saved since this stage last became live", and parking a race does
+        // not end its life the way finishing or truly leaving it does - the
+        // player is about to keep racing under the same key. Left set, a
+        // Speed Lap improved after a resume would never be recorded (the
+        // `escape` guard would see it as already saved), and a Time Trial
+        // that is escaped mid-race and then resumed to a real finish would
+        // have that finish silently dropped by `Session::frame`'s own guard.
+        // The race was genuinely captured once, on the way in here - this
+        // does not lose that write, only stops it from blocking the next
+        // one.
+        stage.result_saved = false;
         // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
         // last picture, so a later `escape` does not flash black waiting for
         // the restarted feed's first frame.
@@ -817,6 +831,34 @@ impl Session {
     /// rather than a track, and nothing there to resume into, so that one is
     /// still discarded the way every race used to be.
     pub(crate) fn escape(&mut self) {
+        // **The other capture site** - see `oag_game::records`'s own module
+        // doc for why there have to be two. This one exists for the three
+        // modes `Session::frame`'s finish-transition arm can never reach:
+        // `SpeedLap` and `Zone` never set `Race::finished` at all, and an
+        // abandoned `TimeTrial` leaves through here too. Guarded by
+        // `result_saved` the same way the other site is, so a race that
+        // already saved on finishing and is *then* escaped from its own
+        // results table does not write the file a second time for nothing
+        // new to say.
+        //
+        // Read into locals and the borrow of `self.stage` ended before
+        // `self.records` is touched - the same borrow-splitting
+        // `Session::frame`'s own capture uses, and for the same reason:
+        // `stage` and `self.records` are different fields of the same
+        // `self`, so the first has to stop being borrowed before the second
+        // can be.
+        if let Stage::Race(stage) = &mut self.stage
+            && !stage.result_saved
+        {
+            stage.result_saved = true;
+            let key = stage.result_key.clone();
+            let observation = stage.observation();
+            self.records.record(key, observation);
+            if let Err(e) = records::save(&self.records) {
+                error!("could not save race records: {e:#}");
+            }
+        }
+
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
         if let Stage::Menu(stage) = &mut self.stage {

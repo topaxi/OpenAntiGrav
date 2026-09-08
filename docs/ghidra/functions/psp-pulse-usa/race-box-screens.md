@@ -157,7 +157,10 @@ screen puts in it.
 (not traced further): a 2-widget layout for the default case (only
 `Info1`/`Info3`, both cleared to blank) and a 7-widget layout for five other
 `Mode` values, which additionally computes summed lap/stage records from a
-handling-stats-shaped table (`FUN_088085d0`, not traced). This dispatch is by
+handling-stats-shaped table (`FUN_088085d0`, not traced - **and that reading is
+now corrected: it is the profile's saved-record store**, keyed by a definition's
+name hash, so the summed figures are saved bests rather than handling stats. See
+[`race-campaign.md`](race-campaign.md)). This dispatch is by
 **`Mode`**, not by the circuit's own row-count property, so it neither
 confirms nor refutes `race-setup.md`'s `Info Track %d.%d` = (count, index)
 reading - it shows a *different* axis (which stat rows are shown) is
@@ -209,7 +212,14 @@ a sibling `<Image name="{label} Bar">`'s fill fraction to
   "craft variants gate on loyalty" would need to become a confirmed
   mechanism rather than an XML reading corroborated by one live capture.
 - `Mode == 6` reading as "Custom Race" is a 55-confidence hypothesis, not a
-  finding - no enum table was located.
+  finding - no enum table was located. **An enum table has since been located**
+  (`0x08ab062c`, see [`race-campaign.md`](race-campaign.md)) and in *that* table
+  `6` is **`Zone`**, not a custom race - which would make
+  `TrackSelection_PopulateList`'s extra `+0x16e` gate "the circuits Zone is
+  playable on", a reading that fits three circuits at least as well. Whether the
+  `Mode` global this screen caches is the same enumeration was **not** checked,
+  so this stays a lead: 60, and the `Mode == 6` identification above is
+  superseded but not yet replaced.
 - The per-craft rating record `FUN_08808664` resolves (`+0xb4..+0xc0`) is a
   distinct table from `HandlingStats.xml`, unlocated.
 - `FUN_088edc08`'s layout dispatch and `FUN_088085d0`'s record lookup are

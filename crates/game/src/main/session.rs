@@ -9,7 +9,8 @@ use oag_core::TickClock;
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, catalogue, drs, loading, menu, movie, perf, pilots, prefetch, race, settings, upscale,
+    audio, catalogue, drs, loading, menu, movie, perf, pilots, prefetch, race, records, settings,
+    upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -300,6 +301,12 @@ pub(crate) struct Session {
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,
+    /// Best lap, best total time and the last result, per circuit/mode/class -
+    /// loaded once at [`Session`] construction and rewritten whenever a race
+    /// finishes or is left. See `oag_game::records`'s own module doc for why
+    /// this exists at all, and `Session::frame`/`Session::escape` for the two
+    /// places that ever call [`records::Store::record`].
+    pub(crate) records: records::Store,
     /// `--anim-seconds`: pins the trackside animation clock instead of deriving
     /// it from the tick.
     ///
