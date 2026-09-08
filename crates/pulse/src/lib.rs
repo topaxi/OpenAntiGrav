@@ -18,6 +18,7 @@
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
+pub mod campaign;
 pub mod frontend;
 pub mod hud;
 pub mod loading;

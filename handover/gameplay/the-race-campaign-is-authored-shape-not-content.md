@@ -118,11 +118,23 @@ The law, all decompiled and all in `race-campaign.md`:
   in-race structure the HUD mirrors. Everything ruled out is listed above, so a
   next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal
   target item, which has been blocked on RE since the HUD work.
-- **Parse the grid files properly rather than by hand.** `oag-formats` already
-  reads the `<code>`-dictionary front-end XML dialect; sixteen grid files with a
-  known schema are a small, well-specified loader, and per `CLAUDE.md`'s rule
-  the campaign must read the disc's data rather than carry a transcribed table.
-  The schema is the two parser tables in `race-campaign.md`.
+- ~~Parse the grid files properly rather than by hand.~~ **Done, 2026-09-08.**
+  `oag_formats::race_campaign` parses `PI_Grid`/`PI_Cell` off the existing
+  `fexml` reader, `oag_pulse::campaign` carries the sixteen entry names, and
+  `crates/formats/tests/race_campaign_ground_truth.rs` (`#[ignore]`d,
+  `just test-data`) reproduces every count this thread's own summary above
+  cites against the real USA PSP disc: 16 grids, 236 cells, the exact
+  per-class lap census, the mode census (Race 59 / Time Trial 47 / Speed Lap
+  42 / Tournament 27 / Head2Head 23 / Elimination 22 / Zone 16) and the
+  `RequiredPoints` ladder. See `docs/formats/race-campaign.md`. **One new
+  finding**: a `Zone` cell's own `class=` attribute is the literal text
+  `"Zone"`, not one of the four speed classes `g_class_name_table` was read
+  as - either that table has a fifth entry unread, or the field just carries
+  an unrecognised name. The parser kept it as a raw string rather than
+  guessing which. **Deliberately not done**: the medal law
+  (`Cell_EvaluateMedal`, the points table, the unlock-points comparison) and
+  wiring a cell into an actual race - both gameplay, not parsing, and the
+  launch-path tracing below is still the prerequisite for either.
 - **Check the EU and PS2 pressings for `Data\Plugins\grids\Definition.xml`.**
   The path is now known, so this is one `oag-wad cat` per image, and a
   divergence would be a finding (PS2 already diverges on the *custom* grid,
