@@ -36,6 +36,9 @@ last_place = 2
 last_laps_completed = 3
 last_tick = 6042
 last_best_lap_ticks = 1987
+best_medal = "gold"
+best_points = 3
+last_medal = "gold"
 ```
 
 `title`, `track`, `mode` and `class` together are the key - see
@@ -46,6 +49,21 @@ completed lap and the quickest *finished* race ever recorded on that row,
 each only ever improving. The five `last_*` fields are the most recent race
 on that row, whatever it says - better or worse than the standing best,
 because "last" is a different question than "best".
+
+`best_medal`, `best_points` and `last_medal` are the campaign medal fields,
+added 2026-09-09 once `oag_formats::race_campaign::Cell::evaluate_medal`
+reimplemented `Cell_EvaluateMedal`'s law - see
+[`docs/formats/race-campaign.md`](../formats/race-campaign.md). `Medal` is
+serialized as a lowercase word, never the bare ordinal the original's own
+`0 = gold` convention would suggest: the in-race HUD carries a *different*
+medal-tier ordinal running the opposite direction, so a stored integer would
+misread. **`best_medal`/`best_points` are `None` on every row today**, not
+because the law is unimplemented but because nothing yet selects *which*
+campaign cell a real race was run against, or converts that race's result
+into the value `evaluate_medal` wants - see
+[`oag_game::records::Observation::campaign_medal`](../../crates/game/src/records.rs)'s
+own doc, and the join proven with an invented cell in
+`crates/game/tests/campaign_medal.rs`.
 
 Every value is ticks (`u32`/`u64`), the same unit `oag_game::hud::format_lap_time`
 already takes, never a formatted string - formatting is a presentation
@@ -132,15 +150,15 @@ actually asserts.
 
 ## Where a career system attaches
 
-`Record` carries a best lap, a best total time and a last result, and
-nothing about a medal, an unlock or a tournament standing - those are a
-separate finding, not a guess made here (see the `campaign` handover thread
-for what the disc actually authors, if it is still open; check `HANDOVER.md`
-first). Two ways to grow this file when that lands, and both are additive so
-neither needs `Key`, `parse` or `Store::record` to change:
+`Record` now also carries a best-ever campaign medal and its points, and the
+most recent race's own medal - `oag_formats::race_campaign::Cell::evaluate_medal`
+reimplements the law that produces one (`Cell_EvaluateMedal`); still absent
+is an unlock or a tournament standing. Two ways to grow this file further,
+still additive, neither needing `Key`, `parse` or `Store::record` to change:
 
 - A new `#[serde(default)]` **field** on `Record`, for something that is
-  still one number per circuit/mode/class - a medal tier, say.
+  still one number per circuit/mode/class - the difficulty a medal was
+  earned at, say.
 - A new **sibling table** in the same file, alongside `[[records]]`, for
   something that spans more than one circuit - a tournament standing.
 
@@ -152,3 +170,23 @@ itself, plus whatever a future session prints or draws from it. Wiring a
 "personal best" line into the results table, or a records browser of its own,
 is left for whoever picks this up next; the storage and the two capture sites
 are the part of this that does not change shape underneath it.
+
+**Nor is there any wiring from a real race to a campaign cell.** The medal
+law is implemented and unit-tested
+(`crates/formats/src/race_campaign/tests.rs`,
+`crates/game/tests/campaign_medal.rs`), and `Observation::campaign_medal`
+and `Record::best_medal`/`best_points`/`last_medal` are ready to carry a
+result through to disk - but `RaceStage::observation`, the one place an
+`Observation` is built from a real race today, passes `campaign_medal: None`
+unconditionally, because nothing yet selects which `PI_Cell` a launched race
+corresponds to. Closing that needs, at minimum: tracing `Cell Selection`'s
+launch path to find which globals a cell writes (the `campaign` handover
+thread's own next step), a mapping from `Cell::track`/`Cell::mode.as_str()`
+onto `crate::catalogue::Track::entry_name`/`oag_race::Mode::name()` (the two
+do not share a spelling - `"16_Track"` against a `.vex` path,
+`"Time Trial"` against `"time_trial"`), and a value to evaluate per mode:
+`Observation::place` covers `Race`/`Tournament`/`Head2Head` directly,
+`Observation::tick` needs converting from 60 Hz ticks to the centiseconds
+`Time Trial`/`Speed Lap` targets are authored in, and `Zone`'s zone count and
+`Elimination`'s kill count are not in the snapshot `Observation` carries at
+all yet.

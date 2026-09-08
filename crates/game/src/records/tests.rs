@@ -72,6 +72,7 @@ fn the_first_race_on_a_key_seeds_every_field_from_itself() {
             laps_completed: 3,
             tick: 6000,
             best_lap_ticks: Some(1900),
+            campaign_medal: None,
         },
     );
     let row = store.get(&key("16_track")).expect("just recorded");
@@ -97,6 +98,7 @@ fn a_slower_race_does_not_erase_the_standing_best() {
             laps_completed: 3,
             tick: 6000,
             best_lap_ticks: Some(1900),
+            campaign_medal: None,
         },
     );
     store.record(
@@ -107,6 +109,7 @@ fn a_slower_race_does_not_erase_the_standing_best() {
             laps_completed: 3,
             tick: 6500,
             best_lap_ticks: Some(2100),
+            campaign_medal: None,
         },
     );
     let row = store.get(&key("16_track")).expect("still there");
@@ -135,6 +138,7 @@ fn a_faster_race_improves_both_bests() {
             laps_completed: 3,
             tick: 6500,
             best_lap_ticks: Some(2100),
+            campaign_medal: None,
         },
     );
     store.record(
@@ -145,6 +149,7 @@ fn a_faster_race_improves_both_bests() {
             laps_completed: 3,
             tick: 6000,
             best_lap_ticks: Some(1900),
+            campaign_medal: None,
         },
     );
     let row = store.get(&key("16_track")).expect("still there");
@@ -165,6 +170,7 @@ fn an_unfinished_race_can_still_set_a_best_lap_but_never_a_best_total() {
             laps_completed: 4,
             tick: 9000,
             best_lap_ticks: Some(1800),
+            campaign_medal: None,
         },
     );
     let row = store.get(&key("06_track")).expect("just recorded");
@@ -186,6 +192,7 @@ fn different_tracks_do_not_share_a_row() {
             laps_completed: 3,
             tick: 6000,
             best_lap_ticks: Some(1900),
+            campaign_medal: None,
         },
     );
     store.record(
@@ -196,6 +203,7 @@ fn different_tracks_do_not_share_a_row() {
             laps_completed: 3,
             tick: 5000,
             best_lap_ticks: Some(1600),
+            campaign_medal: None,
         },
     );
     assert_eq!(store.rows().len(), 2);
@@ -223,6 +231,7 @@ fn rows_stay_sorted_regardless_of_insertion_order() {
                 laps_completed: 3,
                 tick: 6000,
                 best_lap_ticks: Some(1900),
+                campaign_medal: None,
             },
         );
     }
@@ -244,6 +253,7 @@ fn a_store_round_trips_through_its_own_written_text() {
             laps_completed: 3,
             tick: 6042,
             best_lap_ticks: Some(1987),
+            campaign_medal: None,
         },
     );
     let text = toml::to_string_pretty(&store).expect("serialises");
@@ -344,4 +354,101 @@ class = "venom"
     assert_eq!(row.best_lap_ticks, None);
     assert_eq!(row.best_total_ticks, None);
     assert!(!row.last_finished);
+}
+
+fn observation_with_medal(medal: Option<Medal>) -> Observation {
+    Observation {
+        finished: true,
+        place: Some(1),
+        laps_completed: 3,
+        tick: 6000,
+        best_lap_ticks: Some(1900),
+        campaign_medal: medal,
+    }
+}
+
+/// The bar `Medal::better` exists to clear: a later, worse race must not
+/// erase a standing gold, even though "last" still moves to it - the exact
+/// mirror of `a_slower_race_does_not_erase_the_standing_best` above, for the
+/// medal fields instead of the lap/total ones.
+#[test]
+fn a_gold_medal_is_never_downgraded_by_a_later_bronze() {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Gold)));
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Bronze)));
+    let row = store.get(&key("16_track")).expect("still there");
+    assert_eq!(
+        row.best_medal,
+        Some(Medal::Gold),
+        "the better medal survives"
+    );
+    assert_eq!(
+        row.best_points,
+        Some(3),
+        "points stay in sync with the medal"
+    );
+    assert_eq!(
+        row.last_medal,
+        Some(Medal::Bronze),
+        "but the last race is still reported as it actually went"
+    );
+}
+
+/// The opposite direction: a better medal does replace a worse standing one.
+#[test]
+fn a_better_medal_upgrades_the_standing_best() {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Silver)));
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Gold)));
+    let row = store.get(&key("16_track")).expect("still there");
+    assert_eq!(row.best_medal, Some(Medal::Gold));
+    assert_eq!(row.best_points, Some(3));
+}
+
+/// A race with no campaign cell in play - `campaign_medal: None`, the only
+/// value any real call site produces today - must not read as "no medal was
+/// ever earned here" and erase a standing one.
+#[test]
+fn no_campaign_cell_leaves_the_standing_medal_untouched() {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Gold)));
+    store.record(key("16_track"), observation_with_medal(None));
+    let row = store.get(&key("16_track")).expect("still there");
+    assert_eq!(
+        row.best_medal,
+        Some(Medal::Gold),
+        "the standing medal survives"
+    );
+    assert_eq!(row.last_medal, None, "but the last race truly had none");
+}
+
+/// `Store::record` keeps `best_points` derived from `best_medal` rather than
+/// letting the two drift - checked directly against the measured
+/// gold/silver/bronze = 3/2/1 table.
+#[test]
+fn best_points_matches_the_medal_it_was_earned_by() {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Silver)));
+    assert_eq!(store.get(&key("16_track")).unwrap().best_points, Some(2));
+}
+
+/// The reason [`Medal`] carries its own `Serialize`/`Deserialize` rather
+/// than deriving through its ordinal: a bare integer in the file would be
+/// exactly the kind of value the in-race HUD's *opposite*-direction medal
+/// ordinal could be misread against.
+#[test]
+fn a_medal_round_trips_as_a_lowercase_word_not_an_ordinal() {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Gold)));
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    assert!(
+        text.contains("best_medal = \"gold\""),
+        "expected a lowercase word in:\n{text}"
+    );
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(
+        notes.is_empty(),
+        "a clean write should need no notes: {notes:?}"
+    );
+    assert_eq!(parsed.rows(), store.rows());
 }

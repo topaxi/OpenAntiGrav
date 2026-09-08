@@ -172,6 +172,109 @@ fn definition_xml_lists_its_load_xml_entries() {
     );
 }
 
+// `Cell_EvaluateMedal` tests. The fixture's `Race` cell targets 1/2/3, its
+// `Elimination` cell targets 10/7/5, its `Zone` cell targets 20/17/15 - see
+// `FIXTURE` above. Every exact-tie boundary below (`value == target`) is
+// covered directly, since `evaluate_medal`'s `<=`/`>=` settle a tie without
+// needing a "chosen, not measured" label.
+
+#[test]
+fn a_race_position_hits_each_tier_at_its_exact_target() {
+    let grid = parse(FIXTURE).expect("parses");
+    let race = &grid.cells[0];
+    assert_eq!(race.evaluate_medal(1), Some(Medal::Gold));
+    assert_eq!(race.evaluate_medal(2), Some(Medal::Silver));
+    assert_eq!(race.evaluate_medal(3), Some(Medal::Bronze));
+    assert_eq!(race.evaluate_medal(4), None);
+}
+
+#[test]
+fn an_elimination_kill_count_hits_each_tier_at_its_exact_target() {
+    let grid = parse(FIXTURE).expect("parses");
+    let elim = &grid.cells[2];
+    assert_eq!(elim.evaluate_medal(10), Some(Medal::Gold));
+    assert_eq!(elim.evaluate_medal(7), Some(Medal::Silver));
+    assert_eq!(elim.evaluate_medal(5), Some(Medal::Bronze));
+    assert_eq!(elim.evaluate_medal(4), None);
+}
+
+#[test]
+fn a_zone_count_hits_each_tier_at_its_exact_target() {
+    let grid = parse(FIXTURE).expect("parses");
+    let zone = &grid.cells[3];
+    assert_eq!(zone.evaluate_medal(20), Some(Medal::Gold));
+    assert_eq!(zone.evaluate_medal(17), Some(Medal::Silver));
+    assert_eq!(zone.evaluate_medal(15), Some(Medal::Bronze));
+    assert_eq!(zone.evaluate_medal(14), None);
+}
+
+/// The guard: an `Elimination` value between the silver and bronze targets
+/// only scores bronze because the comparison is flipped (`value >=
+/// target`). Dropping the flip would compare `6 <= 10` instead and wrongly
+/// award gold - this is the case that would pass a test written from the
+/// same wrong "less is better" assumption everywhere else in this file.
+#[test]
+fn elimination_direction_is_flipped_not_the_default_less_is_better() {
+    let grid = parse(FIXTURE).expect("parses");
+    let elim = &grid.cells[2];
+    assert_eq!(elim.evaluate_medal(6), Some(Medal::Bronze));
+}
+
+/// The same guard for `Zone`: 16 zones clears only the bronze floor
+/// (`16 >= 15`, but `16 < 17`). Un-flipped, `16 <= 20` would wrongly read as
+/// gold.
+#[test]
+fn zone_direction_is_flipped_not_the_default_less_is_better() {
+    let grid = parse(FIXTURE).expect("parses");
+    let zone = &grid.cells[3];
+    assert_eq!(zone.evaluate_medal(16), Some(Medal::Bronze));
+}
+
+/// The mirror guard, for a mode the flip must **not** apply to: a `Race`
+/// finishing position of 3 is bronze under the ordinary `<=` direction
+/// (`3 <= 3`). If the flip were wrongly extended to `Race`, `3 >= 1` would
+/// misread it as gold instead.
+#[test]
+fn race_direction_is_not_flipped() {
+    let grid = parse(FIXTURE).expect("parses");
+    let race = &grid.cells[0];
+    assert_eq!(race.evaluate_medal(3), Some(Medal::Bronze));
+}
+
+#[test]
+fn zero_and_the_unset_sentinel_are_no_result_regardless_of_mode() {
+    let grid = parse(FIXTURE).expect("parses");
+    let race = &grid.cells[0];
+    let elim = &grid.cells[2];
+    assert_eq!(race.evaluate_medal(0), None);
+    assert_eq!(race.evaluate_medal(0xFFFF_FFFF), None);
+    assert_eq!(elim.evaluate_medal(0), None);
+    assert_eq!(elim.evaluate_medal(0xFFFF_FFFF), None);
+}
+
+/// `<= 0`, not only `== 0`: this reimplementation's own deliberately wider
+/// guard - see [`Cell::evaluate_medal`]'s own doc for why a negative value
+/// is treated the same as "unset" rather than reaching the comparison loop.
+#[test]
+fn a_negative_value_is_also_no_result() {
+    let grid = parse(FIXTURE).expect("parses");
+    let race = &grid.cells[0];
+    assert_eq!(race.evaluate_medal(-1), None);
+}
+
+#[test]
+fn medal_points_match_the_measured_table() {
+    assert_eq!(Medal::Gold.points(), 3);
+    assert_eq!(Medal::Silver.points(), 2);
+    assert_eq!(Medal::Bronze.points(), 1);
+}
+
+#[test]
+fn gold_is_the_smallest_ord_value() {
+    assert!(Medal::Gold < Medal::Silver);
+    assert!(Medal::Silver < Medal::Bronze);
+}
+
 #[test]
 fn mode_ordinals_match_the_executables_own_table() {
     assert_eq!(Mode::Race.ordinal(), 3);
