@@ -24,13 +24,20 @@
 //! </PI_Grid>
 //! ```
 //!
-//! # This crate does not know the campaign's medal law
+//! # This crate knows the medal law, not who won
 //!
-//! `Cell_EvaluateMedal`, `Cell_MedalPoints` and the unlock-points comparison
-//! are gameplay rules, not a property of the file. This module surfaces the
-//! authored numbers - the three targets, the required points, the unlock
-//! grid name - and leaves what a caller does with them to whoever wires the
-//! campaign into a race. [`oag_pulse::campaign`](../../oag_pulse/campaign/index.html)
+//! [`Cell::evaluate_medal`] reimplements `Cell_EvaluateMedal` - the
+//! three-way threshold compare against a cell's own targets, direction
+//! flipped for `Zone`/`Elimination` - and [`Medal::points`] reimplements
+//! `Cell_MedalPoints`. Both are properties of the law the disc's own code
+//! applies to this data, not of the file, so they live beside the type they
+//! evaluate. What they do **not** do is decide *which* cell a race was run
+//! against, or *what value* a finished race actually scored - that mapping
+//! (a race's result onto a campaign cell's mode-specific value) and the
+//! unlock-points comparison across a whole grid are still a caller's job;
+//! see `crates/game/src/records.rs` for where a race's own outcome is
+//! captured and `docs/architecture/persistence.md` for what is and is not
+//! wired yet. [`oag_pulse::campaign`](../../oag_pulse/campaign/index.html)
 //! carries the sixteen entry names, per [ADR-0022] - a file's *shape* lives
 //! here, what a title *ships* lives there.
 //!
@@ -368,6 +375,95 @@ impl Cell {
             1 => skill,
             _ => self.skill_hard.unwrap_or(skill + 1.0),
         })
+    }
+
+    /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of
+    /// `value` against this cell's own gold/silver/bronze targets. `value`
+    /// is a finishing position for `Race`/`Tournament`/`Head2Head`, a time
+    /// in centiseconds for `Time Trial`/`Speed Lap`, a zone count for
+    /// `Zone`, or a kill count for `Elimination` - never derived here; the
+    /// caller supplies whatever that mode measures.
+    ///
+    /// **The comparison direction flips for `Zone` and `Elimination`.**
+    /// Every other mode wants a *lower* value than the target (`<=`: a
+    /// better finishing position or a faster time); these two counting
+    /// modes want a *higher* value (`>=`: more zones crossed or more
+    /// kills). Dropping the flip would score a Zone run of 16 zones against
+    /// `20`/`17`/`15` targets a *gold* (`16 <= 20`), when 16 in fact clears
+    /// only the bronze floor going the right direction (`16 >= 15`, but
+    /// `16 < 17`) - see this module's tests for the three cases that would
+    /// go wrong each way, both if the flip is dropped and if it is wrongly
+    /// applied to a non-counting mode.
+    ///
+    /// `None` when no tier is met, or when `value` reads as "no result
+    /// yet": the literal `0xFFFF_FFFF` the original stores as an unset
+    /// `u32` register, or **any non-positive value**. The original checks
+    /// only the exact value `0` against that `u32` register - this
+    /// reimplementation's `<= 0` is a deliberately wider, **chosen, not
+    /// measured**, guard: no mode here ever legitimately measures a
+    /// negative position, time, zone count or kill count, so treating every
+    /// non-positive `i64` as "unset" changes no real value the original
+    /// could ever have produced, and closes off a negative value reaching
+    /// the comparison loop by accident (a `<=` mode would otherwise score a
+    /// negative "time" a gold).
+    #[must_use]
+    pub fn evaluate_medal(&self, value: i64) -> Option<Medal> {
+        if value <= 0 || value == 0xFFFF_FFFF {
+            return None;
+        }
+        let flipped = matches!(self.mode, Mode::Zone | Mode::Elimination);
+        for (tier, target) in [
+            (Medal::Gold, self.gold),
+            (Medal::Silver, self.silver),
+            (Medal::Bronze, self.bronze),
+        ] {
+            let met = if flipped {
+                value >= target
+            } else {
+                value <= target
+            };
+            if met {
+                return Some(tier);
+            }
+        }
+        None
+    }
+}
+
+/// The medal tier [`Cell::evaluate_medal`] (`Cell_EvaluateMedal`,
+/// `0x088bf620`) produces: ordinal `0 = gold`, `1 = silver`, `2 = bronze`.
+/// [`Ord`] is derived in this declaration order, so `Gold < Silver < Bronze`
+/// and the *smaller* value is the *better* medal - a caller comparing two
+/// medals with `min` picks the better one, matching the original's own
+/// "0 is best" convention.
+///
+/// **Not the in-race HUD's own medal-tier ordinal**, which runs the
+/// opposite way (`0 = BRONZE, 1 = SILVER, 2 = GOLD, 3 = RECORD`) and is a
+/// separate, still-unread value - see
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what is not
+/// determined" section.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Medal {
+    /// The best tier. Declared first for the [`Ord`] reasoning above.
+    Gold,
+    /// The middle tier.
+    Silver,
+    /// The worst tier a race can still be awarded.
+    Bronze,
+}
+
+impl Medal {
+    /// `Cell_MedalPoints` (`0x088bf530`): gold 3, silver 2, bronze 1. Called
+    /// with a stored medal it is the value that cell contributed to a
+    /// grid's earned points; called with [`Medal::Gold`] it is what any
+    /// cell is worth at best, which is always `3`.
+    #[must_use]
+    pub fn points(self) -> u32 {
+        match self {
+            Self::Gold => 3,
+            Self::Silver => 2,
+            Self::Bronze => 1,
+        }
     }
 }
 

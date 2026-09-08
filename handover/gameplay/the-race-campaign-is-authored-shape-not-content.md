@@ -109,11 +109,30 @@ The law, all decompiled and all in `race-campaign.md`:
 
 ## Next Steps
 
-- **Do not implement from this page without first tracing the launch path.**
-  Read `Cell Selection`'s `Update`/`OnExit` (`0x088d6430`, and the `OnExit` slot
-  at word 31 of `0x08acfb64`) and `Team Selection`'s exit to find which globals
-  a cell writes. That is the gap between "the law is known" and "a cell can be
-  raced".
+- ~~Implement the medal law and persist it.~~ **Done, 2026-09-09.**
+  `oag_formats::race_campaign::Cell::evaluate_medal` reimplements
+  `Cell_EvaluateMedal` directly on `Cell` (three-way threshold compare,
+  direction flipped for `Zone`/`Elimination`, `Medal::points` for
+  `Cell_MedalPoints`), tested against three cases chosen to fail if the flip
+  is dropped or wrongly applied elsewhere. `crates/game/src/records.rs`
+  gained `Record::best_medal`/`best_points`/`last_medal` and
+  `Observation::campaign_medal`, additive per this thread's own earlier
+  "field" suggestion. `crates/game/tests/campaign_medal.rs` proves the two
+  pieces agree end to end with an invented cell (evaluate → convert → merge
+  → `save`/`parse` round trip → medal and points survive). **Not done, and
+  the next step now**: `RaceStage::observation` still passes
+  `campaign_medal: None` unconditionally - no medal is captured from any
+  real race yet, because nothing selects which `PI_Cell` a launch
+  corresponds to. See `docs/architecture/persistence.md`'s "where a career
+  system attaches" for the three concrete gaps (the launch path below, the
+  `Cell`/catalogue name mismatch, and Zone/Elimination's value not being in
+  `Observation` at all).
+- **Do not implement the cell-selection wiring without first tracing the
+  launch path.** Read `Cell Selection`'s `Update`/`OnExit` (`0x088d6430`, and
+  the `OnExit` slot at word 31 of `0x08acfb64`) and `Team Selection`'s exit
+  to find which globals a cell writes. That is the gap between "the law is
+  known and implemented" and "a cell can be raced and its medal earned for
+  real".
 - **Close the HUD tier.** Find the writer of `*(hud + 0x3c) + 0x34` - the
   in-race structure the HUD mirrors. Everything ruled out is listed above, so a
   next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal

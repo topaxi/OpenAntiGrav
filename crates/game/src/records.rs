@@ -72,16 +72,22 @@
 //!
 //! # Where a career system attaches
 //!
-//! [`Record`] carries a best lap, a best total time and the last result and
-//! nothing else - no medal, no unlock, no tournament standing. Those are a
-//! sibling member's own finding, not this pass's guess: a medal threshold or
-//! a points value invented here would be exactly the kind of thing
-//! `CLAUDE.md` forbids presenting as the original's behaviour. The shape
-//! leaves two ways to grow when that lands, and both are additive:
+//! [`Record`] now also carries a best-ever campaign [`Medal`] and its
+//! points, and the most recent race's own medal - the law behind them
+//! (`Cell_EvaluateMedal`/`Cell_MedalPoints`) was a sibling member's own
+//! finding, recovered and reimplemented as
+//! `oag_formats::race_campaign::Cell::evaluate_medal`, not guessed at here;
+//! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`. What is
+//! **still** not here: no unlock, no tournament standing, and no wiring
+//! that selects *which* campaign cell a real race was run against -
+//! [`Observation::campaign_medal`] is `None` at the one call site that
+//! builds an `Observation` today, so a medal is captured only once
+//! something upstream starts computing it. Two ways left to grow this file
+//! further, and both stay additive:
 //!
 //! - A new **field** on [`Record`], `#[serde(default)]` like every field
 //!   already here, for something that is still one number per
-//!   circuit/mode/class - a medal tier, say.
+//!   circuit/mode/class - a difficulty the medal was earned at, say.
 //! - A new **sibling table** in the same file, alongside `[[records]]`, for
 //!   something that is not shaped like this key at all - a tournament
 //!   standing spans several circuits, not one.
@@ -166,6 +172,60 @@ impl Key {
     }
 }
 
+/// A campaign medal tier, [`oag_formats::race_campaign::Cell::evaluate_medal`]'s
+/// own three-value law restated here rather than imported - see that
+/// function's doc for `Cell_EvaluateMedal` (`0x088bf620`) and
+/// [`oag_formats::race_campaign::Medal::points`] for `Cell_MedalPoints`
+/// (`0x088bf530`), gold 3 / silver 2 / bronze 1.
+///
+/// **Duplicated, not imported, on purpose.** [`Observation`]'s own doc
+/// already keeps this module free of `oag-race`/`oag-gameplay`/`crate::race`
+/// so [`Store::record`] and [`laps_completed`] stay testable with no disc, no
+/// GPU and no simulation step; pulling in `oag-formats` here for one enum
+/// would trade that guarantee for a single shared type. [`laps_completed`]
+/// already makes the identical trade for `crate::scoreboard::build`'s
+/// arithmetic - see its own doc.
+///
+/// Serialized as a lowercase word (`medal = "gold"`), never the bare
+/// ordinal: the in-race HUD carries a *different* medal-tier ordinal running
+/// the opposite direction (`0 = BRONZE`, per
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what is not
+/// determined" section), so a bare integer in this file would be a standing
+/// invitation to misread which convention it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Medal {
+    /// The best tier. Declared first so `Ord`'s derived order makes `Gold`
+    /// the smallest value - [`Medal::better`] relies on this to pick the
+    /// better of two medals with a plain `min`.
+    Gold,
+    /// The middle tier.
+    Silver,
+    /// The worst tier a race can still be awarded.
+    Bronze,
+}
+
+impl Medal {
+    /// `Cell_MedalPoints`'s own table: gold 3, silver 2, bronze 1.
+    #[must_use]
+    pub fn points(self) -> u32 {
+        match self {
+            Self::Gold => 3,
+            Self::Silver => 2,
+            Self::Bronze => 1,
+        }
+    }
+
+    /// The better of two medals. Named rather than inlined as `self.min(other)`
+    /// at the call site, so a reader of [`Store::record`] does not have to
+    /// work out for themselves why `min` means "best" here - see this type's
+    /// own doc for the `Ord` direction that makes it true.
+    #[must_use]
+    fn better(self, other: Self) -> Self {
+        self.min(other)
+    }
+}
+
 /// One race's outcome, read off [`crate::race::Race`]'s already-public state
 /// from *outside* the tick - see the module doc's "where this is captured"
 /// section for why there are exactly two call sites and no others.
@@ -195,6 +255,22 @@ pub struct Observation {
     /// The player's own quickest completed lap, in ticks - `None` if they
     /// never finished one.
     pub best_lap_ticks: Option<u32>,
+    /// This race's own campaign medal, already evaluated by
+    /// `oag_formats::race_campaign::Cell::evaluate_medal` and converted to
+    /// this module's own [`Medal`] by the caller - this module knows
+    /// nothing about a campaign cell's targets or mode, and never computes
+    /// this itself. `None` both when the race was not run against a
+    /// campaign cell at all, and when the cell's own law says the value
+    /// scored met no medal.
+    ///
+    /// **Always `None` at the only call site that builds an `Observation`
+    /// today** (`RaceStage::observation`,
+    /// `crates/game/src/main/race_stage.rs`), because no campaign cell is
+    /// selected for any race yet: this field is wired end to end but not
+    /// yet fed by a real race. See the module doc's "where a career system
+    /// attaches" section and the `campaign` handover thread for what
+    /// selecting one still needs.
+    pub campaign_medal: Option<Medal>,
 }
 
 /// Laps completed, for the `laps_completed` field of an [`Observation`].
@@ -257,6 +333,27 @@ pub struct Record {
     /// ever driven on this row.
     #[serde(default)]
     pub last_best_lap_ticks: Option<u32>,
+    /// The best campaign medal ever earned on this row - never downgraded,
+    /// the same "best-of" rule [`Self::best_lap_ticks`] follows, using
+    /// [`Medal::better`]. `None` until a race on this row carries an
+    /// [`Observation::campaign_medal`] - which, today, is every race: see
+    /// that field's own doc for why nothing feeds it yet.
+    #[serde(default)]
+    pub best_medal: Option<Medal>,
+    /// The points [`Self::best_medal`] is worth - always
+    /// `Self::best_medal.map(Medal::points)`, kept as its own field so a
+    /// reader of the file sees the number a career total would sum without
+    /// also having to know the medal-to-points law. [`Store::record`] is
+    /// the only writer, and keeps the two in sync.
+    #[serde(default)]
+    pub best_points: Option<u32>,
+    /// The most recent race's own campaign medal - may differ from
+    /// [`Self::best_medal`] whenever this race was not the best one ever
+    /// driven on this row. `None` for a race with no campaign cell in
+    /// play, the same "last" semantics every other `last_*` field already
+    /// carries.
+    #[serde(default)]
+    pub last_medal: Option<Medal>,
 }
 
 impl Record {
@@ -302,9 +399,12 @@ impl Store {
     /// **Best-of, never overwritten downward.** [`Record::best_lap_ticks`]
     /// and [`Record::best_total_ticks`] only ever shrink, and the second
     /// stays untouched entirely when `obs.finished` is `false` - an
-    /// abandoned race has no total time to compare. The `last_*` fields
-    /// always take `obs`'s own values, whatever they say: that is what "the
-    /// last race" means, better or worse than the one before it.
+    /// abandoned race has no total time to compare. [`Record::best_medal`]
+    /// only ever improves too, via [`Medal::better`], and stays untouched
+    /// when `obs.campaign_medal` is `None` - no campaign cell in play is not
+    /// evidence the row's standing medal should be forgotten. The `last_*`
+    /// fields always take `obs`'s own values, whatever they say: that is
+    /// what "the last race" means, better or worse than the one before it.
     pub fn record(&mut self, key: Key, obs: Observation) {
         let row = match self.records.iter_mut().find(|record| record.key() == key) {
             Some(row) => row,
@@ -335,6 +435,11 @@ impl Store {
         row.last_laps_completed = obs.laps_completed;
         row.last_tick = obs.tick;
         row.last_best_lap_ticks = obs.best_lap_ticks;
+        if let Some(medal) = obs.campaign_medal {
+            row.best_medal = Some(row.best_medal.map_or(medal, |best| best.better(medal)));
+            row.best_points = row.best_medal.map(Medal::points);
+        }
+        row.last_medal = obs.campaign_medal;
 
         // Stable, so the file `save` writes is the same shape every run bar
         // the numbers that actually changed - see the struct's own doc.

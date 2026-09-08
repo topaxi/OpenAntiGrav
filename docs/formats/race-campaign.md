@@ -9,9 +9,10 @@ format fact, the sixteen names it ships are a title fact.
 
 This is the schema half of
 [`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md),
-which carries the decompiled law (the medal evaluator, the points table, the
-unlock gate) that this page's types deliberately do not implement - see
-below.
+which carries the decompiled law. As of 2026-09-09 the medal evaluator and
+its points table are also implemented here, on the type they evaluate - see
+below - but the unlock-points comparison across a whole grid, and picking
+*which* cell a race is run against, are not.
 
 ## What is on disc
 
@@ -51,15 +52,38 @@ fallible mapping and returns `None` for `"Zone"` - an unrecognised value is
 not an error, per this project's own established lesson that a parser must
 not fail on a field it does not understand.
 
-## What this module deliberately does not implement
+## The medal law, implemented on `Cell`: `evaluate_medal`
 
-`Cell_EvaluateMedal`, `Cell_MedalPoints` and the grid-unlock points comparison
-are gameplay rules, not properties of the file, and wiring the campaign into a
-race is explicitly a later pass (it collides with the `eliminator` and
-`career` lanes running the same day this was written). This module surfaces
-the authored numbers only: the three medal targets, `RequiredPoints`, the
-`<Unlock Grid=>` name, `AICount`, `skill`/`skillEasy`/`skillHard`. What a
-caller does with them is out of scope here.
+`Cell::evaluate_medal(value: i64) -> Option<Medal>` reimplements
+`Cell_EvaluateMedal` (`0x088bf620`) directly: a three-way threshold compare
+of `value` against the cell's own gold/silver/bronze targets, ordinal
+`Gold`/`Silver`/`Bronze` (`0`/`1`/`2` in the original), comparison direction
+**flipped for `Zone` and `Elimination`** (`>=`, more is better) and ordinary
+(`<=`, less is better) everywhere else. `Medal::points` reimplements
+`Cell_MedalPoints` (`0x088bf530`): gold 3, silver 2, bronze 1. Both are
+covered by unit tests against the invented fixture, including three cases
+chosen specifically to fail if the direction flip is dropped or wrongly
+applied to a non-counting mode - see `crates/formats/src/race_campaign/tests.rs`.
+
+`evaluate_medal` treats `value <= 0` as "no result yet", alongside the
+original's own literal `0xFFFF_FFFF` unset-`u32` sentinel. **The `<= 0`
+guard is this reimplementation's own choice, not measured** - the original
+checks only the exact value `0`, but no mode here ever legitimately measures
+a negative position, time, zone count or kill count, so the wider guard
+changes no real value the original could produce.
+
+## What this module still does not implement
+
+The unlock-points comparison across a whole grid (`Unlock_GridPointsMet`),
+and - more importantly for wiring a race - **picking which cell a real race
+was run against, and what value that race actually scored in
+`evaluate_medal`'s own terms.** Neither the launch path (which globals
+`Cell Selection` writes, per the `campaign` handover thread's own "Next
+Steps") nor the mapping from `oag_race::Mode`/`crate::catalogue::Track` back
+onto a `Cell` was traced this pass. `crates/game/src/records.rs` carries the
+persistence half - a `Medal` and its points, additive on the existing
+per-circuit/mode/class row - and documents exactly where it is, and is not,
+fed yet; see `docs/architecture/persistence.md`.
 
 ## Two open questions this pass did not resolve
 
