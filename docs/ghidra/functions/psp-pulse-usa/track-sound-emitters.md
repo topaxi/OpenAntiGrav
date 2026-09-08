@@ -364,6 +364,49 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
   nothing observed so far reads it back.
 - **`soundcone`'s init and update are not found**, which is what leaves the two
   angles at 75 and `+0x42` unexplained on cones.
-- **The PS2 and Pure equivalents are unchecked.** `SCES_547.48` is the disc whose
-  panning `positional-audio.md` still cannot account for; whether it authors the
-  same node is unknown.
+- ~~**The PS2 and Pure equivalents are unchecked.**~~ **Answered, 2026-09-08, for
+  both, by different methods.**
+
+  **PS2 (`pulse-ps2-eu`) shares the class IDs and the exact authored counts.**
+  `just view 'data/images/pulse-ps2-eu.chd:54748/WADS2.WAD' --nodes
+  'Data\Environments\01_Track\track.vex' --class 0x3e1` (and `0x3e9`, `0x3cc`)
+  reads 86 `sound`/0 `soundcone`/0 `speaker` on `01_Track` and 43/9/0 on
+  `07_Track` - matching this page's [Census](#census) table on `pulse-psp-usa`
+  exactly, node for node. `speaker` stays at zero on the second pressing too,
+  which is a second data point for its "unused by Pulse" row above. This is a
+  direct ID sweep, valid because Pulse's PS2 and PSP pressings are the same
+  title from the same exporter and do not renumber classes against each other
+  the way Pure does.
+
+  **Pure (`pure-psp-usa`) authors the same thing, under a class ID this pass
+  did not identify.** A direct sweep at Pulse's literal IDs reads zero on
+  Pure's `Data\Environments\01_Vineta_K\track.vex`, as expected -
+  [`pure-status.md`](../../../formats/pure-status.md#the-class-id-space-is-renumbered)
+  already established Pure renumbers the whole `.vex` class space. An ID-blind,
+  size-blind check settles it instead: every node payload here carries a
+  bank-label/cue-name pair as ASCII text (`+0x14`/`+0x1c`), and Pure ships the
+  same `SBlk` container with the same per-circuit-bank convention this page's
+  [bank table](#the-bank-and-cue-fields-resolve-against-the-discs-own-banks)
+  documents (`just wad sounds <pure>:.../Data.wad` lists `VINETTA`, `SEBCLIM`,
+  `CHENGOU`, `GENTRAK`, one per circuit plus the shared general bank, the same
+  shape as Pulse's `basilic`/`gentrak`/etc). Extracting a Pure `track.vex`
+  whole (`just wad cat`) and running `strings` over the raw bytes finds
+  exactly those bank names paired with `~`-prefixed cue names identical to the
+  bank's own cue table (`~TRACKLIGHT`, `~BILLBOARDHUM`, `~SEAGULL_CLD`,
+  `~STARTLINE`, ...), each one sitting inside a node named `woSound1`,
+  `woSound2`, ... in the scene - 48 on `01_Vineta_K`, 56 on
+  `10_Sebenco_Climb`, 106 on `04_Chenghou_Project` (three circuits checked).
+  The surrounding bytes carry the same shape this page's payload table
+  describes: two equal `f32`s where `sound`'s `+0x0c`/`+0x10` sit, and
+  `0x3c888889` (`1/60`) where the curve's seconds-per-tick field sits. No
+  `woSoundCone`- or `woSpeaker`-named sibling turned up in the same scan, so
+  whether Pure distinguishes a cone the same way is unread.
+
+  **So the follow-on this page's Next Steps used to name - "find where Pure's
+  circuit banks live, because it ships no `trackstartup.xml`" - turns out not
+  to be the hard part.** The banks are trivially named, the same way Pulse's
+  are (`oag-wad sounds`, one per circuit). What is still unfound is Pure's own
+  class ID for `woSound` (and whether a cone/speaker split exists under it at
+  all) - the same table-index or registration-function technique
+  `pure-status.md` used for the collision classes would answer it, and needs
+  the Ghidra bridge this pass did not have.
