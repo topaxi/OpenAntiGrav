@@ -591,6 +591,14 @@ enum Neighbour {
 /// case-insensitively, so a disc's serial-named directory does not need to be
 /// spelled out.
 ///
+/// **The candidate order is the caller's preference and is honoured**, which
+/// this took until 2026-09-08 to actually do: it used to walk the *source's*
+/// entries and take the first one matching any candidate, so the disc's own
+/// directory order decided. The only caller passing more than one candidate is
+/// `oag_game::boot`'s movie loader, which lists the PS2's 60 Hz cut ahead of
+/// its 50 Hz one and silently got `BG512.IPF` anyway, because that is what
+/// `DATA/MOVIES/` lists first.
+///
 /// This is for containers no archive addresses by hash: the PS2's movies are
 /// plain files under `DATA/MOVIES/`, unlike the PSP's, which are `Data.wad`
 /// entries. See `docs/ps2/pulse-disc-layout.md`.
@@ -610,9 +618,9 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
     if path.is_dir() {
         let mut files = Vec::new();
         collect(path, "", &mut files);
-        let Some(file) = files
+        let Some(file) = candidates
             .iter()
-            .find(|f| candidates.iter().any(|c| names(f, c)))
+            .find_map(|c| files.iter().find(|f| names(f, c)))
         else {
             return Ok(None);
         };
@@ -621,10 +629,14 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
     }
 
     let mut disc = DiscImage::open(source)?;
-    let found = disc
-        .entries()?
+    let entries = disc.entries()?;
+    let found = candidates
         .iter()
-        .find(|entry| !entry.is_directory && candidates.iter().any(|c| names(&entry.path, c)))
+        .find_map(|c| {
+            entries
+                .iter()
+                .find(|entry| !entry.is_directory && names(&entry.path, c))
+        })
         .cloned();
     let Some(entry) = found else {
         return Ok(None);
