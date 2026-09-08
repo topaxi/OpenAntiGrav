@@ -561,11 +561,13 @@ fn plan(options: &Options) -> Result<Plan> {
 
 /// The PS2 release's movies, which are loose on the disc rather than in a WAD.
 ///
-/// All four cuts, not the two this pressing plays: `oag_game::boot`'s
-/// `LOOSE_MOVIES` picks between the PAL `512` pair and the NTSC `640` one on a
-/// global whose ultimate trigger is not traced, and a prefetch that converted
-/// only the pair it guessed would leave the other pair to a lazy transcode in
-/// the middle of a boot. Converting both pairs is the point of prefetching.
+/// All four cuts, not the two a boot plays: `oag_game::boot`'s `LOOSE_MOVIES`
+/// prefers the 60 Hz `640` pair, where the original picks between the pairs on
+/// `g_refresh_mode` - the player's own answer to a first-boot question, not a
+/// region (`docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md`). A prefetch
+/// that converted only one pair would leave the other to a lazy transcode in
+/// the middle of a boot, so both pairs are converted; that is the point of
+/// prefetching, and it is what makes the preference cheap to revisit.
 ///
 /// Matched by trailing path components through
 /// [`oag_assets::read_loose_file`], so the disc's serial-named directory - `54748/`

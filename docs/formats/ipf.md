@@ -136,16 +136,20 @@ The pairing comes from the executable.
 `Data\Movies\Backdrop.ipf` to `Data\Movies\bg512.ipf` or `bg640.ipf` on the
 **same global** (`0x0027a85c`) and with the same sense as it picks
 `Intro512.pss` against `Intro640.pss` - and those two do declare their rates,
-measured with `ffprobe` at 25/1 and 30000/1001. So `bg512` is the PAL cut and
-`bg640` the NTSC one.
+measured with `ffprobe` at 25/1 and 30000/1001. So `bg512` is the 50 Hz cut
+and `bg640` the 60 Hz one.
 
 It checks out arithmetically as well, which is the part that would catch a
 swapped pairing: 225 frames at 25 Hz is 9.000 s and 270 at 30000/1001 is
 9.009 s, so the two files are the same loop. Swapped, one would be 10.8 s and
 the other 7.5 s.
 
-Confidence **85**, inherited from the PAL/NTSC reading of `0x0027a85c` rather
-than measured here. Nothing visible depends on it being exact: the backdrop
+Confidence **85**, inherited from the 50/60 Hz reading of `0x0027a85c` rather
+than measured here. What sets that global is now read - the player picks it on
+a first-boot screen, see
+[`refresh-mode.md`](../ghidra/functions/ps2-pulse-eu/refresh-mode.md) - which is
+why `oag-game` prefers the `640` pair rather than treating `512` as the disc's
+region. Nothing visible depends on it being exact: the backdrop
 loops.
 
 Display aspect is taken the same way, and it is **the frame's, not the `4:3`

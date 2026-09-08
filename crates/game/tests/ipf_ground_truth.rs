@@ -233,11 +233,16 @@ fn both_ipf_files_decode_through_the_movie_cache() {
 /// Two things this build had wrong meet here: the widget's `src` already
 /// carries its extension on PS2, so appending `.PMF` asked for
 /// `Data\Movies\Backdrop.ipf.PMF`; and the name is not a filename at all -
-/// `Movie_ResolveSourcePath` maps it onto the region's cut. See
+/// `Movie_ResolveSourcePath` maps it onto one of two cuts. See
 /// `docs/ghidra/functions/ps2-pulse-eu/movie-paths.md`.
+///
+/// The original picks between them on `g_refresh_mode`, which is the player's
+/// own answer to a first-boot 60 Hz question rather than a region
+/// (`refresh-mode.md`), so both cuts are legitimate on this pressing and this
+/// engine prefers the 60 Hz one.
 #[test]
 #[ignore = "needs data/images/"]
-fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {
+fn the_front_ends_own_backdrop_name_resolves_to_the_60hz_cut() {
     let Some(image) = image() else { return };
 
     let options = oag_game::boot::Options {
@@ -262,14 +267,14 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {
     }
 
     let backdrop = loaded.movie.expect("the backdrop must resolve");
-    assert_eq!((backdrop.width, backdrop.height), (512, 512));
-    assert_eq!(backdrop.frame_count, 225);
-    assert_eq!(backdrop.frame_rate, (25, 1));
+    assert_eq!((backdrop.width, backdrop.height), (640, 448));
+    assert_eq!(backdrop.frame_count, 270);
+    assert_eq!(backdrop.frame_rate, (30_000, 1001));
     assert!(
         loaded
             .report
             .iter()
-            .any(|line| line.contains("BG512.IPF") && line.contains("IPU video")),
+            .any(|line| line.contains("BG640.IPF") && line.contains("IPU video")),
         "the report does not name the file the backdrop came from"
     );
     assert!(

@@ -64,8 +64,8 @@ impl std::fmt::Display for EntryRef {
 ///
 /// **A source with no reel of its own is not an error.** The PS2 release ships no
 /// `.PMF` in any archive: its movies are loose in the ISO filesystem instead -
-/// `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream, and
-/// `DATA/MOVIES/BG512.IPF`, IPU video for the PS2's Image Processing Unit. Both
+/// `DATA/MOVIES/INTRO640.PSS`, an MPEG-2 program stream, and
+/// `DATA/MOVIES/BG640.IPF`, IPU video for the PS2's Image Processing Unit. Both
 /// decode, but neither is addressable as an archive entry, so
 /// [`LOOSE_MOVIES`] is consulted before giving up. A source with neither still
 /// gets the sequence without a picture rather than a failure - the same path
