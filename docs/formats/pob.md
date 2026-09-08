@@ -514,7 +514,7 @@ table, checked two independent ways: `strings -a` over the whole binary
 both names. **The control that makes this null result mean something**:
 this is not merely "unwired effects have no string" - `strings -a … | rg -o
 'Data.Psys.[A-Z0-9_]+\.POB' | sort -u | wc -l` finds **46 of the 82** disc
-names as a load-path string, well past the 11 `RACE_EFFECTS` wires,
+names as a load-path string, well past the 15 `RACE_EFFECTS` wires,
 including effects this engine has not built at all (`WO_LEACHBEAM_CHARGING`,
 `WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*` tier) - so the original
 executable's own string table tracks *its* load paths, not OAG's wiring, and
@@ -526,10 +526,29 @@ sub-effects reached from inside a parent tree rather than by a top-level
 load, per this file's `embedded` bucket) mean absence from the 46 alone
 isn't proof, and neither scan proves no code path reaches these two by a
 route that never puts the name in the string table (a hash, a constructed
-string, an index). Two of the 75
-unwired HD systems this project owes a bucketing pass
+string, an index).
+
+**Four more, 2026-09-08, all environment effects**: `wo_blue_welder.pob`
+(`WO_BLUE_WELDER`), `wo_modesto_steam_a.pob` (`WO_MODESTO_STEAM_A`) and
+`wo_underwater_godrays.pob` (`WO_UNDERWATER_GODRAYS`) are `DATA02`;
+`wo_dustmotes.pob` (`WO_DustMotes` - mixed case internally, the only name in
+the corpus that isn't all-caps) is `DATA00`, paired with its own
+`data/psys/tex/dustmotes_4x4.gtf` texture in the same archive, which is why
+this one reads as a real shipped asset rather than a second debug leftover
+despite the odd casing. None of the four names occurs anywhere in
+`EBOOT.elf`'s string table either, by the same two independent checks
+(`strings -a`, Ghidra `search_strings`), both zero. `WO_BLUE_WELDER` and
+`WO_MODESTO_STEAM_A` are exactly the two names the PSP's own
+`NO_TRIGGER_RECOVERED` list already carries under "environment effect, no
+recovered placement trigger, the track format carries no effect placement
+this project has read" - this confirms that reason independently on HD's
+own executable rather than assuming it carries over unchanged, and
+`WO_DustMotes`/`WO_UNDERWATER_GODRAYS` extend the same category to two names
+new to HD. Confidence 82, same caveats as above.
+
+Six of the 82 unwired HD systems this project owes a bucketing pass
 over (see `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc
-comment); the other 73 are unread.
+comment); the other 61 are unread.
 
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry
