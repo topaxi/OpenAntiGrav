@@ -50,30 +50,38 @@
   `strings -a` over `EBOOT.elf` and Ghidra's own defined-string table
   (`search_strings`, once a live instance became available mid-session) -
   both agreeing on zero hits for every name below:
-  - `NUMBERS`, `TEST_BOMBSPIKES` (both `DATA02`-only): disc-authored
-    debug/test assets. **The control that matters**: this isn't just "unwired
-    means no string" - a `Data\Psys\...POB` load-path scan finds 46 of the 82
-    disc names as a string, including plenty this engine hasn't built at all
-    (`WO_LEACHBEAM_CHARGING`, `WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*`
-    tier), so the original executable's string table tracks its own load
-    paths, not OAG's wiring - these two sitting outside that 46 says
-    something about the original game, not about this project's scope.
+    Confidence 82: 36 authored names are *also* missing from that 46-string
+    load-path scan, so absence alone isn't proof, but the control shows the
+    check discriminates for this category (unbuilt weapon names *are* in the
+    46), so a genuine null result is meaningful here.
   - `WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A` (`DATA02`), `WO_UNDERWATER_GODRAYS`
     (`DATA02`, new to HD) and `WO_DustMotes` (`DATA00`, the only mixed-case
     name in the corpus, paired with its own `dustmotes_4x4.gtf` texture in
     the same archive - which is why it reads as a real shipped asset despite
     the odd casing, not a second debug leftover): environment effects, no
-    recovered placement trigger. `WO_BLUE_WELDER` and `WO_MODESTO_STEAM_A` are
-    exactly the two names the PSP's own `NO_TRIGGER_RECOVERED` list already
-    carries under that reason - this confirms it independently on HD's own
-    executable instead of assuming it carries over unchanged, and the other
-    two extend the same category to names new to HD.
+    recovered placement trigger. **Correction to the first draft of this
+    bullet, caught by advisor review before it left the worktree**: the draft
+    claimed the string checks "confirm it independently" the way they did for
+    `NUMBERS`/`TEST_BOMBSPIKES`. They don't - re-running the 46-name
+    load-path control specifically for the environment family found **zero**
+    environment names in it, `WO_RAIN`/`WO_SNOW` included, wired or not. And
+    the wired `WO_SHIP_ENGINEFLARE` is *also* absent from HD's string table
+    (its trigger comes from the PS2 disc's own "an engine flare is on while
+    the craft is" reasoning, not an HD-side string), same as its two unwired
+    HD-only siblings `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` - see Next Steps.
+    So a continuous/ambient effect's trigger just doesn't show up as a
+    load-path string at all, on either disc, wired or not; a zero hit here
+    proves nothing either way, unlike the debug pair above. The bucket
+    assignment still stands, but on the same basis PSP's own `WO_RAIN` entry
+    already rests on - an admitted gap in this project's own track-placement
+    parsing (`.effectsettings`, `aurora.xml`, or a `track.vex` node, none
+    decoded), not a fresh HD-side confirmation. `WO_BLUE_WELDER`/
+    `WO_MODESTO_STEAM_A` reuse that PSP reasoning under the same name;
+    `WO_DustMotes`/`WO_UNDERWATER_GODRAYS` extend it to two names new to HD
+    on naming and asset-pairing grounds alone. **Confidence 65**, lower than
+    the debug pair's 82 for exactly that reason.
 
-  Confidence 82 for all six (not higher: for the first two, 36 authored names
-  are *also* missing from the 46-string load-path scan, so absence alone
-  isn't proof; for the environment four, no code path was traced for a track
-  format that might place them some way that never puts the name in a
-  string). Full writeup: `docs/formats/pob.md`'s HD corpus section. Still no
+  Full writeup: `docs/formats/pob.md`'s HD corpus section. Still no
   code-side change - six of 82 doesn't justify assembling an HD-side
   `NO_TRIGGER_RECOVERED` const yet (see
   `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment).
@@ -108,3 +116,20 @@
   `mod hd` - mirroring the PSP/PS2 one - is the natural place to enforce the
   bucketing the same way those two discs already are, rather than leaving it
   as prose here indefinitely.
+- **`WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are a correctness question, not
+  just an unread trigger.** `RACE_EFFECTS`' `WO_SHIP_ENGINEFLARE` is wired
+  for a PS2-sourced race and its reasoning is source-specific: the PS2 disc
+  authors that one name and the PSP doesn't, so a PSP-sourced race falls back
+  to `oag_render::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
+  own doc comment in `crates/game/src/race/effect_names.rs`). HD authors
+  three engine-flare names, not one: `WO_SHIP_ENGINEFLARE` plus these two
+  unwired ones, and none of the three shows up in HD's own string table
+  (checked 2026-09-08, `strings -a` + `search_strings`, all zero) - which
+  the environment-family finding above already establishes doesn't mean much
+  on its own for a continuous effect. Open question this project hasn't
+  answered: is HD's real engine flare actually `WO_SHIP_ENGINEFLARE` (as
+  currently assumed by extension from the PS2 case), or does HD's own
+  executable reach one of `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` instead - in
+  which case an HD-sourced race is currently playing the wrong asset. Needs a
+  Ghidra read of whatever spawns the flare on HD specifically, not an
+  inference from the PS2 disc's own trigger.

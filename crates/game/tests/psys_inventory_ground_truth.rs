@@ -395,23 +395,35 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 /// plausibility-over-evidence shortcut this file's own doc comment forbids
 /// for the two discs it already covers. That bucketing is still owed, save
 /// six names read against the executable rather than inferred (`just psarc
-/// cat … | xxd` for the internal name, `strings -a` and Ghidra's own
-/// `search_strings` for the trigger check, both agreeing on zero hits for
-/// each) - confidence 82, `docs/formats/pob.md`'s HD corpus section carries
-/// the evidence for all six:
+/// cat … | xxd` for the internal name; `strings -a` and Ghidra's own
+/// `search_strings` for the trigger check) - `docs/formats/pob.md`'s HD
+/// corpus section carries the evidence for all six:
 ///
 /// - `NUMBERS`, `TEST_BOMBSPIKES` (`DATA02` only): disc-authored debug/test
-///   assets.
+///   assets - confidence 82. Both string checks agree on zero hits, and a
+///   46-of-82 load-path control (unbuilt weapon names like
+///   `WO_LEACHBEAM_CHARGING` *are* in that 46) shows the check actually
+///   discriminates here.
 /// - `WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A` (`DATA02`), `WO_DustMotes`
 ///   (`DATA00`, mixed-case internally, unlike every wired name), and
 ///   `WO_UNDERWATER_GODRAYS` (`DATA02`, new to HD): environment effects, no
-///   recovered placement trigger - the same category `WO_RAIN`'s PSP/PS2
-///   entry already names, and `WO_BLUE_WELDER`/`WO_MODESTO_STEAM_A` are the
-///   same two names carried over from that disc's own list, now independently
-///   zero-hit-confirmed against HD's own executable rather than assumed to
-///   carry over.
+///   recovered placement trigger - confidence 65, lower than the first two.
+///   The same string checks come back zero, but the control fails for this
+///   category: *no* environment name is in the 46, wired or not, and the
+///   wired `WO_SHIP_ENGINEFLARE` (plus its two unwired HD siblings
+///   `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`) is absent too - a continuous or
+///   ambient effect's trigger just doesn't leave a load-path string, so zero
+///   hits proves nothing either way here. The bucket assignment instead
+///   rests on the same basis `WO_RAIN`'s PSP entry already does: the
+///   track-placement format is unread, not a string search - `WO_BLUE_WELDER`
+///   and `WO_MODESTO_STEAM_A` reuse that reasoning under the same name,
+///   `WO_DustMotes`/`WO_UNDERWATER_GODRAYS` extend it to two names new to HD
+///   on naming and asset-pairing grounds alone.
 ///
-/// 61 remain unbucketed. Not added to a bucket list here: this module
+/// 61 remain unbucketed - two of those, `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`,
+/// carry an open correctness question rather than just an unread trigger
+/// (see the handover thread's Next Steps). Not added to a bucket list here:
+/// this module
 /// doesn't carry an HD-side `NO_TRIGGER_RECOVERED` const yet, and six of 82
 /// isn't the completed sweep that would justify assembling one.
 ///
