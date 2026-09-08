@@ -486,6 +486,30 @@ fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
+/// The LeachBeam's own fixture: the whole nine-attribute schema both shipped
+/// tables author, every number distinct so a test that read the wrong offset
+/// fails on the value rather than passing by coincidence.
+///
+/// `active_time` is short (`0.5`) where the Race table authors `3`, for the
+/// reason [`one_shuriken_table`]'s `fuse` is: these tests drive tens of ticks,
+/// and a link that outlives every one of them cannot exercise its own expiry.
+/// `energy_multiplier` is `1` rather than the disc's `50` so the first tick is
+/// not a special case in a test measuring the steady rate.
+fn one_leach_beam_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="LeachBeam"><Stats absorb="41" damage="42" repair="43"
+               slowShipFactor="0.44" lock_min_dist="5" lock_max_dist="450"
+               range="460" active_time="0.5" energy_multiplier="1"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="LeachBeam"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
 /// The Shuriken's own fixture: the schema both shipped tables author, with the
 /// ricochet pair present and distinct from the blast pair so a test can tell
 /// which one reached the blast.

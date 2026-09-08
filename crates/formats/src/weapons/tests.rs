@@ -583,14 +583,25 @@ fn a_shuriken_missing_its_fuse_is_absent_rather_than_defaulted() {
 }
 
 #[test]
-fn the_leachbeam_reads_its_lock_window_and_its_absorb() {
+fn the_leachbeam_reads_its_whole_block() {
     let stats = parse(FIXTURE).expect("the fixture parses");
+    // Every attribute distinct in the fixture, so an arm wired to the wrong
+    // offset fails rather than passing on a coincidence - which is the failure
+    // mode a nine-attribute block invites. The fixture also authors
+    // `lock_max_dist` *before* `lock_min_dist`, so document order is not what
+    // this reads by.
     assert_eq!(
         stats.leach_beam(),
         Some(LeachBeamStats {
+            repair: 70.0,
             absorb: 71.0,
+            damage: 72.0,
             lock_min_dist: 73.0,
             lock_max_dist: 74.0,
+            slow_ship_factor: 75.0,
+            range: 76.0,
+            active_time: 77.0,
+            energy_multiplier: 78.0,
         })
     );
 }

@@ -29,6 +29,15 @@ produced it and the one that replaces it.
 | `0x08872da8` | `LeachBeam_InitUnlocked` | 80 |
 | `0x08866b08` | `LeachBeam_UpdatePool` | 85 (was `FUN_08866b08` at 60-78, see [bad-memory-access-halt.md](bad-memory-access-halt.md)) |
 | `0x08866804` | `LeachBeam_Drain` | 78 |
+| `0x08872edc` | `LeachBeam_DrainRate` | 88 (new 2026-09-08) |
+| `0x08872f18` | `LeachBeam_RepairRate` | 88 (new 2026-09-08) |
+| `0x08873fa0` | `LeachBeam_Advance` | 85 (new 2026-09-08) |
+| `0x08873020` | `LeachBeam_PulseStrength` | 82 (new 2026-09-08) |
+| `0x088732f8` | `LeachBeam_MarkPulse` | 82 (new 2026-09-08) |
+| `0x08873090` | `LeachBeam_MarkDisconnected` | 80 (new 2026-09-08) |
+| `0x088730a4` | `LeachBeam_LingerExpired` | 80 (new 2026-09-08) |
+| `0x08873068` | `LeachBeam_UnlockedExpired` | 78 (new 2026-09-08) |
+| `0x0883f228` | `Ship_ApplyPendingWeaponRepair` | 85 (new 2026-09-08) |
 | `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
 | `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
 | `0x08834b14` | `AiManager_Update` | 80 (new 2026-09-08) |
@@ -845,6 +854,13 @@ separate from the travelling wave's positional loop (`_DAT_00284554` in
 DAT literal was tracked down to a real cue name this pass; both are read as
 "a sound plays here", not "this sound plays here".
 
+> **The hit cue is resolved, 2026-09-08: it is `QUAKEHIT`.** Decompiling
+> `FUN_088418e0` whole for the LeachBeam pass below prints the argument as
+> `PTR_s_QUAKEHIT_08a7b740`, a string pointer rather than a bare DAT - so this
+> one *is* "this sound plays here" now, at confidence 85. The travelling wave's
+> own cue in `Quake_Update` is still only "a sound plays here"; the two were
+> never the same literal.
+
 ### The three remaining helpers, read - and one correction
 
 - **`func_0x00118a4c` (`0x0891ca4c`) is *not* a segment-length getter, and the
@@ -1050,27 +1066,213 @@ functions (`func_0x0006eedc`, `func_0x0006ef18`) and what actually consumes
 `+0x120`/`+0x128` into visible health/shield state were not decompiled this
 pass.
 
+### 2026-09-08: the whole weapon read, and an arithmetic slip in the section above
+
+**Every item this section's own Open list carried is closed below**, and the
+first thing that had to be fixed to close any of them is an address.
+
+#### The two rate functions were rebased wrong, the same way the Cannon's was
+
+The section above names them `func_0x0006eedc` = `0x0886eedc` and
+`func_0x0006ef18` = `0x0886ef18`. **Both are wrong**: `0x08804000 + 0x0006eedc`
+is **`0x08872edc`**, not `0x0886eedc`. The stated addresses decompile inside
+`FUN_0886ee88`, which is not a LeachBeam function at all - it is a radial
+impulse over every craft, adding `(1 - d/stats+0x1c) * stats+0x20` along the
+separation into `entity+0x110`, very plausibly the **Repulser's** own push and
+recorded here only as a lead for whoever opens that weapon.
+
+This is the second `0x4000`-magnitude slip on this page (the first produced
+`0x088537ac` for the Cannon, corrected at the top). The corrected addresses land
+immediately beside `FUN_08872f54` - the distance helper this section already
+cites - and `LeachBeam_InitUnlocked` (`0x08872da8`), which is the corroboration.
+
+#### `WeaponStats_ParseLeachBeam` (`0x0880d328`), decompiled whole
+
+One `Xml_AttributeNameIs` arm per attribute, each storing to a distinct offset.
+This **closes "`ActiveLeachBeamStats+0x11c`'s attribute name is unmeasured"**:
+
+| offset | attribute | Race table | Eliminator table |
+| --- | --- | --- | --- |
+| `+0x104` | `damage` | `0.1` | `0.5` |
+| `+0x108` | `absorb` | `10` | `15` |
+| `+0x10c` | `repair` | `0.1` | `0.3` |
+| `+0x110` | `slowShipFactor` | `0.8` | `0.5` |
+| `+0x114` | `lock_min_dist` | `10` | `10` |
+| `+0x118` | `lock_max_dist` | `200` | `200` |
+| `+0x11c` | `range` | `250` | `250` |
+| `+0x120` | `active_time` | `3` | `10` |
+| `+0x124` | `energy_multiplier` | `50.0` | `50.0` |
+
+Values are this repository's own parser reading `pulse-psp-usa.chd`, which is
+why the whole block is now `oag_formats::weapons::LeachBeamStats`. Confidence
+**90** on the offset map - a direct decompile with no VFPU on the path, each arm
+unambiguous.
+
+**Two corrections to the prose above fall out.** `+0x11c` is `range`, so "call it
+the beam's own maximum reach" was right about the meaning. And
+`LeachBeam_Drain`'s `target+0x134 = <ActiveLeachBeamStats+0x110>`, which the
+section above reads as `pending_source`, is **`slowShipFactor`** - not a source
+id at all. See below for where it lands.
+
+#### The two rate functions, read
+
+```c
+float LeachBeam_DrainRate(Instance *b) {          // 0x08872edc
+    float mult = 1.0f;
+    Stats *s = ActiveStats();
+    if (b->first_drain /* +0x58 */) { mult = s->energy_multiplier; b->first_drain = 0; }
+    return s->damage * mult;
+}
+float LeachBeam_RepairRate(Instance *b) {         // 0x08872f18
+    float mult = 1.0f;
+    Stats *s = ActiveStats();
+    if (b->first_repair /* +0x59 */) { mult = s->energy_multiplier; b->first_repair = 0; }
+    return s->repair * mult;
+}
+```
+
+Both flags are set to `1` by `LeachBeam_InitLocked` and consumed once each, so
+the **first** draining tick moves `0.1 * 50 = 5.0` energy each way and every tick
+after moves `0.1`. Neither function scales by `dt`, and neither does
+`LeachBeam_Drain` - the original's transfer is per *frame*, and therefore
+frame-rate dependent. Confidence **88**.
+
+#### Both accumulator consumers, found - the page's largest open item
+
+`Ship_ApplyPendingWeaponDamage` (`0x0883f13c`, already named on
+`shield-pickup.md`) is `entity+0x120`'s consumer:
+
+```c
+if (craft->pending_damage /* +0x120 */ > 0.0f && Ship_State(entity) == 1) {
+    if (!(craft->flags /* +0x1b8 */ & 0x10)) {                 // no shield pickup up
+        Ship_Damage(craft->pending_damage, entity, 2, craft->kind /* +0x138 */, craft->+0x124);
+        if (craft->kind == 7)                                   // the LeachBeam's own tag
+            handling /* craft+0x94 */ ->+0x31c = craft->+0x134;  // = slowShipFactor
+    } else {
+        ShipShield_Hit(...);
+    }
+    craft->pending_damage = 0.0f;
+}
+```
+
+`Ship_ApplyPendingWeaponRepair` (`0x0883f228`, named here) is `entity+0x128`'s,
+and it is four lines:
+
+```c
+if (craft->pending_repair /* +0x128 */ > 0.0f) {
+    Ship_AddShield(craft->pending_repair, entity);   // 0x0883ddc8, already named
+    craft->pending_repair = 0.0f;
+}
+```
+
+`Ship_AddShield` is `Ship_SetShield(Ship_Shield(entity) + amount)`. So **the
+victim's energy leaves through the ordinary `Ship_Damage` path a fired Shield
+pickup swallows, and the shooter's arrives straight in its own pool** - no
+separate mechanic on either side. Both are called from `FUN_0883f540`
+(`0x0883f540`), the per-craft weapon update, in the order `FUN_0883efb4` ->
+`Ship_ApplyPendingWeaponDamage` -> `Ship_ApplyPendingWeaponRepair` ->
+`Ship_ApplyCollisionImpulse`. Confidence **85**.
+
+**`slowShipFactor` is why this block authors no `slowdown_time`, and the absence
+is design.** `craft+0x31c` is not a slowdown at all: `engine.md`'s
+`Ship_UpdateEngine` reading has it as a **one-shot thrust scale** -
+`if (craft+0x31c < 1.0) { T *= craft+0x31c; craft+0x31c = 1.0 }` - re-armed by
+the block above on every tick the beam drains. A craft under a beam is throttled
+to 80 % (Race) or 50 % (Eliminator) of its thrust for exactly as long as the link
+holds, rather than charged a fixed number of seconds on impact the way every
+other weapon is.
+
+#### The lifetime, and the beam's own geometry: `LeachBeam_Advance` (`0x08873fa0`)
+
+The section above lists `func_0x0006ffa0` as unread; correctly rebased it is
+`0x08873fa0`, the per-tick advance. It counts `instance+0x134` (**the age**) up
+by `dt` and **returns `age < ActiveStats->active_time`** - and that return is the
+flag `LeachBeam_UpdatePool` uses to decide whether to keep the link. So the
+beam's lifetime is the authored `active_time`. Confidence **88**.
+
+**This also closes "the 32-entry `0x30`-byte transform chain's exact use".** The
+same function builds the beam as a **segmented ribbon** from the shooter's node
+to the target's, `ceil((6.0 / range) * min(distance, range) * 6.0)` segments
+long, each vertex displaced sideways on two mutually perpendicular axes by
+`sin((i + 1) * step)` times a per-index random amplitude drawn at construction -
+a lightning arc, not a straight bolt. It matches the alternating `(0,0)/(0,1)`
+and `(1,0)/(1,1)` pairs `LeachBeam_InitLocked` zero-fills the chain with, which
+are a strip's UV columns. Confidence **80**; the draw call itself was not
+followed.
+
+#### The drain is pulsed, and the four small helpers are read
+
+```c
+float LeachBeam_PulseStrength(Instance *b) {      // 0x08873020
+    float t = b->age - b->last_pulse /* +0x138, initialised to -1.0 */;
+    return (0.0f <= t && t <= 1.0f) ? t * 2.0f : 0.0f;
+}
+void LeachBeam_MarkPulse(Instance *b) {           // 0x088732f8
+    if (b->age - b->last_pulse > 1.0f) b->last_pulse = b->age;
+}
+void LeachBeam_MarkDisconnected(Instance *b) {    // 0x08873090
+    b->disconnected /* +0x144 */ = 1;  b->disconnected_at /* +0x148 */ = b->age;
+}
+bool LeachBeam_LingerExpired(Instance *b) {       // 0x088730a4
+    return b->disconnected_at + 0.5f < b->age;
+}
+bool LeachBeam_UnlockedExpired(Instance *b) {     // 0x08873068
+    return 0.75f < b->age;
+}
+```
+
+`LeachBeam_UpdatePool` calls `LeachBeam_Drain` only while `PulseStrength > 0`.
+`LeachBeam_MarkPulse` runs inside `LeachBeam_Advance`'s **pulse block**, which
+re-enters each time the ribbon's scroll cursor (`+0xa8`) wraps to zero - and that
+same block plays the `LEACHENERGY` cue and re-spawns `WO_LEACHBEAM_ENERGY` at the
+target. So the beam pulses about once a second and drains for the second that
+follows each pulse, which over a three-second beam is all but a scattering of
+ticks. Confidence **80** on "effectively continuous"; the exact tick pattern
+depends on the ribbon's own segment count, which varies with the two craft's
+separation.
+
+The two linger constants are engine literals, not attributes: **0.5 s** between a
+disconnect and the retire, and **0.75 s** for an unlocked (`kind = 2`) beam,
+which does nothing whatsoever before it expires.
+
+#### Assets and cues - checked, not assumed
+
+Three cues, each read as a string-pointer argument in a decompile rather than
+inferred from a plausible name:
+
+- **`LEACH`** - `LeachBeam_InitLocked`, one-shot on the shooter's emitter.
+- **`_LEACHATTACH`** - `LeachBeam_InitLocked`, held, on a `SoundEmitter_Init`
+  emitter the constructor allocates at `+0x4c` with a `600.0` falloff, carried by
+  the beam itself.
+- **`LEACHENERGY`** - `LeachBeam_Advance`'s pulse block, falloff `300.0`.
+
+Two authored effects, both spawned through the ordinary `Psys_Spawn_q` shape:
+
+- **`WO_LEACHBEAM_CHARGING`**, fourcc `0x43424c53` (`'SLBC'`) - spawned by
+  `FUN_0883f540` on the *holder's* own node whenever `craft+0x1bc == 10` (the
+  LeachBeam's held-weapon id) and `Ship_State == 1`, and despawned the moment
+  either stops being true. **A player sees this while merely carrying the
+  pickup**, before firing anything.
+- **`WO_LEACHBEAM_ENERGY`**, fourcc `0x4542454c` (`'LEBE'`) - spawned at the
+  *target's* node by the pulse block, roughly once a second.
+
+`FUN_0883f540` also confirms outright that **`Ship_AcquireLock` runs for held
+weapon ids `1` and `10` and no others** - the Missile and the LeachBeam - which
+is independent confirmation of "victim selection is the Missile's own lock-on,
+reused whole" above.
+
 ### Open
 
-- **The two drain-rate functions** (`func_0x0006eedc` = `0x0886eedc`,
-  `func_0x0006ef18` = `0x0886ef18`) are unread - they decide the actual
-  numbers, likely off a `<Stats>` attribute this page has not identified.
-- **What consumes `entity+0x120`/`entity+0x128`** into an actual health or
-  shield change is unread. It is **not** `Ship_AddSlowdown`'s `+0x130` channel -
-  these are two different fields on two different craft, credited by a
-  different function, and their own consumer is the single largest remaining
-  gap for porting the LeachBeam's actual effect.
-- **`ActiveLeachBeamStats+0x11c`'s attribute name is unmeasured.** Its offset is
-  now located (adjacent to `lock_min_dist`/`lock_max_dist`); no parser call for
-  it was re-checked against `WeaponStats_ParseLeachBeam` (`0x0880d328`,
-  `plasma.md`'s table) this pass.
-- **The 32-entry `0x30`-byte transform chain's exact use** (which quad/segment
-  of the beam it draws, and by which draw call) was not read past its
-  zero-fill shape.
-- **`func_0x0006f068`/`func_0x0006f090`/`func_0x0006f0a4`/`func_0x0006ffa0`** -
-  the expiry/disconnect/retire helpers `LeachBeam_UpdatePool` calls - are
-  unread past their call sites; their names are guesses in the prose above
-  ("expiry", "disconnect callback") and are not in `names.tsv`.
+- **Which draw call consumes the ribbon.** The chain's contents and its segment
+  count are read; what submits them is not.
+- **`FUN_08872e64`** (the per-instance teardown `LeachBeam_UpdatePool` calls on
+  retire) and **`FUN_08862d4c`** (the `Ship_IsValid`-shaped predicate
+  `LeachBeam_Drain` gates both halves on) are unread past their call sites and
+  are not in `names.tsv`.
+- **The per-craft readout slot** `LeachBeam_UpdatePool` writes `PulseStrength`
+  into - `**(float **)(pool + owner * 4 + 0x44)`, i.e. offset zero of the owner's
+  own entity - is not identified. A HUD or audio amplitude is the obvious guess
+  and it is only a guess.
 
 ## What is buildable now and what still is not
 
@@ -1098,10 +1300,17 @@ pass.
   re-transformed every frame, not a mesh or vertex write, which is a stronger
   version of the same conclusion this page reached before the per-frame update
   was found.
-- **The LeachBeam is buildable for target selection and the connect/disconnect
-  gate** (all reused from the Missile's lock, plus the range/shield checks read
-  above), **but not for the actual drain amount**, which needs the two rate
-  functions and the `+0x120`/`+0x128` consumer this page leaves open.
+- ~~**The LeachBeam is buildable for target selection and the connect/disconnect
+  gate** … **but not for the actual drain amount**~~. **The LeachBeam is
+  buildable in full, 2026-09-08, and is built** - see the section above. The
+  drain amount is the authored `damage`/`repair` per tick with a one-shot
+  `energy_multiplier`; both accumulators' consumers are found
+  (`Ship_ApplyPendingWeaponDamage` and `Ship_ApplyPendingWeaponRepair`); the
+  lifetime is the authored `active_time`; and the whole nine-attribute
+  `<Stats>` block is decoded as `oag_formats::weapons::LeachBeamStats`. The one
+  half deliberately **not** wired is `slowShipFactor`, which needs the one-shot
+  thrust scale at `craft+0x31c` that `oag_physics::engine` documents and does
+  not implement.
 
 ## History
 

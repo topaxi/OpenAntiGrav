@@ -330,6 +330,8 @@ impl Race {
             projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
             projectile_flare_orbit: [None; oag_gameplay::projectile::MAX_PROJECTILES],
             quake_effect: None,
+            leach_beam_effect: None,
+            leach_charge_effect: None,
             stage_rng: Rng::new(STAGE_SEED),
             sparks_ignitions: 0,
             sparks_rng: Rng::new(SPARKS_SEED),

@@ -687,32 +687,48 @@ pub struct BombStats {
     pub trigger_radius: f32,
 }
 
-/// The LeachBeam's `<Stats>`, cut down to the lock window and `absorb`.
+/// The LeachBeam's `<Stats>`, decoded in full.
 ///
-/// # Why this block is decoded at all, and why so little of it
+/// # Why this block is decoded at all
 ///
 /// The module's rule is that an attribute earns a field when something reads
-/// it, and what reads these is the **lock-on reticle**. `Ship_AcquireLock`
-/// (`0x08844784`) is one function serving two weapons: it selects
-/// `stats+0x50`/`+0x54` when the held weapon is the Missile and
-/// `stats+0x114`/`+0x118` when it is the LeachBeam, and runs the *same* cone,
-/// the same along-track screen and the same nearest-by-longitudinal-distance
-/// tie-break either way. So the LeachBeam locks - and `HudSight_Bind`
-/// (`0x0881b604`) binds it four sight widgets of its own to show it doing so.
-/// See `docs/ghidra/functions/psp-pulse-usa/missile.md` and
+/// it. Two things read these now.
+///
+/// The first is the **lock-on reticle**. `Ship_AcquireLock` (`0x08844784`) is
+/// one function serving two weapons: it selects `stats+0x50`/`+0x54` when the
+/// held weapon is the Missile and `stats+0x114`/`+0x118` when it is the
+/// LeachBeam, and runs the *same* cone, the same along-track screen and the
+/// same nearest-by-longitudinal-distance tie-break either way. So the LeachBeam
+/// locks - and `HudSight_Bind` (`0x0881b604`) binds it four sight widgets of its
+/// own to show it doing so. See
+/// `docs/ghidra/functions/psp-pulse-usa/missile.md` and
 /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
 ///
-/// The other six attributes on the block are the *beam*, and this engine has no
-/// beam: nothing drains another craft's energy, nothing holds an attachment
-/// open for a duration, nothing slows the ship it is fastened to. They stay
-/// named on `docs/formats/weapon-stats.md` and undecoded, which is the same
-/// answer [`BombStats`]'s second radius gets.
+/// The second, from 2026-09-08, is the **beam itself**:
+/// `oag_gameplay::projectile::leach_beam` now holds a link open and drains it.
+/// The six attributes that had stayed named and unread until then are read now
+/// because that consumer exists, and each one's own doc comment below names the
+/// function that spends it.
 ///
-/// **`range` is deliberately not decoded, and it is the trap on this block.**
-/// It is authored at the same figure as `oag_game::race::sight::DRAW_RANGE`,
-/// which is a *code* literal in `HudSight_Update` and has nothing to do with
-/// this weapon. Reading one as evidence for the other would manufacture a
-/// finding out of a coincidence.
+/// # The whole block's offsets, measured
+///
+/// `WeaponStats_ParseLeachBeam` (`0x0880d328`) was decompiled whole on
+/// 2026-09-08, one `Xml_AttributeNameIs` arm per attribute, each storing to a
+/// distinct offset:
+///
+/// | offset | attribute |
+/// | --- | --- |
+/// | `+0x104` | [`damage`](Self::damage) |
+/// | `+0x108` | [`absorb`](Self::absorb) |
+/// | `+0x10c` | [`repair`](Self::repair) |
+/// | `+0x110` | [`slow_ship_factor`](Self::slow_ship_factor) |
+/// | `+0x114` | [`lock_min_dist`](Self::lock_min_dist) |
+/// | `+0x118` | [`lock_max_dist`](Self::lock_max_dist) |
+/// | `+0x11c` | [`range`](Self::range) |
+/// | `+0x120` | [`active_time`](Self::active_time) |
+/// | `+0x124` | [`energy_multiplier`](Self::energy_multiplier) |
+///
+/// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 ///
 /// # It authors no `slowdown_time`, and it is the only decoded block that does
 /// not
@@ -753,4 +769,84 @@ pub struct LeachBeamStats {
     /// `crates/formats/tests/weapons_ground_truth.rs` gives - the relation is
     /// the claim, and it is what that test asserts.
     pub lock_max_dist: f32,
+    /// Energy the victim loses on every tick the link holds.
+    ///
+    /// Spent by `LeachBeam_DrainRate` (`0x08872edc`), which returns
+    /// `damage * multiplier` and hands it to `LeachBeam_Drain` (`0x08866804`)
+    /// to add into the victim's `entity+0x120`. That accumulator is drained
+    /// once a tick by `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) into the
+    /// ordinary `Ship_Damage` path, so a fired Shield pickup swallows it the
+    /// same way it swallows any other hit.
+    ///
+    /// **Per tick, not per second** - neither the rate function nor the drain
+    /// scales by `dt`. See [`Self::energy_multiplier`] for the one-shot the
+    /// first tick gets, and `oag_gameplay::projectile::leach_beam` for what
+    /// that means at this project's fixed 60 Hz against the original's own
+    /// variable timestep.
+    pub damage: f32,
+    /// Energy the *shooter* gains on every tick the link holds.
+    ///
+    /// The other half of the transfer, and the reason the weapon is called what
+    /// it is. `LeachBeam_RepairRate` (`0x08872f18`) is
+    /// [`Self::damage`]'s twin, differing only in which offset it reads and
+    /// which of the instance's two one-shot flags it consumes; its result goes
+    /// into the shooter's `entity+0x128`, which `Ship_ApplyPendingWeaponRepair`
+    /// (`0x0883f228`) drains into `Ship_AddShield` (`0x0883ddc8`) - straight
+    /// into the shooter's own shield pool, not through any damage path.
+    ///
+    /// Authored equal to [`Self::damage`] on both shipped Pulse tables, which
+    /// makes the transfer conservative; nothing in the executable requires
+    /// that, so the two stay separate fields.
+    pub repair: f32,
+    /// The handling multiplier a craft under the beam is held at.
+    ///
+    /// **This is why the block authors no `slowdown_time` and the absence is
+    /// design rather than omission.** Every other weapon adds *seconds* to the
+    /// shared `entity+0x130` slowdown channel `oag_gameplay::slowdown` drains.
+    /// The LeachBeam does not touch that channel at all: `LeachBeam_Drain`
+    /// copies this attribute into the victim's `entity+0x134`, and
+    /// `Ship_ApplyPendingWeaponDamage` writes it on into the victim's *handling*
+    /// record at `+0x31c` - but only on the branch where the pending weapon kind
+    /// is `7`, the LeachBeam's own tag. A factor held for as long as the link
+    /// holds, not a duration charged once on impact.
+    pub slow_ship_factor: f32,
+    /// How far apart the two craft may drift before the link breaks.
+    ///
+    /// `LeachBeam_UpdatePool` (`0x08866b08`) measures the floor-clamped
+    /// distance between the beam's own resolved position and the target's, and
+    /// marks the link disconnected past this figure. Distinct from
+    /// [`Self::lock_max_dist`], which is the *longitudinal* window the lock is
+    /// taken in: a beam reaches further than it can be aimed, so a target that
+    /// pulls ahead stays connected for a while after it would no longer be
+    /// lockable.
+    ///
+    /// **The trap this attribute used to carry is now resolved rather than
+    /// avoided.** It is authored at the same figure as
+    /// `oag_game::race::sight::DRAW_RANGE`, a *code* literal in
+    /// `HudSight_Update` with nothing to do with this weapon, and this block
+    /// left `range` undecoded rather than manufacture a finding out of that
+    /// coincidence. What settles it is not the value but the parser: the
+    /// `range` arm of `WeaponStats_ParseLeachBeam` stores to `stats+0x11c`, and
+    /// `stats+0x11c` is the offset `LeachBeam_UpdatePool` compares its distance
+    /// against. The coincidence stands and is still a coincidence.
+    pub range: f32,
+    /// Seconds a fired beam holds before it lets go, whether or not it ever
+    /// connected.
+    ///
+    /// `LeachBeam_Advance` (`0x08873fa0`) counts the instance's age up by `dt`
+    /// and returns `age < active_time`; `LeachBeam_UpdatePool` treats a `false`
+    /// there as a disconnect, after which a linger window runs before the pool
+    /// retires the instance.
+    pub active_time: f32,
+    /// What the **first** draining tick's transfer is multiplied by, once on
+    /// each half.
+    ///
+    /// Both rate functions carry their own one-shot flag on the instance
+    /// (`+0x58` for the drain, `+0x59` for the repair), set by
+    /// `LeachBeam_InitLocked` and cleared on first read. So a connection lands
+    /// one large transfer and then settles to [`Self::damage`] and
+    /// [`Self::repair`] per tick - which is what makes a glancing, immediately
+    /// broken link still worth something, and what stops a long hold being the
+    /// only way the weapon does anything.
+    pub energy_multiplier: f32,
 }

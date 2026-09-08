@@ -231,6 +231,15 @@ pub struct World {
     /// covered by [`crate::hash::hash_world`] exactly as [`Self::projectiles`]
     /// is.
     pub quake: Option<crate::projectile::quake::Wave>,
+    /// The single LeachBeam link, or `None` when none is in flight.
+    ///
+    /// Beside [`Self::quake`] and for the same reason - see
+    /// `crate::projectile::leach_beam`'s module doc comment: the original's own
+    /// pool cursor allows exactly one beam **in the whole race** at a time, a
+    /// stricter gate than any other weapon has, and a beam carries a link
+    /// between two craft rather than a position and a velocity. Simulation
+    /// state, so [`crate::hash::hash_world`] covers it.
+    pub leach_beam: Option<crate::projectile::leach_beam::Beam>,
 }
 
 impl World {
@@ -245,6 +254,7 @@ impl World {
             race: RaceState::default(),
             projectiles: crate::projectile::Projectiles::new(),
             quake: None,
+            leach_beam: None,
         }
     }
 
