@@ -32,6 +32,11 @@ produced it and the one that replaces it.
 | `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
 | `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
 | `0x08834b14` | `AiManager_Update` | 80 (new 2026-09-08) |
+| `0x088651d8` | `Cannon_Construct` | 85 (new 2026-09-08) |
+| `0x088573b0` | `CannonPool_Construct` | 88 (new 2026-09-08) |
+| `0x08864b00` | `Cannon_LoadTextures` | 85 (new 2026-09-08) |
+| `0x08b3bf80` | `g_cannon_bolt_texture` (data) | 85 (new 2026-09-08) |
+| `0x08b3bf84` | `g_cannon_muzzle_flash_texture` (data) | 85 (new 2026-09-08) |
 
 Read [weapon-fire.md](weapon-fire.md) first for the two traps every reading below
 depends on: `entity+0x1b8` is the fire-request word, and every `jal` operand and
@@ -424,6 +429,64 @@ recovered gate above, but the *value* of the byte is undefined behaviour and so
 cannot be measured: treating it as non-zero for every AI craft is **chosen, not
 measured, and carries no confidence score**. The mechanism is recovered; the
 value it terminates in is not a fact about the disc.
+
+### What draws a Cannon round: two textures and three quads, and not a particle effect at all
+
+**Read 2026-09-08, confidence 85, and it refutes the premise the visuals thread
+was working from.** The round was assumed to be a `Data\Psys\*.POB` effect whose
+trigger had not been found, with `Ship Muzzle` (`0x3e2`) and `cannon_flash`
+(`0x3eb`) as the two candidate classes. Neither is it. The Cannon names its own
+assets in the executable, in plain strings:
+
+| String | Address | What loads it |
+| --- | --- | --- |
+| `Data\Weapons\pulse_muzzleflash.vex` | `0x08a7c85c` | `Cannon_Construct` (`0x088651d8`), via `Vex_LoadModel` into the round's own node at `instance+0xc0` |
+| `Data\Weapons\Textures\Cannon_bolt.mip` | `0x08a7c804` | `Cannon_LoadTextures` (`0x08864b00`), into `g_cannon_bolt_texture` (`0x08b3bf80`) |
+| `Data\Weapons\Textures\Cannon_muzzle_flash.mip` | `0x08a7c82c` | `Cannon_LoadTextures`, into `g_cannon_muzzle_flash_texture` (`0x08b3bf84`) |
+| `Data\Psys\WO_CANNON_SPARKS.POB` | `0x08a7c484` | referenced from `FUN_0886593c` (`0x0886593c`) - the **impact**, not the round |
+| `CANNON` | `0x08a7c7f0` | the fire cue, played at the end of `Cannon_Init` |
+
+`Cannon_Construct` (`0x088651d8`) is the per-round constructor: 60 of them are
+allocated by `CannonPool_Construct` (`0x088573b0`) at `pool + 0x68 + i*4` -
+exactly the slot array
+[`Weapon_FireCannon`](#weapon_firecannon-0x088577ac-is-a-round-robin-burst-spawn-not-a-single-shot)
+indexes - and its `pool + 0x158` live count is zeroed in the same function, which
+is the second cross-check on both offsets.
+
+Each round then builds **two GU display lists in its own constructor**, under a
+semaphore, and replays them per frame:
+
+```c
+Gu_Start(1, instance + 0x240, 0x200);  FUN_08864cd0(instance);   // two 4-vertex strips
+Gu_Start(1, instance + 0x440, 0x1c0);  FUN_08864dc4(instance);   // one 4-vertex strip
+```
+
+Both set the same state - fog off, texture transform reset, depth write on with
+func 6, `Gu_BlendFunc(0, 2, 10, 0, 0xffffff)` - and both draw primitive `4`
+(triangle strip) with vertex format `0x19f`. `FUN_08864cd0` draws from
+`instance+0x100` and `instance+0x160`; `FUN_08864dc4` draws from
+`instance+0x1c0`. Those three vertex blocks are the `0x3f800000` runs
+`Cannon_Construct` seeds at `+0x104`/`+0x118`/`+0x11c`, `+0x164`/`+0x178`/`+0x17c`
+and `+0x1c4`/`+0x1d8`/`+0x1dc`.
+
+**Which list is the bolt and which is the muzzle flash is not read**, so neither
+function is renamed. The ordering (`Cannon_LoadTextures` loads bolt then flash;
+the constructor builds `FUN_08864cd0`'s list then `FUN_08864dc4`'s) makes
+"`0x08864cd0` is the bolt, `0x08864dc4` is the flash" the obvious guess and it is
+written down here as a guess - **confidence 40, do not rename on it**. Neither
+draw function binds a texture in the decompile; both call
+`FUN_0891e988(g_display, 0xfdb2, 0x3e9, 0)` with the same two constants
+`Vex_LoadModel` is passed, so the binding is somewhere those constants reach.
+`0x3e9` is **not** a vex class id here - `0x3e9` in the class table is
+`soundcone` (see [vex.md](../../../formats/vex.md)), so the pair reads as a tag,
+not a class.
+
+**Consequence for this project**: an implementer needs `pulse_muzzleflash.vex`
+and the two `.mip` textures out of `Data.wad`, not `psys::Library`. The WAD is
+hash-keyed with no recovered names for these, so the first step is
+`just wad hash 'Data\Weapons\pulse_muzzleflash.vex'` and the two textures, then
+looking the hashes up in `PSP_GAME/USRDIR/Data.wad`'s 1142 entries. Nothing is
+drawn today and nothing invented stands in - see the visuals thread.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 

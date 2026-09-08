@@ -479,23 +479,21 @@ impl Race {
             return;
         } else if weapon == oag_formats::weapons::Weapon::Cannon {
             // **Named here rather than left to fall through to absorb, and
-            // for a different reason than the Autopilot's.** An opponent
-            // cannot fire a Cannon at all, and that is recovered rather than
-            // an omission: `Cannon_UpdateReload` (`0x0883f424`) gates on the
-            // *fire-held* byte of the craft's control record (`+0x16`), and
-            // nothing in the whole image writes that byte except the human
-            // pad's own per-frame update. `WeaponAi_Update` (`0x08851550`)
-            // writes the record's fire-*press* byte `+0x15` and its absorb
-            // byte `+0x17` and never `+0x16`, so an AI's press sets a request
-            // bit nothing dispatches and no round leaves. See
+            // for a different reason than the Autopilot's.** The Cannon is the
+            // one weapon that does not fire off the press edge at all - not for
+            // the player either. `Weapon_RequestFire`'s bit `0x2000` is
+            // dispatched by nothing; `Cannon_UpdateReload` (`0x0883f424`) reads
+            // the *held* half of the same button and arms bit `0x4000`, which is
+            // what `Weapons_DispatchFire` actually dispatches. So this arm has
+            // nothing to do on the tick the pickup lands, and
+            // `Race::advance_cannons` - which runs every slot, not just the
+            // player's - does the firing on every tick after it. See
             // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
             //
-            // Keeping the pickup rather than absorbing it is the conservative
-            // half of that: what `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`)
-            // chooses for held-weapon id 3 is not read, and turning an
-            // opponent's Cannon straight into energy would be inventing an
-            // answer. So the slot simply stays occupied until the next pad
-            // replaces it.
+            // Keeping the pickup rather than absorbing it is therefore not
+            // conservatism any more: the craft has to go on holding the weapon
+            // for `advance_cannons` to spend it, exactly as the Mine's arm above
+            // holds one for the length of its cluster.
             return;
         } else {
             // **Anything not named above falls through to absorb**, which is how

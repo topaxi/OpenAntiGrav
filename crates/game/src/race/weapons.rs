@@ -541,40 +541,39 @@ impl Race {
     /// concluded the weapon self-fired; it does not. See
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
-    /// **Slot 0 only, and that is recovered rather than a shortcut.** The whole
-    /// per-craft weapon block in `FUN_0883f540` sits behind a null check on the
-    /// control record, and while AI craft do have one - `WeaponAi_Update`
-    /// (`0x08851550`) writes its fire-*press* byte `+0x15` and its absorb byte
-    /// `+0x17` - nothing in the image ever writes `+0x16` except the human
-    /// pad's own update. An exhaustive operand scan finds one byte read at
-    /// `+0x16` in the whole game range (the Cannon's) and zero byte stores. So
-    /// an opponent holding a Cannon never fires it in the original, and does
-    /// not here. Whether it *should* is a design question of the shape the
-    /// barrel roll's own 2026-09-06 ruling settled, not an RE one.
+    /// **Every craft, not just slot 0** - and an opponent's half is *chosen,
+    /// not measured*. `Cannon_UpdateReload` gates on the fire-held byte of the
+    /// firing craft's control record, and for an opponent that record is
+    /// `Ai + 0x08`, so the byte is `Ai + 0x1e`. **Nothing in the image writes
+    /// `Ai + 0x1e`, at any width, and `Ai_Construct`'s object is allocated
+    /// without a zero-fill** while the craft object beside it is explicitly
+    /// memset. The gate is therefore uninitialised heap: the *mechanism* is
+    /// recovered, the *value* is undefined behaviour and cannot be measured.
+    /// The maintainer reports from play that AI craft do fire Cannons, so this
+    /// port takes the byte as non-zero for every opponent - which carries **no
+    /// confidence score**, because there is no fact about the disc to score.
+    /// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
-    /// **A craft flown by the autopilot fires nothing either**, for the same
-    /// reason in the same shape: `Ship_UpdateCraft` (`0x08849618`) re-points
-    /// `craft+0x78` at a blend buffer filled from the autopilot's controller
-    /// while `craft+0x1d4` is non-zero, and that controller has no fire-held
-    /// byte to set. `Race::flown_for_the_player` is this port's stand-in for
-    /// that condition; it covers the operator's `--autopilot` too, which the
-    /// original has no equivalent of.
+    /// The consequence is deliberate and worth stating, because it is what a
+    /// player should see: an opponent holding a Cannon fires it **continuously
+    /// from the tick it picks it up**, with no aiming and no fire decision, until
+    /// its authored `rounds` run out. `WeaponAi_DecideFireOrAbsorb`'s own choice
+    /// writes the record's press byte `+0x15`, which reaches `Weapon_RequestFire`,
+    /// which sets bit `0x2000`, which nothing reads.
+    ///
+    /// **A craft flown by the autopilot fires nothing**, and that half *is*
+    /// measured: `Ship_UpdateCraft` (`0x08849618`) re-points `craft+0x78` at a
+    /// blend buffer filled from the autopilot's own `Ai` record while
+    /// `craft+0x1d4` is non-zero, and the player's autopilot is an `Ai` too - so
+    /// it has the same unwritten hole, and the human pad's held byte is no longer
+    /// what is read. `Race::flown_for_the_player` is this port's stand-in for that
+    /// condition; it covers the operator's `--autopilot` too, which the original
+    /// has no equivalent of.
     ///
     /// Called from the tick right after `Race::lay_mines`, for the same
     /// reason that one runs where it does: a round fired this tick leaves
     /// from where the craft was when the tick started.
     pub(super) fn advance_cannons(&mut self, snapshot: &InputSnapshot) {
-        if self.flown_for_the_player()
-            || !snapshot
-                .buttons
-                .is_held(oag_gameplay::input::Button::Square)
-        {
-            // The button is up, so the original's countdown does not move.
-            // Deliberately *not* a reset: `Cannon_UpdateReload` leaves
-            // `craft+0x158` exactly where it stopped, so releasing and
-            // re-pressing resumes rather than restarts.
-            return;
-        }
         let Some(cannon) = self
             .weapons
             .as_ref()
@@ -584,12 +583,36 @@ impl Race {
             // Nothing to arm with no `rounds`/`rate` to read.
             return;
         };
-        if !self.world.ships[0].active
-            || self.world.ships[0].pickup.weapon != Some(oag_formats::weapons::Weapon::Cannon)
+        // The player's own held state, read once. An autopilot blend takes the
+        // pad out of the loop entirely, exactly as above.
+        let player_holds_fire = !self.flown_for_the_player()
+            && snapshot
+                .buttons
+                .is_held(oag_gameplay::input::Button::Square);
+        for slot in 0..self.world.ship_count as usize {
+            // Slot 0 follows the pad; every other slot holds fire always, for
+            // the reason in this method's own doc comment.
+            let holds_fire = if slot == 0 { player_holds_fire } else { true };
+            if !holds_fire {
+                // The button is up, so the original's countdown does not move.
+                // Deliberately *not* a reset: `Cannon_UpdateReload` leaves
+                // `craft+0x158` exactly where it stopped, so releasing and
+                // re-pressing resumes rather than restarts.
+                continue;
+            }
+            self.advance_one_cannon(slot, &cannon);
+        }
+    }
+
+    /// One craft's Cannon countdown, and the round it puts in the air when the
+    /// countdown reaches zero. See [`Self::advance_cannons`] for the gate.
+    fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_formats::weapons::CannonStats) {
+        if !self.world.ships[slot].active
+            || self.world.ships[slot].pickup.weapon != Some(oag_formats::weapons::Weapon::Cannon)
         {
             return;
         }
-        let Some(remaining) = self.world.ships[0].pickup.advance_cannon_reload(
+        let Some(remaining) = self.world.ships[slot].pickup.advance_cannon_reload(
             self.dt,
             cannon.rate,
             // Saturating: a disc that ever authored more than 255 rounds
@@ -599,7 +622,7 @@ impl Race {
             // The countdown moved but has not reached zero yet.
             return;
         };
-        let ship = &self.world.ships[0];
+        let ship = &self.world.ships[slot];
         // **The low bit of the count remaining after this round**, not
         // before it - `Weapon_FireCannon` reads `craft->shots & 1` after
         // `Cannon_UpdateReload`'s own decrement, and
@@ -614,9 +637,12 @@ impl Race {
         // rule `Race::lay_mines` follows: the round has already been
         // spent, so a Cannon held by a craft in a saturated pool simply
         // stops putting anything in the air until a slot frees up.
-        self.world
-            .projectiles
-            .spawn(oag_formats::weapons::Weapon::Cannon, position, velocity, 0);
+        self.world.projectiles.spawn(
+            oag_formats::weapons::Weapon::Cannon,
+            position,
+            velocity,
+            slot as u8,
+        );
     }
 
     /// One tick of the Quake's own travelling wave: advances it along the
