@@ -36,16 +36,6 @@ taste, and are the reason it is worth doing properly rather than quickly:**
 
 ## Open
 
-- **Opcode `0x14` is undecoded and nine authored emitters are silent because
-  of it.** Playing the emitters found a failure the name-table sweep could not:
-  a cue that *is* in the bank and whose command run binds no waveform. 38 nodes
-  across eight circuits, and the opcodes split them cleanly - `0x1e` on every
-  `~SetReg*` cue and nothing else, `0x14` on `moather~birds`, `dekonst~CRANE`
-  and, beside its `0x1e`, on both of `talonsj`'s. `0x1e` reads as a register
-  set that plausibly emits nothing; **`0x14` is the one to decode**, and the
-  `talonsj` cues carrying both is what rules out "these are all just
-  registers". Table and confidence on
-  [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md).
 - **What a latched voice should do.** `SoundEmitter_ServiceRequests` leaves a
   latched request untouched - "not even reaped" - so the original's voice keeps
   playing at the last in-range gain, which is near zero. `Ambience::tick` stops
@@ -72,21 +62,25 @@ taste, and are the reason it is worth doing properly rather than quickly:**
   nothing observed reads it back. It is `25.0` on every cone and equal to the
   radius on every `sound`.
 
+**2026-09-08: opcode `0x14` is decoded - a bare no-op, corroborated on
+`ps3-hdfury-eu` at the same slot (`Scream_OpNop`/`Scream_DoGrainNop`,
+confidence 82, [sound.md](../../docs/ghidra/functions/psp-pulse-usa/sound.md#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)).**
+It does not bind a waveform, so `moather~birds`, `dekonst~CRANE` and both
+`talonsj~SETREG` cues are correctly silent, not blocked on a missing handler -
+[track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
+corrects its prior confidence-88 hypothesis. Nothing to wire follows from this
+- there was no waveform to bind - so the former Next Step #1 is dropped rather
+than closed with an implementation.
+
 ## Next Steps
 
-1. **Decode opcode `0x14`.** Find its handler in `Scream_StepCommandList`'s
-   dispatch; `moather~birds` is the cue to point it at, one command long. It is
-   the difference between five silent bird emitters and Moa Therma sounding
-   like Moa Therma. `crates/game/tests/track_audio_ground_truth.rs` already
-   prints every one of the 38 nodes with its cue and its opcodes, so the check
-   is a before/after on that test's own output.
-2. **Sweep `pure-psp-usa` and `pulse-ps2-eu` for the three classes** - one
+1. **Sweep `pure-psp-usa` and `pulse-ps2-eu` for the three classes** - one
    `--nodes --class` run each. If Pure authors them, finding where its circuit
    banks live is the follow-on, because it ships no `trackstartup.xml`.
-3. **Find `soundcone`'s init**, which is the only thing standing between 134
+2. **Find `soundcone`'s init**, which is the only thing standing between 134
    authored directional emitters and being played. Everything else they need is
    in place: the payload decodes, the emitter record has the half-angle at
    `+0x40` and the enable byte at `+0x4c`, and `SoundEmitter_ComputeVolumeAndAngle`
    already multiplies the cone falloff in.
-4. **Decide whether the mix wants headroom.** Not an audio-emitter question -
+3. **Decide whether the mix wants headroom.** Not an audio-emitter question -
    it was already clipping - but the ambience is what made it visible.
