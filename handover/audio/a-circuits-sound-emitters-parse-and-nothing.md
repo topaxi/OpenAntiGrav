@@ -4,10 +4,11 @@
 is on
 [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md),
 which is the durable record - **do not requote its layout table here**. This
-thread is the half that did not land: **1,298 authored emitters are readable and
-nothing in `oag-game` plays a single one**, so every circuit is still as silent
-as it was before the parse, and the fidelity win is all still in front of
-whoever picks this up.
+thread's title is now stale: `8b6eaf56` (2026-09-06) landed the half that did
+not - **the circuits are audible**, `oag_game::audio::sfx::TrackEmitters`
+opens a held looping voice for every `sound` `0x3e1` node inside its radius
+and stops it when the listener leaves, and a headless lap renders to a WAV.
+What is left is what wiring the 1,298 authored emitters turned up, below.
 
 What exists to build on: `oag_formats::sound_emitters::emitters(data, nodes)`
 returns each node's bank label, cue name, radius curve, optional cone and world
