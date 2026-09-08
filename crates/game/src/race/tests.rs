@@ -122,6 +122,7 @@ fn setup(handling: Handling) -> Setup {
             down_speed: 30.0,
         },
         mode: Mode::TimeTrial,
+        eliminator_kill_target: None,
         difficulty: oag_ai::Difficulty::default(),
         class: "VENOM".to_string(),
         opponents: false,

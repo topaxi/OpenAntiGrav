@@ -524,9 +524,25 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0xb9c2_9ac6_b8fe_010b` / `0x34c7_a5fa_88c8_357d` at 600 - reproduced bit
 ///   for bit, and [`REFERENCE_VOLLEY`]'s did too. That is what makes this an
 ///   addition to what the gate covers rather than a change to what a race does.
+/// - **Moved again 2026-09-08, same day, for [`oag_race::Mode::Eliminator`].**
+///   `oag_race::Standing` gained `kills: u32` and `deaths: u32` - Eliminator's
+///   own bookkeeping - so `hash::write_standing` writes eight more bytes per
+///   ship per tick. Neither scenario here runs Eliminator or writes to either
+///   field, so both stay a constant `0` through the whole run; nothing else
+///   about either scenario changed. The mode enum also gained a fifth
+///   discriminant (`Mode::Eliminator => 4` in `hash::write_race`), which
+///   changes nothing for the four pre-existing modes' own encoding - neither
+///   scenario's `world.race.mode` is ever `Eliminator`.
+///
+///   **Isolated the way this comment requires.** With `write_u32(*kills)` and
+///   `write_u32(*deaths)` removed from `write_standing` and nothing else
+///   touched, the constants this commit replaces - `0x2321_c766_223d_0fc8` /
+///   `0x3917_5149_7ee8_d198` at 60 ticks and `0xb9c2_9ac6_b8fe_010b` /
+///   `0x34c7_a5fa_88c8_357d` at 600 - reproduced bit for bit, and
+///   [`REFERENCE_VOLLEY`]'s did too.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xef75_9a8c_2dc1_d0d8, 0x3409_ed83_efae_1cf2),
-    (600, 0xa3ae_0aac_579b_c5b1, 0x9113_a329_913c_41ef),
+    (60, 0x4963_1808_d962_2738, 0xe4d8_473d_f658_1912),
+    (600, 0x901c_b152_e506_3551, 0x5f3b_9d57_fee0_358f),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -700,9 +716,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   Replaces `0x89da_d0f0_bd19_2e0c` / `0xea20_03ce_ebb3_2762` at 60 ticks and
 ///   `0x62d3_802f_e05b_0fa9` / `0xf440_21aa_cf59_fd86` at 600. No isolation
 ///   repeated here - [`REFERENCE`]'s entry ran it for both scenarios at once.
+/// - **Moved again 2026-09-08, same day, inherited from the
+///   `Standing::kills`/`deaths` addition [`REFERENCE`]'s own history
+///   records**, through the same `write_standing` call both scenarios share -
+///   this one never scores a kill or a death either, so both fields stay a
+///   constant `0` through the whole run. Replaces `0x57ff_1511_51c9_3e64` /
+///   `0xf488_c189_693d_c7c4` at 60 ticks and `0x4872_7a5a_3abb_9c2b` /
+///   `0x189c_0e36_01b8_688a` at 600. No isolation repeated here -
+///   [`REFERENCE`]'s entry ran it for both scenarios at once.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x57ff_1511_51c9_3e64, 0xf488_c189_693d_c7c4),
-    (600, 0x4872_7a5a_3abb_9c2b, 0x189c_0e36_01b8_688a),
+    (60, 0x8430_6c4a_253e_6ae4, 0x1941_4fc9_a94c_5504),
+    (600, 0x94aa_9286_21bf_5eeb, 0x61ab_2992_4820_54ca),
 ];
 
 #[test]

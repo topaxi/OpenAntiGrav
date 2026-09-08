@@ -21,6 +21,7 @@ impl Race {
     pub fn start(setup: Setup) -> Self {
         let Setup {
             mode,
+            eliminator_kill_target,
             difficulty,
             opponents,
             trail_sparks,
@@ -289,6 +290,10 @@ impl Race {
             respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
             respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
             respawns: [0; oag_gameplay::MAX_SHIPS],
+            eliminator_kill_target: eliminator_kill_target
+                .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
+            last_damager: [None; oag_gameplay::MAX_SHIPS],
+            eliminator_respawn_timer: [0.0; oag_gameplay::MAX_SHIPS],
             rolls_armed: [0; oag_gameplay::MAX_SHIPS],
             rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
             lost_ticks: [0; oag_gameplay::MAX_SHIPS],
