@@ -940,6 +940,20 @@ Recorded so none of this reads as undiscovered work.
   read - see the structural finding above and
   [hud-time-caption-substitution.md](../ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md)
   - what remains open is what feeds the ordinal tier that table switches on.
+  **The progression data itself now exists** - a campaign cell authors its
+  gold/silver/bronze targets and `Cell_EvaluateMedal` (`0x088bf620`) turns a
+  result into a tier, all in
+  [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md). **That
+  is not this tier and does not close this item**: `Cell_EvaluateMedal` numbers
+  the tiers `0 = gold, 1 = silver, 2 = bronze` and has no `RECORD` tier at all,
+  while the table above runs `0 = BRONZE` up to `3 = RECORD`. Two different
+  ordinals. What the campaign pass did pin down for whoever picks this up: the
+  field is `*(hud + 0x3c) + 0x34`, cached against `hud + 0x190`; its siblings
+  are `+0x30` (the target value) and `+0x38` (a bool that reddens it); and its
+  writer is **not** `Hud_BindWidgets`' two `DAT_08b30ffc` reads at `0x088207d8`/
+  `0x088207e4` (a results-screen `sprintf` of the cell's gold target), not
+  `Eliminator_UpdateKillTarget` (`0x0882ce18`) and not `AI_ResolveSkillScale`
+  (`0x08834df4`). Still confidence 50, still deliberately not renamed.
 - **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
   than suspending it.
 - **26 unreferenced `Data\HUD\*.vex` models.** `Bar_1`, `Speed`, `Shield`, `Lap`,
