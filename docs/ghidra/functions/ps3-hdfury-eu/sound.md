@@ -56,6 +56,7 @@ which is a completely different global.
 | `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 88 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
 | `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 82 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
 | `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 88 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
+| `0x14` | `0x006234c0` | `Scream_DoGrainNop` | 82 | No-op (`li r3,0; blr`), corroborating [`psp-pulse-usa`'s `Scream_OpNop`](../psp-pulse-usa/sound.md#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08) at the same opcode slot - found from that page's side, 2026-09-08, refuting [`track-sound-emitters.md`](../psp-pulse-usa/track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)'s prior hypothesis that `0x14` binds a waveform |
 
 Confidence is capped at 84 for every grain opcode not yet corroborated
 elsewhere, by the rubric's "decompilation only, consistent call sites"
