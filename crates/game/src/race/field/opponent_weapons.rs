@@ -186,6 +186,77 @@ impl Race {
         true
     }
 
+    /// Fastens an opponent's beam onto whoever is in front of it, if its driver
+    /// wants a shot now and nobody else's beam is up.
+    ///
+    /// Returns whether the beam went out, on the same `&&`-chain contract every
+    /// other armed weapon here follows.
+    ///
+    /// **The busy check comes first**, matching `Weapon_FireLeachBeam`'s own
+    /// world-wide pool cursor: one beam in the whole race, so a driver that
+    /// wants to fire into somebody else's link keeps the pickup instead.
+    ///
+    /// # An opponent only fires this one with a lock, and that is chosen
+    ///
+    /// The player's own arm fires with or without a lock, because the original
+    /// does - `Weapon_FireLeachBeam` claims the pool slot before it branches,
+    /// and an unlocked beam is a 0.75-second no-op. **An opponent declines
+    /// instead**, keeping the pickup until it has somebody to fasten onto.
+    ///
+    /// **Chosen, not measured**, and tuned for a better race rather than for
+    /// fidelity - the licence `HANDOVER.md` records for opponent behaviour. The
+    /// reasoning: the LeachBeam's pool is a *global* cursor, so an opponent
+    /// burning it on nothing locks the weapon out of the whole race for three
+    /// seconds, the player included. That is the one weapon here where a wasted
+    /// AI shot costs somebody else their turn, and letting an opponent hold on
+    /// to it until it can actually use it makes it a threat instead of a
+    /// nuisance. No confidence score, because nothing was measured.
+    fn fire_opponent_leach_beam(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        if self.world.leach_beam.is_some() {
+            return false;
+        }
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if self.world.ships[slot]
+            .driver
+            .wants_to_fire(&context)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(stats) = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::leach_beam)
+        else {
+            return false;
+        };
+        let count = self.world.ship_count as usize;
+        let ship = &self.world.ships[slot];
+        // The same window `Race::sight_target` runs for the player, from the
+        // craft's own position - the LeachBeam has no recovered launch offset to
+        // measure from, so neither path invents one.
+        let Some(target) = oag_gameplay::projectile::missile::lock_window(
+            &self.world.ships[..count],
+            slot as u8,
+            ship.physics.body.position,
+            ship.physics.body.forward(),
+            stats.lock_min_dist,
+            stats.lock_max_dist,
+            self.course.as_ref().map(oag_race::Course::length),
+        ) else {
+            return false;
+        };
+        self.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+            slot as u8, target, &stats,
+        ));
+        true
+    }
+
     /// Puts one plasma bolt in the air for an opponent, if its driver wants a
     /// shot now.
     ///
@@ -465,6 +536,10 @@ impl Race {
             }
         } else if weapon == oag_formats::weapons::Weapon::Quake {
             if !self.fire_opponent_quake(slot, field) {
+                return;
+            }
+        } else if weapon == oag_formats::weapons::Weapon::LeachBeam {
+            if !self.fire_opponent_leach_beam(slot, field) {
                 return;
             }
         } else if matches!(

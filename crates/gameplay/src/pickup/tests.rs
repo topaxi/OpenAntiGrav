@@ -30,23 +30,29 @@ fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
 
 /// The stand-in for "weighted, and not implemented". **It has to be a weapon
 /// that stays out of [`IMPLEMENTED`]**, or the tests below invert silently
-/// the day it lands - which is exactly what happened to the `Rocket` these
-/// two used before, and to `Quake` after it: both were reasonable picks when
-/// chosen and both were built out from under this constant. The LeachBeam
-/// needs its own two drain-rate functions and their consumer, none of which
-/// is read - see
-/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s own Open
-/// list, which is a longer way off than either retired pick was.
-const UNIMPLEMENTED: Weapon = Weapon::LeachBeam;
+/// the day it lands - which has now happened to three picks in a row: the
+/// `Rocket`, then the `Quake`, then the `LeachBeam`, each a reasonable choice
+/// when made and each built out from under this constant within weeks.
+///
+/// **The Repulser is the fourth and should be the last, because it is the one
+/// pick whose reason is a decision rather than a gap.** Every other weapon is
+/// now implemented, so there is nothing else to choose; and the Repulser is
+/// not merely unread but *deferred* - the shipped tables give it zero odds
+/// outside Eliminator, and this build has no Eliminator, so nobody has a
+/// reason to build it. See `HANDOVER.md`. If it ever does land, the honest
+/// replacement is not another weapon but a synthetic one, because at that
+/// point the premise "some weighted weapon is unimplemented" stops being true
+/// of the shipped table at all.
+const UNIMPLEMENTED: Weapon = Weapon::Repulser;
 
 #[test]
 fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
-    // A LeachBeam is weighted and a LeachBeam cannot be handed out, so this
+    // A Repulser is weighted and a Repulser cannot be handed out, so this
     // is the real shape of the restriction rather than an empty table.
-    let leachbeams_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
+    let repulsers_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
     let mut rng = Rng::new(1);
     assert_eq!(
-        draw(&mut rng, &leachbeams_only, Driver::HUMAN_UNPLACED, None),
+        draw(&mut rng, &repulsers_only, Driver::HUMAN_UNPLACED, None),
         None
     );
 }

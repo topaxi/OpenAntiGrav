@@ -761,10 +761,10 @@ impl Race {
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
         // on `self.shield[slot].hit()`, narrowed to the beam's one victim.
-        if report.absorbed {
-            if let Some(shell) = self.shield.get_mut(beam.target as usize) {
-                shell.hit();
-            }
+        if report.absorbed
+            && let Some(shell) = self.shield.get_mut(beam.target as usize)
+        {
+            shell.hit();
         }
         self.world.leach_beam = if report.retired { None } else { Some(beam) };
     }
