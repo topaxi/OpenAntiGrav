@@ -347,15 +347,21 @@ is why craft availability cannot be modelled with the circuit unlock's shape.
 
 **Status: read, not implemented**, same as the rest of this page - and the
 subject of a dedicated scoping pass (2026-09-08) into how much of Wipeout
-Pulse's campaign structure already exists as data on the disc. Short answer:
-**the screen flow and the grid's visual shape are fully authored; which
-cell of the campaign's own grid races which track, mode or medal time is
-not found authored anywhere this pass could read - but a separate,
-per-track family of race-time/lap-time/AI-difficulty records *is* authored,
-and whether the two connect is an open question, not a confirmed link.**
-All extracted directly with `oag-wad cat`/`extract` against
-`pulse-psp-usa.chd`'s `Data.wad`, `FE.wad` and `FEData.wad`; nothing here
-needed Ghidra.
+Pulse's campaign structure already exists as data on the disc. The screen
+half, below, was read with `oag-wad cat`/`extract` against
+`pulse-psp-usa.chd`'s `Data.wad`, `FE.wad` and `FEData.wad` and needed no
+Ghidra: **the screen flow and the grid's visual shape are fully authored, and
+every content slot on those screens is a template placeholder.**
+
+**The heading's "content no" is about the screens, and it survives only in that
+sense.** A Ghidra follow-up the same day found the campaign's content in full,
+in sixteen `Data\Plugins\grids\grid_NN.xml` files this pass never opened - 236
+`PI_Cell` records with their own tracks, modes, lap counts and gold/silver/
+bronze targets. Read
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md) before
+using anything below as evidence that a value is missing; the
+["settled the same day"](#settled-the-same-day-in-ghidra-the-content-is-authored-in-files-this-pass-never-opened)
+section corrects the specific claims.
 
 **A region note, since it bears on the language and front-end findings
 below**: `oag-unpack info` identifies this image as `UCUS-98712` (USA) by
@@ -433,8 +439,13 @@ races that feature AI ships, you can change their difficulty level with δ."*
 So the disc's own documentation confirms medal requirements are meant to be
 shown per cell - the widgets to show them are authored - **and no source read
 this pass carries the numbers that would fill them in.** Confidence 88 for
-the widget/placeholder reading (direct, unambiguous XML); the absence claim
-that follows is scored on its own, below.
+the widget/placeholder reading (direct, unambiguous XML). The absence claim was
+**refuted the same day**: the numbers are `<Gold Target=>`/`<Silver Target=>`/
+`<Bronze Target=>` on each `PI_Cell` in `Data\Plugins\grids\grid_NN.xml`, and
+`CellSelection_PopulateDetail` (`0x088d68d8`) substitutes them into exactly
+these three widgets - hiding all three for `Race`, `Tournament` and
+`Head2Head`, where the target is a finishing position and therefore implicit.
+See [`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md).
 
 ### Circuit and craft unlocks already read (above) are the campaign's own gate
 
@@ -522,6 +533,16 @@ Four things read off the 24 records directly:
   "WithoutWeapons" fields ever carry a nonzero value. Confidence 90, flat
   census. Reads as: a weapons-on grid gets no AI equalising offset (weapons
   themselves are the equaliser); a weapons-off grid and head-to-head do.
+- **The element names above are now read from the parser, not guessed.**
+  `TrackStats_ParseElement` (`0x088c46f8`) calls the `<l>` block
+  `SkillLevels`, its 12 rows `Entry` and its 4 rows `ModeModifiers`, and
+  `TrackStats_Load` (`0x088c454c`) opens these files as `"%s\stats.xml"` /
+  `"%s\stats_reversed.xml"` under each track's own directory. The whole record
+  is parsed onto the **`PI_Track` definition object**, not into any campaign
+  structure. `SkillScaleValue` defaults to `1.0`/`2.0`/`3.0` for Easy/Medium/
+  Hard before parsing, so it is an index on a three-point curve rather than a
+  raw multiplier - see
+  [`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md).
 - **`SkillScaleValue` is now a located, valued field.**
   [`ai-stats.md`](../ghidra/functions/psp-pulse-usa/ai-stats.md#what-is-not-determined)
   already flagged it as "appears in the string table and in none of the nine
@@ -541,55 +562,63 @@ positional mapping puts `4419` at position 3 and `5350` at position 5 -
 swapped. So file order is *not* a reliable track key on its own evidence,
 and no attempt to name all 24 tracks from this family is made here.
 
-### What this pass could not settle
+### Settled the same day, in Ghidra: the content is authored, in files this pass never opened
 
-**Confidence 55, genuinely unresolved, and explicitly a question for whoever
-has Ghidra next**: where the built-in campaign's per-cell content - which
-track, which mode, which medal target times, how many points a race is worth,
-how many points a grid requires to clear - actually lives, and **whether it
-draws on the `FEData.wad` per-track family above or is unrelated to it.**
-Two readings remain open and this pass could not discriminate them from XML
-or from the newly-found record shape alone:
+The paragraph that stood here asked where the built-in campaign's per-cell
+content lives, and offered two readings - a compiled table in `BOOT.BIN`, or a
+campaign built procedurally out of `Definition.xml` plus the `FEData.wad`
+per-track family. **Both are wrong, and the answer was on disc the whole time.**
+`Data\Plugins\grids\Definition.xml` in `Data.wad` lists **sixteen** files,
+`grid_00.xml` .. `grid_15.xml`, each one `PI_Grid` holding 8-16 `PI_Cell`
+records - **236 cells in all**, every one naming its track, mode, speed class,
+lap count, weapons and damage switches, AI count, AI skill, and **its own gold,
+silver and bronze targets**. The full decompilation of the parsers, the medal
+evaluator, the points table and the unlock gate is
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md); the
+headline numbers it recovers:
 
-1. **A compiled table inside `BOOT.BIN`**, read the way `Definition_IsUnlocked`
-   reads `<Unlock>` rows - i.e. the grid's *shape* is XML but its *content* is
-   executable data, the same split `TrackSelection_PopulateList` already shows
-   for the ordinary track list (XML declares candidates, code filters and
-   orders them). Under this reading a cell could point at one `FEData.wad`
-   record and a class, and derive its three medal tiers from that record's
-   single `RaceTimes` figure by a still-unknown ratio.
-2. **A procedurally-built campaign**: grid contents derived at runtime from
-   `Definition.xml`'s existing `PI_Track`/`Grid` associations plus the
-   `FEData.wad` per-track record, with no separate *campaign* table at all -
-   the campaign organises data that already exists for other purposes
-   (Custom Race medal defaults, AI scaling) rather than authoring its own.
+- **A medal is worth gold 3, silver 2, bronze 1** (`Cell_MedalPoints`,
+  `0x088bf530`). There is no points-per-position table anywhere on disc because
+  points come from the medal, not the position.
+- **A grid unlocks when the points earned in the *previous* grid reach its
+  authored `RequiredPoints`** - 12, 16, 20, 24, then 28 for every grid from
+  `grid4` on (`Unlock_GridPointsMet`, `0x0888ebd8`). That is exactly what a
+  `<Unlock Grid="Grid0"/>` row on a `PI_Track` evaluates.
+- **The medal is a three-way threshold compare** against the cell's own
+  `Target0..2`, with the comparison direction flipped for `Zone` and
+  `Elimination` where more is better (`Cell_EvaluateMedal`, `0x088bf620`). The
+  ordinal is `0 = gold, 1 = silver, 2 = bronze, 0xff = none`.
+- **The campaign reads `FEData.wad`'s per-track family for exactly one thing:
+  AI difficulty.** A cell's `skill`/`skillEasy`/`skillHard` is a position on the
+  track's own `SkillScaleValue` curve, and `AI_ResolveSkillScale`
+  (`0x08834df4`) interpolates the two. Nothing about a medal target, a mode or a
+  lap count comes from there.
+- **The 32-cell count above is the widget shape, not the content.** A
+  `CellSelection` screen can display 32 hex positions; a campaign grid fills 8,
+  10, 12, 14 or 16 of them, addressed by the `(x, y)` parsed out of each cell's
+  own name (`grid0_2_1`).
 
-Nothing in `Data.wad`'s 17 resolving GUI/plugin definition files, nor
-`FE.wad` (27 entries, fonts and textures only, no text) nor the rest of
-`FEData.wad` (242 entries: images, `.smf`/`.sse` movie data, WAVE audio, and
-64 `<code>`-dictionary blobs total, of which the 24-file family above is
-one identifiable group - the other 40 were not individually read this pass),
-distinguishes these two readings. The language tables themselves are in
-`Data.wad` only, not duplicated in `FEData.wad`. The five files this
-page's own Limits section already flags as unresolved (`Controls_Definition`,
-`Credits_Definition`, `Debug_Screens`, `MemoryStickBootScreens`,
-`MemoryStickScreens`) are unlikely campaign-shaped by name, but were not
-ruled out. **The concrete next step is Ghidra, not more XML reading**: find
-what populates `Cell Selection`'s `Title`/`Line1..8`/`Target0..2` and `Grid
-Selection`'s `Medals`/`Points`/`Required` widgets at runtime, and whether
-that consumer also reads the `FEData.wad` family above - the same
-cross-reference approach
-[`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md)
-used for `TrackSelection`/`TeamSelection` once the PSP relocation patch made
-`get_xrefs_to` usable on these screen classes too. That is outside this
-pass's lane (Ghidra is another contributor's) and is recorded as a next step
-in [the handover thread](../../HANDOVER.md) this pass opened.
+The lesson for the next search, worth writing down: this pass read
+`Data.wad`'s *resolving* GUI/plugin definition files and concluded the content
+was absent, but `Data\Plugins\grids\*` resolves only if you already know the
+path - the WAD's own name table does not carry it, and `Data\Plugins\grids`
+alone (no file) does not hash to an entry. The string that gives it away is
+`"%s\Definition.xml"` at `0x08a7d6a8` in `BOOT.BIN`, applied to the
+`"Data\Plugins\grids"` at `0x08a7d38c`. **A negative over an archive whose
+names are hashes is only ever a negative over the names you thought to try.**
 
 ### The full mode list the disc authors, seven against this project's four
 
 `RaceBox_Definition.xml`'s `Mode` list (`Single Player`, confidence 92 - see
 above) is the complete enumeration: **Arcade, Head2Head, Time Trial, Speed
-Lap, Tournament, Zone, Elimination.** `oag_race::Mode::ALL` implements four of
+Lap, Tournament, Zone, Elimination.** The executable's own `{ value, name }`
+table at `0x08ab062c` gives the ordinals and two more names the front-end XML
+never shows: **3 `Race`, 4 `Tournament`, 5 `Time Trial`, 6 `Zone`, 8
+`Elimination`, 9 `Head2Head`, 10 `Speed Lap`, 11 `Custom Grid`, 12 `AI Race`**
+- 7 is absent from the table and banks no result. Confidence 92, and the
+speed-class table beside it at `0x08ab067c` is `0 Venom, 1 Flash, 2 Rapier, 3
+Phantom`; see
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md). `oag_race::Mode::ALL` implements four of
 the seven (Time Trial, Speed Lap, Zone, and Single Race for the disc's
 `Arcade`). English text for all seven is in `Data.wad`'s language tables -
 five `.cod`-extension entries reached only through `oag-wad extract` (they
@@ -645,6 +674,14 @@ ours" gap for Single Race: the original's own manual text says a Venom race
 (the default class) is normally 3 laps, agreeing with this project's guess,
 but Rapier/Phantom races are described as longer, and nothing here ties a lap
 count to a class programmatically.
+
+**Superseded the same day by hard data, and the hedged prose turns out to be
+exact.** Every one of the 236 `PI_Cell` records in
+`Data\Plugins\grids\grid_NN.xml` carries a `laps` attribute, and across all 236
+it is **3 for Venom, 4 for Flash, 4 for Rapier and 5 for Phantom** with no
+exception, `7` for every `Speed Lap` cell and `0` (rendered `RC_INF`) for every
+`Zone` cell. Confidence 90 - a flat census over 236 authored records. See
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md).
 
 **End-of-tournament placement text, all eight positions, previously
 unrecorded**: `ER_END_TOUR_1`.."Congratulations! 1st Place!" through

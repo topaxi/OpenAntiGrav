@@ -381,6 +381,18 @@ and Eliminator's kill target (the count `ER_YOU_ELIM`'s ending refers to) is
 **10**, also flat. Confidence 90, a clean census over all 24 files. Not
 wired into `oag_race` - this is the number, not the implementation.
 
+**Refined the same day in Ghidra, and the two numbers are not equal in
+standing.** `Eliminator_UpdateKillTarget` (`0x0882ce18`) reads the kill target
+from **the campaign cell's own gold target** when one is in play, and only falls
+back to a global (`DAT_08b30fb0`) otherwise; the campaign's 22 `Elimination`
+cells all author `10`/`7`/`5` for gold/silver/bronze, so `10` is both the
+`FEData` constant and the campaign's own gold threshold, and the race ends when
+**any** ship reaches it (`entity + 0x8d8` is the kill count). Zone is the
+opposite: the campaign's 16 `Zone` cells author gold targets of **18 to 24, per
+track**, never 25 - so `FEData`'s `Zone="25"` is a default for some other path,
+not the campaign's target. See
+[race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md).
+
 ### The string table also settles why shield does not matter in the other two
 
 `MAN_P3_PG1_ENER`: *"The Time Trial and Speed Lap events will recover your ship
@@ -448,6 +460,16 @@ nothing until now.
   Confidence 78, hedged wording, no `laps="%d"` record cross-checked against
   it - not enough to change `SINGLE_RACE_LAPS` on, but enough that a future
   per-class pass should start there instead of from zero.
+  **Settled the same day, and the guess is right for Venom.** The campaign's own
+  236 authored `PI_Cell` records each carry a `laps` attribute, and across all
+  236 it is **3 for Venom, 4 for Flash, 4 for Rapier, 5 for Phantom**, with no
+  exception; `Speed Lap` is `7` everywhere and `Zone` is `0`. Confidence **90**,
+  a flat census over 236 records - see
+  [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md). So the
+  lap count is **per speed class, not per mode**, and `SINGLE_RACE_LAPS = 3` is
+  correct for the default class and wrong for the other three. Fixing that needs
+  the speed class to reach `oag_race`, which it does not yet; the number is
+  measured now, the plumbing is not.
 
 ### A destroyed craft is out of a single race, not respawned
 
