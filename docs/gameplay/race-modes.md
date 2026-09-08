@@ -6,6 +6,27 @@ grid: they are the part of the race layer that can be finished rather than
 stubbed. The fourth, **single race**, is the first with weapons, and it exists
 because pickups have nowhere else to happen; see below.
 
+**The disc names three more, and there is no game around any of the four
+implemented here.** `Tournament`, `Elimination` and `Head2Head` sit alongside
+the four above in `Single Player`'s own `Mode` list, and above all seven of
+them sits a `RACE CAMPAIGN` main-menu entry this project has no equivalent of
+at all - a persistent grid of events with medals and unlocks, not a single
+race repeated. [`race-setup.md`'s Race Campaign
+section](../formats/race-setup.md#the-race-campaign-the-discs-own-campaign-grid-shape-yes-content-no)
+has the 2026-09-08 scoping pass: the campaign's **screen flow and grid shape**
+are fully authored (a two-level hex grid, `Grid Selection` then `Cell
+Selection`, sharing its 35-cell widget with the player's own custom-grid
+editor), its **medal-target widgets** are authored down to gold/silver/bronze
+colour, and its **unlock gating** is the same named `Grid0`..`Grid10`
+mechanism this page's circuit/craft-variant unlocks already use - but **which
+track, mode and medal times actually populate a given cell was not found
+authored anywhere this pass could read**, and is flagged there as a Ghidra
+question for whoever picks it up next. English text for `Tournament`,
+`Elimination` and `Head2Head` is recovered in full on that page, including
+three previously unrecorded Eliminator mechanics (no pickup absorption,
+scaled weapon damage, a kill-count ending rather than a lap count) and all
+eight tournament placement strings.
+
 **Neither is invented - both are measured on the running original and now
 enforced in code, not just true by construction.** `Mode::has_opponents` and
 `Mode::weapons_enabled` return `false` for the three single-ship modes: the Custom Race screen
@@ -412,6 +433,14 @@ nothing until now.
   race-setup format carries `laps="%d"`, so the original configures it per event
   and no single race has been watched long enough to read what a Custom Race is
   set to. `Mode::SINGLE_RACE_LAPS`, flagged as a guess where it is defined.
+  **A lead, not a confirmation, from the 2026-09-08 campaign scoping pass**:
+  the speed-class help text (`MSC_LOAD_VENOM` etc., see
+  [race-setup.md](../formats/race-setup.md#the-full-mode-list-the-disc-authors-seven-against-this-projects-four))
+  says Venom - the default class - is "most" a 3-lap event, agreeing with the
+  guess here, but Rapier and Phantom are described as usually 4 and 5 laps.
+  Confidence 78, hedged wording, no `laps="%d"` record cross-checked against
+  it - not enough to change `SINGLE_RACE_LAPS` on, but enough that a future
+  per-class pass should start there instead of from zero.
 
 ### A destroyed craft is out of a single race, not respawned
 
