@@ -21,6 +21,39 @@ pub(crate) struct RaceStage {
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `oag_game::hud::countdown`.
     pub(crate) countdown: Option<oag_game::hud::Countdown>,
+    /// Which circuit/mode/class row [`oag_game::records`] persists this
+    /// race's outcome under - resolved once, at load, from
+    /// [`oag_game::race::Loaded::title`] and the [`oag_game::race::Options`]
+    /// that produced it, because neither is reachable from a finished or an
+    /// escaped race any other way. See `Session::frame`'s finish-transition
+    /// arm and `Session::escape`, the only two readers.
+    pub(crate) result_key: oag_game::records::Key,
+    /// Whether this race's result has already been folded into
+    /// `Session::records` and saved **since this stage last became live** -
+    /// not "ever", which is why `Session::resume_race` clears it back to
+    /// `false` on the way out of a park.
+    ///
+    /// **Read and set at both capture sites, for two different reasons.**
+    /// `Session::frame`'s finish-transition arm re-enters every tick for as
+    /// long as the results table sits on screen, so without this check a
+    /// finished race would resave the identical result every frame; without
+    /// setting it there, `Session::escape` leaving that same race a moment
+    /// later would save it a second time for nothing new to say. Reading it
+    /// in `escape` too covers the mirror case: a race that finished and was
+    /// saved is then escaped from its own results table without the finish
+    /// arm's every-tick check ever seeing it happen again.
+    ///
+    /// **Clearing it on resume is not optional.** A race `escape` parks
+    /// (`Session::suspended_race`, an unfinished race only) keeps this same
+    /// `RaceStage`, flag included, across the trip through the menus. Left
+    /// set, a Speed Lap improved after resuming would never be recorded -
+    /// `escape`'s own guard would see it as already saved - and a Time
+    /// Trial escaped mid-race and then resumed to a real finish would have
+    /// that finish silently swallowed by `Session::frame`'s guard instead of
+    /// reaching `Store::record` at all. The race genuinely was captured once
+    /// on the way into the park; clearing the flag on the way back out does
+    /// not lose that write; it only stops it from blocking the next one.
+    pub(crate) result_saved: bool,
 }
 
 impl RaceStage {
@@ -99,6 +132,29 @@ impl RaceStage {
                 phase_count: frame.phase_count,
                 reset: frame.reset,
             })
+    }
+
+    /// Reads the player's own outcome so far, straight off [`race::Race`]'s
+    /// already-public state - never from inside a tick.
+    ///
+    /// The one place both capture sites (`Session::frame`'s finish-transition
+    /// arm and `Session::escape`) build an
+    /// [`oag_game::records::Observation`], so the field list only has to
+    /// agree with `oag_game::records` in one place. See that module's own
+    /// doc for why it takes primitives rather than a `&Race`.
+    pub(crate) fn observation(&self) -> oag_game::records::Observation {
+        let standing = &self.race.world.ships[0].standing;
+        oag_game::records::Observation {
+            finished: self.race.finished(),
+            place: Some(self.race.places()[0]),
+            laps_completed: oag_game::records::laps_completed(
+                standing.lap,
+                self.race.finished(),
+                self.race.world.race.laps_target,
+            ),
+            tick: standing.finish_tick.unwrap_or(self.race.world.tick),
+            best_lap_ticks: standing.best_lap_ticks,
+        }
     }
 
     /// Draws the HUD, or the results table once the race has one.

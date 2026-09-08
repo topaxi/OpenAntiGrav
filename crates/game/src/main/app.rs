@@ -238,6 +238,12 @@ impl App {
                 self.autopilot,
                 self.autopilot_pilot,
                 self.autopilot_skill,
+                // `self.race_options` is this same load's own request - see
+                // `run_race` in `headless.rs`, the only place that builds
+                // both `self.race` and `self.race_options` together.
+                self.race_options
+                    .as_ref()
+                    .and_then(|options| options.track.as_deref()),
             )?
         } else if let Some(shell) = self.boot_shell.take() {
             // **Always the loading screen**, where this used to be `--prefetch`
@@ -366,6 +372,13 @@ impl App {
             launched: false,
             races_launched: 0,
             settings: self.settings.clone(),
+            // Loaded fresh here rather than carried on `App`: there is one
+            // window per run and `App::open` only ever runs once for it, so
+            // this is not a repeated disk read on the hot path any settings
+            // or pilot load is not already on. See `oag_game::records::load`,
+            // which cannot fail - a records file this build cannot make sense
+            // of degrades to an empty store rather than failing the boot.
+            records: oag_game::records::load(),
             shell: self.shell.clone(),
             race_title: self.race_title,
             // Race Remix's title pickers - see the field's own doc comment

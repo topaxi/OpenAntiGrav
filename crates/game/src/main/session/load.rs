@@ -496,6 +496,13 @@ impl Session {
                     self.autopilot,
                     self.autopilot_pilot,
                     self.autopilot_skill,
+                    // The same options this load itself was started from -
+                    // see `Session::launch_race`, which clones this same
+                    // field into the worker rather than taking it, so it is
+                    // still here once the worker reports back.
+                    self.race_options
+                        .as_ref()
+                        .and_then(|options| options.track.as_deref()),
                 );
                 info!("race scene built in {:?}", start.elapsed());
                 // **Building the pipeline objects above is not the same as the
