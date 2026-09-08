@@ -6,6 +6,8 @@
 //! `trace.rs`: the tests are 639 lines, past the 200 an inline test module
 //! may hold. See `scripts/check-file-size.py`, which is the rule as a gate.
 
+use oag_core::math::Vec3;
+
 use super::*;
 
 /// Two ticks in exactly the shape `scripts/psp-trace.py` writes: the same
