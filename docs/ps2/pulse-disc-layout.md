@@ -181,10 +181,13 @@ non-square: `SAR 4:3` on a square 512x512 decode). Confirmed against
 picks `640`. That global's sole writer, `FUN_0010b030`, sets a PAL-shaped
 non-square pixel-aspect correction (`0.8`/`1.1428`) and issues a GS mode-setup
 call when passed `1`, and a `1.0`/no-correction set when passed `0` - matching
-the measured PAL/NTSC split exactly. Not fully traced: the ultimate trigger
-that decides which value `FUN_0010b030` is called with (a numbered
-event-dispatcher case in `FUN_00186ed8`, itself not read further). For the
-EU/PAL disc this project reads, `512` is what `oag-game` tries first.
+the measured 50/60 Hz split exactly. **The trigger is traced**, and it is not a
+region byte: the two calls are cases 4 and 5 of a task dispatcher, named
+`Switch50` and `Switch60`, and the disc's front-end XML authors both on a
+first-boot screen that asks the player whether their television does 60 Hz. See
+[refresh-mode.md](../ghidra/functions/ps2-pulse-eu/refresh-mode.md). Both cuts
+are therefore reachable on this PAL-only pressing, which is why it carries the
+`640` pair at all; `oag-game` prefers `640`.
 
 **The `.IPF` backdrops have no rate of their own and inherit this split**, which
 is the only reason `BG512.IPF` is played at 25 Hz and `BG640.IPF` at 29.97: the

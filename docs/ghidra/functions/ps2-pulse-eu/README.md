@@ -23,6 +23,7 @@ form, and Ghidra's string search will return all three.
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
 | [Front-end globals](fe-globals.md) | The `FEGlobals->` / `FEConst->` indirection, its registry, and the flag-bit tagging that makes one a live binding |
 | [Movie source paths](movie-paths.md) | How a `Movie` widget's `src` becomes a filename, and the one global that picks the PAL cut of both the intro and the backdrop |
+| [Refresh mode](refresh-mode.md) | Why that global is not a region byte: `<Values task="Switch50">` on a first-boot screen, through a six-entry task table |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |

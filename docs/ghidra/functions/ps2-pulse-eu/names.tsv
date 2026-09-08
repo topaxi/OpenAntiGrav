@@ -215,3 +215,8 @@
 0x0027ddbc	data	g_ingame	85	anim-transform.md
 0x00299b10	data	g_anim_transform_vtable	80	anim-transform.md
 0x002e3640	data	g_ingame_fallback	70	anim-transform.md
+0x0010b030	function	Video_SetRefreshMode	90	refresh-mode.md
+0x00186ed8	function	BackendController_RunTask	90	refresh-mode.md
+0x001867d0	function	BackendController_ParseAttributes	90	refresh-mode.md
+0x0027a85c	data	g_refresh_mode	90	refresh-mode.md
+0x0027f030	data	g_backend_task_names	90	refresh-mode.md

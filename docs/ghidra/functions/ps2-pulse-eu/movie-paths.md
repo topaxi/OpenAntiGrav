@@ -71,23 +71,29 @@ says what kind of object `+0xc0` is.
 intro branch and `0019b32c` for the backdrop branch - **the same address**, and
 the same sense both times: non-zero picks `512`, zero picks `640`.
 
-That global's sole writer is `FUN_0010b030`, which sets non-square PAL
-pixel-aspect constants (`0.8`, `1.1428`) and issues a GS mode-setup call when
-passed `1`, and a no-correction set when passed `0`. So `512` is the PAL cut and
-`640` the NTSC one, which the measured frame rates of the two `.PSS` files
-confirm independently: 25 fps and 30000/1001. Confidence **85** on the PAL/NTSC
-reading, unchanged from
-[pulse-disc-layout.md](../../../ps2/pulse-disc-layout.md); what is new here is
-that the *backdrop* rides the same global.
+That global is `g_refresh_mode`, and its sole writer is `Video_SetRefreshMode`
+(`0x0010b030`), which sets non-square PAL pixel-aspect constants (`0.8`,
+`1.1428`) when passed `1` and a no-correction set when passed `0`. So `512` is
+the 50 Hz cut and `640` the 60 Hz one, which the measured frame rates of the two
+`.PSS` files confirm independently: 25 fps and 30000/1001.
+
+**What decides it is now read: the player does, on a first-boot screen** - see
+[refresh-mode.md](refresh-mode.md). `Video_SetRefreshMode`'s two callers are
+cases 4 and 5 of a six-entry task dispatcher, and those two cases are the names
+`Switch50` and `Switch60`, which the disc's own front-end XML authors on
+`RefreshTestFail` and `RefreshTestScreen`. So this is a refresh rate the player
+chose, not a region the console reported, and both cuts are reachable on the one
+(PAL-only) pressing that exists. What is new *here* is that the *backdrop* rides
+the same global.
 
 ### Why 90 and not higher
 
 The control flow, the operand addresses and the string contents are all read
 directly, and both branches are structurally identical, which is a check in
 itself. Held under 95 because `0x0020b8e8` and `0x0020b3a8` are inferred from
-their argument counts, return use and call sites rather than read, and because
-what ultimately decides the value of `0x0027a85c` is still a numbered case in
-the dispatcher `FUN_00186ed8` that nobody has traced.
+their argument counts, return use and call sites rather than read. The other
+reason this sat under 95 - that what decides `0x0027a85c` was an untraced case
+in `FUN_00186ed8` - no longer applies; see [refresh-mode.md](refresh-mode.md).
 
 ## What this settles for the reimplementation
 

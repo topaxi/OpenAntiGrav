@@ -264,12 +264,17 @@ them was scaled, and both are the disc's own doing rather than a decision here:
 ## Open
 
 - **What the PAL frame does to a real raster.** The DISPLAY registers are built
-  in `FUN_00238de8` and patched with the Screen Offset in `FUN_00216ff8`; the
-  region index (`0x0027a85c`, also what picks `Intro512` over `Intro640`)
+  in `FUN_00238de8` and patched with the Screen Offset in `FUN_00216ff8`;
+  `g_refresh_mode` (`0x0027a85c`, also what picks `Intro512` over `Intro640`)
   selects `DX/DY` defaults of `(0x280, 0x34)` or `(0x2a8, 0x48)`. Whether the
   448 lines fill a 576-line PAL raster or sit inside it changes how much of the
   24% is visible on real hardware, not which way it goes. A PCSX2 frame at each
-  setting would settle it; nothing here needs it.
+  setting would settle it; nothing here needs it. **This page called
+  `0x0027a85c` "the region index" until 2026-09-08 and that was wrong** - it is
+  the 50/60 Hz refresh mode, and the player picks it on a first-boot screen; see
+  [refresh-mode.md](../ghidra/functions/ps2-pulse-eu/refresh-mode.md). The
+  reading above is unaffected: the mode moves the picture in the raster and
+  corrects its pixels, and resizes nothing.
 - **`default="100"`**, and therefore which setting a fresh memory card gets.
 - **The original's default size for an `<Image>` with no `width`/`height`.**
   Reading it in the PS2 front-end widget code would turn the 70 above into a
