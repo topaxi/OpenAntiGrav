@@ -142,7 +142,7 @@ pub(super) fn resources(
                 .features()
                 .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
         ),
-        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], "no zone stage"),
+        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], "no zone stage", None),
     };
 
     let vis_texture = device.create_texture(&wgpu::TextureDescriptor {

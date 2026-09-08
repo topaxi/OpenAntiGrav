@@ -108,6 +108,7 @@ fn texture(alpha: u8) -> Arc<ModelTexture> {
         width: 1,
         height: 1,
         texels: Texels::Rgba8(vec![255, 255, 255, alpha]),
+        mip_count: None,
     })
 }
 

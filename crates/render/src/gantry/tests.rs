@@ -206,6 +206,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
             width: 8,
             height: 8,
             texels: Texels::Rgba8(vec![0; 8 * 8 * 4]),
+            mip_count: None,
         }))
     };
     model.textures = vec![

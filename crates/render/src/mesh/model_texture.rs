@@ -31,6 +31,29 @@ pub struct ModelTexture {
     pub height: u32,
     /// The texels, in the form they will be uploaded in.
     pub texels: Texels,
+    /// How many mip levels the source asset itself declares, for a
+    /// [`Texels::Rgba8`] texture whose chain this project synthesises.
+    ///
+    /// `None` means the count is unmeasured for this path, which keeps
+    /// today's behaviour: the uploader synthesises a full box-filtered chain
+    /// down to 1x1. **A `Some` caps the synthesised chain at the asset's own
+    /// depth** - see
+    /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`'s "the asset
+    /// decides the chain depth" finding: `Texture_BuildBindList` never
+    /// uploads more levels than the texture object's own `+0x05` byte, and
+    /// the GE has nowhere to sample a level past what was uploaded. Wired for
+    /// the PSP `.vex` embedded-texture path first.
+    ///
+    /// **This alone does not close the advert-board blur**
+    /// (`handover/frontend/hud-icon-turbo-timing.md`): capping
+    /// `hub_banner_GLOW.tga` (128x128, `mip_count = 5`) at its authored depth
+    /// changed 24 of 518,400 pixels in a Talon's Junction Time Trial capture,
+    /// mean difference 4.7e-5 - the same "measured inert" shape this file's
+    /// own doc already found for the exhaust textures. Landed anyway because
+    /// the gap itself - a parsed field no consumer read - was real and this
+    /// closes it exactly as that doc's own "worth fixing on its own account"
+    /// note asked for; the blur's actual cause is still open.
+    pub mip_count: Option<u32>,
 }
 
 /// How a [`ModelTexture`] carries its texels.
@@ -152,6 +175,10 @@ impl ModelTexture {
             width,
             height,
             texels,
+            // Unmeasured for the decode-and-box-filter fallback: the same gap
+            // `mip_count`'s own doc names, just not chased here - this path
+            // is HD's, and the thread that measured the PSP one is Pulse's.
+            mip_count: None,
         })
     }
 
@@ -185,13 +212,24 @@ impl ModelTexture {
     }
 
     /// One already-decoded RGBA8 texture.
+    ///
+    /// `mip_count` is the source asset's own declared depth, where the caller
+    /// knows it - see [`Self::mip_count`]'s doc for what a `Some` changes and
+    /// why every other call site still passes `None`.
     #[must_use]
-    pub fn rgba8(label: String, width: u32, height: u32, rgba: Vec<u8>) -> Self {
+    pub fn rgba8(
+        label: String,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+        mip_count: Option<u32>,
+    ) -> Self {
         Self {
             label,
             width,
             height,
             texels: Texels::Rgba8(rgba),
+            mip_count,
         }
     }
 

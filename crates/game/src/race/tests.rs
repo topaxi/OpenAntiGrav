@@ -51,6 +51,7 @@ fn model(slots: usize, decoded: usize) -> Model {
                         1,
                         1,
                         vec![255; 4],
+                        None,
                     ))
                 })
             })
