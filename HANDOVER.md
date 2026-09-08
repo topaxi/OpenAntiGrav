@@ -763,6 +763,23 @@ tripwire the same day. `race::Options::seed` is the resampling axis: it reaches
 is real - 350 s in debug against 17 s, which makes it the suite's longest single
 test.
 
+**It bit a second test the same day, and there the rate had not moved at all.**
+`oag-game::ram_ground_truth a_ram_rarely_throws_the_rammer_out_of_the_corridor`
+was **already red on `main`** before this pass - isolated by reverting only the
+Quake lifetime fix, which changed the count from 9 to 11 and left it red either
+way, so it is not a consequence of that fix. Its bound is "no worse than one in
+six", set from 2 of 27 shifts over six races in August. The ram was later
+narrowed to the player slot and every pickup-pool change since has reshuffled
+the field, so six races now yield **nine** shifts and `2 of 9` trips a 1-in-6
+bound on noise alone. Re-measured over forty races on the same tree: **11 of
+123, 8.9%**, against the 7.4% the bound came from. The bound was left exactly
+where it was and `RACES` went 6 -> 40 (about 110 s in debug).
+
+**The lesson both cases share**: when a ground-truth bound goes red, check the
+*denominator* before the numerator. A shrinking sample and a real regression
+look identical from the assertion message, and this suite has several bounds
+whose sample was sized against a field that has since changed.
+
 **`oag-game::ps2_source_ground_truth an_uncapped_transcode_still_reports_a_total_to_divide_by`
 fails under load and passes alone, and it looks like a real regression when it
 does.** 2026-09-08. It transcodes the PS2's loose intro through ffmpeg, and on a

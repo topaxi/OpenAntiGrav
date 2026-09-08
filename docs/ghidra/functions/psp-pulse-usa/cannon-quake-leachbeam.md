@@ -1069,8 +1069,45 @@ emitters. `Quake_Destruct` has no direct caller (`get_xrefs_to` returns none),
 so it is reached through the vtable: object teardown at race end, not wave
 expiry.
 
+### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
+
+`Data\Tex\Weapons\leachbeam_surface.mip` (string at `0x08a8839c`), loaded by
+`Texture_LoadEffectSurfaces` (`0x0890cc1c`) into `DAT_08af2804` through the same
+`FUN_089277ac` loader `Cannon_LoadTextures` uses for its two `.mip`s.
+
+**The directory is the finding.** The Cannon's textures live under
+`Data\Weapons\Textures\`; this one lives under `Data\Tex\Weapons\`. Hashing
+candidate names against `Data.wad` under the Cannon's layout - the technique
+that found the Cannon's own two - would have returned nothing for every
+plausible LeachBeam name, and read as "the texture is not on the disc". A
+`(?i)leach` string search over `.rodata` found it in one call. **Prefer the
+string search to name-hashing when the loading function has not been read**:
+the string is what the original actually passes, a hashed guess is a guess.
+
+**And it is not the beam's ribbon.** `DAT_08af2804` has two readers,
+`FUN_0890d828` (`0x0890d828`) and `FUN_0890e140` (`0x0890e140`), and the first
+walks a craft's own mesh chain and passes the texture to `FUN_0890e304` per
+sub-mesh, gated on a scalar at `craft+0x74 -> +0x4c` being positive. That is a
+**surface overlay on the drained craft's hull**, the sibling of
+`Data\Tex\Weapons\absorb_surface.*` (`DAT_08af2800`), which the shield's own
+absorb pass uses in exactly the same shape. The ribbon chain
+`LeachBeam_InitLocked` zero-fills the UV columns of is textured by something
+else, and that something else is still unlocated. Confidence **85** on the
+identification and on which thing it textures; the ribbon's own texture is
+**open**.
+
+Neither is drawn by this engine, and both are honest absences rather than
+stand-ins.
+
 ### Open
 
+- **The LeachBeam ribbon's own texture is still unlocated**, and
+  `Data\Tex\Weapons\leachbeam_surface.mip` is not it (above). The next step is
+  the ribbon's own draw call out of `LeachBeam_Advance` (`0x08873fa0`) rather
+  than another string search - the two `Data\Tex\Weapons\` strings are the only
+  LeachBeam-flavoured texture paths in `.rodata`, so the ribbon's texture is
+  either shared with something else or named for what it looks like rather than
+  for the weapon.
 - **`WO_QUAKE.POB` itself was not inspected.** The trigger and its transform
   are recovered; whether the effect it draws looks like the maintainer's
   "concrete wave" description is a separate, unchecked question. If it parses

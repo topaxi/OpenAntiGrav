@@ -55,10 +55,21 @@ const TICKS: usize = 12_000;
 /// How many seeded races the measurement runs over.
 ///
 /// One race is not a measurement here: a ram is a rare event gated on a roll,
-/// and the change of a single gate reshuffles the whole field's trajectory. Six
-/// is enough that the rate is stable across a re-run and still under ten
-/// seconds.
-const RACES: u64 = 6;
+/// and the change of a single gate reshuffles the whole field's trajectory.
+///
+/// **Six was not enough either, and that was found the hard way on
+/// 2026-09-08.** Six races produced 27 shifts when the bound was written and
+/// **9** on the tree that day - the ram was narrowed to the player slot in
+/// between, and every pickup-pool change since has reshuffled the field's
+/// trajectories - so the denominator collapsed and `2 of 9` tripped a bound
+/// that reads "no worse than one in six". At forty races the same tree measures
+/// **11 of 123, 8.9%**, against the 2 of 27 (7.4%) the bound was set from.
+/// **The rate never moved; the sample had stopped being able to see it.** Ten
+/// shifts cannot distinguish 9% from 17%; a hundred and twenty can.
+///
+/// Forty costs about 110 seconds in a debug build, which is what `just
+/// test-data` runs. That is the price of a bound that means something.
+const RACES: u64 = 40;
 
 /// How long after a shift its consequences are watched for. A second, which is
 /// comfortably past the point the craft's own grip has taken the lateral
@@ -241,8 +252,13 @@ fn a_ram_rarely_throws_the_rammer_out_of_the_corridor() {
         shifts.len()
     );
     // 2 of 27 measured 2026-08-24, against 54 of 208 before the gate was fixed.
-    // A sixth is "no worse than today" with room for the noise a sample this
-    // thin carries, not a target - see the module docs for why it is thin.
+    // A sixth is "no worse than today" with room for noise, not a target - see
+    // the module docs for why the outcome cannot be a property.
+    //
+    // **The bound is unchanged; the sample under it grew.** Re-measured
+    // 2026-09-08 at 11 of 123 (8.9%) over `RACES` races - see that constant's
+    // own doc comment for why six races stopped being able to support this and
+    // what tripped it. Nothing about the ram moved.
     assert!(
         outside * 6 <= shifts.len(),
         "{outside} of {} shifts ended past the corridor edge they went toward, \
