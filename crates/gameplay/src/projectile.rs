@@ -72,6 +72,7 @@
 
 mod blast;
 pub mod cannon;
+pub mod leach_beam;
 pub mod mine;
 pub mod missile;
 pub mod plasma;
