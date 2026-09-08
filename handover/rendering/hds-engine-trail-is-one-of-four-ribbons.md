@@ -59,9 +59,10 @@
     name in the corpus, paired with its own `dustmotes_4x4.gtf` texture in
     the same archive - which is why it reads as a real shipped asset despite
     the odd casing, not a second debug leftover): environment effects, no
-    recovered placement trigger. **Correction to the first draft of this
-    bullet, caught by advisor review before it left the worktree**: the draft
-    claimed the string checks "confirm it independently" the way they did for
+    recovered placement trigger. **Correction, 2026-09-08, committed then
+    fixed in the following commit (`48ef5c17`) after advisor review**: the
+    first version of this bullet claimed the string checks "confirm it
+    independently" the way they did for
     `NUMBERS`/`TEST_BOMBSPIKES`. They don't - re-running the 46-name
     load-path control specifically for the environment family found **zero**
     environment names in it, `WO_RAIN`/`WO_SNOW` included, wired or not. And

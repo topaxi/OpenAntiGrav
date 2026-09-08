@@ -566,8 +566,8 @@ placement mechanism for HD's environment effects is still unread, and
 `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are a live open question (see the
 handover thread's Next Steps) rather than settled.
 
-Six of the 82 total names this project owes a bucketing pass over (67
-unwired: 82 minus the 15 `RACE_EFFECTS` wires) - see
+Six of the 67 unwired names (82 total minus the 15 `RACE_EFFECTS` wires)
+this project owes a bucketing pass over are done - see
 `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment;
 the other 61 are unread.
 

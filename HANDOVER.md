@@ -737,6 +737,46 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A `Data\Psys\<NAME>.POB` load-path string search discriminates for weapon
+and debug particle-effect names on HD's executable, and is blind to
+continuous/ambient ones - a zero hit means opposite things for the two
+categories.** 2026-09-08, bucketing `hds-engine-trail-is-one-of-four-ribbons.md`'s
+unwired HD `.pob` inventory. For `NUMBERS`/`TEST_BOMBSPIKES`, absence from
+`EBOOT.elf`'s string table was real evidence: a control scan
+(`strings -a … | rg -o 'Data.Psys.[A-Za-z0-9_]+\.POB'`) finds 46 of HD's 82
+disc names as a load-path string, including several this engine has not
+built at all (`WO_LEACHBEAM_CHARGING`, `WO_BOMB_EXPLO_DETONATOR`), so the
+executable's string table tracks the *original* game's load paths and a
+genuine absence says something. Reused unchecked for four environment names
+(`WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`, `WO_DustMotes`,
+`WO_UNDERWATER_GODRAYS`) in the same pass, and the control silently fails
+for that category: **zero** environment-flavoured name is in the 46, wired
+or not (`WO_RAIN`/`WO_SNOW` included), and the *wired* `WO_SHIP_ENGINEFLARE`
+is absent from the string table too, same as its two unwired HD siblings
+`WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`. A continuous or ambient effect's
+trigger evidently never puts its name in a load-path string on this disc,
+so a zero hit there proves nothing either way - caught only because advisor
+review asked for the same control re-run scoped to the new category, one
+commit after the overclaimed version had already landed
+(`f496a5b2` -> corrected in `48ef5c17`). **Re-establish a control for each
+new *category* of name before trusting a zero-hit search on it, not just
+once per search technique** - see `docs/formats/pob.md`'s HD corpus
+section and that thread's Next Steps for the worked example and the
+now-open `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` question it left behind.
+
+**A wired-effect count kept in prose drifts stale independently in every
+place it's copied, with nothing to catch it converging on the wrong
+number.** 2026-09-08, same pass. `RACE_EFFECTS` (`crates/game/src/race/effects.rs`)
+grew from 8 to 15 over two weeks (Plasma, Shuriken, Quake landed
+2026-09-02) while three different prose copies of "how many are wired"
+stood still at three different stale values - 7 in a handover thread, 11 in
+`psys_inventory_ground_truth.rs`'s own doc comment - neither matching each
+other or the real number, until cross-checked against the source directly.
+**Recompute a wired/authored count from `RACE_EFFECTS.len()` (or the
+equivalent const) at the point of use rather than trusting a number
+written down earlier**, especially across a gap of more than a day or two;
+nothing enforces that these prose counts stay in sync with the source.
+
 **A tuning number chosen on the twelve lone-craft circuits can turn a *field*
 ground-truth test red, and the whole `just` gate will stay green while it
 does.** 2026-09-06, choosing `oag_ai::Tuning::curvature_span`. A cap of 10
