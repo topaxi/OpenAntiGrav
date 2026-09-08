@@ -674,6 +674,16 @@
 0x088730a4	function	LeachBeam_LingerExpired	80	cannon-quake-leachbeam.md
 0x08873068	function	LeachBeam_UnlockedExpired	78	cannon-quake-leachbeam.md
 0x0883f228	function	Ship_ApplyPendingWeaponRepair	85	cannon-quake-leachbeam.md
+0x08874a30	function	Quake_UpdateSpans	85	cannon-quake-leachbeam.md
+0x0891cab8	function	Quake_UpdateSpan	80	cannon-quake-leachbeam.md
+0x0891b714	function	Quake_ArmSpan	82	cannon-quake-leachbeam.md
+0x0891b7a4	function	Quake_RetireSpan	85	cannon-quake-leachbeam.md
+0x0891b7f4	function	Quake_PropagateForward	78	cannon-quake-leachbeam.md
+0x0891b940	function	Quake_PropagateBackward	78	cannon-quake-leachbeam.md
+0x0891ba98	function	Quake_Construct	85	cannon-quake-leachbeam.md
+0x0891bcc8	function	Quake_Destruct	82	cannon-quake-leachbeam.md
+0x0891bf98	function	Quake_StopAllSpans	85	cannon-quake-leachbeam.md
+0x0890cc1c	function	Texture_LoadEffectSurfaces	85	cannon-quake-leachbeam.md
 0x088778ac	function	Shuriken_Bounce	85	shuriken.md
 0x08877bdc	function	Shuriken_Update	85	shuriken.md
 0x0888b980	function	Plugin_LoadManifest	80	../../../architecture/frontend-boot.md

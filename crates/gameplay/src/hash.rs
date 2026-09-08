@@ -384,6 +384,7 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
                 radius,
                 slowdown_time,
                 hit,
+                age,
             } = wave;
             hasher.write_u8(*owner);
             hasher.write_f32(*progress);
@@ -391,6 +392,7 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
             hasher.write_f32(*damage);
             hasher.write_f32(*radius);
             hasher.write_f32(*slowdown_time);
+            hasher.write_f32(*age);
             for latch in hit {
                 hasher.write_u8(u8::from(*latch));
             }

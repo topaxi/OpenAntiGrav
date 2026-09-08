@@ -24,6 +24,15 @@ produced it and the one that replaces it.
 | `0x0891c028` | `Quake_SampleSpan` | 76 |
 | `0x0891c7e0` | `Quake_ProximityToCraft_q` | 60 |
 | `0x0891c82c` | `Quake_SpanIntensityAt_q` | 55 |
+| `0x08874a30` | `Quake_UpdateSpans` | 85 (new 2026-09-08) |
+| `0x0891cab8` | `Quake_UpdateSpan` | 80 (new 2026-09-08) |
+| `0x0891b714` | `Quake_ArmSpan` | 82 (new 2026-09-08) |
+| `0x0891b7a4` | `Quake_RetireSpan` | 85 (new 2026-09-08) |
+| `0x0891b7f4` | `Quake_PropagateForward` | 78 (new 2026-09-08) |
+| `0x0891b940` | `Quake_PropagateBackward` | 78 (new 2026-09-08) |
+| `0x0891ba98` | `Quake_Construct` | 85 (new 2026-09-08) |
+| `0x0891bcc8` | `Quake_Destruct` | 82 (new 2026-09-08) |
+| `0x0891bf98` | `Quake_StopAllSpans` | 85 (new 2026-09-08) |
 | `0x08866658` | `Weapon_FireLeachBeam` | 88 (was 82) |
 | `0x08873d3c` | `LeachBeam_InitLocked` | 82 |
 | `0x08872da8` | `LeachBeam_InitUnlocked` | 80 |
@@ -912,8 +921,208 @@ DAT literal was tracked down to a real cue name this pass; both are read as
   later, confirming (not merely repeating) "orientation refined by the track
   is not what this reading supports". Nothing new narrows it.
 
+### 2026-09-08: the lifetime, found - 5.0 seconds from launch, and the Quake does deform the track
+
+This section answers the page's own longest-standing Quake question and
+**corrects one of its conclusions**. Both come from the half of the weapon
+neither `Quake_Init` nor `Quake_Update` reaches: a second apparatus, keyed on
+the *road spans* the wave passes over.
+
+#### The road-span records, and the ripple that is the Quake
+
+`DAT_08b33040` is a **pointer** to a track-side table, not a scalar. Settled at
+instruction level rather than from the decompiler, which renders it three
+different ways in three functions and had this page one careless step from a
+fourth address slip:
+
+```
+0891cb30  lui   a0, 0x8b3
+0891cb34  lw    a0, 0x3040(a0)     ; a0 = *(0x08b33040) - a POINTER load
+0891cb38  lw    a1, 0x4(a0)        ; a1 = table->0x04
+0891cb3c  addiu a1, a1, 0x1
+0891cb40  sw    a1, 0x4(a0)        ; table->0x04 += 1
+```
+
+So `table->0x00` is a record count, `table->0x0c` the record base, and
+`table->0x04` a counter. `DAT_08b33044`, which `Quake_Init` writes, is a
+*separate* global that happens to sit next to the pointer - it is not
+`table->0x04`, and reading the two as one is exactly the kind of slip this page
+has already carried twice. Each record is `0x80` bytes: `+0x40` its own length,
+`+0x52` a segment id, `+0x54`/`+0x58` a `[t_start, t_end]` window, `+0x30` and
+`+0x34` neighbour indices in each direction, `+0x5c`/`+0x60` the ripple's
+leading and trailing edge, **`+0x74` its age**, `+0x78` its direction (`±270.0`,
+the same constant `Quake_Update` spends), and `+0x7c`..`+0x7f` four state bytes
+of which `+0x7e` is "armed" and `+0x7d` is "retire me".
+
+#### `Quake_UpdateSpans` (`0x08874a30`) is the per-frame driver, and it clears the busy byte
+
+```c
+void Quake_UpdateSpans(float dt, Quake *q) {
+    FUN_0885eca4(q);
+    table->live = 0;                                  // table->0x04
+    for (i = 0; i < table->count; i++)
+        if (record[i].armed) Quake_UpdateSpan(dt, &record[i], 1);  // each bumps table->live
+    if (table->live == 0) {                            // nothing rippled this frame
+        q->0x3c &= ~8;  q->0x2c &= ~4;
+        DAT_08b317a8 = 0;                              // the flag Weapon_FireQuake sets to 2
+        q->0x48 = 0;                                   // <- the busy byte, cleared
+    }
+}
+```
+
+**This is what re-opens `Weapon_FireQuake`'s own gate.** That handler returns
+early on `*(char *)(pool->instance + 0x48) != 0`; `Quake_Init` sets that byte to
+`1` when it arms the launch span, and nothing else in the whole apparatus writes
+it. So a Quake becomes fireable again on the first frame no road span is
+rippling, and not before. It also explains `Quake_Update`'s own head gate
+(`0 < DAT_08abf594 && table->live != 0`): once the ripple is empty, the wave's
+travelling position stops advancing, `DAT_08abf598` goes to `0`, and
+`Quake_SampleSpan` returns invalid, which is what tears down the `WO_QUAKE`
+effect and the `QUAKETRAVEL` emitter.
+
+#### The 5.0 seconds, at instruction level
+
+`Quake_UpdateSpan` (`0x0891cab8`), first fifteen instructions:
+
+```
+0891cacc  lbu    a1, 0x7f(s1)          ; record->0x7f - "skip one frame", set by propagation
+0891cae8  bne    a1, zero, 0x0891cb20  ; taken -> clear it and return
+0891caf8  lwc1   f12, 0x74(s1)         ; record->0x74 - the age
+0891cafc  lui    a0, 0x40a0            ; 0x40A00000 == 5.0f
+0891cb00  add.s  f12, f12, f20         ; age + dt
+0891cb08  c.le.s f12, f13              ; (age + dt) <= 5.0 ?
+0891cb10  bc1f   0x0891cb28            ; no ->
+0891cb28  li     a0, 0x1
+0891cb2c  sb     a0, 0x7d(s1)          ; record->0x7d = 1, the retire byte
+...
+0891cb68  add.s  f14, f14, f20         ; age += dt
+0891cb6c  swc1   f14, 0x74(s1)
+```
+
+`lui a0, 0x40a0` is `5.0f` exactly. `+0x7d` is the same byte `Quake_RetireSpan`
+(`0x0891b7a4`) sets immediately before it clears `+0x7e`, and with it set
+`Quake_UpdateSpan` zeroes the trailing edge, skips both propagation calls and
+lets the span go.
+
+#### Why 5.0 is the *wave's* lifetime and not each span's
+
+Because the age is **inherited, not restarted**. `Quake_ArmSpan`
+(`0x0891b714`) writes its second argument straight into the new span's `+0x74`:
+
+```c
+bool Quake_ArmSpan(float dir, float age, float t, Span *s) {
+    bool armed = s->0x7e == 0;
+    if (armed) {
+        s->0x7c = 1; s->0x7d = 0; s->0x7e = 1; s->0x7f = 0;
+        s->0x78 = dir;  s->0x74 = age;              // <- inherited
+        s->0x64 = 0; s->0x68 = 0; s->0x5c = t; s->0x60 = t;
+        Quake_UpdateSpan(0.0, s, table->live < 0x19);
+    }
+    return armed;
+}
+```
+
+and both propagators pass the *parent's* own `+0x74`:
+`Quake_PropagateForward` (`0x0891b7f4`) walks `+0x30`'s two neighbour indices
+and `Quake_PropagateBackward` (`0x0891b940`) walks `+0x34`'s, each calling
+`Quake_ArmSpan(parent->0x78, parent->0x74, t, neighbour)`. `Quake_Init` starts
+the chain with a literal `0`. **So every span the ripple ever reaches carries
+one clock begun at launch, and the whole apparatus crosses 5.0 s together.**
+
+Confidence **85**: the literal is instruction-level, the retire byte is
+cross-checked against the one function that retires a span, and the inheritance
+is a plain scalar copy read in three separate decompiles that agree. What is
+*not* established is whether a frame's worth of `dt` slop at the boundary
+matters, and whether `Quake_UpdateSpan`'s two early-return paths (the wave front
+running off a span's far end, forcing the neighbour and retiring this one) can
+extend the chain past the bound - they cannot, because they run under the same
+`+0x7d` short-circuit, but that was reasoned rather than traced.
+
+#### The correction: the Quake *is* a track deformation
+
+This page states, under the wave branch inside `FUN_088418e0`, that "the Quake
+is a travelling impulse along the track's own path ..., not a deformation of the
+track". **That conclusion is right about the three functions it was drawn from
+and wrong about the weapon.** `Quake_UpdateSpan`'s body, past the ageing above,
+rewrites the road's own packed `short3` vertex positions in place - a `vcos_q`
+profile over a window between the ripple's leading and trailing edges, clamped
+by `vmax_q`/`vmin_q`, converted back through `vf2in_q`/`vi2s_q` and stored to
+the mesh. The deformation was simply not in `Weapon_FireQuake`, `Quake_Init` or
+the damage branch, which is where this page looked.
+
+The narrower claim survives intact and is the one the port relies on: **the
+damage and slowdown are a scalar impulse through the shared pending-hit
+channel, with no geometry involved**, and nothing in the damage path needs the
+deformation. What changes is that "does the Quake deform the track" is now
+answered **yes**, at confidence 85, and this engine draws none of it.
+
+#### The object's own two ends
+
+`Quake_Construct` (`0x0891ba98`) increments `DAT_08abf594`, memsets every wave
+global to zero and installs the vtable at `0x08ad190c` - which is the table
+`Quake_Update`'s one data reference (`0x08ad1930`) sits inside, settling that
+`Quake_Update` is a virtual method of this object rather than a table-driven
+handler of unknown ownership. `Quake_Destruct` (`0x0891bcc8`) decrements it,
+calls `Quake_StopAllSpans` (`0x0891bf98`) - which retires every armed span,
+zeroes `table->0x04` and clears the span count - and tears down both sound
+emitters. `Quake_Destruct` has no direct caller (`get_xrefs_to` returns none),
+so it is reached through the vtable: object teardown at race end, not wave
+expiry.
+
+### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
+
+`Data\Tex\Weapons\leachbeam_surface.mip` (string at `0x08a8839c`), loaded by
+`Texture_LoadEffectSurfaces` (`0x0890cc1c`) into `DAT_08af2804` through the same
+`FUN_089277ac` loader `Cannon_LoadTextures` uses for its two `.mip`s.
+
+**Both resolve in `Data.wad` on the USA pressing**, checked rather than assumed:
+
+```sh
+cargo run -q -p oag-tools --bin oag-wad -- cat \
+    'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' \
+    'Data\Tex\Weapons\leachbeam_surface.mip'
+```
+
+returns 2,064 bytes opening `20 00 20 00 08 00 01 00` - a 32x32, 8-bit
+paletted `.mip`, which is exactly `16 + 32*32 + 256*4`. Its sibling
+`Data\Tex\Weapons\absorb_surface.mip` (string at `0x08a88378`, read whole out
+of memory rather than trusted from the decompiler's truncated
+`s_Data_Tex_Weapons_absorb_surface__`) is the same 2,064 bytes and the same
+header.
+
+**The directory is the finding.** The Cannon's textures live under
+`Data\Weapons\Textures\`; this one lives under `Data\Tex\Weapons\`. Hashing
+candidate names against `Data.wad` under the Cannon's layout - the technique
+that found the Cannon's own two - would have returned nothing for every
+plausible LeachBeam name, and read as "the texture is not on the disc". A
+`(?i)leach` string search over `.rodata` found it in one call. **Prefer the
+string search to name-hashing when the loading function has not been read**:
+the string is what the original actually passes, a hashed guess is a guess.
+
+**And it is not the beam's ribbon.** `DAT_08af2804` has two readers,
+`FUN_0890d828` (`0x0890d828`) and `FUN_0890e140` (`0x0890e140`), and the first
+walks a craft's own mesh chain and passes the texture to `FUN_0890e304` per
+sub-mesh, gated on a scalar at `craft+0x74 -> +0x4c` being positive. That is a
+**surface overlay on the drained craft's hull**, the sibling of
+`Data\Tex\Weapons\absorb_surface.*` (`DAT_08af2800`), which the shield's own
+absorb pass uses in exactly the same shape. The ribbon chain
+`LeachBeam_InitLocked` zero-fills the UV columns of is textured by something
+else, and that something else is still unlocated. Confidence **85** on the
+identification and on which thing it textures; the ribbon's own texture is
+**open**.
+
+Neither is drawn by this engine, and both are honest absences rather than
+stand-ins.
+
 ### Open
 
+- **The LeachBeam ribbon's own texture is still unlocated**, and
+  `Data\Tex\Weapons\leachbeam_surface.mip` is not it (above). The next step is
+  the ribbon's own draw call out of `LeachBeam_Advance` (`0x08873fa0`) rather
+  than another string search - the two `Data\Tex\Weapons\` strings are the only
+  LeachBeam-flavoured texture paths in `.rodata`, so the ribbon's texture is
+  either shared with something else or named for what it looks like rather than
+  for the weapon.
 - **`WO_QUAKE.POB` itself was not inspected.** The trigger and its transform
   are recovered; whether the effect it draws looks like the maintainer's
   "concrete wave" description is a separate, unchecked question. If it parses

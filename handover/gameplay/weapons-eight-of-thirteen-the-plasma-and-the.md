@@ -656,13 +656,92 @@ player-visible consequences, both live on `main`:
    kept and unusable.
 2. The wave circles the ring forever, re-hitting the whole field once a lap.
 
-The original does terminate - `Quake_SampleSpan` returns a validity bool that goes
-false once the span runs off its track-gap window - but that mechanism has no
-analogue in this port's progress-along-a-ring representation, so **the fix is a
-chosen lifetime rather than a measured one** and was left rather than invented in
-a pass that was about a different weapon. The cheapest honest fix is an age on
-`Wave` plus a bound of one full course length, labelled chosen; the better one is
-reading what actually retires the original's instance.
+**Fixed 2026-09-08, and the lifetime is measured rather than chosen.** The
+prediction in this section - that the mechanism had no analogue in a
+progress-along-a-ring representation and the fix would have to be a chosen bound
+- was wrong, and pleasantly so. The original's terminator is not
+`Quake_SampleSpan`'s validity bool; it is a **fixed 5.0 seconds from launch**,
+and it is a single scalar that ports exactly.
+
+The apparatus neither `Quake_Init` nor `Quake_Update` reaches is a table of
+*road span* records. `Quake_UpdateSpan` (`0x0891cab8`) ages each armed span by
+`dt` and sets its retire byte the frame `age + dt` exceeds `5.0` - the literal
+is a `lui a0, 0x40a0` at `0x0891cafc`, read at instruction level. What makes
+that one wave lifetime rather than one per span is that `Quake_ArmSpan`
+(`0x0891b714`) *inherits* its caller's age into the new span rather than zeroing
+it, and both propagators pass the parent's own. `Quake_Init` starts the chain at
+`0`. `Quake_UpdateSpans` (`0x08874a30`) then clears the busy byte (`q+0x48`) on
+the first frame no span rippled, which is what re-opens `Weapon_FireQuake`'s own
+gate. Confidence 85; nine names landed with the evidence. See
+[cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
+2026-09-08 section.
+
+`oag_gameplay::projectile::quake::LIFETIME_SECONDS` is that 5.0, `Wave::age`
+accumulates it on every path including the degenerate-course one, and
+`Race::advance_quake` drops the wave before applying hits on the tick it
+expires.
+
+**By-catch, and it is a correction to a documented conclusion**: the page's
+"the Quake is a travelling impulse ..., not a deformation of the track" was
+drawn from the three functions that pass the deformation by.
+`Quake_UpdateSpan` rewrites the road mesh's own packed `short3` vertex
+positions in place under a `vcos_q` profile. **The original does deform the
+track.** The narrower claim the port rests on survives whole - the damage and
+slowdown are a scalar impulse through the shared pending-hit channel with no
+geometry in the path - but "does the Quake deform the track" now answers yes,
+and this engine draws none of it. That is a new, unbuilt visual, not a
+regression.
+
+## 2026-09-08: adding a weapon to `IMPLEMENTED` reddened an AI test, and the test was the problem
+
+**Landing the LeachBeam turned
+`oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
+red**, and nothing about the barrel roll had moved. Recorded here because the
+next weapon to join `oag_gameplay::pickup::IMPLEMENTED` will do the same thing to
+whatever statistic is next-smallest.
+
+The failure: `skilled armed 0 rolls total against novice's 1`, per-tier totals
+novice 1, skilled 0, elite 1, ace 3. Cause confirmed by isolation, not guessed -
+`Weapon::LeachBeam` in `IMPLEMENTED` makes it fail, the same line out makes it
+pass, with nothing else changed. **A wider pickup pool widens the weighted walk
+in `oag_gameplay::pickup::draw`**, so every craft draws different pickups, so
+every trajectory in the race differs, so the seven per-flight roll coin tosses
+are simply re-rolled.
+
+**The general shape, which is the part worth carrying forward.** Anything
+downstream of `pickup::draw` is downstream of `IMPLEMENTED`'s *length*. A test
+that measures a sparse, race-wide statistic - a count in the range 0-3, a
+"did it ever happen" - is not measuring the mechanic it names; it is measuring
+one particular sequence of draws. Adding a weapon is a legitimate change that
+will reroll every such statistic, and the answer is a sample that survives the
+reroll, not a re-baselined number.
+
+**The maintainer's ruling, and what landed**: make the sample big enough to
+assert on. The test now sums over **twelve forward circuits by two world seeds
+by seven opponents** - 24 grid races and 168 flights per tier - rather than one
+race on `09_Track`. `race::Options::seed` reaches `World::new`,
+`oag_ai::Driver::for_slot` and `oag_ai::pilot_for_slot`, so a second seed is a
+second grid of characters drawing from a second pickup stream, which is the
+nuisance variable that had to be averaged out.
+
+Measured 2026-09-08, armed totals:
+
+| tier | seed `0x1` | seed `0x5eed0002` | total |
+| --- | --- | --- | --- |
+| novice | 5 | 0 | 5 |
+| skilled | 13 | 8 | 21 |
+| elite | 22 | 21 | 43 |
+| ace | 46 | 36 | 82 |
+
+Each seed reproduces the ordering on its own, which is the evidence the sample
+is big enough rather than that it was grown until it passed. The bound is
+unchanged - non-decreasing tier to tier, on the aggregate. **Two options were
+rejected by the maintainer and are recorded so they are not re-proposed**:
+dropping the monotonicity claim, and re-baselining the tier ordering.
+
+**Cost**: 350 s in a debug build, against the 17 s the single-circuit version
+took. `just test-data` runs debug, so that is the number that counts; it makes
+this the longest single test in the suite.
 
 ## Next Steps
 
