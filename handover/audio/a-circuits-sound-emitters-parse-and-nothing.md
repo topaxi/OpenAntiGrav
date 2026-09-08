@@ -63,14 +63,22 @@ taste, and are the reason it is worth doing properly rather than quickly:**
   radius on every `sound`.
 
 **2026-09-08: opcode `0x14` is decoded - a bare no-op, corroborated on
-`ps3-hdfury-eu` at the same slot (`Scream_OpNop`/`Scream_DoGrainNop`,
+`ps3-hdfury-eu` at the same slot (`Scream_OpNop14`/`Scream_DoGrainNop14`,
 confidence 82, [sound.md](../../docs/ghidra/functions/psp-pulse-usa/sound.md#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)).**
-It does not bind a waveform, so `moather~birds`, `dekonst~CRANE` and both
-`talonsj~SETREG` cues are correctly silent, not blocked on a missing handler -
+It does not bind a waveform, so the **9** nodes carrying it (`moather~birds`,
+`dekonst~CRANE` and both `talonsj~SETREG` cues) are correctly silent, not
+blocked on a missing handler -
 [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
-corrects its prior confidence-88 hypothesis. Nothing to wire follows from this
-- there was no waveform to bind - so the former Next Step #1 is dropped rather
-than closed with an implementation.
+corrects its prior confidence-88 hypothesis. **The other 29 (every `~SetReg*`
+cue, opcode `0x1e`) are unaffected by this and stay unread** - "set register"
+is still only a name-based guess, not a decoded handler. Nothing to wire
+follows from `0x14` itself - there was no waveform to bind - so the former
+Next Step #1 is dropped rather than closed with an implementation. The
+discriminating check on this (do the table's neighbouring slots hold distinct
+handlers) found `0x15` is the same no-op shape and `0x16` scans for it -
+neither is one of the 38 silent nodes' opcodes, so it doesn't change this
+thread's count, but it is recorded on `sound.md` since it came from the same
+table read.
 
 ## Next Steps
 

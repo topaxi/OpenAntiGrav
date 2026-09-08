@@ -259,7 +259,7 @@ after sounds - and, decisively, in `talonsj~SETREG_01`/`_02` **beside** their
 **Decoded, 2026-09-08, and it refutes the hypothesis this section used to
 make.** `0x14` is a bare no-op -
 [`sound.md`](sound.md#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)
-found its handler (`Scream_OpNop`, confidence 82) two instructions long,
+found its handler (`Scream_OpNop14`, confidence 82) two instructions long,
 `jr ra; li v0,0`, and corroborated the same shape at the same opcode slot on
 `ps3-hdfury-eu`. It does not bind a waveform, does not play another cue, and
 ignores its own operand bytes. **The 9 nodes are not a decode gap**: Moa
