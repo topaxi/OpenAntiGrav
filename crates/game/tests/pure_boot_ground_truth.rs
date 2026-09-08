@@ -675,3 +675,51 @@ fn title_screens_own_wordmark_gets_the_measured_texture() {
         );
     }
 }
+
+/// `BackgroundTopRightImage`, the "ワイプアウト" wordmark beside the swoosh
+/// logo - see
+/// `docs/formats/pure-status.md#fe-screens-corner-logo-backgroundtoprightimage`
+/// for how entry 27 of `Data.wad` was found and matched against a real
+/// captured `Main Menu` frame.
+///
+/// The same shape of test as [`title_screens_own_wordmark_gets_the_measured_texture`]:
+/// this widget's own `Skin.xml` gives it no `src` either, so
+/// [`oag_pure::frontend::FALLBACK_IMAGES`] is what fills it, and this test
+/// pins that the fallback resolves on both pressings, at the widget's own
+/// authored rect, to a texture that actually decodes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn fe_screens_own_corner_logo_gets_the_measured_texture() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let screen = loaded
+            .frontend
+            .screens()
+            .by_name("FE Screen")
+            .unwrap_or_else(|| panic!("{label}: FE Screen"));
+        let corner_logo = screen
+            .images
+            .iter()
+            .find(|image| image.name.as_deref() == Some("BackgroundTopRightImage"))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{label}: BackgroundTopRightImage did not resolve through the fallback table"
+                )
+            });
+        assert_eq!(corner_logo.src, "hash:7ba78aca");
+        assert_eq!((corner_logo.x, corner_logo.y), (252.0, 3.0));
+        assert_eq!(
+            (corner_logo.width, corner_logo.height),
+            (Some(256.0), Some(32.0))
+        );
+        let placed = loaded
+            .sprites
+            .get(&corner_logo.src)
+            .unwrap_or_else(|| panic!("{label}: hash:7ba78aca must decode as a texture"));
+        assert_eq!(
+            (placed.width, placed.height),
+            (256, 32),
+            "{label}: already a power of two on both axes, unlike TitleFrame's padded crop"
+        );
+    }
+}

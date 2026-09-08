@@ -129,11 +129,16 @@ pub mod states {
     /// scroll arrow pair, a squiggle-text date/version strip, `ArrowSelect`
     /// (`FETextures.mip`) - and one `<BackgroundController>` wrapping a
     /// `BackgroundImage` and a `BackgroundTopRightImage`, **neither naming a
-    /// `src`**. Both are drawn nothing rather than a guess: `Skin.xml`
-    /// declares no default-background global for either, so whatever texture
-    /// the real menu shows is assigned by the executable at runtime, not
-    /// authored here - the same class of gap as `Title Screen`'s own missing
-    /// wordmark texture, `TitleFrame`, still open. See
+    /// `src`**, the same class of gap as `Title Screen`'s own missing wordmark
+    /// texture, `TitleFrame`. `BackgroundTopRightImage` is resolved the same
+    /// way `TitleFrame` was, by content scan against a captured frame -
+    /// `hashes::MENU_TOPRIGHT_LOGO`, filled through [`FALLBACK_IMAGES`].
+    /// `BackgroundImage` stays a genuine gap, but **not for want of looking**:
+    /// the same scan checked every full-screen-shaped candidate against a real
+    /// `Main Menu` capture and none matched - the capture's own background is
+    /// flat white with nothing drawn on it, which is what
+    /// [`crate::MENU_SKIN`]'s `background` field already carries as a plain
+    /// colour fill. See `docs/formats/pure-status.md` for the scan and
     /// [`super::FRONT_END`]'s own `menu_frame`.
     pub const FE_SCREEN: &str = "FE Screen";
 }
@@ -197,17 +202,34 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
 /// name to a content-scan hash - the same "assigned programmatically on the
 /// original" gap [`FALLBACK_GLOBALS`] fills for a colour, but for a texture.
 ///
-/// **One entry today.** `Title Screen->TitleFrame`, the "wipEout pure"
+/// **Two entries today.** `Title Screen->TitleFrame`, the "wipEout pure"
 /// wordmark - see [`crate::hashes::TITLE_LOGO`] for the scan that found it and
-/// the evidence it is the right one. `FE Screen->BackgroundImage` is the same
-/// shape of gap and stays out of this table: no candidate for it has been
-/// checked against a captured frame yet, so adding it here would be a guess
-/// dressed as a measurement.
+/// the evidence it is the right one. `FE Screen->BackgroundTopRightImage`, the
+/// "ワイプアウト" wordmark beside the swoosh logo - see
+/// [`crate::hashes::MENU_TOPRIGHT_LOGO`] for the same scan run again, sized
+/// for a full-screen backdrop, which is what found this one too.
+///
+/// `FE Screen->BackgroundImage` is the same shape of gap and stays out of
+/// this table, **not for want of trying**: the scan that found the two
+/// entries above also filtered its 361 decoded textures to every
+/// `480x272`/`512x256`/`512x512`-shaped candidate (a full-screen backdrop,
+/// allowing for PSP power-of-two padding) and checked each against a real
+/// `Main Menu` capture. None matched - the capture's own background is flat
+/// white with nothing drawn on it at all, to the pixel (`magick ... -format
+/// "%[fx:mean...]"` over the open area reads exactly `255,255,255`), which is
+/// already what [`crate::MENU_SKIN`]'s `background` field supplies as a plain
+/// colour fill. Adding a candidate here anyway would be a guess dressed as a
+/// measurement, which is exactly what this table exists not to hold - see
+/// `docs/formats/pure-status.md` for the scan and every candidate it ruled
+/// out.
 ///
 /// Consulted by `oag-game`'s own front-end XML loader the same way
 /// `fallback_globals` is: only where a widget's own XML leaves `src` unset,
 /// and a real `src` always wins.
-pub const FALLBACK_IMAGES: &[(&str, &str)] = &[("TitleFrame", "hash:3af18d90")];
+pub const FALLBACK_IMAGES: &[(&str, &str)] = &[
+    ("TitleFrame", "hash:3af18d90"),
+    ("BackgroundTopRightImage", "hash:7ba78aca"),
+];
 
 /// How Pure lays its menus out, as far as its own disc states it.
 ///
