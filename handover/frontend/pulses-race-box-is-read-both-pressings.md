@@ -1,9 +1,11 @@
-# Pulse's race box is read on both pressings, and the code side is blocked
+# Pulse's race box is read on both pressings, and the code side is unblocked
 
-2026-09-05. The Pulse half of the race-box investigation, PSP and PS2 together
-because the PS2 is a delta rather than an independent measurement. The
-permanent write-up is
-[`docs/formats/race-setup.md`](../../docs/formats/race-setup.md).
+2026-09-05, updated 2026-09-08. The Pulse half of the race-box investigation,
+PSP and PS2 together because the PS2 is a delta rather than an independent
+measurement. The permanent write-up is
+[`docs/formats/race-setup.md`](../../docs/formats/race-setup.md), with the
+decompiled screen classes at
+[`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/race-box-screens.md).
 
 ## What is settled
 
@@ -36,27 +38,38 @@ with no locked entry reachable from this screen. `Black`/`White` in the
 `TrackSelection` string block are confirmed to be the two circuit runs (the
 screen's own Help text says so), not a preview toggle.
 
+**The relocation blocker is resolved, and both screen classes are now
+decompiled in full.** The PSP Allegrex relocation patch landed 2026-09-07
+across all four PSP Ghidra databases (`HANDOVER.md`, "Traps that are live"),
+and `TrackSelection`/`TeamSelection` decompile cleanly with it applied - see
+[`race-box-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/race-box-screens.md)
+for the full function table, fifteen names applied at 72-82 confidence, and
+what those functions do:
+
+- **What populates the track list is now found.**
+  `TrackSelection_PopulateList` filters on `<Unlock>` plus a second, mode-
+  gated per-track byte flag - the mechanism behind "why Custom Race offers
+  three circuits" going from an XML-only inference to code.
+- **`Top->Ship` has a confirmed referent.** It is a node inside each track's
+  own dynamically created preview scene, not a static screen widget - which
+  is why no button probe on the live capture ever found it.
+- **`Team Selection`'s stat bars, Eliminator/Normal variant pick and
+  suggested/forced-ship help text are all traced to code**, not just the XML
+  widget inventory.
+- **One function (`Definition_IsUnlocked`) was cross-checked against
+  `psp-pulse-eu`** by exact opcode hash and confirmed (123/123 instructions
+  equal); the other fourteen have no exact-hash match on the EU binary, and
+  a single-address fuzzy check found nothing above 0.55 either - the
+  front-end code region diverges more between pressings than the physics
+  code the earlier EU transfer pass covered. See `race-box-screens.md`'s own
+  cross-platform section.
+
 ## Open
 
-- **The two screen classes cannot be followed in Ghidra.** `TrackSelection`
-  (`0x08a84a00`) and `TeamSelection` (`0x08a84688`) exist as strings in
-  `/psp-pulse-usa/BOOT.BIN`, and every route to their code is blocked:
-  `get_xrefs_to` returns "No references found", a byte scan for the literal
-  pointer finds nothing, and `search_instructions` for the `addiu` immediate
-  finds zero matches across 525,049 instructions. That is the defect in
-  `handover/ghidra-applies-no-psp-relocation-the-patch-is.md` - **a tooling
-  block, not an absence.** The patch is written and not yet installed.
-
-  The way around it that already worked: the screen classes' string blocks sit
-  contiguously in `.rodata` and terminate in the class name, so
-  `inspect_memory_content` over the block recovers the asset templates and the
-  widget names without any xref at all. That is how both previews were
-  resolved. **It does not recover behaviour** - only names.
-
-- **What populates the track list is unread.** `Track Creation` authors no
-  `<List>` at all. The three-entry Custom Race list is consistent with the
-  three `PI_Track` entries carrying no `<Unlock>`, but the code that reads
-  `Definition.xml` and builds the rows has not been found.
+- **The nine unlock-predicate functions behind `Definition_IsUnlocked` are
+  unnamed and untraced.** This is what "circuits gate on a named grid" and
+  "craft variants gate on loyalty" need to become a confirmed mechanism
+  rather than an XML reading corroborated by one live capture.
 
 - **`GSDisableEntriesBitField` is undecoded.** Read as "bit N disables entry
   N", confidence 72 - self-consistent on Pulse's `0xFA` over seven entries and
@@ -81,11 +94,6 @@ screen's own Help text says so), not a preview toggle.
   yet listed in `docs/formats/ps2-texture.md`, falling straight out of that
   page's own `.mip` -> `.pct` rule. Unverified by eye.
 
-- **`Top->Ship` still has no confirmed referent.** The 2026-09-05 capture
-  found no ship model, silhouette or top-down framing on `Track Creation`
-  under any of `square`/`triangle`/`select`/`up`/`down` - a bounded negative,
-  confidence 65, not proof the path never renders anything. Unread in code.
-
 - **The locked-circuit info panel is confirmed unreachable from `Track
   Creation` itself** (the wrapping list only ever holds the three ungated
   tracks), but still genuinely unanswered: reaching one needs `Tournament C`
@@ -93,18 +101,35 @@ screen's own Help text says so), not a preview toggle.
   tried.
 
 - **The `Info Track %d.%d` = (count, index) layout-selection hypothesis is
-  untested rather than confirmed or refuted.** All three of Pulse's reachable
-  circuits rendered the same single-row layout; nothing in this capture
-  exercised the 2-row or 3-row templates the string block also lists.
+  still untested rather than confirmed or refuted.** The code shows a
+  *different* mode-driven axis (2-widget vs 7-widget stat layout) that is
+  orthogonal to this question - see `race-box-screens.md`'s own note on it.
+
+- **The per-craft rating record (`Speed`/`Thrust`/`Handling`/`Shield` shown
+  on `Team Selection`) resolves through `FUN_08808664` at offsets
+  `+0xb4..+0xc0`, a table distinct from `HandlingStats.xml`.** Its own source
+  file and struct are unlocated.
+
+- **Nothing in `race-box-screens.md` is runtime-verified.** Everything is
+  static decompilation, capped at the rubric's 70-84 band. A PPSSPP capture
+  with a breakpoint in `TrackSelection_PopulateList` or `TeamSelection_Update`
+  would move several of those into the 90s.
 
 ## Next Steps
 
-1. Once the PSP relocation patch lands, decompile the `TrackSelection` class
-   and find the list-population site. That is the same missing piece HD's
-   `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md#not-found`
-   records, so solving it on either title informs the other.
-2. Decode `WADS2.WAD` entry 3410 and confirm it is `hex_bg`, then add the row
+1. Trace the nine unlock-predicate functions
+   (`race-box-screens.md#definition_isunlocked-and-the-two-axis-unlock-read`)
+   to turn the two-unlock-axis reading from an XML-plus-one-capture
+   corroboration into a confirmed mechanism.
+2. Run a proper `bulk_fuzzy_match` sweep (descending thresholds,
+   collision-filtered, each candidate individually `diff_functions`-checked)
+   against `psp-pulse-eu` for the fourteen functions that had no exact-hash
+   match, per this project's EU-preference. A single-address fuzzy check
+   already came back too weak to act on; a broader sweep may still turn up
+   real matches the same way the physics-code pass found 115.
+3. Decode `WADS2.WAD` entry 3410 and confirm it is `hex_bg`, then add the row
    to `docs/formats/ps2-texture.md`. Five minutes.
-3. Do not rename either screen class in Ghidra until its code is actually read.
-   The strings are proof the classes exist, not evidence of what any function
-   does, and the rubric's floor is 50 to rename at all.
+4. HD's equivalent screen-population code is still unfound - see
+   `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md` - and
+   solving it there would let the two titles' readings corroborate each
+   other the way `race-box-screens.md`'s method could be reused for.

@@ -248,11 +248,16 @@ own corridor, framed in a hexagonal window - never a top-down map and never a
 ship.** Confirmed across all three reachable circuits and after pressing
 `square`, `triangle` and `select` on the screen (the first is inert here,
 the other two open a `Track Help` overlay): no ship model, silhouette or
-top-down framing appeared under any of them. So on the evidence gathered,
-**`Top->Ship` does not visibly draw a ship on this screen** - confidence 65
-for the negative, since `square`/`triangle`/`select`/`up`/`down` is a bounded
-probe, not an exhaustive one, and the widget path's actual behaviour is still
-unread in code.
+top-down framing appeared under any of them, which agrees with the code now
+that it is readable: **`Top->Ship` has a confirmed referent, and it is not a
+static screen widget at all.** It is a node inside *each track's own*
+dynamically created preview scene - replaced every time the selection
+changes - fed the already-confirmed `%s\FE\%s.vex` mesh path directly. The
+name most likely survives from a shared preview-scene template also used for
+an actual ship (`Team Selection`'s equivalent node is named `Info->Ship` and
+does hold a craft). See
+[`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#top-ship-has-a-confirmed-referent-after-all),
+confidence 78.
 
 **The wrapping three-entry list was walked all the way round** (`down` x4,
 landing back where it started): `1/3` Talon's Junction White (`Distance(m)
@@ -315,7 +320,13 @@ From `Data\Plugins\PI001\Definition.xml`. Confidence 95.
 index will not round-trip. **Exactly three `PI_Track` entries carry no
 `<Unlock>` at all**: `16_Track`, `03_Track` and `18_Track`. Those three are
 therefore the only circuits available before any campaign grid is cleared,
-which is a much shorter list than "everything raceable".
+which is a much shorter list than "everything raceable". **`Track
+Creation`'s own list code confirms this from the executable side, and adds a
+second, mode-gated flag on top of it**: `TrackSelection_PopulateList` filters
+on `<Unlock>` (via `Definition_IsUnlocked`) and, only when the current `Mode`
+equals a specific value, an additional per-track byte that happens to be set
+on exactly the same three tracks. See
+[`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#trackselection_populatelist-closes-what-populates-the-track-list-is-unread).
 
 **Craft variants gate on loyalty, per team.** Each `PI_TeamModel` /
 `PI_ModelSkin` leaf carries *two* `<Unlock>` rows - a cheap own-team price and
@@ -426,23 +437,23 @@ track-plus-class picker is the crossplay lobby vote.
   upgrades it - see
   [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
   Pure's ordering has the same limit and is capped at 88 for it.
-- **The PSP screen classes cannot be reached by cross-reference.**
-  `get_xrefs_to` on `TrackSelection` (`0x08a84a00`) returns nothing, a byte
-  scan for the literal pointer finds nothing, and an instruction search for the
-  matching `addiu` immediate finds zero matches across 525,049 instructions.
-  Relocations are not applied at these binaries' import, so operands do not
-  hold loaded addresses. **An empty result here is the tool failing, never
-  evidence that a reference does not exist** - the same caution
-  [ship-skin](../ghidra/functions/psp-pulse-usa/ship-skin.md) already
-  documents for `.rodata` strings. Reading a class's contiguous string block
-  works around it for *names*; it recovers no behaviour. **The 2026-09-05
-  capture upgrades what the two screens draw from names to an observed,
-  running frame** - see [above](#captured-live-in-ppsspp-2026-09-05) - but
-  this is still a fact about *pixels*, not code: nothing about the capture
-  reaches the functions that build the frame, so this limit's substance is
-  unchanged.
-- **What populates either list is unfound**, on Pulse and on HD alike -
-  see [track-selection-screen](../ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
+- **The PSP screen classes could not be reached by cross-reference until
+  2026-09-07, when the Allegrex relocation patch was applied to all four
+  PSP Ghidra databases** (`HANDOVER.md`, "Traps that are live"). Before that,
+  `get_xrefs_to` on `TrackSelection` (`0x08a84a00`) returned nothing, a byte
+  scan for the literal pointer found nothing, and an instruction search for
+  the matching `addiu` immediate found zero matches across 525,049
+  instructions - because relocations were not applied at import, so operands
+  did not hold loaded addresses. **With the patch applied, both classes
+  decompile cleanly** - see
+  [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md).
+  Kept here as a record of what an unrelocated PSP binary looks like from
+  this tooling, since Pure and HD's PSP databases carried the same defect
+  and may still, if their own databases were not among the ones reimported.
+- **What populates `Track Creation`'s list is now found on Pulse** - see
+  [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#trackselection_populatelist-closes-what-populates-the-track-list-is-unread).
+  HD's equivalent is still unfound - see
+  [track-selection-screen](../ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
 - **Pure's track and craft previews are unresolved.** A craft candidate exists
   (`%s\Phantom.vex` inside the `fe::TeamSelection_Screen` string span, with
   `Data\Ships\Feisar\Phantom.vex` resolving) but no cross-reference was
