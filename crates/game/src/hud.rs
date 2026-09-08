@@ -413,14 +413,22 @@ impl Layout {
     }
 }
 
-/// Widget-name prefixes whose authored position is **not** a screen coordinate.
+/// Widget-name prefixes this crate does not yet check the position of.
 ///
-/// `PosTag0`-`PosTag7` and `PlrTag0`-`PlrTag7` are the floating opponent tags:
-/// each is anchored to a rival's projected screen position at runtime, and its
-/// authored `x`/`y` plus the enclosing `<Item>` offset are a *nudge* from that
-/// anchor. The arcade layout puts them inside `<Item OffsetX="-40">`, so they
-/// resolve to negative coordinates - correct for an offset, nonsense for a
-/// position.
+/// **The two are not the same kind of gap, corrected 2026-09-08.**
+/// `PlrTag0`-`PlrTag7` (`MPTag_HUD.xml`, multiplayer only) are the real
+/// runtime anchor this constant's name describes: their `<Values>` carries
+/// no `x`/`y` at all. `PosTag0`-`PosTag7` are not - they resolve to a fixed
+/// on-screen column, `(405, 25..165)` on the arcade layout and
+/// `(460, 25..165)` on the eliminator one, both measured and pinned by
+/// `postag_is_a_fixed_column_not_a_runtime_anchor`
+/// (`crates/game/tests/hud_layout_ground_truth.rs`) - an earlier reading
+/// took the arcade layout's inner `<Item OffsetX="-40">` alone and called
+/// the result negative, missing that the outer `<Item OffsetX="445">`
+/// composes with it. `PosTag` stays in this list anyway: what each of the
+/// eight rows draws is unread (no `idstring`, no `string`), so the anchor
+/// being on screen does not mean a label's own text width is checkable yet.
+/// See `docs/ui/hud.md`.
 ///
 /// This exists because the on-screen check is otherwise the sharpest test of the
 /// `<Item>` handling, and these eight would force it to be dropped entirely.

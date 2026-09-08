@@ -51,11 +51,23 @@
 //!   same colour-only convention `crate::screen` already uses for front-end
 //!   backdrops. Read as a sprite it is a widget with no texture, and the parser
 //!   dropped it.
-//! - **`PosTag0`-`PosTag7` and `PlrTag0`-`PlrTag7` are not screen-positioned.**
-//!   The arcade layout nests them in `<Item OffsetX="-40">`, so they resolve to
-//!   negative coordinates. They are anchored to a rival's projected position at
-//!   runtime and their authored position is a nudge from it, which is why
-//!   `hud::is_screen_positioned` exists and why the on-screen check skips them.
+//! - **`PlrTag0`-`PlrTag7` carry no authored `x`/`y` at all** (`MPTag_HUD.xml`,
+//!   the multiplayer-only sibling layout) - a genuine runtime anchor with
+//!   nothing to compose, which is why `hud::is_screen_positioned` exists and
+//!   why the on-screen check below skips it. **`PosTag0`-`PosTag7` are not
+//!   this** - corrected 2026-09-08, see
+//!   [`postag_is_a_fixed_column_not_a_runtime_anchor`] for the measurement
+//!   and `docs/ui/hud.md` for where the same correction landed. An earlier
+//!   reading took the arcade layout's inner `<Item OffsetX="-40">` alone and
+//!   called the result negative; `<Item>` offsets compose, and the outer
+//!   `<Item OffsetX="445" OffsetY="5">` around it composes to `(405, 5)`, a
+//!   fixed on-screen column stepping twenty pixels a row by index -
+//!   `Elimination_HUD.xml`'s own single-level `<Item OffsetX="460">`
+//!   corroborates without needing composing to read positive at all. Still
+//!   grouped with `PlrTag` in `hud::RUNTIME_ANCHORED` regardless, because
+//!   what the eight rows draw is unread and a label's own text width is
+//!   unmeasurable without it - see that test for why removing the exemption
+//!   is left open rather than done here.
 
 use std::path::{Path, PathBuf};
 
@@ -174,6 +186,100 @@ fn all_five_layouts_parse_with_the_widget_counts_the_disc_has() {
         assert_eq!(layout.labels.len(), labels, "{entry} label count");
         assert_eq!(layout.models.len(), models, "{entry} model count");
     }
+}
+
+/// `PosTag0`-`PosTag7` are a fixed column, not a runtime anchor - corrected
+/// 2026-09-08, against this file's own doc comment and against
+/// `docs/ui/hud.md`.
+///
+/// **The doc comment above and `docs/ui/hud.md` both say these "resolve to
+/// negative coordinates" because the arcade layout nests them in
+/// `<Item OffsetX="-40">`.** That reading takes the `-40` alone; `<Item>`
+/// offsets compose (`Layout::collect`'s `x = offset_x + OffsetX`, landed and
+/// checked against nine assertions - none of which touched `PosTag`), and
+/// the enclosing `<Item OffsetX="445" OffsetY="5">` composes with it to
+/// `(405, 5)`. Measured here rather than argued: `PosTag0` through
+/// `PosTag7` land at `x=405`, `y=25, 45, ..., 165` - one fixed column,
+/// twenty pixels a row, both **on screen** and **evenly spaced by index**,
+/// which a set of eight independent per-craft anchors would have no reason
+/// to be. `Elimination_HUD.xml` corroborates independently, at its own
+/// `x=460` (single-level `<Item OffsetX="460" OffsetY="5">`, so this one
+/// needs no composing to read positive) and the same twenty-pixel step -
+/// two files, two `<Item>` shapes, the same column.
+///
+/// **`PlrTag0`-`PlrTag7` (`MPTag_HUD.xml`, the multiplayer-only sibling
+/// layout) are the opposite: genuinely unpositioned.** Their `<Values>`
+/// carries no `x`/`y` at all, so [`Layout::from_xml`] leaves both at their
+/// `f32` default, `0.0` - the real "nothing to read a position from" case
+/// `hud::RUNTIME_ANCHORED`'s doc describes, unlike `PosTag`.
+///
+/// **What is not settled, and is not this test's job to settle**: what text
+/// each of the eight rows carries. Neither carries an `idstring` or a
+/// `string`, so the content is runtime-supplied and unread - filling it
+/// would be inventing what the asset does not author, which `CLAUDE.md`
+/// forbids. `hud::RUNTIME_ANCHORED`/`hud::is_screen_positioned` still skip
+/// `PosTag` in [`every_widget_lands_on_screen`] below, deliberately left
+/// alone in this change: the *anchor* now passes that check on its own
+/// merits (`405`/`460`, `25` to `165`, all inside `480x272`), but a label's
+/// own text width is unmeasurable without knowing what fills it, and
+/// `align="left"` at `x=405` on a 480-wide screen leaves only 75 px before
+/// the right edge - narrower than `TotalTime`'s own measured 92 px at
+/// `HUD` scale 1.0 (see this file's "TotalTime overflows the right edge"
+/// open item in `docs/ui/hud.md`). Untangling that needs the content first.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn postag_is_a_fixed_column_not_a_runtime_anchor() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+
+    let arcade = layout_of(&mut archives, hud::layouts::ARCADE);
+    for row in 0..8u32 {
+        let name = format!("PosTag{row}");
+        let label = arcade
+            .label(&name)
+            .unwrap_or_else(|| panic!("{name} missing from {}", hud::layouts::ARCADE));
+        assert!(
+            (label.x - 405.0).abs() < f32::EPSILON,
+            "{name}: x={}, expected 405 (the composed column, not -40 read alone)",
+            label.x
+        );
+        assert!(
+            (label.y - (25.0 + row as f32 * 20.0)).abs() < f32::EPSILON,
+            "{name}: y={}",
+            label.y
+        );
+    }
+
+    let elimination = layout_of(&mut archives, hud::layouts::ELIMINATION);
+    for row in 0..8u32 {
+        let name = format!("PosTag{row}");
+        let label = elimination
+            .label(&name)
+            .unwrap_or_else(|| panic!("{name} missing from {}", hud::layouts::ELIMINATION));
+        assert!(
+            (label.x - 460.0).abs() < f32::EPSILON,
+            "{name}: x={}, expected 460",
+            label.x
+        );
+        assert!(
+            (label.y - (25.0 + row as f32 * 20.0)).abs() < f32::EPSILON,
+            "{name}: y={}",
+            label.y
+        );
+    }
+
+    // The multiplayer sibling, for contrast: no authored position at all,
+    // which is the genuine runtime-anchor case `PosTag` was believed to be.
+    let mp_tag = layout_of(&mut archives, hud::layouts::MP_TAG);
+    let plr_tag0 = mp_tag
+        .label("PlrTag0")
+        .expect("PlrTag0 missing from MPTag_HUD.xml");
+    assert_eq!(
+        (plr_tag0.x, plr_tag0.y),
+        (0.0, 0.0),
+        "PlrTag0 carries no x/y, unlike PosTag - this is what an unauthored anchor looks like"
+    );
 }
 
 /// Every authored rectangle must land inside the PSP's screen.
