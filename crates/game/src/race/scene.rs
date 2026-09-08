@@ -153,6 +153,10 @@ pub struct Scene {
     mines: Vec<Drawable>,
     /// The Bomb's own, one size up from the Mine's model, same terms.
     bombs: Vec<Drawable>,
+    /// A Cannon round's own, same terms: empty when
+    /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
+    /// draws as nothing rather than as an invented stand-in.
+    cannon_rounds: Vec<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -333,6 +337,7 @@ impl Scene {
         rocket_model: Option<Model>,
         mine_model: Option<Model>,
         bomb_model: Option<Model>,
+        cannon_model: Option<Model>,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -855,6 +860,7 @@ impl Scene {
         let rockets = weapon_drawables(rocket_model)?;
         let mines = weapon_drawables(mine_model)?;
         let bombs = weapon_drawables(bomb_model)?;
+        let cannon_rounds = weapon_drawables(cannon_model)?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -947,6 +953,7 @@ impl Scene {
             rockets,
             mines,
             bombs,
+            cannon_rounds,
             boost_uv_transforms,
             collision,
             sky,

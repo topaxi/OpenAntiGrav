@@ -370,6 +370,27 @@ pub const MINE_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Mine.vex";
 /// per that section, so what is true of one's drop is true of the other's.
 pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
 
+/// The archive entry a Cannon round's model comes from.
+///
+/// **Recovered, confidence 85.** `Cannon_Construct` (`0x088651d8`) calls
+/// `Vex_LoadModel` with exactly this string (`0x08a7c85c`) for every one of
+/// the sixty round instances `CannonPool_Construct` (`0x088573b0`)
+/// allocates, and hangs the node it gets at `instance+0xc0` - see
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "What
+/// draws a Cannon round". The entry resolves in `Data.wad` on both PSP
+/// pressings (name hash `b94a2a6c`, entry 1048, 6,608 bytes).
+///
+/// **The name is the file's, not a description**, and it is worth saying
+/// once: the mesh is called *muzzleflash* while the round it is loaded for
+/// is the bolt. Each round instance also builds two GU display lists of
+/// hand-written quads in its constructor, textured from
+/// `Data\\Weapons\\Textures\\Cannon_bolt.mip` and
+/// `Cannon_muzzle_flash.mip` (`Cannon_LoadTextures`, `0x08864b00`), and
+/// **which of those two lists is which is not read**. So this draws the
+/// model the original hangs on the round and nothing else: the quads are an
+/// honest absence rather than an invented billboard, per CLAUDE.md.
+pub const CANNON_MODEL_ENTRY: &str = r"Data\Weapons\pulse_muzzleflash.vex";
+
 /// Half-width of the sprite a projectile in flight is drawn as, in world units.
 ///
 /// **Invented**, and now only a *fallback*: a rocket is drawn as

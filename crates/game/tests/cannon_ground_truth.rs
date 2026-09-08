@@ -242,3 +242,176 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         )
     );
 }
+
+/// An opponent holding a Cannon fires it, with no button pressed anywhere -
+/// and only while it has somebody in front to fire at.
+///
+/// **The mechanism is measured; what the gate reads is not.**
+/// `Cannon_UpdateReload` gates on the fire-held byte of the firing craft's
+/// control record, which for an opponent is `Ai + 0x1e`. Nothing in the image
+/// writes that byte at any width, and `Ai_Construct`'s object is allocated
+/// without a zero-fill, so on the real hardware it is whatever the heap block
+/// held. There is no design there to be faithful to, and opponent behaviour is
+/// a design axis on this project rather than a fidelity one - so the trigger is
+/// **chosen, not measured, with no confidence score**: an opponent holds fire
+/// while `oag_ai::Driver::holds_fire` says there is a target ahead. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+///
+/// **What this pins is what a player should be able to see**: rounds leaving an
+/// opponent's barrel with the pad untouched, aimed up the road rather than
+/// sprayed at nothing. Every opponent is armed rather than just slot 1, because
+/// which craft happens to have a rival in its cone at any moment is a property
+/// of the race, not of the weapon - arming one slot and hoping would be a
+/// flaky test of a real behaviour.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    let count = usize::from(race.world.ship_count);
+    assert!(count > 1, "a single race should grid more than one craft");
+    let cannon = race.cannon_stats().expect("the disc authors a Cannon");
+    for slot in 1..count {
+        race.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
+    }
+
+    // `throttle` holds CROSS and never SQUARE, so nothing the player does can
+    // account for a round appearing. Long enough for the field to string out
+    // and put somebody in somebody else's cone; the magazine itself is a second
+    // and a half.
+    let ticks = (cannon.rate * 60.0).ceil() as u64 + 900;
+    let mut shooters: Vec<u8> = Vec::new();
+    for _ in 0..ticks {
+        race.tick(&throttle);
+        for round in race
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind == Some(Weapon::Cannon) && p.owner != 0)
+        {
+            if !shooters.contains(&round.owner) {
+                shooters.push(round.owner);
+            }
+        }
+        if !shooters.is_empty() {
+            break;
+        }
+    }
+    assert!(
+        !shooters.is_empty(),
+        "no opponent Cannon round appeared in {ticks} ticks with every opponent \
+         armed - either `Race::advance_cannons` is not running the other slots, \
+         or `Driver::holds_fire` never finds a target on this circuit"
+    );
+    println!("opponent slots that fired: {shooters:?}");
+
+    // And the player, who is holding no fire button, fired nothing.
+    assert!(
+        rounds(&race).is_empty(),
+        "slot 0 fired a Cannon with SQUARE never held"
+    );
+}
+
+/// An opponent with nobody in front of it does **not** fire.
+///
+/// The other half of the tuned trigger, and the half that would otherwise pass
+/// silently: a gate that always returns `true` satisfies the test above just as
+/// well as the real one. The leader has no rival ahead by construction, so its
+/// magazine must still be full after a long stretch.
+///
+/// Chosen, not measured - see the test above.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    let count = usize::from(race.world.ship_count);
+    // Whoever is out front right now: `Field::ahead` is empty for it, so
+    // `Driver::holds_fire` has nothing to aim at.
+    let places = race.places();
+    let leader = (1..count)
+        .min_by_key(|&slot| places[slot])
+        .expect("a grid of more than one");
+    race.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
+
+    for _ in 0..300 {
+        race.tick(&throttle);
+        // Stop as soon as it is no longer leading - the premise has gone and
+        // the rest of the run would be measuring something else.
+        if race.places()[leader] != 1 {
+            break;
+        }
+        assert!(
+            race.world
+                .projectiles
+                .slots
+                .iter()
+                .all(|p| p.kind != Some(Weapon::Cannon) || p.owner != leader as u8),
+            "the craft in front fired a Cannon at nobody - `Driver::holds_fire` \
+             is not gating on a target"
+        );
+    }
+}
+
+/// The disc carries the round's own model, and it decodes to real geometry.
+///
+/// **The acceptance test for objective 2's asset half.** `Cannon_Construct`
+/// (`0x088651d8`) loads `CANNON_MODEL_ENTRY` into every round instance's scene
+/// node; this asserts that entry resolves in `Data.wad` and parses to
+/// something with vertices, so `Race::cannon_model_matrices` has a mesh to
+/// drive. Without it the rounds fall back to nothing at all - which is the
+/// deliberate choice, but it must be *visible* which of the two happened.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_discs_cannon_round_carries_its_own_model() {
+    let Some(loaded) = single_race() else { return };
+    let model = loaded
+        .cannon_model
+        .expect("the disc carries Data\\Weapons\\pulse_muzzleflash.vex");
+
+    assert!(
+        !model.vertices.is_empty() && !model.indices.is_empty(),
+        "the round's model decoded to no geometry: {} vertices, {} indices",
+        model.vertices.len(),
+        model.indices.len()
+    );
+
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for vertex in &model.vertices {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(vertex.position[axis]);
+            max[axis] = max[axis].max(vertex.position[axis]);
+        }
+    }
+    let span = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    println!(
+        "pulse_muzzleflash.vex: {} vertices, {} indices, spans x {:.3}, y {:.3}, z {:.3}",
+        model.vertices.len(),
+        model.indices.len(),
+        span[0],
+        span[1],
+        span[2]
+    );
+
+    // The same assertion `the_rocket_model_is_longest_along_the_axis_it_is_flown_down`
+    // makes, and for the same reason: `projectile_model_matrices` builds
+    // `Mat4::from_cols(side, up, forward, position)`, mapping the model's own
+    // **+Z** onto the direction of travel. Nothing in a unit test can check
+    // that +Z is where this mesh actually points; only the real file can.
+    //
+    // It is also the evidence that this mesh is the *bolt* despite being named
+    // `pulse_muzzleflash`: a 3.6-long, 1.2-square dart is a round in flight, not
+    // a flat flash at a barrel.
+    let longest = (0..3).max_by(|a, b| span[*a].total_cmp(&span[*b])).unwrap();
+    assert_eq!(
+        longest,
+        2,
+        "the round is longest along {} but `cannon_model_matrices` aims +Z down \
+         the velocity, so it would be drawn broadside; spans are {span:?}",
+        ["x", "y", "z"][longest]
+    );
+}

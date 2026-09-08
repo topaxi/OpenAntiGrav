@@ -99,11 +99,70 @@ impl Driver {
         if personality.trigger <= 0.0 {
             return None;
         }
-        // **Noticed, not measured.** A driver cannot shoot at a craft it has
-        // not seen yet; the clock itself is advanced by [`Self::drive`], which
-        // is the tick this one shares. See [`Reflex`].
+        let target = self.aimable(ctx, WEAPON_MIN_RANGE)?;
+        let appetite = personality.trigger * (1.0 + self.provoked());
+        if roll(self.seed, self.phase, WEAPON_STREAM) >= appetite * TRIGGER_RATE {
+            return None;
+        }
+        Some(target.slot)
+    }
+
+    /// Whether this driver is holding the trigger down on a **continuously
+    /// fired** weapon right now - the Cannon, and nothing else so far.
+    ///
+    /// **Chosen, not measured. No confidence score.** The original decides this
+    /// with an *uninitialised* byte - `Cannon_UpdateReload` gates on the
+    /// fire-held flag of the firing craft's control record, which for an
+    /// opponent is `Ai + 0x1e`, which nothing in the image ever writes, in an
+    /// object that is never zero-filled. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`. There is
+    /// no design there to be faithful to, and the project's standing ruling is
+    /// that opponent behaviour is a design axis rather than a fidelity one:
+    /// **tuned for a good race, not for the heap.**
+    ///
+    /// # What it is tuned for
+    ///
+    /// A Cannon in the original empties thirty rounds in a second and a half.
+    /// Held down unconditionally that is a magazine sprayed at empty track the
+    /// instant the pickup lands, which is neither threatening nor interesting -
+    /// the player mostly never sees it. So this holds the trigger **only while
+    /// there is somebody in front worth hitting**, by exactly the aiming gates
+    /// [`Self::wants_to_fire`] uses. The weapon then reads as an opponent
+    /// leaning on the player down a straight and letting go through the corner,
+    /// and its thirty rounds are spent where they make the race harder.
+    ///
+    /// **Two deliberate differences from `wants_to_fire`:**
+    ///
+    /// - **No trigger roll.** That roll is a *delay before a single shot* (see
+    ///   [`TRIGGER_RATE`]); against a per-tick reload countdown it would instead
+    ///   throttle the fire *rate* to a twentieth of the authored one, which is
+    ///   the authored `rate` quietly overridden by an AI constant. The Cannon's
+    ///   cadence is the disc's; only the decision to hold is ours.
+    /// - **No minimum range.** [`WEAPON_MIN_RANGE`] exists because a blast
+    ///   catches the craft that fired it, and a Cannon round has no blast. Point
+    ///   blank is exactly where this weapon should be used.
+    ///
+    /// Everything else is shared with `wants_to_fire` on purpose: a pilot that
+    /// will not take a rocket shot round a corner does not hose a Cannon round
+    /// one either.
+    #[must_use]
+    pub fn holds_fire(&self, ctx: &Context<'_>) -> bool {
+        if self.personality(ctx.pilot).trigger <= 0.0 {
+            return false;
+        }
+        self.aimable(ctx, 0.0).is_some()
+    }
+
+    /// The rival ahead this driver could aim a forward weapon at, if there is
+    /// one: noticed, in range, inside the cone, with straight enough road in
+    /// between.
+    ///
+    /// **Noticed, not measured.** A driver cannot shoot at a craft it has not
+    /// seen yet; the clock itself is advanced by [`Self::drive`], which is the
+    /// tick this one shares. See [`Reflex`].
+    fn aimable(&self, ctx: &Context<'_>, min_range: f32) -> Option<crate::Rival> {
         let target = self.reflex.filter(ctx.field).ahead?;
-        if target.range <= WEAPON_MIN_RANGE || target.range > WEAPON_RANGE {
+        if target.range <= min_range || target.range > WEAPON_RANGE {
             return None;
         }
         if target.cos_bearing < WEAPON_CONE {
@@ -118,11 +177,7 @@ impl Driver {
         {
             return None;
         }
-        let appetite = personality.trigger * (1.0 + self.provoked());
-        if roll(self.seed, self.phase, WEAPON_STREAM) >= appetite * TRIGGER_RATE {
-            return None;
-        }
-        Some(target.slot)
+        Some(target)
     }
 
     /// Whether this driver wants to lay a cluster of mines right now.

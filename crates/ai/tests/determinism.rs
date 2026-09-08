@@ -158,6 +158,21 @@ use oag_ai::probe::{self, Scenario};
 ///   curvature spread is untouched, which is what
 ///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] measures:
 ///   the line did not change, only how a driver reacts to a touching rival.
+/// - **The two `Field` rows regenerated again 2026-09-08**, for
+///   [`oag_ai::Driver::social`]'s new `CONTACT_FLOOR` - the minimum yield every
+///   driver now gives a rival it is already alongside, whatever its personality
+///   says. See that constant for what it is for and why it is chosen rather than
+///   measured. The signature is exactly the previous regeneration's, which is
+///   the check that it went where it was meant to: `Solo` carries no rival, so
+///   `alongside` is always `None` there and the floor can never fire, and that
+///   row reproduced **bit for bit** again (`0x65d7_0dd3_7566_c624` and
+///   `0xb1f8_d6c8_1437_06ee`, both unchanged for the second time). Only the two
+///   `Field` rows moved. `oag-core`, `oag-physics` and `oag-gameplay`'s gates
+///   all still pass unchanged, and
+///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] still holds,
+///   so the line is untouched and only the driver's response to contact moved.
+///   `Driver::holds_fire`, added in the same change, cannot reach this file at
+///   all - no weapon exists in [`oag_ai::probe`]'s scenarios.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
@@ -168,14 +183,14 @@ const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Field,
-        0xbfb4_c122_f4b0_0961,
-        0xa546_2a0e_1623_a3c4,
+        0x1a85_6b24_0c50_ee9b,
+        0x4dcf_51f5_eb9f_dfad,
     ),
     (
         1_800,
         Scenario::Field,
-        0x12eb_c46e_56c1_82eb,
-        0xdd8e_33d4_eb50_4cd6,
+        0x6c6e_0024_0096_376d,
+        0x11a2_3f23_77dd_7b02,
     ),
 ];
 

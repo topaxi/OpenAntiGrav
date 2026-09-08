@@ -83,10 +83,11 @@ impl super::Scene {
         queue: &wgpu::Queue,
         view_projection: Mat4,
         prev_vp: Mat4,
-    ) -> (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>) {
+    ) -> (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>) {
         let rocket_matrices = race.rocket_model_matrices();
         let mine_matrices = race.mine_model_matrices();
         let bomb_matrices = race.bomb_model_matrices();
+        let cannon_matrices = race.cannon_model_matrices();
         write_one_kind(
             &self.rockets,
             &rocket_matrices,
@@ -111,12 +112,25 @@ impl super::Scene {
             view_projection,
             prev_vp,
         );
-        (rocket_matrices, mine_matrices, bomb_matrices)
+        write_one_kind(
+            &self.cannon_rounds,
+            &cannon_matrices,
+            &prev.cannon_rounds,
+            queue,
+            view_projection,
+            prev_vp,
+        );
+        (
+            rocket_matrices,
+            mine_matrices,
+            bomb_matrices,
+            cannon_matrices,
+        )
     }
 }
 
 /// One kind's own write loop - the shared body of
-/// [`super::Scene::write_weapon_models`]'s three calls.
+/// [`super::Scene::write_weapon_models`]'s four calls.
 fn write_one_kind(
     drawables: &[Drawable],
     matrices: &[Mat4],

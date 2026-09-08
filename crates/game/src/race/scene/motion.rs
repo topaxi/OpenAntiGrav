@@ -38,6 +38,8 @@ pub(super) struct Snapshot {
     pub(super) mines: Vec<Mat4>,
     /// The Bomb's own, same terms.
     pub(super) bombs: Vec<Mat4>,
+    /// The Cannon round's own, same terms.
+    pub(super) cannon_rounds: Vec<Mat4>,
 }
 
 impl Snapshot {
@@ -51,6 +53,7 @@ impl Snapshot {
             rockets: race.rocket_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
+            cannon_rounds: race.cannon_model_matrices(),
         }
     }
 

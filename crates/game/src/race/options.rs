@@ -521,6 +521,11 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
+    /// The model a Cannon round in flight is drawn as:
+    /// [`CANNON_MODEL_ENTRY`]. `None` on the same terms as
+    /// [`Self::rocket_model`], and a round then draws as nothing at all
+    /// rather than as a stand-in - see that constant.
+    pub cannon_model: Option<Model>,
     /// The model a laid Mine is drawn as: [`MINE_MODEL_ENTRY`]. `None` on the
     /// same terms as [`Self::rocket_model`].
     pub mine_model: Option<Model>,
