@@ -74,8 +74,21 @@ The law, all decompiled and all in `race-campaign.md`:
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and
   re-reading would let both be named and would firm up the record-store section.
-- **`Status`/`Locked` on a `PI_Cell` and `Group` on a `PI_Grid`** are parsed and
-  their consumers were not traced. `Group="1"` marks `grid12`..`grid15`.
+- **`Status`/`Locked` on a `PI_Cell`, `Locked`/`Group` on a `PI_Grid`** are
+  parsed and no consumer of any of them was traced. `Definition_IsUnlocked`
+  (which reads `+0x99`/`+0x9c`) and `FUN_0888e5e4` (a `"ms:"`/`"PID"`
+  source-path test, i.e. memory-stick/DLC content, not a lock) are both ruled
+  out. So whether `Locked="true"` drives `Cell Selection`'s `Lock_x_y` overlay
+  or is redundant against the `<Unlock>` rows beside it is **open at 50** -
+  do not implement a lock from the attribute. `Group="1"` marks
+  `grid12`..`grid15`.
+- **The `Tournament` arm of `Race_RecordResult` does a second record lookup**
+  that no other arm does, keyed on `FUN_08945890(DAT_08b31158 + 0x74)` rather
+  than on the cell - the tournament's own standings, the state behind
+  `ER_TOUR_STAN` / `ER_RACE_POINTS` / `ER_END_TOUR_1..8`. `DAT_08b31158` was not
+  identified and the per-leg accumulation was not traced. Tournament has 27
+  authored cells and is the only mode with per-leg state, so this is where a
+  Tournament implementation starts.
 - **`Unlock_LoyaltyMet` (`0x0888ea30`) compares against a whole 32-bit word** at
   the record's `+8`, which for a cell is `difficulty | medal << 8`. Either the
   team record's payload differs or the arithmetic does something this pass did

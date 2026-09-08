@@ -72,7 +72,22 @@ the legs.
 
 `grid12`..`grid15` additionally carry `Group="1"`; `grid0`..`grid11` carry no
 `Group`. `grid15`'s `RequiredPoints="0"` renders as `FE_NA` rather than a number
-(`GridSelection_Update`, below) - it is the last grid and gates nothing.
+(`GridSelection_Update`, below), and no `<Unlock Grid="Grid15">` row appears in
+any of the sixteen grid files - `PI_Track`/`PI_TeamModel` rows were not
+re-checked for one, so "nothing depends on grid15" is a reading of the grid
+files alone.
+
+**The `Locked` column above is reported, not interpreted.** `Locked` is parsed
+onto a `PI_Grid` at `+0xa0` and onto a `PI_Cell` at `+0xb9`, and **no consumer
+of either byte was traced this pass**. It is not `Definition_IsUnlocked`, which
+reads the hard-hidden byte at `+0x99` and the `<Unlock>` list at `+0x9c`; and it
+is not `FUN_0888e5e4`, the function both screens call into `screen + 0xd8`,
+which compares the definition's source path at `+0x94` against `"ms:"` and
+`"PID"` and is therefore a **memory-stick/DLC-source** test, not a lock. So
+whether `Locked="true"` drives `Cell Selection`'s `Lock_x_y` overlay, or is
+redundant against the `<Unlock>` rows that sit beside it on every locked grid,
+is **open**. Confidence 50 on any reading of it; the column is transcribed from
+the files so the next pass does not have to re-extract them.
 
 **236 cells, 708 points maximum.** The campaign covers 24 distinct
 `NN_Track` names and all seven modes:
@@ -329,7 +344,7 @@ bank per mode, then evaluates and stores:
 | `mode` | Value banked | Notes |
 | --- | --- | --- |
 | 3 `Race`, 9 `Head2Head`, 14, 15 | finishing position (`param_3`) | also writes the top-3 position/name table at `record + 0x5dc`, stride `0x24` per class |
-| 4 `Tournament`, 16 | finishing position, **only on the last leg** (`DAT_08b30fa4 == DAT_08b30fa0 - 1`) | |
+| 4 `Tournament`, 16 | finishing position, **only on the last leg** (`DAT_08b30fa4 == DAT_08b30fa0 - 1`) | and a **second record lookup** first - see below |
 | 5 `Time Trial`, 17 | race time (`param_2`) | |
 | 6 `Zone` | zone count (`*param_4`, a `u16`) | |
 | 7 | nothing | the enum gap |
@@ -354,6 +369,20 @@ For every mode with a campaign cell in play (`DAT_08b30ffc != 0`) it then:
 Confidence **85** - the branch structure and the mode dispatch are unambiguous
 and line up exactly with the mode enum below, but the six parameters are only
 identified by which mode consumes them, not from a caller.
+
+**The `Tournament` arm is the one that is structurally different, and it is
+worth a next pass on its own.** Before touching the cell record at all it hashes
+`DAT_08b31158 + 0x74` through `FUN_08945890` and looks up a **second** record
+with `FUN_088085d0(profile, hash, 0, 0)`, writing the finishing position into
+that record's per-class slot at `+ class*0x24` and a name beside it. Only then
+does it fall through to the cell record and `Cell_EvaluateMedal`. That second
+record reads as the tournament's own standings - the state behind `ER_TOUR_STAN`
+("Tournament standings"), `ER_RACE_POINTS` and the eight `ER_END_TOUR_1..8`
+placement strings the earlier pass recovered, and behind `MSC_EVENT_TOURN`'s
+"you can save your tournament progress between races". `DAT_08b31158` was not
+identified and the per-leg accumulation was not traced. Tournament is the mode
+with 27 authored cells and the only one carrying per-leg state, so this is the
+concrete starting point for it.
 
 ## The mode and class enumerations, read off their own tables
 
@@ -529,9 +558,13 @@ state machine was not traced.
   `0x088207e4` (a results-screen `sprintf` of `cell + 0xa0`),
   `Eliminator_UpdateKillTarget_q` and `AI_ResolveSkillScale`. Confidence **50**,
   deliberately not renamed.
-- **`Status` (`+0xb8`) and `Locked` (`+0xb9`) on a `PI_Cell`** are parsed and no
-  consumer was traced. No shipped grid file sets `Status`; `Locked="false"`
-  appears on a handful of `grid_00`/`grid_03` cells only.
+- **`Status` (`+0xb8`) and `Locked` (`+0xb9`) on a `PI_Cell`, and `Locked`
+  (`+0xa0`) on a `PI_Grid`**, are parsed and no consumer of any of them was
+  traced. No shipped grid file sets `Status`; `Locked="false"` appears on a
+  handful of `grid_00`/`grid_03` cells only. `Definition_IsUnlocked` and
+  `FUN_0888e5e4` are both ruled out as the reader - see the grid table above.
+  Whether these bytes drive `Cell Selection`'s `Lock_x_y` overlay at all is
+  open, at 50.
 - **`Group` (`+0xb0`) on a `PI_Grid`** is `1` on `grid12`..`grid15` and absent
   elsewhere; its consumer was not traced. A "these four are the expert set"
   reading is plausible and unverified.
