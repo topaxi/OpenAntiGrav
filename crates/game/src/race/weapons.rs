@@ -5,10 +5,13 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change. Its tests are
 //! `race/tests/weapons.rs`. What a fired weapon then *shows* - the blasts, the
 //! flares, the sprites - is [`visuals`], split out under the same rule the day
-//! the Mine's and the Missile's own effects were wired.
+//! the Mine's and the Missile's own effects were wired. The Quake's and the
+//! LeachBeam's per-tick advances are [`single_instance`], split out under the
+//! same rule again the day the LeachBeam landed.
 
 use super::*;
 
+mod single_instance;
 mod visuals;
 // Only reached through `crate::race::weapons::<name>` by
 // `race/tests/weapons.rs`, which asserts each pure gate without a disc -
@@ -696,77 +699,6 @@ impl Race {
             velocity,
             slot as u8,
         );
-    }
-
-    /// One tick of the Quake's own travelling wave: advances it along the
-    /// course, and applies its hit/slowdown to every craft its own radius
-    /// currently spans.
-    ///
-    /// A no-op with no course loaded (nothing for the wave to travel round)
-    /// and a no-op with no wave in flight - see `Race::spend_pickup`'s own
-    /// Quake arm for what launches one. See
-    /// `oag_gameplay::projectile::quake` for the recovered advance rate and
-    /// the hit test this reuses whole.
-    ///
-    /// Called from the tick after `Race::advance_cannons`, on this tick's own
-    /// standings - so a wave that just passed over a craft credits the hit
-    /// the same tick the craft's position moved into and out of its radius,
-    /// the same "this tick, not last tick's stale reading" rule every other
-    /// per-craft weapon update in this module follows.
-    pub(super) fn advance_quake(&mut self) {
-        let Some(course) = self.course.as_ref() else {
-            return;
-        };
-        let Some(mut wave) = self.world.quake else {
-            return;
-        };
-        let length = course.length();
-        wave.advance(length, self.dt);
-        let rules = oag_gameplay::damage_rules(self.world.race.mode);
-        let mut absorbed = [false; MAX_SHIPS];
-        wave.apply_hits(
-            &mut self.world.ships,
-            self.world.ship_count,
-            length,
-            rules,
-            &mut absorbed,
-        );
-        for (slot, hit) in absorbed.iter().enumerate() {
-            if *hit {
-                self.shield[slot].hit();
-            }
-        }
-        self.world.quake = Some(wave);
-    }
-
-    /// One tick of the single LeachBeam link: age it, test it, drain it, retire
-    /// it.
-    ///
-    /// A no-op with no beam in flight - see `Race::spend_pickup`'s own
-    /// LeachBeam arm for what fires one, and
-    /// `oag_gameplay::projectile::leach_beam` for the recovered transfer and
-    /// the one place it knowingly departs from the original.
-    ///
-    /// Called from the tick beside `Race::advance_quake`, on this tick's own
-    /// craft positions - so a target that pulled out of range this tick breaks
-    /// the link this tick rather than one tick late, the same "this tick, not
-    /// last tick's stale reading" rule every other per-craft weapon update in
-    /// this module follows.
-    pub(super) fn advance_leach_beam(&mut self) {
-        let Some(mut beam) = self.world.leach_beam else {
-            return;
-        };
-        let rules = oag_gameplay::damage_rules(self.world.race.mode);
-        let report = beam.advance(&mut self.world.ships, self.world.ship_count, rules, self.dt);
-        // A swallowed hit is the only thing that makes the target's shell
-        // visibly react - the same out-parameter `Race::advance_quake` spends
-        // on `self.shield[slot].hit()`, narrowed to the beam's one victim.
-        if report.absorbed
-            && let Some(shell) = self.shield.get_mut(beam.target as usize)
-        {
-            shell.hit();
-        }
-        self.world.leach_beam = if report.retired { None } else { Some(beam) };
     }
 
     /// One tick of the lock-on reticle, and the tone state that goes with it.

@@ -352,6 +352,7 @@ impl Race {
         // weapons that read every craft's freshest state rather than last
         // tick's. See `Race::advance_leach_beam`.
         self.advance_leach_beam();
+        self.advance_leach_beam_visual();
 
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It

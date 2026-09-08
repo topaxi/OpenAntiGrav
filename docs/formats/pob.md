@@ -516,9 +516,9 @@ this is not merely "unwired effects have no string" - `strings -a … | rg -o
 'Data.Psys.[A-Za-z0-9_]+\.POB' | sort -u | wc -l` finds **46 of the 82** disc
 names as a load-path string (case-insensitive on purpose - `WO_DustMotes`
 below is the one mixed-case name in the corpus and an all-caps pattern would
-silently drop it), well past the 15 `RACE_EFFECTS` wires,
-including effects this engine has not built at all (`WO_LEACHBEAM_CHARGING`,
-`WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*` tier) - so the original
+silently drop it), well past the 17 `RACE_EFFECTS` wires,
+including effects this engine has not built at all
+(`WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*` tier) - so the original
 executable's own string table tracks *its* load paths, not OAG's wiring, and
 `NUMBERS`/`TEST_BOMBSPIKES` sitting outside that 46 is evidence about the
 original game, not an artifact of this project's scope. **Confidence 82**

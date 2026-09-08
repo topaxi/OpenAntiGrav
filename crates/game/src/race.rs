@@ -695,6 +695,23 @@ pub struct Race {
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
     quake_effect: Option<psys::Playing>,
+    /// The [`weapons::visuals::LEACHBEAM_ENERGY_EFFECT`] instance riding the
+    /// craft a beam is fastened to, or `None` when no link is connected.
+    ///
+    /// One slot for the same reason [`Self::quake_effect`] is one: the
+    /// original allows a single beam in the whole race, so
+    /// [`oag_gameplay::World::leach_beam`] is one `Option` and this follows it.
+    leach_beam_effect: Option<psys::Playing>,
+    /// The [`weapons::visuals::LEACHBEAM_CHARGING_EFFECT`] instance riding a
+    /// craft that is *holding* a LeachBeam, or `None`.
+    ///
+    /// **Not the fired weapon - the carried one.** `FUN_0883f540` spawns this
+    /// on any craft whose held-weapon id is the LeachBeam's `10`, and despawns
+    /// it the moment that stops being true, so a player sees the pickup
+    /// charging before they ever press fire. One slot rather than eight because
+    /// only the player's own craft is followed; see
+    /// [`Race::advance_leach_beam_visual`].
+    leach_charge_effect: Option<psys::Playing>,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     stage_rng: Rng,

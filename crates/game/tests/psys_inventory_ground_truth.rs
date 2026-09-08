@@ -77,10 +77,14 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ),
     (
         "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
-        "the Leach Beam is not built.",
+        "the LeachBeam is built (2026-09-08) and its own two effects are wired, \
+         but this third one is not: it is a *damage* spark on the drained \
+         craft, and no call site for it was found in LeachBeam_Drain \
+         (0x08866804) or in Ship_ApplyPendingWeaponDamage (0x0883f13c), the \
+         two functions that actually spend the beam's damage. Checked rather \
+         than assumed, the Mine_Init standard - see \
+         docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md.",
     ),
-    ("WO_LEACHBEAM_CHARGING", "the Leach Beam is not built."),
-    ("WO_LEACHBEAM_ENERGY", "the Leach Beam is not built."),
     (
         "WO_CANNON_SPARKS",
         "the Cannon is in the weapon table and fires nothing - its fire bit \
