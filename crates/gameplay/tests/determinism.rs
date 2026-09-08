@@ -510,9 +510,23 @@ fn run(ticks: u32) -> (u64, u64) {
 /// movement is legitimate - a new field on `World`, say - record why it moved
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
+/// - **Moved 2026-09-08**, and it is the hash stream and nothing else.
+///   [`oag_gameplay::World`] gained `leach_beam: Option<Beam>` for the
+///   LeachBeam, so `hash::write_world` writes one extra discriminant byte per
+///   tick. Neither scenario here fires a LeachBeam - neither collects a pickup
+///   at all - so the field is `None` on every tick of both and that byte is a
+///   constant `0`; nothing else about either run changed.
+///
+///   **Isolated the way this comment requires.** With
+///   `write_leach_beam(hasher, leach_beam)` removed from `write_world` and
+///   nothing else touched, the constants this commit replaces -
+///   `0x2321_c766_223d_0fc8` / `0x3917_5149_7ee8_d198` at 60 ticks and
+///   `0xb9c2_9ac6_b8fe_010b` / `0x34c7_a5fa_88c8_357d` at 600 - reproduced bit
+///   for bit, and [`REFERENCE_VOLLEY`]'s did too. That is what makes this an
+///   addition to what the gate covers rather than a change to what a race does.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x2321_c766_223d_0fc8, 0x3917_5149_7ee8_d198),
-    (600, 0xb9c2_9ac6_b8fe_010b, 0x34c7_a5fa_88c8_357d),
+    (60, 0xef75_9a8c_2dc1_d0d8, 0x3409_ed83_efae_1cf2),
+    (600, 0xa3ae_0aac_579b_c5b1, 0x9113_a329_913c_41ef),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -677,9 +691,18 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
+/// - **Moved 2026-09-08**, inherited from the `World::leach_beam` addition
+///   [`REFERENCE`]'s own history records, through the same one extra
+///   discriminant byte a tick. **This scenario moved where the 2026-09-01 blast
+///   change left it alone**, which is the opposite way round from that entry and
+///   is the expected shape: a hash-stream addition reaches every scenario
+///   equally, and a force-law change only reaches the ones that trigger it.
+///   Replaces `0x89da_d0f0_bd19_2e0c` / `0xea20_03ce_ebb3_2762` at 60 ticks and
+///   `0x62d3_802f_e05b_0fa9` / `0xf440_21aa_cf59_fd86` at 600. No isolation
+///   repeated here - [`REFERENCE`]'s entry ran it for both scenarios at once.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x89da_d0f0_bd19_2e0c, 0xea20_03ce_ebb3_2762),
-    (600, 0x62d3_802f_e05b_0fa9, 0xf440_21aa_cf59_fd86),
+    (60, 0x57ff_1511_51c9_3e64, 0xf488_c189_693d_c7c4),
+    (600, 0x4872_7a5a_3abb_9c2b, 0x189c_0e36_01b8_688a),
 ];
 
 #[test]

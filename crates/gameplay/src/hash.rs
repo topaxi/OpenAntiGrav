@@ -37,6 +37,7 @@ use oag_formats::weapons::Weapon;
 use oag_race::{LapGate, Mode, RaceState};
 
 use crate::pickup::Held;
+use crate::projectile::leach_beam::{Beam, Kind as BeamKind};
 use crate::projectile::quake::Wave;
 use crate::projectile::{Projectile, Projectiles};
 use crate::world::{Ship, World};
@@ -66,6 +67,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         race,
         projectiles,
         quake,
+        leach_beam,
     } = world;
 
     hasher.write_u64(*tick);
@@ -90,6 +92,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     write_race(hasher, race);
     write_projectiles(hasher, projectiles);
     write_quake(hasher, quake);
+    write_leach_beam(hasher, leach_beam);
 }
 
 fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
@@ -391,6 +394,55 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
             for latch in hit {
                 hasher.write_u8(u8::from(*latch));
             }
+        }
+    }
+}
+
+/// [`write_quake`]'s twin, discriminant byte and all.
+///
+/// The nested `Option<f32>` goes through the same shape a second time: a byte
+/// for "is it there" and a value only when it is, so a beam that broke at
+/// `0.0` seconds cannot hash the same as one that has not broken.
+fn write_leach_beam(hasher: &mut StateHasher, leach_beam: &Option<Beam>) {
+    match leach_beam {
+        None => hasher.write_u8(0),
+        Some(beam) => {
+            hasher.write_u8(1);
+            let Beam {
+                owner,
+                target,
+                kind,
+                age,
+                disconnected_at,
+                first_drain,
+                first_repair,
+                damage,
+                repair,
+                range,
+                active_time,
+                energy_multiplier,
+            } = beam;
+            hasher.write_u8(*owner);
+            hasher.write_u8(*target);
+            hasher.write_u8(match kind {
+                BeamKind::Locked => 0,
+                BeamKind::Unlocked => 1,
+            });
+            hasher.write_f32(*age);
+            match disconnected_at {
+                None => hasher.write_u8(0),
+                Some(at) => {
+                    hasher.write_u8(1);
+                    hasher.write_f32(*at);
+                }
+            }
+            hasher.write_u8(u8::from(*first_drain));
+            hasher.write_u8(u8::from(*first_repair));
+            hasher.write_f32(*damage);
+            hasher.write_f32(*repair);
+            hasher.write_f32(*range);
+            hasher.write_f32(*active_time);
+            hasher.write_f32(*energy_multiplier);
         }
     }
 }

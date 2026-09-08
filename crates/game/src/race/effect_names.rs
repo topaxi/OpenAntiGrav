@@ -200,3 +200,26 @@ pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT
 /// track's own width every later frame - see
 /// [`Race::advance_quake_visual`].
 pub const QUAKE_EFFECT: &str = "WO_QUAKE";
+
+/// What a connected LeachBeam draws on the craft it is draining.
+///
+/// **The disc's own, with a recovered trigger** - `LeachBeam_Advance`
+/// (`0x08873fa0`) spawns it at the *target's* own scene node, inside the same
+/// block that plays the `LEACHENERGY` cue, each time the beam's ribbon-scroll
+/// cursor wraps. That is roughly once a second over the beam's authored
+/// `active_time`; this engine attaches it once when the link connects and
+/// follows the target with it instead, because the re-spawn cadence is a
+/// function of the ribbon geometry this crate deliberately does not build.
+/// **Chosen, not measured**, and it is the cadence only - the effect and its
+/// anchor are both recovered. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
+
+/// What a craft *holding* a LeachBeam draws, before it fires anything.
+///
+/// **The disc's own, with a fully recovered trigger** - `FUN_0883f540`
+/// (`0x0883f540`) spawns it on the holder's own node whenever the craft's
+/// held-weapon id is `10` and its state is racing, and tears it down the moment
+/// either stops being true. Nothing about the cadence is chosen here: it is up
+/// exactly while the pickup is held.
+pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";

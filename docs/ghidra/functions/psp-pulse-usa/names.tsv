@@ -665,6 +665,15 @@
 0x08872da8	function	LeachBeam_InitUnlocked	80	cannon-quake-leachbeam.md
 0x08866b08	function	LeachBeam_UpdatePool	85	cannon-quake-leachbeam.md
 0x08866804	function	LeachBeam_Drain	78	cannon-quake-leachbeam.md
+0x08872edc	function	LeachBeam_DrainRate	88	cannon-quake-leachbeam.md
+0x08872f18	function	LeachBeam_RepairRate	88	cannon-quake-leachbeam.md
+0x08873fa0	function	LeachBeam_Advance	85	cannon-quake-leachbeam.md
+0x08873020	function	LeachBeam_PulseStrength	82	cannon-quake-leachbeam.md
+0x088732f8	function	LeachBeam_MarkPulse	82	cannon-quake-leachbeam.md
+0x08873090	function	LeachBeam_MarkDisconnected	80	cannon-quake-leachbeam.md
+0x088730a4	function	LeachBeam_LingerExpired	80	cannon-quake-leachbeam.md
+0x08873068	function	LeachBeam_UnlockedExpired	78	cannon-quake-leachbeam.md
+0x0883f228	function	Ship_ApplyPendingWeaponRepair	85	cannon-quake-leachbeam.md
 0x088778ac	function	Shuriken_Bounce	85	shuriken.md
 0x08877bdc	function	Shuriken_Update	85	shuriken.md
 0x0888b980	function	Plugin_LoadManifest	80	../../../architecture/frontend-boot.md

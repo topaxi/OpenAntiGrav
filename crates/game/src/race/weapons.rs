@@ -5,10 +5,13 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change. Its tests are
 //! `race/tests/weapons.rs`. What a fired weapon then *shows* - the blasts, the
 //! flares, the sprites - is [`visuals`], split out under the same rule the day
-//! the Mine's and the Missile's own effects were wired.
+//! the Mine's and the Missile's own effects were wired. The Quake's and the
+//! LeachBeam's per-tick advances are [`single_instance`], split out under the
+//! same rule again the day the LeachBeam landed.
 
 use super::*;
 
+mod single_instance;
 mod visuals;
 // Only reached through `crate::race::weapons::<name>` by
 // `race/tests/weapons.rs`, which asserts each pure gate without a disc -
@@ -359,6 +362,39 @@ impl Race {
                     self.world.ships[0].pickup.begin_drop(drop.count);
                     return;
                 }
+                oag_formats::weapons::Weapon::LeachBeam => {
+                    let Some(stats) = weapons.leach_beam() else {
+                        // As the Rocket: nothing to fasten onto anybody.
+                        return;
+                    };
+                    // **The busy check first, and it is a whole-race one.**
+                    // `Weapon_FireLeachBeam` (`0x08866658`) returns on
+                    // `pool->live != 0` - a world cursor, not a per-craft
+                    // cooldown - so a press while *anybody's* beam is up keeps
+                    // the pickup. The strictest gate any weapon here has; see
+                    // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+                    if self.world.leach_beam.is_some() {
+                        return;
+                    }
+                    // The lock is the Missile's own, unmodified - the same
+                    // `Ship_AcquireLock` scan off the LeachBeam's own
+                    // `<Stats>` window, which `Race::sight_target` already
+                    // computes for the reticle. `FUN_0883f540` confirms the
+                    // reuse directly: it calls `Ship_AcquireLock` for held
+                    // weapon ids `1` and `10` and no others.
+                    //
+                    // **Fired with or without one**, and the pickup is spent
+                    // either way: `Weapon_FireLeachBeam` claims the pool slot
+                    // and clears the fire bit *before* it branches on
+                    // `craft+0x16c`, and the no-lock arm builds a real
+                    // instance that simply expires. The player has fired.
+                    self.world.leach_beam = Some(match self.sight_target() {
+                        Some(target) => {
+                            oag_gameplay::projectile::leach_beam::Beam::locked(0, target, &stats)
+                        }
+                        None => oag_gameplay::projectile::leach_beam::Beam::unlocked(0, &stats),
+                    });
+                }
                 oag_formats::weapons::Weapon::Quake => {
                     let Some(stats) = weapons.quake() else {
                         // No authored Quake, so nothing to launch - the same
@@ -663,47 +699,6 @@ impl Race {
             velocity,
             slot as u8,
         );
-    }
-
-    /// One tick of the Quake's own travelling wave: advances it along the
-    /// course, and applies its hit/slowdown to every craft its own radius
-    /// currently spans.
-    ///
-    /// A no-op with no course loaded (nothing for the wave to travel round)
-    /// and a no-op with no wave in flight - see `Race::spend_pickup`'s own
-    /// Quake arm for what launches one. See
-    /// `oag_gameplay::projectile::quake` for the recovered advance rate and
-    /// the hit test this reuses whole.
-    ///
-    /// Called from the tick after `Race::advance_cannons`, on this tick's own
-    /// standings - so a wave that just passed over a craft credits the hit
-    /// the same tick the craft's position moved into and out of its radius,
-    /// the same "this tick, not last tick's stale reading" rule every other
-    /// per-craft weapon update in this module follows.
-    pub(super) fn advance_quake(&mut self) {
-        let Some(course) = self.course.as_ref() else {
-            return;
-        };
-        let Some(mut wave) = self.world.quake else {
-            return;
-        };
-        let length = course.length();
-        wave.advance(length, self.dt);
-        let rules = oag_gameplay::damage_rules(self.world.race.mode);
-        let mut absorbed = [false; MAX_SHIPS];
-        wave.apply_hits(
-            &mut self.world.ships,
-            self.world.ship_count,
-            length,
-            rules,
-            &mut absorbed,
-        );
-        for (slot, hit) in absorbed.iter().enumerate() {
-            if *hit {
-                self.shield[slot].hit();
-            }
-        }
-        self.world.quake = Some(wave);
     }
 
     /// One tick of the lock-on reticle, and the tone state that goes with it.

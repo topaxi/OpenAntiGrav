@@ -43,12 +43,13 @@
 //! # Only what has an effect is handed out
 //!
 //! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
-//! Autopilot, Mine, Bomb, Plasma, Shuriken and, as of 2026-09-07, the Cannon.
+//! Autopilot, Mine, Bomb, Plasma, Shuriken, the Cannon and the Quake as of
+//! 2026-09-07, and the LeachBeam as of 2026-09-08.
 //!
-//! Of the three still out, the Quake needs its wave's own per-frame travel
-//! along the track's spline (not deformation - that reading was wrong), the
-//! LeachBeam needs its two drain-rate functions, and the Repulser needs a
-//! field the craft *is in* rather than a projectile.
+//! **One weapon is still out, and it is out by decision rather than by
+//! ignorance**: the Repulser, which needs a field the craft *is in* rather than
+//! a projectile, and which the shipped tables give zero odds outside Eliminator
+//! - a mode this build does not have. See `HANDOVER.md`.
 //!
 //! **The Cannon left the list the same day**, and it is the odd one out among
 //! everything built here so far: it does not fire through
@@ -174,6 +175,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Shuriken,
     Weapon::Cannon,
     Weapon::Quake,
+    Weapon::LeachBeam,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

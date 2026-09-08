@@ -587,6 +587,83 @@ Missile fires nothing yet" - it does) and are corrected to name the real gap:
 `Race::ignite_blast` reuses the Rocket's own explosion pair for every
 detonating projectile rather than reading which file each weapon authors.
 
+## 2026-09-08: the LeachBeam built - thirteen of thirteen, less the deferred Repulser
+
+**Every weapon a player can get now does something.** The LeachBeam was the
+last, and the pass that built it started by finding that the reason the
+2026-09-07 pass could not was **a wrong address, not a hard function.**
+
+**The finding, and it is the same finding twice on one page.**
+`cannon-quake-leachbeam.md` names the two drain-rate functions
+`func_0x0006eedc` = `0x0886eedc` and `func_0x0006ef18` = `0x0886ef18`. Both
+rebases are `0x4000` low: `0x08804000 + 0x0006eedc` is **`0x08872edc`**. The
+stated addresses decompile cleanly - into `FUN_0886ee88`, a radial impulse over
+every craft that has nothing to do with this weapon - which is exactly why the
+error survived. **A wrong address that decompiles to a real function is the most
+expensive kind**, and this page has now produced two of them, the first being the
+Cannon candidate `0x088537ac` it corrected on 2026-09-07. Both were the same
+magnitude as a bit mask being read nearby. **If a rebased address gives a
+function whose shape does not match its call site, re-do the addition before
+concluding anything about the function.**
+
+**What the corrected addresses gave, in about the time the arithmetic cost.**
+`LeachBeam_DrainRate` and `LeachBeam_RepairRate` are six lines each: an authored
+rate times a one-shot `energy_multiplier` held on the instance's own byte. From
+there the rest fell out in one sitting - `WeaponStats_ParseLeachBeam`'s whole
+nine-attribute offset map, the lifetime (`LeachBeam_Advance` returns
+`age < active_time`), the linger and fizzle constants, the ribbon geometry, three
+cues and two authored effects.
+
+**The item that had been called "the single largest remaining gap" was two
+functions away from a function already named.** What consumes `entity+0x120` and
+`entity+0x128` is `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`, *already in
+`names.tsv` since the shield-pickup pass*) and its four-line neighbour
+`FUN_0883f228`. Both are called from `FUN_0883f540`, the per-craft weapon update,
+in the same statement list. Nobody had decompiled the caller. **When a field's
+consumer is missing, decompile the function that calls the functions you already
+know** - it cost one call here and closed the item outright.
+
+**A correction the parser forced.** The page reads `LeachBeam_Drain`'s
+`target+0x134 = <stats+0x110>` as a `pending_source` id. `+0x110` is
+`slowShipFactor`, and `Ship_ApplyPendingWeaponDamage` passes it on to the
+victim's handling record at `+0x31c` - which `engine.md` already identifies as a
+**one-shot thrust scale**, not a slowdown. So the LeachBeam throttles its victim
+to 80 % thrust for as long as the link holds, and *that* is why its block is the
+only one authoring no `slowdown_time`. The absence was design, and this names the
+mechanic that replaces it.
+
+**Deliberately not wired, and it is the one gap:** that thrust scale.
+`oag_physics::engine` documents `craft+0x31c` and does not implement it, so
+wiring `slowShipFactor` needs a new `ShipState` field and its own hash movement.
+The attribute is parsed and carried; nothing spends it yet.
+
+**By-catch.** The Quake's hit cue is literally `QUAKEHIT` -
+`PTR_s_QUAKEHIT_08a7b740`, from decompiling `FUN_088418e0` whole. The page had
+it as "a sound plays here, not this sound plays here".
+
+**A defect found in the landed Quake, and not this pass's to have caused.** See
+the section below.
+
+## 2026-09-08: the Quake wave never retires
+
+`Race::advance_quake` ends with `self.world.quake = Some(wave)` on every path and
+nothing anywhere sets the field back to `None`;
+`oag_gameplay::projectile::quake::Wave` carries no age and no lifetime. Two
+player-visible consequences, both live on `main`:
+
+1. `Race::spend_pickup`'s Quake arm returns early on `world.quake.is_some()`, so
+   **a Quake can be fired exactly once per race** and every later Quake pickup is
+   kept and unusable.
+2. The wave circles the ring forever, re-hitting the whole field once a lap.
+
+The original does terminate - `Quake_SampleSpan` returns a validity bool that goes
+false once the span runs off its track-gap window - but that mechanism has no
+analogue in this port's progress-along-a-ring representation, so **the fix is a
+chosen lifetime rather than a measured one** and was left rather than invented in
+a pass that was about a different weapon. The cheapest honest fix is an age on
+`Wave` plus a bound of one full course length, labelled chosen; the better one is
+reading what actually retires the original's instance.
+
 ## Next Steps
 
 - ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**

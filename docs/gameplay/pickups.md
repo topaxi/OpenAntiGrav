@@ -481,13 +481,31 @@ weapons the *pool* would hand out and the authored *odds* never do.
   orientation is not established by anything read, so it draws
   axis-aligned, chosen rather than measured. See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-- **The LeachBeam is read but not built** (2026-09-07) - see the same page.
-  It reuses the Missile's own lock-on for target selection outright and
-  drains continuously while connected, crediting one accumulator on the
-  victim and a second, symmetric one on the shooter every tick - buildable
-  for selection and the connect/disconnect gate, not yet for the actual
-  drain amount, whose two rate functions and whose consumer of the two
-  accumulators are unread. The **Repulser** stays the one true "field the
+- ~~**The LeachBeam is read but not built** (2026-09-07)~~ **Built
+  2026-09-08**, and what unblocked it was three reads the 2026-09-07 pass had
+  left open, one of which was blocked on a wrong address: the page's two
+  drain-rate functions were rebased `0x4000` low, exactly as its own Cannon
+  candidate had been. Corrected, they are `LeachBeam_DrainRate`
+  (`0x08872edc`) and `LeachBeam_RepairRate` (`0x08872f18`), each returning an
+  authored per-tick rate times a **one-shot** `energy_multiplier` held on its
+  own instance byte - so the first draining tick moves fifty times what every
+  tick after it does. The two accumulators' consumers, which that pass called
+  "the single largest remaining gap", are `Ship_ApplyPendingWeaponDamage`
+  (`0x0883f13c`) for the victim - the ordinary `Ship_Damage` path a fired
+  Shield swallows - and `Ship_ApplyPendingWeaponRepair` (`0x0883f228`) for the
+  shooter, which is `Ship_AddShield` straight into its own pool. The lifetime
+  is the authored `active_time`, from `LeachBeam_Advance` (`0x08873fa0`)
+  returning `age < active_time`. Target selection is the Missile's lock
+  outright, and `FUN_0883f540` confirms that directly by calling
+  `Ship_AcquireLock` for held weapon ids `1` and `10` and no others.
+  `oag_gameplay::projectile::leach_beam` holds the single link a race ever
+  has - a whole-race pool cursor, the strictest gate any weapon here has -
+  and `oag_formats::weapons::LeachBeamStats` now decodes all nine attributes.
+  **One half is deliberately not wired**: `slowShipFactor` lands on
+  `craft+0x31c`, the one-shot thrust scale `oag_physics::engine` documents and
+  does not implement, so a craft under a beam is not yet throttled. See
+  [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+  The **Repulser** stays the one true "field the
   craft *is in* rather than a projectile" - its handler copies four of its
   own `<Stats>` onto the firing craft before it spawns anything - and is
   still deferred as Eliminator-only, per `HANDOVER.md`.

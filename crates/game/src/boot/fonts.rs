@@ -6,11 +6,17 @@
 //! `<Font>` slots name every face, and a role that resolves to nothing is a
 //! finding rather than a cue to reach for a constant.**
 //!
-//! Pure is the case that makes it more than a principle: its `pulse_text.fnt`
-//! is simply absent from `Data.wad`, so the `Default` role resolves to a name
-//! nothing on the disc answers to and its front end draws in the built-in 5x7
-//! glyphs. That is reported rather than papered over - a silent fallback would
-//! make a rendering bug indistinguishable from a loading one.
+//! Pure is the case that makes it more than a principle, and it is a **historical**
+//! one now: `load_font` used to name `Data\FE\Fonts\pulse_text.fnt` outright, which
+//! is absent from Pure's `Data.wad` and drew its whole front end in the built-in 5x7
+//! glyphs. Since the role is resolved through the plugin's own `<Font>` slots
+//! (below), a Pure boot now loads `Data\FE\Fonts\FX300ANG.fnt` for the same
+//! `Default` role - confirmed by `--dry-run`'s own report line
+//! (`font Data\FE\Fonts\FX300ANG.fnt (role "Default"): 256x256 atlas, 201 glyphs,
+//! line height 15`) and by `font_roles_ground_truth::every_disc_names_a_body_face_and_it_loads`.
+//! A role that still resolves to nothing on some future source is reported rather
+//! than papered over - a silent fallback would make a rendering bug
+//! indistinguishable from a loading one.
 //!
 //! # HD was in that state too, and it was this module's own reading that was wrong
 //!

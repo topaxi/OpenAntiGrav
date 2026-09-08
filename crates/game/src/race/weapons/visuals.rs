@@ -10,6 +10,82 @@
 use super::*;
 
 impl Race {
+    /// Keeps the LeachBeam's two authored effects on the two craft the disc
+    /// hangs them on: [`LEACHBEAM_CHARGING_EFFECT`] on whoever is *holding* one
+    /// and [`LEACHBEAM_ENERGY_EFFECT`] on whoever a link is currently draining.
+    ///
+    /// # Neither is a stand-in, and the ribbon deliberately is not drawn
+    ///
+    /// Both effects are the disc's own `Data\Psys\*.POB` files, played through
+    /// the same [`psys::Stage`] every other weapon's are, with triggers read
+    /// out of the executable rather than guessed - see
+    /// [`LEACHBEAM_CHARGING_EFFECT`] and [`LEACHBEAM_ENERGY_EFFECT`] for the
+    /// function and address behind each.
+    ///
+    /// **What is not drawn is the beam itself.** `LeachBeam_Advance`
+    /// (`0x08873fa0`) builds it as a segmented ribbon between the two craft -
+    /// `ceil((6.0 / range) * min(distance, range) * 6.0)` segments, each
+    /// displaced sideways by a sine of its own index times a random amplitude,
+    /// with the UV columns `LeachBeam_InitLocked` zero-fills the chain with -
+    /// and *that geometry is recovered*. Its **texture is not**: no WAD entry
+    /// has been located for what the strip is drawn with, and the draw call
+    /// that submits it has not been followed. So this draws nothing for the
+    /// link's own body rather than an untextured strip or a line of billboards,
+    /// which is the rule `CLAUDE.md` states and which this file's own history
+    /// records being broken twice. A player sees the charge on the holder and
+    /// the energy on the victim; the visible absence is the honest report that
+    /// the middle is unread.
+    pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
+        // The charge: up exactly while slot 0 holds a LeachBeam, which is the
+        // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
+        let holding = self.world.ships[0].pickup.weapon
+            == Some(oag_formats::weapons::Weapon::LeachBeam)
+            && self.world.ships[0].active;
+        let holder = self.world.ships[0].physics.body.position;
+        match (
+            holding.then(|| self.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
+            self.leach_charge_effect,
+        ) {
+            (Some(Some(effect)), None) => {
+                self.leach_charge_effect = self.stage.attach(&effect, holder, 1.0);
+            }
+            (Some(Some(_)), Some(playing)) => self.stage.follow(playing, holder),
+            // Not holding one any more (or the file never loaded): tear the
+            // instance down, the same way the original despawns it the moment
+            // its own two-part gate stops holding.
+            (None, Some(playing)) | (Some(None), Some(playing)) => {
+                self.stage.detach(playing);
+                self.leach_charge_effect = None;
+            }
+            (None, None) | (Some(None), None) => {}
+        }
+
+        // The energy: on the victim, and only while the link is actually
+        // draining. A disconnected beam in its linger window draws nothing,
+        // matching the original clearing the link before the pool retires it.
+        let connected = self
+            .world
+            .leach_beam
+            .filter(oag_gameplay::projectile::leach_beam::Beam::connected);
+        let Some(beam) = connected else {
+            if let Some(playing) = self.leach_beam_effect.take() {
+                self.stage.detach(playing);
+            }
+            return;
+        };
+        let target = self.world.ships[beam.target as usize].physics.body.position;
+        match (
+            self.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned(),
+            self.leach_beam_effect,
+        ) {
+            (Some(effect), None) => {
+                self.leach_beam_effect = self.stage.attach(&effect, target, 1.0);
+            }
+            (Some(_), Some(playing)) => self.stage.follow(playing, target),
+            (None, _) => {}
+        }
+    }
+
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
