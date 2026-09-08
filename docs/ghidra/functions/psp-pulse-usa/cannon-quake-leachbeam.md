@@ -311,9 +311,35 @@ stores; `field 0x5a` finds exactly one store, `0x0883ccd0`, inside
 image.
 
 So an AI holding a Cannon sets the press edge, `Weapon_RequestFire` sets bit
-`0x2000`, nothing reads it, and no round ever leaves. Whether a reimplementation
-*should* copy that is a design question of the same shape as the 2026-09-06
-barrel-roll ruling, not an RE one; `oag_game::race::weapons` copies it for now.
+`0x2000`, nothing reads it, and no round ever leaves.
+
+> **CONTRADICTED BY PLAY, 2026-09-08. The conclusion above is wrong; the
+> evidence for it is not.** The maintainer reports from playing the original
+> that **AI craft do fire the Cannon, at the player and at each other.** So a
+> producer of `record+0x16` exists and this search did not find it.
+>
+> **The search's own shape is the prime suspect, and it is a known trap.**
+> `scripts/psp-relocate.py field 0x16` looks for **byte** accesses. `+0x15`
+> (fire press), `+0x16` (fire held) and `+0x17` (absorb) are three *adjacent*
+> bytes, so a single `sh` at `+0x16` or `sw` at `+0x14` would set the held flag
+> and be invisible to a byte-store search - as would a `memcpy`/struct
+> assignment of the whole record. "Zero byte stores" is not "zero stores", and
+> the two were conflated.
+>
+> **What to do:** re-run the field search for halfword and word stores whose
+> range covers `+0x16`, and for bulk copies into the record, before touching
+> any code. `WeaponAi_Update` (`0x08851550`) and
+> `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) remain the right functions to
+> look in - they already write `+0x15` and `+0x17` through `*(ai+0x10)`, so
+> they hold a pointer to the record and a wider store there is the cheapest
+> explanation that fits both this evidence and the play report.
+>
+> Everything else on this page stands: `+0x16` really is the held flag, the
+> countdown really is gated on it, and the human pad really does write it via
+> `PlayerInput_Update`. Only "the human pad is the *only* producer" is
+> refuted. `oag_game::race::weapons` currently reproduces the wrong
+> conclusion - an AI cannot fire a Cannon in this build - and that is now a
+> known deviation rather than a faithful copy.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 

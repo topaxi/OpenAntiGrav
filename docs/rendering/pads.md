@@ -367,6 +367,33 @@ only the fallback tint value and each file's own alpha coverage.
 
 ### Which alpha channel gates the accumulate - settled, asset-side, 2026-09-07
 
+> **PARTLY CONTRADICTED BY PLAY, 2026-09-08, and it lands exactly on this
+> section's own stated weakness.** The maintainer reports from playing the
+> original: **speed pads are cyan, weapon pads are red.** This trace measured
+> the patched colour as light cyan/blue `(0, 196, 253)` and reported it
+> **identical between the Speedup and the Weapon Pad material files** - and it
+> is that *identity*, not the cyan, that the play report refutes. Cyan is
+> right for the Speedup Pad and confirmed independently by play.
+>
+> **The suspect is the aliasing caveat this section already raised.**
+> Confidence was capped at 82 precisely because of a `Weapon Pad`-specific
+> concern: its diffuse fetch may alias `R0` under NV40's H/R packing, so
+> `R0.w` at the weapon pad's `MAD H2, R0.wwww, ...` (const slot 58) may not be
+> pristine `_ne` alpha. The one material the caveat singles out is the one
+> material play says we read wrong. That is a strong hint the two are the same
+> fault rather than a coincidence.
+>
+> **What to do:** re-derive the Weapon Pad's constant independently of the
+> `R0` assumption - read const slot 58's own value out of the material record
+> directly rather than inferring it through the register trace, and compare
+> against slot 55's for the Speedup Pad. If slot 58 is red, the trace was
+> right about the mechanism and wrong only about which constant reaches it.
+> **Do not "correct" the value to red by hand** - measure it.
+>
+> Everything else in this section stands, including the finding that matters
+> most: the accumulate is gated by the `_ne`'s own ~7% bars-only alpha, which
+> the same play report independently corroborates ("only the light bars").
+
 The open question above is answered by tracing register writes with their
 own swizzle and write mask (`crates/render/examples/hd_pad_ne_tint_probe.rs`,
 extended this pass to print both - it previously showed only the opcode and

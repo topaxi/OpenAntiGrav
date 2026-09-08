@@ -108,6 +108,20 @@ is complete and this file is only what it did **not** close.
 
 ## Open
 
+- **The two pad types differ in colour, and this project measured them as
+  identical - 2026-09-08, from play.** The maintainer reports **speed pads are
+  cyan, weapon pads are red**. The register trace measured the patched colour
+  as `(0, 196, 253)` cyan and reported it the same in both material files. Cyan
+  is corroborated for the *speed* pad; the *weapon* pad's value is wrong.
+  **The suspect is already named in `docs/rendering/pads.md`**: confidence was
+  capped at 82 over a `Weapon Pad`-specific `R0` aliasing concern under NV40's
+  H/R packing, and the weapon pad is exactly the one play says we read wrong.
+  Re-derive const slot 58 straight out of the material record rather than
+  through the register trace, and **do not hand-correct the value to red**.
+- **The same report corroborates the finding that matters most**: only the
+  light bars change state, which is the `_ne`'s own ~7% alpha and not the
+  diffuse's 93%. That half of the trace is independently confirmed.
+
 **Does an HD weapon pad look different while it is cooling down, and what
 draws that? There is a state change - the maintainer reports it from play,
 2026-09-07, and it is more specific than the recollection this row used to
