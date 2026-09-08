@@ -58,15 +58,18 @@
 //!   is what `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s own doc
 //!   comment reads as evidence for rather than restates.
 //!
-//! - **The LeachBeam's lock window and `absorb` alone**, because the
-//!   LeachBeam is the *other* weapon `Ship_AcquireLock` reads distances for -
-//!   at `stats+0x114`/`+0x118` against the Missile's `+0x50`/`+0x54` - and the
-//!   consumer is `oag_game::race::sight`, which now draws the four
-//!   `leachbeam_sight_*` widgets the disc binds for it. The beam itself is not
-//!   decoded: nothing here drains a craft's energy or holds an attachment open,
-//!   so `repair`, `damage`, `slowShipFactor`, `range`, `active_time` and
-//!   `energy_multiplier` stay named and unread. See [`LeachBeamStats`], which
-//!   also records the one attribute this block does **not** author.
+//! - **The LeachBeam's block, in full, from 2026-09-08.** It was the lock
+//!   window and `absorb` alone for as long as the only consumer was the
+//!   reticle - the LeachBeam being the *other* weapon `Ship_AcquireLock` reads
+//!   distances for, at `stats+0x114`/`+0x118` against the Missile's
+//!   `+0x50`/`+0x54`, which is what `oag_game::race::sight` draws the four
+//!   `leachbeam_sight_*` widgets off. `repair`, `damage`, `slowShipFactor`,
+//!   `range`, `active_time` and `energy_multiplier` stayed named and unread
+//!   because nothing drained a craft's energy or held an attachment open.
+//!   `oag_gameplay::projectile::leach_beam` now does both, so all six are
+//!   decoded and each one's own doc comment on [`LeachBeamStats`] names the
+//!   function that spends it. That type also records the one attribute this
+//!   block does **not** author, and why the absence is design.
 //!
 //! Everything else - the other two weapons' blocks (the Quake's is decoded; the
 //! Repulser's is not) and the seven disturber effects - is named on
@@ -736,6 +739,12 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     absorb: number(block, "Stats", "absorb")?,
                     lock_min_dist: number(block, "Stats", "lock_min_dist")?,
                     lock_max_dist: number(block, "Stats", "lock_max_dist")?,
+                    damage: number(block, "Stats", "damage")?,
+                    repair: number(block, "Stats", "repair")?,
+                    slow_ship_factor: number(block, "Stats", "slowShipFactor")?,
+                    range: number(block, "Stats", "range")?,
+                    active_time: number(block, "Stats", "active_time")?,
+                    energy_multiplier: number(block, "Stats", "energy_multiplier")?,
                 })
             })?;
             continue;
