@@ -936,13 +936,16 @@ naively is unsafe:
 
 **Corrected 2026-09-08: the sentence that stood here said `PI000` was the
 odd one out. It is not - none of Pure's five picker languages names an
-external `entries.xml`.** Re-checking all five `Definition.xml` files by
-hand finds zero occurrences of `Dynamic Entry File Source` across
-`PI000`/`PI008`/`PI009`/`PI010`/`PI011`, each carrying its whole table
-inline in its own `<StringTable>` instead - 906, 882, 879, 886 and 882
-`<Entry>` tags respectively. So this is Pure's convention for every
-language it offers, not a one-off for English: unlike Pulse, whose plugins
-name an external `entries.xml`, Pure's shipped languages never do. `PI000`'s
+external `entries.xml`, on either pressing.** Re-checking all five
+`Definition.xml` files by hand finds zero occurrences of `Dynamic Entry File
+Source` across `PI000`/`PI008`/`PI009`/`PI010`/`PI011`, each carrying its
+whole table inline in its own `<StringTable>` instead - 906, 882, 879, 886
+and 882 `<Entry>` tags on `pure-psp-usa.chd`, 910, 895, 892, 899 and 895 on
+`pure-psp-eu.chd` (same five plugins, same order, counts differ only because
+the EU text is longer). So this is Pure's convention for every language it
+offers, on both pressings, not a one-off for English on one disc: unlike
+Pulse, whose plugins name an external `entries.xml`, Pure's shipped
+languages never do. `PI000`'s
 own table is still worth calling out for size - the roughly 1,000-entry
 table, HUD captions (`idstring="HUD_Lap"`, `HUD_current`, `HUD_best` -
 matched directly against `Data\XML\TimeTrial_HUD.xml`'s own `idstring`
