@@ -24,6 +24,11 @@ use crate::stage::Stage;
 mod apply;
 #[path = "session/draw.rs"]
 mod draw;
+// `Session::escape` and `Session::resume_race` - split out of `menus.rs`
+// under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
+// the seam.
+#[path = "session/escape.rs"]
+mod escape;
 #[path = "session/frame.rs"]
 mod frame;
 #[path = "session/load.rs"]
