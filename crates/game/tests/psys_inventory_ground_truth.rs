@@ -385,13 +385,47 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 
 /// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
 ///
-/// HD authors 82 distinct particle systems and only 11 are wired - the weapon
-/// table alone (Detonator, Nitro, per-damage-tier hull states) is mostly
-/// unbuilt in this engine, and writing a `NO_TRIGGER_RECOVERED`-style reason
-/// for each of the other 75 on the strength of "that weapon isn't built"
-/// would be exactly the plausibility-over-evidence shortcut this file's own
-/// doc comment forbids for the two discs it already covers. That bucketing is
-/// still owed.
+/// HD authors 82 distinct particle systems and 15 are wired (`RACE_EFFECTS`'
+/// current length - up from 11 when this comment was first written; Plasma,
+/// Shuriken and Quake landed since, so recompute from the source rather than
+/// trusting a number here) - the weapon table alone (Detonator, Nitro,
+/// per-damage-tier hull states) is mostly unbuilt in this engine, and writing
+/// a `NO_TRIGGER_RECOVERED`-style reason for each of the other 67 on the
+/// strength of "that weapon isn't built" would be exactly the
+/// plausibility-over-evidence shortcut this file's own doc comment forbids
+/// for the two discs it already covers. That bucketing is still owed, save
+/// six names read against the executable rather than inferred (`just psarc
+/// cat … | xxd` for the internal name; `strings -a` and Ghidra's own
+/// `search_strings` for the trigger check) - `docs/formats/pob.md`'s HD
+/// corpus section carries the evidence for all six:
+///
+/// - `NUMBERS`, `TEST_BOMBSPIKES` (`DATA02` only): disc-authored debug/test
+///   assets - confidence 82. Both string checks agree on zero hits, and a
+///   46-of-82 load-path control (unbuilt weapon names like
+///   `WO_LEACHBEAM_CHARGING` *are* in that 46) shows the check actually
+///   discriminates here.
+/// - `WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A` (`DATA02`), `WO_DustMotes`
+///   (`DATA00`, mixed-case internally, unlike every wired name), and
+///   `WO_UNDERWATER_GODRAYS` (`DATA02`, new to HD): environment effects, no
+///   recovered placement trigger - confidence 65, lower than the first two.
+///   The same string checks come back zero, but the control fails for this
+///   category: *no* environment name is in the 46, wired or not, and the
+///   wired `WO_SHIP_ENGINEFLARE` (plus its two unwired HD siblings
+///   `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`) is absent too - a continuous or
+///   ambient effect's trigger just doesn't leave a load-path string, so zero
+///   hits proves nothing either way here. The bucket assignment instead
+///   rests on the same basis `WO_RAIN`'s PSP entry already does: the
+///   track-placement format is unread, not a string search - `WO_BLUE_WELDER`
+///   and `WO_MODESTO_STEAM_A` reuse that reasoning under the same name,
+///   `WO_DustMotes`/`WO_UNDERWATER_GODRAYS` extend it to two names new to HD
+///   on naming and asset-pairing grounds alone.
+///
+/// 61 remain unbucketed - two of those, `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`,
+/// carry an open correctness question rather than just an unread trigger
+/// (see the handover thread's Next Steps). Not added to a bucket list here:
+/// this module
+/// doesn't carry an HD-side `NO_TRIGGER_RECOVERED` const yet, and six of 82
+/// isn't the completed sweep that would justify assembling one.
 ///
 /// What *is* checkable without inventing a reason for anything: that every
 /// [`RACE_EFFECTS`] name this engine already fires is really on the disc (so

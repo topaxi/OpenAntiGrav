@@ -501,6 +501,76 @@ itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` still names itself
 separately from this corpus check, and prints which names those extra blobs
 belong to.
 
+**Two of the 82 are genuinely their own name, not a leftover copy, and
+`DATA02`-only**: `numbers.pob` names itself `NUMBERS` and
+`test_bombspikes.pob` names itself `TEST_BOMBSPIKES` - read off the name
+field at `0x10 + slots * 4` the same way as every other row in this table
+(`just psarc cat <image>:DATA02.PSARC /data/psys/numbers.pob | xxd`, or
+`ParticleSystem::parse`), 2026-09-08. Neither string - bare name or as a
+`Data\Psys\...POB` load path - occurs anywhere in `EBOOT.elf`'s string
+table, checked two independent ways: `strings -a` over the whole binary
+(both names, case-insensitive) and Ghidra's own defined-string table
+(`search_strings`) against the imported program; both agree, zero hits for
+both names. **The control that makes this null result mean something**:
+this is not merely "unwired effects have no string" - `strings -a … | rg -o
+'Data.Psys.[A-Za-z0-9_]+\.POB' | sort -u | wc -l` finds **46 of the 82** disc
+names as a load-path string (case-insensitive on purpose - `WO_DustMotes`
+below is the one mixed-case name in the corpus and an all-caps pattern would
+silently drop it), well past the 15 `RACE_EFFECTS` wires,
+including effects this engine has not built at all (`WO_LEACHBEAM_CHARGING`,
+`WO_BOMB_EXPLO_DETONATOR`, every `WO_DAMAGE_*` tier) - so the original
+executable's own string table tracks *its* load paths, not OAG's wiring, and
+`NUMBERS`/`TEST_BOMBSPIKES` sitting outside that 46 is evidence about the
+original game, not an artifact of this project's scope. **Confidence 82**
+that both are disc-authored debug/test assets with no shipped trigger: the
+36 authored names *also* missing from that load-path scan (some are
+sub-effects reached from inside a parent tree rather than by a top-level
+load, per this file's `embedded` bucket) mean absence from the 46 alone
+isn't proof, and neither scan proves no code path reaches these two by a
+route that never puts the name in the string table (a hash, a constructed
+string, an index).
+
+**Four more, 2026-09-08, all environment effects - but the string-table
+method that worked above turned out blind to this whole category, not just
+these four**: `wo_blue_welder.pob` (`WO_BLUE_WELDER`), `wo_modesto_steam_a.pob`
+(`WO_MODESTO_STEAM_A`) and `wo_underwater_godrays.pob` (`WO_UNDERWATER_GODRAYS`)
+are `DATA02`; `wo_dustmotes.pob` (`WO_DustMotes` - mixed case internally, the
+only name in the corpus that isn't all-caps) is `DATA00`, paired with its own
+`data/psys/tex/dustmotes_4x4.gtf` texture in the same archive, which is why
+this one reads as a real shipped asset rather than a second debug leftover
+despite the odd casing. None of the four occurs anywhere in `EBOOT.elf`'s
+string table (`strings -a`, Ghidra `search_strings`, both zero) - but so does
+*no* environment-flavoured name, including `WO_RAIN`, `WO_SNOW` and the two
+above that are already-established `NO_TRIGGER_RECOVERED` entries on the PSP
+disc: none of the environment family is in the 46-name load-path control
+above, wired or not, on either disc. The engine flare family shows the same
+blind spot from the other side - `WO_SHIP_ENGINEFLARE` is wired
+(`RACE_EFFECTS`) and *also* absent from HD's string table, its trigger
+established from the PS2 disc's own reasoning ("an engine flare is on while
+the craft is") rather than from any HD-side string, and its two HD-only
+siblings `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are absent the same way. So a
+zero hit for a continuous/ambient effect proves nothing either way; unlike
+`NUMBERS`/`TEST_BOMBSPIKES`, this check does not discriminate for these four.
+
+The bucket assignment - environment effect, no recovered placement trigger -
+still stands on the same basis PSP's own `WO_RAIN` entry already rests on:
+an admission that the track-placement format (`.effectsettings`, `aurora.xml`,
+or a `track.vex` node) is not decoded by this project, not a string search.
+Two of the four (`WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`) reuse that PSP
+reasoning outright, sharing the exact name; `WO_DustMotes` and
+`WO_UNDERWATER_GODRAYS` extend the category to two names new to HD on
+naming and asset-pairing grounds, not on independent HD executable evidence.
+**Confidence 65** for the bucket assignment being correct (down from the 82
+above, which the string check earned and this one did not) - a genuine
+placement mechanism for HD's environment effects is still unread, and
+`WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are a live open question (see the
+handover thread's Next Steps) rather than settled.
+
+Six of the 67 unwired names (82 total minus the 15 `RACE_EFFECTS` wires)
+this project owes a bucketing pass over are done - see
+`crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment;
+the other 61 are unread.
+
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry
 blend table; the blend class is 1, 2 or 3; the shape is inside the emit
