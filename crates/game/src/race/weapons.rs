@@ -359,6 +359,39 @@ impl Race {
                     self.world.ships[0].pickup.begin_drop(drop.count);
                     return;
                 }
+                oag_formats::weapons::Weapon::LeachBeam => {
+                    let Some(stats) = weapons.leach_beam() else {
+                        // As the Rocket: nothing to fasten onto anybody.
+                        return;
+                    };
+                    // **The busy check first, and it is a whole-race one.**
+                    // `Weapon_FireLeachBeam` (`0x08866658`) returns on
+                    // `pool->live != 0` - a world cursor, not a per-craft
+                    // cooldown - so a press while *anybody's* beam is up keeps
+                    // the pickup. The strictest gate any weapon here has; see
+                    // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+                    if self.world.leach_beam.is_some() {
+                        return;
+                    }
+                    // The lock is the Missile's own, unmodified - the same
+                    // `Ship_AcquireLock` scan off the LeachBeam's own
+                    // `<Stats>` window, which `Race::sight_target` already
+                    // computes for the reticle. `FUN_0883f540` confirms the
+                    // reuse directly: it calls `Ship_AcquireLock` for held
+                    // weapon ids `1` and `10` and no others.
+                    //
+                    // **Fired with or without one**, and the pickup is spent
+                    // either way: `Weapon_FireLeachBeam` claims the pool slot
+                    // and clears the fire bit *before* it branches on
+                    // `craft+0x16c`, and the no-lock arm builds a real
+                    // instance that simply expires. The player has fired.
+                    self.world.leach_beam = Some(match self.sight_target() {
+                        Some(target) => {
+                            oag_gameplay::projectile::leach_beam::Beam::locked(0, target, &stats)
+                        }
+                        None => oag_gameplay::projectile::leach_beam::Beam::unlocked(0, &stats),
+                    });
+                }
                 oag_formats::weapons::Weapon::Quake => {
                     let Some(stats) = weapons.quake() else {
                         // No authored Quake, so nothing to launch - the same
@@ -704,6 +737,36 @@ impl Race {
             }
         }
         self.world.quake = Some(wave);
+    }
+
+    /// One tick of the single LeachBeam link: age it, test it, drain it, retire
+    /// it.
+    ///
+    /// A no-op with no beam in flight - see `Race::spend_pickup`'s own
+    /// LeachBeam arm for what fires one, and
+    /// `oag_gameplay::projectile::leach_beam` for the recovered transfer and
+    /// the one place it knowingly departs from the original.
+    ///
+    /// Called from the tick beside `Race::advance_quake`, on this tick's own
+    /// craft positions - so a target that pulled out of range this tick breaks
+    /// the link this tick rather than one tick late, the same "this tick, not
+    /// last tick's stale reading" rule every other per-craft weapon update in
+    /// this module follows.
+    pub(super) fn advance_leach_beam(&mut self) {
+        let Some(mut beam) = self.world.leach_beam else {
+            return;
+        };
+        let rules = oag_gameplay::damage_rules(self.world.race.mode);
+        let report = beam.advance(&mut self.world.ships, self.world.ship_count, rules, self.dt);
+        // A swallowed hit is the only thing that makes the target's shell
+        // visibly react - the same out-parameter `Race::advance_quake` spends
+        // on `self.shield[slot].hit()`, narrowed to the beam's one victim.
+        if report.absorbed {
+            if let Some(shell) = self.shield.get_mut(beam.target as usize) {
+                shell.hit();
+            }
+        }
+        self.world.leach_beam = if report.retired { None } else { Some(beam) };
     }
 
     /// One tick of the lock-on reticle, and the tone state that goes with it.

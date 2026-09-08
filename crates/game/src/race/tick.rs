@@ -348,6 +348,11 @@ impl Race {
         self.advance_quake();
         self.advance_quake_visual();
 
+        // Beside the Quake and for the same reason: both are single-instance
+        // weapons that read every craft's freshest state rather than last
+        // tick's. See `Race::advance_leach_beam`.
+        self.advance_leach_beam();
+
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It
         // takes a snapshot and touches no simulation state, which is what lets
