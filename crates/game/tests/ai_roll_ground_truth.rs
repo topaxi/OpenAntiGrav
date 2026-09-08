@@ -220,7 +220,13 @@ fn rolls_everywhere(
 /// whether the mechanic fires with seven rivals, traffic and weapons in the
 /// way. Every opponent draws its own pilot from `oag_ai::pilot_for_slot`, the
 /// same as a player would see; only the tier is chosen here.
-fn grid_rolls_on(level: oag_ai::Difficulty, track: &str) -> Option<Vec<Rolls>> {
+///
+/// `seed` is the world seed, which decides both the pickup stream and which
+/// character `oag_ai::pilot_for_slot` deals each slot - so two seeds are two
+/// different grids of the same tier, not the same race twice. See
+/// [`a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`] for why that
+/// axis had to exist.
+fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Vec<Rolls>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -228,6 +234,7 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str) -> Option<Vec<Rolls>> {
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         track: Some(track.to_string()),
+        seed: Some(seed),
         ..race::Options::default()
     })
     .ok()?;
@@ -488,58 +495,113 @@ fn sweep_rolls() {
     println!("{report}");
 }
 
+/// World seeds the grid sweep re-runs every circuit under.
+///
+/// **A resampling axis, not a repeat.** `race::Options::seed` reaches
+/// `World::new`, `oag_ai::Driver::for_slot` and `oag_ai::pilot_for_slot`, so a
+/// second seed is a second grid of characters drawing from a second pickup
+/// stream on the same circuit at the same tier - which is exactly the
+/// nuisance variable that has to be averaged out before a tier-to-tier
+/// comparison means anything. The first entry is `race::SEED`, the value every
+/// caller that does not choose one gets, so the historical measurement is
+/// still inside the new sample rather than replaced by it.
+const GRID_SEEDS: [u64; 2] = [race::SEED, 0x5eed_0002];
+
 /// **A full grid, not an isolated craft**: does the mechanic still fire with
 /// seven rivals, traffic and weapons in the way, and does a higher tier still
 /// roll more than a lower one when they are actually racing each other?
 ///
-/// `09_Track` - the circuit `no_tier_rolls_itself_down_to_nothing` already
-/// treats as the worst case for shield - at all four tiers, nothing
-/// switched off and nothing forced: every opponent draws its own pilot from
-/// `oag_ai::pilot_for_slot`, exactly as a real race does.
+/// Every forward circuit on the disc, at [`GRID_SEEDS`] seeds each, at all four
+/// tiers, nothing switched off and nothing forced: every opponent draws its own
+/// pilot from `oag_ai::pilot_for_slot`, exactly as a real race does.
 ///
-/// **Asserted loosely, on purpose.** Seven independent per-flight coin
-/// tosses over one race is a small sample, so this checks the *aggregate*
-/// across the whole grid is non-decreasing tier to tier rather than any
-/// single slot's count, and it stops short of asserting a strict `>` between
-/// adjacent tiers - see the printed table for whether the ordering the
-/// maintainer asked for actually held on this run, and `docs/gameplay/ai.md`
-/// for the numbers this produced.
+/// # Why the sample is this large, and why it had to grow
+///
+/// **This test used to race `09_Track` once per tier and it could not support
+/// its own claim.** Seven opponents times one race is seven per-flight coin
+/// tosses on a circuit whose airborne windows are around half a second each, so
+/// the per-tier `armed` totals landed in the range 0-3. A statistic with four
+/// distinct values cannot carry a monotonicity claim across four tiers: one
+/// craft deciding differently reorders the table.
+///
+/// That is not a hypothesis. On 2026-09-08, adding `Weapon::LeachBeam` to
+/// `oag_gameplay::pickup::IMPLEMENTED` - a change that touches no roll gate, no
+/// `oag_ai` axis and no force law - turned this test red. Confirmed by
+/// isolation: removing that one line made it pass again, putting it back made
+/// it fail. A wider pickup pool widens the weighted walk in
+/// `oag_gameplay::pickup::draw`, so every craft is handed different pickups, so
+/// every trajectory differs, so all seven coin tosses are re-rolled. The totals
+/// it produced were novice 1, skilled 0, elite 1, ace 3. Nothing about the
+/// mechanic had moved; the measurement was simply too small to notice.
+///
+/// So the sample is **twelve forward circuits times two seeds times seven
+/// opponents = 168 per-tier flights**, twenty-four grid races per tier and
+/// ninety-six in all. The circuit set is `circuits()` entire - the same set
+/// [`no_tier_rolls_itself_down_to_nothing`] and [`sweep_rolls`] already use -
+/// rather than a chosen handful, so the sample is not a search for one that
+/// passes. Budget the cost: a grid race is about four seconds in a debug build,
+/// which is what `just test-data` runs, so this test measured **350 s** on
+/// 2026-09-08 against the 17 s the single-circuit version took. That is the
+/// price of a statistic that discriminates.
+///
+/// # What the larger sample measures, and why it is believed
+///
+/// Armed totals on 2026-09-08, twenty-four grid races per tier:
+///
+/// | tier | seed `0x1` | seed `0x5eed0002` | total | spent |
+/// | --- | --- | --- | --- | --- |
+/// | novice | 5 | 0 | 5 | 38.0 |
+/// | skilled | 13 | 8 | 21 | 159.6 |
+/// | elite | 22 | 21 | 43 | 326.8 |
+/// | ace | 46 | 36 | 82 | 623.2 |
+///
+/// **Each seed reproduces the ordering on its own**, which is the evidence that
+/// the sample is big enough rather than that it was grown until it passed: the
+/// twelve-circuit sweep at either seed alone is already monotone, and the
+/// second seed is a held-out check on the first rather than padding. The
+/// tier-to-tier ratios are roughly 4x, 2x and 2x against the 0-3 range the
+/// single-race version had to work in.
+///
+/// **Still asserted loosely, and still on the aggregate.** Non-decreasing tier
+/// to tier, not a strict `>` between adjacent tiers, and on the sum rather than
+/// any single slot's count. Read the printed table for the ordering this run
+/// actually produced, and `docs/gameplay/ai.md` for the numbers behind the
+/// tuning.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less() {
-    let track = circuits()
-        .into_iter()
-        .find(|(id, _)| id == "09_Track")
-        .map(|(_, entry)| entry);
-    let Some(track) = track else {
+    let circuits = circuits();
+    if circuits.is_empty() {
         return;
-    };
+    }
 
     let mut totals = Vec::new();
     for (name, level) in oag_ai::Difficulty::ALL {
-        let Some(rolls) = grid_rolls_on(level, &track) else {
-            return;
-        };
-        let armed: u32 = rolls.iter().map(|r| r.armed).sum();
-        let spent: f32 = rolls.iter().map(|r| r.spent).sum();
-        println!("=== 09_Track, full grid, {name} ===");
-        for (slot, r) in rolls.iter().enumerate() {
-            println!(
-                "  slot {:<2} armed {:<3} spent {:>5.1} left {:>5.1} of {:.0} \
-                 airborne windows {:<3} longest {:.2}s ticks airborne {}/{TICKS} laps {} resp {}",
-                slot + 1,
-                r.armed,
-                r.spent,
-                r.shield,
-                r.capacity,
-                r.airborne_windows,
-                r.longest_airborne,
-                r.airborne_ticks,
-                r.laps,
-                r.respawns
-            );
+        let mut armed = 0u32;
+        let mut spent = 0.0f32;
+        let mut races = 0u32;
+        println!("=== full grid, {name} ===");
+        for (id, entry) in &circuits {
+            for seed in GRID_SEEDS {
+                let Some(rolls) = grid_rolls_on(level, entry, seed) else {
+                    return;
+                };
+                let race_armed: u32 = rolls.iter().map(|r| r.armed).sum();
+                let race_spent: f32 = rolls.iter().map(|r| r.spent).sum();
+                let windows: u32 = rolls.iter().map(|r| r.airborne_windows).sum();
+                let aloft: u64 = rolls.iter().map(|r| r.airborne_ticks).sum();
+                println!(
+                    "  {id:<10} seed {seed:#010x} armed {race_armed:<3} \
+                     spent {race_spent:>5.1} airborne windows {windows:<4} \
+                     ticks aloft {aloft}/{}",
+                    TICKS * rolls.len() as u64
+                );
+                armed += race_armed;
+                spent += race_spent;
+                races += 1;
+            }
         }
-        println!("  TOTAL armed {armed} spent {spent:.1}");
+        println!("  TOTAL over {races} grid races: armed {armed} spent {spent:.1}");
         totals.push((name, armed));
     }
 
@@ -547,9 +609,10 @@ fn a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less() {
         let ((easier_name, easier), (harder_name, harder)) = (pair[0], pair[1]);
         assert!(
             harder >= easier,
-            "on a full grid on 09_Track, {harder_name} armed {harder} rolls total \
-             against {easier_name}'s {easier}, which is a lower tier rolling more \
-             than a higher one, not less"
+            "over every forward circuit at {} seeds, {harder_name} armed {harder} \
+             rolls total against {easier_name}'s {easier}, which is a lower tier \
+             rolling more than a higher one, not less",
+            GRID_SEEDS.len()
         );
     }
 }
