@@ -128,6 +128,13 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// rolled; [`eye`] and [`look_at_point`] read `target.up` unrolled, matching
 /// the original, whose `row1` offsets both before this rotation is taken.
 /// See `oag_render::roll`.
+///
+/// This call site inherits [`crate::roll::ROLL_DIRECTION`]'s measured sign
+/// on the argument that the VFPU register-naming ambiguity it settles is one
+/// binary-wide fact rather than a per-call-site choice - `FUN_088455ec`'s own
+/// `up = Rot(...) * up` was not itself captured, only the ship's display
+/// matrix in `FUN_088418e0` was. Labelled here so that distinction is not
+/// lost: the ship's roll is measured, the cockpit's is inferred from it.
 #[must_use]
 pub fn view(target: Target, params: &InternalParams, roll_phase: f32) -> Mat4 {
     let up = crate::roll::rotation(target.forward, roll_phase) * target.up;

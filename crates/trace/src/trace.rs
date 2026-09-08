@@ -26,7 +26,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 62] = [
+pub const COLUMNS: [&str; 65] = [
     "tick",
     "dt",
     "grounded",
@@ -47,6 +47,9 @@ pub const COLUMNS: [&str; 62] = [
     "ss_shift_l",
     "ss_shift_r",
     "ss_lockout",
+    "steer_lean",
+    "roll_phase",
+    "roll_eased",
     "right_x",
     "right_y",
     "right_z",
@@ -130,7 +133,7 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 37] = [
+pub const OPTIONAL_COLUMNS: [&str; 40] = [
     "stun_timer",
     "timer_2e0",
     "shield",
@@ -142,6 +145,9 @@ pub const OPTIONAL_COLUMNS: [&str; 37] = [
     "ss_shift_l",
     "ss_shift_r",
     "ss_lockout",
+    "steer_lean",
+    "roll_phase",
+    "roll_eased",
     "avel_x",
     "avel_y",
     "avel_z",
@@ -375,6 +381,24 @@ pub struct Frame {
     /// Set to `1.0` on any tick either shift timer is positive and counted down
     /// by `dt` - one second between sideshifts, novice or veteran.
     pub ss_lockout: Option<f32>,
+    /// The barrel roll's linear phase, `entity+0x87c`, or `None`. Ramped by
+    /// `Ship_UpdateSideshiftInput_q` toward `+/-1.0`; see
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll section.
+    pub roll_phase: Option<f32>,
+    /// `FUN_088418e0`'s one-writer eased copy of [`Self::roll_phase`],
+    /// `entity+0x880`, or `None`. The display matrix and the internal camera's
+    /// up vector both read this directly - `angle = roll_eased * 6.28`, no
+    /// second `ease()` pass - which is the quantity the roll-sign capture
+    /// (`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`) pinned
+    /// `oag_render::roll::ROLL_DIRECTION` against.
+    pub roll_eased: Option<f32>,
+    /// The steering lean, `entity+0x854`, or `None`. `FUN_0883fab4`'s output,
+    /// the roll angle's *other* term (`angle = steer_lean * 0.5 + roll_eased *
+    /// 6.28`) - confidence **0** for what it physically means, and
+    /// deliberately not ported. Recorded so a capture taken while steering (a
+    /// d-pad roll gesture *is* steering input) can still reconstruct the
+    /// exact angle the original drew.
+    pub steer_lean: Option<f32>,
     /// Row 0 of the player camera node's basis, or `None` for a capture taken
     /// without `--camera`.
     ///
@@ -434,6 +458,9 @@ impl Default for Frame {
             ss_shift_l: None,
             ss_shift_r: None,
             ss_lockout: None,
+            roll_phase: None,
+            roll_eased: None,
+            steer_lean: None,
             camera_row0: None,
             camera_up: None,
             camera_forward: None,
@@ -533,6 +560,9 @@ impl Frame {
             "ss_shift_l" => self.ss_shift_l?,
             "ss_shift_r" => self.ss_shift_r?,
             "ss_lockout" => self.ss_lockout?,
+            "roll_phase" => self.roll_phase?,
+            "roll_eased" => self.roll_eased?,
+            "steer_lean" => self.steer_lean?,
             "cam_right_x" => self.camera_row0?.x,
             "cam_right_y" => self.camera_row0?.y,
             "cam_right_z" => self.camera_row0?.z,
@@ -575,6 +605,9 @@ impl Frame {
             "ss_shift_l" => self.ss_shift_l.is_some(),
             "ss_shift_r" => self.ss_shift_r.is_some(),
             "ss_lockout" => self.ss_lockout.is_some(),
+            "roll_phase" => self.roll_phase.is_some(),
+            "roll_eased" => self.roll_eased.is_some(),
+            "steer_lean" => self.steer_lean.is_some(),
             "cam_right_x" | "cam_right_y" | "cam_right_z" => self.camera_row0.is_some(),
             "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
             "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
@@ -631,6 +664,9 @@ impl Frame {
             "ss_shift_l" => self.ss_shift_l = Some(value),
             "ss_shift_r" => self.ss_shift_r = Some(value),
             "ss_lockout" => self.ss_lockout = Some(value),
+            "roll_phase" => self.roll_phase = Some(value),
+            "roll_eased" => self.roll_eased = Some(value),
+            "steer_lean" => self.steer_lean = Some(value),
             "cam_right_x" => self.camera_row0.get_or_insert(Vec3::ZERO).x = value,
             "cam_right_y" => self.camera_row0.get_or_insert(Vec3::ZERO).y = value,
             "cam_right_z" => self.camera_row0.get_or_insert(Vec3::ZERO).z = value,

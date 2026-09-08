@@ -32,21 +32,42 @@ pub const FULL_TURN: f32 = 6.28;
 
 /// The roll's direction about the forward axis, for a positive `roll_phase`.
 ///
-/// **Chosen, not measured.** The VFPU register-name row/column transpose that
-/// recovered this recipe settles the rotation's *axis* - the ship's own
-/// nose - because both literal `1.0`s of the rotation matrix sit on the
-/// diagonal, which survives a transpose; it does not settle the *sign*,
-/// because that reaches exactly the `sin`/`-sin` placement the transpose
-/// does move.
+/// **Measured, confidence 92** (rubric: a runtime trace, one binary - see
+/// `docs/reverse-engineering/confidence-rubric.md`). A memory-read capture
+/// against a real, booted `pulse-psp-usa.chd` settled what the VFPU
+/// register-name row/column ambiguity could not: the ambiguity reaches
+/// exactly the `sin`/`-sin` placement in the rotation the original composes
+/// with the rigid body (the *axis* survives it, since both literal `1.0`s
+/// sit on the diagonal), so only a live read of the result - not another
+/// reading of the disassembly - could close it.
 ///
-/// `1.0` is picked so that a `[1, 2, 1]` gesture - tap LEFT first, which ramps
-/// `roll_phase` toward `-1.0` - drops the **left** wing (anticlockwise seen
-/// from behind): the mapping a player's gesture would suggest, and so the one
-/// least likely to need flipping. It is a choice pending a play-test or a
-/// capture, not a confidence-scored finding - do not cite it as one.
-/// Flipping it to `-1.0` is the entire fix if it reads backwards; this is the
-/// one place that has to change.
-pub const ROLL_DIRECTION: f32 = 1.0;
+/// The capture: `entity+0x880` (the eased phase `FUN_088418e0`'s display
+/// matrix reads directly, `angle = entity[0x880] * 6.28`) was pinned at a
+/// breakpoint to a small sweep of values (`0.0`, `+/-0.2`, `+/-0.35`) with
+/// the steering lean `entity+0x854` pinned at `0.0`, and the resulting
+/// display matrix - `*(*(entity+0x8b0)+0x3c)+0x40`, self-validated because
+/// its own row 3 reproduces the rigid body's position exactly - was read
+/// back alongside the body basis at `entity+0x794`. Every nonzero sample
+/// agreed with `row0 = scale*cos(angle)*right + scale*sin(angle)*up` (the
+/// literal, un-transposed reading of the matrix as disassembled) to 3-4
+/// significant figures, `scale` reading exactly `0.75` at the `angle = 0`
+/// baseline. For a positive phase the original's right axis gains a
+/// positive `up` component - the right wingtip rises. See
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll section
+/// for the full numbers and
+/// `crates/game/src/race/drawable.rs`'s
+/// `roll_direction_matches_the_original_captured_display_matrix` test, which
+/// reproduces that same body and phase through this crate's own
+/// `orientation * roll` composition rather than trusting hand algebra to
+/// carry the sign across the two engines' different axis conventions
+/// (`oag_physics::ship::Body::forward` is local `-Z`; the original's own
+/// third row is `+`).
+///
+/// `-1.0`, not the `+1.0` a player's own gesture would have suggested and
+/// this constant shipped as before the capture: a `[1, 2, 1]` gesture (tap
+/// LEFT first, which ramps `roll_phase` toward `-1.0`) turns out to drop the
+/// **right** wing, not the left.
+pub const ROLL_DIRECTION: f32 = -1.0;
 
 /// The symmetric quadratic ease-in-out `FUN_08841f88` applies to
 /// `roll_phase` before turning it into an angle.

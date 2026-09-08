@@ -690,6 +690,22 @@ access to the gesture is not.
 Searched 2026-09-06, and the answer is **yes, there is a render consumer** - two
 of them, both reading one intermediate. Confidence **88**.
 
+**Correction, 2026-09-08: every `craft[...]` below is the entity, not the
+craft `Ship_UpdateCraft` takes in `a0`.** This is the same trap the shield
+field's own history and `fov_additive`/`fov_intercept` (both in
+`scripts/psp_trace_fields.py`) already caught once each for a different
+offset and for `FUN_088455ec`'s offsets respectively - `FUN_088418e0` is
+reached through `craft->0x78`'s child dispatch (the "Deliberately not
+renamed" section below quotes the exact instructions), so its own local that
+this page's pseudocode calls `craft` is that child, i.e. the entity
+`ENTITY_POINTER = craft+0x1c4` names elsewhere. Confirmed live 2026-09-08, at
+the rollsign capture below: `entity+0x794` read back exactly the body pointer
+`craft+0x1cc` (`Ship_UpdateCraft`'s own `BODY_POINTER`) already held, while
+`craft+0x794` itself - Ship_UpdateCraft's own `a0` base - read `0`. The
+pseudocode blocks below keep the decompiler's own `craft[...]` spelling
+unchanged, matching `camera.md`'s own precedent for the same trap; read every
+occurrence as the entity.
+
 **Nothing here used `get_xrefs_to`, and an empty result from it would have proved
 nothing.** Ghidra applies no relocation to any PSP database (see
 [workflow.md](../../workflow.md)), so the searchable form is the same
@@ -758,7 +774,27 @@ ambiguity.** The two literal `1.0`s in `R` are written by `vone.s S122` and
 `vone.s S133` - both on the diagonal, and a diagonal element is the same under
 either row-major or column-major reading of the VFPU register names. Only the
 *sign* of the `s`/`-s` pair flips with the reading, so which axis is held fixed is
-determined and which way the ship rolls is not.
+determined and which way the ship rolls was not, until the capture below settled
+it.
+
+**`vmmul.q`'s operand order is `R * body`, settled by the same capture.** `D0`
+(the captured display matrix's own row 0) came out a combination of `body`'s
+row 0 and row 1 *only*, and `D2` came out `scale * body row 2` unchanged -
+exactly `R * body`'s shape, since the other order (`body * R`) would mix
+`body`'s **columns** instead. The caveat the thread carried is still real -
+the two orders agree while `body` is orthonormal, which it is at every sample
+here - but the reading that was actually disassembled is the reading that
+matches.
+
+**`[0x002ace1c]` is `0.75`, and it is `g_craft_scale`.** The captured `M'`
+read exactly `0.7500` at every sample, including the `angle = 0` baseline
+where hand-checking is trivial (`M' = 0.75 * body`, `M = body`, both
+confirmed against the live body basis). `0.75` is the `3/4` factor
+[camera.md](camera.md#the-34-factor-is-g_craft_scale-a-code-literal-and-it-is-the-scale-this-project-already-knew)
+already identified as `g_craft_scale` (`0x08ab0e1c`) at confidence 85 for a
+different call site; this is the same scale applied a second, independent
+place, and it closes this section's own open item on the strength of an exact
+match rather than a coincidence of the two addresses' similar names.
 
 Index 2 is the nose. [camera.md](camera.md) establishes "`row2` is the ship's
 forward axis, positive toward the nose" at confidence 92, measured on the running
@@ -852,6 +888,79 @@ of them reads it:
 
 All three are roll-cancel paths. `f20`'s value at `0x08847a54` was not traced.
 
+#### Settled on the running game, 2026-09-08: the sign, confidence 92
+
+The rollsign capture, PPSSPP v1.20.4 under Xvfb, `pulse-psp-usa.chd`, Time
+Trial on Talon's Junction, the player's own craft stationary on the start
+line. Method: break execution at `0x08842140` (Stage 2a's own first
+instruction), filter to the player's own entity by reading `s2` (the
+function's own entity-in-register, confirmed against `cpu.getAllRegs`) since
+every craft's per-tick pass through this code hits the same address, write a
+test value into `entity+0x880` and `0.0` into `entity+0x854` (the steering
+lean, zeroed to isolate the roll term) before resuming, then on the *next*
+hit for the same entity read back the previous tick's own display matrix -
+`*(*(entity+0x8b0)+0x3c)+0x40`, self-validated because its own row 3
+reproduces the rigid body's position exactly - alongside the body basis at
+`entity+0x794`. This is the same memory-read technique the sideshift capture
+used (`docs/reverse-engineering/ppsspp-debugger.md`), applied to a value
+written under debugger control rather than one produced by a scripted
+gesture: a ground d-pad `[2,1,2]`/`[1,2,1]` gesture was tried first and
+produced no roll at all (`entity+0x87c` stayed exactly `0.0` through 20
+polls at `grounded=1.0`), consistent with this port's own airborne-only
+arming gate (`crates/physics/src/barrel_roll.rs`) - so the direct write is
+what actually produced the data below, and the ground-gesture attempt is
+recorded as the honest negative that motivated it rather than omitted.
+
+Six samples, `entity+0x880` at `0.0`, `+/-0.2`, `+/-0.35`, and `0.0` again to
+close the sweep. Reading `D0`/`D1` (the captured matrix's rows 0/1) against
+the body's row 0/1 (`right`/`up`):
+
+| `entity+0x880` | `angle = value * 6.28` | `dot(D0,right)` | predicted `scale*cos` | `dot(D0,up)` | predicted `+scale*sin` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `0.000` | `0.0000` | `0.7500` | `0.7500` | `-0.0000` | `0.0000` |
+| `+0.200` | `1.2560` | `0.2322` | `0.2321` | `0.7131` | `0.7132` |
+| `-0.200` | `-1.2560` | `0.2322` | `0.2321` | `-0.7131` | `-0.7132` |
+| `+0.350` | `2.1980` | `-0.4402` | `-0.4409` | `0.6073` | `0.6068` |
+| `-0.350` | `-2.1980` | `-0.4402` | `-0.4409` | `-0.6073` | `-0.6068` |
+
+Every sample agrees with the **literal, un-transposed** reading of `R` -
+`D0 = scale*cos(angle)*right + scale*sin(angle)*up` - to 3-4 significant
+figures, `scale` reading exactly `0.75` throughout (see above). `dot(D1,right)`
+and `dot(D1,up)` mirror this (`-scale*sin(angle)` and `scale*cos(angle)`
+respectively) at every sample and are omitted from the table for space.
+
+**What this means for the ship's own roll:** for a positive `entity+0x880`
+(same sign as `roll_phase`, since `ease` is odd and monotone), the physics-
+right axis gains a positive `up` component - **the right wingtip rises**.
+Since `right`, `up` and `forward` are a right-handed triple here
+(`cross(right, up)` reproduces `forward` to four figures at every sample,
+confirming `camera.md`'s own reading of the row layout) and the captured
+`up` row is itself near world-`+Y` (`(-0.046, 0.996, 0.076)` at the baseline
+sample, consistent with a level start line), "rises" is a plain world-height
+statement and needs no further handedness reasoning.
+
+`crates/render/src/roll.rs`'s `ROLL_DIRECTION` carries this finding, flipped
+from the `+1.0` it shipped as (chosen, not measured) to `-1.0` -
+`crates/game/src/race/drawable.rs`'s
+`roll_direction_matches_the_original_captured_display_matrix` test reproduces
+this exact body and phase through `oag-render`'s own `orientation * roll`
+composition (rather than hand algebra) to carry the sign across the two
+engines' different forward-axis conventions
+(`oag_physics::ship::Body::forward` is local `-Z`; the row read here is `+`)
+and pins the constant against it. A `[1, 2, 1]` gesture (tap LEFT first,
+which ramps `roll_phase` toward `-1.0`) turns out to drop the **right** wing,
+not the left the constant shipped assuming.
+
+Confidence **92**: a runtime trace of the exact quantity (six samples across
+a baseline and four nonzero angles, all agreeing to 3-4 figures, plus a
+self-validating pointer chain), one binary, one emulator - the same evidence
+shape `camera.md`'s fov law scored 94 with nineteen samples; short of that
+ceiling for fewer points. The internal camera's own site
+(`FUN_088455ec`'s `up = Rot(...) * up`) was **not** independently captured
+this pass; `oag_render::camera::internal` inherits the same
+`ROLL_DIRECTION`, labelled as an inference rather than a second measurement
+- see its own doc comment.
+
 #### Deliberately not renamed
 
 `FUN_088418e0` stays `FUN_`. It advances per-craft timers, runs contact reaction
@@ -862,14 +971,17 @@ stops the next reader looking.
 
 #### What is not determined
 
-- **The sign of the roll.** The `s`/`-s` placement is the one thing the transpose
-  ambiguity does reach, so whether a `1,2,1` gesture rolls the ship left or right
-  on screen is not settled by this static read. A capture settles it in one run.
-- **`vmmul.q`'s operand order.** Whether the composed matrix is `R * body` or
-  `body * R` was not established, and the two differ when the body matrix is not
-  orthonormal.
-- **`[0x002ace1c]`**, the scalar `vmscl.q` applies to rows 0-2. Unidentified;
-  camera.md's own `g_craft_scale` discussion is the place to look first.
+Three of the four items this section used to list are closed by the
+rollsign capture above: the sign, `vmmul.q`'s operand order and
+`[0x002ace1c]`. What is left:
+
+- **The internal camera's own site** (`FUN_088455ec`'s `up = Rot(...) * up`)
+  was not independently captured - `oag_render::camera::internal` inherits
+  the ship's measured sign on the argument that the VFPU register-naming
+  ambiguity is one binary-wide fact, not a per-call-site choice, but that is
+  an inference, not a second measurement. A capture identical in shape to
+  the one above, breaking inside `FUN_088455ec` instead of `FUN_088418e0`,
+  would close it.
 
 
 
