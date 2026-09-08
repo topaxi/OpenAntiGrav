@@ -501,6 +501,26 @@ itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` still names itself
 separately from this corpus check, and prints which names those extra blobs
 belong to.
 
+**Two of the 82 are genuinely their own name, not a leftover copy, and
+`DATA02`-only**: `numbers.pob` names itself `NUMBERS` and
+`test_bombspikes.pob` names itself `TEST_BOMBSPIKES` (`just psarc list`,
+2026-09-08). Neither string - bare name or as a `Data\Psys\...POB` load
+path, the shape every wired effect's name takes in the executable
+(`WO_ROCKET_FLARE`, `WO_BOMB_SMOKERING`, etc. all appear that way) - occurs
+anywhere in `EBOOT.elf`, checked two independent ways: `strings -a` over the
+whole binary (both names, case-insensitive) and Ghidra's own defined-string
+table (`search_strings`) against the imported program. Both come back zero
+for both names; both come back the two expected hits (bare name and load
+path) for `WO_ROCKET_FLARE` used as a positive control. **Confidence 82**
+that both are disc-authored debug/test assets with no shipped trigger: the
+name and the null result are directly read off the disc and the binary
+through two independently-implemented string scans agreeing, but neither
+proves no code path could reach them by a route that never puts the name in
+the string table (a hash, a constructed string, an index). Two of the 75
+unwired HD systems this project owes a bucketing pass
+over (see `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc
+comment); the other 73 are unread.
+
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry
 blend table; the blend class is 1, 2 or 3; the shape is inside the emit

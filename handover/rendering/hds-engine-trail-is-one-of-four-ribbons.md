@@ -29,16 +29,28 @@
   the two discs it already covers - each of the 75 needs its own executable
   evidence, the same bar `NO_TRIGGER_RECOVERED`'s existing 27 entries hold to.
 
+- **2026-09-08: `numbers.pob` and `test_bombspikes.pob` confirmed.** Their
+  internal `SYSP` names are their own, not a leftover copy -  `NUMBERS` and
+  `TEST_BOMBSPIKES`, both `DATA02`-only (`just psarc list`). Neither string
+  occurs anywhere in `EBOOT.elf`, bare or as the `Data\Psys\<NAME>.POB` load
+  path every wired effect's name takes, checked two independent ways -
+  `strings -a` + case-insensitive grep, and Ghidra's own defined-string
+  table once a live instance became available mid-session - both zero hits
+  for both names and both hitting the expected two matches for
+  `WO_ROCKET_FLARE` as a positive control. Confidence 82 disc-authored
+  debug/test assets with no shipped trigger - see `docs/formats/pob.md`'s HD
+  corpus section for the full writeup. That's 2 of the 75 down, 73 to go;
+  still no code-side change, since a two-entry list doesn't justify
+  assembling an HD-side `NO_TRIGGER_RECOVERED` const yet (see
+  `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment).
+
 ## Next Steps
 
-- Bucket HD's other 75 distinct particle systems (82 total minus the 7
-  wired) into "no trigger recovered, with why" or a genuinely new trigger,
-  one name at a time against the executable - not by inference from an
-  already-established "that weapon/mode isn't built" fact, which is not the
-  same as reading *that name's own* trigger. `numbers.pob` and
-  `test_bombspikes.pob` look like disc-authored debug/test assets rather than
-  shipped effects and are a reasonable place to start, since confirming that
-  is a small, bounded Ghidra string search rather than a weapon-system read.
+- Bucket HD's other 73 distinct particle systems (82 total minus the 7
+  wired minus the 2 confirmed above) into "no trigger recovered, with why"
+  or a genuinely new trigger, one name at a time against the executable -
+  not by inference from an already-established "that weapon/mode isn't
+  built" fact, which is not the same as reading *that name's own* trigger.
   `stesparkstest.pob` is confirmed already, incidentally, while measuring the
   inventory count above: its internal `SYSP` name field is not `STESPARKSTEST`
   at all but `WO_SHIP_COLL_SPARK_DAMAGE` - a leftover copy of the wired
@@ -47,4 +59,8 @@
   internally named `WO_SHIP_EXPLOSION`, which is a `NO_TRIGGER_RECOVERED`-style
   entry in its own right once someone's ready to write one (it is already
   known to be the same name as the wired-but-unbuilt `WO_SHIP_EXPLOSION`
-  reason, just a second file, not a second effect).
+  reason, just a second file, not a second effect). Once enough of the 73 are
+  read to be worth assembling, an HD-side `NO_TRIGGER_RECOVERED` const in
+  `psys_inventory_ground_truth.rs`'s `mod hd` - mirroring the PSP/PS2 one -
+  is the natural place to enforce the bucketing the same way those two discs
+  already are, rather than leaving it as prose here indefinitely.
