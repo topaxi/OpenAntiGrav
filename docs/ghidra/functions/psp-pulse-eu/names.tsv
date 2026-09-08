@@ -477,3 +477,11 @@
 0x08991ac0	function	Scream_FindBankByName	75	exact-hash-transfer.md
 0x08991b60	function	Scream_FindSoundInBank	80	exact-hash-transfer.md
 0x089952f8	function	Scream_PanVolumePair	89	exact-hash-transfer.md
+
+# 2026-09-08: one exact-hash match found while checking the race-box screen
+# functions (../psp-pulse-usa/race-box-screens.md) against this binary.
+# Unique hash both sides, diff_functions 123/123 equal, zero added/removed -
+# callee-naming asymmetry only, same category exact-hash-transfer.md already
+# established. The other fourteen named that pass had no exact-hash match on
+# this binary; see race-box-screens.md's own history note.
+0x0888e0c4	function	Definition_IsUnlocked	67	../psp-pulse-usa/race-box-screens.md
