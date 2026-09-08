@@ -539,6 +539,62 @@ Two rows this page deliberately does not add:
   has its own AIRBRAKE LEFT/AIRBRAKE RIGHT row; a third row naming the same
   key for the same gesture would repeat information rather than add it.
 
+## AI PILOTS: the axis preview
+
+The AI PILOTS page's own `AXIS`/`LOW`/`HIGH` rows show a raw axis name and two
+numbers - `commitment`, `0.93`, `1.05` - and nothing on that page says what
+`commitment` *is* or why `1.05` is close to a wall. `pilots::axis_preview_for`
+(`crates/game/src/pilots.rs`) turns whichever axis `AXIS` is currently on into
+one plain-language line, read live off the row the same way `session::
+pilot_editor::held_text` reads `pilot.axis` for saving - so it tracks the
+player without a second copy of "which axis is this."
+
+**Chosen, not measured, and carries no confidence score.** The original has
+no pilots and no such preview; every word is this project's own gloss on
+numbers [`Pilot`](../../crates/ai/src/pilot.rs)'s own doc comments and
+`pilots::limit` already state - the mechanism, the unit, and the allowed
+range - never an invented scale or a claim about what a number "feels like"
+in play. Where the source says only "how readily" with no stated direction
+(`trigger`), the line says the same, in fewer words, rather than guessing a
+sign. `pilots::axis_gloss` is the per-axis table; `axis_names_cover_every_draw`
+already checks `AXES` against `Pilot::spans`, and `every_axis_has_a_preview`
+is its sibling for this table specifically, so a landed axis with no line here
+fails a test instead of just having a gap. `lean` is deliberately absent: it
+is a `Lean`, not a `Span`, `AXIS` can never select it, and a line about a row
+that cannot be reached would be a preview of nothing on screen.
+
+**One function reached from two crates, because the two draw paths are in
+different ones.** `axis_preview_for` lives in the library crate
+(`oag_game::pilots`) rather than beside `session::pilot_editor`'s other pure
+functions, which are the binary's: `MenuStage::render` (binary,
+`main/menu_stage.rs`) and `capture::menu_page` (library, for
+`--menu-page pilots`) both need the same line, and the library cannot depend
+on the binary. `prompt::axis_preview_draw` (`crates/game/src/prompt.rs`) is
+the matching draw-side split - not modal, drawn straight over the page, in the
+established amber `NOTE` colour a live remark already uses for
+`Keyboard`'s own note.
+
+**Its position is not `menu::rows::draw`'s reserved note slot, on purpose.**
+That slot is sized for one line clearing the bottom of the 272-pixel screen;
+it says nothing about Pulse's own bottom-of-screen mark (`frame.marks`, drawn
+on every page regardless of content, at a fixed position). A first capture of
+this page put the preview line squarely on top of that mark - legible, amber
+against both the mark's dark and bright halves, but visibly cluttered. Found
+by capturing the real page and looking, the way this project's own rule says
+to, not by the arithmetic passing. `prompt::AXIS_PREVIEW_SCALE` (smaller than
+the note scale `Keyboard`'s own remark uses) and a small upward nudge in
+`axis_preview_draw` are the fix, tuned against that capture rather than
+derived - the gap between the AI PILOTS page's last visible row and the mark
+is under one line tall at the note scale. This is one page's own layout
+fact, not a general one: `menu::visible_rows`'s "clear the 272-pixel screen"
+budget has never accounted for `frame.marks`, and any future warning or
+restart note on a page that scrolls to exactly its own `visible_rows` would
+find the same mark waiting in the same place. That is `menu/rows.rs`'s own
+budget to fix, not this feature's.
+
+`--menu-page pilots --screenshot <path>` is how to look at it without a
+window.
+
 ## What is not built
 
 - **Localised labels.** Row labels are literal text, and `string_id` **is**

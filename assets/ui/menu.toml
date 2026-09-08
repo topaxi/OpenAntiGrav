@@ -45,10 +45,12 @@ root = "main"
 [[page]]
 id = "main"
 title = "OPENANTIGRAV"
+title_string_id = "OAG_MENU_MAIN_TITLE"
 
 [[page.entry]]
 kind = "submenu"
 label = "RACE"
+string_id = "OAG_MENU_RACE"
 target = "race"
 
 # **Shown unconditionally, not gated on "more than one title available".**
@@ -62,21 +64,25 @@ target = "race"
 [[page.entry]]
 kind = "submenu"
 label = "REMIX"
+string_id = "OAG_MENU_REMIX"
 target = "remix"
 
 [[page.entry]]
 kind = "submenu"
 label = "OPTIONS"
+string_id = "OAG_MENU_OPTIONS"
 target = "options"
 
 [[page.entry]]
 kind = "action"
 label = "QUIT"
+string_id = "OAG_MENU_QUIT"
 action = "quit"
 
 [[page]]
 id = "race"
 title = "RACE"
+title_string_id = "OAG_RACE_PAGE_TITLE"
 
 # Mode first, because it is the thing that decides what the other rows mean: a
 # zone run ignores the lap count a time trial is built around.
@@ -88,6 +94,7 @@ title = "RACE"
 [[page.entry]]
 kind = "choice"
 label = "MODE"
+string_id = "OAG_RACE_MODE"
 setting = "race.mode"
 values_from = "race_modes"
 
@@ -103,6 +110,7 @@ values_from = "race_modes"
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
+string_id = "OAG_RACE_SPEED_CLASS"
 setting = "race.class"
 values_from = "speed_classes"
 
@@ -123,6 +131,7 @@ values_from = "speed_classes"
 [[page.entry]]
 kind = "choice"
 label = "AI DIFFICULTY"
+string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
@@ -130,6 +139,7 @@ disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zon
 [[page.entry]]
 kind = "choice"
 label = "TEAM"
+string_id = "OAG_RACE_TEAM"
 setting = "race.team"
 values_from = "teams"
 disabled_by = { setting = "race.mode", value = "zone" }
@@ -142,6 +152,7 @@ disabled_by = { setting = "race.mode", value = "zone" }
 [[page.entry]]
 kind = "choice"
 label = "VARIANT"
+string_id = "OAG_RACE_VARIANT"
 setting = "race.variant"
 values_from = "race_variant"
 disabled_by = { setting = "race.mode", value = "zone" }
@@ -154,21 +165,25 @@ disabled_by = { setting = "race.mode", value = "zone" }
 [[page.entry]]
 kind = "choice"
 label = "TRACK"
+string_id = "OAG_RACE_TRACK"
 setting = "race.track"
 values_from = "tracks"
 
 [[page.entry]]
 kind = "action"
 label = "START"
+string_id = "OAG_RACE_START"
 action = "launch_race"
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "remix"
 title = "RACE REMIX"
+title_string_id = "OAG_REMIX_PAGE_TITLE"
 
 # Mode and AI difficulty are title-agnostic and shared with the ordinary RACE
 # page verbatim - same settings keys, same values, same `disabled_by`.
@@ -181,6 +196,7 @@ title = "RACE REMIX"
 [[page.entry]]
 kind = "choice"
 label = "MODE"
+string_id = "OAG_RACE_MODE"
 setting = "race.mode"
 values_from = "race_modes"
 
@@ -193,12 +209,14 @@ values_from = "race_modes"
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
+string_id = "OAG_RACE_SPEED_CLASS"
 setting = "race.class"
 values_from = "remix_speed_classes"
 
 [[page.entry]]
 kind = "choice"
 label = "AI DIFFICULTY"
+string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
@@ -212,24 +230,28 @@ disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zon
 [[page.entry]]
 kind = "choice"
 label = "TRACK TITLE"
+string_id = "OAG_REMIX_TRACK_TITLE"
 setting = "remix.track_title"
 values_from = "titles"
 
 [[page.entry]]
 kind = "choice"
 label = "TRACK"
+string_id = "OAG_RACE_TRACK"
 setting = "remix.track"
 values_from = "remix_tracks"
 
 [[page.entry]]
 kind = "choice"
 label = "CRAFT TITLE"
+string_id = "OAG_REMIX_CRAFT_TITLE"
 setting = "remix.craft_title"
 values_from = "craft_titles"
 
 [[page.entry]]
 kind = "choice"
 label = "TEAM"
+string_id = "OAG_RACE_TEAM"
 setting = "remix.team"
 values_from = "remix_teams"
 disabled_by = { setting = "race.mode", value = "zone" }
@@ -243,6 +265,7 @@ disabled_by = { setting = "race.mode", value = "zone" }
 [[page.entry]]
 kind = "choice"
 label = "VARIANT"
+string_id = "OAG_RACE_VARIANT"
 setting = "remix.variant"
 values_from = "remix_variant"
 disabled_by = { setting = "race.mode", value = "zone" }
@@ -250,15 +273,18 @@ disabled_by = { setting = "race.mode", value = "zone" }
 [[page.entry]]
 kind = "action"
 label = "START"
+string_id = "OAG_RACE_START"
 action = "launch_remix"
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "options"
 title = "OPTIONS"
+title_string_id = "OAG_OPTIONS_PAGE_TITLE"
 
 # Two pages and not one, and the line between them is whether the renderer
 # would notice. DISPLAY is the picture's container and how a finished frame
@@ -269,21 +295,25 @@ title = "OPTIONS"
 [[page.entry]]
 kind = "submenu"
 label = "DISPLAY"
+string_id = "OAG_OPTIONS_DISPLAY"
 target = "display"
 
 [[page.entry]]
 kind = "submenu"
 label = "GRAPHICS"
+string_id = "OAG_OPTIONS_GRAPHICS"
 target = "graphics"
 
 [[page.entry]]
 kind = "submenu"
 label = "AUDIO"
+string_id = "OAG_OPTIONS_AUDIO"
 target = "audio"
 
 [[page.entry]]
 kind = "submenu"
 label = "CONTROLS"
+string_id = "OAG_OPTIONS_CONTROLS"
 target = "controls"
 
 # Ours - no disc has ever shipped a pilot editor, because pilots are this
@@ -291,6 +321,7 @@ target = "controls"
 [[page.entry]]
 kind = "submenu"
 label = "AI PILOTS"
+string_id = "OAG_PILOT_PAGE_TITLE"
 target = "pilots"
 
 # Also read from the source. Changing it takes effect on the **next launch**:
@@ -300,16 +331,19 @@ target = "pilots"
 [[page.entry]]
 kind = "choice"
 label = "LANGUAGE"
+string_id = "OAG_OPTIONS_LANGUAGE"
 setting = "language"
 values_from = "languages"
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "display"
 title = "DISPLAY"
+title_string_id = "OAG_OPTIONS_DISPLAY"
 
 # The screens this machine has, read at runtime the way the tracks and the
 # languages are: a definition file cannot know them, and a compositor is free to
@@ -323,6 +357,7 @@ title = "DISPLAY"
 [[page.entry]]
 kind = "choice"
 label = "MONITOR"
+string_id = "OAG_DISPLAY_MONITOR"
 setting = "display.monitor"
 values_from = "monitors"
 
@@ -332,12 +367,14 @@ values_from = "monitors"
 [[page.entry]]
 kind = "choice"
 label = "WINDOW MODE"
+string_id = "OAG_DISPLAY_WINDOW_MODE"
 setting = "display.window_mode"
 values = ["windowed", "borderless"]
 
 [[page.entry]]
 kind = "choice"
 label = "WINDOW SIZE"
+string_id = "OAG_DISPLAY_WINDOW_SIZE"
 setting = "display.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
 
@@ -349,6 +386,7 @@ values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440
 [[page.entry]]
 kind = "choice"
 label = "ASPECT RATIO"
+string_id = "OAG_DISPLAY_ASPECT_RATIO"
 setting = "display.aspect"
 values = ["psp", "ps2", "free"]
 
@@ -366,6 +404,7 @@ values = ["psp", "ps2", "free"]
 [[page.entry]]
 kind = "choice"
 label = "FRONT END STYLE"
+string_id = "OAG_DISPLAY_FRONT_END_STYLE"
 setting = "display.front_end_style"
 values_from = "front_end_styles"
 
@@ -380,6 +419,7 @@ values_from = "front_end_styles"
 [[page.entry]]
 kind = "choice"
 label = "VSYNC"
+string_id = "OAG_DISPLAY_VSYNC"
 setting = "display.vsync"
 values = ["off", "on", "smooth"]
 
@@ -392,6 +432,7 @@ values = ["off", "on", "smooth"]
 [[page.entry]]
 kind = "choice"
 label = "FRAME LIMIT"
+string_id = "OAG_DISPLAY_FRAME_LIMIT"
 setting = "display.frame_limit"
 disabled_by = { setting = "display.vsync", value = "on" }
 values = [
@@ -423,22 +464,26 @@ values = [
 [[page.entry]]
 kind = "choice"
 label = "BRIGHTNESS"
+string_id = "OAG_DISPLAY_BRIGHTNESS"
 setting = "display.brightness"
 values = ["50", "75", "90", "100", "110", "125", "150"]
 
 [[page.entry]]
 kind = "choice"
 label = "GAMMA"
+string_id = "OAG_DISPLAY_GAMMA"
 setting = "display.gamma"
 values = ["60", "80", "90", "100", "110", "120", "140"]
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "graphics"
 title = "GRAPHICS"
+title_string_id = "OAG_OPTIONS_GRAPHICS"
 
 # Which adapter draws the picture. On this page and not DISPLAY because the line
 # between the two is whether the renderer would notice, and *what the renderer
@@ -464,6 +509,7 @@ title = "GRAPHICS"
 [[page.entry]]
 kind = "choice"
 label = "RENDERER"
+string_id = "OAG_GRAPHICS_RENDERER"
 setting = "graphics.renderer"
 values_from = "renderers"
 restart_required = "RESTART THE GAME TO DRAW WITH THIS"
@@ -483,6 +529,7 @@ restart_required = "RESTART THE GAME TO DRAW WITH THIS"
 [[page.entry]]
 kind = "choice"
 label = "RENDER SCALE"
+string_id = "OAG_GRAPHICS_RENDER_SCALE"
 setting = "graphics.render_scale"
 values = ["50", "75", "100", "125", "150", "200"]
 
@@ -505,6 +552,7 @@ values = ["50", "75", "100", "125", "150", "200"]
 [[page.entry]]
 kind = "choice"
 label = "TARGET FPS"
+string_id = "OAG_GRAPHICS_TARGET_FPS"
 setting = "graphics.target_fps"
 values = ["off", "30", "60", "90", "120", "144"]
 warn_when = [
@@ -560,6 +608,7 @@ warn_when = [
 [[page.entry]]
 kind = "choice"
 label = "MINIMUM RESOLUTION"
+string_id = "OAG_GRAPHICS_MINIMUM_RESOLUTION"
 setting = "graphics.minimum_resolution"
 values = ["50", "75", "100", "125", "150", "200"]
 disabled_by = { setting = "graphics.target_fps", value = "off" }
@@ -627,6 +676,7 @@ warn_when = [
 [[page.entry]]
 kind = "choice"
 label = "RECONSTRUCTION"
+string_id = "OAG_GRAPHICS_RECONSTRUCTION"
 setting = "graphics.reconstruction"
 values = ["off", "fxaa", "smaa", "fsr1", "fsr3"]
 warn_when = [
@@ -672,6 +722,7 @@ warn_when = [
 [[page.entry]]
 kind = "choice"
 label = "UPSCALER SHARPNESS"
+string_id = "OAG_GRAPHICS_UPSCALER_SHARPNESS"
 setting = "graphics.upscale_sharpness"
 values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
 disabled_by = { setting = "graphics.reconstruction", values = ["off", "fxaa", "smaa"] }
@@ -710,6 +761,7 @@ disabled_by = { setting = "graphics.reconstruction", values = ["off", "fxaa", "s
 [[page.entry]]
 kind = "choice"
 label = "MSAA"
+string_id = "OAG_GRAPHICS_MSAA"
 setting = "graphics.msaa"
 values = ["off", "4x"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
@@ -725,6 +777,7 @@ disabled_by = { setting = "graphics.reconstruction", value = "fsr3" }
 [[page.entry]]
 kind = "choice"
 label = "MOTION BLUR"
+string_id = "OAG_GRAPHICS_MOTION_BLUR"
 setting = "graphics.motion_blur"
 values = ["off", "low", "medium", "high"]
 
@@ -759,6 +812,7 @@ values = ["off", "low", "medium", "high"]
 [[page.entry]]
 kind = "choice"
 label = "SHADOWS"
+string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
@@ -767,6 +821,7 @@ values = ["off", "blob", "original", "mapped"]
 [[page.entry]]
 kind = "choice"
 label = "ANISOTROPIC FILTERING"
+string_id = "OAG_GRAPHICS_ANISOTROPIC_FILTERING"
 setting = "graphics.anisotropy"
 values = ["off", "2x", "4x", "8x", "16x"]
 
@@ -784,6 +839,7 @@ values = ["off", "2x", "4x", "8x", "16x"]
 [[page.entry]]
 kind = "choice"
 label = "CAMERA VIEW"
+string_id = "OAG_GRAPHICS_CAMERA_VIEW"
 setting = "graphics.camera_view"
 values = ["internal", "close", "far"]
 
@@ -796,6 +852,7 @@ values = ["internal", "close", "far"]
 [[page.entry]]
 kind = "choice"
 label = "FIELD OF VIEW"
+string_id = "OAG_GRAPHICS_FIELD_OF_VIEW"
 setting = "graphics.fov"
 values = ["75", "90", "100", "110", "125", "150", "175"]
 
@@ -814,6 +871,7 @@ values = ["75", "90", "100", "110", "125", "150", "175"]
 [[page.entry]]
 kind = "choice"
 label = "BOOST FOV KICK"
+string_id = "OAG_GRAPHICS_BOOST_FOV_KICK"
 setting = "graphics.boost_fov_kick"
 values = ["0", "8", "16", "32"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
@@ -827,16 +885,19 @@ restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 [[page.entry]]
 kind = "choice"
 label = "PERFORMANCE OVERLAY"
+string_id = "OAG_GRAPHICS_PERFORMANCE_OVERLAY"
 setting = "graphics.perf_overlay"
 values = ["off", "fps", "pacing", "dev"]
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "audio"
 title = "AUDIO"
+title_string_id = "OAG_OPTIONS_AUDIO"
 
 # Two bus rows, because the original's options menu has exactly two volumes and
 # no more: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at `0x08a78668`.
@@ -850,12 +911,14 @@ title = "AUDIO"
 [[page.entry]]
 kind = "choice"
 label = "MUSIC VOLUME"
+string_id = "OAG_AUDIO_MUSIC_VOLUME"
 setting = "audio.music_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
 [[page.entry]]
 kind = "choice"
 label = "SFX VOLUME"
+string_id = "OAG_AUDIO_SFX_VOLUME"
 setting = "audio.sfx_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
@@ -871,6 +934,7 @@ values = ["0", "25", "50", "75", "90", "100"]
 [[page.entry]]
 kind = "choice"
 label = "ANNOUNCER VOLUME"
+string_id = "OAG_AUDIO_ANNOUNCER_VOLUME"
 setting = "audio.speech_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
@@ -887,6 +951,7 @@ values = ["0", "25", "50", "75", "90", "100"]
 [[page.entry]]
 kind = "choice"
 label = "MASTER VOLUME"
+string_id = "OAG_AUDIO_MASTER_VOLUME"
 setting = "audio.master_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
@@ -916,16 +981,19 @@ values = ["0", "25", "50", "75", "90", "100"]
 [[page.entry]]
 kind = "choice"
 label = "MUSIC SOURCE"
+string_id = "OAG_AUDIO_MUSIC_SOURCE"
 setting = "audio.music_source"
 values_from = "music_sources"
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "controls"
 title = "CONTROLS"
+title_string_id = "OAG_OPTIONS_CONTROLS"
 
 # Cross or Start confirms a row below, which waits for the next key pressed
 # and gives it exactly that key: `oag_input::bindings::Bindings` steals the
@@ -949,6 +1017,7 @@ title = "CONTROLS"
 [[page.entry]]
 kind = "binding"
 label = "THRUST"
+string_id = "OAG_CONTROLS_THRUST"
 button = "cross"
 
 [[page.entry]]
@@ -966,31 +1035,37 @@ button = "circle"
 [[page.entry]]
 kind = "binding"
 label = "STEER LEFT"
+string_id = "OAG_CONTROLS_STEER_LEFT"
 button = "left"
 
 [[page.entry]]
 kind = "binding"
 label = "STEER RIGHT"
+string_id = "OAG_CONTROLS_STEER_RIGHT"
 button = "right"
 
 [[page.entry]]
 kind = "binding"
 label = "PITCH UP"
+string_id = "OAG_CONTROLS_PITCH_UP"
 button = "up"
 
 [[page.entry]]
 kind = "binding"
 label = "PITCH DOWN"
+string_id = "OAG_CONTROLS_PITCH_DOWN"
 button = "down"
 
 [[page.entry]]
 kind = "binding"
 label = "AIRBRAKE LEFT"
+string_id = "OAG_CONTROLS_AIRBRAKE_LEFT"
 button = "l"
 
 [[page.entry]]
 kind = "binding"
 label = "AIRBRAKE RIGHT"
+string_id = "OAG_CONTROLS_AIRBRAKE_RIGHT"
 button = "r"
 
 # Not one of the original's eight driving bindings, and listed here anyway: the
@@ -1003,6 +1078,7 @@ button = "r"
 [[page.entry]]
 kind = "binding"
 label = "CAMERA VIEW"
+string_id = "OAG_CONTROLS_CAMERA_VIEW"
 button = "select"
 
 # The one row on this page that is not a key binding, and the reason it sits
@@ -1021,6 +1097,7 @@ button = "select"
 [[page.entry]]
 kind = "choice"
 label = "SIDESHIFT"
+string_id = "OAG_CONTROLS_SIDESHIFT"
 setting = "controls.scheme"
 values = ["veteran", "novice"]
 
@@ -1034,6 +1111,7 @@ values = ["veteran", "novice"]
 [[page.entry]]
 kind = "choice"
 label = "TRIGGERS"
+string_id = "OAG_CONTROLS_TRIGGERS"
 setting = "controls.triggers"
 values = ["airbrakes", "thrust_brake"]
 
@@ -1045,12 +1123,14 @@ values = ["airbrakes", "thrust_brake"]
 [[page.entry]]
 kind = "choice"
 label = "TRIGGER SENSITIVITY"
+string_id = "OAG_CONTROLS_TRIGGER_SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
 
 [[page.entry]]
 kind = "back"
 label = "BACK"
+string_id = "OAG_MENU_BACK"
 
 [[page]]
 id = "pilots"

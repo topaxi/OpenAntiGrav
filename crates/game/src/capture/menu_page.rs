@@ -225,6 +225,12 @@ pub(super) fn menu_page(
         backdrop,
         frame,
     );
+    // What the `AXIS` row currently means, read live off `model`'s own rows -
+    // `None` off any page but AI PILOTS. The one function the live session
+    // draws this line through too; see `crate::pilots::axis_preview_for`'s
+    // own doc.
+    let axis_preview = crate::pilots::axis_preview_for(&model, Some(strings));
+
     // A modal prompt over the page, when one was asked for.
     //
     // **The only way to look at one headlessly.** `--menu-page` runs no clock
@@ -264,14 +270,24 @@ pub(super) fn menu_page(
                 .map_or_else(|| "winston".to_string(), |entry| entry.name.clone())
         };
         let mut list = layers.flatten();
+        if let Some(text) = &axis_preview {
+            list.push(crate::prompt::axis_preview_draw(&model, skin, text));
+        }
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
     }
     let Some(phase) = phase else {
-        return Ok(layers.flatten());
+        let mut list = layers.flatten();
+        if let Some(text) = &axis_preview {
+            list.push(crate::prompt::axis_preview_draw(&model, skin, text));
+        }
+        return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what
     // this draws is a frame of the real transition rather than a picture of one.
+    // No axis-preview line here, matching `MenuStage::render`'s own gate:
+    // the row list is a zoomed, mid-tween picture at this point, and the
+    // preview's position is computed against the still one.
     let shape = crate::menu::Transition::default();
     let mut tween = crate::anim::Tween::new(1.0);
     tween.advance(phase.clamp(0.0, 1.0));

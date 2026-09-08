@@ -1,6 +1,7 @@
 //! Modal overlays over the menus: an on-screen [`Keyboard`], a yes/no
 //! [`Confirm`], and [`message_draw`] for a status line neither of those two
-//! fit - see its own doc for why a third shape exists.
+//! fit - see its own doc for why a third shape exists. [`axis_preview_draw`]
+//! is the odd one out: not modal at all, and documented on itself for why.
 //!
 //! Like [`crate::menu`], this holds no GPU handles, opens no files and reads
 //! no clock. It takes an [`Input`] snapshot in and emits an [`Outcome`] and a
@@ -68,7 +69,7 @@
 
 use crate::frontend::{Align, Draw};
 use crate::input::{Button, Input};
-use crate::menu::Skin;
+use crate::menu::{Menu, Skin};
 
 /// What a prompt did on a tick.
 ///
@@ -591,6 +592,58 @@ pub fn message_draw(skin: &Skin, text: &str) -> Vec<Draw> {
     ]
 }
 
+/// The AI PILOTS page's own live line under its rows: what `text` (off
+/// [`crate::pilots::axis_preview_for`]) says the axis currently on the
+/// `AXIS` row means.
+///
+/// **Not modal, and not [`message_draw`]'s shape either.** Nothing here asks
+/// a question or blocks input - the rows behind it keep taking Cross and the
+/// d-pad - so this draws one more [`Draw::Text`] over the page rather than a
+/// scrim and a panel.
+///
+/// **Positioned under whichever row is actually last on screen, not a fixed
+/// row count** - [`Menu::scroll`] and [`Menu::visible_rows`] rather than
+/// `menu::rows::draw`'s own `pub(super)` internals, because the AI PILOTS
+/// page has nine rows and only seven show at once on Pulse's own measured
+/// pitch. Both are `pub`, so this is a second, independent computation of
+/// the same "how many rows are actually drawn" fact `menu::rows::draw` makes
+/// for itself, not a shared one reached through a new dependency between two
+/// otherwise separate modules.
+///
+/// **Pulled up off `menu::rows::draw`'s own warning/restart slot, and drawn
+/// smaller - both empirically, off a real capture.** That slot is sized for
+/// one line at [`NOTE_SCALE`] clearing the bottom of the 272-pixel screen; it
+/// says nothing about Pulse's own bottom-of-screen mark (`frame.marks`,
+/// drawn on every page regardless of content), which a capture of this page
+/// showed sitting in most of that same room. [`AXIS_PREVIEW_SCALE`] and the
+/// upward nudge below are this function's own answer to a gap that turned
+/// out to be under one line tall - see that constant's own doc for the
+/// capture that found it.
+///
+/// **Chosen, not measured**, on the same footing as [`SCRIM`] and
+/// `menu_stage`'s own `PAUSE_OVERLAY`: nothing on either disc has an axis to
+/// preview, so there is nothing to recover a position from. Reuses [`NOTE`],
+/// the same amber a live remark already draws in [`Keyboard::draw`]'s own
+/// note, rather than inventing a second colour. See
+/// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.
+#[must_use]
+pub fn axis_preview_draw(menu: &Menu, skin: &Skin, text: &str) -> Draw {
+    let entries = menu.page().entries.len();
+    let shown = menu
+        .visible_rows()
+        .min(entries.saturating_sub(menu.scroll()));
+    Draw::Text {
+        x: skin.menu_x() - 18.0,
+        y: skin.first_row_y() + shown as f32 * skin.row_pitch() - skin.row_pitch() * 0.18,
+        scale: skin.row_scale() * AXIS_PREVIEW_SCALE,
+        color: NOTE,
+        border: None,
+        align: Align::Left,
+        text: text.to_string(),
+        wrap_width: None,
+    }
+}
+
 /// What everything outside the panel is dimmed with.
 ///
 /// **Ours, chosen not measured**, on the same footing as `menu_stage`'s own
@@ -614,6 +667,19 @@ const NOTE: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// How small a note is drawn, as a multiple of a row's own scale.
 const NOTE_SCALE: f32 = 0.66;
+
+/// How small [`axis_preview_draw`]'s own line is drawn, smaller again than
+/// [`NOTE_SCALE`].
+///
+/// **Tuned against a real capture, not derived.** The AI PILOTS page's own
+/// gap between its last visible row and Pulse's own bottom-of-screen mark
+/// (`frame.marks`, drawn regardless of page - a real capture of a page with
+/// no note at all still shows it, at the same position) is under one line
+/// tall at [`NOTE_SCALE`], which is why this is its own, smaller constant
+/// rather than a reuse: see `docs/architecture/menus.md`'s "AI PILOTS: the
+/// axis preview" section for the capture that found it and the margin this
+/// was chosen against.
+const AXIS_PREVIEW_SCALE: f32 = 0.5;
 
 /// How many lines of pitch the note is given, wrapped or not.
 ///

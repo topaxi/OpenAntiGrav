@@ -324,6 +324,13 @@ impl MenuStage {
         // gap `docs/architecture/menus.md`'s Rebinding section names as this
         // project's own, not the disc's.
         binding_prompt: Option<&str>,
+        // What the `AXIS` row on the AI PILOTS page currently means, off
+        // `Session::draw`'s call site - this stage holds no `StringTable` of
+        // its own to read `pilots::axis_preview_for` with. `Some` draws one
+        // more line under the rows, in the same slot a warning or a restart
+        // note would use; see `oag_game::prompt::axis_preview_draw`'s own
+        // doc for why that is not `message_draw`'s modal shape.
+        axis_preview: Option<&str>,
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -399,6 +406,21 @@ impl MenuStage {
                 &|text| font::measure(&self.text_atlas, text),
                 self.marquee.elapsed(),
             ),
+        };
+        // The AI PILOTS page's own live line, off `Session::draw`'s call
+        // site. Skipped mid-transition (`self.change.is_some()`), the same
+        // guard the marquee above uses and for the same reason: the row
+        // list it is positioned against is a zoomed, fading picture during a
+        // tween, not the still one `oag_game::prompt::axis_preview_draw`
+        // reads `self.menu`'s scroll and visible-row count off.
+        let list: Vec<Draw> = match (axis_preview, self.change.is_none()) {
+            (Some(text), true) => list
+                .into_iter()
+                .chain(std::iter::once(oag_game::prompt::axis_preview_draw(
+                    &self.menu, &self.skin, text,
+                )))
+                .collect(),
+            _ => list,
         };
         // The pause overlay, drawn under the rows and over everything else:
         // first in the list, since the list paints back to front. Ahead of

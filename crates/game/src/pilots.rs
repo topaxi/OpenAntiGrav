@@ -60,6 +60,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::language::StringTable;
+use crate::menu;
 use anyhow::{Context, Result, bail};
 use oag_ai::{Lean, Pilot, Span};
 use serde::Deserialize;
@@ -325,6 +327,119 @@ pub fn axis_accessor(axis: &str) -> Option<fn(&Pilot) -> Span> {
     AXES.iter()
         .find(|(name, _)| *name == axis)
         .map(|(_, accessor)| *accessor)
+}
+
+/// A one-line, plain-English gloss for one axis - what it does and the range
+/// [`limit`] allows for it - and the `string_id` a translation may override it
+/// with.
+///
+/// **Chosen, not measured, and carries no confidence score.** The original
+/// has no pilots and no such preview; every word here is this project's own
+/// presentation of numbers [`Pilot`]'s own doc comments and [`limit`] already
+/// state, not a claim recovered from either disc. See
+/// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.
+///
+/// Deliberately short of the full explanation on [`Pilot`]'s own fields -
+/// this is a glance, not the manual, and every axis it names is one [`AXES`]
+/// also names, so the two cannot fall out of step silently:
+/// `every_axis_has_a_preview` checks the count directly.
+///
+/// `None` when `axis` is not one [`AXES`] names, or is `"lean"` - a `Lean` is
+/// not a [`Span`], the `AXIS` row can never land on it, and a line about a row
+/// that cannot be selected would be a preview of nothing on screen.
+#[must_use]
+fn axis_gloss(axis: &str) -> Option<(&'static str, String)> {
+    let (id, meaning): (&'static str, &'static str) = match axis {
+        "line_bias" => ("OAG_PILOT_AXIS_LINE_BIAS", "OFFSET FROM THE LINE"),
+        "wander" => ("OAG_PILOT_AXIS_WANDER", "DRIFT AROUND THAT OFFSET"),
+        "wander_period" => ("OAG_PILOT_AXIS_WANDER_PERIOD", "TICKS PER DRIFT STEP"),
+        "look" => ("OAG_PILOT_AXIS_LOOK", "LOOKAHEAD MULTIPLIER"),
+        "commitment" => (
+            "OAG_PILOT_AXIS_COMMITMENT",
+            "CORNERING GRIP MULTIPLIER, CAPPED AT THE HULL'S LIMIT",
+        ),
+        "patience" => (
+            "OAG_PILOT_AXIS_PATIENCE",
+            "BRAKE-TIMING MULTIPLIER, BELOW 1 IS LATER",
+        ),
+        "trail" => ("OAG_PILOT_AXIS_TRAIL", "ROTATION-GRIP MULTIPLIER"),
+        "width" => ("OAG_PILOT_AXIS_WIDTH", "CORRIDOR-USE MULTIPLIER"),
+        "inside" => (
+            "OAG_PILOT_AXIS_INSIDE",
+            "INSIDE-LINE BIAS, SIGNED BY THE CORNER",
+        ),
+        "courtesy" => ("OAG_PILOT_AXIS_COURTESY", "YIELDS TO A CHASER"),
+        "defence" => ("OAG_PILOT_AXIS_DEFENCE", "BLOCKS A CHASER"),
+        "caution" => ("OAG_PILOT_AXIS_CAUTION", "LIFTS OFF FOR TRAFFIC AHEAD"),
+        "ram" => ("OAG_PILOT_AXIS_RAM", "RAMS A RIVAL LEVEL WITH IT"),
+        "provocation_ticks" => (
+            "OAG_PILOT_AXIS_PROVOCATION_TICKS",
+            "GRUDGE LENGTH, IN TICKS",
+        ),
+        "trigger" => ("OAG_PILOT_AXIS_TRIGGER", "FIRING READINESS"),
+        "roll_chance" => (
+            "OAG_PILOT_AXIS_ROLL_CHANCE",
+            "BARREL-ROLL PROBABILITY, ONCE PER FLIGHT",
+        ),
+        "roll_floor" => (
+            "OAG_PILOT_AXIS_ROLL_FLOOR",
+            "SHARE OF SHIELD KEPT BACK FROM A ROLL",
+        ),
+        "roll_airtime" => (
+            "OAG_PILOT_AXIS_ROLL_AIRTIME",
+            "SECONDS OF FLIGHT BEFORE A ROLL IS WORTH IT",
+        ),
+        _ => return None,
+    };
+    let (min, max) = limit(axis);
+    let unit = match axis {
+        "wander_period" | "provocation_ticks" => " TICKS",
+        "roll_airtime" => " SECONDS",
+        _ => "",
+    };
+    Some((id, format!("{meaning}. RANGE {min} TO {max}{unit}.")))
+}
+
+/// [`axis_gloss`], resolved through `strings` and read live off `model`'s own
+/// `AXIS` row - so this tracks whatever a player has AXIS on. Deliberately
+/// crate-only rather than living beside `session::pilot_editor`'s other pure
+/// functions: the binary's `menu_stage.rs` and this crate's own
+/// [`crate::capture::menu_page`] both need it, and the lib cannot depend on
+/// the binary - so this is the one function both call, in the crate both can
+/// reach.
+///
+/// `None` off a page with no `pilot.axis` row - AXIS is not selected, or this
+/// is not the AI PILOTS page - and off `"lean"`, which [`axis_gloss`] already
+/// refuses. Both are honest absences: nothing is drawn rather than a stale or
+/// invented line.
+///
+/// **`model.page()`, never `model.definition().pages`.** The AI PILOTS page's
+/// own `AXIS` row stays supplied and seeded in the definition even while a
+/// different page is open - `capture::menu_page` supplies every source
+/// unconditionally, and the live session never tears a page's rows down on
+/// leaving it either - so a search across every page rather than the one on
+/// screen found and drew this line **on every other page too**, GRAPHICS
+/// included, the first time this was captured. Caught by looking at the
+/// capture rather than by the type system: `Definition::pages` and `Menu::page`
+/// are both `&[Entry]`-shaped and the compiler cannot tell "the wrong page's
+/// rows" from "the right one's".
+#[must_use]
+pub fn axis_preview_for(model: &menu::Menu, strings: Option<&StringTable>) -> Option<String> {
+    let axis = model
+        .page()
+        .entries
+        .iter()
+        .find(|entry| entry.setting() == Some("pilot.axis"))
+        .and_then(menu::Entry::chosen)
+        .and_then(|value| match value {
+            menu::Value::Text(text) => Some(text),
+            menu::Value::Flag(_) => None,
+        })?;
+    let (id, english) = axis_gloss(&axis)?;
+    match strings.and_then(|table| table.get(id)) {
+        Some(text) => Some(text.to_string()),
+        None => Some(english),
+    }
 }
 
 /// Edits one axis of a pilot file **without disturbing anything else in it**.
