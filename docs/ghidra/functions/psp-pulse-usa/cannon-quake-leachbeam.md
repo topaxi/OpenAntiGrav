@@ -1075,6 +1075,21 @@ expiry.
 `Texture_LoadEffectSurfaces` (`0x0890cc1c`) into `DAT_08af2804` through the same
 `FUN_089277ac` loader `Cannon_LoadTextures` uses for its two `.mip`s.
 
+**Both resolve in `Data.wad` on the USA pressing**, checked rather than assumed:
+
+```sh
+cargo run -q -p oag-tools --bin oag-wad -- cat \
+    'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' \
+    'Data\Tex\Weapons\leachbeam_surface.mip'
+```
+
+returns 2,064 bytes opening `20 00 20 00 08 00 01 00` - a 32x32, 8-bit
+paletted `.mip`, which is exactly `16 + 32*32 + 256*4`. Its sibling
+`Data\Tex\Weapons\absorb_surface.mip` (string at `0x08a88378`, read whole out
+of memory rather than trusted from the decompiler's truncated
+`s_Data_Tex_Weapons_absorb_surface__`) is the same 2,064 bytes and the same
+header.
+
 **The directory is the finding.** The Cannon's textures live under
 `Data\Weapons\Textures\`; this one lives under `Data\Tex\Weapons\`. Hashing
 candidate names against `Data.wad` under the Cannon's layout - the technique
