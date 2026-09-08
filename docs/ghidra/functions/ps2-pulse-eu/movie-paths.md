@@ -104,10 +104,11 @@ Two things, both of which this build had wrong:
    *with* the extension, so nothing is appended there. This build appended
    anyway and asked for `Data\Movies\Backdrop.ipf.PMF`. Fixed in
    `crate::screen::Movie::entry_name`.
-2. **The XML's names are not filenames, and the mapping is per-region.** A
-   loader that goes looking for `Backdrop.ipf` on the disc finds nothing.
-   `crate::boot::LOOSE_MOVIES` is this table, with `512` first because the disc
-   this project reads is EU/PAL.
+2. **The XML's names are not filenames.** A loader that goes looking for
+   `Backdrop.ipf` on the disc finds nothing. `oag_pulse::movies::LOOSE_MOVIES`
+   is this table, with `640` first: the pick is a refresh rate the player chose
+   rather than a region, so both cuts are legitimate here and this engine
+   prefers 60 Hz.
 
 ## Not read
 
