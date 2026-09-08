@@ -217,10 +217,15 @@ pub mod ships {
     /// and the model's textures are `feis_phantom1_shinemap.tga` and friends -
     /// a separate paint set, not a re-skin of the base hull. Confidence 90.
     ///
-    /// **Not determined: what selects it.** No call site has been read, so
-    /// whether the swap happens on the class alone, on an unlock, or somewhere
-    /// else entirely is unknown; nothing here should be wired to a class
-    /// comparison on the strength of the name.
+    /// **What selects it is mostly read, not fully.** The call site
+    /// (`FUN_08927dac`/`FUN_08927694`) reads one flag byte out of a synced
+    /// ad-hoc-multiplayer network object (`sceNetAdhoc*` calls confirmed on
+    /// the object's own init routine) - not a class comparison - but which
+    /// send-side write decides *this* player's own flag before it is
+    /// broadcast is still unread. See "`Phantom` is the speed class, and what
+    /// selects the model is now partly read" in `ship-models.md`. Nothing
+    /// here should be wired to a class comparison on the strength of the
+    /// name.
     ///
     /// Present for the **eight core racing teams only** - not `Medievil`, not
     /// `Zone`, not `Zone_01`, all three of which are unlockable or Zone-mode

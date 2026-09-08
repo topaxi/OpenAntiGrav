@@ -93,13 +93,18 @@ the archive answered a name this project composed and handed back a payload that
 spells the same team and the same leaf in Maya's words. A CRC collision or a
 mis-split template would not survive that.
 
-### `Phantom` is the speed class, and what selects the model is unread
+### `Phantom` is the speed class, and what selects the model is now partly read
 
-**Confidence 90 for the identification, and the trigger is not determined.**
-A per-class model is something **Pulse** does not author - its own recovered
-template set is mode-keyed (`Ship`/`Zone`/`shipboost`/`Zoneboost`/`shipshield`)
-rather than class-keyed. **HD and 2048 were not checked for one**, so that
-contrast is between two titles and is not a claim about the lineage.
+**Confidence 90 for the identification** (unchanged). The call site is now
+found, on both pressings, unblocked by the 2026-09-07 PSP relocation patch: a
+direct `get_xrefs_to 0x08a7a5e4` (`psp-pure-usa`) - never usable before that
+patch, see "Technique" above - returns exactly one caller, `FUN_08927dac`
+(`psp-pure-eu`'s structural counterpart, confirmed field-offset-for-field-offset
+identical: `FUN_08927694`). Both are early-exit on an unchanged team
+(`*(param_1+0x8b8) == param_2 -> return`), release the live model and wreck
+instances, then rebuild both - this is the craft's "switch active team" /
+model-(re)load function, not a per-frame update. **Not renamed** - see "Do not
+rename yet" below.
 
 `PHANTOM` is the top rung of the five-rung ladder Pure's `handlingstats.xml`
 files author (`docs/formats/pure-status.md`), and the executable carries
@@ -109,9 +114,122 @@ a re-skin: `Data\Ships\Feisar\Textures\feis_phantom1_shinemap.tga` through
 `feis_phantom3_shinemap.tga` plus `feis_phantom_lod.tga`, against the base
 hull's `feis_01..03_shinemap.tga` and `lod1.tga`.
 
-**No call site has been read.** Whether the swap keys on the selected class, on
-an unlock flag, or on something else is unknown, and nothing should be wired to
-a class comparison on the strength of the name.
+**The gate is not a class comparison - correct that assumption, don't just
+retire it.** `FUN_08927dac`'s decompile (both pressings agree instruction for
+instruction, modulo relocated addresses):
+
+```c
+cVar6 = DAT_08b1742c;                              // default: off
+if ((8 < DAT_08b173e4) &&                          // field +0x1c of the
+    (cVar6 = '\0', DAT_08b174fc != 0)) {            // global struct at
+  iVar5 = FUN_08804bf8(&DAT_08b173c8,               // DAT_08b173c8, > 8
+                        *(int *)(param_1 + 0x480));
+  if (*(char *)(DAT_08b174fc + iVar5 + 0x90) == 1) {
+    cVar6 = '\x01';                                 // -> Phantom.vex
+  }
+}
+```
+
+So the Phantom swap reads one precomputed flag byte, at `DAT_08b174fc + iVar5
++ 0x90`, where `iVar5` comes from a small lookup helper
+(`FUN_08804bf8(base, idx) = *(base + idx*4 + 0x230)`) keyed on the craft's own
+`+0x480` field (set from the Ship constructor's third argument, `FUN_089261ac`
+(`psp-pure-usa`) / its EU counterpart). **The byte could still be written from
+the selected speed class upstream** - this decompile only proves the *read*
+side, not that the write side ignores class. Don't write "not class-keyed"
+without reading a writer.
+
+**`DAT_08b174fc` is populated by network session setup, which reframes the
+question.** `get_xrefs_to 0x08b174fc` (`psp-pure-usa`) returns four writers;
+the first read, `FUN_0889aad8`, is short enough to be conclusive on its own:
+
+```c
+FUN_08901a6c(&DAT_08b5c6c0, 1, 2, 0, 0, 30000, 0, auStack_bc, "NetGlobals", DAT_08b5c6bc);
+FUN_08901c54(&local_c0, DAT_08b5c6c0);
+DAT_08b174fc = *(undefined4 *)(local_c0 + 0x1c);
+```
+
+`"NetGlobals"` is a literal argument to what reads as a networked/replicated
+object registration call. `DAT_08b174fc` is non-null only once that object
+exists, and `DAT_08b173e4` (the same struct's `+0x1c` field, thresholded `> 8`
+here) is compared elsewhere against 5, 6, 7 and `0xb` (11) in
+`FUN_0892195c` - too many distinct values for a boolean, reads as a mode/session
+kind enum, not a class count.
+
+**The other three writers confirm it, rather than just corroborating it -
+`DAT_08b174fc` is ad-hoc (Link) multiplayer state, not a hedge any more.**
+
+- `FUN_0889dcec` **is** the ad-hoc bring-up routine: it logs `"::InitAdhoc()"`
+  and its own step names (`"InitAdhoc - sceNetInit()"`,
+  `"...sceNetAdhocInit()"`, `"...sceNetAdhocctlInit()"`,
+  `"...sceNetAdhocctlAddHandler()"`, `"...sceNetAdhocctlConnect()"`) around
+  literal `sceNet*` PSP ad-hoc Wi-Fi calls, and zeroes `DAT_08b174fc` at entry.
+  There is no reading of this as anything but network-session setup.
+- `FUN_0889aecc` registers the synced object by name -
+  `FUN_08901efc(&DAT_08b5c6bc, "NetObjectGlobalsStructure", 0xb0)` - then binds
+  two callbacks to it, `FUN_08901f8c(DAT_08b5c6bc, FUN_0889ac74, FUN_0889ad1c,
+  &LAB_0889aeb4)`. Before that it declares fourteen named fields inside the
+  0xb0-byte block via a `FUN_0890192c(&field_id, offset, ...)` pattern - among
+  them `DAT_08aac7bc` at offset `0xc` and `DAT_08aac7c0` at offset `0x90`,
+  the two offsets the read side actually touches.
+- `FUN_0889ac74` and `FUN_0889ad1c` are the two registered callbacks, and both
+  do the same copy: `FUN_08804c38(&DAT_08b173c8, slot, *(int*)(DAT_08b174fc +
+  0xc + slot*4))` for `slot` in `0..8` - `FUN_08804c38(base, idx, val) =
+  *(base + idx*4 + 0x230) = val`, the exact setter counterpart of the getter
+  the Phantom check calls (`FUN_08804bf8`). `FUN_0889ad1c` additionally takes
+  a `param_3` field-id and only re-copies when it is `-1` (full sync) or equal
+  to `DAT_08aac7bc` (the `+0xc` field specifically) - i.e. this is a
+  per-network-object-field change handler, and the 8-slot table is one field
+  of it.
+
+**Reading the whole chain together**: an ad-hoc session broadcasts a 176-byte
+`NetObjectGlobalsStructure`; its `+0xc..+0x2c` holds one 4-byte value per of
+(at least) 8 player slots, which every participant copies into a local table
+at `&DAT_08b173c8+0x230` on every full or partial sync. A `Ship`'s own
+`+0x480` field (set from the constructor's third argument, so per-craft/slot)
+indexes that table to get an offset, which is then added to `+0x90` in the
+*synced block itself* (not the local table) to read one flag byte. **`+0x90`
+sits inside a second 8-long span the same registration names**
+(`DAT_08aac7c0`, also offset `0x90`) - consistent with one Phantom-flag byte
+per slot, packed at `DAT_08b174fc+0x90 .. +0x97`, looked up via the `+0xc`
+table's per-slot value rather than the slot index directly.
+
+**What is still open, narrower than before**: nothing read so far writes this
+byte on the *local* player's own slot before the object is broadcast - every
+function on this trail is a receive/apply path (`FUN_0889ac74`/`FUN_0889ad1c`
+fire when a remote update arrives, or the local session's own copy of a field
+it just set is echoed back). Whatever decides "this player has Phantom" -
+an unlock check, `handlingstats.xml`'s `PhantomTweak`/class threshold, or
+something else - is a **send-side** write to `DAT_08b174fc+0x90+n` that has
+not been located. Confidence for the read chain above: 85 (every offset and
+call cross-checked against a second, independent source - the field
+registration in `FUN_0889aecc`). Confidence for "the swap is Link-only": 80 -
+`DAT_08b174fc` is null outside a session (every read site null-checks it) and
+`DAT_08b173e4 > 8` is a second, independent gate, but the enum's own values
+are still unnamed so "every value `> 8` really is a Link submode" is not
+individually confirmed.
+
+**`FUN_0892195c`'s own call sites to `FUN_08927dac` are a next/prev craft
+cycler reading `strcasecmp` against a list, gated on `DAT_08b173e0` walking
+0..4** - reads like a dev-only team browser, not shipping flow, which (if
+right) makes the Ship constructor the only *shipping* caller and the flag at
+`+0x90` something prepared before a race starts, not computed live.
+Hypothesis, not confirmed - noted so it isn't re-derived from scratch.
+
+### Do not rename yet
+
+`FUN_08927dac`/`FUN_08927694` are not in `names.tsv`. The read above is solid
+(structurally identical on both pressings, matches every known template
+address and offset), but "what writes `+0x90`" is still open, and a name like
+`Ship_LoadModelsForTeam` would want that closed first rather than guessed at
+`_q` confidence. Also: **do not call a Ghidra rename tool on `psp-pure-usa`
+right now without first switching to it** - `list_open_programs`'s
+`is_current` can point at an unrelated program (`ps3-hdfury-eu` did, this
+session), and `rename_function_by_address`/`create_function` silently act on
+whichever program the bridge considers active regardless of the `program`
+field passed - see HANDOVER.md, "The Ghidra bridge's `switch_program` can
+silently no-op." Land a `names.tsv` row and apply through `just apply-names`
+instead of a live rename.
 
 ### `VR` is a whole alternate presentation set, and its meaning is not determined
 

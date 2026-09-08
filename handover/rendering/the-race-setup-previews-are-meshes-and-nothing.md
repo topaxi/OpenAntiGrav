@@ -34,18 +34,36 @@ assumed. See the docs page for the full evidence and the confidence scores.
 | Pulse PSP | `<location>\FE\forward.vex` / `reverse.vex` | `<team>\<variant>_FE.vex` |
 | Pulse PS2 | same names, own geometry | same names, own geometry |
 | HD / Fury | `<Model name="TrackModel">` | `<Model name="ShipModel">` |
-| Pure | unresolved | unresolved, a candidate exists |
+| Pure | unresolved | call site found 2026-09-08, camera/wiring still open |
 
 ## Open
 
 - **Nothing in this build draws either preview.** `assets/ui/menu.toml`'s
   `race` page has no preview at all, and neither does `remix`.
-- **Pure's two previews are unresolved.** For the craft, `%s\Phantom.vex` and
-  `%s\VR\Phantom.vex` sit inside the `fe::TeamSelection_Screen`..`TeamSelection`
-  string span in `psp-pure-eu/BOOT.BIN`, and `Data\Ships\Feisar\Phantom.vex`
-  resolves in `Data.wad` - but no xref was recovered, so the association is
-  string-pool adjacency alone. Confidence 45. **Do not build on it.** For the
-  track, nothing was found at all.
+- **Pure's craft preview call site is found, 2026-09-08** (spun off a
+  `wipeout-pure-races-on-pulses-physics-and-what.md` session that landed on it
+  while reading `psp-pure-eu`): `get_xrefs_to 0x08a76654` (the `%s\Phantom.vex`
+  copy beside `%s\VR\Phantom.vex` at `0x08a76664`) returns one caller,
+  `FUN_08951bd0`. It calls `Screen_FindElementByPath` (the same helper
+  `race-box-screens.md` already names on Pulse), matches the selection against
+  a list by `strcasecmp` on a `+0x7c` field, then composes `%s\VR\Phantom.vex`
+  or `%s\Phantom.vex` from `*(matched_record + 0x9c)` gated on two byte flags
+  on the *screen* object itself (`+0xe1`, `+0xe2`) - not on the craft's speed
+  class. **`+0x9c` being the team `location` string is inferred by the same
+  `+0x7c`/`+0x9c` field-pair pattern
+  `wipeout-pure-races-on-pulses-physics-and-what.md`'s session found on the
+  in-race side, not independently confirmed here with `read_memory`** -
+  confidence 65 pending that. If the file the screen composes doesn't resolve,
+  it falls back to unlock/livery UI (marks a `Livery` element's flags), not to
+  `Ship.vex` - a different fallback than the in-race loader
+  (`ship-models.md`) uses. **This is a different function from the in-race
+  model loader** (`FUN_08927dac`/`FUN_08927694`, see that thread) - two
+  separate Phantom-selection code paths, one per screen/context, not one
+  shared mechanism. Full decompile is not yet written up on any docs page -
+  re-run `get_xrefs_to 0x08a76654` on `psp-pure-eu` then `decompile_function`
+  on the one caller it returns to reproduce it, settle the `+0x9c` question
+  above, and write it up before wiring anything. For the track preview,
+  nothing was found at all.
 - **What camera the originals frame these meshes with is still unmeasured.**
   HD states its own (`OriginX="1220" OriginY="412" nearZ="1.0" z="-24.0"
   RotX="0.4" RotY="-0.5"` on `ShipModel`); the two PSP titles author no
@@ -77,12 +95,11 @@ assumed. See the docs page for the full evidence and the confidence scores.
    (`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`) applies to it as it
    does to the in-race hull. If it does, the livery cycler and the preview are
    one mechanism.
-3. Settle Pure's craft preview, either by capturing `Team Selection` in PPSSPP
-   (`docs/reverse-engineering/ppsspp-debugger.md`) or by decompiling the
-   function that references `0x08a76654`. **The PSP relocation patch landed
-   2026-09-07 across all four PSP databases, both Pure ones included**
-   (`HANDOVER.md`, "Traps that are live"), so this decompile is unblocked and
-   not yet attempted. A capture is still far cheaper and settles the track
-   preview at the same time.
+3. **Partly done, 2026-09-08**: the function referencing `0x08a76654`
+   (`FUN_08951bd0` on `psp-pure-eu`) is found and decompiled - see the Open
+   item above for what it shows and what's still unsettled (the `+0x9c` field
+   identity, a docs page). A PPSSPP capture of `Team Selection`
+   (`docs/reverse-engineering/ppsspp-debugger.md`) is still the cheaper way to
+   settle the *track* preview, which this session did not touch.
 4. Only then wire anything. A preview needs a camera, and the camera is the
    part that is not yet measured on the PSP titles.
