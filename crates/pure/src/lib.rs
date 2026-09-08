@@ -130,10 +130,17 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Pure authors a frame on `FE Screen` too - rule lines, scroll arrows, a
     // squiggle-text date strip - the same idiom as Pulse's and HD's, once
     // `oag_game::screen`'s widget collection recurses into
-    // `<BackgroundController>` the way it does `<Viewport>`/`<Animation>`. Its
-    // own background image is not part of that win: `BackgroundImage` and
-    // `BackgroundTopRightImage` name no `src` on either pressing, so they
-    // still draw nothing - see `frontend::states::FE_SCREEN`'s own doc.
+    // `<BackgroundController>` the way it does `<Viewport>`/`<Animation>`.
+    // Neither of its two images names a `src` on either pressing.
+    // `BackgroundTopRightImage` is filled by `hashes::MENU_TOPRIGHT_LOGO`
+    // through `frontend::FALLBACK_IMAGES`, the same content-scan mechanism
+    // `TitleFrame` uses. `BackgroundImage` - the full-screen backdrop - stays
+    // unfilled: the same scan that found the other two checked every
+    // `480x272`/`512x256`/`512x512`-shaped candidate against a real `Main
+    // Menu` capture and none matched it, because the real capture's
+    // background is genuinely flat white with no picture at all. See
+    // `frontend::states::FE_SCREEN`'s own doc and
+    // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
 };
 
@@ -185,6 +192,34 @@ pub mod hashes {
     /// this hash to this widget is still unread (Ghidra territory, not taken
     /// this pass).
     pub const TITLE_LOGO: u32 = 0x3af1_8d90;
+
+    /// `FE Screen->BackgroundTopRightImage`'s own texture: the "ワイプアウト"
+    /// katakana wordmark beside the swoosh/arrow logo, `256x32`, 8bpp indexed.
+    ///
+    /// **Names no `src` either** - `<Image name="BackgroundTopRightImage">
+    /// <Values x="252" y="3" width="256" height="32" U="0" V="0"
+    /// TxtrWidth="256" TxtrHeight="32">`, nested in the same
+    /// `<BackgroundController>` as [`TITLE_LOGO`]'s sibling gap,
+    /// `BackgroundImage`. Found the same way: a full image-content scan of
+    /// `Data.wad`/`FE.wad`/`FEData.wad`, filtered this time to the shape a
+    /// full-screen backdrop or a `256x32` corner graphic would decode as,
+    /// checked by eye against a real captured `Main Menu` frame. See
+    /// `docs/formats/pure-status.md` for the scan and the sibling
+    /// `BackgroundImage` gap it did **not** resolve.
+    ///
+    /// **Entry 27 of `Data.wad`, `Data.wad`-only** - not in `FE.wad` or
+    /// `FEData.wad`, checked by hash across all three, the same shape as
+    /// `TITLE_LOGO`'s own evidence. `9,232` bytes matches `256*32 + 256*4`
+    /// palette `+ 16` header exactly, with no padding to account for -
+    /// `256x32` is already a power of two on both axes, unlike `TitleFrame`'s
+    /// `512`-wide crop of a `480`-wide widget.
+    ///
+    /// Byte-identical on both pressings (`pure-psp-usa.chd` and
+    /// `pure-psp-eu.chd`), at the same hash. Confidence **85**, the same basis
+    /// as `TITLE_LOGO`: an exact visual match to a real captured frame and
+    /// agreement across both pressings, short of 90 because the runtime
+    /// mechanism that assigns this hash to this widget is still unread.
+    pub const MENU_TOPRIGHT_LOGO: u32 = 0x7ba7_8aca;
 }
 
 /// The archives a PSP Pure disc ships, relative to the image root.

@@ -803,8 +803,75 @@ pass). `crates/game/tests/pure_boot_ground_truth.rs`'s
 decoded size against both real discs.
 
 `FE Screen->BackgroundImage`/`BackgroundTopRightImage` are the same shape of
-gap and remain unresolved: no candidate for either has been checked against a
-captured frame, so nothing was added to `FALLBACK_IMAGES` for them.
+gap. The scan below, run again and sized for these two, resolved one and ruled
+out every candidate for the other.
+
+### `FE Screen`'s corner logo, `BackgroundTopRightImage`
+
+`FE Screen->BackgroundController` wraps two more `src`-less images, the same
+class of gap `TitleFrame` is: `BackgroundImage` (`width="512" height="272"
+TxtrWidth="480" TxtrHeight="272"`, no `x`/`y`, so a full-screen backdrop) and
+`BackgroundTopRightImage` (`x="252" y="3" width="256" height="32" U="0" V="0"
+TxtrWidth="256" TxtrHeight="32"`, the corner graphic). This is a player-
+reported bug - "Pure's menu has no background" - not a documentation gap found
+by inspection.
+
+**The scan.** The same method `TitleFrame` used, run again against
+`pure-psp-usa.chd`'s three archives and filtered for two different shapes
+instead of `512x128`: a full-screen backdrop (`480x272`, or PSP power-of-two
+padding of it - `512x256`, `512x512`) and the corner graphic's own `256x32`.
+The 361-texture decode count is unchanged from the `TitleFrame` scan (same
+archives, same disc); what differs is the filter:
+
+| Shape | Candidates | Archive | Verdict |
+| --- | --- | --- | --- |
+| `480x272` | `498abb06` | `Data.wad`/`FEData.wad` | a track background render, checked by eye and ruled out (same entry `TitleFrame`'s own scan already found and ruled out) |
+| `512x256` | `5c0ea854` | `Data.wad`/`FEData.wad` | blue/cyan speed-line art, no rule lines or menu chrome - a loading-screen candidate, not this one |
+| `512x512` | `775fd47d` | `Data.wad`/`FEData.wad` | a white card bearing "A-G RACING", a barcode, `VS.0`/`//2197`, a world-map-style graphic and a memory-card outline, over a solid magenta lower half - **not** a match: none of that content appears anywhere on a real `Main Menu` capture |
+| `256x32` | `09af556a` | `Data.wad`-only | a diagonal hazard-stripe pattern plus a small bracket - not a match |
+| `256x32` | **`7ba78aca`** | `Data.wad`-only | **the "ワイプアウト" katakana wordmark beside the swoosh/arrow logo - an exact match** |
+
+**`BackgroundTopRightImage` is resolved.** Entry 27 of `Data.wad`, hash
+`7ba78aca`, `256x32` 8bpp indexed (`9,232` bytes: `256*32 + 256*4` palette
+`+ 16` header, exactly - already a power of two on both axes, so unlike
+`TitleFrame` there is no padding to crop). Absent from `FE.wad`/`FEData.wad`,
+checked by hash. Byte-identical on both pressings (`pure-psp-usa.chd` entry
+27, `pure-psp-eu.chd` entry 28 - same hash, different index). Cropping a real
+`Main Menu` capture to the widget's own rect (`x=252 y=3 width=256 height=32`,
+doubled for the `2x` capture) reproduces the texture exactly: same katakana
+text, same swoosh logo, same layout, same cyan ink. Confidence **85**, the
+same basis as `TITLE_LOGO`: an exact visual match to a real captured frame and
+agreement across both pressings, short of 90 because the runtime mechanism
+that assigns this hash to this widget is still unread. Recorded as
+`oag_pure::hashes::MENU_TOPRIGHT_LOGO`, wired through `FALLBACK_IMAGES` the
+same way `TITLE_LOGO` is.
+`crates/game/tests/pure_boot_ground_truth.rs`'s
+`fe_screens_own_corner_logo_gets_the_measured_texture` pins the rect and the
+decoded size against both real discs.
+
+**`BackgroundImage` is not.** Every full-screen-shaped candidate above was
+checked against a real `Main Menu` capture - PPSSPP v1.20.4 under Xvfb
+(`:97`), `--xres 960 --yres 544` for exact `2x` native resolution, a fresh
+profile driven the whole way from a cold boot: `Language Selection` (cross)
+-> `Developer Publisher Screen` (auto) -> `MemoryStickWarning` (cross) ->
+`FMV Intro` (start, skipping the movie) -> `Title Screen` (start) -> `Profile`
+-> `New` -> `Set Name` -> `Set Tag` -> `Save Profile` (yes) -> `Main Menu`,
+using PPSSPP's own websocket debugger (`input.buttons.press`) rather than
+keyboard injection, so no PPSSPP keymap needed guessing. **None of the three
+full-screen candidates matches**: the real `Main Menu` background is flat
+white with nothing drawn on it at all - sampled directly
+(`magick ... -format "%[fx:mean...]"` over the open area between the row list
+and the footer) reads exactly `255,255,255`, not close-to-white, to the pixel.
+That is what `oag_title::MenuSkin::background` (`0xFFFFFFFF`, already measured
+- see `menus-original.md`) already supplies as a plain colour fill, so the
+existing behaviour is correct as it stands; nothing in `FALLBACK_IMAGES` was
+added for `BackgroundImage`, on purpose - adding one of the three ruled-out
+candidates anyway would be a guess dressed as a measurement, exactly what that
+table's own doc comment says it will not hold. Whether the real disc ever
+draws a picture here (a different profile, a different theme, an entrance
+animation this capture missed) is still open; what this pass adds is that
+**none of the 361 decoded textures on this disc is it**, checked against one
+real capture.
 
 ### The language plugin id space is Pure's own, not Pulse's
 

@@ -308,6 +308,23 @@ widgets pinned against the disc, and `crates/game/tests/menu_skin.rs`'s
 `pures_main_menu_capture_measured_its_background_and_its_selected_row` for
 the two colours.
 
+**2026-09-08: the corner logo is found, the backdrop is ruled negative -
+same scan, sized for a full screen instead of `TitleFrame`'s `512x128`.**
+`BackgroundController`'s other image, `BackgroundTopRightImage` (the
+"ワイプアウト" wordmark beside the swoosh logo, top right), names no `src`
+either and is now filled the same way `TitleFrame` is: entry 27 of `Data.wad`
+(hash `7ba78aca`), an exact visual match to a real `Main Menu` capture cropped
+to the widget's own rect. `BackgroundImage` itself - the full-screen backdrop
+- stayed unfilled on purpose: every `480x272`/`512x256`/`512x512`-shaped
+candidate across all 361 decoded textures was checked against a fresh
+`Main Menu` capture (PPSSPP under Xvfb, driven start to finish through the
+websocket debugger's `input.buttons.press` rather than a keyboard binding),
+and none of them is what the real screen shows - the background there is
+flat white with nothing drawn on it, sampled at exactly `255,255,255`, which
+is already what `MenuSkin::background` supplies as a plain fill. See
+[`pure-status.md`'s own section on it](../formats/pure-status.md#fe-screens-corner-logo-backgroundtoprightimage)
+for the full candidate table.
+
 ## Not built
 
 - **The footer's ticker text and button-prompt line** - see above.
@@ -320,9 +337,12 @@ the two colours.
   (darkening, not brightening toward white), so Pulse's numbers must never be
   borrowed for it.
 - **`BackgroundImage`'s own texture on Pure.** Its colour is measured (see
-  above); what the disc's engine actually assigns there - whether it is
-  static or changes with the chosen mode/theme - needs Ghidra, not a second
-  screenshot.
+  above), and a full image-content scan of all 361 decoded textures against a
+  real `Main Menu` capture found no picture at all - the screen is genuinely
+  flat white. Whether the disc's engine ever assigns a texture there on some
+  other profile or theme is unread; what changed is that the negative is now
+  a checked one rather than an unlooked-for gap. `BackgroundTopRightImage`,
+  the sibling image in the same container, **is** found this way - see above.
 - **Cursor motion between rows.** There is nothing positional to move -
   selection is a colour - and no capture shows the brightness changing over
   anything but an instant.
