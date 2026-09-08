@@ -737,6 +737,32 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**Adding a weapon to `oag_gameplay::pickup::IMPLEMENTED` re-rolls every
+statistic downstream of `pickup::draw`, and a sparse one will flip.**
+2026-09-08. Landing the LeachBeam turned
+`oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
+red - `skilled armed 0 rolls total against novice's 1` - with nothing touching
+the barrel roll, `oag_ai` or any force law. Confirmed by isolation: that one
+line in `IMPLEMENTED` makes it fail, the same line out makes it pass. A longer
+`IMPLEMENTED` widens the weighted walk in `draw`, so every craft draws different
+pickups, so every trajectory differs, so the seven per-flight roll coin tosses
+are re-rolled. The test's per-tier totals lived in the range 0-3, and a
+statistic with four distinct values cannot carry a monotonicity claim across
+four tiers.
+
+**So a red in a race-wide *behaviour* statistic after a pickup change is a
+sample-size finding first, not a regression.** Check whether the assertion's
+statistic can absorb a reroll before looking for the bug. The fix the maintainer
+ruled for is to make the sample discriminate - that test now sums twelve forward
+circuits by two world seeds by seven opponents (24 grid races per tier, armed
+totals 5/21/43/82, each seed monotone on its own) rather than one race on
+`09_Track`. **Weakening the bound and re-baselining the number were both
+explicitly rejected**, the same call made on the `craft_sticking_ground_truth`
+tripwire the same day. `race::Options::seed` is the resampling axis: it reaches
+`World::new`, `oag_ai::Driver::for_slot` and `oag_ai::pilot_for_slot`. The cost
+is real - 350 s in debug against 17 s, which makes it the suite's longest single
+test.
+
 **`oag-game::ps2_source_ground_truth an_uncapped_transcode_still_reports_a_total_to_divide_by`
 fails under load and passes alone, and it looks like a real regression when it
 does.** 2026-09-08. It transcodes the PS2's loose intro through ffmpeg, and on a

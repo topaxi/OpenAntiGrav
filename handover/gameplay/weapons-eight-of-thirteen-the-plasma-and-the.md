@@ -664,6 +664,57 @@ a pass that was about a different weapon. The cheapest honest fix is an age on
 `Wave` plus a bound of one full course length, labelled chosen; the better one is
 reading what actually retires the original's instance.
 
+## 2026-09-08: adding a weapon to `IMPLEMENTED` reddened an AI test, and the test was the problem
+
+**Landing the LeachBeam turned
+`oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
+red**, and nothing about the barrel roll had moved. Recorded here because the
+next weapon to join `oag_gameplay::pickup::IMPLEMENTED` will do the same thing to
+whatever statistic is next-smallest.
+
+The failure: `skilled armed 0 rolls total against novice's 1`, per-tier totals
+novice 1, skilled 0, elite 1, ace 3. Cause confirmed by isolation, not guessed -
+`Weapon::LeachBeam` in `IMPLEMENTED` makes it fail, the same line out makes it
+pass, with nothing else changed. **A wider pickup pool widens the weighted walk
+in `oag_gameplay::pickup::draw`**, so every craft draws different pickups, so
+every trajectory in the race differs, so the seven per-flight roll coin tosses
+are simply re-rolled.
+
+**The general shape, which is the part worth carrying forward.** Anything
+downstream of `pickup::draw` is downstream of `IMPLEMENTED`'s *length*. A test
+that measures a sparse, race-wide statistic - a count in the range 0-3, a
+"did it ever happen" - is not measuring the mechanic it names; it is measuring
+one particular sequence of draws. Adding a weapon is a legitimate change that
+will reroll every such statistic, and the answer is a sample that survives the
+reroll, not a re-baselined number.
+
+**The maintainer's ruling, and what landed**: make the sample big enough to
+assert on. The test now sums over **twelve forward circuits by two world seeds
+by seven opponents** - 24 grid races and 168 flights per tier - rather than one
+race on `09_Track`. `race::Options::seed` reaches `World::new`,
+`oag_ai::Driver::for_slot` and `oag_ai::pilot_for_slot`, so a second seed is a
+second grid of characters drawing from a second pickup stream, which is the
+nuisance variable that had to be averaged out.
+
+Measured 2026-09-08, armed totals:
+
+| tier | seed `0x1` | seed `0x5eed0002` | total |
+| --- | --- | --- | --- |
+| novice | 5 | 0 | 5 |
+| skilled | 13 | 8 | 21 |
+| elite | 22 | 21 | 43 |
+| ace | 46 | 36 | 82 |
+
+Each seed reproduces the ordering on its own, which is the evidence the sample
+is big enough rather than that it was grown until it passed. The bound is
+unchanged - non-decreasing tier to tier, on the aggregate. **Two options were
+rejected by the maintainer and are recorded so they are not re-proposed**:
+dropping the monotonicity claim, and re-baselining the tier ordering.
+
+**Cost**: 350 s in a debug build, against the 17 s the single-circuit version
+took. `just test-data` runs debug, so that is the number that counts; it makes
+this the longest single test in the suite.
+
 ## Next Steps
 
 - ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**
