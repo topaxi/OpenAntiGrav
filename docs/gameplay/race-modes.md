@@ -15,7 +15,7 @@ race repeated. [`race-setup.md`'s Race Campaign
 section](../formats/race-setup.md#the-race-campaign-the-discs-own-campaign-grid-shape-yes-content-no)
 has the 2026-09-08 scoping pass: the campaign's **screen flow and grid shape**
 are fully authored (a two-level hex grid, `Grid Selection` then `Cell
-Selection`, sharing its 35-cell widget with the player's own custom-grid
+Selection`, sharing its 32-cell widget with the player's own custom-grid
 editor), its **medal-target widgets** are authored down to gold/silver/bronze
 colour, and its **unlock gating** is the same named `Grid0`..`Grid10`
 mechanism this page's circuit/craft-variant unlocks already use - but **which
@@ -372,7 +372,14 @@ the point where it would go.
 
 `MSC_EVENT_ZONE` also ends *"Clear the target number of zones to win the event"*,
 so a Zone event has a target zone count. That is progression data - M7 - and is
-not modelled.
+not modelled. **The number itself is now known**: the 2026-09-08 campaign
+scoping pass found a 24-entry per-track record family in `FEData.wad` (see
+[race-setup.md](../formats/race-setup.md#fedatawad-authors-real-per-track-numbers---race-times-lap-times-ai-difficulty-and-two-mode-independent-constants))
+where every one of the 24 carries an identical `<Targets Zone="25"
+Elimination="10">` - so the zone target is **25**, flat across every circuit,
+and Eliminator's kill target (the count `ER_YOU_ELIM`'s ending refers to) is
+**10**, also flat. Confidence 90, a clean census over all 24 files. Not
+wired into `oag_race` - this is the number, not the implementation.
 
 ### The string table also settles why shield does not matter in the other two
 
