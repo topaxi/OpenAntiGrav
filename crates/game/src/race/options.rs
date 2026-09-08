@@ -105,6 +105,18 @@ pub struct Options {
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
     /// two share `TimeTrial_HUD.xml`. See [`hud_layout`].
     pub mode: Mode,
+    /// The kill count that ends an Eliminator event, or `None` for
+    /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
+    ///
+    /// **A parameter rather than a constant, on purpose.** The real number
+    /// lives on the campaign's own `PI_Cell` records (`10`, `7` or `5` -
+    /// `Eliminator_UpdateKillTarget`,
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`), and that
+    /// campaign is not wired into this engine - `--mode eliminator` outside
+    /// it has no cell to read one from. This is the escape hatch for the day
+    /// it is: a campaign loader would fill it in per cell instead of leaving
+    /// it `None`.
+    pub eliminator_kill_target: Option<u32>,
     /// Force the Zone colour grade to a stage, instead of resting where the
     /// title's own ladder leaves it.
     ///
@@ -250,6 +262,7 @@ impl Default for Options {
             // not silently inherit one that was.
             class: SpeedClass::Venom.as_str().to_string(),
             mode: Mode::default(),
+            eliminator_kill_target: None,
             zone_stage: None,
             ribbon: false,
             collision: false,
@@ -271,6 +284,9 @@ impl Default for Options {
 pub struct Setup {
     /// Which mode's rules the race runs under.
     pub mode: Mode,
+    /// Unresolved, like [`Options::eliminator_kill_target`] - [`Race::start`]
+    /// is what applies [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
+    pub eliminator_kill_target: Option<u32>,
     /// How good the opponents are. See [`Options::difficulty`].
     pub difficulty: oag_ai::Difficulty,
     /// The speed class the race is run in, spelled the way the disc spells it.

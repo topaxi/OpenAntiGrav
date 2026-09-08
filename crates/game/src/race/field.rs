@@ -402,6 +402,12 @@ impl Race {
             if evaluated.shield.absorbed {
                 self.shield[slot].hit();
             }
+            // Eliminator's own kill-attribution rule, the opponents' half of
+            // the one `Race::tick` applies to the player - see
+            // `crate::race::eliminator`.
+            if evaluated.shield.lost > 0.0 {
+                self.last_damager[slot] = None;
+            }
 
             // **The same recovery the player gets**, and it is not a nicety.
             // Without it an opponent that leaves the geometry keeps going: the

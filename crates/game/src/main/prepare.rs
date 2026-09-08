@@ -125,6 +125,10 @@ impl Pending {
             hull_variant: self.cli.variant.clone(),
             class: self.class.clone(),
             mode: self.mode,
+            // `None`: no CLI flag names one and the campaign grid a real
+            // value would come from is not wired into this engine yet - see
+            // `race::Options::eliminator_kill_target`.
+            eliminator_kill_target: None,
             zone_stage: self.cli.zone_stage,
             opponent_teams,
             ribbon: self.cli.ribbon,

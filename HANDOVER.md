@@ -204,7 +204,7 @@ file does not need to carry its own.
     fixed** (per this file's own standing rule: a red ground-truth test
     usually encodes a real disagreement, so "make it green" is the wrong
     instinct without understanding why first):
-    [`shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`](handover/gameplay/a-thrown-shuriken-detonates-on-a-straggler-before.md)
+    `shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`
     (one press throws zero blades - **not** `0c78c477`, that attribution is
     refuted; bisected to `cc395862`, the countdown-hold fix, which correctly
     leaves the field grid-tight at throw time and a blade clips a grid-mate -
@@ -212,7 +212,16 @@ file does not need to carry its own.
     class, so this scenario - a blade thrown off a standing start in a single
     race - is one no implemented mode can produce a weapon pad for; it needs
     `Mode::Eliminator`, which does not exist yet, so chasing `hull_radius`
-    further is parked rather than a next step).
+    further is parked rather than a next step). **Resolved 2026-09-08**, once
+    `Mode::Eliminator` landed: the diagnosis above was exactly right and the
+    engine's behaviour was never the bug - a hull hit correctly detonates a
+    Shuriken by design, the confound was a grid-mate in the blade's path. The
+    test now runs in Eliminator (the mode the weapon is actually reachable
+    in) with the other seven grid slots switched off before the throw, which
+    is what its own doc comment already claimed to be testing - a blade
+    against track geometry, not a craft's hull. Green: 119 of 120 fuse ticks
+    alive, 3 bounces. The `hull_radius` question this thread left open is
+    therefore moot for this scenario and was not otherwise chased.
     `stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`
     was the other one - **fixed 2026-09-07**: instrumenting `(tick, thrust,
     speed)` around the countdown release confirmed the standing hypothesis
@@ -599,7 +608,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Players should be able to build pilots in game, and a naive editor would eat their comments](handover/frontend/players-should-be-able-to-edit-pilots-in-game.md) - **requested by the maintainer 2026-09-06**: in-game CRUD over the pilot `.toml` files, and **all five operations have now landed**. List, edit, save and create-from-template first; then rename and delete, once `crate::prompt` gave this project the text entry it had none of. Both traps were paid: `set_axis` goes through `toml_edit` so a hand-written comment survives an edit, and `rename_pilot` is a *move*, so the file arrives at its new name byte for byte. **Deleting `aggressive.toml` restores the built-in rather than removing a pilot**, and the confirm says so by name. What is left in the thread is the axis preview, `string_id` for the remaining rows, and the one-axis-at-a-time silence pinned by a test
 - [Pulse authors its own text entry, and it is not a keyboard](handover/frontend/pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md) - a **positive** result found while checking whether the disc had a keyboard to play before this project drew its own. It has no keyboard and no key glyphs, and the standing `sceUtilityOsk` assumption is **refuted at 92** - all four OSK NIDs are absent from both Pulse executables, while Pure links them. What Pulse has instead is a `<TagInput>`: a row of `length` character cells scrolled one glyph at a time, 15 instances in `Data.wad` (entry **#1083**, hash `b94fe6f9`, name unresolved), geometry authored per screen, and a **70-character alphabet in `BOOT.BIN`** at file offset 2,808,976 / vaddr `0x08AB1C10`, at 85. Nothing renders it yet; `docs/formats/fexml.md` has no `TagInput` row. Open at 65: the input mapping, one PPSSPP capture away
 - [Five reference traces are missing here, and the silent skip is why nobody noticed](handover/tooling/five-reference-traces-are-gone-and-the-skip-hid-it.md) - five of the six trace captures the ground-truth tests name do not exist in this checkout, and their absence never turned a build red because a missing reference **skips**. `just test-data` reports 2 failures; the same suite under `OAG_REQUIRE_GAME_DATA=1` reports 14, eleven of them missing-file panics rather than behaviour. [ADR-0046](docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md) now tracks a trace a test names, per file by name, so this cannot recur - it does not recover the five. Open: removing the skip path, recapturing, and two docs that assert a capture this checkout cannot demonstrate
-- [A thrown Shuriken detonates on a straggler before the test can see it fly](handover/gameplay/a-thrown-shuriken-detonates-on-a-straggler-before.md) - **deferred by maintainer decision, 2026-09-06**, not blocked and not resolved. `shuriken_ground_truth` is deterministically red across three runs and is one of only two reds under the plain documented command. **Its first attribution was wrong and the refutation is the finding**: `0c78c477`'s claim that the VECTOR lookup's `None` path is unreachable on measured data is **correct** - instrumented directly, `speed_for_named("VENOM")` gives `Some(700.0)`, `launch()` gives `Some(..)`, `throw()` succeeds, and none of the four early-returns fires. **Bisected and confirmed**: `cc395862` (hold AI opponents at the line through the start countdown) is the exact commit - `9785a177` (its parent) passes twice, `cc395862` fails twice with the identical panic `d11c5fb7`/`main` also show. A diagnostic readout (headings ~1.0, field 15-136 units out in grid order post-fix vs 536-681 units out on a since-curved line pre-fix) confirms this is a grid-tight field at throw time, not a steering-displacement bug in the gate itself - `cc395862`'s own fix is not implicated. **Deferred rather than chased further**: the test sets the pickup directly to get a thrown blade off a standing start at all - `WeaponStats_Race.xml` zeroes the Shuriken's odds in every class (see [pickups.md](docs/gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)), so a weapon pad in any implemented mode can never produce this scenario; it is Eliminator's alone, and `Mode::Eliminator` does not exist in this engine yet. The bisect and the open `hull_radius` question stand as written for whoever picks this up once Eliminator lands; this thread has already been misattributed to two different commits (`0c78c477`, then `cc395862`, both cleared above), which is itself a reason to stop guessing rather than open a third
 
 ## Pending maintainer decision: shipped design data in tracked docs
 
@@ -861,8 +869,11 @@ sweep harness (`crates/game/tests/ai_span_sweep.rs`) now reports both boards,
 using the two committed field fixtures set up exactly as they set themselves
 up. The second half of the trap is why it survived review at all: **`just` does
 not run `#[ignore]`d disc-backed tests**, so `just` was green throughout. Run
-`just test-data` after any AI tuning change; only `shuriken_ground_truth` and
-`stall_rescue_ground_truth` should be red.
+`just test-data` after any AI tuning change. Historical note, not current
+guidance: `shuriken_ground_truth` and `stall_rescue_ground_truth` were once
+the two expected reds this line named - both are fixed (2026-09-07 and
+2026-09-08 respectively, see the shuriken thread below) and `just test-data`
+should be all-green again barring a fresh regression.
 
 **A start-line or grid-timing change can flip an `#[ignore]`d ground-truth
 test without CI ever seeing it, because `just test` never runs `#[ignore]`d

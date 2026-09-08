@@ -89,6 +89,10 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     time_trial: layouts::TIME_TRIAL,
     speed_lap: layouts::TIME_TRIAL,
     zone: layouts::ZONE,
+    // Pure's own Eliminator layout has not been checked for; `arcade` is the
+    // one other title fact this crate already reuses this way (`speed_lap`
+    // above). See `oag_title::HudLayouts::elimination`.
+    elimination: layouts::ARCADE,
 };
 
 /// How Pure's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

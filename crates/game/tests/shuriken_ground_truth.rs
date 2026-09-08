@@ -87,6 +87,26 @@ fn single_race() -> Option<race::Loaded> {
     Some(loaded)
 }
 
+/// Eliminator: the mode the Shuriken is actually reachable in - it is one of
+/// the two weapons (with the Repulser) `docs/gameplay/pickups.md` records as
+/// zero-odds on every other mode's `<Pickupodds>` table, and it is the mode
+/// whose own weapon table (`WeaponStats_Elimination.xml`) this build now
+/// reads instead of the ordinary race's - see `oag_race::Mode::Eliminator`.
+fn eliminator_race() -> Option<race::Loaded> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    for line in &loaded.report {
+        println!("{line}");
+    }
+    Some(loaded)
+}
+
 /// One button held down, tick after tick. See `mine_ground_truth.rs`'s twin for
 /// why a fresh `Input` per call is right.
 fn held(button: Button) -> oag_gameplay::InputSnapshot {
@@ -112,14 +132,13 @@ fn blades(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
 
 /// A race with the craft already up to speed, and full throttle to keep it
 /// there.
-fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
-    let loaded = single_race()?;
+fn moving(loaded: race::Loaded) -> (race::Race, oag_gameplay::InputSnapshot) {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
-    Some((race, throttle))
+    (race, throttle)
 }
 
 /// The disc's own `<Shuriken>` block decodes, and reads the blast pair rather
@@ -170,12 +189,49 @@ fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
 /// takes geometry the blade runs into at an angle, which no hand-built fixture
 /// has. The counter is `Projectile::bounces`, which the Shuriken raises without
 /// limit - unlike the Missile, which stops at `MAX_BOUNCES`.
+///
+/// # Why this was the tree's one red, and why Eliminator alone does not fix it
+///
+/// This test was the single remaining red in `just test-data` before
+/// `oag_race::Mode::Eliminator` existed, and instrumenting it settled *why*:
+/// `Race::has_opponents` flipped true for a single race on 2026-08-11, and a
+/// blade thrown from the grid on this track (`16_Track`, the disc's own
+/// default) at this warm-up struck a grid-mate 15 units away on its very
+/// first tick - `Impact { kind: Shuriken, owner: 0, struck: Some(7), .. }`.
+/// That is a **direct hit**, and `oag_gameplay::projectile::step`'s own
+/// `may_bounce` rule is `struck.is_none() && ..` - a hull hit detonates by
+/// design, the same rule a Rocket or a Missile follows. **The engine was
+/// behaving correctly**; the test's own fixture had a craft in the one place
+/// its assertions never accounted for.
+///
+/// **Eliminator does not remove that confound** - `MSC_EVENT_ELIM` promises
+/// "a full grid of trigger happy contenders", so `Mode::Eliminator.has_opponents()`
+/// is `true` too, and the same grid-mate sits in the same spot on the same
+/// track. What Eliminator *does* fix, genuinely: it is the mode the Shuriken
+/// is reachable in at all (zero pickup odds on every other mode's table -
+/// `docs/gameplay/pickups.md`), so this is the first test that exercises it
+/// in the context it is actually thrown in, reading its stats off
+/// `WeaponStats_Elimination.xml` rather than the ordinary race table. The
+/// bounce-off-geometry confound is a separate, pre-existing fixture bug and
+/// is fixed here the honest way: the seven other grid slots are switched off
+/// before the throw, which is exactly what this test's own doc comment
+/// above already claims to be measuring - a blade against **track geometry**,
+/// not against another craft's hull. Nothing about the assertions below
+/// changed or weakened; the fixture now matches what they test.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
-    let Some((mut race, throttle)) = moving() else {
+    let Some(loaded) = eliminator_race() else {
         return;
     };
+    let (mut race, throttle) = moving(loaded);
+    // See this test's own doc comment: a grid-mate sits close enough to the
+    // player's own launch trajectory on this track to take a direct hit on
+    // the blade's first tick of flight, which correctly detonates it - not a
+    // bug, but not what this test measures either.
+    for ship in &mut race.world.ships[1..] {
+        ship.active = false;
+    }
     let shuriken = race.shuriken_stats().expect("the disc authors a Shuriken");
     let speed = race.world.ships[0].physics.body.linear_velocity.length();
     assert!(

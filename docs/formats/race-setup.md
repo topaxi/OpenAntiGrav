@@ -618,9 +618,10 @@ never shows: **3 `Race`, 4 `Tournament`, 5 `Time Trial`, 6 `Zone`, 8
 - 7 is absent from the table and banks no result. Confidence 92, and the
 speed-class table beside it at `0x08ab067c` is `0 Venom, 1 Flash, 2 Rapier, 3
 Phantom`; see
-[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md). `oag_race::Mode::ALL` implements four of
-the seven (Time Trial, Speed Lap, Zone, and Single Race for the disc's
-`Arcade`). English text for all seven is in `Data.wad`'s language tables -
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md). `oag_race::Mode::ALL` implements five of
+the seven (Time Trial, Speed Lap, Zone, Single Race for the disc's `Arcade`,
+and Eliminator, from 2026-09-08 - see
+[race-modes.md](../gameplay/race-modes.md#eliminator)). English text for all seven is in `Data.wad`'s language tables -
 five `.cod`-extension entries reached only through `oag-wad extract` (they
 have no resolved path; the extractor names them by directory index and
 hash), each a flat `<a c="IDSTRING" b="text"></a>` list. English is entry

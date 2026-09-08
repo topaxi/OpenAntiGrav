@@ -301,7 +301,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the one mode that needs it.
     //
     // Two failures, two lines, for the reason `<Global>` above gives at length.
-    let weapons = assets::load_weapons(&mut archives, title, &mut report);
+    let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     if options.mode.weapons_enabled() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -931,6 +931,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         title,
         setup: Setup {
             mode: options.mode,
+            eliminator_kill_target: options.eliminator_kill_target,
             difficulty: options.difficulty,
             class: options.class.clone(),
             opponents: options.opponents,

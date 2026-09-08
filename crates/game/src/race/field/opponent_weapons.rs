@@ -577,6 +577,12 @@ impl Race {
             // `IMPLEMENTED` and this chain have to grow together, and
             // `every_implemented_weapon_has_a_fire_arm_on_both_paths` is what
             // makes that fail loudly.
+            // Eliminator refuses absorption for an opponent exactly as it
+            // does for the player - see `Race::spend_pickup` and
+            // `Mode::pickups_absorb`.
+            if !self.world.race.mode.pickups_absorb() {
+                return;
+            }
             let Some(amount) = absorb else {
                 return;
             };

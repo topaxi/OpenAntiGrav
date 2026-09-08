@@ -152,7 +152,18 @@ pub(super) fn resolve(
     // crossing grant a pickup on every tick the hull is inside the volume - so
     // the trigger treats a zero as "grant once and never again on this pad"
     // rather than trusting it; see `Race::test_weapon_pads`.
+    //
+    // **Eliminator reads a different figure, from 2026-09-08.**
+    // `<WeaponPad elimination_refresh_time>` is an order of magnitude shorter
+    // than the ordinary `refresh_time` on both shipped PSP discs (`0.05`
+    // against `0.55`) - `oag_formats::handling::global::WeaponPad`'s own doc
+    // comment already named this mode by name before anything read it. A
+    // title with no second figure (Pure, which has no Eliminator) falls back
+    // to the ordinary one.
     let weapon_pad_refresh = match class {
+        Some((_, _, pad)) if options.mode == Mode::Eliminator => {
+            pad.elimination_refresh_time.unwrap_or(pad.refresh_time)
+        }
         Some((_, _, pad)) => pad.refresh_time,
         None => 0.0,
     };

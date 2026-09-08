@@ -223,6 +223,8 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         lap_start_tick,
         best_lap_ticks,
         lap_splits,
+        kills,
+        deaths,
     } = standing;
 
     hasher.write_u32(*lap);
@@ -263,6 +265,9 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
     for split in lap_splits {
         write_option_u32(hasher, *split);
     }
+    // Eliminator-only counts, `0` on every other mode - see `Standing::kills`.
+    hasher.write_u32(*kills);
+    hasher.write_u32(*deaths);
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
@@ -338,6 +343,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         Mode::SpeedLap => 1,
         Mode::Zone => 2,
         Mode::SingleRace => 3,
+        Mode::Eliminator => 4,
     });
     hasher.write_u32(*lap);
     write_option_u32(hasher, *laps_target);

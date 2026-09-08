@@ -62,6 +62,17 @@ pub struct HudLayouts {
     pub speed_lap: &'static str,
     /// Zone.
     pub zone: &'static str,
+    /// Eliminator, from 2026-09-08.
+    ///
+    /// **Not `Option`, on the same reasoning [`Self::speed_lap`] states**: a
+    /// title that ships no dedicated layout falls back to one that exists
+    /// rather than leaving a gap this engine would have to special-case.
+    /// Pulse and HD both author `Elimination_HUD.xml`/`elimination_hud.xml`
+    /// and use it; Pure, whose own Eliminator layout has not been checked
+    /// for, reuses [`Self::arcade`] the way it already reuses
+    /// [`Self::time_trial`] for [`Self::speed_lap`] - a title fact stated
+    /// once here rather than a `None` every caller would have to handle.
+    pub elimination: &'static str,
 }
 
 /// `reference` with its file extension replaced by `extension`.

@@ -475,6 +475,14 @@ impl Race {
                 _ => return,
             }
         } else {
+            // **Eliminator refuses this outright.** `MSC_EVENT_ELIM`: "you
+            // cannot absorb pickups" - see `Mode::pickups_absorb`. The pickup
+            // is kept rather than spent, the same "nothing happened, so
+            // nothing is lost" rule the no-op weapon arms above already
+            // follow.
+            if !self.world.race.mode.pickups_absorb() {
+                return;
+            }
             let Some(amount) = weapons.absorb(weapon) else {
                 return;
             };

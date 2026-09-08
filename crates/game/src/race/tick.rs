@@ -180,6 +180,14 @@ impl Race {
         if evaluated.shield.absorbed {
             self.shield[0].hit();
         }
+        // Eliminator's own kill-attribution rule, applied here for the same
+        // reason the shield edges above are: a wall contact that actually
+        // cost the pool clears whatever weapon last hit this craft, so a
+        // death that follows credits nobody rather than the shot from
+        // earlier. See `crate::race::eliminator`'s module doc comment.
+        if evaluated.shield.lost > 0.0 {
+            self.last_damager[0] = None;
+        }
 
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in
@@ -220,6 +228,13 @@ impl Race {
         // actually ended the tick rather than a tick behind it.
         self.advance_projectile_flares();
         for impact in impacts.iter().flatten() {
+            // Eliminator's own kill attribution - see `crate::race::eliminator`.
+            // A direct hit only: a blast's own splash damage against a craft
+            // it did not directly strike is not credited, which this project
+            // labels a chosen simplification rather than a recovery.
+            if let Some(struck) = impact.struck {
+                self.last_damager[struck as usize] = Some(impact.owner);
+            }
             self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
         }
         self.ignite_missile_bounces(&bounces_before);
@@ -248,6 +263,13 @@ impl Race {
         self.step_opponents();
         self.resolve_craft_pairs();
 
+        // Eliminator's own respawn-and-bookkeeping pass, over the whole
+        // field, and a no-op on every other mode. Before the ending check
+        // just below and before the standings, so a craft respawned this
+        // tick is placed where it is put rather than left mid-explosion for
+        // the lap counter to read. See `crate::race::eliminator`.
+        self.tick_eliminator();
+
         self.world.tick += 1;
 
         // The race rules run last of the simulation, on the position the step
@@ -266,7 +288,14 @@ impl Race {
         // their pool at 20. See `oag_gameplay::damage_rules`, and
         // `RaceState::eliminate` for the disc text that settles the single
         // race's own answer as the same one.
-        if self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
+        //
+        // **Eliminator does not reach this branch at all.** `tick_eliminator`
+        // above has already turned this tick's `Eliminated` craft back into a
+        // `Racing` one via a respawn, before this read - see
+        // `crate::race::eliminator`'s own doc comment for why the mode's own
+        // text rules out `RaceState::eliminate` as its ending.
+        if self.world.race.mode != Mode::Eliminator
+            && self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
             && self.world.race.eliminate()
         {
             // The original plays `~BLOWUP`, hides the HUD and swings the camera
@@ -332,6 +361,9 @@ impl Race {
 
             if outcome.lap_completed {
                 self.grant_free_turbo();
+                // Eliminator's own per-lap mechanic, a no-op on every other
+                // mode - see `Race::eliminator_lap_health_refill`.
+                self.eliminator_lap_health_refill(0);
             }
         }
 

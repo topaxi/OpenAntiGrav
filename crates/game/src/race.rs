@@ -121,6 +121,7 @@ mod capture;
 mod drawable;
 mod effect_names;
 mod effects;
+mod eliminator;
 mod field;
 pub mod gantry;
 mod hash;
@@ -533,6 +534,16 @@ pub struct Race {
     /// How many times each craft has been respawned this race, for tests and
     /// for the load report.
     respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// The kill count that ends an Eliminator event - see
+    /// [`Setup::eliminator_kill_target`].
+    eliminator_kill_target: u32,
+    /// The slot that last struck each craft with a direct weapon hit,
+    /// `None` once nobody has (or the last hit was a wall, which credits
+    /// nobody). Eliminator-only bookkeeping - see `crate::race::eliminator`.
+    last_damager: [Option<u8>; oag_gameplay::MAX_SHIPS],
+    /// Seconds left before an Eliminated craft returns to the race, once it
+    /// has reached that state - see `crate::race::eliminator`.
+    eliminator_respawn_timer: [f32; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
     /// cost it.
     ///
