@@ -849,4 +849,48 @@ mod tests {
             "the forward axis must not move: {a} vs {b}"
         );
     }
+
+    /// [`oag_render::roll::ROLL_DIRECTION`] against the original's own
+    /// display matrix, captured live 2026-09-08 - see
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll
+    /// section for the full method and numbers. `entity+0x880` (the eased phase the original's display
+    /// matrix reads) was written to `+0.2` at a breakpoint and the resulting
+    /// display matrix's own row 0 - where the physics-local right axis
+    /// lands in world space - was read back, alongside the body basis at
+    /// the same instant. Reproducing that same body basis and the same
+    /// angle through this crate's own `orientation * roll` composition
+    /// and comparing the world height (`dot(row0, Vec3::Y)`) of the right
+    /// axis is a sign check that needs no hand algebra: whichever
+    /// `ROLL_DIRECTION` reproduces the original's sign is correct, and this
+    /// pins it without assuming anything about axis handedness on either
+    /// side.
+    #[test]
+    fn roll_direction_matches_the_original_captured_display_matrix() {
+        // Body basis (right/up/forward rows) and the resulting display
+        // matrix's own row 0, both read from `entity+0x794`'s rigid body and
+        // `entity+0x8b0`'s display node while `entity+0x880` was pinned at
+        // `+0.2` (`entity+0x854`, the steering lean, pinned at `0.0`).
+        let right = Vec3::new(0.867_575_1, 0.002_168_793_2, 0.497_301_55);
+        let up = Vec3::new(-0.045_852_03, 0.996_079_86, 0.075_647_85);
+        let forward = Vec3::new(-0.495_188, -0.088_432_48, 0.864_273_5);
+        let original_row0 = Vec3::new(0.168_767_69, 0.710_852_6, 0.169_427_96);
+
+        let orientation = Quat::from_mat3(&oag_core::math::Mat3::from_cols(right, up, forward));
+        // `entity+0x880` is the *eased* phase the display matrix reads
+        // directly (`angle = entity[0x880] * 6.28`, no second `ease()`
+        // pass) - not `roll_phase` itself, so the angle is built straight
+        // from the same `0.2 * FULL_TURN` the capture used rather than
+        // routed back through `oag_render::roll::ease`.
+        let angle = 0.2 * oag_render::roll::FULL_TURN;
+        let roll = Quat::from_axis_angle(Vec3::NEG_Z, angle * oag_render::roll::ROLL_DIRECTION);
+        let ours_row0 = orientation * roll * Vec3::X;
+
+        assert_eq!(
+            ours_row0.dot(Vec3::Y).signum(),
+            original_row0.dot(Vec3::Y).signum(),
+            "our right axis's world height must rise/fall the same way the \
+             original's did for the same body and the same positive phase: \
+             ours={ours_row0} original={original_row0}"
+        );
+    }
 }
