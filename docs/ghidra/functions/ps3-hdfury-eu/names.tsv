@@ -257,3 +257,4 @@
 0x005c18d8	function	Rsx_UploadVertexConstantBlock	88	renderer.md
 0x003a4da0	function	Billboard_LoadModelAndBind	80	billboards.md
 0x008b6f38	data	g_BillboardSlots	84	billboards.md
+0x0017acc0	function	Music_BuildFeshipTrackPath	78	sound.md

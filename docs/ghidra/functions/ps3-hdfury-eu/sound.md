@@ -462,6 +462,41 @@ from 80/84/78/80 to 88/88/82/88 in the table above; see the confidence
 rubric's reasoning on the PSP page linked above rather than repeating it
 here.
 
+## `Music_BuildFeshipTrackPath`, the front end's second track
+
+2026-09-08. [`hd-status.md`](../../../formats/hd-status.md#two-front-end-axes-one-of-them-unread)
+records `FEship.mp3` as a second front-end track with an unread trigger; this is
+that trigger's builder, not its caller. `0x0017acc0`, TOC `0x008ad4d8` (checked
+with `scripts/ps3-toc.py toc`, not trusted from `decompile_function` - see the
+TOC trap noted [above](#the-real-dispatch-table)):
+
+```text
+$ python3 scripts/ps3-toc.py resolve 0x0017acc0 -0x1400
+0x008ac0d8 -> 0x007881c8 'Data\Music\FEMusic\FEship.mp3'
+$ python3 scripts/ps3-toc.py resolve 0x0017acc0 -0x13fc
+0x008ac0dc -> 0x007881e8 'Data\Music\FEMusic\FEship_surround.mp3'
+```
+
+The function copies one of the two strings byte-for-byte onto the stack -
+`param_1 == 1` picks the 29-byte stereo path, anything else the 38-byte
+surround one, the same stereo/surround axis every other front-end template
+picks on - then forwards the buffer to `FUN_00310b30(handle, path, 1, 0, 0,
+0)`, which opens the handle if a flag at `+0x44` says it needs it and always
+calls a further `FUN_003034e8`, matching an open-then-play shape. Confidence
+**78**: the copy and the branch are unambiguous decompilation, matching the
+disc's own two `FEship*.mp3` filenames exactly, but single-binary and
+uncorroborated by any second source.
+
+**Not determined: who calls it.** `search_instructions(mnemonic=bl,
+operand_pattern=17acc0)` finds zero direct call sites anywhere in the ELF, and
+the address never appears as an immediate operand
+(`search_instructions(operand_pattern=878db0)` - its own `.opd` descriptor -
+is also empty), so it is reached only through an indirect dispatch this
+session did not locate. The `.opd` table's physical neighbours
+(`FUN_006926b0`, `FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated
+functions (particle-effect timing, a refcounted-object destructor) - adjacency
+in `.opd` is link order, not a call table, and is not evidence of a group.
+
 ## Not determined
 
 - **`sysvar_table`'s contents** (`0x008c0038`). A runtime pointer, not a
