@@ -571,22 +571,27 @@ weight is zero in every class. So a `SingleRace` inventory slot can hold a
 Shuriken (it can be thrown once granted by a test or a script setting it
 directly - see `crates/game/tests/shuriken_ground_truth.rs`) but a weapon pad
 in this build can never *hand out* one: not because the pool excludes it, but
-because the odds do. **`Shuriken`'s presence in `IMPLEMENTED` is
-correct-but-unreachable rather than wrong** - it is built and ready for a mode
-that does not exist in this engine yet. `Repulser` is unreachable twice over:
-it is also absent from `IMPLEMENTED` itself (see the list above), for its own,
-independent reason - no craft-state field a weapon can attach to yet.
+because the odds do. **`Shuriken`'s presence in `IMPLEMENTED` was correct-but-unreachable until
+2026-09-08, when `Mode::Eliminator` landed and closed the gap this section
+used to describe as open.** `oag_game::race::load_weapons` now takes the mode
+and opens `title.weapons.elimination` for Eliminator specifically, falling
+back to `race` (with a report line) for a title that ships no second table -
+see [race-modes.md](race-modes.md#eliminator). A `SingleRace` weapon pad
+still cannot hand out a Shuriken - `RACE_ENTRY`'s odds are still zero there,
+unchanged - but an Eliminator one now can, through the table this section
+already measured. `Repulser` is still unreachable, for its own, independent
+reason: it is absent from `IMPLEMENTED` itself (see the list above), because
+no craft-state field a weapon can attach to yet exists for the "field the
+craft is in" mechanic its handler needs. Landing `Repulser` is a
+`crates/gameplay` question now, not a mode-existence one.
 
-**Eliminator is not a mode this engine drives, which is why nothing dispatches
-on it.** `oag_race::Mode::ALL` holds exactly four variants - `TimeTrial`,
-`SpeedLap`, `Zone`, `SingleRace` - and no fifth. `oag_title::weapons::Weapons`
-does carry the axis (`race` and an optional `elimination` entry, Pulse's and
-HD's both `Some`, Pure's `None`), but `oag_game::race::load_weapons` opens only
-`title.weapons.race`, unconditionally, by its own doc comment. That is a
-correct absence of dispatch rather than a bug: there is no second mode to
-dispatch by yet. It becomes a real gap in the read - one this project should
-close - only on the day a `Mode::Eliminator` lands and still reaches for
-`race` regardless of mode.
+`crates/game/tests/shuriken_ground_truth.rs`'s own ground-truth test moved
+onto `Mode::Eliminator` the same day, for the reason above - it is the mode
+the weapon is actually reachable in, and its own single remaining red
+(a thrown blade detonating on a nearby grid-mate rather than flying free, see
+that file's own doc comment) turned out to be a fixture confound - a straggler
+in the blade's path, unrelated to the mode - fixed by disabling the rest of
+the grid before the throw, not by anything about Eliminator's own mechanics.
 
 ## What a fired Turbo does
 

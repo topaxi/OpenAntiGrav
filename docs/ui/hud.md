@@ -133,6 +133,27 @@ ground-truth test is not checking the parser against its own output.
 Most widgets are inactive in any given frame; these are sizes of the layout, not
 of what is on screen.
 
+### Eliminator
+
+`Data\XML\Elimination_HUD.xml` was drawn by no mode before
+[`oag_race::Mode::Eliminator`](../gameplay/race-modes.md#eliminator)
+(2026-09-08) - "Layouts no mode here reaches" used to name it explicitly
+alongside HD's Detonator/Duel/MPTag. Wired the same way every other mode's
+layout is: `oag_title::HudLayouts::elimination`, read by
+`oag_game::race::hud_layout`. Pulse and HD both author a dedicated file and
+use it; Pure, whose own Eliminator layout has never been read off its disc,
+falls back to `arcade` - the same "no dedicated file, reuse one that exists"
+shape this page's own `speed_lap`/`time_trial` row already has.
+
+**Only the layout is wired.** Nothing here yet substitutes kill/death counts,
+the `PosTag` column, or any of this layout's own widgets with live numbers -
+`oag_gameplay::hash::write_world` now carries `Standing::kills`/`deaths` as
+real simulation state (`docs/gameplay/race-modes.md#eliminator`), but no HUD
+draw call reads either field. This is the same, already-documented gap
+`docs/gameplay/race-modes.md` records for `Zone_HUD.xml` - the substitution
+rule between a mode's own counters and the widgets a layout positions is
+unread on every layout, not only this one - and Eliminator does not close it.
+
 ## The schema
 
 Small and closed: 8 element names and 33 attributes across all five files. No

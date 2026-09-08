@@ -82,20 +82,20 @@ The rules live in `crates/race`; how a lap is decided at all is
 [lap counting](lap-counting.md), and it is a convention rather than a recovery.
 
 Selected on the RACE menu page, which opens on the time trial, or with
-`--mode time_trial|speed_lap|zone|single_race` on the command line. `--race` skips the menus,
+`--mode time_trial|speed_lap|zone|single_race|eliminator` on the command line. `--race` skips the menus,
 so the flag is the only way in on that path.
 
 ## What each mode is
 
-| | Time trial | Speed lap | Zone | Single race |
-| --- | --- | --- | --- | --- |
-| Laps | 3 | unlimited | unlimited | 3, **ours** |
-| Throttle | the player's | the player's | the mode's | the player's |
-| Ends by itself | after lap 3 | never | **not implemented** - see below | after lap 3 |
-| Weapons | off | off | off | **on** |
-| Free turbo a lap | **yes** | **yes** | no | no |
-| HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` |
-| Environment | the circuit's | the circuit's | **its own**, see below | the circuit's |
+| | Time trial | Speed lap | Zone | Single race | Eliminator |
+| --- | --- | --- | --- | --- | --- |
+| Laps | 3 | unlimited | unlimited | 3, **ours** | unlimited |
+| Throttle | the player's | the player's | the mode's | the player's | the player's |
+| Ends by itself | after lap 3 | never | **not implemented** - see below | after lap 3 | on a kill count - see below |
+| Weapons | off | off | off | **on** | **on, scaled up** |
+| Free turbo a lap | **yes** | **yes** | no | no | no |
+| HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` | `Elimination_HUD.xml` |
+| Environment | the circuit's | the circuit's | **its own**, see below | the circuit's | the circuit's |
 
 Time trial and speed lap sharing a layout is the disc's arrangement, not a
 shortcut: there is no `SpeedLap_HUD.xml`, which is why
@@ -514,6 +514,139 @@ you come back in; a single race has no such row.
 into a respawn or the Eliminator's kill bookkeeping" resolves to the second
 branch for the modes this engine runs. What is still unread is what the original
 does with the 1.5 s itself.
+
+## Eliminator
+
+Race for kills, not position: a full grid, weapons on and scaled up, no lap
+target, and a destroyed craft respawns rather than sitting out. Implemented
+2026-09-08, from `MSC_EVENT_ELIM`'s own text and the campaign RE pass the same
+day settled the ending on:
+
+> *"Eliminator: race for kills, not position, against a full grid of trigger
+> happy contenders in a weapons-heavy environment. Weapons do more damage,
+> and you cannot absorb pickups, but you regain health after each lap. The
+> lap count is not fixed, and the race will end when the kill count is
+> reached."*
+
+Four mechanics come straight out of that sentence, each with its own recovery
+status:
+
+- **A full grid.** `Mode::has_opponents` answers `true`, the same reading
+  `Mode::SingleRace` already has and for the same reason - the text promises
+  one outright.
+- **Weapons on, and scaled up by a whole second table.** `Mode::weapons_enabled`
+  answers `true`, and `race::load` opens `Data\XML\WeaponStats_Elimination.xml`
+  instead of the ordinary `WeaponStats_Race.xml` for this mode alone -
+  `oag_title::weapons::Weapons::elimination`, a field that existed and named
+  this exact file before anything read it. Confidence 90: `DAT_08b32428`
+  selects the file (not the speed class) and was measured `0` in a single race
+  and `1` in Eliminator, both at Venom - see
+  [`missile.md`](../ghidra/functions/psp-pulse-usa/missile.md). This is what
+  "weapons do more damage" *is* in the recovered engine: a second, real table,
+  not an invented multiplier. A title with no second table (Pure) falls back
+  to the ordinary one and says so in the load report.
+- **Pads refresh an order of magnitude faster.** `<WeaponPad
+  elimination_refresh_time>` is `0.05` seconds against the ordinary
+  `refresh_time`'s `0.55` on both shipped PSP discs -
+  `oag_formats::handling::global::WeaponPad`'s own doc comment already named
+  Eliminator by name before this mode existed to read it. `race::load` selects
+  it the same way it selects the weapon table above, falling back to the
+  ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).
+- **No pickup absorption.** `Mode::pickups_absorb` answers `false` for
+  Eliminator alone; both the player's and an opponent's absorb path check it
+  and keep the pickup rather than spend it on nothing, the pattern this
+  project already uses for every no-effect weapon.
+- **Health regenerates on a completed lap, in place of absorption.**
+  `Race::eliminator_lap_health_refill` runs on the same `outcome.lap_completed`
+  edge the free Time Trial/Speed Lap turbo already reads. **The amount is not
+  authored anywhere read this pass** - the sentence says "you regain health",
+  not how much - so a full refill is **chosen, not measured**: the plain
+  reading of a mode with no partial-heal vocabulary anywhere else in its own
+  text, easy to replace the day a real figure turns up.
+
+### A destroyed craft respawns and is counted, not eliminated from the race
+
+Where a single race or Zone reads `CraftState::Eliminated` as the end
+(`RaceState::eliminate`), Eliminator reads it as a **death**:
+`Race::tick_eliminator` runs once a tick, over the whole field, and for a
+craft that has finished its `Eliminated` sequence it increments
+`Standing::deaths`, credits a kill if one is owed (below), refills the shield
+pool and puts the craft back on the track through the same recovery
+`Race::respawn` already does for an off-track/`Reset` rescue - confidence 40,
+inherited from that method's own doc comment, since where an Eliminator
+respawn actually happens was not found in the executable either.
+`ER_DEATHS` ("Deaths:") is this count's own results-screen row, and a mode
+that authors one is a mode you come back into - the reasoning the disc's own
+strings settled before any of this landed.
+
+**A 1.5-second dwell before the respawn is measured, separately from the
+explosion.** `oag_physics::CraftState::Eliminated`'s own doc comment records
+the original moving on "after 1.5 s, into a respawn or the Eliminator's kill
+bookkeeping" - `eliminator::ELIMINATOR_RESPAWN_DELAY` is that figure, counted
+from the tick the craft reaches `Eliminated` (i.e. *after*
+`DESTROYED_DURATION`'s own half-second explosion has already run).
+
+### Kill attribution is chosen, not recovered
+
+**Nothing in the read executable was traced for how the original decides
+*whose* weapon a kill belongs to** - only that the count exists, at
+`entity+0x8d8`. `Race::last_damager` is this engine's own rule: the most
+recent craft to land a *direct* weapon hit on the one that died is credited,
+cleared the instant a wall or another cause deals damage instead, so a stale
+hit from long before is never credited for an unrelated death. A splash-only
+hit (inside a blast's radius but not the craft it directly struck) is not
+credited, and neither is a wall-only death - both count the victim's own
+death and nobody's kill. This is a design choice, stated as one, and it is
+the piece of Eliminator most likely to need revisiting if the original's own
+mechanism is ever read.
+
+### The ending is measured, and the number it uses today is not the flat one first reported
+
+`Eliminator_UpdateKillTarget` (`0x0882ce18`, confidence 80) is a real,
+*measured* ending: the mode's own update reads a kill target and ends the
+race the instant **any** craft's kill count reaches it - `RaceMode_SetState`
+to state 3 - not only the player's. See
+[`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md).
+`RaceState::eliminator_finished(target, kills)` takes both numbers from its
+caller rather than deciding either itself, and `kills` is the field's own
+highest `Standing::kills`, exactly matching "any craft".
+
+**The target itself is per-campaign-cell, not a flat number - a correction to
+this page's own earlier reading.** A first pass read `FEData.wad`'s
+identical `<Targets Elimination="10">` across all 24 per-track records as a
+flat census; the campaign RE pass the same day found the real source is
+`Data\Plugins\grids\grid_00..15.xml`'s `PI_Cell` records, each with its own
+gold-medal figure, and the values actually used are **10, 7 or 5** - never
+one flat figure. `FEData.wad`'s `10` was one sample of three read as the
+whole population. **This engine has no campaign grid wired in at all**
+(`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` says so in its own doc
+comment), so `Options::eliminator_kill_target` is a parameter with `10` -
+one of the three real values, not an invented one - as its default, ready for
+a campaign loader to fill in the cell's own figure per race the day one
+exists.
+
+### What is deliberately out of scope
+
+- **The campaign grid itself.** No `PI_Cell`, no medal evaluation
+  (`Cell_EvaluateMedal`'s own gold/silver/bronze, direction flipped for Zone
+  and Elimination), no per-cell AI-skill or lap-count resolution. Wiring a
+  cell in is what would let `eliminator_kill_target` stop being a default.
+- **Presentation.** The same "the sound is built, the HUD hide and the camera
+  swing are not" gap [Zone's own ending](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be)
+  already carries applies here too.
+- **`ER_YOU_ELIM`'s exact wording** ("You have been eliminated!") is not
+  drawn anywhere; nothing in this pass settled whether it belongs to the
+  craft that reached the target or to the one that did not, and this engine's
+  own ending does not need to answer that to work.
+- **Opponent aggression in Eliminator is a design axis, not a fidelity
+  one** - the owner's own standing rule, *"AI doesn't have to be faithful,
+  but challenging"*. `oag_ai::Driver::wants_to_fire` is unchanged by this
+  work; how hard an opponent hunts another craft in a kill-count mode is
+  future tuning, not a recovery question.
+
+HUD layout: `Elimination_HUD.xml`, wired the same way every other mode's
+layout is (`oag_title::HudLayouts::elimination`) - see [the HUD
+page](../ui/hud.md#eliminator).
 
 ## What happens when a race ends
 
