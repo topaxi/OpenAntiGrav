@@ -51,6 +51,21 @@ So the gate is uninitialised heap. Recovered mechanism, undefined value.
   `CANNONEXPLWALL` are now located, and the function that loads the first
   (`FUN_0886593c`, `0x0886593c`) is the obvious place to read the hit path from.
 
+- **`craft_sticking_ground_truth::no_craft_pair_sticks_together_on_a_real_grid`
+  is RED because of this change, and the bound was deliberately not raised.**
+  Worst overlap streak 46 -> 95. The cause is measured and it is *not* sticking:
+  every craft finishes the run `Racing` and active, and the two most
+  conservative alternatives - running the countdown without spawning a round,
+  and absorbing the Cannon instead of holding it - both give **68**. The old 46
+  was measured in a regime where several opponents sat frozen on a useless
+  pickup all race, so any fix to that moves it. Re-measuring the *pathology*
+  under the new regime (`Driver::social` reverted to `Field::behind` only) gives
+  **90** against the fixed driver's 95 - the statistic no longer separates the
+  bug from the fix, so no bound can. The distribution still does: 10 sticking
+  pairs with five over 25 ticks pre-fix, 7 with two post-fix. **That file needs
+  a better statistic, not a bigger number**, and it is written up in its own
+  header. This is a maintainer decision, not something to fix from here.
+
 ## Next Steps
 
 - **Ask the maintainer the one question that settles it**: does AI cannon fire in
@@ -64,6 +79,15 @@ So the gate is uninitialised heap. Recovered mechanism, undefined value.
   (`FUN_0893c9d4`'s registry hands the same pointer to anyone who asks for
   `"AI input %d"`), and the PS2 build, whose `Ai_Construct` may zero the byte and
   whose behaviour would then differ from the PSP's.
+- **Decide what to do about the sticking tripwire**, which is the one thing this
+  change leaves red. Three options, in the order they look defensible: change
+  the statistic (total overlapped pair-ticks, or pairs over a floor - both
+  separate 10-with-five-over-25 from 7-with-two cleanly); give every personality
+  a minimal collision-avoidance floor, which the file's own header already names
+  as the known follow-up and which would be *invented* tuning; or hold the AI
+  Cannon behaviour until one of those lands. Do **not** just raise the bound -
+  the measurement above shows it cannot separate the pathology from the fix any
+  more.
 - **`AiManager_Update` (`0x08834b14`) is worth a page of its own.** It is the
   per-frame chain for the whole AI subsystem - the `Ai` list at `manager+0x44`
   and the `WeaponAi` list at `manager+0x78` - and nothing in `docs/gameplay/ai.md`
