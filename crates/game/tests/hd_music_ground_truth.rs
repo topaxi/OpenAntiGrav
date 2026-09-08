@@ -211,12 +211,17 @@ fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
 /// The front end's music loads **through the path the engine would use**, and
 /// not merely through a name that resolves.
 ///
-/// The only thing that reaches `music::load_front_end` for an HD source. HD's
-/// `Title::front_end` is `None`, so `Audio::start_music` is never called on an
-/// HD boot and the race playlist is all a player hears - which makes this
-/// branch unreachable in practice and a test the only thing that can exercise
-/// it. Without this, "HD's front-end music works" would rest on `locate`
-/// returning `Some`, which is true of any real entry.
+/// **This paragraph used to say the opposite - `oag_hd::TITLE.front_end` was
+/// `None` when it was written, on the same day it changed** (2026-08-17,
+/// ADR-0025 gave HD a real front end a few hours later), so `Audio::start_music` is
+/// **not** unreachable: a headless `just play hd` run reaches
+/// `Frontend::is_playing_movie` going false the same way Pulse's does, and
+/// does call it - confirmed 2026-09-08, `oag-game --dump-audio` on a real
+/// boot logs `audio: music Data\Music\FEMusic\frontend1_stereo.mp3, 170.7 s,
+/// looping` before the front end ever reaches this test's own path. This test
+/// still earns its keep: it is the only thing that exercises
+/// `music::load_front_end` in isolation, decoupled from wherever in the boot
+/// sequence `start_music` happens to be called from.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_front_ends_music_loads_through_the_engines_own_path() {

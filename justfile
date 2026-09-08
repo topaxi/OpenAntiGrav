@@ -177,13 +177,16 @@ hash-images:
 # does it, and docs/formats/ps3-disc.md is why. The recipe says so rather than
 # letting the archive open fail with something obscure.
 #
-# **`--race` is no longer needed**, and this paragraph used to say the opposite.
-# The front end refused HD by name while `oag_hd::TITLE` set `front_end: None`;
-# ADR-0025 replaced that with a boot chain that carries its provenance, and the
-# boot now walks HD's own declared order, plays its logo reel and opens the
-# menus - in HD's 1920x1080 grid, in its own `helv.fnt`. Every line of the boot
-# report still says the order is **declared** rather than watched, which is the
-# hold that has not moved.
+# **`--race` is no longer needed**, and this paragraph used to say the opposite
+# twice over. The front end refused HD by name while `oag_hd::TITLE` set
+# `front_end: None`; ADR-0025 replaced that with a boot chain that carries its
+# provenance, and the boot now walks HD's own declared order, plays its logo
+# reel and opens the menus - in HD's 1920x1080 grid, in its own `helv.fnt`.
+# **The order is no longer only declared, either**: three cold boots on RPCS3
+# (2026-09-05) walked all eight steps and the report now says `Measured`, not
+# `Declared` - see docs/formats/hd-frontend.md. That capture watched the
+# screen order, not the audio; which of HD's front-end music cuts the
+# original actually plays is still unobserved.
 #
 # Six of the eight declared steps are dialogs this build cannot drive, so the
 # chain it walks is the picker and `Studio Logo`; running out of it opens this
