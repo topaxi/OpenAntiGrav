@@ -813,7 +813,10 @@ two encodes of one. What the original selects on has not been read, so
 `oag_hd::names::FRONT_END_MUSIC` picks the base stereo cut and
 `FRONT_END_MUSIC_VARIANTS` records all four with the axis named. `FEship.mp3`
 is a second front-end track, a literal rather than a template, and is recorded
-and unwired - its trigger is unread.
+and unwired. Its builder is now located -
+[`Music_BuildFeshipTrackPath`](../ghidra/functions/ps3-hdfury-eu/sound.md#music_buildfeshiptrackpath-the-front-ends-second-track),
+confidence 78 - but nothing calls it by a direct branch anywhere in the
+binary, so what actually triggers it is still unread.
 
 ### What it cost, and what it found
 
@@ -832,13 +835,15 @@ Two things, neither of them about MP3:
 ### Confidence
 
 **88.** The templates and the declaration are each read off the disc and every
-expansion resolves, but nothing has been watched running under an emulator - so
-which of the four front-end cuts the original plays, and which track it starts
-on, are unobserved. HD's front end **is** wired as of 2026-08-17
-([ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)),
-which is what makes those cuts reachable and does not make them observed: the
-boot walks an order read out of the disc's own XML. `crates/game/tests/hd_music_ground_truth.rs` asserts every claim
-above against the disc.
+expansion resolves, but which of the four front-end cuts the *original*
+plays, and which track it starts on, are still unobserved - the 2026-09-05
+RPCS3 boot capture ([ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md),
+[hd-frontend.md](hd-frontend.md#this-front-end-is-wired-and-its-chain-has-now-been-watched))
+watched the screen order, not the audio output, so it settled nothing about
+which cut plays. What *is* now observed is our own boot: a headless
+`just play hd --dump-audio` run picks `frontend1_stereo.mp3` and plays it
+looping, confirmed 2026-09-08. `crates/game/tests/hd_music_ground_truth.rs`
+asserts every claim above against the disc.
 
 ### Reproducing it
 
