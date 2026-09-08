@@ -934,17 +934,30 @@ naively is unsafe:
   separate image and boot chain to add when that becomes a goal, not a
   question about the EU/USA pressings this page covers.
 
-**`PI000` states its own strings inline rather than pointing at an
-`entries.xml`.** Every other language plugin here names one (`Dynamic Entry
-File Source`); `PI000` does not, and `Data\Plugins\PI000\entries.xml` does not
-exist on either pressing - the roughly 1,000-entry table, HUD captions
-(`idstring="HUD_Lap"`, `HUD_current`, `HUD_best` - matched directly against
-`Data\XML\TimeTrial_HUD.xml`'s own `idstring` attributes) included, sits
-directly inside `Definition.xml`'s own `<StringTable>`. [`load_strings`] now
-re-parses the definition itself as a string table when a language names no
-external one; a `<Font>`/`<Values>` node carries no `<Entry>` tag, so this
-costs nothing on the discs where the field really is absent and only helps
-the one where it is not.
+**Corrected 2026-09-08: the sentence that stood here said `PI000` was the
+odd one out. It is not - none of Pure's five picker languages names an
+external `entries.xml`.** Re-checking all five `Definition.xml` files by
+hand finds zero occurrences of `Dynamic Entry File Source` across
+`PI000`/`PI008`/`PI009`/`PI010`/`PI011`, each carrying its whole table
+inline in its own `<StringTable>` instead - 906, 882, 879, 886 and 882
+`<Entry>` tags respectively. So this is Pure's convention for every
+language it offers, not a one-off for English: unlike Pulse, whose plugins
+name an external `entries.xml`, Pure's shipped languages never do. `PI000`'s
+own table is still worth calling out for size - the roughly 1,000-entry
+table, HUD captions (`idstring="HUD_Lap"`, `HUD_current`, `HUD_best` -
+matched directly against `Data\XML\TimeTrial_HUD.xml`'s own `idstring`
+attributes) included, sits directly inside `Definition.xml`'s own
+`<StringTable>` - but `Data\Plugins\PI000\entries.xml` not existing is not a
+gap peculiar to English; nothing under `Data\Plugins\PI0NN\entries.xml`
+exists for any of the five. [`load_strings`] re-parses the definition itself
+as a string table when a language names no external one; a `<Font>`/
+`<Values>` node carries no `<Entry>` tag, so this costs nothing on a plugin
+that really points elsewhere and is what makes every one of Pure's five
+languages resolve, German included - confirmed directly by
+`--dry-run --no-video`'s own report line,
+`Data\Plugins\PI009\Definition.xml: 873 strings for German`, which is the
+exact language name the `German names no string table` failure this
+mechanism replaced used to print.
 
 Confidence **90**: every plugin id, its `Language`/`Entry` shape and its font
 and string content are read directly off both pressings and asserted in
