@@ -68,16 +68,27 @@ samples), RMS -13.0 dBFS; SFX-alone (music muted at the settings level, the
 same isolation technique `the-race-mix-saturates-the-per-voice-sas.md` used)
 clips **0.043%**, RMS -14.5 dBFS - close to that thread's own live-measured
 original figure, **0.044%** (930/2,123,332, "isolated transients, not a mix
-sitting on the rail"). **This is a large, recent improvement over the
-2.3-2.8% this thread and its sibling were both citing**: `b46c6659` (landed
-2026-09-07, after this thread's own last saturation numbers and after the
-sibling thread's own last whole-mix clip reading) ported
-`Scream_PanVolumePair`, the SFX pipeline stage the sibling thread found
-carries a live-measured mean **-11.7 dB**. Nobody had re-measured the whole
-mix's clip rate since that port landed until this pass. Read as: **the
-saturation this thread and its sibling both opened with is now
-substantially resolved, by work neither thread did** - `PanVolumePair` was
-the sibling thread's own subject, not this one's.
+sitting on the rail"). Verified this was a real grid, not just the flag's
+"drawing" effect its own `--help` text warns about: `--opponents` moved the
+whole-mix RMS by a reproducible 0.33 dB (bit-identical across two separate
+runs of each side), where `settings.toml`'s `mode` alone did not move it at
+all (`single_race` without `--opponents` reproduced the solo run's RMS to
+the last printed digit) - see the scratch report for the four-way check.
+
+**This is a large, recent improvement over the 2.3-2.8% this thread and its
+sibling were both citing, and the likely cause is attributable rather than
+measured here**: `b46c6659` (landed 2026-09-07, after this thread's own last
+saturation numbers and after the sibling thread's own last whole-mix clip
+reading) ported `Scream_PanVolumePair`, the SFX pipeline stage the sibling
+thread found carries a live-measured mean **-11.7 dB**. Nobody had
+re-measured the whole mix's clip rate since that port landed until this
+pass, and this pass did not itself capture a before/after `PanVolumePair`
+pair (that would mean reverting `.rs` and pulling in the full gate for a
+side measurement) - so read the attribution as "the timing and the size both
+fit," not as a controlled before/after. Read as: **the saturation this
+thread and its sibling both opened with is now substantially smaller, by
+work neither thread did** - `PanVolumePair` was the sibling thread's own
+subject, not this one's.
 
 Given that, the decision is **not to add an invented limiter or gain
 reduction**, chosen for two reasons: the port's clip rate is now the same
