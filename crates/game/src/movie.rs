@@ -1311,11 +1311,7 @@ fn gst_frame_store(
 /// `Data\Movies\bg640.ipf` on exactly the same global (`0x0027a85c`) that picks
 /// `Intro512.pss` against `Intro640.pss` - and those two *do* declare their
 /// rates, measured at 25/1 and 30000/1001. So `bg512` is the 50 Hz cut and
-/// `bg640` the 60 Hz one. That global is `g_refresh_mode`, and which value it
-/// takes is the player's answer to a first-boot question rather than a region -
-/// see `docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md`. This function is
-/// asked about whichever cut was loaded, so the preference lives in
-/// `oag_pulse::movies::LOOSE_MOVIES` and not here.
+/// `bg640` the 60 Hz one - a player's answer, not a region: `refresh-mode.md`.
 ///
 /// It checks out arithmetically as well: 225 frames at 25 Hz is 9.000 s and
 /// 270 at 30000/1001 is 9.009 s, so the two cuts are the same nine-second loop.

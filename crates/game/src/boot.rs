@@ -1119,8 +1119,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     //
     // **Both current sources pass it**, and that was worth checking rather than
     // assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272, and
-    // the PS2's `INTRO640.PSS` and `BG640.IPF` are both 640x448 (as are the
-    // 50 Hz cuts it prefers them over, both 512x512). What differs on
+    // the PS2's `INTRO640.PSS` and `BG640.IPF` are both 640x448. What differs on
     // the PS2 is the *display aspect*, not the plane size, and that is already
     // handled per-movie by the pillarbox rect rather than here. So this branch
     // does not currently fire on any disc anyone has - it is what stops a future
