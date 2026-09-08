@@ -29,7 +29,9 @@ pub(crate) struct RaceStage {
     /// arm and `Session::escape`, the only two readers.
     pub(crate) result_key: oag_game::records::Key,
     /// Whether this race's result has already been folded into
-    /// `Session::records` and saved.
+    /// `Session::records` and saved **since this stage last became live** -
+    /// not "ever", which is why `Session::resume_race` clears it back to
+    /// `false` on the way out of a park.
     ///
     /// **Read and set at both capture sites, for two different reasons.**
     /// `Session::frame`'s finish-transition arm re-enters every tick for as
@@ -40,6 +42,17 @@ pub(crate) struct RaceStage {
     /// in `escape` too covers the mirror case: a race that finished and was
     /// saved is then escaped from its own results table without the finish
     /// arm's every-tick check ever seeing it happen again.
+    ///
+    /// **Clearing it on resume is not optional.** A race `escape` parks
+    /// (`Session::suspended_race`, an unfinished race only) keeps this same
+    /// `RaceStage`, flag included, across the trip through the menus. Left
+    /// set, a Speed Lap improved after resuming would never be recorded -
+    /// `escape`'s own guard would see it as already saved - and a Time
+    /// Trial escaped mid-race and then resumed to a real finish would have
+    /// that finish silently swallowed by `Session::frame`'s guard instead of
+    /// reaching `Store::record` at all. The race genuinely was captured once
+    /// on the way into the park; clearing the flag on the way back out does
+    /// not lose that write; it only stops it from blocking the next one.
     pub(crate) result_saved: bool,
 }
 

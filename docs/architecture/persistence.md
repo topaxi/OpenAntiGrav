@@ -74,6 +74,18 @@ state after the fact:
    same flag, so a race already saved on finishing does not get saved again
    for nothing new to say.
 
+**`result_saved` means "since this stage last became live", not "ever".** An
+*unfinished* race `escape` leaves is parked rather than discarded
+(`Session::suspended_race`), keeping the same `RaceStage` - flag included -
+across the trip through the menus, and `Session::resume_race` swaps it
+straight back into `Stage::Race`. Left set, a Speed Lap lap improved after
+resuming would never be recorded, and a Time Trial escaped mid-race and then
+resumed to a real finish would have that finish silently swallowed by the
+finish arm's own guard. `resume_race` clears the flag back to `false` on the
+way out of a park for exactly this reason - found by reasoning through the
+resume path during review, not by a test, since neither capture site's own
+unit tests touch `Session` at all.
+
 The second site exists because `oag_race::Mode::laps_target` is `None` for
 Speed Lap and Zone, so `Race::finished` never turns `true` for either mode -
 and Speed Lap's entire purpose is a fast lap time. Leaving a race is the one

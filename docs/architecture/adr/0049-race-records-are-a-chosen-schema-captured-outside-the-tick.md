@@ -104,6 +104,57 @@ still one number per circuit/mode/class, or a new sibling table beside
 `Key`, `parse` or `Store::record` to change - the same promise `settings.rs`'s
 own `#[serde(default)]`-everywhere shape already makes for its tables.
 
+### `result_saved` means "since this stage last became live", not "ever"
+
+`Session::escape` can park an *unfinished* race in `Session::suspended_race`
+rather than discard it - a player backing out mid-race expects to get back to
+it, and `Session::resume_race` swaps the same `RaceStage` straight back into
+`Stage::Race`. The guard flag rides along with it, so `resume_race` clears it
+back to `false` on the way out of a park. Without that: a Speed Lap lap
+improved after resuming would never be recorded (`escape`'s own guard would
+see the flag already set), and a Time Trial escaped mid-race and then resumed
+to a real finish would have that finish silently swallowed by the finish
+arm's own guard instead of ever reaching `Store::record`. Caught by reasoning
+through the resume path explicitly rather than by a test that happened to
+drive it - the two capture sites' unit tests do not touch `Session` at all,
+so this is architectural review territory, not something `cargo nextest`
+could have flagged.
+
+## Alternatives considered
+
+**A nested `BTreeMap<title, BTreeMap<track, BTreeMap<mode, BTreeMap<class,
+Record>>>>` instead of `Vec<Record>` with the four key fields inline.**
+Rejected: four levels of dynamic TOML table keys, one of them a backslashed
+archive path needing escaping, reads worse than a flat array of tables and
+buys nothing - `Store::record`'s linear scan over what is realistically a few
+dozen rows costs nothing measurable, and every row already carries its own
+key fields for `parse`'s tolerant per-row decode to work from.
+
+**Canonical rewrite (`toml::to_string_pretty`) on every save, rather than a
+`pilots.rs`-style surgical `toml_edit` upsert that touches only the changed
+row.** Chosen deliberately over the surgical route despite one real cost: a
+future field this build does not know about, present in a file written by a
+newer version, is silently dropped on the next rewrite by an older binary -
+the same trade-off `settings.toml` already accepts, and accepted here for the
+same reason: `records.toml` is machine-owned and rewritten every run, unlike
+a pilot file a player hand-edits and expects untouched. The surgical route
+would preserve an unknown future field through an old binary, at the cost of
+`records.rs` growing `pilots.rs`'s save-path complexity for a machine-owned
+file that never needed it.
+
+**Capturing only on the finish transition, not also on `escape`.** The
+simpler design, matching the scoreboard's own precedent exactly - and
+rejected because it silently drops Speed Lap and Zone entirely, which
+`Mode::laps_target` being `None` for both makes structural rather than
+incidental. See the Decision section's second point.
+
+**Keying `Key::track` on [`crate::catalogue::Track::id`] plus a reversed
+flag, rather than the `.vex` entry name directly.** Equivalent information,
+and the id is arguably the more legible field to hand-inspect in the file -
+but the entry name is what a load actually resolves to and is already the
+value `race::Options::track` and `title.race.track` both carry, so using it
+directly needed no extra lookup at the one call site that builds a `Key`.
+
 ## Consequences
 
 - A player's best lap, best total time and last result now survive a process

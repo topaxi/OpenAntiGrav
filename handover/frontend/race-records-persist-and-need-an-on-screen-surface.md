@@ -15,6 +15,36 @@ all twelve clean) were both green with this change in.
 
 ## Open
 
+**`Session::escape`'s own capture site has not been runtime-verified** - only
+`Session::frame`'s finish transition has, live, twice, with a real process
+restart in between. This sandbox has no way to deliver an Escape keypress to
+the game's window (a real Wayland surface; `xdotool` is X11-only and finds
+nothing, and no `wtype`/`ydotool`/`wlrctl` is installed), and there is no
+`SIGTERM` handler anywhere in `crates/game/src/main`, so a `kill` bypasses
+`escape()` rather than exercising it. The code is compile-checked and
+reviewed against the same live-confirmed `RaceStage::observation()` the
+finish site uses, but Speed Lap and Zone - the two modes that depend on this
+site entirely, since `Race::finished` never turns `true` for either - have
+not themselves produced a saved row on a real desktop yet. Run this on one:
+
+```sh
+oag-game --race --mode speed_lap --autopilot
+# let it complete a lap or two, then press Escape
+cat "${XDG_CONFIG_HOME:-$HOME/.config}/oag/records.toml"
+# expect a row: mode = "speed_lap", last_finished = false, a real best_lap_ticks
+```
+
+A `result_saved` bug was found and fixed the same day, by reasoning through
+`Session::escape`/`Session::resume_race` rather than by a test: an
+*unfinished* race `escape` parks (`Session::suspended_race`) keeps its
+`RaceStage`, guard flag included, across a trip through the menus, so
+without `resume_race` clearing the flag on the way back out, a Speed Lap
+improved after resuming would never be recorded and a Time Trial escaped
+mid-race and then resumed to a real finish would have that finish silently
+dropped. Worth re-checking on a real desktop too: escape mid-race, resume,
+then either improve a Speed Lap or finish a Time Trial, and confirm the
+result lands.
+
 **Nothing draws a stored record.** A player can see their times only by
 reading `records.toml` by hand - there is no "personal best" line on the
 results table, no records browser, nothing in `assets/ui/menu.toml`. This

@@ -761,9 +761,21 @@ impl Session {
     /// `handle_menu`'s own guard but is cheap to make true unconditionally
     /// rather than only where it is currently checked.
     fn resume_race(&mut self) {
-        let Some(stage) = self.suspended_race.take() else {
+        let Some(mut stage) = self.suspended_race.take() else {
             return;
         };
+        // **Cleared, not left as `escape` set it.** `result_saved` means
+        // "saved since this stage last became live", and parking a race does
+        // not end its life the way finishing or truly leaving it does - the
+        // player is about to keep racing under the same key. Left set, a
+        // Speed Lap improved after a resume would never be recorded (the
+        // `escape` guard would see it as already saved), and a Time Trial
+        // that is escaped mid-race and then resumed to a real finish would
+        // have that finish silently dropped by `Session::frame`'s own guard.
+        // The race was genuinely captured once, on the way in here - this
+        // does not lose that write, only stops it from blocking the next
+        // one.
+        stage.result_saved = false;
         // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
         // last picture, so a later `escape` does not flash black waiting for
         // the restarted feed's first frame.
