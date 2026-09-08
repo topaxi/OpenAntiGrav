@@ -134,8 +134,16 @@ order:
   translated under `[untranslated]` rather than leaving it out - this is the
   only way to prove the *language* half of this, as opposed to the *override*
   half, and the first real exercise of the marker convention above.
-- Cross-check against
-  [pures-string-tables-are-not-read-and-its.md](pures-string-tables-are-not-read-and-its.md):
-  Pure's own table loading empty is a bug in the read side, distinct from this
-  feature, and the override layer must not be used to paper over it silently -
-  fixing `load_strings` for Pure stays the real fix.
+- **Settled 2026-09-08, cited for whoever still has this open in a stale
+  checkout: `load_strings` reading empty for Pure is fixed.** `boot.rs`'s
+  `load_strings` now re-parses a language plugin's own `Definition.xml` as
+  the string table when it names no external `entries.xml` - which is every
+  one of Pure's five picker languages, English included, not only the one
+  this used to single out. `--dry-run --no-video` against
+  `pure-psp-usa.chd` reports `Data\Plugins\PI009\Definition.xml: 873 strings
+  for German`, the exact language the old `German names no string table`
+  failure named. See
+  `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
+  The distinction this bullet drew still holds going forward: the override
+  layer here must not be used to paper over a *read*-side bug in some future
+  title, only to add or replace text this project authors itself.
