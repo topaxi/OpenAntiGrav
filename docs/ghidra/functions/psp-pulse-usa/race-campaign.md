@@ -544,6 +544,19 @@ state machine was not traced.
 
 ## What is not determined
 
+- **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
+  shipped `Zone` cell's own `class=` attribute contradicts that.** Every
+  `Zone`-mode cell in `grid_00.xml` .. `grid_15.xml` carries the literal
+  `class="Zone"` (e.g. `grid0_4_2`), not one of `Venom`/`Flash`/`Rapier`/
+  `Phantom` - found by
+  [`crates/formats/src/race_campaign.rs`](../../../../crates/formats/src/race_campaign.rs)'s
+  parser against the real disc, not re-read in Ghidra. Either the table has a
+  fifth entry this pass missed, or `PI_Cell_ParseElement` leaves an
+  unrecognised `class=` string in the field rather than rejecting it - both
+  are consistent with `CellSelection_PopulateDetail` blanking the class label
+  for `Zone`. Left open rather than guessed; the parser keeps `class` as a raw
+  string and maps only the four known names, per
+  [`docs/formats/race-campaign.md`](../../../formats/race-campaign.md).
 - **The in-race HUD's medal tier is a different value and is still unread.**
   [`hud.md`](../../../ui/hud.md) records `Hud_UpdateTimeCluster_q`
   (`0x0881c9d0`) picking a caption from a five-way table on an ordinal where
