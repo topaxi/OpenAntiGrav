@@ -592,8 +592,8 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/tooling/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/tooling/movie-entry-name-hardcodes-us-so-a-european.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/frontend/where-pulses-language-picker-belongs-is-unevidenced.md)
+- [Pure's language picker: the selected row's colour is a placeholder, and its highlight sits high](handover/frontend/pures-language-picker-selected-row-colour-and.md) - the blank-row bug itself is fixed (2026-09-09); a measured `selected` colour (`0xFF16AED1`) exists in `oag_pure::frontend::MENU_SKIN` and is not wired to this screen yet, and the highlight `Fill`'s own geometry sits noticeably higher than the row it marks
 - [Pure's `Title Screen` logo wordmark is found; `FE Screen`'s own backdrop is not](handover/frontend/pures-title-screen-is-missing-its-own-logo.md)
-- [Pure's language picker draws no text for its own selected first row](handover/frontend/pures-language-picker-draws-no-text-for-its.md)
 - [A *slot-resolved* record's own field layout](handover/tooling/a-slot-resolved-records-own-field-layout.md)
 - [Pure's DLC trailer key and TEST.bin, still unknown](handover/tooling/pure-dlc-trailer-key-and-testbin-unknowns.md)
 - [A model built from several small pieces sharing one atlas](handover/rendering/a-model-built-from-several-small-pieces-sharing.md)

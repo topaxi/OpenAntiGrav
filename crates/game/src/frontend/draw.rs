@@ -759,15 +759,39 @@ impl Frontend {
                     color: [0.37, 0.86, 0.96, 0.35],
                 });
             }
+            // **Not recoloured to white when selected.** It used to be, and
+            // that was a real, reproducible bug rather than a stylistic
+            // choice: Pure's picker sits on a white backdrop
+            // (`insert_backdrop_parent_fills` above), and opaque white text is
+            // invisible there regardless of which row it is - proven by
+            // forcing the selected colour to red and watching the same row
+            // appear. It looked row-0-specific at first only because row 0 is
+            // what a fresh boot lands on with no input; selecting any other
+            // row and inspecting its own `Draw::Text` (not just the row that
+            // happened to be tried) shows the same blank text, on both
+            // `pure-psp-usa.chd` and `pure-psp-eu.chd`'s row order. Pulse's
+            // picker never showed it because its own picker backdrop is not
+            // white, so white-on-white never arises there - not because its
+            // draw loop treats index 0 specially, which it does not either.
+            //
+            // **The replacement is the row's own unselected colour, not a new
+            // invented one - and not yet the measured one either.**
+            // `oag_pure::frontend::MENU_SKIN.selected` *does* carry a real,
+            // captured value for Pure (`0xFF16AED1`, confidence 65 - darker
+            // and more saturated than the unselected `TextColor`, the
+            // opposite direction from Pulse's own "brightens toward white").
+            // This function has no access to that table - `Frontend` carries
+            // no `oag_title::MenuSkin` today - so wiring it in is future
+            // work, not done here under this pass's deadline. Falling back to
+            // the row's own colour is the safe interim choice precisely
+            // because it needs no new, unverified guess: every row already
+            // proves that colour legible against both the white backdrop and
+            // the highlight `Fill`, selected or not.
             out.push(Draw::Text {
                 x: menu_x,
                 y,
                 scale,
-                color: if selected {
-                    [1.0, 1.0, 1.0, 1.0]
-                } else {
-                    color
-                },
+                color,
                 border: None,
                 align,
                 text: language.native_name.clone(),
