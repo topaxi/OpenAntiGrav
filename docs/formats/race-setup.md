@@ -343,6 +343,320 @@ team read:
 That second axis is what the `Loyalty` bar on `Team Selection` displays, and it
 is why craft availability cannot be modelled with the circuit unlock's shape.
 
+## The Race Campaign: the disc's own campaign grid, shape yes, content no
+
+**Status: read, not implemented**, same as the rest of this page - and the
+subject of a dedicated scoping pass (2026-09-08) into how much of Wipeout
+Pulse's campaign structure already exists as data on the disc. Short answer:
+**the screen flow and the grid's visual shape are fully authored; which
+cell of the campaign's own grid races which track, mode or medal time is
+not found authored anywhere this pass could read - but a separate,
+per-track family of race-time/lap-time/AI-difficulty records *is* authored,
+and whether the two connect is an open question, not a confirmed link.**
+All extracted directly with `oag-wad cat`/`extract` against
+`pulse-psp-usa.chd`'s `Data.wad`, `FE.wad` and `FEData.wad`; nothing here
+needed Ghidra.
+
+**A region note, since it bears on the language and front-end findings
+below**: `oag-unpack info` identifies this image as `UCUS-98712` (USA) by
+its boot path, but its ISO 9660 volume id reads `SCEE` and it also carries a
+full `PSP_GAME/USRDIR/UCES00465/` (EU-serial) subtree alongside the USA one -
+an oddity not resolved this pass. The `Data.wad`/`FE.wad`/`FEData.wad` this
+page reads sit under the USA `PSP_GAME/USRDIR/` root regardless, and the
+five-language string table found there (English, French, German, Spanish,
+Italian) is consistent with either a PAL disc or a USA disc that ships PAL's
+language set - it does not by itself resolve which pressing this image
+actually is. Flagged here rather than silently assumed.
+
+### The path in, and it is a fourth destination `FE_RACEBOX` does not touch
+
+`MainMenu_Definition.xml`'s `Mode` list carries `FE_RACE_CAM` **before**
+`FE_RACEBOX` - "RACE CAMPAIGN" is its own top-level entry, not a mode of the
+custom race box this page already covers. Its redirect chain:
+
+```
+Main Menu (FE_RACE_CAM) -> TournamentLoad -> Grid Selection -> Cell Selection -> Cell Help
+                                                                       |
+                                                          Team Selection -> Launch Game
+```
+
+`TournamentLoad` (`MainMenu_Definition.xml`) is a loading/dialog screen -
+title `MSC_LOADTOURN`, a `MSC_MSG_AUTOSAVE3` warning dialog gated behind
+`MSC_SQ_MSG7` - before redirecting on to `Grid Selection`. That autosave
+dialog is the first concrete evidence the campaign persists between sessions,
+consistent with `MSC_EVENT_TOURN`'s own text (below) saying a tournament can
+be saved between races. Confidence 90 - clean widget/redirect reads, not
+runtime-verified.
+
+### `Grid Selection` and `Cell Selection`: two authored levels, `CellMode_Definition.xml`
+
+`Grid Selection` (`type="GridSelection"`) shows one row of up to four
+`GridController` tiers (`MaxX="4" MaxY="1"`), each labelled `GRID 1`, `GRID
+2`... (`Title`, `string="GRID 1"` - a template, filled per grid at runtime)
+and three stat lines per tier: `Medals` (`"00/16"`), `Points` (`"000/110"`)
+and `Required` (`"20"`), each with its own idstring (`RC_GM` "Gold medals",
+`RC_TP` "Total points", `RC_PN` "Points needed"). **All three are literal
+placeholder strings in the XML**, the same pattern `race-setup.md` already
+reads on `Track Creation`'s `1/1`/`1/3` counters and the placeholder circuit
+names - a template the executable substitutes into, not shipped content.
+
+Selecting a tier opens `Cell Selection` (`type="CellSelection"`): the same
+hex `GridController` as `Cell Creation`'s custom-grid editor (below), each
+cell a `Medal_x_y` / `Outline_x_y` / `Lock_x_y` triple - filled hex, outline,
+and a lock glyph overlay. `MaxX="7" MaxY="5"` is the bounding box, not the
+cell count: a hex grid staggers, and counting the authored `Medal_x_y` nodes
+by column gives 5,4,5,4,5,4,5 - **32 cells**, not 35. Confirms the campaign's
+per-tier grid and the player-built custom grid share one widget shape, 32
+cells, not merely a similar look.
+
+### A selected cell's detail panel is authored down to the medal-target colours - the values are not
+
+Selecting a cell opens a panel with:
+
+- **`Title`**, `string="SINGLE RACE 01"` - placeholder.
+- **`Line1`..`Line8`**, each an id/value pair (`l1`..`l4` placeholders, then
+  literally `--7`/`--5`/`--6`/`--7` for lines 5-8) - eight scoreboard-shaped
+  rows, unpopulated.
+- **`Target0`/`Target1`/`Target2`**, each a coloured hex swatch
+  (`0xfffaeb38` gold, `0xffdae3e4` silver, `0xffdf942f` bronze - the ordering
+  and the colours themselves are the evidence these are the three medal
+  tiers) plus an `IG_HUD_TARGET` ("Target") label and a `string="value"`
+  placeholder for the actual time or score.
+- **`Event Help`**, `idstring="MSC_EVENT_SR"` by default - the same
+  `MSC_EVENT_*` family `docs/gameplay/race-modes.md` already reads for the
+  four implemented modes, confirming a cell's help text is one of these
+  per-mode strings substituted in, not bespoke per-cell prose.
+
+`MSC_HELP_RC_CS`, the screen's own help text, says outright: *"Details and
+medal requirements for this event are listed to the right of the grid. For
+races that feature AI ships, you can change their difficulty level with δ."*
+So the disc's own documentation confirms medal requirements are meant to be
+shown per cell - the widgets to show them are authored - **and no source read
+this pass carries the numbers that would fill them in.** Confidence 88 for
+the widget/placeholder reading (direct, unambiguous XML); the absence claim
+that follows is scored on its own, below.
+
+### Circuit and craft unlocks already read (above) are the campaign's own gate
+
+The eleven named `Grid0`..`Grid10` tiers this page's unlock section already
+documents on 21 of 24 `PI_Track`s and every `PI_TeamModel`/`PI_ModelSkin` are
+now read in context: they are what `Cell Selection`'s `Lock_x_y` overlay and
+`Grid Selection`'s tier progression gate against. Clearing enough of one
+grid's cells is what should unlock the next `PI_Track`s carrying that grid's
+name - that inference was already implicit in the unlock section; this pass
+adds the screen that displays the lock, not a new mechanism.
+
+### What is authored for a *custom* grid, and it is a different answer
+
+`Racebox` (`RaceBox_Definition.xml`, `RB_EDIT_GRID` -> `Cell Creation`) is the
+**player-built** equivalent of the same 32-cell shape, and here the medal
+targets genuinely are authored - **by the player, at the console, not by the
+disc**. `Cell Creation`'s `Records` button opens `SetTargetTimes`, whose three
+`TargetInput` widgets (`type="time"`) are labelled `RB_GOLD_TARG` "Gold
+target", `RB_SILV_TARG` "Silver target", `RB_BRON_TARG` "Bronze target" - a
+free-text time entry, one per medal, per custom cell. `Cell Creation`'s
+`Tournament` button opens `Tournament C`
+(`Selection_Definition.xml`, `type="TournamentSelection"`, title
+`RB_TOURN_SET` "Set tournament") - the multi-track list this page's "Nobody
+offers a lap count" section already reads the serialisation format for
+(`<TournamentTrack size="%d">` wrapping `<Values track=... mode=... laps=...>`
+records, four slots on PSP, twelve on PS2).
+
+**So the same three medal-target widgets exist in two contexts and are filled
+two different ways**: typed by the player for a custom grid, and (on the
+evidence available) supplied from somewhere unread for the built-in Race
+Campaign. That a custom grid needs `TargetInput` at all is itself evidence
+the built-in campaign's numbers are not entered the same way - a player never
+sees a `TargetInput` on `Cell Help`, only a rendered value.
+
+### `FEData.wad` authors real per-track numbers - race times, lap times, AI difficulty, and two mode-independent constants
+
+**Found by widening the search past `Data.wad` alone**, after the negative
+above looked too clean to leave unchecked: `FEData.wad` (6.7 MiB, 242
+entries) carries **24** entries - exactly the `PI_Track` count - each a
+flat `<code>`-dictionary record (extension `.cod`, the same guessed
+extension the language tables use; unrelated content, same guess heuristic)
+with this shape:
+
+```
+<RaceTimes Flash="138" Phantom="128" Rapier="119" Venom="117"/>
+<LapTimes  Flash="33"  Phantom="25"  Rapier="29"  Venom="38"/>
+<Targets Elimination="10" Zone="25"/>
+<Physical Length="5178"/>
+<l>
+  <c Difficulty="Easy"   Class="Venom"   SkillScaleValue="0.9"/>
+  ... 12 rows, {Easy,Medium,Hard} x {Venom,Flash,Rapier,Phantom}
+  <f Class="Venom" HeadToHead="1.7" FullGridWithWeapons="0.0"
+     HalfGridWithWeapons="0.0" FullGridWithoutWeapons="0.1"
+     HalfGridWithoutWeapons="0.0"/>
+  ... 4 rows, one per Class
+</l>
+```
+
+(attribute names expanded from the file's own `<code>` shortening for
+legibility - `ModeModifiers`/`ModeModifiers` values quoted directly). Read
+this way, confidence 88: the tags (`RaceTimes`, `LapTimes`, `Targets`,
+`Physical`, `SkillScaleValue`, `ModeModifiers`) are unambiguous once expanded,
+and one record's `Physical Length="5178"` is an **exact** match to the
+`Distance(m) 5178` this page's own PPSSPP capture already recorded live for
+Talon's Junction White - independent corroboration this family is genuine
+per-track data, not a coincidence of format.
+
+Four things read off the 24 records directly:
+
+- **`Targets Elimination="10" Zone="25"` is identical on every one of the 24
+  files** - a fixed, track-independent kill-count for Eliminator and
+  zone-count for Zone. This is the numeric value behind `MSC_EVENT_ZONE`'s
+  "clear the target number of zones" and `MSC_EVENT_ELIM`'s kill-count
+  ending (both text-only until now). Confidence 90 - flat census over all 24.
+- **`RaceTimes`/`LapTimes` carry one figure per speed class**, varying track
+  to track (Venom's `RaceTimes` ranges 87-135 across the 24). These read as
+  target/record times, but each is a *single* number per class - there is no
+  three-way gold/silver/bronze split inside this record. Whether/how it
+  feeds `Cell Help`'s three `Target0..2` tiers is **not established**; a
+  single baseline scaled by a fixed ratio into three tiers is plausible and
+  unverified.
+- **The `ModeModifiers` block's two "WithWeapons" fields
+  (`FullGridWithWeapons`, `HalfGridWithWeapons`) are `0.0` on every class, on
+  every one of the 24 files** - only `HeadToHead` and the two
+  "WithoutWeapons" fields ever carry a nonzero value. Confidence 90, flat
+  census. Reads as: a weapons-on grid gets no AI equalising offset (weapons
+  themselves are the equaliser); a weapons-off grid and head-to-head do.
+- **`SkillScaleValue` is now a located, valued field.**
+  [`ai-stats.md`](../ghidra/functions/psp-pulse-usa/ai-stats.md#what-is-not-determined)
+  already flagged it as "appears in the string table and in none of the nine
+  functions [read], unchased" - this pass did not chase the consumer either
+  (that is Ghidra, out of lane), but the *values* are now on disc, per track
+  per difficulty per class, twelve rows to a file.
+
+**File order was checked as a possible track-identity key and does not hold
+up as one.** The 24 entries' extraction indices are consecutive
+(`00218`-`00241`), and the first pairs (`00218`/`00219`, both length `5178`;
+`00222`/`00223`, both `5350`) look like forward/reverse pairs sharing one
+physical circuit, tempting a "file order equals `Definition.xml`'s `k`
+order" reading. **That reading is contradicted by the third pair**: `k=3`
+(`03_Track`) and `k=5` (`18_Track`) are independently known from this page's
+own PPSSPP capture to measure `5350` and `4419` respectively, but a strict
+positional mapping puts `4419` at position 3 and `5350` at position 5 -
+swapped. So file order is *not* a reliable track key on its own evidence,
+and no attempt to name all 24 tracks from this family is made here.
+
+### What this pass could not settle
+
+**Confidence 55, genuinely unresolved, and explicitly a question for whoever
+has Ghidra next**: where the built-in campaign's per-cell content - which
+track, which mode, which medal target times, how many points a race is worth,
+how many points a grid requires to clear - actually lives, and **whether it
+draws on the `FEData.wad` per-track family above or is unrelated to it.**
+Two readings remain open and this pass could not discriminate them from XML
+or from the newly-found record shape alone:
+
+1. **A compiled table inside `BOOT.BIN`**, read the way `Definition_IsUnlocked`
+   reads `<Unlock>` rows - i.e. the grid's *shape* is XML but its *content* is
+   executable data, the same split `TrackSelection_PopulateList` already shows
+   for the ordinary track list (XML declares candidates, code filters and
+   orders them). Under this reading a cell could point at one `FEData.wad`
+   record and a class, and derive its three medal tiers from that record's
+   single `RaceTimes` figure by a still-unknown ratio.
+2. **A procedurally-built campaign**: grid contents derived at runtime from
+   `Definition.xml`'s existing `PI_Track`/`Grid` associations plus the
+   `FEData.wad` per-track record, with no separate *campaign* table at all -
+   the campaign organises data that already exists for other purposes
+   (Custom Race medal defaults, AI scaling) rather than authoring its own.
+
+Nothing in `Data.wad`'s 17 resolving GUI/plugin definition files, nor
+`FE.wad` (27 entries, fonts and textures only, no text) nor the rest of
+`FEData.wad` (242 entries: images, `.smf`/`.sse` movie data, WAVE audio, and
+64 `<code>`-dictionary blobs total, of which the 24-file family above is
+one identifiable group - the other 40 were not individually read this pass),
+distinguishes these two readings. The language tables themselves are in
+`Data.wad` only, not duplicated in `FEData.wad`. The five files this
+page's own Limits section already flags as unresolved (`Controls_Definition`,
+`Credits_Definition`, `Debug_Screens`, `MemoryStickBootScreens`,
+`MemoryStickScreens`) are unlikely campaign-shaped by name, but were not
+ruled out. **The concrete next step is Ghidra, not more XML reading**: find
+what populates `Cell Selection`'s `Title`/`Line1..8`/`Target0..2` and `Grid
+Selection`'s `Medals`/`Points`/`Required` widgets at runtime, and whether
+that consumer also reads the `FEData.wad` family above - the same
+cross-reference approach
+[`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md)
+used for `TrackSelection`/`TeamSelection` once the PSP relocation patch made
+`get_xrefs_to` usable on these screen classes too. That is outside this
+pass's lane (Ghidra is another contributor's) and is recorded as a next step
+in [the handover thread](../../HANDOVER.md) this pass opened.
+
+### The full mode list the disc authors, seven against this project's four
+
+`RaceBox_Definition.xml`'s `Mode` list (`Single Player`, confidence 92 - see
+above) is the complete enumeration: **Arcade, Head2Head, Time Trial, Speed
+Lap, Tournament, Zone, Elimination.** `oag_race::Mode::ALL` implements four of
+the seven (Time Trial, Speed Lap, Zone, and Single Race for the disc's
+`Arcade`). English text for all seven is in `Data.wad`'s language tables -
+five `.cod`-extension entries reached only through `oag-wad extract` (they
+have no resolved path; the extractor names them by directory index and
+hash), each a flat `<a c="IDSTRING" b="text"></a>` list. English is entry
+**#1141** (hash `b96b2da0`), identified by content - `ER_YOU_ELIM` reads
+"You have been eliminated!" there and something else in each of the other
+four (French, German, Spanish, Italian - the PAL five-language set, see the
+region note below):
+
+| idstring | English text |
+| --- | --- |
+| `MSC_EVENT_SR` | "Single Race: take on a full grid of opponents, weapons optional. A gold medal awaits those who emerge victorious." |
+| `MSC_EVENT_TT` | "Time Trial: beat the clock in this solo race. ... You will be given a free turbo pickup once per lap. Your energy will also recover automatically..." |
+| `MSC_EVENT_SL` | "Speed Lap: focus all your efforts into tearing up the track and beating the single best lap time in this solo event. ..." |
+| `MSC_EVENT_ZONE` | "Zone: your ship accelerates automatically and the top speed increases after every ten second period... Clear the target number of zones to win the event." |
+| `MSC_EVENT_TOURN` | "Tournament: take part in a series of single races. Points are awarded between races, and tallied to determine the overall winner. ... You can also save your tournament progress between races." |
+| `MSC_EVENT_ELIM` | "Eliminator: race for kills, not position, against a full grid of trigger happy contenders in a weapons-heavy environment. Weapons do more damage, and you cannot absorb pickups, but you regain health after each lap. The lap count is not fixed, and the race will end when the kill count is reached." |
+| `MSC_EVENT_HTH` | "Head to Head: an intense game of rivalry where you will be pitted against an opponent. ... Track the distance between you and your opponent on the HUD." |
+
+Confidence 92 for every string (direct text extraction, five languages
+cross-checked to identify English by content). Three mechanically new facts
+inside Eliminator's own text, none previously recorded: pickups cannot be
+absorbed (health regenerates per lap instead), weapon damage is scaled up,
+and the race ends on a kill-count target rather than a lap count -
+corroborating `docs/gameplay/race-modes.md`'s existing reading that
+`ER_DEATHS`/`ER_YOU_ELIM` imply a respawn-based mode.
+
+**`docs/ui/hud.md` describes `Arcade_HUD.xml`, in passing, as "the
+single-race and tournament layout"** - that page's own reading, cited here
+rather than re-verified; this pass did not independently confirm the
+tournament half of it. `docs/ui/hud.md`'s own census of the five layout XMLs
+(`Arcade`, `Elimination`, `TimeTrial`, `Zone`, `MPTag`) is the evidence there
+is no separate `Tournament_HUD.xml`. **This pass separately tried
+`Data\XML\Head2Head_HUD.xml` directly (`oag-wad cat`) and it does not
+resolve** - consistent with, but not the same claim as, hud.md's five-file
+census. If both hold, an in-race tournament or head-to-head leg looks like
+an ordinary single race, and only the surrounding menu chrome (`Cell Help`,
+its target/points widgets, the end-of-tournament placement text below) is
+campaign-specific - but that inference rests on hud.md's phrasing for the
+tournament half, not on a probe run here.
+
+**Per-speed-class lap counts, read from help text rather than a table, and
+qualified in the source's own wording**: `MSC_LOAD_VENOM` "Most Venom events
+last for 3 laps", `MSC_LOAD_FLASH` "Flash events usually last 4 laps",
+`MSC_LOAD_RAPIER` "a lap count of 4 for most events", `MSC_LOAD_PHANTOM` "a
+punishing 5 laps of racing for most events". Confidence 78 - direct quotes,
+capped because the text itself hedges ("most", "usually") rather than stating
+a fixed rule, and no `<Values laps="%d">` record was cross-checked against it.
+This bears directly on
+[race-modes.md](../gameplay/race-modes.md#single-race)'s "the lap count is
+ours" gap for Single Race: the original's own manual text says a Venom race
+(the default class) is normally 3 laps, agreeing with this project's guess,
+but Rapier/Phantom races are described as longer, and nothing here ties a lap
+count to a class programmatically.
+
+**End-of-tournament placement text, all eight positions, previously
+unrecorded**: `ER_END_TOUR_1`.."Congratulations! 1st Place!" through
+`ER_END_TOUR_8` "Bad luck! Maybe next time!", plus `ER_TOUR_COM` "Tournament
+complete - ", `ER_WON_TOUR` "You have won the tournament!", `ER_QUIT_TOUR`
+"Quit Tournament", `ER_CONT_TOUR` "Continue tournament", `ER_TOUR_STAN`
+"Tournament standings", `ER_RACE_POINTS` "Race points:", `ER_RC_POINTS` "Race
+Campaign points", `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` "Gold/Silver/Bronze/No
+medal awarded". None of these carry a numeric points table alongside them -
+they are presentation strings, not data, the same distinction the rest of
+this section draws.
+
 ## Nobody offers a lap count
 
 **No title authors a lap-count row on its race-setup page.** Confidence 88,
