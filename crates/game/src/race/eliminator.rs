@@ -94,6 +94,11 @@ impl Race {
                 self.world.ships[killer as usize].standing.kills += 1;
             }
 
+            // **A full refill, chosen rather than recovered.** The original
+            // charges a respawn instead: `Ship_SetState`'s state-3 branch
+            // computes `clamp(shield - 1, 0, 5)`, and what consumes that
+            // figure is unread - see `oag_physics::damage`'s own module doc.
+            // A full pool is the un-punitive reading, not a measurement.
             let dimensions = self.world.ships[slot].handling.dimensions;
             oag_physics::damage::reset(&mut self.world.ships[slot].physics, &dimensions);
 
