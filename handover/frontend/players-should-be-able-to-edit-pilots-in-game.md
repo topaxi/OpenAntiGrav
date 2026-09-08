@@ -1,5 +1,44 @@
 # Players should be able to build pilots in game, and a naive editor would eat their comments
 
+## Landed 2026-09-08: the string_id backlog
+
+Next Step 2 from the previous cut - and now Next Step 1, since the axis
+preview below took that number. `assets/ui/menu.toml`'s remaining eight pages
+(`main`, `race`, `remix`, `options`, `display`, `graphics`, `audio`,
+`controls`) all name a `string_id`/`title_string_id` now, each with its
+English text in `assets/ui/strings/english.toml` in the same change.
+`scripts/check-strings.py`'s `BASELINE_LABELS`/`BASELINE_TITLES` are both
+**empty** - `just check-strings` reports `83 menu row(s) (0 baselined), 9
+page title(s) (0 baselined)` - left declared rather than deleted so a future
+regression still has somewhere to be caught. Genuinely bookkeeping, as the
+previous cut said it would be: `MODE`, `SPEED CLASS`, `AI DIFFICULTY`,
+`TEAM`, `VARIANT`, `TRACK` and `START` share one id each across RACE and
+RACE REMIX (same setting key or the same word doing the same job), the way
+`OAG_MENU_BACK` already does for every page's own BACK row; every
+OPTIONS-page submenu row reuses the target page's own title id
+(`OAG_OPTIONS_DISPLAY` names both), except AI PILOTS, which reuses the
+pilots page's own `OAG_PILOT_PAGE_TITLE`.
+
+## Landed 2026-09-08: the axis preview
+
+Next Step 1 from the previous cut. `pilots::axis_preview_for` reads whichever
+axis `AXIS` currently holds and turns it into one plain-language line -
+mechanism, unit and allowed range off `Pilot`'s own doc comments and
+`pilots::limit`, never an invented scale. Chosen, not measured, no confidence
+score: see `docs/architecture/menus.md`'s new "AI PILOTS: the axis preview"
+section for the full design writeup, including a real layout bug it found
+(the reserved note slot `menu/rows.rs` computes collides with Pulse's own
+`frame.marks` on any page that scrolls to exactly its `visible_rows` - fixed
+locally for this page in `prompt::axis_preview_draw`, left open below because
+`menu/rows.rs`'s own budget is where the general fix belongs).
+
+Also fixed on the way: the first cut of `axis_preview_for` searched every
+page in the definition for a `pilot.axis` row rather than the one actually
+open, so the line leaked onto every other page too (found by capturing
+GRAPHICS, not by reading the code). `axis_preview_reads_the_live_axis_row`
+and `axis_preview_is_absent_off_a_page_with_no_axis_row` in
+`crates/game/src/pilots/tests.rs` both cover it now.
+
 ## Landed 2026-09-07: rename and delete, and the text entry they needed
 
 The two operations the first cut deferred are in, and so is the thing that
@@ -230,32 +269,44 @@ maintainer call, not one to make here.
   translation long enough to fill the whole panel would still run into
   them. `menu::draw_list` already threads a `measure` closure through for
   the strip; the same could be done here if it ever matters.
-- Whether a player can see what a pilot actually does without racing it. A
-  preview - "this pilot brakes late and defends hard" derived from its axes -
-  would make experimentation much cheaper, and is entirely invented UI.
-  Untouched by this cut.
-- **Landed 2026-09-07**: every row on the AI PILOTS page now names a
-  `string_id`, the page itself names a `title_string_id` (new mechanism,
-  resolved the same way a row's `label` is), and `pilot_choice`'s
-  "(built-in)" suffix is looked up too. `just check-strings`
-  (`scripts/check-strings.py`) now gates this: a new `menu.toml` row/page
-  with no id fails the build. Every other page in the file still carries
-  none - see
+- **Landed 2026-09-08, narrower than this bullet first asked for.** What
+  landed is a per-*axis* line - what `commitment` or `patience` means, read
+  live off `AXIS` - not the whole-*pilot* narrative this bullet originally
+  named ("this pilot brakes late and defends hard", derived from every axis
+  at once). That is still open, and it is a materially different problem:
+  it needs a cross-axis scale (low/mid/high commitment, say) this cut
+  deliberately did not invent, since "describe the numbers that are there,
+  do not invent a scale" was the brief for the per-axis line. A whole-pilot
+  summary is the next, harder step if the maintainer still wants it.
+- **A real layout bug the axis preview's own capture found**:
+  `menu::visible_rows`'s "clear the 272-pixel screen" budget for the
+  warning/restart note slot (`crates/game/src/menu/skin.rs`) never accounts
+  for Pulse's own `frame.marks` - the bottom-of-screen mark drawn on every
+  page regardless of content. On a page that scrolls to exactly its own
+  `visible_rows` (AI PILOTS has nine rows, seven show at once), a note in
+  that slot lands on top of the mark. Worked around locally for the axis
+  preview in `prompt::axis_preview_draw` (a smaller scale and a nudge, tuned
+  against a real capture - see `docs/architecture/menus.md`'s "AI PILOTS:
+  the axis preview" section), but the general fix belongs in
+  `menu/rows.rs`/`menu/skin.rs`, which any future warning or restart note on
+  a similarly-scrolled page will need too.
+- **Landed 2026-09-07, and the ratchet it named is now cleared.** Every row
+  on the AI PILOTS page named a `string_id`, the page itself a
+  `title_string_id` (new mechanism, resolved the same way a row's `label`
+  is), and `pilot_choice`'s "(built-in)" suffix was looked up too. `just
+  check-strings` (`scripts/check-strings.py`) gates this: a new `menu.toml`
+  row/page with no id fails the build. At the time every other page in the
+  file still carried none - see
   [invented-ui-text-has-no-translation-and-the.md](invented-ui-text-has-no-translation-and-the.md)
-  for the ratchet that bounds it.
+  - and as of **2026-09-08** none do any more:
+  `BASELINE_LABELS`/`BASELINE_TITLES` are both empty. That other thread's own
+  description of the ratchet is now stale in the same way; whoever picks it
+  up next should read this file's own "Landed 2026-09-08: the string_id
+  backlog" section above rather than trust its count.
 
 ## Next Steps
 
-1. The axis preview above - it needs no new mechanism, only reading
-   `Pilot`'s own numbers into a sentence, and it is what makes
-   experimenting cheap rather than blind.
-2. Give the rest of `assets/ui/menu.toml`'s rows a `string_id` - the AI
-   PILOTS page's own are done now, and the mechanism (including the
-   `title_string_id` a page carries too) is proven end to end; the
-   remaining eight pages are bookkeeping rather than design, one
-   `BASELINE_LABELS`/`BASELINE_TITLES` row in `check-strings.py` deleted per
-   row converted.
-3. Reuse `crate::prompt::Keyboard` for the next thing that needs a name -
+1. Reuse `crate::prompt::Keyboard` for the next thing that needs a name -
    a profile, a replay, a saved setup. It was built to be reused and
    nothing about it knows what a pilot is; the only thing to decide is
    whether that caller wants a wider character set.

@@ -13,10 +13,14 @@ before anything checked that. This script is that check.
 It mirrors `check-file-size.py`'s own shape on purpose, for the same reason:
 82 of this file's label rows and 9 of its page titles already had no id
 before this script existed, and failing the gate on all of them turns the
-gate off. So existing debt is frozen in `BASELINE_LABELS`/`BASELINE_TITLES` -
-a row already there when the rule landed may stay untranslated, but nothing
-*new* may join it, and a row that gains a `string_id` must have its baseline
-entry deleted, the same "graduated" rule `check-file-size.py` enforces.
+gate off. So existing debt was frozen in `BASELINE_LABELS`/`BASELINE_TITLES` -
+a row already there when the rule landed could stay untranslated, but nothing
+*new* could join it, and a row that gained a `string_id` had to have its
+baseline entry deleted, the same "graduated" rule `check-file-size.py`
+enforces. **Both sets are empty as of 2026-09-08** - the last eight pages'
+worth of debt converted in one pass - but they stay declared rather than
+removed, so the mechanism (and a future regression) still has somewhere to
+be checked against.
 
 Three things are checked, offline and without a Ghidra bridge or a built
 binary:
@@ -63,98 +67,19 @@ STRINGS_DIR = ROOT / "assets/ui/strings"
 BASE_LANGUAGE = "english"
 
 # Pre-existing debt: `(page id, label)` pairs allowed to carry no
-# `string_id`. Recorded on 2026-09-07, the day this script landed - every
-# row here predates the rule, on a page the pilot editor did not touch.
-# **May shrink, never grow.** Converting a row: give it a `string_id`, add
-# the id to `assets/ui/strings/english.toml`, and delete its row here.
-BASELINE_LABELS: set[tuple[str, str]] = {
-    ("main", "RACE"),
-    ("main", "REMIX"),
-    ("main", "OPTIONS"),
-    ("main", "QUIT"),
-    ("race", "MODE"),
-    ("race", "SPEED CLASS"),
-    ("race", "AI DIFFICULTY"),
-    ("race", "TEAM"),
-    ("race", "VARIANT"),
-    ("race", "TRACK"),
-    ("race", "START"),
-    ("race", "BACK"),
-    ("remix", "MODE"),
-    ("remix", "SPEED CLASS"),
-    ("remix", "AI DIFFICULTY"),
-    ("remix", "TRACK TITLE"),
-    ("remix", "TRACK"),
-    ("remix", "CRAFT TITLE"),
-    ("remix", "TEAM"),
-    ("remix", "VARIANT"),
-    ("remix", "START"),
-    ("remix", "BACK"),
-    ("options", "DISPLAY"),
-    ("options", "GRAPHICS"),
-    ("options", "AUDIO"),
-    ("options", "CONTROLS"),
-    ("options", "AI PILOTS"),
-    ("options", "LANGUAGE"),
-    ("options", "BACK"),
-    ("display", "MONITOR"),
-    ("display", "WINDOW MODE"),
-    ("display", "WINDOW SIZE"),
-    ("display", "ASPECT RATIO"),
-    ("display", "FRONT END STYLE"),
-    ("display", "VSYNC"),
-    ("display", "FRAME LIMIT"),
-    ("display", "BRIGHTNESS"),
-    ("display", "GAMMA"),
-    ("display", "BACK"),
-    ("graphics", "RENDERER"),
-    ("graphics", "RENDER SCALE"),
-    ("graphics", "TARGET FPS"),
-    ("graphics", "MINIMUM RESOLUTION"),
-    ("graphics", "RECONSTRUCTION"),
-    ("graphics", "UPSCALER SHARPNESS"),
-    ("graphics", "MSAA"),
-    ("graphics", "MOTION BLUR"),
-    ("graphics", "SHADOWS"),
-    ("graphics", "ANISOTROPIC FILTERING"),
-    ("graphics", "CAMERA VIEW"),
-    ("graphics", "FIELD OF VIEW"),
-    ("graphics", "BOOST FOV KICK"),
-    ("graphics", "PERFORMANCE OVERLAY"),
-    ("graphics", "BACK"),
-    ("audio", "MUSIC VOLUME"),
-    ("audio", "SFX VOLUME"),
-    ("audio", "ANNOUNCER VOLUME"),
-    ("audio", "MASTER VOLUME"),
-    ("audio", "MUSIC SOURCE"),
-    ("audio", "BACK"),
-    ("controls", "THRUST"),
-    ("controls", "STEER LEFT"),
-    ("controls", "STEER RIGHT"),
-    ("controls", "PITCH UP"),
-    ("controls", "PITCH DOWN"),
-    ("controls", "AIRBRAKE LEFT"),
-    ("controls", "AIRBRAKE RIGHT"),
-    ("controls", "CAMERA VIEW"),
-    ("controls", "SIDESHIFT"),
-    ("controls", "TRIGGERS"),
-    ("controls", "TRIGGER SENSITIVITY"),
-    ("controls", "BACK"),
-}
+# `string_id`. Recorded on 2026-09-07, the day this script landed; **empty**
+# as of 2026-09-08 - every row that predated the rule now names an id, the
+# last eight pages converted in the same pass that added the AI PILOTS page's
+# own axis preview. Left as an explicit empty set rather than deleted, so a
+# row that regresses (a new one added with no id) fails here rather than
+# silently starting a fresh pile of debt with nothing recording that the
+# baseline was ever cleared.
+BASELINE_LABELS: set[tuple[str, str]] = set()
 
-# Pre-existing debt: page ids allowed to carry no `title_string_id`. The
-# `pilots` page is not here - it is the newest page in the file, and it
-# shipped translated from day one of this rule.
-BASELINE_TITLES: set[str] = {
-    "main",
-    "race",
-    "remix",
-    "options",
-    "display",
-    "graphics",
-    "audio",
-    "controls",
-}
+# Pre-existing debt: page ids allowed to carry no `title_string_id`. **Empty**
+# as of 2026-09-08, for the same reason and in the same change as
+# `BASELINE_LABELS` above.
+BASELINE_TITLES: set[str] = set()
 
 # Files read by hand and confirmed to hold nothing under an `OAG_` string
 # literal but a real lookup against a `StringTable` - see this module's own

@@ -17,7 +17,7 @@
 use anyhow::Result;
 use log::{debug, info};
 
-use oag_game::{display, drs, movie, perf, upscale};
+use oag_game::{display, drs, movie, perf, pilots, upscale};
 
 use crate::stage::Stage;
 
@@ -570,6 +570,14 @@ impl Session {
             .awaiting_binding
             .map(|button| crate::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings)));
         if let Stage::Menu(stage) = &mut self.stage {
+            // What the `AXIS` row currently means, read live off the page's
+            // own rows - `None` off any page but AI PILOTS. Computed here
+            // rather than inside `MenuStage::render`, which holds no
+            // `StringTable` of its own; see `pilots::axis_preview_for`'s own
+            // doc for why the pure half of this lives in the library crate
+            // rather than beside `session::pilot_editor`'s other rows.
+            let axis_preview =
+                pilots::axis_preview_for(&stage.menu, self.shell.as_ref().map(|s| &s.strings));
             stage.render(
                 &self.gpu,
                 &mut encoder,
@@ -579,6 +587,7 @@ impl Session {
                 &|button| self.controls.bound_keys(button),
                 self.suspended_race.is_some(),
                 binding_prompt.as_deref(),
+                axis_preview.as_deref(),
             )?;
         }
 

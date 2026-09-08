@@ -183,6 +183,95 @@ fn axis_names_cover_every_draw() {
     assert_eq!(AXES.len(), Pilot::BALANCED.spans().len());
 }
 
+/// `axis_gloss` and [`AXES`] are two lists an axis has to join together -
+/// this is the guard `axis_gloss`'s own doc comment promises, the same
+/// shape `axis_names_cover_every_draw` is for `Pilot::spans`.
+#[test]
+fn every_axis_has_a_preview() {
+    for (name, _) in AXES {
+        assert!(
+            axis_gloss(name).is_some(),
+            "{name} is in AXES but axis_gloss does not know it"
+        );
+    }
+    // Not a `Span`, so the `AXIS` row can never land on it - a line about it
+    // would be a preview of a row that does not exist.
+    assert!(axis_gloss("lean").is_none());
+    assert!(axis_gloss("not-a-real-axis").is_none());
+}
+
+/// A minimal AI PILOTS page: just the `AXIS` row `axis_preview_for` reads,
+/// so this exercises the free function without a real window, GPU or disc -
+/// the same fixture shape `session::pilot_editor`'s own tests use for the
+/// same page.
+fn fixture_menu_on_axis(axis: &str) -> menu::Menu {
+    let text = "\
+version = 1
+root = \"pilots\"
+[[page]]
+id = \"pilots\"
+[[page.entry]]
+kind = \"choice\"
+label = \"AXIS\"
+setting = \"pilot.axis\"
+values_from = \"pilot_axes\"
+";
+    let strings = StringTable::default();
+    let definition = menu::Definition::parse(text, &strings).expect("a tiny valid definition");
+    let mut model = menu::Menu::new(definition);
+    let axes: Vec<menu::Choice> = AXES
+        .iter()
+        .map(|(name, _)| menu::Choice::plain(*name))
+        .collect();
+    model.supply(menu::ValueSource::PilotAxes, &axes);
+    model.seed("pilot.axis", &menu::Value::Text(axis.to_string()));
+    model
+}
+
+#[test]
+fn axis_preview_reads_the_live_axis_row() {
+    let model = fixture_menu_on_axis("commitment");
+    let preview = axis_preview_for(&model, None).expect("commitment has a preview");
+    assert!(preview.contains("RANGE 0.5 TO 1.05"), "{preview:?}");
+
+    let model = fixture_menu_on_axis("roll_airtime");
+    let preview = axis_preview_for(&model, None).expect("roll_airtime has a preview");
+    assert!(preview.contains("SECONDS"), "{preview:?}");
+}
+
+/// A translation overrides the English fallback, the same rule
+/// `session::pilot_editor::say` follows for every other project-owned id.
+#[test]
+fn axis_preview_prefers_a_translation_over_the_english_fallback() {
+    let model = fixture_menu_on_axis("commitment");
+    let mut strings = StringTable::default();
+    strings.merge(std::collections::HashMap::from([(
+        "OAG_PILOT_AXIS_COMMITMENT".to_string(),
+        "TRANSLATED COMMITMENT LINE".to_string(),
+    )]));
+    let preview = axis_preview_for(&model, Some(&strings)).expect("commitment has a preview");
+    assert_eq!(preview, "TRANSLATED COMMITMENT LINE");
+}
+
+/// A page with no `AXIS` row - anything but the AI PILOTS page - draws
+/// nothing rather than a stale or invented line.
+#[test]
+fn axis_preview_is_absent_off_a_page_with_no_axis_row() {
+    let text = "\
+version = 1
+root = \"root\"
+[[page]]
+id = \"root\"
+[[page.entry]]
+kind = \"back\"
+label = \"BACK\"
+";
+    let strings = StringTable::default();
+    let definition = menu::Definition::parse(text, &strings).expect("a tiny valid definition");
+    let model = menu::Menu::new(definition);
+    assert!(axis_preview_for(&model, None).is_none());
+}
+
 /// The whole point of `toml_edit` over `settings.rs`'s
 /// `toml::to_string_pretty`: a hand-written comment must still be there after
 /// the row it documents is edited and saved.
