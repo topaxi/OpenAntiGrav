@@ -7,7 +7,7 @@ use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::strings;
-use oag_game::{boot, font, menu, race, report, settings};
+use oag_game::{boot, font, menu, race, records, report, settings};
 use oag_gameplay::input::Button;
 
 use crate::hints;
@@ -474,6 +474,33 @@ impl Session {
                     {
                         println!("{}", race::describe(&stage.race.telemetry()));
                     }
+                }
+            }
+
+            // **The one moment a *finished* race's result is captured** -
+            // never from inside `Race::tick` above, and never on every frame
+            // the results table sits on screen: `result_saved` makes this a
+            // one-time transition even though the finished arm re-enters
+            // every tick for as long as the player looks at the board.
+            // `escape` is the other capture site, for the three modes that
+            // may never reach this one at all - see `oag_game::records`'s own
+            // module doc for why both exist.
+            //
+            // Outside the `match` above on purpose: that borrows `self.stage`
+            // mutably through `stage`, and `self.records` is a different
+            // field of the same `self` - ending the first borrow before this
+            // runs is what lets the second start. See `Session::escape`,
+            // which draws the same borrow apart the same way.
+            if let Stage::Race(stage) = &mut self.stage
+                && stage.race.finished()
+                && !stage.result_saved
+            {
+                stage.result_saved = true;
+                let key = stage.result_key.clone();
+                let observation = stage.observation();
+                self.records.record(key, observation);
+                if let Err(e) = records::save(&self.records) {
+                    error!("could not save race records: {e:#}");
                 }
             }
         }
