@@ -242,3 +242,60 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         )
     );
 }
+
+/// An opponent holding a Cannon fires it, with no button anywhere and no fire
+/// decision - which is what the recovered gate implies and what the maintainer
+/// reports from play.
+///
+/// **The mechanism is measured; the value the gate reads is not.**
+/// `Cannon_UpdateReload` gates on the fire-held byte of the firing craft's
+/// control record, which for an opponent is `Ai + 0x1e`. Nothing in the image
+/// writes that byte at any width, and `Ai_Construct`'s object is allocated
+/// without a zero-fill, so on the real hardware it is whatever the heap block
+/// held. This port takes it as non-zero - **chosen, not measured** - and the
+/// consequence this test pins is the one a player should be able to see: an
+/// opponent's Cannon is *continuous from the tick it is picked up*, not aimed
+/// and not timed. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    assert!(
+        race.world.ship_count > 1,
+        "a single race should grid more than one craft"
+    );
+    let cannon = race.cannon_stats().expect("the disc authors a Cannon");
+    race.world.ships[1].pickup.weapon = Some(Weapon::Cannon);
+
+    // `throttle` holds CROSS and never SQUARE, so nothing the player does can
+    // account for a round appearing. One magazine's worth of ticks plus slack.
+    let ticks = (cannon.rate * 60.0).ceil() as u64 + 120;
+    let mut fired = 0usize;
+    for _ in 0..ticks {
+        race.tick(&throttle);
+        fired = race
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind == Some(Weapon::Cannon) && p.owner == 1)
+            .count();
+        if fired > 0 {
+            break;
+        }
+    }
+    assert!(
+        fired > 0,
+        "no opponent Cannon round appeared in {ticks} ticks - \
+         `Race::advance_cannons` is not running slot 1"
+    );
+
+    // And the player, who is holding no fire button, fired nothing.
+    assert!(
+        rounds(&race).is_empty(),
+        "slot 0 fired a Cannon with SQUARE never held"
+    );
+}
