@@ -636,7 +636,8 @@ impl Driver {
     ///   side comes from the corner ahead instead - yielding toward its
     ///   outside, which is where an overtaker does not want to be.
     fn social(&self, ctx: &Context<'_>, personality: &Personality, bend: f32) -> f32 {
-        let Some(rival) = ctx.field.alongside.or(ctx.field.behind) else {
+        let touching = ctx.field.alongside;
+        let Some(rival) = touching.or(ctx.field.behind) else {
             return 0.0;
         };
         // **Provocation scales covering, not yielding.** A driver that has just
@@ -648,17 +649,18 @@ impl Driver {
         // the aim point is summed into.
         let lean =
             (personality.defence * (1.0 + self.provoked()) - personality.courtesy).clamp(-1.0, 1.0);
-        if lean == 0.0 {
-            return 0.0;
-        }
 
         let gap = rival.gap.abs();
         if gap >= AWARENESS_RANGE {
             return 0.0;
         }
         // Inside the close range only the yielding half survives - see
-        // [`SOCIAL_MIN_GAP`].
-        let lean = if gap < SOCIAL_MIN_GAP {
+        // [`SOCIAL_MIN_GAP`] - **and below that, everybody yields at least
+        // [`CONTACT_FLOOR`]**, whatever their personality says. See that
+        // constant.
+        let lean = if touching.is_some() && gap < SOCIAL_MIN_GAP {
+            lean.min(-CONTACT_FLOOR)
+        } else if gap < SOCIAL_MIN_GAP {
             lean.min(0.0)
         } else {
             lean
@@ -820,6 +822,34 @@ const YIELD_MAX: f32 = 0.55;
 /// measured, 119 against 95 at elite. Moving away from somebody who is already
 /// there is never the wrong thing to do.
 const SOCIAL_MIN_GAP: f32 = 14.0;
+
+/// The minimum yield every driver gives a rival it is **already alongside**,
+/// whatever its personality says.
+///
+/// **Chosen, not measured. No confidence score** - the original has no social
+/// term at all, so there is nothing to recover this from, and opponent
+/// behaviour is a design axis on this project rather than a fidelity one.
+///
+/// # The hole this fills
+///
+/// [`Driver::social`]'s lean is `defence - courtesy`, and inside
+/// [`SOCIAL_MIN_GAP`] only its yielding half survives. So **every driver whose
+/// defence is at least its courtesy contributes exactly zero at contact** -
+/// including the neutral baseline `Personality::from_seed(0)` gives, where both
+/// are zero. Two such craft that touch have nothing steering either of them
+/// apart: `oag_physics::pair::resolve` nudges them, both drivers aim straight
+/// back at the same corridor point, and they grind along together. That is the
+/// residue `craft_sticking_ground_truth`'s own header records as left over
+/// after the `alongside` fix - the fix made a touching rival *visible* to this
+/// term; this makes the term *say something* when it sees one.
+///
+/// Small on purpose. It is a floor, not a policy: an aggressive pilot still
+/// covers, a shy one still yields harder, and all this does is stop the
+/// aggressive one contributing nothing at the one range where contact is
+/// already happening. Scaled by [`YIELD_MAX`], pressure and the corner gate
+/// like any other yield, so it fades out mid-corner rather than steering two
+/// craft off a bend they are both at the grip limit on.
+const CONTACT_FLOOR: f32 = 0.25;
 
 /// How close a craft ahead has to be before a driver lifts for it, in units
 /// along the track. Shorter than [`AWARENESS_RANGE`]: a craft two seconds up

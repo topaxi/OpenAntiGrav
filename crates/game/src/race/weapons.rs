@@ -542,24 +542,29 @@ impl Race {
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
     /// **Every craft, not just slot 0** - and an opponent's half is *chosen,
-    /// not measured*. `Cannon_UpdateReload` gates on the fire-held byte of the
-    /// firing craft's control record, and for an opponent that record is
-    /// `Ai + 0x08`, so the byte is `Ai + 0x1e`. **Nothing in the image writes
-    /// `Ai + 0x1e`, at any width, and `Ai_Construct`'s object is allocated
-    /// without a zero-fill** while the craft object beside it is explicitly
-    /// memset. The gate is therefore uninitialised heap: the *mechanism* is
-    /// recovered, the *value* is undefined behaviour and cannot be measured.
-    /// The maintainer reports from play that AI craft do fire Cannons, so this
-    /// port takes the byte as non-zero for every opponent - which carries **no
-    /// confidence score**, because there is no fact about the disc to score.
-    /// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    /// not measured, with no confidence score*. `Cannon_UpdateReload` gates on
+    /// the fire-held byte of the firing craft's control record, and for an
+    /// opponent that record is `Ai + 0x08`, so the byte is `Ai + 0x1e`.
+    /// **Nothing in the image writes `Ai + 0x1e`, at any width, and
+    /// `Ai_Construct`'s object is allocated without a zero-fill** while the
+    /// craft object beside it is explicitly memset. So the original's gate is
+    /// uninitialised heap: the *mechanism* is recovered, the *value* is
+    /// undefined behaviour and there is no fact about the disc to score. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
-    /// The consequence is deliberate and worth stating, because it is what a
-    /// player should see: an opponent holding a Cannon fires it **continuously
-    /// from the tick it picks it up**, with no aiming and no fire decision, until
-    /// its authored `rounds` run out. `WeaponAi_DecideFireOrAbsorb`'s own choice
-    /// writes the record's press byte `+0x15`, which reaches `Weapon_RequestFire`,
-    /// which sets bit `0x2000`, which nothing reads.
+    /// **An accident is not a design, so this is tuned rather than copied.**
+    /// The project's standing ruling is that opponent behaviour is a design
+    /// axis, not a fidelity one. An opponent holds the trigger while
+    /// `oag_ai::Driver::holds_fire` says there is somebody in front worth
+    /// hitting - see that method for what it is tuned for and for the two gates
+    /// it deliberately drops. Held unconditionally instead, which is what the
+    /// heap-garbage reading literally predicts, a craft sprays its whole
+    /// thirty-round magazine at empty track a second and a half after the pickup
+    /// lands, and the player mostly never sees the weapon at all.
+    ///
+    /// The Cannon's *cadence* is still the disc's - the countdown, the authored
+    /// `rate` and the magazine are all measured. Only the decision to hold is
+    /// ours.
     ///
     /// **A craft flown by the autopilot fires nothing**, and that half *is*
     /// measured: `Ship_UpdateCraft` (`0x08849618`) re-points `craft+0x78` at a
@@ -589,15 +594,30 @@ impl Race {
             && snapshot
                 .buttons
                 .is_held(oag_gameplay::input::Button::Square);
+        // Built once for the whole grid, the same way `Race::step_opponents`
+        // does it: every craft's view of the field needs the same ordering, and
+        // an opponent's trigger reads that view.
+        let places = self.places();
         for slot in 0..self.world.ship_count as usize {
-            // Slot 0 follows the pad; every other slot holds fire always, for
-            // the reason in this method's own doc comment.
-            let holds_fire = if slot == 0 { player_holds_fire } else { true };
+            // Slot 0 follows the pad; every other slot asks its own driver.
+            let holds_fire = if slot == 0 {
+                player_holds_fire
+            } else {
+                let field = self.field_for(slot, &places);
+                self.world.ships[slot].driver.holds_fire(&oag_ai::Context {
+                    line: &self.racing_line,
+                    tuning: &self.ai_tuning,
+                    pilot: &self.ai_pilots[slot],
+                    field: &field,
+                })
+            };
             if !holds_fire {
-                // The button is up, so the original's countdown does not move.
+                // The trigger is up, so the original's countdown does not move.
                 // Deliberately *not* a reset: `Cannon_UpdateReload` leaves
-                // `craft+0x158` exactly where it stopped, so releasing and
-                // re-pressing resumes rather than restarts.
+                // `craft+0x158` exactly where it stopped, so letting go and
+                // squeezing again resumes rather than restarts - which is why an
+                // opponent that loses its target mid-burst picks the burst back
+                // up rather than re-arming from a full reload.
                 continue;
             }
             self.advance_one_cannon(slot, &cannon);
