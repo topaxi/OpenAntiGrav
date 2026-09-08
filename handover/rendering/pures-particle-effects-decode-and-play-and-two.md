@@ -7,9 +7,9 @@
 
 ## Open
 
-- No caller has been found for any of the four functions in `rocket-and-collision-fx.md` - the same `jal`-relocation wart that broke the string lookups breaks `get_function_callers` too, so each reading is a name-and-tag match, not a call-graph-verified one. Worth another hour if higher confidence is wanted, not blocking.
+- No caller has been found for any of the four functions in `rocket-and-collision-fx.md` - the same `jal`-relocation wart that broke the string lookups breaks `get_function_callers` too, so each reading is a name-and-tag match, not a call-graph-verified one. **The PSP relocation patch landed 2026-09-07 across all four PSP databases, both Pure ones included** (`HANDOVER.md`, "Traps that are live"), so `get_function_callers` should work directly now - worth another hour if higher confidence is wanted, still not blocking.
 - Whether Pure has an equivalent to Pulse's `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` branch (`kind==1` on Pulse's `ShipCollisionFx_Trigger`) is unread - Pure's version only showed two `kind`-like branches in this pass.
 
 ## Next Steps
 
-- If picked up again: try resolving a caller for `Rocket_Update` or `ShipCollisionFx_Trigger` via `search_byte_patterns` on the `jal`'s raw encoded bytes rather than the operand text, in case that survives the relocation wart where the printed operand doesn't.
+- If picked up again: try `get_function_callers` on `Rocket_Update` or `ShipCollisionFx_Trigger` directly first, now that the relocation patch has landed. Only fall back to `search_byte_patterns` on the `jal`'s raw encoded bytes if that still comes back empty.

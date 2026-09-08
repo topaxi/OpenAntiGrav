@@ -46,17 +46,24 @@ assumed. See the docs page for the full evidence and the confidence scores.
   resolves in `Data.wad` - but no xref was recovered, so the association is
   string-pool adjacency alone. Confidence 45. **Do not build on it.** For the
   track, nothing was found at all.
-- **What camera the originals frame these meshes with is unmeasured.** HD
-  states its own (`OriginX="1220" OriginY="412" nearZ="1.0" z="-24.0"
+- **What camera the originals frame these meshes with is still unmeasured.**
+  HD states its own (`OriginX="1220" OriginY="412" nearZ="1.0" z="-24.0"
   RotX="0.4" RotY="-0.5"` on `ShipModel`); the two PSP titles author no
-  `<Model>` element, so their framing lives in the screen class and is unread.
-  A framing picked by eye would be ours, and would have to say so.
+  `<Model>` element, so their framing lives in the screen class. Pulse's own
+  `TrackSelection`/`TeamSelection` classes are now decompiled
+  (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`), but the camera
+  itself was not specifically traced there - the functions read cover mesh
+  loading and stat-panel binding, not a camera setup call. A framing picked
+  by eye would still be ours, and would have to say so.
 - **Whether the track mesh is the circuit ribbon or something else** has not
   been looked at - the files are 10-23 KB against a real `track.vex`'s 4.25 MB,
   so they are purpose-built, but nobody has decoded one and looked.
-- `Top->Ship` appears in the `TrackSelection` string block, i.e. the *track*
-  screen carries a ship widget too. Confidence 55 on the string being that;
-  what it shows is unestablished.
+- **`Top->Ship` is resolved, on Pulse PSP.** It is not a static screen widget:
+  `TrackSelection_ApplySelection` resolves it as a node inside *each track's
+  own* dynamically-created preview scene, replaced every time the selection
+  changes, fed the `%s\FE\%s.vex` mesh directly. See
+  [`race-box-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/race-box-screens.md#top-ship-has-a-confirmed-referent-after-all),
+  confidence 78, static decompilation only.
 
 ## Next Steps
 
@@ -72,8 +79,10 @@ assumed. See the docs page for the full evidence and the confidence scores.
    one mechanism.
 3. Settle Pure's craft preview, either by capturing `Team Selection` in PPSSPP
    (`docs/reverse-engineering/ppsspp-debugger.md`) or by decompiling the
-   function that references `0x08a76654` once the PSP relocation patch in
-   `handover/ghidra-applies-no-psp-relocation-the-patch-is.md` is installed. A
-   capture is far cheaper and settles the track preview at the same time.
+   function that references `0x08a76654`. **The PSP relocation patch landed
+   2026-09-07 across all four PSP databases, both Pure ones included**
+   (`HANDOVER.md`, "Traps that are live"), so this decompile is unblocked and
+   not yet attempted. A capture is still far cheaper and settles the track
+   preview at the same time.
 4. Only then wire anything. A preview needs a camera, and the camera is the
    part that is not yet measured on the PSP titles.

@@ -25,5 +25,5 @@ Its HUD atlas (it has none - the HUD is `.vex` models off `Data\HUD\*.vex`, a wh
 
 ## Next Steps
 
-- Read whatever picks `Phantom.vex` over `Ship.vex`. The `.rodata` route that produced the templates is the one to reuse: `search_instructions` for a `lui`/`addiu` pair building `0x08a7a5e4`'s low half, since `get_xrefs_to` is empty on both Pure databases regardless (unapplied relocation, confidence 92).
+- Read whatever picks `Phantom.vex` over `Ship.vex`. The `.rodata` route that produced the templates (`search_instructions` for a `lui`/`addiu` pair building `0x08a7a5e4`'s low half) was the workaround for `get_xrefs_to` being empty on both Pure databases (unapplied relocation, confidence 92) - **the PSP relocation patch landed 2026-09-07 across all four PSP databases including both Pure ones** (`HANDOVER.md`, "Traps that are live"), so a direct `get_xrefs_to` retry may now resolve it in one call instead of needing the `search_instructions` route.
 - Stopping `oag_game::race::load` reporting a Pure boost model as missing is split out - it is `crates/game`, not this lane. See `handover/rendering/pure-boost-entry-name-is-pulses-on-every-title.md`.
