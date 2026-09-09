@@ -107,3 +107,49 @@ compared at a high `vn`.
   left out of scope this pass (a bigger design decision than "read a channel
   this term already had access to").
 - The Ghidra/PPSSPP item above.
+
+## 2026-09-09: a correctness fix reopened the sticking question
+
+**The Cannon's base speed stopped being a guess, and the field got stickier.**
+`oag_gameplay::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it is
+a measured `500.0` (confidence 90 - `func_0x00060af4` is three instructions
+returning a flat `500.0f` and ignoring the class pointer it is handed, so the
+"per-class" premise the constant's name carried was also wrong). See
+[cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
+
+`craft_sticking_ground_truth`'s scenario is a `SingleRace` with weapons live,
+so this reaches it: faster rounds land more hits, more hits mean more slowdown,
+and a slowed field bunches. The same tree scores **1,051** overlapped
+pair-ticks with the old constant and **1,558** with the real one. Isolated by
+reverting that one constant and nothing else, twice, both times returning
+exactly `1_051` - and the pass's other half, the `WO_CANNON_SPARKS` wiring,
+was confirmed to move the simulation not at all, which is what a render-only
+effect should do.
+
+**`MAX_OVERLAPPED_PAIR_TICKS` was re-baselined 1,300 -> 2,000 to keep `main`
+green, and that is a genuinely weaker guard.** The old bound followed a rule -
+sit midway between a fixed driver's 978 and the pathology's 1,756 - that no
+longer applies, because **both of those figures predate this physics fix** and
+the pathology has never been re-measured against a correct Cannon.
+
+## Open
+
+- **Does contact still feel magnetic under weapon fire? The sustained metric
+  says look hard.** Total pair-ticks (1,558) sit well below the stale
+  pathology's 1,756 - but the run also prints *sustained* pair-ticks, streaks
+  longer than 10 ticks, and those are **1,032 against the fixed driver's 537
+  and the pathology's 1,062**. That is 97 % of the pathology on the sub-metric
+  that most directly describes "stuck together rather than brushing past",
+  while the headline total still looks like a comfortable pass. A bound on the
+  total alone would not have caught this, and did not: the re-baselined 2,000
+  passes.
+- This was a closed question and is not any more. 1,558 against a (stale) pathology of 1,756 is
+  a much smaller margin than 1,051 was, and the test exists because a
+  maintainer reported the feel from play - so the discriminating check is a
+  play session with weapons live, not another statistic.
+- **Re-measure the pathology regime against the corrected Cannon**, by
+  reverting `oag_ai::Driver::social`'s `alongside`/`CONTACT_FLOOR` fix for one
+  run. That restores the like-for-like pair the bound's original rule needed,
+  and would say whether 2,000 is generous, tight, or meaningless.
+- The residual ~46-tick sticking and the Ghidra/PPSSPP capture item, both
+  unchanged, above.

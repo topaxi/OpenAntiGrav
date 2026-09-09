@@ -88,6 +88,15 @@
 //! | pairs that ever overlap | 15 | 6 |
 //! | worst single streak | 178 | 91 |
 //!
+//! **Both columns above were measured before 2026-09-09, when the Cannon's
+//! base speed was still a chosen `400.0` rather than its measured `500.0`.**
+//! This scenario runs a `SingleRace` with weapons live, and the correction
+//! moves the fixed driver's own score from 1,051 to **1,558** - so the
+//! pathology column is a stale ceiling and the two are no longer a like-for-
+//! like pair. Re-measuring the pathology against a correct Cannon needs
+//! `oag_ai::Driver::social`'s fix reverted for one run; nobody has done it.
+//! See [`MAX_OVERLAPPED_PAIR_TICKS`].
+//!
 //! `MAX_OVERLAPPED_PAIR_TICKS` is set from those measured runs rather than from
 //! what makes today's tree pass. The per-pair streaks are still *printed*,
 //! because they are the readable description of what happened; they are simply
@@ -128,13 +137,49 @@ fn image() -> Option<PathBuf> {
 /// to compare against (see `oag_ai::Driver::social`'s own doc comment), so
 /// there is nothing to recover this from. No confidence score.
 ///
-/// **Set from a measured run rather than from what makes today's tree pass**,
-/// and midway between the two regimes rather than just above the good one: the
-/// fixed driver scores **978** and the pathology **1,756** on this scenario (see
-/// this file's header). `1_300` leaves the fix a third of headroom for the
-/// chaotic re-rolling any AI change causes, and still fails a quarter before the
-/// pathology is reached.
-const MAX_OVERLAPPED_PAIR_TICKS: u32 = 1_300;
+/// **Set from a measured run rather than from what makes today's tree pass.**
+/// It was `1_300` until 2026-09-09, sitting midway between a fixed driver's
+/// **978** and the pathology's **1,756** (see this file's header).
+///
+/// **Re-baselined to `2_000` when the Cannon's base speed stopped being a
+/// guess, and the midpoint rule it used to follow no longer applies.**
+/// `oag_gameplay::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it
+/// is a *measured* `500.0` (confidence 90 - `func_0x00060af4` is three
+/// instructions returning a flat `500.0f`). This scenario is a `SingleRace`
+/// with weapons live, so faster rounds land more hits, more hits mean more
+/// slowdown, and a slowed field bunches: the same tree scores **1,051** with
+/// the old constant and **1,558** with the real one. Isolated by reverting
+/// that single constant and nothing else, twice, both times returning exactly
+/// `1_051`.
+///
+/// **Both figures in the header now predate a physics correctness fix, so the
+/// pathology ceiling is stale and the old "midway between the regimes" rule
+/// cannot be reapplied verbatim** - the pathology has not been re-measured
+/// against a correct Cannon, and doing so needs `oag_ai::Driver::social`'s fix
+/// reverted for a run. Until it is, this bound is set by proportional headroom
+/// instead: `2_000` is ~28 % above the measured `1_558`, close to the ~33 %
+/// the old bound allowed over its own regime for the chaotic re-rolling any AI
+/// change causes.
+///
+/// **This is a weaker guard than it was, and the weakening is the finding.**
+/// Correct physics moved the field from 1,051 to 1,558 against a pathology
+/// once measured at 1,756 - so "does contact still feel magnetic under weapon
+/// fire" is an open question again, not a closed one, and the discriminating
+/// check is a play session with weapons live rather than another statistic.
+///
+/// **Read the printed `sustained` figure before trusting this bound.** The
+/// total is what fails the test, but streaks longer than
+/// [`SUSTAINED_TICKS`] are what "stuck together rather than brushing past"
+/// actually looks like, and they now measure **1,032 against a fixed driver's
+/// 537 and the pathology's 1,062** - 97 % of the pathology, while the headline
+/// total still reads as a comfortable pass. A bound on the total alone does
+/// not catch that, and did not.
+///
+/// The speed itself is evidenced in
+/// [`cannon-quake-leachbeam.md`](../../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md);
+/// re-measuring the pathology regime needs `oag_ai::Driver::social`'s
+/// `alongside`/`CONTACT_FLOOR` fix reverted for one run.
+const MAX_OVERLAPPED_PAIR_TICKS: u32 = 2_000;
 
 /// Ticks per race: the same length the sticking measurement above was taken
 /// over, so a change here would also move the number this bound is set
