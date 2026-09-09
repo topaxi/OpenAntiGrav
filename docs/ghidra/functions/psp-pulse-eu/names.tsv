@@ -487,3 +487,12 @@
 0x0888e0c4	function	Definition_IsUnlocked	67	../psp-pulse-usa/race-box-screens.md
 0x08925ad0	function	VexSoundCone_Init	90	../psp-pulse-usa/track-sound-emitters.md
 0x089256c8	function	VexSound_Tick	85	../psp-pulse-usa/track-sound-emitters.md
+0x08865798	function	Cannon_UpdateRound	77	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x0885813c	function	CannonPool_Update	83	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08857834	function	Cannon_TestCraftHit	55	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08857db8	function	Cannon_MarkCraftHit	80	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08857d1c	function	Cannon_ApplyCraftDamage	83	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08864950	function	Cannon_BaseSpeedKmh	87	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x088652b8	function	Cannon_DrawRound	83	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08864b2c	function	Cannon_BuildBoltList	80	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x08864c20	function	Cannon_BuildMuzzleFlashList	80	../psp-pulse-usa/cannon-quake-leachbeam.md

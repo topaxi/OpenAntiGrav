@@ -216,6 +216,13 @@ impl Race {
     /// - **`Mine`**: [`MINE_EXPLO_EFFECT`] always, whatever it struck, the
     ///   same shape as the Missile's - see that constant's doc comment for
     ///   `Mine_SpawnExplosion`.
+    /// - **`Cannon`**: [`CANNON_SPARKS_EFFECT`] when `struck` is `None` - a
+    ///   wall or track hit - and nothing when it is `Some`. `Cannon_UpdateRound`
+    ///   (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
+    ///   raycast; the separate craft-proximity test that produces a `Some`
+    ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
+    ///   sound cue but never spawns a particle effect. See
+    ///   `oag_gameplay::projectile::cannon`'s module doc for the full read.
     /// - **`Bomb`, and everything else**: `None`. The Bomb's own teardown -
     ///   a distinct function from the Mine's, per its own separate pool
     ///   cursor - is not chased, so whether it reaches `Mine_SpawnExplosion`
@@ -244,6 +251,9 @@ impl Race {
             }),
             oag_formats::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
             oag_formats::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
+            oag_formats::weapons::Weapon::Cannon if struck.is_none() => {
+                Some((CANNON_SPARKS_EFFECT, point))
+            }
             _ => None,
         }
     }
@@ -539,10 +549,37 @@ impl Race {
     /// [`CANNON_MODEL_ENTRY`] into every round instance's own scene node, so
     /// this is playing the disc's data rather than standing in for it. Each
     /// round *also* builds two display lists of hand-written quads textured
-    /// from the disc's `Cannon_bolt.mip` and `Cannon_muzzle_flash.mip`, and
-    /// **which list is which is not read**, so none of that is drawn: an honest
-    /// absence, not an invented billboard. See
-    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    /// from the disc's `Cannon_bolt.mip` and `Cannon_muzzle_flash.mip`.
+    ///
+    /// **Which list is which is now settled, confidence 88 - not the load-order
+    /// guess this comment used to carry at confidence 40.** The per-round draw
+    /// function, `FUN_0886545c` (EU `FUN_088652b8`), is instruction-level
+    /// unambiguous: it binds `g_cannon_bolt_texture` and calls
+    /// `Gu_CallList(instance+0x240)` - the list `FUN_08864cd0` (EU
+    /// `FUN_08864b2c`) built from `instance+0x100`/`+0x160` - every frame a
+    /// round is live; then, **only while `instance+0xc8 < 0.1` seconds since
+    /// spawn**, it binds `g_cannon_muzzle_flash_texture` and calls
+    /// `Gu_CallList(instance+0x440)` - the list `FUN_08864dc4` (EU
+    /// `FUN_08864c20`) built from `instance+0x1c0`, sized and coloured from
+    /// `Psys_RandIntRange(0x96,0xff)` each time it is rebuilt. So
+    /// `FUN_08864cd0`/`FUN_08864b2c` is the **bolt** (drawn for the round's
+    /// whole flight, as a streak between its previous and current position)
+    /// and `FUN_08864dc4`/`FUN_08864c20` is the **muzzle flash** (drawn only
+    /// for the round's first tenth of a second, sized and tinted at random).
+    /// This is an independent, stronger check than the archive's
+    /// entry-adjacency cross-check (1057/1058) the earlier reading proposed
+    /// but never spent - it confirms the same answer.
+    ///
+    /// **Neither is drawn here regardless**, and that is still an honest
+    /// absence rather than a regression: both are hand-authored GU quads with
+    /// their own two `.mip` textures, not `Data\Psys` particle effects, so
+    /// drawing them for real needs a textured-billboard path this project's
+    /// mesh/texture-upload machinery does not yet expose outside
+    /// `oag_render::mesh_render` - reaching into it is out of this pass's own
+    /// file ownership. Inventing an untextured stand-in quad instead would be
+    /// exactly the kind of plausible-looking invention `CLAUDE.md` forbids,
+    /// so this stays as a documented next step rather than an approximation.
+    /// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
     /// Velocity-oriented like the Rocket's rather than pose-oriented like the
     /// Mine's, for the reason the shared helper below gives: a round is a body
