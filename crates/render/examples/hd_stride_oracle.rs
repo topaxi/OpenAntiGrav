@@ -5,7 +5,7 @@
 //! width missing from it is a chunk no search can ever solve, and the
 //! declaration is the oracle that says which widths exist.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

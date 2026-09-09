@@ -89,7 +89,7 @@
 //! is unknown. [`Pvs::trailing`] reports how much of it there is rather than
 //! guessing at it; the visibility lookup does not need it.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 /// Where the cell records begin.
 const CELLS_AT: usize = 0x10;

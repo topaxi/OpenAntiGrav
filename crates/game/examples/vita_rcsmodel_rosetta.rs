@@ -53,7 +53,7 @@
 
 use std::collections::HashMap;
 
-use oag_formats::rcsmodel::{self, psp2};
+use oag_rcs::rcsmodel::{self, psp2};
 
 const HD_DIR: &str = "data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR";
 const VITA_DLC: [&str; 2] = [

@@ -1,7 +1,7 @@
 //! What the disc says about `track.pvs`, over every one of the 28 shipped
 //! files rather than the two the parser was written against.
 //!
-//! The three claims `oag_formats::hd_pvs`' module docs rest on, made
+//! The three claims `oag_rcs::hd_pvs`' module docs rest on, made
 //! executable: the declared chunk count is the sibling `.rcsmodel`'s, the
 //! bitmap is `ceil(chunks / 8)` bytes, and a cell's bits fall inside it.
 //!
@@ -10,7 +10,7 @@
 
 mod rcsmodel_common;
 
-use oag_formats::{hd_pvs, rcsmodel};
+use oag_rcs::{hd_pvs, rcsmodel};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds a `.pvs`.

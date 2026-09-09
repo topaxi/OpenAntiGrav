@@ -14,7 +14,7 @@
 //!   the exact form of the same question: a circuit names one material path
 //!   in dozens of slots, and a tinted frame identifies a surface by ordinal,
 //!   so the needle that follows up on it has to be an ordinal too. Ordinals
-//!   are `oag_formats::rcsmodel::Mesh::material`, the same numbering
+//!   are `oag_rcs::rcsmodel::Mesh::material`, the same numbering
 //!   `crates/render/examples/hd_slot_list.rs` prints.
 //! - `OAG_OPAQUE_ONLY=1` drops every chunk the material asks to be blended,
 //!   which is the one-run answer to "is there anything solid behind all this
@@ -39,7 +39,7 @@
 //! then the only thing that tells those slots apart. With both variables set,
 //! `SKIP` is applied after `ONLY`.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use std::sync::OnceLock;
 
 /// The parsed environment, computed once.

@@ -16,7 +16,7 @@
 //!     data/images/hdfury-ps3-eu-dec.iso
 //! ```
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_render::mesh;
 use oag_vex::vex;

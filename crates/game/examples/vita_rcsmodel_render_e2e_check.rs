@@ -9,7 +9,7 @@
 //! cargo run -q -p oag-game --example vita_rcsmodel_render_e2e_check
 //! ```
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 use oag_render::mesh;
 
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";

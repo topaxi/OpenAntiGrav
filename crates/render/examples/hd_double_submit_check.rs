@@ -5,7 +5,7 @@
 //! makes the world-space pass draw a *second* copy on top of one the node
 //! pass already drew, rather than replacing an absence.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_render::mesh;
 use oag_vex::vex;

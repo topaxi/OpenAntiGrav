@@ -89,7 +89,7 @@ pub struct Report {
     /// and the other three are left unsampled: a circuit reporting zero here is
     /// drawing its surfaces unlit by the artists' bake, which is a visible
     /// absence and should be a stated one. See
-    /// `oag_formats::rcsmodel::Material::lightmap`.
+    /// `oag_rcs::rcsmodel::Material::lightmap`.
     pub lightmapped: usize,
     /// Materials naming a lightmap whose `.gtf` did not load or decode.
     pub lightmap_undecoded: usize,

@@ -6,7 +6,7 @@
 //! an entry index of 2 or more is a texture `oag-render` cannot bind today.
 
 use oag_assets::Container;
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 use oag_render::mesh;
 
 const ARCHIVES: &[&str] = &[

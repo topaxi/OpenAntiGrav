@@ -2,7 +2,7 @@
 //! read straight off disk, as TSV.
 //!
 //! `model<TAB>chunk<TAB>hash<TAB>material<TAB>tris<TAB>verts<TAB>colourset<TAB>lightmapuv<TAB>tangent<TAB>transparency`
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 const TANGENT: u32 = 0xdbe5_f417;
 
@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
             });
             let transp = model
                 .material_of(chunk)
-                .and_then(oag_formats::rcsmodel::Material::transparency)
+                .and_then(oag_rcs::rcsmodel::Material::transparency)
                 .map_or("?".into(), |t| format!("{t:?}"));
             println!(
                 "{path}\t{i}\t{:#010x}\t{mat}\t{tris}\t{verts}\t{colour}\t{lmap}\t{tangent}\t{transp}",

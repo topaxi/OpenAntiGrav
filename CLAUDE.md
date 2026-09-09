@@ -158,7 +158,8 @@ Existing crates:
 | --- | --- | --- |
 | `oag-core` | `crates/core` | Deterministic math (`f32`, no SIMD), `TickClock`, seeded `Rng`, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, platform identification. |
-| `oag-formats` | `crates/formats` | Asset container identification and parsing (WAD, PSARC, LZSS, sound banks, console byte layout). Being split by format family per [ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md). |
+| `oag-formats` | `crates/formats` | Asset containers and what sits under them: WAD, PSARC, LZSS, sound banks, magic-number triage, byte order and the GE swizzle. Split by format family per [ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md); the decoders now live in `oag-vex`, `oag-rcs`, `oag-texture`, `oag-tables` and `oag-video`. |
+| `oag-rcs` | `crates/rcs` | The `RCSMODEL` scene the PS3 and Vita ship geometry in: models, materials, visibility sets, and the Vita's compiled shader programs. |
 | `oag-vex` | `crates/vex` | The `.vex` scene tree and every payload authored in it: geometry, collision, track spline, pads, PVS, fog, lights, sound emitters, shadow hulls, plus `.pob` particles, PS2 VIF packets and 2048's collision. |
 | `oag-texture` | `crates/texture` | Every pixel format the originals ship, decoded to RGBA8888 - PSP `.mip`, PS2 GS packets, PS3 `.gtf`, Vita `.gxt`, fonts, liveries, and a PNG writer. |
 | `oag-tables` | `crates/tables` | The tables titles author as XML: handling, weapons, campaign grids, load manifests, lighting rigs. Zero dependencies - the crate the simulation reads its numbers from has no path to a texture decoder. |

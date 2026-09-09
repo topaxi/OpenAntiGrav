@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("no sibling"))?;
-    let source = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let source = oag_rcs::rcsmodel::Model::parse(&geometry)?;
 
     let mut chunks_of: std::collections::HashMap<u32, usize> = Default::default();
     for mesh in &source.meshes {
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
             mesh::read_blob(&spec, &format!("/{}", material.name))
                 .ok()
                 .and_then(|blob| {
-                    oag_formats::rcsmaterial::Declared::parse(&blob, variant.fragment.offset)
+                    oag_rcs::rcsmaterial::Declared::parse(&blob, variant.fragment.offset)
                 })
         });
         if let Some(d) = declared.as_ref() {

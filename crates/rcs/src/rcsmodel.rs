@@ -89,7 +89,7 @@
 //! Full evidence, with confidence scores, on
 //! [`rcsmodel.md`](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/rcsmodel.md).
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 mod coverage;
 pub mod material;

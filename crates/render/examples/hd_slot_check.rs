@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let data = mesh::read_blob(&spec, &name)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("{name}: no sibling .rcsmodel"))?;
-    let raw = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let raw = oag_rcs::rcsmodel::Model::parse(&geometry)?;
     let (model, _) = mesh::rcs::scene_from(&spec, &name, &data)?
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         if std::env::var("OAG_VARIANTS").is_ok()
             && let Ok(blob) = oag_assets::Container::open(&spec)
                 .and_then(|mut c| c.read_entry(&format!("/{}", material.name)))
-            && let Ok(parsed) = oag_formats::rcsmaterial::RcsMaterial::parse(&blob)
+            && let Ok(parsed) = oag_rcs::rcsmaterial::RcsMaterial::parse(&blob)
         {
             let picked = model
                 .material_variants
@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
                 .and_then(|v| v.as_ref())
                 .map(|v| v.fragment.offset);
             for v in &parsed.variants {
-                let samplers = oag_formats::rcsmaterial::Declared::parse(&blob, v.fragment.offset)
+                let samplers = oag_rcs::rcsmaterial::Declared::parse(&blob, v.fragment.offset)
                     .map(|d| {
                         let mut s: Vec<String> = d
                             .samplers
@@ -99,7 +99,7 @@ fn main() -> anyhow::Result<()> {
                     .and_then(|mut c| c.read_entry(&format!("/{}", material.name)))
                     .ok()?;
                 let program =
-                    oag_formats::rcsmaterial::fragment::Program::parse(&blob, v.fragment.offset)?;
+                    oag_rcs::rcsmaterial::fragment::Program::parse(&blob, v.fragment.offset)?;
                 let t = program.output_texels();
                 let colour = t[0].merge(t[1]).merge(t[2]);
                 Some(format!("colour {colour:?} | alpha {:?}", t[3]))

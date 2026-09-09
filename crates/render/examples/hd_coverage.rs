@@ -1,7 +1,7 @@
 //! Scratch probe: how much of each `.rcsmodel` on the disc `oag_formats`
 //! actually reads, and what the largest unread runs sit between.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

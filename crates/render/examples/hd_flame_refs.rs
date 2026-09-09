@@ -13,9 +13,9 @@
 //! standalone `.rcsmaterial` files.
 //!
 //! It also prints a disc-wide census of the per-instance **parameter table**
-//! `oag_formats::rcsmodel::material::parameters` reads, which is what turns
+//! `oag_rcs::rcsmodel::material::parameters` reads, which is what turns
 //! "the layout was validated on two files" into a number.
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 fn main() -> anyhow::Result<()> {
     let iso = "data/images/hdfury-ps3-eu-dec.iso";
     let needle = std::env::args().nth(1).unwrap_or_else(|| "flame".into());

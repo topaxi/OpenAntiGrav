@@ -48,7 +48,7 @@
 //! across the disc, most often 128. Everything above sits inside the smallest of
 //! them.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 mod parameters;
 pub use parameters::{KIND_SAMPLER, Parameter, parameters, samplers};
@@ -312,7 +312,7 @@ pub enum Transparency {
 /// # What draws through it, and what still does not
 ///
 /// **A blend needs an alpha, and the alpha is in the texture.** That is why
-/// this table sat unwired when it was first read: `oag_formats::rcsmodel`
+/// this table sat unwired when it was first read: `oag_rcs::rcsmodel`
 /// decodes positions, indices and normals, and the four bytes at `+0x0a` were
 /// measured against the vertex-colour hypothesis and are not one - no lane is
 /// `0xff`-dominant the way an alpha would be, and on stride 22 the last is the

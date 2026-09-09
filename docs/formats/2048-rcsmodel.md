@@ -6,8 +6,8 @@ It shares the extension and nothing else: a linker-style image, read
 little-endian, with a header section carrying relocation tables and two
 back-to-back payload blocks that are rebased at load.
 
-Read by `oag_formats::rcsmodel::psp2`, drawn by `oag_render::mesh::rcs::psp2`,
-validated by `crates/formats/tests/psp2_rcsmodel_ground_truth.rs` over **all 993
+Read by `oag_rcs::rcsmodel::psp2`, drawn by `oag_render::mesh::rcs::psp2`,
+validated by `crates/rcs/tests/psp2_rcsmodel_ground_truth.rs` over **all 993
 files** the three EU packages ship. The loader is `RcsModel_Load`
 (`0x812f15b2`), tagged `PSP2/Psp2.RcsModelLoader.cpp` - see
 [track-and-collision-loaders.md](../ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md).
@@ -102,7 +102,7 @@ commonest.
 ### A second record shape closes every previously-unpaired pointer
 
 **2026-09-02, confidence 92.** The 28-byte gap above is not the *only* shape a
-submesh record takes - `oag_formats::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP`
+submesh record takes - `oag_rcs::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP`
 is a second, **184 bytes**, found on `SkyCube/skycube.rcsmodel` (see
 [2048-sky.md](2048-sky.md)) and tried alongside the first rather than instead
 of it. Both have to pass the same arithmetic `one` already checks - a
@@ -125,7 +125,7 @@ props and craft parts that happened to use the larger record), which is why
 the constant is not named after skies despite where it was first found. The
 existing per-submesh checks (arithmetic closure, unit-length normals, in-range
 positions) all still pass at their usual bar over the enlarged corpus - see
-`crates/formats/tests/psp2_rcsmodel_ground_truth.rs`.
+`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`.
 
 **What the extra bytes hold is still unread.** This finding says where the
 vertex-buffer pointer sits in the second shape, not what fills the 156 bytes
@@ -295,7 +295,7 @@ check content against. The unused 4th byte is `0x00` on every one of the
 1,504 oracle vertices - genuine alignment padding, not a fourth field this
 reading is leaving on the table. The reproducer is
 `crates/game/examples/vita_rcsmodel_bytesearch.rs`; the decode lives in
-`oag_formats::rcsmodel::psp2::unpack_normal`.
+`oag_rcs::rcsmodel::psp2::unpack_normal`.
 
 **What this does not confirm**: the SceGxm symbolic name for type code `5`.
 The decode behaviour (signed, one byte per component, normalised by 127)
@@ -327,7 +327,7 @@ files - the craft this reading was built against among them - but it
 resolves for only 14.2% of the corpus's submeshes, where anchoring on
 `position` per file and keying by stride (`psp2::vertex_decl::find_by_stride`)
 resolves 92.5%. The reproducer is `crates/game/examples/vita_rcsmodel_uv_oracle.rs`;
-the decode is `oag_formats::rcsmodel::psp2::unpack_texcoord`.
+the decode is `oag_rcs::rcsmodel::psp2::unpack_texcoord`.
 
 **Confidence 96** on the decode, on the same basis as the normal. What is
 not decoded: `tangent`'s type (`t5`, 4 components - the byte budget argument
@@ -348,7 +348,7 @@ material references is found by scanning that material's own byte extent for
 any pointer resolving to `.gxt` text, rather than by decoding the shader
 input table's own struct - that struct's shape changes with entry count in a
 way this reading did not solve (clean at two entries, garbage read past it
-at four, six or eight). See `oag_formats::rcsmodel::psp2::material`'s module
+at four, six or eight). See `oag_rcs::rcsmodel::psp2::material`'s module
 doc for the full account, including a trap worth naming: the first version of
 this reading capped the file-level count at 64, calibrated from small props
 and a 16-submesh craft, which silently rejected altima's own 527 real
@@ -436,7 +436,7 @@ The three words beside it are still unread: `-0x20` and `-0x1c` are `0`,
 Reproducers: `crates/game/examples/vita_rcsmodel_material_index_probe.rs` (the
 sweep and its control group) and `vita_rcsmodel_material_index_check.rs` (the
 craft and the circuit read out in full). Pinned by
-`crates/formats/tests/psp2_rcsmodel_material_ground_truth.rs`.
+`crates/rcs/tests/psp2_rcsmodel_material_ground_truth.rs`.
 
 ## A texture bound also would not have painted, until the same day
 

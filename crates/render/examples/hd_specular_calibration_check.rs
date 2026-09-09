@@ -24,8 +24,8 @@
 //! position - at `0x3a00` and at the two blocks that do resolve to `40.0`,
 //! so this can be checked rather than trusted.
 
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::{Program, Source};
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::{Program, Source};
 
 fn main() -> anyhow::Result<()> {
     let image = "data/images/hdfury-ps3-eu-dec.iso";

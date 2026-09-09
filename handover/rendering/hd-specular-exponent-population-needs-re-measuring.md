@@ -1,7 +1,7 @@
 # HD's specular-exponent population needs re-measuring after the `dp3_feeding` fix
 
 2026-09-04. Split out of [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
-when `Program::dp3_feeding` (`crates/formats/src/rcsmaterial/fragment.rs`) turned out to be
+when `Program::dp3_feeding` (`crates/rcs/src/rcsmaterial/fragment.rs`) turned out to be
 lane-unsound in both directions - crediting a `DP3` that wrote the wrong lane (1,679 of 6,141
 then-resolved blocks, a false positive) and missing a real one behind an unrelated write to a
 different lane (5,556 blocks, a larger false negative). Fixed the same day: lane-aware,
@@ -16,7 +16,7 @@ either" - not repeated here.
 count moved from 6,141 to 10,087 fragment blocks (`specular_exponent()`). `Report`'s own count
 for Talon's Junction moved from 426 to 422 of 442 materials unresolved - a small, in-proportion
 move for one circuit against a ~64 % disc-wide jump, not investigated further here. The pinned
-`crates/formats/tests/specular_power_ground_truth.rs` ground-truth test still passes unchanged.
+`crates/rcs/tests/specular_power_ground_truth.rs` ground-truth test still passes unchanged.
 Everything below this line is *not* re-measured yet and is the open work this thread tracks -
 every specific number renderer.md's "Ships have no Lambert diffuse either" published for the
 specular-exponent population was measured under the buggy gate and needs redoing, not assumed

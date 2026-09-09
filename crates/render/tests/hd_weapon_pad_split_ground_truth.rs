@@ -69,7 +69,7 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
     let nodes = vex::nodes(&vex_data).expect("walking the node tree");
     let classes = vex::classes_of(&vex_data).expect("class table");
     let pad_class = classes.weapon_pad.expect("weapon_pad id recovered for v6");
-    let rcs_model = oag_formats::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+    let rcs_model = oag_rcs::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
     let expected_hashes: Vec<u32> = nodes
         .iter()
         .filter(|n| n.class_id == pad_class)

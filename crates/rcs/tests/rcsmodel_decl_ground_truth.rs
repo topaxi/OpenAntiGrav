@@ -21,7 +21,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmodel::{self, Attribute, Layout};
+use oag_rcs::rcsmodel::{self, Attribute, Layout};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds `.rcsmodel` files.

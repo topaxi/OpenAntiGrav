@@ -1,7 +1,7 @@
 //! Scratch probe: does a submesh record carry a plain **small integer index**
 //! into the material offset table?
 //!
-//! `oag_formats::rcsmodel::psp2::material`'s module doc records that every
+//! `oag_rcs::rcsmodel::psp2::material`'s module doc records that every
 //! submesh field was checked against every material's *identity* (`+0x00`,
 //! `+0x08`, the name pointer) and nothing matched. That rules out a hash or a
 //! pointer - and rules out nothing about an index, because an index of 3 does
@@ -28,7 +28,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const PACKAGES: [&str; 3] = [
     "data/extracted/vita/PCSF00007/base/PSP2/data.psarc",

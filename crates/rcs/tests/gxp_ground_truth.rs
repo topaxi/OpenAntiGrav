@@ -1,4 +1,4 @@
-//! Validates [`gxp`](oag_formats::gxp) against every `GXP\0` Wipeout 2048
+//! Validates [`gxp`](oag_rcs::gxp) against every `GXP\0` Wipeout 2048
 //! ships - **both** eboots and all three `.psarc` packages.
 //!
 //! Both builds are swept because they disagree: the base `eboot.elf` embeds
@@ -65,7 +65,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_formats::gxp::{self, Category, Error, Program};
+use oag_rcs::gxp::{self, Category, Error, Program};
 
 /// The executable and the three packages, in sweep order.
 const SOURCES: [&str; 5] = [

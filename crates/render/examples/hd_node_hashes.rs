@@ -5,7 +5,7 @@
 //! a node names a list - an LOD chain, or a multi-part object - everything
 //! past the first is geometry no pass draws.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_render::mesh;
 use oag_vex::vex;

@@ -3,7 +3,7 @@
 //! stride 20 keeps position/normal/VertexColour1 on the corpus it measured -
 //! this checks whether the sky file is the same shape or a different one).
 
-use oag_formats::rcsmodel::psp2::vertex_decl;
+use oag_rcs::rcsmodel::psp2::vertex_decl;
 
 const PACKAGE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 

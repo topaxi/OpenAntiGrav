@@ -12,7 +12,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 use oag_texture::gxt;
 
 const PACKAGES: [&str; 3] = [

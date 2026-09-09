@@ -127,7 +127,7 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 /// [`hd_sky_model`] supplies the cube. Wipeout 2048's is `skycube.rcsmodel`
 /// beside the track, a small camera-centred dome mesh in the same `.rcsmodel`
 /// container [`geometry::track_model`] already reads the track and craft
-/// through - see `oag_formats::rcsmodel::psp2` and
+/// through - see `oag_rcs::rcsmodel::psp2` and
 /// [2048-sky.md](../../../docs/formats/2048-sky.md) for the format finding
 /// that made this readable at all (the dome's own submesh record uses a
 /// second, previously-unrecognised buffer-pointer gap,
@@ -491,7 +491,7 @@ pub(super) enum GeometryKind {
     /// Wipeout HD's own container.
     Hd,
     /// Wipeout 2048's own container - the same extension, an unrelated binary
-    /// shape (see `oag_formats::rcsmodel::psp2`).
+    /// shape (see `oag_rcs::rcsmodel::psp2`).
     Psp2,
 }
 

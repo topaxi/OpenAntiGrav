@@ -24,7 +24,7 @@ use super::{
     Bounds, Mesh, NORMAL_MARGIN_BAR, NORMAL_MIN_VERTICES, NORMAL_UNIT_BAR, POSITION_LEN, STRIDES,
     SubMesh,
 };
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 impl Mesh {
     /// Recovers the vertex stride from the bounding box the `.vex` node

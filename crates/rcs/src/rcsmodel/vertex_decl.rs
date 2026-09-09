@@ -50,7 +50,7 @@
 //! a wrong record size could not pass. The declared stride agrees with the
 //! search wherever the search settles on one, 35,983 of 35,990.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 /// Bytes of declaration header before the first attribute record.
 const HEADER_LEN: usize = 4;

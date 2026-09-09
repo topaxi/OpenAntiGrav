@@ -24,7 +24,7 @@
 
 use anyhow::Result;
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 use oag_texture::gxt;
 
 use super::Textures;

@@ -30,7 +30,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
 use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots, anim_node, slots};
@@ -322,7 +322,7 @@ fn surface(
 
 /// One authored factor pair as the state a pipeline is built with.
 ///
-/// **A translation, not a decision.** `oag_formats::rcsmodel::Factor` is the
+/// **A translation, not a decision.** `oag_rcs::rcsmodel::Factor` is the
 /// disc's own four values under names, and each has exactly one counterpart in
 /// `wgpu`; the operation is `Add` because the RSX's blend equation register is a
 /// separate field this reading has not touched and `GL_FUNC_ADD` is what it
@@ -371,7 +371,7 @@ struct Geometry<'a> {
     /// makes harmless.
     lightmap_texcoords: Option<&'a [[f32; 2]]>,
     /// HD's **baked per-vertex light and sun-occlusion mask**, `[r, g, b,
-    /// mask]`, from `oag_formats::rcsmodel::Mesh::vertex_light`. `None` on 632
+    /// mask]`, from `oag_rcs::rcsmodel::Mesh::vertex_light`. `None` on 632
     /// of Talon's Junction's 983 chunks - not a gap but the other half of the
     /// split: a chunk bakes into the lightmap atlas **or** its vertices, never
     /// both.
@@ -380,7 +380,7 @@ struct Geometry<'a> {
     /// Which chunk of the `.rcsmodel` this geometry is, in file order.
     ///
     /// The join key for `track.pvs`, whose per-cell bitmaps are indexed by
-    /// exactly this number - see [`oag_formats::hd_pvs`]. `None` for geometry
+    /// exactly this number - see [`oag_rcs::hd_pvs`]. `None` for geometry
     /// that is not a chunk of the model the PVS was authored against.
     chunk: Option<u32>,
 }
@@ -509,7 +509,7 @@ fn emit(
                 .unwrap_or([0.0, 0.0]),
             // **`1 - v` where the material's own vertex program writes it**,
             // which one of Talon's Junction's 283 resolved variants does. See
-            // `oag_formats::rcsmaterial::vertex` for the microcode and
+            // `oag_rcs::rcsmaterial::vertex` for the microcode and
             // `skin::flips` for why this is per material rather than global.
             texcoord: texcoords
                 .and_then(|t| t.get(k))
@@ -532,7 +532,7 @@ fn emit(
             slots: surface.roles,
             xform: place.xform,
             // The colour set's fourth byte - see
-            // `oag_formats::rcsmodel::Mesh::vertex_light` and
+            // `oag_rcs::rcsmodel::Mesh::vertex_light` and
             // `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is
             // real and it is masked". `1.0` (unmasked) for a chunk with no
             // colour set, which is what a lightmapped chunk uses instead -
@@ -607,7 +607,7 @@ struct MaterialSetup {
     lightmaps: TextureSlots,
     material_slots: Vec<u32>,
     material_specular_exponent: Vec<f32>,
-    material_variants: Vec<Option<oag_formats::rcsmaterial::Variant>>,
+    material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
     emissive: Vec<crate::mesh::Emissive>,
     alpha_test_ref: Option<f32>,
 }

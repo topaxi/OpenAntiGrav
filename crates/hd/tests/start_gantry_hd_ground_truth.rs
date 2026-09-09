@@ -49,7 +49,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_texture::gtf;
 use oag_vex::vex;
@@ -161,7 +161,7 @@ fn uv_offset(rcs_data: &[u8], hash: u32) -> (f32, f32) {
     material
         .parameters
         .iter()
-        .find(|p| p.hash == oag_formats::rcsmaterial::name_hash("uvOffset"))
+        .find(|p| p.hash == oag_rcs::rcsmaterial::name_hash("uvOffset"))
         .map(|p| (p.value[0], p.value[1]))
         .unwrap_or((0.0, 0.0))
 }

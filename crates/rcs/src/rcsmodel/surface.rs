@@ -5,7 +5,7 @@
 //! is about the record at [`SURFACE_BASE`], which is the structure this module
 //! learned about last and the one a reader is most likely to come looking for.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 use super::{
     Error, LAYOUT_DESCRIBED, LAYOUT_INLINE, Layout, Mesh, Result, SPACE_BYTE, SUBMESH_BASE,

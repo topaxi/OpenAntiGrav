@@ -32,7 +32,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmaterial::{Declared, fragment, name_hash};
+use oag_rcs::rcsmaterial::{Declared, fragment, name_hash};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds a `.rcsmaterial`. The whole disc
@@ -436,7 +436,7 @@ fn no_ship_or_weapon_material_compiles_a_zone_variant() {
 /// the count's own: `saturate(N.y - 1)` is zero for every unit normal, so
 /// those blocks multiply the lookup by zero. That rests on the register
 /// feeding the `ADD` being a normalised `N.y`, decoded through an opcode
-/// (`0x3b`) `oag_formats::rcsmaterial::fragment` does not name - read as a
+/// (`0x3b`) `oag_rcs::rcsmaterial::fragment` does not name - read as a
 /// normalise from its pairing with a `DP3` of a vector against itself, twice
 /// in the same block. What is *measured* here, and what this asserts, is the
 /// two-value threshold set; the "turned off" reading is the interpretation.

@@ -5,7 +5,7 @@
 //! last byte carries only the bits `chunks` leaves valid - the two tests that
 //! say the layout is read right rather than merely plausible.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

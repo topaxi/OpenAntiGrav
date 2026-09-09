@@ -10,7 +10,7 @@
 //! cargo run -p oag-render --example hd_uv_transform_census
 //! ```
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

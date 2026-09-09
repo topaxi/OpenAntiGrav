@@ -1,0 +1,27 @@
+[package]
+name = "oag-rcs"
+description = "The RCSMODEL scene: geometry, materials, visibility sets and shader programs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-formats` for `ByteOrder` and the parser-coverage instrumentation.
+[dependencies]
+oag-formats.workspace = true
+
+# Ground-truth tests read real models out of a disc image. Tests only. The
+# `oag-vex` edge is real but test-only too: three of these compare an
+# `.rcsmodel`'s geometry against the `.vex` node that points at it, which is the
+# whole reason the PS3 split its meshes in two. See `crates/tables/Cargo.toml`
+# for why a dev-dependency onto a crate that depends on this one is permitted.
+[dev-dependencies]
+oag-assets.workspace = true
+oag-disc.workspace = true
+oag-tables.workspace = true
+oag-texture.workspace = true
+oag-vex.workspace = true
+
+[lints]
+workspace = true

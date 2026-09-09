@@ -1324,7 +1324,7 @@ material ships - and **not** one of the 121 engine-owned `_vp`/`_fp` names
 `renderer.md`'s shader-registry census reads out of `EBOOT.elf`, `FEBackgroundAnim*`
 among them. It carries exactly one variant: class `RigidBody`, feature set
 `HalfBrightAmbientSunSpot0SVC0` - the plain sun-plus-ambient lit-race
-permutation [`oag_formats::rcsmaterial::Features::chunk_word`]'s own doctest
+permutation [`oag_rcs::rcsmaterial::Features::chunk_word`]'s own doctest
 names for "no lightmap coordinate, no vertex colour set" (`LIT_RACE_PASS`,
 `decl: None`), despite the file's own name promising a vertex-driven emissive
 term. Read together, this favours a different picture than "a style-specific

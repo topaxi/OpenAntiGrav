@@ -1,7 +1,7 @@
 //! Scratch probe: chunks in an HD track's `.rcsmodel` that no `.vex` mesh
 //! node addresses, with material names and rough extents from position data.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_render::mesh;
 use oag_vex::vex;

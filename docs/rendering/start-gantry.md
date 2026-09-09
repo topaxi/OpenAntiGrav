@@ -469,7 +469,7 @@ open which copy (if either alone) a race reaches.
 ### The geometry moved out of the `.vex`; the mechanism has to be looked for beside it
 
 Every HD `Mesh` node's own payload is a bounding box and a hash, nothing else
-- `oag_formats::rcsmodel` is where the real vertices, indices, texture
+- `oag_rcs::rcsmodel` is where the real vertices, indices, texture
 coordinates and material table for a PS3 model live (see that module's own
 doc comment, and `docs/rendering/scenery-animation.md`). `321go_startfinish.vex`
 is exactly that shape: 43 nodes, 19 of them `Mesh`, and reading any of their
@@ -559,7 +559,7 @@ same trap a first pass at Pulse's own test fell into sorting by `x` instead of
 
 **The material's `uvOffset`/`uvScale` are a static value, not a keyframe
 track, and this is a fact about the format, not an inference from one
-file.** `oag_formats::rcsmodel::material::parameters` decodes a material
+file.** `oag_rcs::rcsmodel::material::parameters` decodes a material
 record's parameter table as a name-hashed array of `{value: [f32; 4], quads:
 u32}` entries with no time axis at all - a `quads` above one would be a longer
 vector the shader indexes, not a sequence of keys, and every parameter this
@@ -684,7 +684,7 @@ name yet because nothing here loads `321go_startfinish.vex` at all.
 
 **Read on `data/extracted/vita/PCSF00007`** (the decrypted EU package: base,
 the 1.04 patch, and both DLC packages), with
-`crates/formats/tests/start_gantry_2048_ground_truth.rs` (9 tests) and
+`crates/rcs/tests/start_gantry_2048_ground_truth.rs` (9 tests) and
 `crates/hd/tests/start_gantry_hd_ground_truth.rs`'s own added sixth test as
 the executable form of every claim below. No Ghidra and no emulator - the
 same `oag-wad`-equivalent reading (`scripts/psarc.py` for the archive census,
@@ -711,7 +711,7 @@ and a `start_light_background1` locator, all static `Transform` nodes, no
 easy to miss on a first pass precisely because it carries nothing to find.
 Every one of the seven glyph files that *does* have geometry, plus `fx350.vex`
 itself, has a sibling `.rcsmodel`, and every sibling opens as
-`oag_formats::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all eight)
+`oag_rcs::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all eight)
 - **2048 re-exported HD's own four glyph files (and `fx350.vex`) into its own
 Vita container rather than shipping the PS3 bytes verbatim**, a measured fact
 about the pipeline, not an assumption.
@@ -824,7 +824,7 @@ this whole positional mapping carries.
 ### Why node-to-submesh correlation is positional here, not addressed
 
 **This container has no hash, no name, nothing to address a chunk by at
-all** - `oag_formats::rcsmodel::psp2`'s own module doc states this plainly:
+all** - `oag_rcs::rcsmodel::psp2`'s own module doc states this plainly:
 every HD chunk is found through a `Mesh` node's `+0x30` hash, and 2048's
 format simply has no equivalent field. So unlike
 `start_gantry_hd_ground_truth.rs`, which resolves `pasted__Go_HD_start_light_321go`

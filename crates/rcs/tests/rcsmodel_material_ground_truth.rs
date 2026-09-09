@@ -13,7 +13,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmodel::{self, Blend, Transparency};
+use oag_rcs::rcsmodel::{self, Blend, Transparency};
 use oag_vex::vex;
 use rcsmodel_common::{PAIRS, image, pair};
 
@@ -964,7 +964,7 @@ fn the_engine_flares_material_authors_the_numbers_its_program_patches() {
             .unwrap_or_else(|| panic!("{hash:#010x} is not in the table"))
             .value[0]
     };
-    let name_hash = oag_formats::rcsmaterial::name_hash;
+    let name_hash = oag_rcs::rcsmaterial::name_hash;
     assert_eq!(value(name_hash("power1")), 10.0);
     assert_eq!(value(name_hash("scale1")), 0.3);
     assert_eq!(value(name_hash("min1")), 0.45);

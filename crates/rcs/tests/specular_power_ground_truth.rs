@@ -17,8 +17,8 @@
 
 mod rcsmodel_common;
 
-use oag_formats::rcsmaterial::{self, Class, Features, fragment};
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmaterial::{self, Class, Features, fragment};
+use oag_rcs::rcsmodel;
 use rcsmodel_common::{PAIRS, image};
 
 #[test]

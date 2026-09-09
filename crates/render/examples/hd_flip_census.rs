@@ -1,6 +1,6 @@
 //! Scratch probe: which material variants flip the diffuse texture coordinate.
 //!
-//! `oag_formats::rcsmaterial::vertex::Program::flips` reads the `v = 1 - v`
+//! `oag_rcs::rcsmaterial::vertex::Program::flips` reads the `v = 1 - v`
 //! out of the resolved vertex block. This runs it over every drawn slot of a
 //! circuit so the reading can be checked against surfaces whose picture is
 //! already known to be right or wrong.
@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("no sibling"))?;
-    let source = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let source = oag_rcs::rcsmodel::Model::parse(&geometry)?;
 
     let mut flipped = 0;
     let mut upright = 0;
@@ -35,12 +35,11 @@ fn main() -> anyhow::Result<()> {
             unread += 1;
             continue;
         };
-        let Some(program) = oag_formats::rcsmaterial::vertex::Program::of(&blob, variant.vertex)
-        else {
+        let Some(program) = oag_rcs::rcsmaterial::vertex::Program::of(&blob, variant.vertex) else {
             unread += 1;
             continue;
         };
-        let hash = oag_formats::rcsmaterial::name_hash("Uv1");
+        let hash = oag_rcs::rcsmaterial::name_hash("Uv1");
         let flips = program.flips(hash);
         if flips {
             flipped += 1;

@@ -1,4 +1,4 @@
-//! Validates the [`rcsmodel::psp2`](oag_formats::rcsmodel::psp2) decoder against
+//! Validates the [`rcsmodel::psp2`](oag_rcs::rcsmodel::psp2) decoder against
 //! every `.rcsmodel` Wipeout 2048 ships.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -25,7 +25,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const PACKAGES: [&str; 3] = [
     "vita/PCSF00007/base/PSP2/data.psarc",

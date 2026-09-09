@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
     let data = mesh::read_blob(&spec, &vex)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &vex, &data)
         .ok_or_else(|| anyhow::anyhow!("{vex}: no sibling .rcsmodel"))?;
-    let model = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let model = oag_rcs::rcsmodel::Model::parse(&geometry)?;
 
     let mut container = Container::open(&spec)?;
     let mut seen = std::collections::BTreeSet::new();

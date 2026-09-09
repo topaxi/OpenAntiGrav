@@ -7,7 +7,7 @@
 //! `is_world_baked` verdict `mesh::rcs::referenced` takes changes with it.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use oag_render::mesh;
 use oag_vex::vex;
 

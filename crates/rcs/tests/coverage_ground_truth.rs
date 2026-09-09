@@ -20,7 +20,7 @@
 
 mod rcsmodel_common;
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 use oag_vex::vex;
 use rcsmodel_common::image;

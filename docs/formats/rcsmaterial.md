@@ -174,7 +174,7 @@ Spot0 Spot1 Spot2 Spot3 ZAlphaOnly AmbientShadow
 29,520 variants of the 693 materials in `DATA00.PSARC`** is reproduced exactly
 by `~crc32` of such a concatenation - 100 %, no exceptions. (`DATA00` is where
 that sweep ran; the whole disc carries **1,632 materials and 76,358 variants**
-across seven archives, and `oag_formats::rcsmaterial`'s ground-truth tests
+across seven archives, and `oag_rcs::rcsmaterial`'s ground-truth tests
 confirm every *structural* claim at that larger scale - no class outside the
 four, no repeated key in any file, no program offset carrying two different
 content hashes. The per-class census disc-wide is `Static` 43,370,
@@ -347,7 +347,7 @@ putting the lit race pass at a different word.
 > `viewProj`. The "empty string at bit 3" was the empty string the loop's
 > *clear* chain loads for every optional token. A selector built on that order
 > would have picked the wrong variant every time, and it shipped in
-> `oag_formats::rcsmaterial` for one commit before this read caught it.
+> `oag_rcs::rcsmaterial` for one commit before this read caught it.
 
 ### The frame's pass order
 
@@ -370,7 +370,7 @@ addresses are `+0x10000`.
 
 A `SHO` block's header carries its parameter and sampler tables, so what a
 program is *fed* reads without decoding an instruction:
-`oag_formats::rcsmaterial::Declared` parses them, and the three tables abutting
+`oag_rcs::rcsmaterial::Declared` parses them, and the three tables abutting
 exactly is its framing check.
 
 **Splitting the lighting families on that was tried and does not work.**
@@ -401,7 +401,7 @@ declare a `lightmapUV`, which is the consistency check.
 
 ### The fragment microcode decodes in Rust (2026-08-20)
 
-`oag_formats::rcsmaterial::fragment` ports the decoder from
+`oag_rcs::rcsmaterial::fragment` ports the decoder from
 [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py), which stays the
 reference: that script established the container facts empirically, by scoring
 every candidate ordering, and this reimplements the reading rather than
@@ -616,7 +616,7 @@ alone: the annotated frame showed the tube's glass as plain grey where the
 reference shows green-tinted glass with a crowd visible through it.
 
 **The second texture is real and unloaded, for four glass materials measured
-this way.** `oag_formats::rcsmodel::Material::second_texture` is populated on
+this way.** `oag_rcs::rcsmodel::Material::second_texture` is populated on
 `glass_texture_customr` (`j_tower_glass_r.gtf`), `etched_glass_tech`
 (`glass_etched_tech.gtf`, matching "What this explains about the picture"
 above), `tunnel_fx_glass` (`tunnel_fx_diffuse.gtf`) and `ds_booth_glass` (a
@@ -977,7 +977,7 @@ material +0x58  u32  file offset of a .gtf path      +0x60  u32  its sampler has
 material +0x78  u32  a second .gtf path              +0x80  u32  its sampler hash
 ```
 
-Read on `oag_formats::rcsmodel::Material::texture_sampler` and
+Read on `oag_rcs::rcsmodel::Material::texture_sampler` and
 `second_texture_sampler`. Three things make it a sampler hash rather than a word
 that happens to be there:
 
@@ -1023,7 +1023,7 @@ folded in quietly.
 **The pairing was off by one entry, and that single mistake is most of this
 page's confusion.** A material record's texture information is not two
 hardcoded slots at `+0x58` and `+0x78`. It is the material's own **input
-table** - the one `oag_formats::rcsmodel::material::parameters` has walked
+table** - the one `oag_rcs::rcsmodel::material::parameters` has walked
 since the flame's numbers were read - whose entries are `0x20` apart and shaped
 
 ```text
@@ -1084,7 +1084,7 @@ overloaded - they are **separate entries whose hashes name them**, and
 and the lightmap is *declared* by 118 of the circuit's materials rather than
 inferred from an `lmaps/` path on 85 of them.
 
-**`oag_formats::rcsmodel::material::samplers` reads the whole list now**;
+**`oag_rcs::rcsmodel::material::samplers` reads the whole list now**;
 `oag-render` still binds the first two, so the third onwards is read and not
 drawn. Which of them a shader wants is no longer a guess - it is the hash,
 against the resolved variant's own declaration.
@@ -1307,7 +1307,7 @@ in one frame.
 
 ## The vertex program says which way up a texture coordinate is (2026-08-24)
 
-**Confidence 92.** [`oag_formats::rcsmaterial::fragment`] traces what a program
+**Confidence 92.** [`oag_rcs::rcsmaterial::fragment`] traces what a program
 does with the texels it samples. Its sibling `vertex` traces the varying it
 samples *at*, and the one thing this project needed from it is that **HD's
 circuit shaders do not agree on the orientation of `v`.**
@@ -1338,7 +1338,7 @@ instruction counts only when it negates the named attribute's input register
 **into an output texture coordinate**, using a source slot the opcode actually
 reads. A negate into a temporary, into `o[POS]`, or parked in a slot that
 `MUL` never looks at is not a flip - each is a test in
-`crates/formats/src/rcsmaterial/vertex/tests.rs`.
+`crates/rcs/src/rcsmaterial/vertex/tests.rs`.
 
 The renderer applies it on the CPU, once per vertex at build time, through
 `mesh::slots::FLIP_V`. That bit rides in the same word as the texture-unit
@@ -1380,7 +1380,7 @@ on either circuit is a sign or a glow: `sign_emissive`, `sign_emissive_glow`,
 `nr_twinblend`, `cf_billboard1`, `scanlinebillboard`, `dc_lightcone`,
 `loopmaterial`, `nr_scalinguvs`. Two independent circuits, no exceptions.
 
-`oag_formats::rcsmaterial::Declared::takes_directional_light` reads it, and
+`oag_rcs::rcsmaterial::Declared::takes_directional_light` reads it, and
 `mesh::slots::NO_AMBIENT`/`NO_SUN` carry the pair to the renderer.
 
 ### What is acted on, and what is not

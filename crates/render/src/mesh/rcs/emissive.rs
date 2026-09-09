@@ -28,7 +28,7 @@
 //! without a clock still has a glow to draw. What it does *not* do is scroll
 //! one it has no rate for; see the three populations below.
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 
 use crate::mesh::{Emissive, ModelTexture, slots};
 

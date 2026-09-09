@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     let data = mesh::read_blob(&spec, &name)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("{name}: no sibling .rcsmodel"))?;
-    let model = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let model = oag_rcs::rcsmodel::Model::parse(&geometry)?;
     for (slot, material) in model.materials.iter().enumerate() {
         if !want.is_empty() && !material.name.contains(&want) && want != slot.to_string() {
             continue;

@@ -6,7 +6,7 @@
 //! cargo run -q -p oag-game --example gantry_2048_probe -- <base/PSP2/data.psarc>
 //! ```
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 use oag_vex::vex;
 

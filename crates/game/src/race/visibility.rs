@@ -78,9 +78,9 @@ pub struct TrackVisibility {
     /// coexist - a `.vex` with `section` nodes has no chunks and a PS3
     /// circuit has no `section` nodes - so this sits beside the PSP fields
     /// rather than in an enum with them, and whichever is populated is the
-    /// tier that runs. See [`oag_formats::hd_pvs`] and
+    /// tier that runs. See [`oag_rcs::hd_pvs`] and
     /// `docs/formats/hd-pvs.md`.
-    chunks: Option<oag_formats::hd_pvs::Pvs>,
+    chunks: Option<oag_rcs::hd_pvs::Pvs>,
 }
 
 impl TrackVisibility {
@@ -139,7 +139,7 @@ impl TrackVisibility {
                 return None;
             }
         };
-        let pvs = match oag_formats::hd_pvs::Pvs::parse(&blob) {
+        let pvs = match oag_rcs::hd_pvs::Pvs::parse(&blob) {
             Ok(pvs) => pvs,
             Err(e) => {
                 report.push(format!("{name}: {e} - drawing every chunk"));
@@ -167,7 +167,7 @@ impl TrackVisibility {
 
     /// The circuit's chunk partition, when it has one.
     #[must_use]
-    pub fn chunks(&self) -> Option<&oag_formats::hd_pvs::Pvs> {
+    pub fn chunks(&self) -> Option<&oag_rcs::hd_pvs::Pvs> {
         self.chunks.as_ref()
     }
 

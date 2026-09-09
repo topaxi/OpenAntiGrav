@@ -423,7 +423,7 @@ fn a_chunk_outside_the_cells_set_is_not_drawn() {
         0 => vec![0, 1],
         _ => vec![15],
     });
-    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let pvs = oag_rcs::hd_pvs::Pvs::parse(&blob).unwrap();
     let set = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::ZERO).expect("located");
     assert!(set.allows(&chunk_draw(Some(0))));
     assert!(set.allows(&chunk_draw(Some(1))));
@@ -444,7 +444,7 @@ fn the_craft_and_the_camera_are_unioned() {
         0 => vec![0],
         _ => vec![9],
     });
-    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let pvs = oag_rcs::hd_pvs::Pvs::parse(&blob).unwrap();
     let together = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::from_array(far)).expect("located");
     assert!(together.allows(&chunk_draw(Some(0))));
     assert!(together.allows(&chunk_draw(Some(9))));
@@ -458,7 +458,7 @@ fn the_craft_and_the_camera_are_unioned() {
 #[test]
 fn a_viewpoint_off_the_partition_draws_everything() {
     let blob = hd_pvs(&[[0.0; 3]], 16, |_| vec![0]);
-    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let pvs = oag_rcs::hd_pvs::Pvs::parse(&blob).unwrap();
     let stray = Vec3::new(CHUNK_TRUST_RADIUS * 10.0, 0.0, 0.0);
     assert!(
         ChunkSet::around(&pvs, stray, stray).is_none(),
@@ -478,7 +478,7 @@ fn a_neighbouring_cell_within_the_padding_is_unioned_in() {
         16,
         |cell| vec![cell],
     );
-    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let pvs = oag_rcs::hd_pvs::Pvs::parse(&blob).unwrap();
     let set = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::ZERO).expect("located");
     assert!(set.allows(&chunk_draw(Some(0))));
     assert!(set.allows(&chunk_draw(Some(1))), "within CHUNK_PAD");

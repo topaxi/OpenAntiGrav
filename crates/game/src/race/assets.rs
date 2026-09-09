@@ -159,7 +159,7 @@ fn authored_ribbon(
     let blob = archives
         .read_name(model)
         .map_err(|e| format!("{model}: not in the archive set ({e})"))?;
-    let parsed = oag_formats::rcsmodel::Model::parse(&blob)
+    let parsed = oag_rcs::rcsmodel::Model::parse(&blob)
         .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
     let material = parsed
         .materials
@@ -189,7 +189,7 @@ fn authored_ribbon(
     // bytes: `Material::blend` names the factors and `rcs::blend_state` turns
     // that pair into a pipeline state, and both already draw every HD surface.
     let authored = material.blend();
-    let oag_formats::rcsmodel::Blend::Factors { src, dst } = authored else {
+    let oag_rcs::rcsmodel::Blend::Factors { src, dst } = authored else {
         return Err(format!(
             "{model}: its material's blend is {authored:?} rather than a factor pair"
         ));

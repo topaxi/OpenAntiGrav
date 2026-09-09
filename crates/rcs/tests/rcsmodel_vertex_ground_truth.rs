@@ -33,7 +33,7 @@
 
 mod rcsmodel_common;
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use rcsmodel_common::*;
 
 /// Claim 3: the recovered vertex stride fills the box the `.vex` authors.

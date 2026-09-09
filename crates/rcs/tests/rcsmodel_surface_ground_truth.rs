@@ -15,7 +15,7 @@
 
 mod rcsmodel_common;
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use rcsmodel_common::image;
 
 const ARCHIVES: &[&str] = &[

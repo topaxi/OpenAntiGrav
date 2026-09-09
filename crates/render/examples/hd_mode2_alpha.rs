@@ -14,7 +14,7 @@
 //! channels, read off each material's own fragment microcode, and this reads
 //! the same bits `mesh.wgsl` does.
 
-use oag_formats::rcsmodel::{Material, Transparency};
+use oag_rcs::rcsmodel::{Material, Transparency};
 use oag_render::mesh::{self, ModelTexture, slots};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -110,7 +110,7 @@ fn main() -> anyhow::Result<()> {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &name, &data) else {
                 continue;
             };
-            let Ok(source) = oag_formats::rcsmodel::Model::parse(&geometry) else {
+            let Ok(source) = oag_rcs::rcsmodel::Model::parse(&geometry) else {
                 continue;
             };
             let Ok(Some((model, _))) = mesh::rcs::scene_from(&spec, &name, &data) else {

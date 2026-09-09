@@ -13,7 +13,7 @@
 //! cargo run -p oag-render --example hd_uv_time_census
 //! ```
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

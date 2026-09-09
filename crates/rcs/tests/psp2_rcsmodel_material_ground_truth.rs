@@ -1,4 +1,4 @@
-//! Validates [`rcsmodel::psp2`](oag_formats::rcsmodel::psp2)'s texture
+//! Validates [`rcsmodel::psp2`](oag_rcs::rcsmodel::psp2)'s texture
 //! coordinate decode and material table reader against every `.rcsmodel`
 //! Wipeout 2048 ships - the corpus-wide argument
 //! `psp2_rcsmodel_ground_truth.rs` already makes for the geometry, extended
@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const PACKAGES: [&str; 3] = [
     "vita/PCSF00007/base/PSP2/data.psarc",
@@ -232,7 +232,7 @@ fn every_material_resolves_to_real_paths() {
 /// Measured 2026-08-27 over the three EU packages: 244,889 submeshes, 0 out of
 /// range, 0 non-zero on a one-material model, 86 of 414 multi-material models
 /// naming every material they declare. **Re-measured 2026-09-02** after
-/// `oag_formats::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP` found 2,647 more
+/// `oag_rcs::rcsmodel::psp2::SKY_BUFFER_POINTER_GAP` found 2,647 more
 /// submeshes the single-gap reading missed entirely (see
 /// `docs/formats/2048-rcsmodel.md`): 247,536 submeshes, still 0 out of range
 /// and 0 non-zero on a one-material model, and now 428 of 428 multi-material

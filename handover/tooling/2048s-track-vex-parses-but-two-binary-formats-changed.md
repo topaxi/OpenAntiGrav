@@ -92,7 +92,7 @@ once the two formats below are readable: the heuristic needs a third answer
 alongside `Big`/`Little`, or a Vita-specific override.
 
 **The `.rcsmodel` beside it is not HD's container**, and this one needed
-Ghidra, not a stride search: `oag_formats::rcsmodel`'s header read is
+Ghidra, not a stride search: `oag_rcs::rcsmodel`'s header read is
 `ByteOrder::Big.u32(data, 0)`, unconditionally, and expects `0x000a0000`;
 `environments/altima/track.rcsmodel`'s first four bytes are `ed ad 5c ca` read
 either way - not a byte-swap of the expected constant, a different value
@@ -455,7 +455,7 @@ None of it is a format any more; it is fields inside one, and presentation:
   index-exact oracle, mean dot 0.994, and 33,335,682 of 33,335,682 normals
   unit-length across the full corpus**
   ([2048-rcsmodel.md](../../docs/formats/2048-rcsmodel.md#the-normal-is-cracked-three-signed-bytes-not-a-packed-word)).
-  Implemented in `oag_formats::rcsmodel::psp2::unpack_normal`, wired into
+  Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal`, wired into
   `oag_render::mesh::rcs::psp2::build`, and `just play 2048 --race` now draws
   Altima lit off the file's own normals. What is still missing is the texture
   coordinate's own type nibble (`t8`) and the material/texture binding - that
@@ -651,7 +651,7 @@ TITLE entry rather than showing them under 2048 - see
    cross-checked, see "What is left" above.
 6. ~~`normal`'s encoding~~ - cracked the same session, see "Open" above:
    three signed bytes, `byte/127.0`, x/y/z in file order, 4th byte padding.
-   Implemented in `oag_formats::rcsmodel::psp2::unpack_normal` and wired into
+   Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal` and wired into
    `oag_render::mesh::rcs::psp2::build`; `just play 2048 --race` now draws
    Altima lit off real normals. The index-exact correspondence built to get
    there (`crates/game/examples/vita_rcsmodel_exact.rs`, 1,504 vertices, zero

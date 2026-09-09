@@ -71,7 +71,7 @@ pub struct DrawCall {
     /// Pulse's batches carry a three-way class in `pass_mask & 0x0700` and that
     /// is all they carry, so [`Self::blend`] is the whole story there and this
     /// is `None`. A Wipeout HD material carries a source and a destination
-    /// factor instead - see `oag_formats::rcsmodel::Blend::Factors` - and the
+    /// factor instead - see `oag_rcs::rcsmodel::Blend::Factors` - and the
     /// two families do not nest: `0001`/`0001` is unweighted additive and
     /// `0001`/`0303` is premultiplied alpha, and neither is any member of
     /// `vex::BlendClass`. Folding them onto the nearest member is what this
@@ -104,7 +104,7 @@ pub struct DrawCall {
     ///
     /// **The join key for Wipeout HD's authored PVS.** `track.pvs` carries one
     /// bit per chunk per cell, addressed by exactly this index - see
-    /// [`oag_formats::hd_pvs`] and `docs/formats/hd-pvs.md`. It is the PS3
+    /// [`oag_rcs::hd_pvs`] and `docs/formats/hd-pvs.md`. It is the PS3
     /// counterpart of [`Self::node`]: the same idea that a draw call should be
     /// culled by the association the artists authored rather than by one
     /// guessed from its world-space bounds, which `crate::pvs`' module docs

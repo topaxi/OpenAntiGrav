@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 
 use super::super::{ModelTexture, TextureSlots};
 use super::{Report, Textures};
@@ -99,7 +99,7 @@ pub(super) fn skin(
         // slot, because the two are answered by different evidence: the
         // lightmap by `Material::lightmap`'s four-signal path reading, and
         // everything else by the material's own microcode. See
-        // `oag_formats::rcsmodel::Material::lightmap` and [`roles`].
+        // `oag_rcs::rcsmodel::Material::lightmap` and [`roles`].
         let second = entry(pick.aux).map(|path| load(path, textures));
         match (material.lightmap_entry().is_some(), &second) {
             (true, Some(Some(_))) => report.lightmapped += 1,
@@ -308,7 +308,7 @@ pub(super) fn picks(
 /// ordinary lit race draws through, and that variant's fragment program states
 /// outright which unit it samples for the picture and which unit and channel it
 /// writes to the output alpha.
-/// `oag_formats::rcsmaterial::fragment::Program::output_texels` traces it, and
+/// `oag_rcs::rcsmaterial::fragment::Program::output_texels` traces it, and
 /// this turns the answer into the four bits `mesh.wgsl` decodes.
 ///
 /// **Only a positive reading is acted on.** A lane the taint could not follow
@@ -328,7 +328,7 @@ pub(super) fn picks(
 /// chunks are exactly the surfaces that addressed a blank third of their own
 /// atlas and drew as flat black bands. Flipping every coordinate instead would
 /// trade those for every surface that is already right; see
-/// `oag_formats::rcsmaterial::vertex`.
+/// `oag_rcs::rcsmaterial::vertex`.
 ///
 /// The attribute asked about is the one the chunk's own declaration calls the
 /// diffuse coordinate, so a layout that names it something other than `Uv1`
@@ -589,7 +589,7 @@ fn units(
 ///
 /// **The first use of the variant key this project can read.** A material is a
 /// table of up to 68 shader variants and the original picks one by a two-part
-/// key - see `oag_formats::rcsmaterial`. Half of it a chunk decides, from its
+/// key - see `oag_rcs::rcsmaterial`. Half of it a chunk decides, from its
 /// own vertex declaration; half a render pass decides, and for an ordinary lit
 /// race that half is [`rcsmaterial::LIT_RACE_PASS`].
 ///

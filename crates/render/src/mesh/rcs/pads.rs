@@ -28,7 +28,7 @@
 //! stay lined up one entry each.
 
 use anyhow::{Context, Result, bail};
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
 use super::{

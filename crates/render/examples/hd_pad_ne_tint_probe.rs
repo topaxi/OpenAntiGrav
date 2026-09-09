@@ -21,7 +21,7 @@
 //! generic `emissive` shape (`mesh.wgsl`, `glow = second.rgb * tint.rgb *
 //! first.a`) is what the pad's own microcode executes.
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 
 use oag_render::mesh;
 use oag_vex::vex;

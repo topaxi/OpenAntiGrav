@@ -21,7 +21,7 @@
 //!
 //! ```text
 //! +0x00  u32   name hash, `!crc32(name)` - the same hashing
-//!              `oag_formats::rcsmaterial::name_hash` already does
+//!              `oag_rcs::rcsmaterial::name_hash` already does
 //! +0x04  u32   kind: `0x8001` for a sampler, `0` for a parameter
 //! +0x18  u32   file offset of the value (a parameter) or of the texture path
 //!              (a sampler)
@@ -56,7 +56,7 @@
 //! instance after all. **That is a finding this module makes possible and does
 //! not act on**; nothing reads `SpecScale` yet.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 /// Bytes per entry.
 const ENTRY_LEN: usize = 0x20;

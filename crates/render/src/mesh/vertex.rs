@@ -82,7 +82,7 @@ pub struct GpuVertex {
     /// **Not `colour.a`.** That channel is already spoken for twice over - the
     /// PSP/PS2 boost plume's baked alpha falloff, and the bloom pass's glow
     /// mask in `mesh.wgsl`'s fragment output - and HD's mask means neither.
-    /// `oag_formats::rcsmodel::Mesh::vertex_light`'s fourth component for a
+    /// `oag_rcs::rcsmodel::Mesh::vertex_light`'s fourth component for a
     /// chunk that carries a colour set, `1.0` (unmasked) for one that does
     /// not and for every non-HD title, which never reads this field at all.
     /// See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is real
@@ -94,7 +94,7 @@ pub struct GpuVertex {
     /// **Read off the material's own fragment microcode**, not guessed from a
     /// file name: a `.rcsmaterial` variant states which unit it samples for the
     /// picture and which unit and channel it puts in the output alpha, and
-    /// `oag_formats::rcsmaterial::fragment::Program::output_texels` traces it.
+    /// `oag_rcs::rcsmaterial::fragment::Program::output_texels` traces it.
     /// See [`slots::DEFAULT`] for what every title that is not Wipeout HD
     /// carries here, which is the behaviour this field replaced.
     ///
@@ -106,7 +106,7 @@ pub struct GpuVertex {
     ///
     /// **Resolved per material where it can be, off the material's own
     /// fragment microcode** -
-    /// `oag_formats::rcsmaterial::fragment::Program::specular_exponent` -
+    /// `oag_rcs::rcsmaterial::fragment::Program::specular_exponent` -
     /// rather than shared. `32.0` is only the *fallback*: for a non-HD
     /// title, which never varies this field at all; for an HD material the
     /// decoder could not resolve to a value; and for a resolved literal
@@ -144,7 +144,7 @@ pub mod slots {
     /// fragment program samples with, so the coordinate has to be flipped.
     ///
     /// **Read off the vertex microcode, per material** - see
-    /// `oag_formats::rcsmaterial::vertex` and `mesh::rcs::skin::flips`. Unlike
+    /// `oag_rcs::rcsmaterial::vertex` and `mesh::rcs::skin::flips`. Unlike
     /// the three bits above it this one never reaches the shader: the build
     /// applies it once per vertex, because it is a property of the material
     /// and not of the pixel. It rides here because this is already the word
@@ -216,7 +216,7 @@ pub mod slots {
     /// *replace*, so without this bit those surfaces draw their diffuse and
     /// their glow is simply absent.
     ///
-    /// Read per material by `oag_formats::rcsmaterial::fragment::Program::accumulates`,
+    /// Read per material by `oag_rcs::rcsmaterial::fragment::Program::accumulates`,
     /// whose own doc carries the disc-wide evidence. **Never set together with
     /// [`SECOND_IS_LIGHTMAP`]**: adding the circuit's baked atlas paints a
     /// shadow map as a glow, the same refusal `skin::roles` already makes for

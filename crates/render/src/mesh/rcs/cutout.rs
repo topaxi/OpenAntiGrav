@@ -1,4 +1,4 @@
-//! Wipeout HD's alpha **test**: `oag_formats::rcsmodel::Transparency::Mode2`.
+//! Wipeout HD's alpha **test**: `oag_rcs::rcsmodel::Transparency::Mode2`.
 //!
 //! # A different fixed-function feature, not a different equation
 //!
@@ -41,7 +41,7 @@
 //! | `lambert` | 32 | 100 | 0.00 % | 44.8 % | 0.4476 |
 //! | `uv_anim_diffuse_alpha_emissive` | 1 | 65 | 0.00 % | 0.8 % | 0.0077 |
 
-use oag_formats::rcsmodel::{self, Blend};
+use oag_rcs::rcsmodel::{self, Blend};
 
 use super::Report;
 

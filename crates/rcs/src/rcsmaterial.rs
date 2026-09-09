@@ -27,12 +27,12 @@
 //! the spot lights, the Zone modes), and this module deliberately does not
 //! guess it: [`Features`] is a set the caller completes.
 
-use crate::ByteOrder;
 use crate::rcsmodel::VertexDecl;
+use oag_formats::ByteOrder;
 
 /// The `~crc32` this format hashes names with.
 ///
-/// The same function `oag_formats::rcsmodel` uses for attribute names and the
+/// The same function `oag_rcs::rcsmodel` uses for attribute names and the
 /// `SHO` tables use for parameters - see
 /// [`crc32.md`](../../../docs/formats/rcsmaterial.md).
 #[must_use]
@@ -319,7 +319,7 @@ impl Features {
     /// they have to be replaced rather than added.
     ///
     /// ```
-    /// use oag_formats::rcsmaterial::{Features, LIT_RACE_PASS};
+    /// use oag_rcs::rcsmaterial::{Features, LIT_RACE_PASS};
     /// let word = Features::chunk_word(LIT_RACE_PASS, None);
     /// assert_eq!(Features::from_pass_word(word).name(), "HalfBrightAmbientSunSpot0SVC0");
     /// ```

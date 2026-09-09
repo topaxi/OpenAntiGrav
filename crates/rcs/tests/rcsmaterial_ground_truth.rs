@@ -1,6 +1,6 @@
 //! What the disc says about a `.rcsmaterial`'s variant table.
 //!
-//! The unit tests beside [`oag_formats::rcsmaterial`] run on a synthetic table,
+//! The unit tests beside [`oag_rcs::rcsmaterial`] run on a synthetic table,
 //! which proves the framing arithmetic and nothing about the disc. These are the
 //! other half: every material Wipeout HD ships, parsed, with the counts
 //! asserted rather than described.
@@ -20,7 +20,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial, fragment};
+use oag_rcs::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial, fragment};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds `.rcsmaterial` files.
@@ -200,7 +200,7 @@ fn a_chunk_determined_key_selects_a_variant_that_exists() {
     let Ok(model_bytes) = archive.read_path(model_path) else {
         return;
     };
-    let model = oag_formats::rcsmodel::Model::parse(&model_bytes).expect("the model parses");
+    let model = oag_rcs::rcsmodel::Model::parse(&model_bytes).expect("the model parses");
 
     // What an ordinary lit race pass adds beyond the chunk's own half. Every
     // token here is pass-determined and unread, so a miss below is expected
@@ -273,7 +273,7 @@ fn a_material_slot_never_needs_two_different_variants() {
         let Ok(bytes) = archive.read_path(&path) else {
             continue;
         };
-        let Ok(model) = oag_formats::rcsmodel::Model::parse(&bytes) else {
+        let Ok(model) = oag_rcs::rcsmodel::Model::parse(&bytes) else {
             continue;
         };
         models += 1;

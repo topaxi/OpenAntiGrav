@@ -34,8 +34,8 @@ python3 scripts/vita-gxp.py dump   <psarc>:<entry> 14
 python3 scripts/vita-gxp.py grep   <psarc> shadow
 ```
 
-`oag_formats::gxp` is the implementation and
-`crates/formats/tests/gxp_ground_truth.rs` is the sweep, `#[ignore]`d because
+`oag_rcs::gxp` is the implementation and
+`crates/rcs/tests/gxp_ground_truth.rs` is the sweep, `#[ignore]`d because
 it needs game content.
 
 ## Where they are
@@ -307,7 +307,7 @@ computes is not**. Every claim on this page and in
 therefore either absent or explicitly marked as unrecovered.
 
 This is where the PS3 pair still goes further:
-`oag_formats::rcsmaterial::fragment` decodes RSX microcode, 37,461 of 37,461
+`oag_rcs::rcsmaterial::fragment` decodes RSX microcode, 37,461 of 37,461
 blocks. Doing the same for USSE is the open thread.
 
 ### The opcode field is located, corpus-wide - nothing is named yet

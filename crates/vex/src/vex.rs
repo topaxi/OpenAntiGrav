@@ -1718,7 +1718,7 @@ mod tests;
 
 /// Which bytes of a `.vex` the node walk reaches.
 ///
-/// **A different question from `oag_formats::rcsmodel::coverage`'s, and a narrower
+/// **A different question from `oag_rcs::rcsmodel::coverage`'s, and a narrower
 /// one.** That one asks whether a *field* went unread, because that is how a
 /// quarter of Wipeout HD's chunks lost their surfaces. This asks whether a
 /// *region* goes unvisited: the node tree is walked whole, so a run of bytes no

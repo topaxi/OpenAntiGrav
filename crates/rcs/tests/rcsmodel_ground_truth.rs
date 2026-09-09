@@ -36,7 +36,7 @@
 
 mod rcsmodel_common;
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use rcsmodel_common::*;
 
 /// Claim 1: the hash in a `Mesh` payload addresses a chunk in the `.rcsmodel`

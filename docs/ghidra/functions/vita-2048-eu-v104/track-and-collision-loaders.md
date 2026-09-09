@@ -93,7 +93,7 @@ buffer data - on `altima` all 23,711 pointer locations are in B and none in C.
 
 What is inside **section B** - its object layout - is still unread; see
 [`2048-rcsmodel.md`](../../../formats/2048-rcsmodel.md) for what
-`oag_formats::rcsmodel::psp2` does instead, and for the vertex fields past the
+`oag_rcs::rcsmodel::psp2` does instead, and for the vertex fields past the
 position that remain unplaced.
 
 ## `KdTree_Load` - `0x8118d134`

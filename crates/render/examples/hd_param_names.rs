@@ -13,7 +13,7 @@
 //! cargo run -p oag-render --example hd_param_names -- <image> path/to/EBOOT.elf
 //! ```
 
-use oag_formats::rcsmaterial::name_hash;
+use oag_rcs::rcsmaterial::name_hash;
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",
@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 continue;
             }
-            let Ok(model) = oag_formats::rcsmodel::Model::parse(&blob) else {
+            let Ok(model) = oag_rcs::rcsmodel::Model::parse(&blob) else {
                 continue;
             };
             for material in &model.materials {

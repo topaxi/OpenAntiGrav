@@ -50,7 +50,7 @@
 //! **Not proven here**: which submesh of `321go_startfinish.rcsmodel` is the
 //! glyph's re-baked geometry. 2048's `.rcsmodel` container has no per-chunk
 //! address (no hash, no name) the way HD's does - see
-//! `oag_formats::rcsmodel::psp2`'s own module doc - so there is no principled
+//! `oag_rcs::rcsmodel::psp2`'s own module doc - so there is no principled
 //! way to point at "this submesh is that node" the way
 //! `start_gantry_hd_ground_truth.rs` does with `Model::mesh(hash)`. A
 //! by-content check (a submesh whose five distinct UV cells numerically match
@@ -505,7 +505,7 @@ fn the_inherited_hd_file_keeps_hds_exact_teleport_timing() {
     let rcs = archive
         .read_path(sibling)
         .unwrap_or_else(|e| panic!("{sibling} reads: {e}"));
-    let model = oag_formats::rcsmodel::psp2::parse(&rcs).expect("the psp2 container parses");
+    let model = oag_rcs::rcsmodel::psp2::parse(&rcs).expect("the psp2 container parses");
     assert_eq!(
         model.unpaired_pointers, 0,
         "every GPU pointer in this file should resolve to a submesh, the \
@@ -539,7 +539,7 @@ fn a_submesh_of_the_inherited_file_numerically_matches_hds_own_five_cells() {
     let rcs = archive
         .read_path(sibling)
         .unwrap_or_else(|e| panic!("{sibling} reads: {e}"));
-    let model = oag_formats::rcsmodel::psp2::parse(&rcs).expect("parses");
+    let model = oag_rcs::rcsmodel::psp2::parse(&rcs).expect("parses");
 
     let go_material_indices: Vec<usize> = model
         .materials

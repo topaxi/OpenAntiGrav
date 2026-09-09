@@ -4,7 +4,7 @@
 //! reads - and say whether it is an inline record or names a separate
 //! `.rcsmaterial` file the chunk's own samplers do not carry.
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 
 use oag_render::mesh;
 use oag_vex::vex;

@@ -4,7 +4,7 @@
 //! a fair seam: this is an audit *of* the parser rather than part of it, and
 //! nothing else in the module calls it.
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 use super::{
     HEADER_LEN, MATERIAL_LEN, Model, SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN,
@@ -31,8 +31,8 @@ use super::{
 /// `crates/formats/tests/coverage_ground_truth.rs`, which ratchets the total
 /// rather than demanding zero.
 #[must_use]
-pub fn coverage(data: &[u8]) -> crate::coverage::Coverage {
-    let mut seen = crate::coverage::Coverage::new(data.len());
+pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
+    let mut seen = oag_formats::coverage::Coverage::new(data.len());
     let Ok(model) = Model::parse(data) else {
         return seen;
     };

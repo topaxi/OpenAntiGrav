@@ -8,8 +8,8 @@
 //! idiom `Program::specular_exponent`'s `LG2`/`MUL`/`EX2` search would never
 //! recognise, since `LIT_EX2_NV40` is one instruction, not three.
 
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::Program;
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::Program;
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",

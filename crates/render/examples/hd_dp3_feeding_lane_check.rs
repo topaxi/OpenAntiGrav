@@ -16,8 +16,8 @@
 //! this file's own independent copy has drifted from it - either way, worth
 //! knowing.
 
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::{Instruction, Program, Source};
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::{Instruction, Program, Source};
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",

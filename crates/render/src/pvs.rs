@@ -513,7 +513,7 @@ pub const CHUNK_TRUST_RADIUS: f32 = 64.0;
 ///
 /// **A bitmap rather than a mask, because HD partitions by chunk and not by
 /// section.** `track.pvs` carries one bit per `.rcsmodel` chunk per cell (see
-/// [`oag_formats::hd_pvs`]), which is 983 to 1,902 bits rather than the PSP's
+/// [`oag_rcs::hd_pvs`]), which is 983 to 1,902 bits rather than the PSP's
 /// 64, so there is no mask to `and` against and the per-draw test is a byte
 /// load and a shift instead. Everything else about the two tiers is the same,
 /// including that this one runs first.
@@ -533,7 +533,7 @@ impl ChunkSet {
     /// by mutual exclusion the way Moa Therma's sections do, so subtracting
     /// anything would be a rule invented rather than found.
     #[must_use]
-    pub fn around(pvs: &oag_formats::hd_pvs::Pvs, craft: Vec3, camera: Vec3) -> Option<Self> {
+    pub fn around(pvs: &oag_rcs::hd_pvs::Pvs, craft: Vec3, camera: Vec3) -> Option<Self> {
         let mut bits: Option<Vec<u8>> = None;
         for point in [craft, camera] {
             let Some(nearest) = pvs.nearest_cell(point.to_array()) else {
@@ -577,7 +577,7 @@ impl ChunkSet {
     pub fn allows(&self, draw: &DrawCall) -> bool {
         match draw.chunk {
             None => true,
-            Some(chunk) => oag_formats::hd_pvs::allows(&self.bits, chunk as usize),
+            Some(chunk) => oag_rcs::hd_pvs::allows(&self.bits, chunk as usize),
         }
     }
 

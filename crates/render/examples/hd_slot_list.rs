@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     let data = mesh::read_blob(&spec, &name)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("{name}: no sibling .rcsmodel"))?;
-    let source = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let source = oag_rcs::rcsmodel::Model::parse(&geometry)?;
     let (model, _) = mesh::rcs::scene_from(&spec, &name, &data)?
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
