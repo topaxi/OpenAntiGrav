@@ -30,10 +30,11 @@
 #
 # # A language other than English
 #
-# No second language file exists yet, but the convention for one is decided
-# ahead of needing it: a translation lands under `[strings]`, exactly like
-# here, and an id this build has but that file's translator has not reached
-# yet is named, explicitly, under a second table:
+# `assets/ui/strings/french.toml` is the first one: a translation lands under
+# `[strings]`, exactly like here, and an id this build has but that file's
+# translator has not reached yet is named, explicitly, under a second table -
+# `french.toml`'s own `[untranslated]` and its header comment are the worked
+# example, in place of the illustrative one this comment used to carry:
 #
 #     [untranslated]
 #     ids = ["OAG_PILOT_SAVE"]

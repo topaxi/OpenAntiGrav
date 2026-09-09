@@ -99,19 +99,14 @@ order:
 
 ## Open
 
-- 73 of 82 label rows and 8 of 9 page titles in `assets/ui/menu.toml` still
-  carry no id - every page but `pilots`. `check-strings.py`'s own
-  `BASELINE_LABELS`/`BASELINE_TITLES` name them individually; converting one
-  is: give it an id, add its English text, delete its baseline row.
-- No second language file exists yet (`assets/ui/strings/french.toml`, ...),
-  so the override layer has only ever been proved against English overriding
-  English, or an empty table falling through to the id, and the
-  `[untranslated]` marker convention above has never been exercised by a real
-  file either.
-- Pure's own `StringTable` loading empty is still a bug in the read side, not
-  fixed and not papered over by the override layer above - see the next
-  section.
-- **`english.toml` now carries its own copy of every `OAG_HINTS_*`/
+- **Stale claim from an earlier pass corrected 2026-09-09: the `string_id`
+  conversion is done, not "73 of 82 rows still open".** Verified against
+  `main` directly: `just check-strings` reports `OK: 83 menu row(s) (0
+  baselined), 9 page title(s) (0 baselined), 109 string id(s) all resolve in
+  english.toml`, and `scripts/check-strings.py`'s own `BASELINE_LABELS`/
+  `BASELINE_TITLES` are both empty sets. Every page converted across the
+  sessions that did this work; nothing is left to convert on that axis.
+- **`english.toml` still carries its own copy of every `OAG_HINTS_*`/
   `OAG_LOADING_*` literal, alongside `hints.rs`/`wording.rs`'s own fallback -
   and the table wins.** Fixing a typo in either file's literal changes
   nothing a player sees until `english.toml`'s copy is fixed too, which is
@@ -119,21 +114,83 @@ order:
   expect. `check-strings.py`'s own byte-for-byte extractor is the check that
   catches the two drifting apart (`STRING_CONSUMERS`'s doc comment says "kept
   in step by hand"); nothing catches a *correct* edit to one side landing
-  without its pair.
+  without its pair. Still unfixed - out of scope for the language work below,
+  which only ever touches string *content*, not this duplication.
+- **The EU Pulse disc ships no English language plugin at all.**
+  `pulse-psp-eu.chd`'s own boot report names exactly four: `French (PI008),
+  German (PI009), Spanish (PI010), Italian (PI011)` - no `PI012`. So
+  `settings.language = "English"` against the EU disc silently falls through
+  `boot::chosen_language`'s own fallback chain to whichever plugin loaded
+  first (French, on this disc), not to English. This is real disc content,
+  not a bug in the fallback - but it means **an English capture must name
+  `pulse-psp-usa.chd`, never the EU disc `just play` defaults to**, or the
+  screenshot silently comes back in the wrong language with no error
+  anywhere. Cost about twenty minutes to a session proving French landed
+  before the mismatch was noticed; naming it here so the next screenshot
+  session does not repeat it.
+
+## Landed 2026-09-09: `assets/ui/strings/french.toml`, the first real second-language file
+
+- **86 of the 109 ids that exist have real French text; the other 23 are
+  named under `french.toml`'s own `[untranslated]`** - the PC-graphics/
+  display jargon block, Wipeout's own `SIDESHIFT`, every prose string
+  carrying a `%s`/button-glyph substitution, the three long key-hint
+  sentences, and the two suffixes concatenated onto two of those sentences.
+  See `french.toml`'s own header for the id-by-id reasoning. This is the
+  first real exercise of the `[untranslated]` convention `english.toml`'s
+  doc comment wrote ahead of a caller - nothing was machine-translated to
+  clear it, and every gap is named rather than silently missing.
+- **`strings::built_in` now embeds it** (`language.eq_ignore_ascii_case
+  ("French")`), which is the actual gap that made a `french.toml` on disk
+  not the same thing as a player seeing French - `overlay`/`project_table`
+  already merged whatever `built_in` handed them, but `built_in` recognised
+  only `"English"` before this change. A new test,
+  `every_file_under_assets_ui_strings_is_reachable_through_built_in` (in
+  `crates/game/src/strings.rs`), fails the same way this gap did if a future
+  language file lands with no matching `built_in` branch.
+- **Proved end to end with headless screenshots**, `pulse-psp-usa.chd`
+  (the EU disc has no English to contrast against - see Open above), two
+  pages, at `1440x816` (this build's real default `--screenshot` size):
+  `--menu-page options` and `--menu-page audio`. OPTIONS reads AFFICHAGE /
+  GRAPHISMES / AUDIO / COMMANDES / PILOTES IA / LANGUE / RETOUR in French
+  against DISPLAY / GRAPHICS / AUDIO / CONTROLS / AI PILOTS / LANGUAGE /
+  BACK in English; AUDIO reads VOLUME DE LA MUSIQUE / VOLUME DES EFFETS /
+  VOLUME DU COMMENTATEUR / VOLUME GÉNÉRAL / SOURCE MUSICALE against MUSIC
+  VOLUME / SFX VOLUME / ANNOUNCER VOLUME / MASTER VOLUME / MUSIC SOURCE.
+  `VOLUME GÉNÉRAL`'s `É` renders as the real accented capital, not a folded
+  blank or a wrong glyph - `crates/game/src/font.rs`'s fold chain and this
+  file's own accented text both confirmed by the same screenshot. The boot
+  report's own two lines (`language French from settings, skipping the
+  picker` and `assets/ui/strings/french.toml: 86 override(s)`) were read
+  back too, not just the picture - see `docs/architecture/frontend-boot.md`
+  for what each line means.
+- Settings reached without touching a developer's own `~/.config/oag/`:
+  `XDG_CONFIG_HOME=<scratch dir> oag-game ... --menu-page ... --screenshot
+  ...` with a `settings.toml` naming `language` under that scratch
+  directory - `dirs = "6"` (`settings::path`) honours `$XDG_CONFIG_HOME` on
+  Linux, and `oag-game` has no `--settings`/`--language` CLI flag of its
+  own, only the saved setting and `--pick-language` (which shows the picker
+  rather than naming a language outright).
 
 ## Next Steps
 
-- Convert another page's rows the same way `pilots` was: a `string_id` per
-  row, a `title_string_id` on the page, matching entries in
-  `assets/ui/strings/english.toml`, and its `BASELINE_LABELS`/
-  `BASELINE_TITLES` rows deleted in `scripts/check-strings.py` - the smallest
-  page (`main`, 4 rows) is the cheapest way to prove the pattern generalises
-  past the screen that motivated it.
-- Add a second language's file (`assets/ui/strings/french.toml`, ...) with a
-  real translation of whatever ids exist by then, marking anything not yet
-  translated under `[untranslated]` rather than leaving it out - this is the
-  only way to prove the *language* half of this, as opposed to the *override*
-  half, and the first real exercise of the marker convention above.
+- Convert another language the same way: pick the ids `french.toml` marked
+  `[untranslated]` that a fluent speaker of a *different* language can
+  translate confidently (the PC-jargon block is probably the same
+  cross-language sticking point, but `SIDESHIFT` and the prose lines are
+  worth a second, independent judgement call rather than assuming French's
+  choice generalises).
+- Revisit `french.toml`'s own `[untranslated]` list once a French speaker
+  can check it against a real shipped French Wipeout release (PS2/PSP Pulse
+  itself, or Pure) - in particular whether `SIDESHIFT` has a canonical
+  in-series French term, which would let it graduate out of the list rather
+  than staying a guess deferred forever.
+- The `english.toml`/`hints.rs`/`wording.rs` literal-duplication friction
+  named in Open above is a mechanism-level fix (probably: `hints.rs`/
+  `wording.rs` stop carrying their own literal and read `english.toml`
+  through `strings::built_in` for their English fallback too, so there is
+  one copy instead of two) - out of scope for a translation-content change,
+  named here so it does not get lost.
 - **Settled 2026-09-08, cited for whoever still has this open in a stale
   checkout: `load_strings` reading empty for Pure is fixed.** `boot.rs`'s
   `load_strings` now re-parses a language plugin's own `Definition.xml` as

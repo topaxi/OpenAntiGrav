@@ -27,9 +27,9 @@
 //!
 //! Embedded with [`include_str!`] rather than read from disk, for the same
 //! reason [`crate::menu::BUILT_IN`] is: the binary works from anywhere. A
-//! language with no file yet - every language but English, today - overlays
-//! nothing, which is the honest state of a translation not yet written rather
-//! than something to guess at.
+//! language with no file yet - every language but English and French, today -
+//! overlays nothing, which is the honest state of a translation not yet
+//! written rather than something to guess at.
 //!
 //! # A translation that has not caught up yet
 //!
@@ -60,6 +60,8 @@ struct File {
 fn built_in(language: &str) -> Option<&'static str> {
     if language.eq_ignore_ascii_case("English") {
         Some(include_str!("../../../assets/ui/strings/english.toml"))
+    } else if language.eq_ignore_ascii_case("French") {
+        Some(include_str!("../../../assets/ui/strings/french.toml"))
     } else {
         None
     }
@@ -195,5 +197,48 @@ mod tests {
     #[test]
     fn project_table_is_empty_for_a_language_this_build_ships_no_file_for() {
         assert!(project_table(Some("Klingon")).is_empty());
+    }
+
+    /// **The check that catches a shipped file `built_in()` forgot to embed.**
+    /// `check-strings.py` validates every `assets/ui/strings/*.toml` on disk,
+    /// but nothing there proves the *binary* ever reads one back - a file
+    /// this script covers and `built_in()` does not match by name would pass
+    /// the gate while shipping no translation at all, the same "kept in step
+    /// by hand" gap that script's own module doc already admits to for
+    /// `STRING_CONSUMERS`.
+    #[test]
+    fn every_file_under_assets_ui_strings_is_reachable_through_built_in() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/ui/strings");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("assets/ui/strings must exist") {
+            let path = entry.expect("a readable dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
+            }
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .expect("a .toml file has a stem");
+            assert!(
+                built_in(stem).is_some(),
+                "{stem}.toml exists under assets/ui/strings/ but built_in() does not embed it"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 2, "expected at least english and french here");
+    }
+
+    /// French translates what the maintainer was confident about and defers
+    /// the rest under `[untranslated]` - see `french.toml`'s own header. A
+    /// deferred id must not appear in the merged table at all, so a caller's
+    /// own English fallback (or the disc's own French entry, on the boot
+    /// path) is what a player actually sees for it.
+    #[test]
+    fn french_translates_a_confident_id_and_defers_an_unconfident_one() {
+        let mut table = StringTable::default();
+        let mut report = Vec::new();
+        overlay(&mut table, "French", &mut report);
+        assert_eq!(table.get("OAG_MENU_RACE"), Some("COURSE"));
+        assert_eq!(table.get("OAG_CONTROLS_SIDESHIFT"), None);
     }
 }

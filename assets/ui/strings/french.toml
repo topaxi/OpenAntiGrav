@@ -1,0 +1,209 @@
+# The French translation of this project's own UI strings - see
+# `assets/ui/strings/english.toml`'s own doc comment for the shared
+# convention, and `crates/game/src/strings.rs`'s module doc for how this file
+# is found and loaded (`strings::built_in`, matched against the disc's own
+# `French` language plugin by `Language::name`).
+#
+# This is the first real second-language file this project ships, and the
+# first real exercise of the `[untranslated]` convention below. Every id
+# either has real French text under `[strings]`, or is named under
+# `[untranslated]` - never both, and never omitted. `just check-strings`
+# (`scripts/check-strings.py`) enforces both halves of that.
+#
+# # What is translated and what is deferred, and why
+#
+# Every id here was translated with real confidence: menu nouns and short
+# verbs, the RACE/REMIX/CONTROLS vocabulary, the pilot editor's CRUD rows,
+# and the loading screen's prose. Deferred to `[untranslated]` instead,
+# rather than guessed at:
+#
+#   - **PC-specific graphics/display jargon** (`VSYNC`, `MSAA`,
+#     `RECONSTRUCTION`, `UPSCALER SHARPNESS`, `RENDERER`, `RENDER SCALE`,
+#     `TARGET FPS`, `FRAME LIMIT`, `BOOST FOV KICK`, `PERFORMANCE OVERLAY`,
+#     `FRONT END STYLE`) - conventions vary enough between French game UIs
+#     that a confident single answer is not available without playing a
+#     shipped French PC game that has the same settings screen to check
+#     against.
+#   - **`SIDESHIFT`** - Wipeout's own jargon for a lateral-thrust manoeuvre;
+#     no French Wipeout release was checked for how (or whether) it
+#     translated the word, so it stays named rather than guessed.
+#   - **Every prose string carrying a `%s`/button-glyph substitution**
+#     (`OAG_BINDING_CAPTURE_PROMPT`, `OAG_KEYBOARD_HINT`,
+#     `OAG_PILOT_NAME_TAKEN`, `OAG_PILOT_RENAME_SHADOWS`,
+#     `OAG_PILOT_DELETE_ASK`, `OAG_PILOT_DELETE_BUILT_IN`) and the three
+#     long key-hint sentences (`OAG_HINTS_MENU_KEYS`, `OAG_HINTS_SHELL_KEYS`,
+#     `OAG_HINTS_RACE_KEYS`) - long enough, and specific enough about button
+#     names and sentence structure, that a wrong translation would be worse
+#     than an honest gap and harder for a reviewer who does not read French
+#     to catch.
+#   - **`OAG_HINTS_ESC_TO_MENU`/`OAG_HINTS_ESC_QUITS`** - each is a suffix
+#     `crates/game/src/main/hints.rs` appends onto one of the three deferred
+#     key-hint sentences above (`esc_to_menu`/`esc_quits` are called right
+#     after `race_keys`/`shell_keys`); translating the suffix alone while its
+#     sentence stays English would read as broken French, not as progress.
+#
+# See `docs/architecture/frontend-boot.md` for how this file reaches the
+# screen: `strings::built_in` embeds it, `strings::overlay`/
+# `strings::project_table` merge it, and `boot::load_strings` calls
+# `overlay` after reading the disc's own `entries.xml`.
+
+[strings]
+
+# The MAIN menu.
+OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
+OAG_MENU_RACE = "COURSE"
+OAG_MENU_REMIX = "REMIX"
+OAG_MENU_OPTIONS = "OPTIONS"
+OAG_MENU_QUIT = "QUITTER"
+
+# RACE / RACE REMIX shared rows.
+OAG_RACE_PAGE_TITLE = "COURSE"
+OAG_RACE_MODE = "MODE"
+OAG_RACE_SPEED_CLASS = "CLASSE DE VITESSE"
+OAG_RACE_AI_DIFFICULTY = "DIFFICULTÉ DE L'IA"
+OAG_RACE_TEAM = "ÉQUIPE"
+OAG_RACE_VARIANT = "VARIANTE"
+OAG_RACE_TRACK = "CIRCUIT"
+OAG_RACE_START = "DÉPART"
+
+# RACE REMIX's own rows.
+OAG_REMIX_PAGE_TITLE = "COURSE REMIX"
+OAG_REMIX_TRACK_TITLE = "TITRE DU CIRCUIT"
+OAG_REMIX_CRAFT_TITLE = "TITRE DU VAISSEAU"
+
+# OPTIONS and its submenu rows.
+OAG_OPTIONS_PAGE_TITLE = "OPTIONS"
+OAG_OPTIONS_DISPLAY = "AFFICHAGE"
+OAG_OPTIONS_GRAPHICS = "GRAPHISMES"
+OAG_OPTIONS_AUDIO = "AUDIO"
+OAG_OPTIONS_CONTROLS = "COMMANDES"
+OAG_OPTIONS_LANGUAGE = "LANGUE"
+
+# DISPLAY's own rows. `FRONT_END_STYLE`/`VSYNC`/`FRAME_LIMIT` are under
+# [untranslated] - see this file's own header.
+OAG_DISPLAY_MONITOR = "MONITEUR"
+OAG_DISPLAY_WINDOW_MODE = "MODE FENÊTRE"
+OAG_DISPLAY_WINDOW_SIZE = "TAILLE DE LA FENÊTRE"
+OAG_DISPLAY_ASPECT_RATIO = "FORMAT D'IMAGE"
+OAG_DISPLAY_BRIGHTNESS = "LUMINOSITÉ"
+OAG_DISPLAY_GAMMA = "GAMMA"
+
+# GRAPHICS's own rows. The PC-rendering jargon block (`RENDERER`,
+# `RENDER_SCALE`, `TARGET_FPS`, `RECONSTRUCTION`, `UPSCALER_SHARPNESS`,
+# `MSAA`, `BOOST_FOV_KICK`, `PERFORMANCE_OVERLAY`) is under [untranslated].
+OAG_GRAPHICS_MINIMUM_RESOLUTION = "RÉSOLUTION MINIMALE"
+OAG_GRAPHICS_MOTION_BLUR = "FLOU DE MOUVEMENT"
+OAG_GRAPHICS_SHADOWS = "OMBRES"
+OAG_GRAPHICS_ANISOTROPIC_FILTERING = "FILTRAGE ANISOTROPE"
+OAG_GRAPHICS_CAMERA_VIEW = "VUE DE LA CAMÉRA"
+OAG_GRAPHICS_FIELD_OF_VIEW = "CHAMP DE VISION"
+
+# AUDIO's own rows.
+OAG_AUDIO_MUSIC_VOLUME = "VOLUME DE LA MUSIQUE"
+OAG_AUDIO_SFX_VOLUME = "VOLUME DES EFFETS"
+OAG_AUDIO_ANNOUNCER_VOLUME = "VOLUME DU COMMENTATEUR"
+OAG_AUDIO_MASTER_VOLUME = "VOLUME GÉNÉRAL"
+OAG_AUDIO_MUSIC_SOURCE = "SOURCE MUSICALE"
+
+# CONTROLS's own rows. `SIDESHIFT` is under [untranslated] - see this file's
+# own header.
+OAG_CONTROLS_THRUST = "POUSSÉE"
+OAG_CONTROLS_STEER_LEFT = "TOURNER À GAUCHE"
+OAG_CONTROLS_STEER_RIGHT = "TOURNER À DROITE"
+OAG_CONTROLS_PITCH_UP = "TANGAGE HAUT"
+OAG_CONTROLS_PITCH_DOWN = "TANGAGE BAS"
+OAG_CONTROLS_AIRBRAKE_LEFT = "AÉROFREIN GAUCHE"
+OAG_CONTROLS_AIRBRAKE_RIGHT = "AÉROFREIN DROIT"
+OAG_CONTROLS_CAMERA_VIEW = "VUE DE LA CAMÉRA"
+OAG_CONTROLS_TRIGGERS = "GÂCHETTES"
+OAG_CONTROLS_TRIGGER_SENSITIVITY = "SENSIBILITÉ DES GÂCHETTES"
+OAG_CONTROLS_FIRE_PICKUP = "TIRER L'ARME"
+OAG_CONTROLS_ABSORB_PICKUP = "ABSORBER L'ARME"
+
+# The AI PILOTS page.
+OAG_PILOT_PAGE_TITLE = "PILOTES IA"
+OAG_PILOT_PILOT = "PILOTE"
+OAG_PILOT_AXIS = "AXE"
+OAG_PILOT_LOW = "BAS"
+OAG_PILOT_HIGH = "HAUT"
+OAG_PILOT_SAVE = "ENREGISTRER"
+OAG_PILOT_NEW = "NOUVEAU DEPUIS UN PILOTE"
+OAG_PILOT_RENAME = "RENOMMER"
+OAG_PILOT_DELETE = "SUPPRIMER"
+OAG_PILOT_BUILT_IN_SUFFIX = " (intégré)"
+
+# Shared BACK row.
+OAG_MENU_BACK = "RETOUR"
+
+# The on-screen keyboard's two action keys. `OAG_KEYBOARD_HINT` (the button
+# line under the grid) is under [untranslated] - see this file's own header.
+OAG_KEYBOARD_DELETE = "SUPPR"
+OAG_KEYBOARD_ACCEPT = "OK"
+
+# Pilot rename/delete dialog titles and the two delete-confirm buttons. The
+# `%s`-substituted prose lines are under [untranslated] - see this file's
+# own header.
+OAG_PILOT_RENAME_TITLE = "RENOMMER LE PILOTE"
+OAG_PILOT_DELETE_TITLE = "SUPPRIMER LE PILOTE"
+OAG_PILOT_DELETE_YES = "SUPPRIMER"
+OAG_PILOT_DELETE_NO = "CONSERVER"
+
+# Window titles. The three key-hint sentences that go with them are under
+# [untranslated] - see this file's own header.
+OAG_HINTS_TITLE = "OpenAntiGrav"
+OAG_HINTS_SHELL_TITLE = "OpenAntiGrav - menu"
+OAG_HINTS_RACE_TITLE = "OpenAntiGrav - course"
+
+# The loading screen's prose. `{done}`, `{total}`, `{cached}` and `{failed}`
+# are placeholders `wording::resolved` substitutes after the lookup - see
+# `assets/ui/strings/english.toml`'s own comment on the same ids.
+OAG_LOADING_READING_ARCHIVES = "LECTURE DES ARCHIVES"
+OAG_LOADING_GENERIC = "CHARGEMENT"
+OAG_LOADING_READY = "PRÊT"
+OAG_LOADING_TRANSCODING_MOVIES = "CONVERSION DES VIDÉOS"
+OAG_LOADING_LOADING_MOVIES = "CHARGEMENT DES VIDÉOS"
+OAG_LOADING_CONVERTING_ASSETS = "CONVERSION DES RESSOURCES"
+OAG_LOADING_STEP_CACHED = "déjà converti, lecture du cache"
+OAG_LOADING_STEP_DECODING = "décodage"
+OAG_LOADING_STEP_TRANSCODING_TOTAL = "conversion - image {done} sur {total}"
+OAG_LOADING_STEP_TRANSCODING = "conversion - image {done}"
+OAG_LOADING_COUNTING = "calcul de ce qui doit être converti"
+OAG_LOADING_COUNTS_LOADED = "{done} / {total} chargés"
+OAG_LOADING_COUNTS_CONVERTED = "{done} / {total} convertis"
+OAG_LOADING_COUNTS_CACHED_SUFFIX = ", {cached} déjà en cache"
+OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} échoué(s)"
+
+[untranslated]
+ids = [
+    # PC-specific graphics/display jargon - see this file's own header.
+    "OAG_DISPLAY_FRONT_END_STYLE",
+    "OAG_DISPLAY_VSYNC",
+    "OAG_DISPLAY_FRAME_LIMIT",
+    "OAG_GRAPHICS_RENDERER",
+    "OAG_GRAPHICS_RENDER_SCALE",
+    "OAG_GRAPHICS_TARGET_FPS",
+    "OAG_GRAPHICS_RECONSTRUCTION",
+    "OAG_GRAPHICS_UPSCALER_SHARPNESS",
+    "OAG_GRAPHICS_MSAA",
+    "OAG_GRAPHICS_BOOST_FOV_KICK",
+    "OAG_GRAPHICS_PERFORMANCE_OVERLAY",
+    # Wipeout's own jargon, not confidently translated - see this file's own
+    # header.
+    "OAG_CONTROLS_SIDESHIFT",
+    # Prose carrying a `%s`/button-glyph substitution, or long enough that a
+    # wrong translation would be worse than the gap - see this file's own
+    # header.
+    "OAG_BINDING_CAPTURE_PROMPT",
+    "OAG_KEYBOARD_HINT",
+    "OAG_PILOT_NAME_TAKEN",
+    "OAG_PILOT_RENAME_SHADOWS",
+    "OAG_PILOT_DELETE_ASK",
+    "OAG_PILOT_DELETE_BUILT_IN",
+    "OAG_HINTS_MENU_KEYS",
+    "OAG_HINTS_SHELL_KEYS",
+    "OAG_HINTS_RACE_KEYS",
+    # Suffixes appended onto the two deferred key-hint sentences above - see
+    # this file's own header.
+    "OAG_HINTS_ESC_TO_MENU",
+    "OAG_HINTS_ESC_QUITS",
+]
