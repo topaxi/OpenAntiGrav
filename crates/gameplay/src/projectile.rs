@@ -214,6 +214,20 @@ pub struct Projectile {
     /// `Quat::IDENTITY` for a flying projectile, which draws from
     /// [`Self::velocity`] instead. See [`mine::frozen_pose`].
     pub orientation: Quat,
+    /// Seconds of wind-up left before this one leaves the craft that fired it,
+    /// and `0.0` for anything already flying.
+    ///
+    /// **Only the Plasma ever holds one, and it is recovered** - see
+    /// [`plasma::CHARGE_SECONDS`] for the two functions that carry it. A bolt
+    /// with a charge left occupies its pool slot and rides the firing craft's
+    /// nose; it does not fly, sweep, collide or age. That is the original's
+    /// own shape: `Weapon_FirePlasma` (`0x0886a868`) takes the slot and
+    /// `Plasma_Init` (`0x0885bd18`) marks it charging in the same breath, so a
+    /// second press while one is winding up finds the pool one entry fuller.
+    ///
+    /// Hashed, unlike [`Self::orientation`]: it decides *when* a bolt starts
+    /// flying and therefore where it is on every later tick.
+    pub charge: f32,
 }
 
 /// What a projectile did when it stopped.
@@ -332,6 +346,7 @@ impl Projectiles {
                 bounces: 0,
                 launch_speed_kmh: 0.0,
                 orientation: Quat::IDENTITY,
+                charge: 0.0,
             }; MAX_PROJECTILES],
         }
     }
@@ -423,6 +438,35 @@ impl Projectiles {
             .is_some()
     }
 
+    /// Fires one plasma bolt, held on the firing craft's nose for its wind-up
+    /// before it flies.
+    ///
+    /// **A fifth entry point, for [`Self::throw`]'s reason** - a rocket and a
+    /// missile must keep landing in the same slot with the same fields they
+    /// always did.
+    ///
+    /// `charge` is [`plasma::CHARGE_SECONDS`]; while it lasts the slot is
+    /// taken and the bolt is reseated on the craft every tick by
+    /// [`Self::advance`], so the shot leaves along wherever that craft is
+    /// pointing when the wind-up ends rather than where it pointed when the
+    /// button went down. `velocity` is therefore read for its **length** while
+    /// charging and for its direction only once the hold is over.
+    pub fn charge_up(&mut self, position: Vec3, velocity: Vec3, owner: u8, charge: f32) -> bool {
+        let Some(slot) = self.place(
+            Weapon::Plasma,
+            position,
+            velocity,
+            owner,
+            None,
+            0.0,
+            MAX_FLIGHT_SECONDS,
+        ) else {
+            return false;
+        };
+        slot.charge = charge;
+        true
+    }
+
     /// Lays one mine or bomb, with its own authored fuse instead of the safety
     /// net.
     ///
@@ -481,6 +525,11 @@ impl Projectiles {
             target,
             bounces: 0,
             launch_speed_kmh,
+            // Flying from this tick on. `Projectiles::charge_up` is the one
+            // entry point that raises it, for `Self::lay`'s reason: every
+            // other weapon must keep landing in the same slot with the same
+            // fields it always did.
+            charge: 0.0,
         };
         Some(slot)
     }
@@ -519,6 +568,29 @@ impl Projectiles {
                 continue;
             };
             let guided = kind == Weapon::Missile;
+
+            // **A charging bolt does not fly**, and the Plasma is the only
+            // weapon that has one. `Plasmas_Update` (`0x0886b490`) branches on
+            // the entity's own `+0x4c` flag: charging entities take
+            // `Plasma_UpdateCharge` (`0x0885c170`) and the countdown at
+            // `+0x50`, flying ones take `Plasma_Update`. Nothing else in the
+            // tick reaches a charging bolt - no probe, no sweep, no hull test,
+            // and no ageing, because the age at `+0x54` is `Plasma_Update`'s
+            // to advance. See [`plasma::CHARGE_SECONDS`].
+            if projectile.charge > 0.0 {
+                // The order is the original's: reseat, *then* count down, so
+                // the tick the hold ends still puts the bolt where the craft
+                // is now. `Plasma_Launch` (`0x0885bf84`) re-reads the craft's
+                // node matrix anyway, which is the same thing said twice.
+                if let Some(ship) = ships.get(projectile.owner as usize) {
+                    let (position, heading) =
+                        plasma::muzzle(&ship.physics, &ship.handling.dimensions);
+                    projectile.position = position;
+                    projectile.velocity = heading * projectile.velocity.length();
+                }
+                projectile.charge = (projectile.charge - dt).max(0.0);
+                continue;
+            }
 
             // **The two rear weapons are the things here that do not fly**, so
             // they take none of what follows: no surface probe, no fall, no

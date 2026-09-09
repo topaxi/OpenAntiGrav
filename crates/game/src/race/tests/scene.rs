@@ -500,11 +500,27 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
         "the Mine's own explosion (Mine_SpawnExplosion), at the impact point"
     );
     assert_eq!(
+        race.blast_for(Weapon::Plasma, point, None),
+        Some((PLASMA_BLAST_EFFECT, point)),
+        "the Plasma's own detonation (Plasma_SpawnDetonation), at the impact \
+         point, whatever it hit"
+    );
+    assert_eq!(
+        race.blast_for(Weapon::Plasma, point, Some(2)),
+        Some((PLASMA_BLAST_EFFECT, point)),
+        "one file for every ending - the teardown pass does not branch on \
+         what was struck, unlike the Rocket's"
+    );
+    assert_eq!(
         race.blast_for(Weapon::Bomb, point, None),
         None,
         "the Bomb's own teardown is unread - drawing nothing beats \
          borrowing the Mine's or the Rocket's"
     );
+    // The Plasma's detonation is its own authored file, not the bolt's
+    // riding flare replayed at the impact - the same distinction the Rocket's
+    // two-file split above exists for.
+    assert_ne!(PLASMA_BLAST_EFFECT, PLASMA_FLARE_EFFECT);
 }
 
 /// A Cannon round throws a spark on a wall it hits, and nothing on a craft.

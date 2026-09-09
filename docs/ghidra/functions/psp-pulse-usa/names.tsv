@@ -635,6 +635,14 @@
 0x0886a868	function	Weapon_FirePlasma	88	plasma.md
 0x0885bd18	function	Plasma_Init	90	plasma.md
 0x0885c6cc	function	Plasma_Update	85	plasma.md
+0x0886b490	function	Plasmas_Update	90	plasma.md
+0x0885bf84	function	Plasma_Launch	90	plasma.md
+0x0885c170	function	Plasma_UpdateCharge	88	plasma.md
+0x0885c5a4	function	Plasma_SpeedForClass	88	plasma.md
+0x0886ac88	function	Plasma_SpawnDetonation	88	plasma.md
+0x0885fd90	function	PlasmaBlast_Construct	85	plasma.md
+0x0886a920	function	Plasma_SpawnRemote	75	plasma.md
+0x08a7c098	data	g_plasma_charge_seconds	90	plasma.md
 0x0880c60c	function	WeaponStats_ParseQuake	88	plasma.md
 0x0880d328	function	WeaponStats_ParseLeachBeam	88	plasma.md
 0x0880d58c	function	WeaponStats_ParseRepulser	88	plasma.md

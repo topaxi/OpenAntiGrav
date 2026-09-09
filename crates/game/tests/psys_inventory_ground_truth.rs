@@ -91,13 +91,13 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_PLASMA_HEAD`** - that one is wired, off `Plasma_Init`
     // (`0x0885bd18`), and this list is the *untriggered* half. The Plasma
     // landed 2026-09-02.
-    (
-        "WO_PLASMA_FLASH",
-        "the Plasma fires, but nothing read plays this second file of its: no \
-         call site was found for it, so whether it is the muzzle flash, the \
-         detonation or the unfound charge-up is open. See \
-         `docs/ghidra/functions/psp-pulse-usa/plasma.md`.",
-    ),
+    // **Not `WO_PLASMA_FLASH`** either, as of 2026-09-09 - it is the Plasma's
+    // *detonation*, spawned by `PlasmaBlast_Construct` (`0x0885fd90`) off
+    // `Plasma_SpawnDetonation` (`0x0886ac88`) in `Plasmas_Update`'s
+    // (`0x0886b490`) teardown pass, and it is wired through `Race::blast_for`.
+    // It sat in this list from 2026-09-02 to 2026-09-09 with "no call site was
+    // found for it"; the call site is the pool teardown that read had not
+    // followed.
     // **Not `WO_SHURIKEN_HEAD` or `WO_SHURIKEN_BOUNCE`** - both are wired,
     // off `Shuriken_Init` (`0x08877280`) and `Shuriken_Bounce` (`0x088778ac`).
     // The Shuriken landed 2026-09-02; its other two files are below.

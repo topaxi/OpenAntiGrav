@@ -308,11 +308,16 @@ impl Race {
         ) else {
             return false;
         };
-        self.sim.world.projectiles.spawn(
-            oag_tables::weapons::Weapon::Plasma,
+        // The same wind-up the player's bolt takes - see
+        // `Race::spend_pickup`'s Plasma arm and
+        // `oag_gameplay::projectile::plasma::CHARGE_SECONDS`. An opponent's
+        // charging bolt occupies the array the same way, so the
+        // "none already in flight" gate above sees it.
+        self.sim.world.projectiles.charge_up(
             position,
             velocity,
             slot as u8,
+            oag_gameplay::projectile::plasma::CHARGE_SECONDS,
         )
     }
 
