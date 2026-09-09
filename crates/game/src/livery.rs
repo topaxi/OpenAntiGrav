@@ -57,6 +57,7 @@ use oag_render::mesh::{self, Model};
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
 mod flare;
+pub(crate) mod ship_skin;
 
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
@@ -173,11 +174,18 @@ pub struct LoadContext<'a> {
 /// and nothing offers an opponent a choice of their own - see
 /// `oag_title::race::HullVariant`'s doc comment for why there is no unlock
 /// model behind it either.
+///
+/// `skin` is the *other* half of that axis and lands on slot 0 for the same
+/// reason: a `PI_ModelSkin`'s own `.dat`, already resolved to an archive entry
+/// by [`ship_skin::resolve`], repainting the hull this slot just built. **Which
+/// skin a race flies is chosen, not measured** - see that module's own docs
+/// for what the original appears to do instead and what would settle it.
 pub fn load(
     archives: &mut oag_assets::Archives,
     teams: &[String],
     ctx: &LoadContext,
     hull_variant: Option<&str>,
+    skin: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
     let mut out: Vec<Livery> = Vec::with_capacity(teams.len());
@@ -211,6 +219,7 @@ pub fn load(
             ctx.race.ships_for(team),
             ctx,
             if slot == 0 { hull_variant } else { None },
+            if slot == 0 { skin } else { None },
             report,
         ) {
             Ok(livery) => out.push(livery),
@@ -245,6 +254,7 @@ fn one(
     ships: oag_title::race::ShipPaths,
     ctx: &LoadContext,
     hull_variant: Option<&str>,
+    skin: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
     let hull_name = ship_entry_name(ships, team, ctx.mode, hull_variant);
@@ -307,6 +317,16 @@ fn one(
             }
         };
         report.push(format!("{hull_name}: {built}"));
+        // **No skin on this branch, and that is not a gap.** A `.dat` is a
+        // paletted 4bpp swap onto a `\TEXTUREn.TGA` slot, which is the PSP
+        // pipeline; HD and 2048 carry no such file and name no
+        // `PI_ModelSkin` at all. A caller that asked for one on a PS3 or Vita
+        // source hears so rather than getting silence.
+        if let Some(skin) = skin {
+            report.push(format!(
+                "{skin}: a ship skin is a PSP-pipeline texture swap and {hull_name} takes its                  geometry from a .rcsmodel - the craft keeps its own paint"
+            ));
+        }
         let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
@@ -338,6 +358,12 @@ fn one(
         && let Some(external) = ps2_texture_set(archives, &hull_name)
     {
         hull = mesh::build_with_textures(&hull_name, &blob, Some(&external), ctx.lod)?;
+    }
+    // **After the PS2 rebuild above, never before it.** That branch replaces
+    // `hull` wholesale, so a skin applied earlier would be thrown away with
+    // the model it was painted onto.
+    if let Some(skin) = skin {
+        ship_skin::apply(archives, skin, &mut hull, report);
     }
     report.push(format!(
         "{hull_name}: {} triangle(s), model centre {:?}, radius {:.2}",

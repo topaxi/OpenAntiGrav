@@ -465,6 +465,20 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) variant: Option<String>,
 
+    /// The player's own alternate paint job: a `PI_ModelSkin` name the team
+    /// declares - `Alternative` or `Eliminator` on both Pulse releases, left
+    /// out for the hull's own textures.
+    ///
+    /// A **skin**, not a hull: the same geometry with four texture slots
+    /// swapped out of a `.dat` the definition names. A team that declares no
+    /// such skin races the baseline and says so in the load report.
+    ///
+    /// **Which skin a race flies is this project's choice, not the
+    /// original's**, and no unlock is checked - see
+    /// `oag_game::livery`'s `ship_skin` module docs.
+    #[arg(long)]
+    pub(crate) skin: Option<String>,
+
     /// A directory holding downloadable content: a pack's `.edat` files, or the
     /// `.zip` they were downloaded as. Repeatable.
     ///

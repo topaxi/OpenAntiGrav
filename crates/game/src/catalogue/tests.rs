@@ -126,6 +126,64 @@ fn a_team_carries_its_ship_directory_and_its_description_key() {
     assert_eq!(teams[0].id, "Assegai");
     assert_eq!(teams[0].location, r"Data\Ships\Assegai");
     assert_eq!(teams[0].help_text.as_deref(), Some("MSC_TEAMDES_ASS"));
+    assert!(
+        teams[0].skins.is_empty(),
+        "a team declaring no PI_TeamModel declares no skin either"
+    );
+}
+
+/// The `PI_ModelSkin` schema `docs/formats/dlc-pack.md` measured, read the
+/// way the loader reads it: both skins under `Normal`, in file order, each
+/// keeping the **full path** its own `location` spells.
+#[test]
+fn a_team_carries_the_skins_its_normal_model_declares() {
+    const WITH_SKINS: &str = r#"<Screen name="Top">
+  <PI_Team name="Ersatz">
+    <Values type="Race" location="Data\Ships\Ersatz"/>
+    <PI_TeamModel name="Normal">
+      <Values location="ship"/>
+      <PI_ModelSkin name="Alternative">
+        <Values location="Data\Ships\Ersatz\ship_alt.dat"/>
+        <Unlock Team="Ersatz" loyalty="10" Exclusive="true"/>
+      </PI_ModelSkin>
+      <PI_ModelSkin name="Eliminator">
+        <Values location="Data\Ships\Ersatz\ship_eliminator.dat"/>
+      </PI_ModelSkin>
+    </PI_TeamModel>
+  </PI_Team>
+</Screen>"#;
+    let teams = teams(WITH_SKINS);
+    let skins = &teams[0].skins;
+    assert_eq!(skins.len(), 2, "{skins:?}");
+    assert_eq!(skins[0].name, "Alternative");
+    assert_eq!(skins[0].location, r"Data\Ships\Ersatz\ship_alt.dat");
+    assert_eq!(skins[1].name, "Eliminator");
+    assert_eq!(
+        teams[0].skin("ELIMINATOR").map(|skin| skin.location.as_str()),
+        Some(r"Data\Ships\Ersatz\ship_eliminator.dat"),
+        "the name a player types is matched case-insensitively"
+    );
+    assert!(teams[0].skin("Concept").is_none());
+}
+
+/// **Only `Normal`.** `Concept` and `Zone` are single unlockable models in
+/// their own right on every source measured, and a skin nested under either
+/// would be a shape nothing has seen - collecting it would quietly widen a
+/// measured schema. See `docs/formats/dlc-pack.md`.
+#[test]
+fn a_skin_under_a_variant_that_is_not_normal_is_not_collected() {
+    const ODD: &str = r#"<Screen name="Top">
+  <PI_Team name="Ersatz">
+    <Values type="Race" location="Data\Ships\Ersatz"/>
+    <PI_TeamModel name="Concept">
+      <Values location="extra"/>
+      <PI_ModelSkin name="Alternative">
+        <Values location="Data\Ships\Ersatz\ship_alt.dat"/>
+      </PI_ModelSkin>
+    </PI_TeamModel>
+  </PI_Team>
+</Screen>"#;
+    assert!(teams(ODD)[0].skins.is_empty());
 }
 
 /// The id is the folder leaf, which is why `race::ship_entry_name` can go
@@ -349,6 +407,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         name: name.map(str::to_string),
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
+        skins: Vec::new(),
     };
 
     // In the table and also carrying a declared name: the table still wins, or

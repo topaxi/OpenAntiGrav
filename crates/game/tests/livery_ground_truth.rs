@@ -337,6 +337,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
             lod: oag_render::mesh::Lod::default(),
         },
         None,
+        None,
         &mut report,
     )
     .expect("the livery loads");
@@ -361,5 +362,174 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
             .iter()
             .any(|line| line.contains("Locators.vex") && line.contains("engine_flare locator")),
         "the report does not say the sibling supplied them: {report:?}"
+    );
+}
+
+/// **The RACE page's other axis: the paint, off the real disc.** `--skin
+/// Alternative` repaints Assegai's own `Ship.vex` from
+/// `Data\Ships\Assegai\ship_alt.dat` for the player alone - the same geometry,
+/// different texels - and leaves every opponent's textures byte-identical.
+///
+/// # What this asserts that "a texture is bound" would not
+///
+/// Four separate things, because three of them can pass while the ship on
+/// screen is still wrong:
+///
+/// 1. **The right team's file.** The `.dat`'s own `0x20` header holds the
+///    team's *display* name, so parsing it and comparing to the team asked
+///    for proves the path resolved to Assegai's skin and not merely to some
+///    skin.
+/// 2. **The right size.** The file declares no width or height anywhere -
+///    the original reads them off the target texture's descriptor, and
+///    `mesh::ship_skin::apply` reads them off the block. Those agree only if
+///    the hull's own textures really are 128x128 and 64x64, and a mismatch
+///    would stretch the paint across the hull rather than fail.
+/// 3. **A visible amount of it.** A repaint that changes 0.1% of the texels
+///    is a bug that passes every binding check there is. The fraction is
+///    printed and asserted substantial, which is the closest a headless test
+///    gets to looking at the ship.
+/// 4. **Slot 0 alone.** Every opponent's texels stay byte-identical, which is
+///    the property that says this is a per-slot override rather than a global
+///    one - and it is only expressible because the renderer keys its uploads
+///    on a texture's address rather than on its label.
+///
+/// **Which skin a race flies is this project's choice, not the original's**,
+/// and no unlock is checked - see `oag_game::livery`'s `ship_skin` module.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
+    let Some(image) = image() else {
+        return;
+    };
+    let options = |skin: Option<&str>| race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: Some("Assegai".to_string()),
+        skin: skin.map(str::to_string),
+        ..race::Options::default()
+    };
+    let baseline = race::load(&options(None)).expect("loading the baseline race");
+    let painted = race::load(&options(Some("Alternative"))).expect("loading the painted race");
+
+    // 1. The right team's file, proved by the header the parser reads.
+    let mut archives =
+        oag_pulse::open(&image.display().to_string()).expect("mounting the disc again");
+    let blob = archives
+        .read_name(r"Data\Ships\Assegai\ship_alt.dat")
+        .expect("the skin the definition names");
+    let skin = oag_formats::ship_skin::parse(&blob).expect("it parses");
+    assert_eq!(
+        skin.team_name, "Assegai",
+        "the resolved path must be this team's own skin, not some other team's"
+    );
+
+    // 2. The right size: the block's dimensions against the hull's own.
+    let mut checked = 0;
+    for slot in baseline.liveries[0].hull.textures.iter().flatten() {
+        let Some(index) = oag_render::mesh::ship_skin::slot_of(&slot.label) else {
+            continue;
+        };
+        let block = &skin.blocks[index];
+        assert_eq!(
+            (slot.width, slot.height),
+            (block.width as u32, block.height as u32),
+            "{} is {}x{} and its skin block is {}x{} - the paint would be stretched",
+            slot.label,
+            slot.width,
+            slot.height,
+            block.width,
+            block.height
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "Ship.vex names no texture1.tga..texture4.tga slot, so nothing could be repainted"
+    );
+    println!("{checked} of Assegai's Ship.vex texture slot(s) take a skin block");
+
+    // 3. A visible amount of the player's own paint actually changed.
+    let texels = |loaded: &race::Loaded, slot: usize| -> Vec<(String, Vec<u8>)> {
+        loaded.liveries[slot]
+            .hull
+            .textures
+            .iter()
+            .flatten()
+            .map(|texture| {
+                (
+                    texture.label.clone(),
+                    texture.rgba().map(<[u8]>::to_vec).unwrap_or_default(),
+                )
+            })
+            .collect()
+    };
+    let (before, after) = (texels(&baseline, 0), texels(&painted, 0));
+    assert_eq!(before.len(), after.len(), "the same hull, so the same slots");
+    let mut differing = 0u64;
+    let mut total = 0u64;
+    for ((label, before), (_, after)) in before.iter().zip(&after) {
+        if oag_render::mesh::ship_skin::slot_of(label).is_none() {
+            continue;
+        }
+        assert_eq!(before.len(), after.len(), "{label}: same size either way");
+        differing += before
+            .chunks_exact(4)
+            .zip(after.chunks_exact(4))
+            .filter(|(a, b)| a != b)
+            .count() as u64;
+        total += (before.len() / 4) as u64;
+    }
+    let fraction = differing as f64 / total.max(1) as f64;
+    println!(
+        "skin: {differing} of {total} texel(s) differ on the player's own hull ({:.1}%)",
+        fraction * 100.0
+    );
+    assert!(
+        fraction > 0.2,
+        "only {:.2}% of the player's texels changed - a livery a player would notice \
+         repaints far more of the hull than that",
+        fraction * 100.0
+    );
+
+    // 4. Nobody else's paint moved.
+    for slot in 1..baseline.liveries.len() {
+        if baseline.liveries[slot].team != painted.liveries[slot].team {
+            continue;
+        }
+        assert_eq!(
+            texels(&baseline, slot),
+            texels(&painted, slot),
+            "slot {slot} ({}) was never offered a paint job and must be untouched",
+            baseline.liveries[slot].team
+        );
+    }
+}
+
+/// A Zone race flies a different hull that no `PI_ModelSkin` names a file
+/// for, so a skin asked for there is refused out loud rather than painted
+/// onto a surface the disc does not specify. See `livery::ship_skin::resolve`.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_zone_race_refuses_a_skin_and_says_so() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Zone,
+        team: Some("Assegai".to_string()),
+        skin: Some("Alternative".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the Zone race");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("ignored on a Zone race")),
+        "{:?}",
+        loaded.report
     );
 }

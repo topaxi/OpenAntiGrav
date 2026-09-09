@@ -123,6 +123,9 @@ impl Pending {
             // and `track` already resolve at. See
             // `race::Options::hull_variant`.
             hull_variant: self.cli.variant.clone(),
+            // `race::Options::skin` - the player's own paint job, resolved
+            // against what the team declares once the source is open.
+            skin: self.cli.skin.clone(),
             class: self.class.clone(),
             mode: self.mode,
             // `None`: no CLI flag names one and the campaign grid a real

@@ -316,6 +316,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.opponent_teams,
         &mut report,
     );
+    // The player's own paint job, resolved against what the definition
+    // declares for their team - see `livery::ship_skin`, and note that
+    // *which* skin a race flies is this project's choice rather than the
+    // original's.
+    let skin = livery::ship_skin::resolve(
+        craft_of(&mut craft, &mut archives),
+        craft_title,
+        &team,
+        options.skin.as_deref(),
+        options.mode,
+        &mut report,
+    );
     let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
     let hd_trail_red = roster::hd_trail_red(&slot_teams);
     let liveries = livery::load(
@@ -328,6 +340,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             lod: options.lod,
         },
         hull_variant,
+        skin.as_deref(),
         &mut report,
     )?;
     report.push(format!(

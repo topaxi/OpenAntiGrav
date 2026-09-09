@@ -301,9 +301,65 @@ pub struct Team {
     /// The string-table id of the team's description, e.g. the `helpText`
     /// attribute. `None` for a team that declares none.
     pub help_text: Option<String>,
+    /// The alternate paint jobs this team declares, in file order.
+    ///
+    /// Every `PI_ModelSkin` nested under this team's
+    /// `PI_TeamModel name="Normal"`, which on every source measured so far is
+    /// exactly two - `Alternative` and `Eliminator`. Empty for a team that
+    /// declares none, and for a source whose definition has no
+    /// `PI_TeamModel` at all.
+    ///
+    /// **The hull axis is not here.** `PI_TeamModel`'s own `Concept`/`Zone`
+    /// entries name a *file stem* inside the team directory and are
+    /// [`oag_title::race::HullVariant`]'s, which needs no per-team data
+    /// because every team offers the same two stems. A skin is the other
+    /// thing entirely: a texture swap on the same geometry, addressed by a
+    /// full path the team declares for itself.
+    pub skins: Vec<ModelSkin>,
+}
+
+/// One alternate paint job a team declares - a `PI_ModelSkin`.
+///
+/// **A skin is a texture swap on the same geometry, not a second model**:
+/// [`Self::location`] names a `.dat` of four palette-plus-pixels blocks that
+/// go over the hull's own `texture1.tga`..`texture4.tga`. See
+/// [`oag_formats::ship_skin`] and
+/// `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelSkin {
+    /// The declared name, e.g. `Alternative` or `Eliminator`.
+    ///
+    /// **Per-title vocabulary, kept as text** for the reason
+    /// [`tracks_of_kind`] takes its `kind` as a `&str`: an enum here would
+    /// hard-code two shipped names into this repository and would have
+    /// nothing to say about a third a pack might declare.
+    pub name: String,
+    /// The archive entry the skin's bytes are in, e.g.
+    /// `Data\Ships\Assegai\ship_alt.dat`.
+    ///
+    /// **A full path, used verbatim - never composed.** This is the same
+    /// `location` attribute whose sibling on `PI_TeamModel` holds a bare file
+    /// *stem* (`"ship"`), which is the naming trap `docs/formats/dlc-pack.md`
+    /// and `crate::livery`'s module docs both record. Nothing may `format!`
+    /// this path out of a team id.
+    pub location: String,
 }
 
 impl Team {
+    /// The declared skin of that name, matched case-insensitively.
+    ///
+    /// Case-insensitive because the name comes from a player - a `--skin`
+    /// argument, or a stored setting - and the disc's own spelling
+    /// (`Alternative`) is not what anyone types. `None` when the team
+    /// declares no such skin, which a caller reports rather than
+    /// substituting another team's.
+    #[must_use]
+    pub fn skin(&self, name: &str) -> Option<&ModelSkin> {
+        self.skins
+            .iter()
+            .find(|skin| skin.name.eq_ignore_ascii_case(name))
+    }
+
     /// What to show a player for this team.
     ///
     /// **The order is the whole content of this function**, and the middle step
@@ -324,13 +380,14 @@ impl Team {
 
 /// Reads every raceable `PI_Team` out of a plugin definition, in file order.
 ///
-/// Alternate hulls (`PI_TeamModel`, `PI_ModelSkin` - the concept, zone and
-/// unlockable liveries) are deliberately **not** read. They are declared right
-/// here and would be easy to collect, but nothing draws a second hull yet, and
-/// a public field no caller reads is worse than one that appears when it is
-/// needed. The schema itself is documented rather than re-derived from
-/// scratch here - see `docs/formats/dlc-pack.md`'s "Entry 0 is a manifest"
-/// section - and `HANDOVER.md`.
+/// **The `PI_ModelSkin`s under `PI_TeamModel name="Normal"` are collected**
+/// into [`Team::skins`], and nothing else about `PI_TeamModel` is: its own
+/// `Concept`/`Zone` entries are [`oag_title::race::HullVariant`]'s axis,
+/// which needs no per-team data. The `Unlock` pair each skin carries is
+/// **deliberately not read** - what `loyalty` accumulates is untraced, so a
+/// field holding it would be a number no caller could interpret. See
+/// `docs/formats/dlc-pack.md`'s "Entry 0 is a manifest" section for the
+/// schema.
 #[must_use]
 pub fn teams(definition_xml: &str) -> Vec<Team> {
     let root = parse(definition_xml);
@@ -377,7 +434,32 @@ fn read_team(node: &Node) -> Option<Team> {
         name,
         location,
         help_text: values.attr("helpText").map(str::to_string),
+        skins: read_skins(node),
     })
+}
+
+/// Every `PI_ModelSkin` nested under this team's `PI_TeamModel name="Normal"`.
+///
+/// **Only under `Normal`.** `dlc-pack.md` measured the shape across all eight
+/// disc teams and a pack manifest: `Normal` is the one variant with skins, and
+/// `Concept`/`Zone` are each a single unlockable model carrying their `Unlock`
+/// directly. A skin found under either of those would be a shape nothing has
+/// seen, and collecting it here would quietly widen a measured schema.
+fn read_skins(team: &Node) -> Vec<ModelSkin> {
+    team.children_named("PI_TeamModel")
+        .filter(|model| model.attr("name") == Some("Normal"))
+        .flat_map(|model| model.children_named("PI_ModelSkin"))
+        .filter_map(|skin| {
+            Some(ModelSkin {
+                name: skin.attr("name")?.to_string(),
+                location: skin
+                    .children_named("Values")
+                    .next()?
+                    .attr("location")?
+                    .to_string(),
+            })
+        })
+        .collect()
 }
 
 /// Every team across `documents`, the first spelling of an id winning.

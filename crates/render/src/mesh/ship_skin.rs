@@ -30,12 +30,27 @@ use super::{Model, ModelTexture};
 /// `ship-skin.md`'s `g_skin_texture_slot_names` table, spelled the way
 /// [`super::ModelTexture::label`] holds it: the shipped models spell the
 /// runtime path in lower case, and the match is case-insensitive either way.
-const SLOT_NAMES: [&str; 4] = [
+pub const SLOT_NAMES: [&str; 4] = [
     "texture1.tga",
     "texture2.tga",
     "texture3.tga",
     "texture4.tga",
 ];
+
+/// Which [`ship_skin::Skin::blocks`] index a texture slot's own label takes,
+/// if any.
+///
+/// Public because the size check a *caller* wants needs the same pairing this
+/// module already does: a skin file declares no dimensions at all, so whether
+/// a block matches the slot it lands in is only answerable by holding the two
+/// side by side, and doing that positionally over a model's slot list pairs
+/// the wrong ones on any hull that skips a slot.
+#[must_use]
+pub fn slot_of(label: &str) -> Option<usize> {
+    SLOT_NAMES
+        .iter()
+        .position(|name| label.eq_ignore_ascii_case(name))
+}
 
 /// Replaces every texture slot of `hull` that `skin` names, in place.
 ///
@@ -59,10 +74,7 @@ pub fn apply(hull: &mut Model, skin: &ship_skin::Skin) -> usize {
     let mut applied = 0;
     for slot in &mut hull.textures {
         let Some(existing) = slot else { continue };
-        let Some(index) = SLOT_NAMES
-            .iter()
-            .position(|name| existing.label.eq_ignore_ascii_case(name))
-        else {
+        let Some(index) = slot_of(&existing.label) else {
             continue;
         };
         let block = &skin.blocks[index];
