@@ -823,6 +823,18 @@ apply-names *ARGS: resolve-imports
 audit-names *ARGS:
     python3 scripts/audit-ghidra-names.py {{ARGS}}
 
+# Export a PSP binary's names.tsv as a PPSSPP .sym symbol map - no Ghidra, no
+# PPSSPP needed. Load the result in PPSSPP's Debug menu -> Load symbol map.
+# See docs/reverse-engineering/ppsspp-symbol-bridge.md.
+export-sym binary:
+    python3 scripts/export-ppsspp-sym.py {{binary}}
+
+# Harvest the names PPSSPP's own analysis already knows for a booted PSP
+# binary, over its websocket debugger - no GUI, works right after boot. Never
+# feeds names.tsv; see docs/reverse-engineering/ppsspp-symbol-bridge.md.
+harvest-ppsspp-symbols binary port="47800":
+    uv run --with websocket-client scripts/harvest-ppsspp-symbols.py {{binary}} --port {{port}}
+
 # Assert no game content (or a reproduction this project itself writes) is tracked
 audit-leakage:
     python3 scripts/check-leakage.py

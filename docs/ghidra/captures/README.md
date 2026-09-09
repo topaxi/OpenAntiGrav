@@ -132,6 +132,23 @@ usual `lower().replace("0x", "")` normalisation.
 `signatures.tsv` and `variables.tsv` exist in the table above and nowhere on
 disk: every binary's filtered set came out empty.
 
+**`ppsspp-detected.tsv` (`psp-pulse-usa`, `psp-pulse-eu`) is not one of the
+files above, and not a Ghidra capture at all** - it is PPSSPP's own
+auto-detected function names, harvested live over its websocket debugger
+(`scripts/harvest-ppsspp-symbols.py`), a completely different tool and a
+different kind of claim from everything else in this directory. It sits here
+because the shape is convenient (per-binary, tab-separated, address-first)
+and `scripts/check-ghidra-captures.py` validates its structure the same way,
+but it is exempt from the evidence-tree and README-table checks that apply to
+real captures, and its `source` column names the API call that produced a
+row (`ppsspp-hle.func.list`) rather than Ghidra's `SourceType` vocabulary.
+Full writeup: [ppsspp-symbol-bridge.md](../../reverse-engineering/ppsspp-symbol-bridge.md).
+Its `data`-kind counterpart does not exist yet - `labels.tsv`'s column shape
+(`address`, `symbol_type`, `name`, `namespace`) is the natural home if a
+PPSSPP data-symbol harvest is ever wanted, since PPSSPP does not export
+functions and data through the same channel any more than Ghidra's own
+capture files do.
+
 ## What this is not
 
 **It is not a second record of truth.** The evidence pages under

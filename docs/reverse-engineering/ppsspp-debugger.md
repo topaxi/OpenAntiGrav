@@ -442,8 +442,9 @@ Two things a first race capture found:
 | `memory.read` / `read_u32` | `read` returns `base64`; `read_u32` returns `value` (**not** `uintValue`). |
 | `memory.disasm` | Address plus count, with PPSSPP's own symbol names for calls. |
 | `hle.thread.list` | Thread names, pcs and wait states. `Main thread`'s entry is `Game_Bootstrap`. |
-| `hle.func.list` | Every function PPSSPP's analysis found, with address and size. Useful for finding which function contains an address. |
+| `hle.func.list` | Every function PPSSPP's analysis found, with address, name and size. Useful for finding which function contains an address, and for harvesting what PPSSPP autodetected - see [ppsspp-symbol-bridge.md](ppsspp-symbol-bridge.md). Works right after boot, before reaching any menu: module analysis runs at load time. |
 | `hle.module.list` | Confirms the module base: `WO_Game` at `0x08804000`, size `0x391800`. |
+| `hle.func.add` / `.remove` / `.rename` / `.scan` | A live-session alternative to loading a `.sym` through the Debug menu - naming a function without a GUI at all. Exercised below; **`.remove` immediately followed by `.add` at the same address crashes the emulator**, `.rename` does not. |
 | `input.buttons.send` / `.press` / `input.analog.send` | Scripted input. `press` takes a duration in frames; `send` sets held state. Names are `cross`, `circle`, `square`, `triangle`, `start`, `select`, `up`, `down`, `left`, `right`, **`ltrigger`, `rtrigger`** - *not* `l` and `r`, see below. |
 | `gpu.stats.get` | Actual and target fps, vblank rate. |
 
@@ -454,6 +455,85 @@ re-derives it. Screenshot the emulator's window through the compositor instead
 (`niri msg action screenshot-window --id N --write-to-disk false` then
 `wl-paste`, or `grim`), which works and is what produced the front-end walk
 below.
+
+## Naming a function live, with `hle.func.add`/`.rename`, and a crash to avoid
+
+Confirmed against PPSSPP v1.20.4, 2026-09-09, `psp-pulse-usa`, over
+`Debugger.call` (`scripts/ppsspp_debugger.py`) - these are not wrapped by a
+dedicated method there yet, call them with `dbg.call("hle.func.rename", ...)`
+directly.
+
+**`hle.func.rename(address, name, size=<optional>)`** renames an existing
+entry in place. Worked example, renaming `z_un_08814014` (a function
+`hle.func.list` already reported at size 3528):
+
+```python
+>>> dbg.call("hle.func.rename", address=0x08814014, name="OagRoundTripTest")
+{'event': 'hle.func.rename', 'ticket': '4', 'address': 142688276, 'size': 3528, 'name': 'OagRoundTripTest'}
+```
+
+`memory.disasm` immediately reflects it, and correctly for the *whole*
+function body, not just its entry address - every instruction from
+`0x08814014` up to (not including) the next known function's start reports
+`"function": "OagRoundTripTest"`, and only the entry instruction carries
+`"symbol": "OagRoundTripTest"` (the rest carry `"symbol": null`, same as
+before the rename):
+
+```
+0x08814014  function=OagRoundTripTest  symbol=OagRoundTripTest  addiu sp,sp,-0x1C0
+0x08814018  function=OagRoundTripTest  symbol=None              lui a1,0x8B3
+...
+0x08814dd8  function=OagRoundTripTest  symbol=None              addiu sp,sp,0x1C0   # last insn of the body
+0x08814ddc  function=z_un_08814ddc     symbol=z_un_08814ddc     lw a1,0x08B32C6C     # next function, untouched
+```
+
+The `size` argument to `.rename` was tried and **appears to be ignored** -
+passing `size=0` alongside a rename left the registered size at the
+original 3528, confirmed by re-reading `hle.func.list` afterward. Renaming
+does not appear to be a route to changing a function's extent, only its name.
+
+**`hle.func.add(address, name, size=<optional>)` fails cleanly if a function
+already exists at `address`** (`"Function already exists at 'address'"`) -
+useful as an existence probe, and this is the case `PpssppImportSymFile.py`'s
+own default behaviour (create-or-skip) needs, since almost every text
+address already has *some* entry (`z_un_...` if nothing else) once
+`hle.func.list` has run.
+
+**The crash: `hle.func.remove` then `hle.func.add` at the same address is
+fatal, every time.** Reproduced twice independently (different addresses,
+one at the entry point / current PC, one far from it, `size >= 32` either
+time):
+
+```python
+>>> dbg.call("hle.func.remove", address=addr)
+{'event': 'hle.func.remove', 'ticket': N, 'address': addr, 'size': orig_size}   # succeeds
+>>> dbg.call("hle.func.add", address=addr, name="Anything", size=0)
+# no reply ever arrives - the process has already exited
+```
+
+The emulator's own stderr, both times:
+
+```
+.../bits/stl_vector.h:1253: reference std::vector<unsigned int>::operator[](size_type) [_Tp = unsigned int, _Alloc = std::allocator<unsigned int>]: Assertion '__n < this->size()' failed.
+```
+
+An out-of-bounds vector access, consistent with `.remove` shrinking some
+index PPSSPP's own analyzer or symbol table rebuilds lazily, and the very
+next `.add` reading a now-stale index into it. Whether the crash needs
+`size=0` specifically, or fires on *any* `.add` right after a `.remove`
+regardless of arguments, was not isolated further - reproducing it a third
+time to narrow that down was judged not worth another crashed session. **The
+practical rule: never call `hle.func.remove` and `hle.func.add` back to
+back on the same address. Use `hle.func.rename` to change an existing
+entry's name instead** - confirmed safe above, and it is what every actual
+use case here needs anyway (PPSSPP already has *some* entry at nearly every
+address, so "add" is rarely the right call once `hle.func.list` has run
+once).
+
+This is the same shape as the already-documented `memory.write` empty-payload
+crash below: a websocket call that is accepted syntactically and kills the
+process instead of erroring. Treat any `hle.func.*` mutation as one more
+address needing the same caution.
 
 ## Two things worth knowing about the game itself
 
