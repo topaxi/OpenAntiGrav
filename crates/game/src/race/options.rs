@@ -68,6 +68,23 @@ pub struct Options {
     /// label, its roster membership - stays exactly `team`'s. See
     /// `oag_title::race::HullVariant`.
     pub hull_variant: Option<String>,
+    /// The `PI_ModelSkin` the **player's** craft is painted with - the
+    /// declared name (`Alternative`, `Eliminator`), not a path.
+    ///
+    /// `None` is the hull's own textures, which is every race before this
+    /// existed and every race that does not ask.
+    ///
+    /// **Which skin a race flies is this project's choice, not the
+    /// original's, and no unlock is checked.** The original appears to select
+    /// `Eliminator` on a global state check rather than on a player pick, but
+    /// what that state *is* is not settled - see
+    /// `crate::livery::ship_skin`'s own module docs for the evidence, and for
+    /// what would replace this. Labelled chosen rather than measured, on the
+    /// same footing `crate::livery::teams_for_slots` stands on.
+    ///
+    /// Applied to slot 0 alone, like [`Self::hull_variant`] and for the same
+    /// reason: nothing offers an opponent a paint job of their own.
+    pub skin: Option<String>,
     /// The team ids the *opponents* may fly, in the caller's own order.
     ///
     /// The caller supplies them because they come off the player's own disc -
@@ -253,6 +270,7 @@ impl Default for Options {
             track: None,
             team: None,
             hull_variant: None,
+            skin: None,
             // Empty for the same reason `dlc` is: the ids come off the
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.

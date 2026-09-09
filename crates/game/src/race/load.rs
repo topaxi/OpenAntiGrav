@@ -316,25 +316,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.opponent_teams,
         &mut report,
     );
-    let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
-    let hd_trail_red = roster::hd_trail_red(&slot_teams);
-    let liveries = livery::load(
+    let roster::Grid {
+        slot_teams,
+        hd_trail_red,
+        liveries,
+    } = roster::grid(
         craft_of(&mut craft, &mut archives),
-        &slot_teams,
-        &livery::LoadContext {
-            race: craft_title.race,
-            mode: options.mode,
-            flare: craft_title.flare,
-            lod: options.lod,
-        },
+        craft_title,
+        options,
+        &team,
+        &available,
         hull_variant,
         &mut report,
     )?;
-    report.push(format!(
-        "grid liveries: {} - which team flies which slot is this project's, not \
-         the original's (livery.rs)",
-        slot_teams.join(", ")
-    ));
     let (shadows, shadow_hulls) = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,

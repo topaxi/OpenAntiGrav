@@ -108,3 +108,80 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
         if fury { 1.0 } else { 0.0 }
     })
 }
+
+/// Everything the grid's own slot list decides: who flies where, what each
+/// one draws, and HD's per-slot trail flag.
+pub(super) struct Grid {
+    /// Which team flies each slot, the player first. **This project's
+    /// ordering, not the original's** - see [`crate::livery`].
+    pub slot_teams: Vec<String>,
+    /// Wipeout HD's red-trail flag per slot; see [`hd_trail_red`].
+    pub hd_trail_red: [f32; oag_gameplay::MAX_SHIPS],
+    /// One hull, plume, nozzle and shield per slot.
+    pub liveries: Vec<crate::livery::Livery>,
+}
+
+/// Fills the grid: slot teams out of `available`, then a [`crate::livery`] per
+/// slot off `archives`.
+///
+/// Here rather than in `load.rs` under the 1,000-line rule in
+/// `scripts/check-file-size.py`, and this is the file that already answers
+/// "which team flies which slot" - `available` above is its own first half. A
+/// move with no behaviour change, taken when the player's paint job joined the
+/// player's hull override as a second per-slot-0 pick.
+///
+/// **Two things here are the player's alone**, and both land on slot 0 because
+/// nothing offers an opponent a choice of their own: `hull_variant`, which
+/// swaps the model file ([`oag_title::race::HullVariant`]), and
+/// [`crate::race::Options::skin`], which repaints the model this slot just
+/// built. The second is resolved here against what the source's own definition
+/// declares for the team - see [`crate::livery::ship_skin`], and note that
+/// **which** skin a race flies is this project's choice rather than the
+/// original's.
+///
+/// # Errors
+///
+/// Propagates [`crate::livery::load`]: only the player's own hull failing to
+/// read or build, which is not a race.
+pub(super) fn grid(
+    archives: &mut oag_assets::Archives,
+    craft_title: &'static oag_title::Title,
+    options: &crate::race::Options,
+    team: &str,
+    available: &[String],
+    hull_variant: Option<&str>,
+    report: &mut Vec<String>,
+) -> anyhow::Result<Grid> {
+    let skin = crate::livery::ship_skin::resolve(
+        archives,
+        craft_title,
+        team,
+        options.skin.as_deref(),
+        options.mode,
+        report,
+    );
+    let slot_teams = crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS);
+    let liveries = crate::livery::load(
+        archives,
+        &slot_teams,
+        &crate::livery::LoadContext {
+            race: craft_title.race,
+            mode: options.mode,
+            flare: craft_title.flare,
+            lod: options.lod,
+        },
+        hull_variant,
+        skin.as_deref(),
+        report,
+    )?;
+    report.push(format!(
+        "grid liveries: {} - which team flies which slot is this project's, not \
+         the original's (livery.rs)",
+        slot_teams.join(", ")
+    ));
+    Ok(Grid {
+        hd_trail_red: hd_trail_red(&slot_teams),
+        slot_teams,
+        liveries,
+    })
+}
