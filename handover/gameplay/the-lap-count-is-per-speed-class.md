@@ -59,11 +59,12 @@ that absence plainly instead of claiming every bounded mode fits.
   and that value should win over the array. Nothing selects a cell yet, which is
   the same blocker `Mode::ELIMINATOR_KILL_TARGET_DEFAULT` carries and the same
   launch-path tracing the race-campaign thread names as its own next step.
-- **`docs/formats/hd-hud.md`'s prose is now stale**, around its
+- ~~**`docs/formats/hd-hud.md`'s prose is now stale**, around its
   `MAX_RECORDED_LAPS` justification: it says "this crate's lap targets" are both
-  `3`. The constant's *reasoning* is unaffected (four rows is what the disc
-  authors), only the sentence about the targets. Not edited here - it was
-  outside this pass's lane.
+  `3`.~~ **Fixed in `d7c95972` (2026-09-09, before this pass started).** The
+  paragraph now names `Mode::SINGLE_RACE_LAPS_BY_CLASS` and the Phantom
+  fifth-lap case directly; this bullet and Next Step 4 below were the only
+  things still stale.
 
 ## Next Steps
 
@@ -77,4 +78,5 @@ that absence plainly instead of claiming every bounded mode fits.
 - **Retire the table when a cell can be raced.** Trace the campaign launch path
   first (see the race-campaign thread), then have the cell's own `laps` override
   `SINGLE_RACE_LAPS_BY_CLASS`.
-- **Fix `hd-hud.md`'s stale sentence** about both lap targets being `3`.
+- ~~**Fix `hd-hud.md`'s stale sentence** about both lap targets being `3`.~~ Done
+  in `d7c95972`, before this pass started.
