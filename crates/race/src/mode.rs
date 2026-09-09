@@ -75,23 +75,41 @@ impl Mode {
         Self::Eliminator,
     ];
 
-    /// Laps in a time trial.
+    /// Laps in a time trial, per speed class, slowest rung first.
     ///
-    /// **Observed, not invented.** The original's own counter reads `Lap 1 of 3`,
-    /// and a run that passes the third lap starts a fresh attempt with the best
-    /// time cleared - see `docs/reverse-engineering/ppsspp-debugger.md:707-709`.
+    /// **Observed live at all four rungs, 2026-09-09, and it replaced this
+    /// module's second-weakest number.** This used to be a flat
+    /// `TIME_TRIAL_LAPS = 3`, carried over unresolved from the same census that
+    /// fixed [`Self::SINGLE_RACE_LAPS_BY_CLASS`]: the campaign's 47 `Time Trial`
+    /// cells read the identical 3/4/4/5 table, but the flat constant had its own
+    /// independent live evidence (`Lap 1 of 3`) and nobody had driven a time
+    /// trial in a class above Venom to check whether the census applied outside
+    /// the campaign too. It does: a Custom Race - no campaign cell in play at
+    /// all - launched once per rung under PPSSPP (`pulse-psp-usa.chd`, Talon's
+    /// Junction White) reads `Lap 1 of 3` on Venom, `Lap 1 of 4` on Flash,
+    /// `Lap 1 of 4` on Rapier and `Lap 1 of 5` on Phantom - one screenshot per
+    /// rung, all four matching the census exactly. Confidence **90**, level with
+    /// [`Self::SINGLE_RACE_LAPS_BY_CLASS`]: that table rests on a larger census
+    /// (236 cells against 47) plus one live point; this one rests on a smaller
+    /// census plus a live point at every rung it has, which is the stronger
+    /// half of the same trade.
+    ///
+    /// A run that passes the last lap starts a fresh attempt with the best time
+    /// cleared rather than ending outright - see
+    /// `docs/reverse-engineering/ppsspp-debugger.md:707-709` - which this crate
+    /// still approximates as an ending; see [`Self::laps_target`]'s own docs.
     /// Note the count is *configuration* in the original rather than a constant:
-    /// the race-setup format string carries `laps="%d"`. Three is what a time
-    /// trial was seen configured with, not a limit of the format.
-    pub const TIME_TRIAL_LAPS: u32 = 3;
+    /// the race-setup format string carries `laps="%d"`.
+    pub const TIME_TRIAL_LAPS_BY_CLASS: [u32; SpeedClass::ALL.len()] = [3, 4, 4, 5];
 
     /// Laps in a single race, per speed class, slowest rung first.
     ///
     /// **Measured, confidence 90, and it replaced this module's weakest
     /// number.** This used to be a flat `SINGLE_RACE_LAPS = 3` that said of
-    /// itself that it was a guess carried over from
-    /// [`Self::TIME_TRIAL_LAPS`]. The campaign's own authored content settled
-    /// it: `Data\Plugins\grids\grid_00.xml` .. `grid_15.xml` inside
+    /// itself that it was a guess carried over from time trial's own flat
+    /// constant (now [`Self::TIME_TRIAL_LAPS_BY_CLASS`], not flat either). The
+    /// campaign's own authored content settled it: `Data\Plugins\grids\grid_00.xml`
+    /// .. `grid_15.xml` inside
     /// `Data.wad` hold **236 `PI_Cell` records**, each carrying a `laps`
     /// attribute, and across all 236 that attribute is *exactly* **3 for
     /// Venom, 4 for Flash, 4 for Rapier and 5 for Phantom**, with no
@@ -196,16 +214,14 @@ impl Mode {
     /// a race-rules crate has no business resolving a name. The caller
     /// resolves; this method matches.
     ///
-    /// **Only [`Mode::SingleRace`] varies with the class today, and that
-    /// asymmetry is deliberate.** The same 236-record census reads `Time
-    /// Trial`'s 47 cells as following the identical 3/4/4/5 table, but
-    /// [`Self::TIME_TRIAL_LAPS`] has independent evidence of its own - the
-    /// original's live counter reading `Lap 1 of 3` - and the two are
-    /// consistent rather than contradictory, because Venom is the default
-    /// class and Venom's census value *is* 3. Reconciling a live observation
-    /// against the census is its own job with its own confidence argument, so
-    /// time trial takes the parameter and ignores it. Same shape as Speed
-    /// Lap's `7`-against-`None` below. See `docs/gameplay/race-modes.md`.
+    /// **[`Mode::TimeTrial`] and [`Mode::SingleRace`] both vary with the
+    /// class, and both are now checked live rather than resting on the census
+    /// alone.** The 236-record census reads `Time Trial`'s 47 cells as
+    /// following the identical 3/4/4/5 table `Single Race`'s do, and a Custom
+    /// Race launched in each of the four classes - no campaign cell in play at
+    /// all - reads `Lap 1 of 3`/`4`/`4`/`5` in exactly that order under
+    /// PPSSPP. So the table is not a campaign peculiarity: it is what a plain
+    /// Custom Race is configured with too. See [`Self::TIME_TRIAL_LAPS_BY_CLASS`].
     ///
     /// **`None` for Eliminator, measured rather than assumed from "no lap
     /// target here either".** `MSC_EVENT_ELIM` says outright: *"The lap count
@@ -215,17 +231,35 @@ impl Mode {
     /// from the data side: an `Elimination` cell carries no `laps` attribute at
     /// all.
     ///
-    /// **`None` for Speed Lap and Zone, and the census disagrees with the first
-    /// of those.** It reads `Speed Lap` as `7` on all 42 of its cells and
-    /// `Zone` as `0` on all 16, while the evidence for `None` here is separate
-    /// and specific: `MSC_EVENT_SL`/`MSC_EVENT_ZONE` describe a race that does
-    /// not end on laps. Those genuinely conflict and reconciling them is a
-    /// different job, recorded in `docs/gameplay/race-modes.md` rather than
-    /// guessed at here.
+    /// **`None` for Speed Lap, and the reason is now settled rather than
+    /// merely asserted, confidence 75.** The census reads `Speed Lap` as `7`
+    /// on all 42 of its cells, and a Custom Race shows exactly that: `Lap 1
+    /// of 7`, live, on Venom, under PPSSPP - so the `7` is real and is not
+    /// campaign-only either. It still does not end the race. Speed Lap's own
+    /// in-race pause menu carries a seventh row, `END SESSION`, that neither
+    /// Time Trial's nor [`Mode::SingleRace`]'s pause menu has - both are
+    /// otherwise identical, six rows each, and both are modes that *do* end
+    /// on their own lap count, checked as the falsifier this claim needs
+    /// rather than assumed safe to skip. Three modes, screenshotted,
+    /// 2026-09-09: the one row present exactly where the mode's own text says
+    /// it never ends. A mode whose own pause menu offers a dedicated way to
+    /// deliberately conclude an open-ended run is a mode that does not
+    /// conclude one on its own - independent of, and agreeing with,
+    /// `MSC_EVENT_SL`'s text: *"never ends, escape leaves"*. 75 rather than
+    /// higher because this is still a correlated UI signal standing in for a
+    /// lap-8 crossing nobody watched directly - an open-loop scripted replay
+    /// could not complete even one lap of Talon's Junction in nine real-time
+    /// minutes to check it the direct way. The `7` itself is display
+    /// convention shared with Time Trial's own `Lap X of Y` widget, not a
+    /// target this method should report.
+    ///
+    /// **`None` for Zone too**, on `MSC_EVENT_ZONE`'s identical wording; the
+    /// census's `0` there reads as `laps` not being the applicable field for a
+    /// mode counting zones instead - see `docs/gameplay/race-modes.md`.
     #[must_use]
     pub const fn laps_target(self, class: SpeedClass) -> Option<u32> {
         match self {
-            Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS),
+            Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS_BY_CLASS[class as usize]),
             Self::SingleRace => Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize]),
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }
@@ -413,6 +447,9 @@ mod tests {
     fn only_the_two_unlimited_modes_never_end_on_laps() {
         assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
         assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
+        // Speed Lap's HUD does show a lap count (`7`, live-confirmed on
+        // Venom) - it just never turns into an ending. See `laps_target`'s
+        // own docs for the pause-menu evidence.
         assert_eq!(Mode::SpeedLap.laps_target(SpeedClass::Venom), None);
         assert_eq!(Mode::Zone.laps_target(SpeedClass::Venom), None);
         // Eliminator has no lap target either, and for a different reason
@@ -432,8 +469,20 @@ mod tests {
         assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Phantom), Some(5));
     }
 
-    /// Every rung the enum has must have a row, or a class would index past
-    /// the table. Cheap here, and the alternative is a panic mid-race.
+    /// The same table, live-confirmed rather than census-only: one Custom
+    /// Race Time Trial per rung under PPSSPP read `Lap 1 of 3`/`4`/`4`/`5`,
+    /// 2026-09-09, `pulse-psp-usa.chd`, Talon's Junction White.
+    #[test]
+    fn a_time_trial_runs_the_same_per_class_lap_count() {
+        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
+        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Flash), Some(4));
+        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Rapier), Some(4));
+        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Phantom), Some(5));
+    }
+
+    /// Every rung the enum has must have a row, in both tables, or a class
+    /// would index past one. Cheap here, and the alternative is a panic
+    /// mid-race.
     #[test]
     fn every_speed_class_has_a_lap_count() {
         for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
@@ -442,17 +491,19 @@ mod tests {
                 Mode::SingleRace.laps_target(class),
                 Some(Mode::SINGLE_RACE_LAPS_BY_CLASS[index]),
             );
+            assert_eq!(
+                Mode::TimeTrial.laps_target(class),
+                Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[index]),
+            );
         }
     }
 
-    /// The class parameter is taken and ignored by every mode except a single
-    /// race - see `laps_target`'s own docs for why time trial in particular
-    /// does not vary yet, and `docs/gameplay/race-modes.md` for what would
-    /// change it.
+    /// The class parameter is taken and ignored by every mode except the two
+    /// that field a real per-class table - see `laps_target`'s own docs for
+    /// Speed Lap's `7`, which is real but does not end the race.
     #[test]
-    fn only_a_single_race_varies_with_the_speed_class() {
+    fn only_time_trial_and_single_race_vary_with_the_speed_class() {
         for class in SpeedClass::ALL {
-            assert_eq!(Mode::TimeTrial.laps_target(class), Some(3));
             assert_eq!(Mode::SpeedLap.laps_target(class), None);
             assert_eq!(Mode::Zone.laps_target(class), None);
             assert_eq!(Mode::Eliminator.laps_target(class), None);
