@@ -63,7 +63,8 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
 
     let output_format = wgpu::TextureFormat::Rgba8Unorm;
     let size = (16u32, 16u32);
-    let chain = Chain::new(&device, output_format, size, params()).expect("the pipelines build");
+    let chain = Chain::new(&device, output_format, size, params(), Glow::Drawn)
+        .expect("the pipelines build");
     let output = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("hd bloom timing test output"),
         size: wgpu::Extent3d {
@@ -126,4 +127,125 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
             reading.seconds * 1000.0
         );
     }
+}
+
+/// The player's `[graphics] bloom` switch reaches this chain.
+///
+/// It did not until 2026-09-09: `race::Scene` gated only `post::bloom`, the
+/// PSP chain, so Wipeout HD - the only title whose bloom *this* module draws -
+/// bloomed whatever the player had set. Measured on the Talon's Junction grid
+/// at the time: flipping the setting moved a Pulse frame's clipped-white share
+/// from 2.07 % to 0.41 % and left an HD frame byte-identical. See
+/// [`Glow`].
+///
+/// A white scene is what makes the two runs separable at all: the resolve is
+/// `saturate(scene * exposure + bloom)`, so a black scene resolves to the same
+/// black either way and would pass this test with the switch unwired.
+#[test]
+fn suppressing_the_glow_dims_the_resolve() {
+    let instance = wgpu::Instance::default();
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    if adapters.is_empty() {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    }
+    let adapter = &adapters[0];
+    let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))
+        .expect("a device with no extra features");
+    let drawn = resolve_a_white_scene(&device, &queue, Glow::Drawn);
+    let suppressed = resolve_a_white_scene(&device, &queue, Glow::Suppressed);
+    assert!(
+        suppressed < drawn,
+        "the suppressed glow resolved no dimmer than the drawn one \
+         ({suppressed} against {drawn}) - the switch is not reaching the chain",
+    );
+}
+
+/// Clears the chain's scene target to white, runs the chain, and returns the
+/// mean of the resolved frame's red channel.
+///
+/// 64x64 because a readback's rows are 256-byte aligned and that is exactly
+/// one `Rgba8Unorm` row, so the copy needs no padding arithmetic.
+fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow) -> f64 {
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let size = (64u32, 64u32);
+    let chain = Chain::new(device, format, size, params(), glow).expect("the pipelines build");
+    let output = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hd bloom glow test output"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = output.create_view(&Default::default());
+    let bytes = u64::from(size.0) * u64::from(size.1) * 4;
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hd bloom glow test readback"),
+        size: bytes,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("hd bloom glow test scene"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: chain.scene_view(),
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    chain.run(queue, &mut encoder, &view, size, None);
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &output,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.0 * 4),
+                rows_per_image: Some(size.1),
+            },
+        },
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |r| {
+        r.expect("the readback maps");
+    });
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let data = readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("the buffer is mapped");
+    let sum: f64 = data.iter().step_by(4).map(|&byte| f64::from(byte)).sum();
+    let mean = sum / f64::from(size.0 * size.1);
+    drop(data);
+    readback.unmap();
+    mean
 }

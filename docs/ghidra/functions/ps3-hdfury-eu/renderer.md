@@ -1892,6 +1892,103 @@ and `0x3b7334` are the two sides of the `bne` at `0x3b5090` - and one,
 `0x3b5350`, is a loop body. The bind census below is what settles the two
 extra, and it is *not* a coarser blur level.
 
+### The chain was unswitchable, and how bright it actually is (2026-09-09)
+
+A regression hunt, opened on a from-play report that HD/Fury's bloom "seemed
+to have gone much stronger recently". **It found no regression and one real
+defect**, and both halves are worth carrying.
+
+The metric throughout is **clipped-white share** - the fraction of pixels with
+R, G and B all at least 250 - and it is now `scripts/clipped-white.py` rather
+than a scratch file. Mean luminance does *not* discriminate here and never
+did; that is why the 2026-08-20 defect survived review. Captures are
+`oag-game --race <iso> --ticks 0 --size 1440x816 --screenshot`, native, no
+dynamic resolution and no upscaler, against the rpcs3 grabs under
+`data/reference/hd-capture/`. **Close framings, not identical, so aggregates
+only - never a pixel diff.**
+
+**No regression, measured four ways.**
+
+| what | clipped white | mean |
+| --- | --- | --- |
+| recorded state after the 2026-08-20 fixes | 10.20 % | 0.497 |
+| the same framing on 2026-09-09 | 9.860 % | 0.513 |
+
+Six matched framings, rendered by a build at `5189f942^` (before HD's glow
+layer landed) and by `2871f895`, using `--pose` so both drew the same view:
+
+| pose | pre-window | today |
+| --- | --- | --- |
+| `500.0,-28.2,-48.0` | 4.355 % | 4.281 % |
+| `184.0,-35.9,186.7` | 15.081 % | 13.560 % |
+| `-410.8,2.6,62.2` | 7.479 % | 7.352 % |
+| `-630.4,-5.1,-200.3` | 13.975 % | 13.663 % |
+| `-156.0,-51.6,-627.0` | 3.780 % | 3.271 % |
+| `255.8,-45.3,-178.3` | 6.628 % | 6.352 % |
+
+Every one is *lower* today. The frame did not get brighter in that window.
+Nor does it climb with time: stationary at ticks 0/60/120/300/600/1200 it
+reads 9.86/10.12/10.17/10.15/10.34/10.58 %, and out on the circuit under
+autopilot it sits at 5.8-6.0 %, inside the reference band. There is no
+accumulating term.
+
+**The gate's two suspects are both inert.** Forcing `frame.a` to zero in
+`fs_gate` still gives a **byte-identical PNG** at tick 0, exactly as it did on
+2026-08-20: `GlowMask::Protected` masks alpha off everywhere that matters, so
+`alpha_contribution` contributes nothing to a race frame. And zeroing HD's own
+emissive `glow` summand in `mesh.wgsl` moves the frame by 0.000 points at
+every tick measured - see the defect below for why.
+
+**The defect: the player's bloom switch never reached this chain.**
+`race::Scene` gated the bloom on `bloom_enabled && hd.is_none()`, so
+`[graphics] bloom` reached only the PSP chain (`oag_render::post::bloom`) and
+Wipeout HD - the only title *this* chain draws for - bloomed regardless.
+
+| title | `bloom = true` -> `false` |
+| --- | --- |
+| Wipeout Pulse, autopilot tick 900 | 2.069 % -> 0.408 % |
+| Wipeout HD, grid | **byte-identical** |
+
+`settings::default_bloom` returns `false` and `Graphics::bloom`'s doc comment
+says why, so **the switch is off unless a player turned it on** - which makes
+HD/Fury the only title that bloomed out of the box, not a quirk of one
+configuration.
+`hd_bloom::Glow::Suppressed` now skips the gate and both blurs and clears the
+resolve's bloom input. It does **not** skip the chain: the ladder feeds the
+luminance adaptation and the exposure resolve is what encodes the linear scene
+target at all. No measured constant moves, and a `bloom = true` capture is
+byte-identical to the same capture before the change.
+
+**What that says about our magnitude.** With the switch honoured the grid
+frame reads 9.860 % with the bloom and 4.507 % without, against **3.85 %**
+(`data/reference/hd-capture/talons/00.png`) and **6.99 %**
+(`talons-fifo/00.png`) on the two rpcs3 grabs. So our bloomed frame is
+brighter than either reference and our unbloomed one is between them. That is
+consistent with what the 2026-08-20 work already concluded - the remaining
+error is a missing *material*, not a bloom constant - and it is **not** a
+licence to scale a read constant down. The switch is a player control, not a
+calibration.
+
+**Two things this pass deliberately did not do**, both filed rather than
+fixed:
+
+1. In `hd_bloom.wgsl`'s `fs_blur` the tap offset is added *after* `drawn()`,
+   so `min(uv * uv_scale, uv_max)` does not constrain the taps - contrary to
+   the comment above `drawn()`. Inert at native, where `uv_scale` is 1.0;
+   wrong under dynamic resolution or FSR. Fixing it changes DRS-path behaviour
+   with no measurement behind the new behaviour.
+2. `mesh.wgsl` sums HD's emissive `glow` into `plain` and not into
+   `lit_linear`, and the fragment resolves
+   `mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit)` - so on HD,
+   whose rig is always enabled, every chunk with `in.lit == 1` drops the glow
+   entirely. Forcing `glow` to a flat red changes **3.60 %** of the frame at a
+   delta above 8/255 (42,305 of 1,175,040 pixels), and only the far background
+   and the hull: the track, the tubes and everything near the camera are on
+   the authored path and never see it. That makes the layer `5189f942` landed
+   very nearly invisible. Fixing it makes the frame *brighter*, which is the
+   opposite of what the report asked for, so it belongs to its own pass with
+   its own reference comparison.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers

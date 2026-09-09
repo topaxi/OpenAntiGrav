@@ -369,8 +369,24 @@ impl Scene {
         // `oag_render::post::hd_bloom` for what of it is the microcode's.
         // A failure is reported and dropped the way the PSP bloom's is: a
         // race without it is the pre-HDR picture, not a broken one.
+        // **`bloom_enabled` reaches this chain too, and until 2026-09-09 it
+        // did not.** The switch gated only the PSP chain below, so Wipeout
+        // HD - the one title this chain draws for - blooms whatever the
+        // player sets. Measured: flipping the setting moved a Pulse frame's
+        // clipped-white share from 2.07 % to 0.41 % and left an HD frame
+        // byte-identical. `Glow::Suppressed` still runs the exposure resolve,
+        // which is what encodes the linear scene target at all; see that
+        // enum for why turning the whole chain off would be a different and
+        // wrong thing.
+        let glow = if bloom_enabled {
+            oag_render::post::hd_bloom::Glow::Drawn
+        } else {
+            oag_render::post::hd_bloom::Glow::Suppressed
+        };
         let hd = match hd_bloom
-            .map(|params| oag_render::post::hd_bloom::Chain::new(device, format, size, params))
+            .map(|params| {
+                oag_render::post::hd_bloom::Chain::new(device, format, size, params, glow)
+            })
             .transpose()
         {
             Ok(hd) => hd,
