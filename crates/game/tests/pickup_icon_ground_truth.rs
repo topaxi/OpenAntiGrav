@@ -21,25 +21,12 @@
 //! resolve, decode, and land in the sheet with a usable quad extent.** This
 //! is what checks the real disc.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::race;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pure-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pure-psp-usa.chd")
 }
 
 fn single_race() -> Option<race::Loaded> {

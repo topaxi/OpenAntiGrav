@@ -36,7 +36,7 @@
 //! only when the trigger genuinely has not been recovered.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_assets::Archive;
 use oag_formats::pob::{self, ParticleSystem};
@@ -229,21 +229,7 @@ const PS2_WIRED: &[&str] = &[
 ];
 
 fn image_named(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Sorts one archive's effects into the three buckets and asserts they cover
@@ -468,19 +454,7 @@ mod hd {
     const SYSTEMS: usize = 82;
 
     fn image() -> Option<PathBuf> {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join("data/images/hdfury-ps3-eu-dec.iso");
-        if path.exists() {
-            return Some(path);
-        }
-        assert!(
-            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-            path.display()
-        );
-        println!("skipping: {} not present", path.display());
-        None
+        oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
     }
 
     /// Every particle system's name across all seven archives, mapped to

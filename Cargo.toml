@@ -17,6 +17,7 @@ members = [
   "crates/pure",
   "crates/race",
   "crates/render",
+  "crates/testdata",
   "crates/title",
   "crates/tools",
   "crates/trace",
@@ -46,6 +47,7 @@ oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
 oag-render = { path = "crates/render" }
+oag-testdata = { path = "crates/testdata" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 

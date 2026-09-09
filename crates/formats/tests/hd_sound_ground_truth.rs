@@ -40,19 +40,7 @@ const ARCHIVES: usize = 7;
 const HD_BANK_ENTRIES: usize = 50;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/hdfury-ps3-eu-dec.iso");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
 
 /// Every `.bnk` entry on the disc, as `(archive, path, bytes)`.

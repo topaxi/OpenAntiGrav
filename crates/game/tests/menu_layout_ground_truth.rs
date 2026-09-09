@@ -12,20 +12,7 @@ use std::path::{Path, PathBuf};
 use oag_formats::fexml;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    eprintln!("skipping: {} is not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Every `<Variable global="...">` the front end's root XML declares.

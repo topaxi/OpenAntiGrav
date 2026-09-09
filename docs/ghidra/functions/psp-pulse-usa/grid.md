@@ -186,7 +186,7 @@ The two known departures above were measured on one track's *forward* grid and
 called sub-unit. On a *reversed* grid the same straight-line formula is not
 sub-unit wrong, it is off the track: a sweep of every Wipeout HD circuit's grid,
 both directions, with opponents on
-(`crates/game/tests/hd_trackwall_ground_truth.rs::every_hd_grid_lands_on_the_track`)
+(`crates/game/tests/hd_trackwall_ground_truth.rs`'s `every_hd_grid_in_data*_lands_on_the_track`)
 found **9 of 12 reversed grids** putting one or more of the eight slots off the
 collision mesh entirely - up to **145 units** from the driveable line on
 `tech_de_ra`'s reversed grid - against one forward grid over its envelope by a

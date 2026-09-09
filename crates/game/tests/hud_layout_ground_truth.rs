@@ -69,26 +69,13 @@
 //!   unmeasurable without it - see that test for why removing the exemption
 //!   is left open rather than done here.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::hud::{self, Layout};
 use oag_pulse as pulse;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// The USA PSP pressing - what [`EXPECTED`] and [`layout_of`] measure against.

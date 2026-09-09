@@ -17,5 +17,6 @@ thiserror.workspace = true
 workspace = true
 
 [dev-dependencies]
+oag-testdata.workspace = true
 miniz_oxide.workspace = true
 oag-pulse.workspace = true

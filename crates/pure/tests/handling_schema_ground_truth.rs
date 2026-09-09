@@ -35,7 +35,6 @@
 //! of the format; the numbers beside them are the game's design data.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use oag_formats::fexml::{self, Node};
 
@@ -47,18 +46,7 @@ const PULSE_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// `None`, with a printed reason, when a disc is not here - unless
 /// `OAG_REQUIRE_GAME_DATA=1`, which turns absence into a failure.
 fn image(relative: &str) -> Option<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(relative);
-    if path.exists() {
-        return Some(path.to_string_lossy().into_owned());
-    }
-    assert!(
-        std::env::var("OAG_REQUIRE_GAME_DATA").as_deref() != Ok("1"),
-        "{relative} is required but absent"
-    );
-    println!("skipping: {relative} not present");
-    None
+    oag_testdata::image(relative).map(|path| path.display().to_string())
 }
 
 /// Both discs, or nothing: a one-sided diff is not a diff.

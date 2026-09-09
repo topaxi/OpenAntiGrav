@@ -76,8 +76,33 @@ test:
 # enough to stop it at 138 of 3,300, which reads as a far worse tree than it is
 # and hides the rest entirely. Six pre-existing reds sat documented as one
 # because of exactly that; see HANDOVER.md's "Read this first".
+#
+# The run is teed to `target/test-data.log` and handed to `check-test-budget`,
+# which is the only place the suite's own cost is measured - see that script for
+# why a per-test ceiling catches what a total cannot.
+#
+# Both exit codes are kept, and a red test wins: the budget report is worth
+# printing either way - a run that failed still measured every test that
+# passed - but "the suite is red" is the more urgent of the two things to say,
+# so it is the one this recipe exits on.
 test-data:
-    cargo nextest run --workspace --run-ignored all --no-fail-fast
+    #!/usr/bin/env bash
+    set -uo pipefail
+    mkdir -p target
+    cargo nextest run --workspace --run-ignored all --no-fail-fast 2>&1 \
+        | tee target/test-data.log
+    tests=${PIPESTATUS[0]}
+    budget=0
+    just check-test-budget || budget=$?
+    [ "$tests" -ne 0 ] && exit "$tests"
+    exit "$budget"
+
+# The ratchet on how long `just test-data` takes, per test and in total.
+#
+# Not in the default `just` gate: that runs `test`, which skips every
+# `#[ignore]`d test, so there would be nothing to measure.
+check-test-budget log="target/test-data.log":
+    python3 scripts/check-test-budget.py {{log}}
 
 # Symlinks the main checkout's data/ subdirectories into this worktree.
 # `data/` is gitignored, so it does not travel into a `git worktree add` and
@@ -410,6 +435,33 @@ hd-survey hd="data/images/hdfury-ps3-eu-dec.iso" pulse="":
 # Extract a raw ISO from a CHD, which is what the emulators want
 extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.iso":
     chdman extractdvd -i {{image}} -o {{out}} -f
+
+# Extract every CHD in data/images/ to data/cache/, which is also what the
+# ground-truth tests want.
+#
+# `oag_testdata::image` hands a test `data/cache/<stem>.iso` in place of
+# `data/images/<stem>.chd` whenever the extract exists and is no older than the
+# image - a CHD is compressed, so every read of one decompresses a hunk, and
+# `Archives::open` measures 31 ms against the CHD against 0.05 ms against the
+# extract. Entirely optional: with no extract the tests read the CHD and are
+# only slower.
+#
+# It costs disk. Budget roughly 2x the CHD per disc, and note the PS2 image is
+# 3.7 GB compressed. Delete anything under data/cache/ to reclaim it; nothing
+# breaks.
+extract-isos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p data/cache
+    for chd in data/images/*.chd; do
+        out="data/cache/$(basename "${chd%.chd}").iso"
+        if [ -f "$out" ] && [ "$out" -nt "$chd" ]; then
+            echo "up to date: $out"
+            continue
+        fi
+        echo "extracting $chd -> $out"
+        chdman extractdvd -i "$chd" -o "$out" -f
+    done
 
 # Run an original disc image in its platform's emulator, for reference and
 # behavioural ground-truth comparison. One recipe per (to be) supported title, see

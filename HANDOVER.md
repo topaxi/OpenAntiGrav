@@ -125,8 +125,9 @@ file does not need to carry its own.
     roughly tick 5,000 to 12,000 while its speed keeps flicking 0-13 units/s,
     never sustained low enough to trip the dwell counter - one lap in 12,000
     ticks, zero respawns. `07_Track` novice shows the same shape, milder.
-    Renamed to `no_circuit_sustains_a_stall_past_the_rescue_threshold`,
-    scoped to the claim that actually holds, and now prints laps rather than
+    Renamed to `no_circuit_sustains_a_stall_past_the_rescue_threshold`
+    (split per difficulty into `..._at_novice`/`_at_skilled`/`_at_elite`/`_at_ace`
+    on 2026-09-09), scoped to the claim that actually holds, and now prints laps rather than
     hiding the ones that stay low. The dwell-counter mechanism itself moved to
     a direct unit test,
     `crates/game/src/race/tests/respawn.rs::a_stopped_opponent_is_flagged_after_the_dwell`,
@@ -239,16 +240,27 @@ file does not need to carry its own.
     stale (2026-08-18) and against a workspace that has nearly tripled in
     test count since; the mechanism notes below it (the ffmpeg flake's shape,
     the build-profile fix) are still accurate and worth reading.
-- **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
-  you are on a tree from before the build-profile fix: `[profile.dev.package."*"]`
-  never matched a workspace member, so our own decoders and the sim compiled at
-  `opt-level = 0`, and the suite additionally ran its multi-minute tests last.
-  Both are fixed in `Cargo.toml` and `.config/nextest.toml`; the measurement and
-  the reasoning are in
+- **`just test-data` takes about 3:20, not 11:27 and not 9:47.** If it takes
+  eleven minutes you are on a tree from before the build-profile fix:
+  `[profile.dev.package."*"]` never matched a workspace member, so our own
+  decoders and the sim compiled at `opt-level = 0`, and the suite additionally
+  ran its multi-minute tests last. Both are fixed in `Cargo.toml` and
+  `.config/nextest.toml`; the measurement and the reasoning are in
   [workspace-layout.md](docs/architecture/workspace-layout.md#build-profiles).
   **Do not "simplify" either file back:** the per-crate `opt-level` lines look
   redundant next to the `"*"` glob and are not, and the nextest priorities look
-  cosmetic and are worth half the win. **The four `oag-trace` failures this bullet used to warn
+  cosmetic and are worth half the win.
+  **If it takes nine or ten minutes you are on a tree from before 2026-09-09**,
+  when the suite had drifted back to 587s with a *single* test accounting for
+  525s of it - the six tail tests were matrices in one `#[test]` each, and
+  `cargo nextest` parallelises across tests, so each ran on one core. They are
+  split now, and `just test-data` runs `scripts/check-test-budget.py` over its
+  own log afterwards so the next one fails at review: **450s for the suite,
+  300s for any single test** (both under-load durations - see that script).
+  The split took it to 379s, and sharing one open `DiscImage` across a
+  source's archives to **344s**. When that fires, re-profile the tail rather than
+  adding a `BASELINE` row - CLAUDE.md's "Commands" section has the four-step
+  recipe and the worked examples of which splits keep which assertions. **The four `oag-trace` failures this bullet used to warn
   about are gone**: the disc-backed `oag-game` and `oag-formats` suites are
   **1,269 of 1,269, 0 skipped** under `--run-ignored all` (re-measured
   2026-08-17 after the HD HUD and `.gtf` passes; `oag-game` alone read 739, then
@@ -744,7 +756,8 @@ writers in it at the same time:
 statistic downstream of `pickup::draw`, and a sparse one will flip.**
 2026-09-08. Landing the LeachBeam turned
 `oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
-red - `skilled armed 0 rolls total against novice's 1` - with nothing touching
+red - `skilled armed 0 rolls total against novice's 1` - (that test is six
+`a_full_grid_of_*_arms_no_fewer_rolls_than_*` tests since 2026-09-09) with nothing touching
 the barrel roll, `oag_ai` or any force law. Confirmed by isolation: that one
 line in `IMPLEMENTED` makes it fail, the same line out makes it pass. A longer
 `IMPLEMENTED` widens the weighted walk in `draw`, so every craft draws different
@@ -768,7 +781,8 @@ test.
 
 **It bit a second test the same day, and there the rate had not moved at all.**
 `oag-game::ram_ground_truth a_ram_rarely_throws_the_rammer_out_of_the_corridor`
-was **already red on `main`** before this pass - isolated by reverting only the
+(merged into `a_ram_fires_only_where_there_is_room_and_rarely_throws_the_rammer_out`
+on 2026-09-09) was **already red on `main`** before this pass - isolated by reverting only the
 Quake lifetime fix, which changed the count from 9 to 11 and left it red either
 way, so it is not a consequence of that fix. Its bound is "no worse than one in
 six", set from 2 of 27 shifts over six races in August. The ram was later

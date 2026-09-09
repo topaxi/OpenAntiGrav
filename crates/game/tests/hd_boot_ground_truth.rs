@@ -37,19 +37,7 @@ use oag_game::{boot, frontend};
 
 /// The decrypted HD/Fury image, if it is there.
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/hdfury-ps3-eu-dec.iso");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
 
 /// Boots the shell alone - no movies, which is the slow half.

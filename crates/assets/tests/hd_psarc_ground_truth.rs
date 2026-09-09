@@ -31,7 +31,7 @@
 //! circuit in the same world coordinates - the claim that makes an HD run and a
 //! Pulse capture directly comparable.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_assets::psarc::Archive;
 use oag_formats::{ByteOrder, collision, handling, pads, pvs, track, vex};
@@ -69,21 +69,7 @@ const HD_COLLISION: [(collision::SurfaceKind, usize, usize); 4] = [
 ];
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 fn hd_track_vex() -> Option<Vec<u8>> {

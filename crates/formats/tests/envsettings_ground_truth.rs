@@ -4,7 +4,7 @@
 //! `just test-data`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::envsettings::{self, EnvSettings};
 
@@ -21,19 +21,7 @@ const ARCHIVES: &[&str] = &[
 const NOT_A_CIRCUIT: &str = "/data/fe/fury.envsettings";
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/hdfury-ps3-eu-dec.iso");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
 
 /// Every `.envsettings` on the disc, as `(path, parsed)`.

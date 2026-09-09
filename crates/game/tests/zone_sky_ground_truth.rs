@@ -35,25 +35,13 @@
 //! no gradient at all and asserts nothing about one. See the same page's
 //! `## What is not established`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::race;
 
 /// One image, or `None` with a printed reason when it is not present.
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// A race on **one named circuit**, so the only thing a pair of loads differs

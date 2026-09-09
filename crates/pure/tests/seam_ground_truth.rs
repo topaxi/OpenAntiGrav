@@ -21,30 +21,13 @@
 //! Pulse-era attributes as optional, but could only be tested against synthetic
 //! documents shaped like Pure's, because opening Pure's disc needed this crate.
 
-use std::path::{Path, PathBuf};
-
 /// The Pure disc this reads. Its serial is `UCUS-98612`.
 const IMAGE: &str = "data/images/pure-psp-usa.chd";
-
-fn workspace(relative: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(relative)
-}
 
 /// `None`, with a printed reason, when the disc is not here - unless
 /// `OAG_REQUIRE_GAME_DATA=1`, which turns absence into a failure.
 fn image() -> Option<String> {
-    let path = workspace(IMAGE);
-    if path.exists() {
-        return Some(path.to_string_lossy().into_owned());
-    }
-    assert!(
-        std::env::var("OAG_REQUIRE_GAME_DATA").as_deref() != Ok("1"),
-        "{IMAGE} is required but absent"
-    );
-    println!("skipping: {IMAGE} not present");
-    None
+    oag_testdata::image(IMAGE).map(|path| path.display().to_string())
 }
 
 /// The seam, stated as one assertion: Pure's disc opens, and it opens through

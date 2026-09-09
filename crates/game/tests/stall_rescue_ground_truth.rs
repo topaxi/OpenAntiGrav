@@ -64,25 +64,13 @@
 //! wrong, it is that a bouncing craft does not describe the state the counter
 //! watches for.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::race;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// What one lone opponent did over a run.
@@ -156,6 +144,45 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     Some(solo)
 }
 
+/// Every forward circuit on the disc at one difficulty, asserting the sustained
+/// dwell stays under [`race::STALL_TICKS`] on each, and returning the worst
+/// cell it saw so the caller can print it.
+///
+/// Split out so the twelve-by-four matrix is four tests rather than four nested
+/// loops in one - see the tests below for why.
+fn no_circuit_sustains_a_stall_at(difficulty: oag_ai::Difficulty) {
+    let tracks = [
+        "01_Track", "02_Track", "03_Track", "04_Track", "05_Track", "06_Track", "07_Track",
+        "09_Track", "10_Track", "13_Track", "14_Track", "16_Track",
+    ];
+
+    let mut worst: Option<(&str, u32)> = None;
+    for track in tracks {
+        let entry = format!("Data\\Environments\\{track}\\track.vex");
+        let Some(solo) = solo(difficulty, &entry, 12_000) else {
+            return;
+        };
+        println!(
+            "{difficulty:?} {track}: longest stall {} ticks, {} lap(s), {} respawn(s)",
+            solo.longest_stall, solo.lap, solo.respawns
+        );
+        if worst.is_none_or(|(_, longest)| solo.longest_stall > longest) {
+            worst = Some((track, solo.longest_stall));
+        }
+        assert!(
+            solo.longest_stall < race::STALL_TICKS,
+            "{difficulty:?} {track}: a craft sat stopped for {} ticks, past the {} \
+             the rescue promises - a real sustained beaching is back",
+            solo.longest_stall,
+            race::STALL_TICKS
+        );
+    }
+    let (track, longest) = worst.expect("the track list is not empty");
+    println!(
+        "worst cell by sustained dwell at {difficulty:?}: {track}, longest stall {longest} ticks"
+    );
+}
+
 /// **The regression guard for the sustained-stall reading only**: no circuit
 /// on the disc sits below `STALL_SPEED` for `STALL_TICKS` consecutive ticks -
 /// which is a narrower claim than "no craft gets stuck". A craft can still
@@ -172,47 +199,44 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
 /// `crates/game/src/race/tests/respawn.rs`. Laps are printed rather than
 /// asserted on, precisely because a low count here (`05_Track`, `07_Track`,
 /// both at novice) is not this test's business to hide.
+///
+/// # One test per difficulty, asserting exactly what one loop did
+///
+/// The claim is a bound on the **worst** cell of a twelve-circuit by
+/// four-difficulty matrix against a constant, and `max` over a partition is
+/// `max` over the whole - so four per-difficulty tests assert precisely what
+/// the single nested loop asserted, cell for cell.
+///
+/// The reason to split is wall clock. `cargo nextest` parallelises across
+/// tests, one process each, so the matrix in one function ran all 48 solos on a
+/// single core: **158 s** on 2026-09-09, in a suite whose whole wall clock was
+/// 587 s. Twelve solos is about 40 s and the four run side by side, at
+/// identical total CPU.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn no_circuit_sustains_a_stall_past_the_rescue_threshold() {
-    let tracks = [
-        "01_Track", "02_Track", "03_Track", "04_Track", "05_Track", "06_Track", "07_Track",
-        "09_Track", "10_Track", "13_Track", "14_Track", "16_Track",
-    ];
-    let difficulties = [
-        oag_ai::Difficulty::Novice,
-        oag_ai::Difficulty::Skilled,
-        oag_ai::Difficulty::Elite,
-        oag_ai::Difficulty::Ace,
-    ];
+fn no_circuit_sustains_a_stall_past_the_rescue_threshold_at_novice() {
+    no_circuit_sustains_a_stall_at(oag_ai::Difficulty::Novice);
+}
 
-    let mut worst: Option<(oag_ai::Difficulty, &str, u32)> = None;
-    for track in tracks {
-        for difficulty in difficulties {
-            let entry = format!("Data\\Environments\\{track}\\track.vex");
-            let Some(solo) = solo(difficulty, &entry, 12_000) else {
-                return;
-            };
-            println!(
-                "{difficulty:?} {track}: longest stall {} ticks, {} lap(s), {} respawn(s)",
-                solo.longest_stall, solo.lap, solo.respawns
-            );
-            if worst.is_none_or(|(_, _, longest)| solo.longest_stall > longest) {
-                worst = Some((difficulty, track, solo.longest_stall));
-            }
-            assert!(
-                solo.longest_stall < race::STALL_TICKS,
-                "{difficulty:?} {track}: a craft sat stopped for {} ticks, past the {} \
-                 the rescue promises - a real sustained beaching is back",
-                solo.longest_stall,
-                race::STALL_TICKS
-            );
-        }
-    }
-    let (difficulty, track, longest) = worst.expect("the track list is not empty");
-    println!(
-        "worst cell by sustained dwell: {difficulty:?} {track}, longest stall {longest} ticks"
-    );
+/// As [`no_circuit_sustains_a_stall_past_the_rescue_threshold_at_novice`], at skilled.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn no_circuit_sustains_a_stall_past_the_rescue_threshold_at_skilled() {
+    no_circuit_sustains_a_stall_at(oag_ai::Difficulty::Skilled);
+}
+
+/// As [`no_circuit_sustains_a_stall_past_the_rescue_threshold_at_novice`], at elite.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn no_circuit_sustains_a_stall_past_the_rescue_threshold_at_elite() {
+    no_circuit_sustains_a_stall_at(oag_ai::Difficulty::Elite);
+}
+
+/// As [`no_circuit_sustains_a_stall_past_the_rescue_threshold_at_novice`], at ace.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn no_circuit_sustains_a_stall_past_the_rescue_threshold_at_ace() {
+    no_circuit_sustains_a_stall_at(oag_ai::Difficulty::Ace);
 }
 
 /// **The control: the rescue fires nowhere it is not needed.**

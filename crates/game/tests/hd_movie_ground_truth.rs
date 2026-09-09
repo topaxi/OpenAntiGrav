@@ -39,19 +39,7 @@ use oag_game::movie;
 /// decrypted, so the encrypted image beside it is not a fallback. Skipped
 /// rather than failed when absent, the way the other ground-truth tests do it.
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/hdfury-ps3-eu-dec.iso");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
 
 /// The seven archives, so the sweep can find every `.bik` wherever it lives.

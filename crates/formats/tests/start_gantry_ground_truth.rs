@@ -36,7 +36,7 @@
 //! Nothing here places the gantry - slot 8's transform is still unrecovered,
 //! and this test asserts what the model does, not where it stands.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::vex;
 
@@ -64,19 +64,7 @@ const DIGIT_PHASES: &[(f32, &str)] = &[(1.10, "3"), (1.85, "2"), (2.60, "1")];
 const GO_SPAN: (f32, f32) = (3.60, 5.95);
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn gantry() -> Option<Vec<u8>> {

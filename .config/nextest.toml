@@ -1,13 +1,20 @@
 # Test-runner configuration. Scheduling only - nothing here changes whether a
 # test runs or what it asserts.
 #
-# `just test-data` is tail-bound rather than throughput-bound: 2,323 tests over
-# 16 cores finish in about the time the *slowest single test* takes, so what
+# `just test-data` is tail-bound rather than throughput-bound: the tests over 16
+# cores finish in about the time the *slowest single test* takes, so what
 # matters is that the long ones are already running while the short ones fill in
-# around them. Every ground-truth test that walks a disc takes minutes; almost
-# every other test takes milliseconds. Left to the default order the suite ends
-# with a handful of multi-minute tests running alone on an otherwise idle
+# around them. Every ground-truth test that walks a disc takes tens of seconds;
+# almost every other test takes milliseconds. Left to the default order the
+# suite ends with a handful of long tests running alone on an otherwise idle
 # machine.
+#
+# **This file is the second-order fix, and it stops paying once one test is the
+# whole tail.** On 2026-09-09 only 62s of a 587s run was not overlapped with a
+# single 525s test, so nothing schedulable here could have helped: the fix was
+# splitting that test. See `scripts/check-test-budget.py`, which fails the run
+# when a single test passes 300s, and `docs/architecture/workspace-layout.md`
+# for the measurements.
 #
 # Priority runs from -100 to 100 and higher goes first.
 
@@ -21,7 +28,8 @@ priority = 50
 # The longest test in the suite, and the one that sets the floor on
 # `just test-data`'s wall clock: it transcodes 950 frames of the PS2 intro, and
 # `refresh: true` is load-bearing for what it asserts, so the work cannot be
-# cached away. Nothing is gained by starting it late.
+# cached away. Nothing is gained by starting it late. It is also the only entry
+# in `check-test-budget.py`'s `BASELINE`, for the same reason.
 [[profile.default.overrides]]
 filter = 'test(an_uncapped_transcode_still_reports_a_total_to_divide_by)'
 priority = 100

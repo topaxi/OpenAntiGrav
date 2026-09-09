@@ -33,7 +33,7 @@
 //! law is an implementation choice awaiting M3, so pinning its magnitudes here
 //! would pin this project's own arithmetic and call it a measurement.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
@@ -49,20 +49,7 @@ const TICK: f32 = 1.0 / 60.0;
 const APPROACH_SPEED: f32 = 150.0;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn load() -> Option<race::Loaded> {

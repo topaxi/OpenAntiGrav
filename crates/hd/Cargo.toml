@@ -18,6 +18,7 @@ oag-assets.workspace = true
 oag-title.workspace = true
 
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-formats.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true

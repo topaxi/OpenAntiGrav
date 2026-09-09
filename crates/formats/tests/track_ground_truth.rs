@@ -18,7 +18,7 @@
 //! cannot. That argument was made once, by hand, against 40 files. This is the
 //! same argument, executable, so it stays true.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::wad::{self, Compression, Directory};
@@ -42,21 +42,7 @@ const TRACK_FILES: &[&str] = &[
 const MIN_TRACKS: usize = 20;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {

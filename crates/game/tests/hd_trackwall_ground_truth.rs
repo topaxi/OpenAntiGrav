@@ -36,7 +36,7 @@
 //! and, since that table has now been read to its terminator, it doesn't. See
 //! `oag_formats::vex::CLASS_TRACK_WALL_COLLISION`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_formats::collision::{self, CollisionNode, SurfaceKind};
@@ -100,21 +100,7 @@ const APPROACH_SPEED: f32 = 150.0;
 const UPRIGHT: f32 = 0.5;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS3_IMAGE);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PS3_IMAGE)
 }
 
 /// One circuit file, straight out of its archive.
@@ -434,15 +420,29 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
 ///
 /// So a row added back here is now a real regression rather than a known
 /// wrinkle, and is worth reading before waving through.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_hd_grid_lands_on_the_track() {
+///
+/// # One test per archive, asserting exactly what one loop did
+///
+/// The claim is per circuit, so any partition of [`CIRCUITS`] asserts the same
+/// 28 things. The archive is the partition worth choosing because it is already
+/// the axis this file's own constant is written around - the reversed files of
+/// the eight `DATA02` circuits live in `DATA03`, which is what makes a list
+/// built from one archive come back 12 short - and because a test then reads
+/// one archive rather than three.
+///
+/// The reason to split at all is wall clock. `cargo nextest` parallelises
+/// across tests, one process each, so all 28 circuits ran on a single core:
+/// **155 s** on 2026-09-09, in a suite whose whole wall clock was 587 s. Twelve
+/// circuits is about 66 s and the three run side by side, at the same total CPU.
+fn every_grid_in_archive_lands_on_the_track(archive: &str) {
     let Some(image) = image() else { return };
 
     /// `(circuit, file, allowed slots with no collision under them)`.
     const KNOWN_SHORT: &[(&str, &str, usize)] = &[];
 
-    for (_, circuit, file) in CIRCUITS {
+    let mut seen = 0usize;
+    for (_, circuit, file) in CIRCUITS.iter().filter(|(a, _, _)| *a == archive) {
+        seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
@@ -487,4 +487,34 @@ fn every_hd_grid_lands_on_the_track() {
              them, {allowed_short} allowed"
         );
     }
+    // A renamed archive would otherwise leave this test passing over an empty
+    // list, which is how a third of the census stops being checked in silence.
+    assert!(
+        seen > 0,
+        "no circuit in CIRCUITS names {archive}, so this asserted nothing"
+    );
+}
+
+/// The twelve circuits `DATA00.PSARC` holds - see
+/// [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data00_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA00.PSARC");
+}
+
+/// The eight forward circuits `DATA02.PSARC` holds - see
+/// [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data02_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA02.PSARC");
+}
+
+/// The eight reversed twins of `DATA02`'s circuits, which `DATA03.PSARC` holds
+/// instead - see [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data03_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA03.PSARC");
 }

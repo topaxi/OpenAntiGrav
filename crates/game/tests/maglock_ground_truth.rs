@@ -84,17 +84,7 @@ use oag_physics::{Body, Environment, ShipState, maglock};
 const INVERTED_UP_Y: f32 = 0.85;
 
 fn image() -> Option<PathBuf> {
-    let path = repo().join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn repo() -> PathBuf {

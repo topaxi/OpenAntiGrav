@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""A ratchet on how long `just test-data` takes, per test and in total.
+
+`just test-data` went from **3:17 to 9:47** between 2026-08-17 and 2026-09-09
+without one commit that looked wrong. `ai_roll_ground_truth`'s full-grid test
+landed on 2026-09-06 measuring **525 s** - 89% of the suite's entire 587 s wall
+clock on its own - with its cost budgeted honestly in its own doc comment and
+nothing in the gate to object. That is the same failure mode
+`check-file-size.py` was written for: every diff is small, and the thing that
+grows is never anybody's diff.
+
+**Why a per-test ceiling and not just a total.** `cargo nextest` runs every test
+in its own process and parallelises across *tests*, so a matrix crammed into one
+`#[test]` runs on one core while the other fifteen idle. The suite is tail-bound
+to the point that the slowest single test *is* the wall clock: on 2026-09-09
+only 62 s of a 587 s run was not overlapped with `ai_roll`. A total alone tells
+you the suite got slower; the per-test ceiling tells you which test to split,
+which is the whole of the fix.
+
+Splitting is nearly always available and nearly always free, because these are
+matrices - N circuits by M tiers by K seeds - and the assertion usually
+partitions with it. `max` over a partition is `max` over the whole;
+`assert_eq!` against an ordered list filters with the list. See
+`stall_rescue_ground_truth.rs` for the simplest worked example and
+`ai_roll_ground_truth.rs` for the one where the split had to be argued.
+
+# What this checks
+
+- The suite's own wall clock may not exceed `SUITE_CEILING`. This is the gate
+  that does most of the work.
+- A test not in `BASELINE` may not exceed `CEILING`, which catches a single
+  pathological test that somehow fits inside a passing suite.
+- A test in `BASELINE` may not exceed the seconds recorded there, times
+  `TOLERANCE`. It may shrink freely.
+- Once a baselined test fits **comfortably** under `CEILING` - under
+  `CEILING / TOLERANCE` - its row must be deleted, so the baseline can only get
+  shorter. The gap matters: a test sitting either side of the ceiling would
+  otherwise fail one run for having no row and the next for having one.
+
+**A ceiling is lowered, never raised.** Raising one turns a ratchet into a
+record of what happened, which is what the absence of this script already was.
+
+# Why the numbers have slack in them
+
+A nextest duration is **wall-per-test under load**, not isolated CPU: the
+2026-09-09 run's durations sum to 4,639 s against 3,143 s of actual CPU, because
+a test descheduled behind fifteen others still reports the time it sat there. On
+fewer cores, or on a busy machine, the same test honestly reports longer. So
+`CEILING` sits at 180 s against a post-split maximum of 114 s, and `TOLERANCE`
+gives baselined rows a fifth on top.
+
+**This gates gross regressions, not drift.** It is here to catch the next 500 s
+test at review, not to make anyone chase a 12% wobble.
+
+# Running it
+
+    just test-data              # writes target/test-data.log and checks it
+    just check-test-budget PATH # check a log you already have
+
+It is deliberately not in the default `just` gate: that runs `test`, which skips
+every `#[ignore]`d test, so there would be nothing to measure.
+"""
+
+import re
+import sys
+from pathlib import Path
+
+# Seconds a single test may take before it has to be split or baselined.
+#
+# **This is a duration under load, not an isolated cost, and the two differ by a
+# lot.** The six `ai_roll` grid tests measure 95-114 s each run on their own and
+# 154-321 s in a full `test-data` run, because 4,100 other tests are competing
+# for the same sixteen cores. The factor is not fixed either - it fell with the
+# suite's total CPU, and the slowest test went from 321 s to 184 s without that
+# test changing at all. So this is set from the measured full-run maximum with
+# room over it, not from an isolated timing; the tail before the 2026-09-09
+# split was 525 s.
+CEILING = 300.0
+
+# The suite's own wall clock, from nextest's `Summary` line, and the gate that
+# does most of the work: a test can only be slow at the suite's expense.
+# Measured at 344 s on 2026-09-09, against 587 s before that day's work, so this
+# leaves about a third of headroom - enough that ordinary growth does not trip
+# it and little enough that a second 500 s test does.
+SUITE_CEILING = 450.0
+
+# How far over a recorded baseline a run may land before it counts as growth
+# rather than as machine noise. See "Why the numbers have slack in them".
+TOLERANCE = 1.2
+
+# Tests that cannot currently be brought under `CEILING`, with the seconds they
+# measured on the day they were baselined and why they are here. A row is
+# deleted the moment its test fits.
+BASELINE: dict[str, float] = {
+    # Empty, and worth keeping that way. The one candidate is
+    # `ps2_source_ground_truth`'s uncapped transcode - 950 frames of the PS2
+    # intro, with `refresh: true` load-bearing for what it asserts, so the work
+    # cannot be cached away - and at 160 s in the 2026-09-09 run it does not
+    # need a row.
+}
+
+# `PASS [   1.234s] (  12/4101) crate::binary test_name`
+RESULT = re.compile(
+    r"^\s+(?:PASS|FAIL|TRY \d+ FAIL)\s+\[\s*([0-9.]+)s\]\s+\(\s*[\d/ ]+\)\s+(\S+)\s+(\S+)"
+)
+SUMMARY = re.compile(r"^\s*Summary\s+\[\s*([0-9.]+)s\]")
+
+
+def measure(log: str) -> tuple[dict[str, float], float | None]:
+    """The slowest run of each test in `log`, and the suite's wall clock."""
+    durations: dict[str, float] = {}
+    wall = None
+    for line in log.splitlines():
+        if found := RESULT.match(line):
+            seconds, binary, name = found.groups()
+            test = f"{binary} {name}"
+            durations[test] = max(durations.get(test, 0.0), float(seconds))
+        elif found := SUMMARY.match(line):
+            wall = float(found.group(1))
+    return durations, wall
+
+
+def check(durations: dict[str, float], wall: float | None) -> list[str]:
+    failures = []
+    for test, seconds in sorted(durations.items(), key=lambda kv: -kv[1]):
+        allowed = BASELINE.get(test)
+        if allowed is None:
+            if seconds > CEILING:
+                failures.append(
+                    f"{test}\n"
+                    f"    took {seconds:.0f}s, over the {CEILING:.0f}s ceiling.\n"
+                    f"    Split it: nextest parallelises across tests, so a matrix in one\n"
+                    f"    #[test] runs on one core. See this script's own doc comment."
+                )
+        elif seconds > allowed * TOLERANCE:
+            failures.append(
+                f"{test}\n"
+                f"    took {seconds:.0f}s against a baseline of {allowed:.0f}s "
+                f"(+{TOLERANCE:.0%} slack).\n"
+                f"    A baseline is lowered, never raised - find what grew."
+            )
+        elif seconds <= CEILING / TOLERANCE:
+            # Not merely `<= CEILING`: a test that lands either side of the
+            # ceiling from run to run would fail one for having no row and the
+            # next for having one.
+            failures.append(
+                f"{test}\n"
+                f"    took {seconds:.0f}s, now clear of the {CEILING:.0f}s ceiling.\n"
+                f"    Delete its BASELINE row in scripts/check-test-budget.py."
+            )
+
+    if wall is not None and wall > SUITE_CEILING:
+        slowest = sorted(durations.items(), key=lambda kv: -kv[1])[:5]
+        table = "\n".join(f"      {s:6.0f}s  {t}" for t, s in slowest)
+        failures.append(
+            f"the suite took {wall:.0f}s, over the {SUITE_CEILING:.0f}s ceiling.\n"
+            f"    Even with every test under its own ceiling the total can drift up as\n"
+            f"    tests are added. Re-profile the tail before adding more:\n{table}"
+        )
+    return failures
+
+
+def main() -> int:
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else "target/test-data.log")
+    if not path.exists():
+        print(
+            f"no run to check at {path} - `just test-data` writes it",
+            file=sys.stderr,
+        )
+        return 1
+
+    durations, wall = measure(path.read_text(errors="replace"))
+    if not durations:
+        print(f"{path} holds no nextest results", file=sys.stderr)
+        return 1
+
+    failures = check(durations, wall)
+    if failures:
+        print(f"test budget, from {path}:\n", file=sys.stderr)
+        for failure in failures:
+            print(f"  {failure}\n", file=sys.stderr)
+        return 1
+
+    slowest = max(durations.values())
+    print(
+        f"test budget: {len(durations)} tests, slowest {slowest:.0f}s, "
+        f"suite {wall:.0f}s"
+        if wall
+        else f"test budget: {len(durations)} tests, slowest {slowest:.0f}s"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

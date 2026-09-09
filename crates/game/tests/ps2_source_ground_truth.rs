@@ -43,7 +43,7 @@
 //! stays that way. The load report still names any model whose slots did not
 //! all fill rather than guessing at one, for whichever half regresses.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_gameplay::input::Button;
 use oag_pulse as pulse;
@@ -62,21 +62,7 @@ const PSP_IMAGE: &str = "pulse-psp-usa.chd";
 const TICKS: u32 = 60;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// A race off `name`, with the defaults, and its report printed.

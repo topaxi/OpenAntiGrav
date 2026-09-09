@@ -23,7 +23,7 @@
 //! given HD's table, opens seven PSARC archives and answers a read by path -
 //! which nothing above `oag-assets` had done before this crate existed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_hd::{TITLE, archives, names, race};
 
@@ -31,21 +31,7 @@ use oag_hd::{TITLE, archives, names, race};
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS3_IMAGE);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PS3_IMAGE)
 }
 
 fn opened() -> Option<oag_assets::Archives> {

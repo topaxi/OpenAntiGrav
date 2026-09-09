@@ -50,7 +50,7 @@
 use oag_game::{catalogue, race};
 use oag_gameplay::input::Button;
 use oag_title::ZoneCircuit;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// One image, or `None` with a printed reason when it is not present.
 ///
@@ -58,19 +58,7 @@ use std::path::{Path, PathBuf};
 /// `just test-data` on a populated checkout wants: a skipped assertion and a
 /// passing one read identically in the summary otherwise.
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Every `PI_Track` a source declares as raceable, off the disc's own plugin

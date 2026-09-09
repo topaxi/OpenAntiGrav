@@ -696,6 +696,7 @@ regression.
 
 **Landing the LeachBeam turned
 `oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
+(six `a_full_grid_of_*_arms_no_fewer_rolls_than_*` tests since 2026-09-09)
 red**, and nothing about the barrel roll had moved. Recorded here because the
 next weapon to join `oag_gameplay::pickup::IMPLEMENTED` will do the same thing to
 whatever statistic is next-smallest.

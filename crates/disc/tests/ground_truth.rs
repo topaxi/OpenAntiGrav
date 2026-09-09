@@ -16,24 +16,22 @@
 //! Tests skip with a printed message when their image is absent, rather than
 //! failing, so a partially populated `data/images/` is usable.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use oag_disc::{DiscImage, Platform};
 
+/// **`exact`, not `image`.** This file's whole subject is the container: it
+/// walks a CHD and its own extracted `.iso` and diffs the two listings.
+/// `oag_testdata::image` would substitute the extract for the CHD when one is
+/// present, and the comparison would be a file against itself - green, and
+/// asserting nothing.
+///
+/// It also gains the `OAG_REQUIRE_GAME_DATA` guard it never had: this was one
+/// of the copies that skipped silently even when a run had declared the data
+/// present.
 fn image(name: &str) -> Option<PathBuf> {
-    // Tests run with the crate as the working directory.
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        Some(path)
-    } else {
-        println!("skipping: {} not present", path.display());
-        None
-    }
+    oag_testdata::exact(name)
 }
 
 #[test]

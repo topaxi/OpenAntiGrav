@@ -40,7 +40,7 @@
 //! thing: no ship ever showed a duplicate name, so the whole roster should be
 //! a byte-for-byte no-op under the new mechanism, checked rather than assumed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::{vex, wad};
 use oag_render::mesh;
@@ -48,20 +48,7 @@ use oag_render::mesh;
 const PS2_IMAGE: &str = "pulse-ps2-eu.chd";
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS2_IMAGE);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PS2_IMAGE)
 }
 
 /// The nested set's own directory, parsed independently of

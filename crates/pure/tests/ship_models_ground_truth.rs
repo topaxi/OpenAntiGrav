@@ -41,8 +41,6 @@
 //! See `docs/formats/pure-status.md` and `crates/pure/src/race.rs`'s `ships`
 //! module.
 
-use std::path::{Path, PathBuf};
-
 use oag_formats::fexml;
 
 const PURE_USA: &str = "data/images/pure-psp-usa.chd";
@@ -65,25 +63,10 @@ const CORE_TEAMS: &[&str] = &[
     r"Data\Ships\Triakis",
 ];
 
-fn workspace(relative: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(relative)
-}
-
 /// `None`, with a printed reason, when the disc is not here - unless
 /// `OAG_REQUIRE_GAME_DATA=1`, which turns absence into a failure.
 fn image(name: &str) -> Option<String> {
-    let path = workspace(name);
-    if path.exists() {
-        return Some(path.to_string_lossy().into_owned());
-    }
-    assert!(
-        std::env::var("OAG_REQUIRE_GAME_DATA").as_deref() != Ok("1"),
-        "{name} is required but absent"
-    );
-    println!("skipping: {name} not present");
-    None
+    oag_testdata::image(name).map(|path| path.display().to_string())
 }
 
 /// Every `<PI_Team>` location the disc's own plugin definition declares.

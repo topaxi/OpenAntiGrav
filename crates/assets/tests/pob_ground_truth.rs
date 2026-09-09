@@ -34,7 +34,7 @@
 //! What is asserted is that every file agrees with the *shape* the layout
 //! claims.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_assets::Archive;
 use oag_formats::pob::{self, ChannelMode, Emitter, ParticleSystem};
@@ -54,21 +54,7 @@ const HD_SYSTEMS: usize = 88;
 const HD_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Every `SYSP` blob in `archive`, decompressed, in directory order.

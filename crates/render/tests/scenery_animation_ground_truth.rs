@@ -32,7 +32,7 @@
 //!    All 393 payloads decode and tile exactly, and the renderer plays them.
 //!    See `docs/rendering/scenery-animation.md`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::vex;
 use oag_render::mesh::{self, ANIM_TRACK_LIMIT, Model, NODE_ANIM_LIMIT};
@@ -50,20 +50,7 @@ const CLASS_ANIMATION_TRIGGER: u32 = 0x3dc;
 const CIRCUITS: &[u32] = &[1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 16];
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn u16_at(b: &[u8], at: usize) -> u16 {
