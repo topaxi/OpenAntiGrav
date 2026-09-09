@@ -61,6 +61,7 @@ out to be wrong.
 | [0048](0048-eu-is-the-psp-pulse-re-target-of-record.md) | `psp-pulse-eu` is the Ghidra target of record; `psp-pulse-usa` corroborates | Accepted |
 | [0049](0049-race-records-are-a-chosen-schema-captured-outside-the-tick.md) | Race records are a chosen schema, captured outside the tick, at two sites | Accepted |
 | [0050](0050-format-crates-split-by-format-family.md) | Format crates split by format family, and why that is not the console axis | Accepted; extends ADR-0022 |
+| [0051](0051-the-composition-root-splits-below-itself.md) | The composition root splits below itself, and the build-time argument does not survive a second time | Accepted; extends ADR-0050 |
 
 ## Format
 
