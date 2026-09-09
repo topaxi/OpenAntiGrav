@@ -50,10 +50,11 @@
 
 [strings]
 
-# The MAIN menu: its own title and its four rows.
+# The MAIN menu: its own title and its five rows.
 OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
 OAG_MENU_RACE = "RACE"
 OAG_MENU_REMIX = "REMIX"
+OAG_MENU_RECORDS = "RECORDS"
 OAG_MENU_OPTIONS = "OPTIONS"
 OAG_MENU_QUIT = "QUIT"
 
@@ -77,6 +78,12 @@ OAG_RACE_START = "START"
 OAG_REMIX_PAGE_TITLE = "RACE REMIX"
 OAG_REMIX_TRACK_TITLE = "TRACK TITLE"
 OAG_REMIX_CRAFT_TITLE = "CRAFT TITLE"
+
+# RECORDS' own title - its MODE and TRACK rows reuse OAG_RACE_MODE/
+# OAG_RACE_TRACK above, and BACK reuses OAG_MENU_BACK, the same sharing RACE
+# REMIX's own page already does. See `docs/architecture/menus.md`'s RECORDS
+# section for what the page draws below these two rows.
+OAG_RECORDS_PAGE_TITLE = "RACE RECORDS"
 
 # OPTIONS and its five submenu rows. Reused as the *target* page's own title
 # too - `OAG_OPTIONS_DISPLAY` covers both the OPTIONS row that opens DISPLAY

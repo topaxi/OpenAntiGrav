@@ -580,6 +580,16 @@ impl Session {
             // rather than beside `session::pilot_editor`'s other rows.
             let axis_preview =
                 pilots::axis_preview_for(&stage.menu, self.shell.as_ref().map(|s| &s.strings));
+            // The RECORDS page's own per-class table - `None` off any page
+            // but RECORDS, or before a shell has loaded, both of which
+            // `crate::records_page::table_for` already answers with an
+            // empty table rather than a missing one. See that function's
+            // own doc.
+            let records_table = self
+                .shell
+                .as_ref()
+                .and_then(|shell| crate::records_page::table_for(&stage.menu, shell, &self.records))
+                .unwrap_or_default();
             stage.render(
                 &self.gpu,
                 &mut encoder,
@@ -590,6 +600,7 @@ impl Session {
                 self.suspended_race.is_some(),
                 binding_prompt.as_deref(),
                 axis_preview.as_deref(),
+                &records_table,
             )?;
         }
 

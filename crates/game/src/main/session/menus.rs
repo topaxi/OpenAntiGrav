@@ -40,7 +40,12 @@ use super::{Session, remix_menu};
 /// maintainer decision. See that function's doc comment and
 /// `docs/architecture/menus.md` for why offering it here too would diverge
 /// wider than asked, even though it is what Pure's own front end does.
-fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
+///
+/// `pub(crate)` rather than private: `crate::records_page` reuses this
+/// verbatim for the RECORDS page's own per-class rows, so the two pages
+/// cannot silently disagree about which classes exist - see that module's
+/// own doc.
+pub(crate) fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
     let named: Vec<&'static str> = match title.race.speed_classes {
         Some(ladder) => ladder
             .selectable()
