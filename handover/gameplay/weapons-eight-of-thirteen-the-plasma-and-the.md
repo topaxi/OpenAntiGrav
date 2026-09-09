@@ -413,12 +413,18 @@ which is the whole point of the weapon.
   weapon - **not** something the wind-up introduced, since each bolt still
   releases one second after its own press and they stay staggered. Recorded so
   the next person driving weapons with `--give` does not read it as new.
-- **A charging bolt draws no glow on the nose.** The original parents its
-  `WO_PLASMA_HEAD` instance to the *craft's* weapon node for the wind-up and
-  re-parents it to the bolt at release; this engine attaches the effect at
-  release only, because `Race::advance_projectile_flares` follows projectiles
-  and a held bolt has no position of its own to follow. Recorded rather than
-  approximated.
+- **The charging glow rides the nose already; its ramp does not.** Checked
+  rather than assumed, and the first draft of this row had it backwards.
+  `Race::flare_effect_for` maps `Weapon::Plasma` to `WO_PLASMA_HEAD` and
+  `advance_projectile_flares` follows *every* live projectile's position - and
+  a charging bolt is a live projectile reseated on the craft's nose every
+  tick, so the glow sits on the nose for the wind-up and leaves with the bolt,
+  which is what the original's re-parenting does, arrived at from the other
+  end. What is **not** ported is `Plasma_UpdateCharge`'s
+  `(1.0 - remaining) * 0.75` scale: the glow does not grow as the shot
+  charges. That needs a per-instance scale on a *riding* flare, which
+  `advance_one_flare` does not currently carry - `Stage::rescale` exists (the
+  Quake uses it) but the flare path never calls it.
 - **`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
   site.** It sits immediately before the plasma blast's own models in the same
   `.rodata` run (`0x08a7c190`), found while reading `PlasmaBlast_Construct`. A

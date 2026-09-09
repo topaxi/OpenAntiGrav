@@ -62,12 +62,22 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// `Plasma_Launch` (`0x0885bf84`) re-parents it to the bolt at release. That
 /// is the charge-up glow: for the wind-up second the instance sits on the
 /// nose and `Plasma_UpdateCharge` (`0x0885c170`) scales it by the charge
-/// fraction. **This engine does not draw the wind-up glow** - the effect is
-/// attached at release, where the bolt is, because
-/// [`Race::advance_projectile_flares`] follows projectiles and a charging
-/// bolt has no position of its own to follow. Corrected 2026-09-09; the
-/// earlier "one instance, at the bolt's own position" reading was written
-/// before `Plasma_Init`'s `+0x4c`/`+0x50` charge fields were read.
+/// fraction.
+///
+/// **This engine gets the riding half of that for free, and does not get the
+/// scale ramp.** [`Race::advance_projectile_flares`] attaches this to every
+/// live projectile whose kind maps here and follows its position each tick;
+/// a charging bolt *is* a live projectile, reseated on the craft's nose every
+/// tick by `Projectiles::advance`'s charging branch, so the glow rides the
+/// craft through the wind-up and the bolt after release - which is what
+/// re-parenting does in the original, arrived at from the other end. What is
+/// **not** ported is `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`
+/// scale, so the glow does not grow as the shot charges; it is played at
+/// [`psys::Stage`]'s neutral scale throughout.
+///
+/// Corrected 2026-09-09; the earlier "one instance, at the bolt's own
+/// position" reading was written before `Plasma_Init`'s `+0x4c`/`+0x50`
+/// charge fields were read.
 pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
 
 /// The explosion a plasma bolt plays when it goes off.
