@@ -264,28 +264,20 @@ file does not need to carry its own.
   missing capture prints the `verification/scenarios/*.inputs` command that
   regenerates it and the test returns early). Verified both ways: all five skip
   cleanly with `data/traces/` absent, and fail loudly under
-  `OAG_REQUIRE_GAME_DATA=1`. **Two of them are flaky rather than solid, and both are in
-  `ps2_source_ground_truth`**:
-  `an_uncapped_transcode_still_reports_a_total_to_divide_by` failed once and
-  passed on the re-run, panicking in *ffprobe duration parsing* ("invalid float
-  literal"); `a_transcode_reports_its_frames_as_it_encodes_them` did the same on
-  2026-08-16 - one failure in a full `--run-ignored all` sweep, then a pass
-  alone and a pass in a second full sweep of the identical tree. Neither has
-  been diagnosed. **Suspect the transcode's environment, and re-run before
-  believing either**; a single red in that file is not a signal about the code
-  under test. **2026-08-17 adds the shape of it, still not the cause: the
-  failure tracks machine *load*, not a cold cache.** The same test failed again
-  in a full sweep - panicking at `ps2_source_ground_truth.rs:657` on
-  `movie.frames` being `None`, i.e. `.expect("a picture")` - and then passed
-  **cache-cold and alone in 117s** after `/tmp/oag-ps2-progress-ground-truth`
-  was deleted outright, so an absent cache is not the trigger. The transcode
-  self-parallelises (242s user over 117s wall), which is why it is the test that
-  suffers when 16 cores are already full: it took 489s contended and 135s
-  scheduled first. Reproducing it means reproducing the contention, not the
-  cache state. Note also that `refresh: true` is load-bearing there - the
-  assertion is about what a *transcode* reports, so it re-encodes 950 frames
-  every run whatever is cached, and the "(once; cached after this)" line it
-  prints is misleading about itself. Separately, and still true, **one failure is the
+  `OAG_REQUIRE_GAME_DATA=1`. **Two of them were flaky rather than solid, both in
+  `ps2_source_ground_truth`, and both are fixed as of 2026-09-09
+  (`33913eb9`).** The cause, undiagnosed across four separate investigations
+  between 2026-08-16 and 2026-09-09: the two transcode tests shared one
+  deterministic scratch directory, so `nextest`'s own parallelism had them
+  writing and reading a single set of files. Every observation those
+  investigations recorded follows from it - a failure in a full sweep then a
+  pass alone, `movie.frames` being `None`, `ffprobe` "invalid float literal"
+  and "Invalid data found", and the correlation with machine load, which only
+  changed the interleaving. See `transcode_scratch`'s doc comment in
+  `crates/game/tests/ps2_source_ground_truth.rs`. **The lesson worth keeping is
+  the shape**: a red that moves with load, passes alone, and resists diagnosis
+  is a shared-path race before it is a starvation story. Separately, and still
+  true, **one failure is the machine rather than the code**:
   machine rather than the code**:
   `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
   out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
@@ -791,48 +783,14 @@ where it was and `RACES` went 6 -> 40 (about 110 s in debug).
 look identical from the assertion message, and this suite has several bounds
 whose sample was sized against a field that has since changed.
 
-**`oag-game::ps2_source_ground_truth an_uncapped_transcode_still_reports_a_total_to_divide_by`
-fails under load and passes alone, and it looks like a real regression when it
-does.** 2026-09-08. It transcodes the PS2's loose intro through ffmpeg, and on a
-quiet machine it takes about 100 seconds and passes. Run inside a full
-`just test-data` alongside `craft_sticking_ground_truth`'s 8-craft, 7,200-tick
-simulation it took **254 seconds and failed**, panicking on
-`movie.frames.as_ref().expect("a picture")` - it produced no frames at all
-rather than the wrong ones. Verified in both directions on the same tree: failed
-twice under load, passed alone at 103 s.
-
-**Reproduced a third time on 2026-09-09, at a much higher load, which sharpens
-the "tracks load" reading into something close to a dose-response.** Four
-members were each running their own `just` and `just test-data` in separate
-worktrees: 16 cores at load average **40**, six concurrent `nextest` processes.
-The same test took **558 s and failed** with the identical `expect("a picture")`
-panic - against 254 s under the 2026-09-08 load and ~100 s quiet - then
-**passed alone at 121 s** on the same tree minutes later. Three points now line
-up monotonically (100 s pass, 254 s fail, 558 s fail), so whatever the mechanism
-is, wall-clock starvation predicts it. The merge under test touched a lap-count
-constant and the audio spatial law; neither goes anywhere near
-`oag_game::movie`.
-
-**The mitigation now exists, so a recurrence means something new.**
-`.claude/skills/oag-drive/SKILL.md` serialises every member's gate through
-`flock "$HOME/.cache/oag/gate.lock"`, precisely so concurrent `test-data` runs
-stop overlapping. This test is the suite's canary for that contention - it is
-the longest test and `.config/nextest.toml` gives it priority 100 so it starts
-first, which is also what makes it the first to starve. If it goes red again
-*with* the lock held, that is a genuinely new signal rather than this trap.
-
-**So a red here is not automatically yours.** Before chasing it, re-run it on its
-own:
-
-```sh
-OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-    an_uncapped_transcode_still_reports_a_total_to_divide_by
-```
-
-The underlying cause is unfixed and not diagnosed past "starves": whether the
-encode has an internal deadline, or ffmpeg is being killed, or the probe's
-duration estimate degrades, has not been read. What is established is that the
-failure tracks machine load rather than the tree.
+**Both PS2 transcode ground-truth tests shared one scratch directory, and it
+read for three days as "fails under load".** Fixed 2026-09-09 in `33913eb9`;
+`transcode_scratch`'s own doc comment in
+`crates/game/tests/ps2_source_ground_truth.rs` carries the mechanism. Kept here
+only for the general lesson: **a deterministic temp path shared by two tests
+races under `nextest`'s own parallelism, with no second worktree and no load
+required** - and the load correlation that follows from it is a symptom
+convincing enough to survive three separate investigations.
 
 **A `Data\Psys\<NAME>.POB` load-path string search discriminates for weapon
 and debug particle-effect names on HD's executable, and is blind to
