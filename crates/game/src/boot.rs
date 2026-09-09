@@ -1089,12 +1089,12 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         languages,
         placements,
     );
+    frontend.set_menu_skin(menu_skin);
 
-    // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's
-    // `Skin.xml` places widgets in a 640x448 grid rather than the PSP's
-    // 480x272, so every widget on that disc landed off the bottom-right of a
-    // screen a third too small - which is why its `Show Logo` drew nothing at
-    // all. Set from the archives' own platform rather than sniffed: the layout
+    // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
+    // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
+    // on that disc landed off the bottom-right of a screen a third too small, leaving
+    // `Show Logo` blank. Set from the archives' own platform, not sniffed - the layout
     // resolved one to open them. See `crate::frontend::Space`.
     frontend.set_space(space);
     report.push(format!(

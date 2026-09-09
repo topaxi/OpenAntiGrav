@@ -723,8 +723,9 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   `*_Definition.xml` files instead. All twelve have now been read for row
   geometry: 19 of the 33 `<Menu>` widgets across them say `y="45"` and no other
   value reaches four, so `MenuSkin::first_row_y` is `Some(45.0)` at confidence
-  80. Row *pitch* is still `None` - one authored `gap` is not a measurement, and
-  the capture below never put a cursor two rows apart to measure one off.
+  80. Row *pitch* on `MenuSkin` itself is still `None` - one authored `gap` is
+  not a measurement - but see the `Language Selection` pitch measured below,
+  on a different screen than this bullet's own capture.
 - **`background` and `selected`, filled in 2026-08-25.** A capture of `Main
   Menu` itself (`pure-psp-usa.chd`, PPSSPP 1.20.4) found two things this build
   drew wrong rather than merely incompletely: the screen is solid white, not
@@ -736,6 +737,50 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   `TitleColor`/`DesignColor`/`TextColor`/`FrameLineColor`. See
   `oag_pure::frontend::MENU_SKIN`'s own `background`/`selected` field
   comments.
+- **`Language Selection` has no highlight band at all, confirmed 2026-09-09.**
+  A second capture, this screen rather than `Main Menu` (`pure-psp-usa.chd`,
+  PPSSPP 1.20.4, 2x native under Xvfb, row 0 then row 1 selected in turn)
+  finds no translucent `Fill` anywhere near the selected row - only a plain
+  colour swap. Sampled at the glyph's own darkest pixel: selected-row ink is
+  `rgb(21-22,173-174,208-209)`, pixel-for-pixel `MENU_SKIN.selected`
+  (`0xFF16AED1`); unselected-row ink is `rgb(137-138,214,232)`, pixel-for-pixel
+  `TextColor` (`0xFF88D6E8`). This is a second, independent confirmation of
+  `selected` (first measured on `Main Menu`, above) and it settles what a
+  1,142-line front-end draw module had been guessing at with an unmeasured
+  translucent `Fill` since 2026-08-18: there was never a rect to position,
+  because the real screen draws no such rect. `crate::frontend::draw::
+  draw_language_selection` (`oag-game`) now swaps the selected row's ink to
+  `MENU_SKIN.selected` and draws no `Fill`, gated on the title carrying a
+  *static* measured `selected` (`selected_pulse_period_secs.is_none()`) so
+  Pulse's own picker - whose `selected` pulses toward white on a clock this
+  build does not yet drive here - keeps its prior, unverified-but-unbroken
+  `Fill`-plus-row-colour behaviour untouched.
+
+  The same capture shows a real selection cue this build still does not draw:
+  a `6x11` pink (`0xFFED4796`, `Intro Screen->ArrowSelect`'s own
+  `MenuHighLightArrowColor`) arrow image sitting to the selected row's left,
+  `Data\FE\Images\FETextures.mip` at `U=53 V=0`. Left unwired: the widget's
+  own definition carries `x="0" y="0"`, so its real per-row runtime placement
+  is not authored anywhere this build reads and is not measured either - a
+  guessed offset would be exactly the invented-stand-in this project's own
+  rule against un-evidenced visuals exists to prevent.
+
+  The same two captures also measured `Language Selection`'s own row pitch -
+  a real two-row sample, which `first_row_y`'s own `MainMenu_Definition.xml`
+  reading (above) never had. The selected row's ink top moves from native
+  y=53 to y=71 between row 0 and row 1, and the arrow glyph's top moves from
+  y=50.5 to y=68.5 - the same **18px**, independently, from two different
+  features. `Language Selection`'s own `Menu` widget authors `y="46"
+  font="Default" scale="FEGlobals->MenuScale"` (`MenuScale` = 1.15, the `Pure`
+  column of the table above), so this build's `font_line_height("Default") *
+  scale` comes out to `13.0 * 1.15 = 14.95`, about 17% short of the measured
+  18. **Not corrected here**: `font_line_height`'s `13.0` fallback is shared
+  by every unrecognised font role on both titles, and one screen's pitch
+  cannot separate "the line height itself is wrong" from "a `gap` sits on top
+  of a right one" from a single sample. Also unexplained: authored `y="46"`
+  against measured ink-top `y="53"` (native), a 7px delta that reads as font
+  ascent (baseline vs cap-height) rather than a second pitch error, but is not
+  measured as one.
 - **No `LeftLayer` element anywhere.** Its `transition` durations are authored
   (0, 0.25, 0.3, 0.5, against Pulse's 0, 0.2, 0.5, 0.7) but what they attach to
   is unread.

@@ -750,48 +750,66 @@ impl Frontend {
         let color = argb_to_rgba(menu.map_or(0xffff_ffff, |m| m.color));
         let row = font_line_height(menu.map_or("Default", |m| m.font.as_str())) * scale;
 
+        // The selected row's own ink, when this title carries a *static*
+        // measured one. `selected_pulse_period_secs` being `Some` (Pulse's
+        // shape: its own ink brightens toward white and back on a clock, see
+        // `oag_title::MenuSkin::selected_pulse_period_secs`) is deliberately
+        // excluded here rather than approximated - a static swap would be a
+        // different, invented animation, not this title's measured one - so
+        // that title keeps its pre-existing fallback below untouched.
+        let static_selected = self
+            .menu_skin
+            .filter(|skin| skin.selected_pulse_period_secs.is_none())
+            .and_then(|skin| skin.selected);
+
         for (index, language) in self.languages.iter().enumerate() {
             let y = menu_y + index as f32 * row;
             let selected = index == self.selected;
-            if selected {
+            let row_color = match (selected, static_selected) {
+                (true, Some(measured)) => argb_to_rgba(measured),
+                _ => color,
+            };
+            // **No highlight `Fill` when a measured selected ink is in
+            // hand.** A real capture of Pure's own `Language Selection`
+            // (PPSSPP, `pure-psp-usa.chd`, 2x native) has no translucent band
+            // at all: row 0 (`English`) selected samples solid
+            // `rgb(21-22,173-174,208-209)` glyph ink, pixel-for-pixel
+            // `MENU_SKIN.selected` (`0xFF16AED1`), against `rgb(137-138,214,
+            // 232)` (`TextColor`, `0xFF88D6E8`) on the unselected rows either
+            // side - no third colour anywhere in the row's own band. The old
+            // `Fill` here (`[menu_x - 6.0, y - 4.0, 220.0, row - 4.0]`, both
+            // `-4.0`s an unmeasured guess, `git blame` `918f78215`) was
+            // therefore never a mispositioned highlight to begin with: this
+            // title's real picker never draws one, so there was no rect to
+            // measure. See `docs/formats/pure-status.md`'s `Language
+            // Selection has no highlight band at all` finding.
+            //
+            // The same capture also shows a real selection cue this build
+            // still does not draw: a `6x11` pink (`0xFFED4796`,
+            // `MenuHighLightArrowColor`) `ArrowSelect` image, authored on
+            // `Intro Screen` (`Data\FE\Images\FETextures.mip`), sitting to
+            // the selected row's left. Left unwired - its runtime placement
+            // (offset from the row, not the `x="0" y="0"` the widget's own
+            // definition carries) is not measured, and a guessed position
+            // would be exactly the kind of invented stand-in this project's
+            // own rule against un-evidenced visuals exists to prevent.
+            //
+            // **Only when a static measured colour exists.** A title with no
+            // `menu_skin` (every test fixture in this file) or one whose
+            // `selected` pulses (Pulse) keeps the old `Fill`-plus-row-colour
+            // fallback below exactly as it was - unverified against a real
+            // Pulse capture, so left unchanged rather than guessed at.
+            if selected && static_selected.is_none() {
                 out.push(Draw::Fill {
                     rect: [menu_x - 6.0, y - 4.0, 220.0, row - 4.0],
                     color: [0.37, 0.86, 0.96, 0.35],
                 });
             }
-            // **Not recoloured to white when selected.** It used to be, and
-            // that was a real, reproducible bug rather than a stylistic
-            // choice: Pure's picker sits on a white backdrop
-            // (`insert_backdrop_parent_fills` above), and opaque white text is
-            // invisible there regardless of which row it is - proven by
-            // forcing the selected colour to red and watching the same row
-            // appear. It looked row-0-specific at first only because row 0 is
-            // what a fresh boot lands on with no input; selecting any other
-            // row and inspecting its own `Draw::Text` (not just the row that
-            // happened to be tried) shows the same blank text, on both
-            // `pure-psp-usa.chd` and `pure-psp-eu.chd`'s row order. Pulse's
-            // picker never showed it because its own picker backdrop is not
-            // white, so white-on-white never arises there - not because its
-            // draw loop treats index 0 specially, which it does not either.
-            //
-            // **The replacement is the row's own unselected colour, not a new
-            // invented one - and not yet the measured one either.**
-            // `oag_pure::frontend::MENU_SKIN.selected` *does* carry a real,
-            // captured value for Pure (`0xFF16AED1`, confidence 65 - darker
-            // and more saturated than the unselected `TextColor`, the
-            // opposite direction from Pulse's own "brightens toward white").
-            // This function has no access to that table - `Frontend` carries
-            // no `oag_title::MenuSkin` today - so wiring it in is future
-            // work, not done here under this pass's deadline. Falling back to
-            // the row's own colour is the safe interim choice precisely
-            // because it needs no new, unverified guess: every row already
-            // proves that colour legible against both the white backdrop and
-            // the highlight `Fill`, selected or not.
             out.push(Draw::Text {
                 x: menu_x,
                 y,
                 scale,
-                color,
+                color: row_color,
                 border: None,
                 align,
                 text: language.native_name.clone(),
