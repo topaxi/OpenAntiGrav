@@ -208,6 +208,27 @@ fn medal_label(medal: records::Medal) -> &'static str {
     }
 }
 
+/// The RECORDS page's own `TIME` column, one call per class row - see
+/// `crate::records_page::table_for`, the only caller. `show_total` picks
+/// [`records::Record::best_total_ticks`] over
+/// [`records::Record::best_lap_ticks`] for a mode that finishes; a row with
+/// nothing recorded yet, or whose recorded field is the wrong one for this
+/// mode (an unfinished Speed Lap/Zone row has no total), draws `-` rather
+/// than a formatted zero - the same "no time" convention `draw_list` already
+/// uses for a craft that never crossed.
+#[must_use]
+pub fn record_table_value(record: Option<&records::Record>, show_total: bool) -> String {
+    let ticks: Option<u64> = if show_total {
+        record.and_then(|row| row.best_total_ticks)
+    } else {
+        record.and_then(|row| row.best_lap_ticks).map(u64::from)
+    };
+    match ticks {
+        Some(ticks) => format_lap_time(ticks, Precision::Hundredths),
+        None => "-".to_string(),
+    }
+}
+
 /// How many extra footer lines [`draw_list`] owes [`PersonalBest`] - zero,
 /// one or two, depending on which of its two rows have anything to show.
 /// Read before the panel height is fixed, so a race with no stored lap yet

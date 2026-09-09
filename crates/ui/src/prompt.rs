@@ -651,6 +651,63 @@ pub fn axis_preview_draw(menu: &Menu, skin: &Skin, text: &str) -> Draw {
     }
 }
 
+/// One row of the RECORDS page's own per-class table - see
+/// `oag_game::records_page`'s own module doc for what draws this and why.
+///
+/// **Continues the page's own row pitch past its last real entry, rather
+/// than the single-line note slot [`axis_preview_draw`] draws in.** `index`
+/// is 0-based within the table, not within the page - this reads the same
+/// [`Menu::visible_rows`] figure [`axis_preview_draw`] does for "how many
+/// real rows are showing" and adds `index` to it, so the table's first line
+/// lands exactly where a fourth row would have if the page had one. Drawn at
+/// the row's own scale and colour - [`Skin::row_scale`], [`Skin::normal`] -
+/// unlike [`axis_preview_draw`]'s smaller, amber note text: this is table
+/// content the page is showing, not a live remark about a row above it.
+///
+/// Two columns, the same split an ordinary `choice` row draws itself in:
+/// [`Skin::menu_x`] for the label, left-aligned, and [`Skin::value_right`]
+/// for the time, right-aligned - reused rather than a new pair of x
+/// coordinates, so the table lines up with the rows above it without this
+/// function knowing anything about the skin's own geometry beyond what a
+/// row already reads.
+#[must_use]
+pub fn record_row_draw(
+    menu: &Menu,
+    skin: &Skin,
+    index: usize,
+    label: &str,
+    value: &str,
+) -> [Draw; 2] {
+    let entries = menu.page().entries.len();
+    let shown = menu
+        .visible_rows()
+        .min(entries.saturating_sub(menu.scroll()));
+    let y = skin.first_row_y() + (shown + index) as f32 * skin.row_pitch();
+    let color = skin.normal();
+    [
+        Draw::Text {
+            x: skin.menu_x(),
+            y,
+            scale: skin.row_scale(),
+            color,
+            border: None,
+            align: Align::Left,
+            text: label.to_string(),
+            wrap_width: None,
+        },
+        Draw::Text {
+            x: skin.value_right(),
+            y,
+            scale: skin.row_scale(),
+            color,
+            border: None,
+            align: Align::Right,
+            text: value.to_string(),
+            wrap_width: None,
+        },
+    ]
+}
+
 /// What everything outside the panel is dimmed with.
 ///
 /// **Ours, chosen not measured**, on the same footing as `menu_stage`'s own

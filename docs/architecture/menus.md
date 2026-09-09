@@ -616,6 +616,101 @@ arithmetic and `crates/game/src/menu/frame.rs`'s on `content_bottom`.
 `--menu-page pilots --screenshot <path>` is how to look at it without a
 window.
 
+## RECORDS
+
+A records browser: MODE and TRACK rows, then a live table of what
+`oag_game::records::Store` holds for whichever track/mode is currently
+picked - one line per speed class, the standing best time. Closes the
+"no records browser" gap [`docs/architecture/persistence.md`](persistence.md)'s
+own "what is not built yet" section named.
+
+**The disc authors this screen, and it was checked before anything here was
+designed.** `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml` is a real
+"Record Grid" screen - see
+[fe-menu-definitions.md](../formats/fe-menu-definitions.md)'s own new
+section for the read, confidence 92. Its `Speed Lap Records` sub-screen is a
+track picker over a table with one row per speed class and a time column -
+**that shape is this page's own**, reused because it is the one the disc's
+four sub-screens that this project's own persisted schema can actually
+back: `oag_game::records::Record` is one row per `(track, mode, class)`,
+with exactly one best lap and one best total kept per row, never a ranked
+list of attempts and never a pilot's tag or team. The disc's own Time
+Trial/Race sub-screens assume the richer shape a ranked multi-attempt board
+would need, and Zone's own assumes a per-run zone/score breakdown this
+project does not persist either - so RECORDS draws Speed Lap's shape for
+every mode rather than picking a different, invented shape per mode, and
+leaves the TAG/TEAM/boost/perfect-lap columns off entirely rather than
+filling them with something this project cannot back. That omission is the
+same "draw nothing and say so" rule `CLAUDE.md`'s own root doc states for a
+`.pob` that will not parse - a card this project has no answer for.
+
+**MODE collapsing the disc's four sub-screens into one row is ours - the
+tree is ours, the same line every other section on this page draws.** The
+per-class rows and the time column underneath are the disc's.
+
+**Shares `race.mode`/`race.track` with the RACE page - the same reuse RACE
+REMIX's own MODE and AI DIFFICULTY rows already model**, and for the same
+reason: browsing here moves what a launched race would use next, which
+this project treats as a feature (the row you were just looking at is the
+row RACE opens on) rather than a leak to guard against. No new setting was
+added for "which track/mode RECORDS is showing" on purpose - a second,
+shadow copy of `race.track`/`race.mode` would need its own
+`Menu::supply`/`resupply` wiring kept in step with the real one for no
+reader-visible benefit.
+
+**Which of `best_lap_ticks`/`best_total_ticks` fills the time column depends
+on the mode**, off `records_page::show_total`: Speed Lap and Zone never
+finish a race at all - `oag_game::records`'s own module doc names both by
+name for why `Record::best_total_ticks` is permanently `None` there - so
+their column reads the best single lap instead. Every other mode reads the
+best total.
+
+**Drawn past the page's last real row, not through the AI PILOTS note
+slot above.** Three real rows (MODE, TRACK, BACK) plus four class rows is
+seven - exactly the row budget Pulse's own skin already fits with nothing
+reserved (see the AI PILOTS section above), so nothing here needed a new
+reservation, and `oag_ui::prompt::record_row_draw` continues the ordinary
+row pitch and colour rather than the smaller, amber note text
+`axis_preview_draw` draws in. Widening the note slot to fit several lines
+was the other option and was not taken: `menu::visible_rows`'s
+`reserve_note` argument is a `bool` read from three call sites, one of
+which (`crates/game/src/capture/menu_page.rs`) is outside what this page's
+own member could touch, and widening it there and not here would let the
+live session and a headless `--menu-page` capture disagree about how much
+room a page reserves - the exact AI-PILOTS-preview-on-the-footer mismatch
+this page's own "The general fix has landed" paragraph above already
+records paying for once.
+
+`crates/game/src/main/records_page.rs` is the module: `records_page::
+table_for` is the pure half (page-id guard, row resolution, the per-class
+lookup), split from `records_page::build_table` for the same reason
+`pilots::axis_preview_for` is split from its own page - `build_table` is
+unit-tested with a hand-built class list and `Store`, with no `Shell` and no
+`'static oag_title::Title` to fabricate. `oag_ui::prompt::record_row_draw`
+is the drawing half, and `crate::menu_stage::MenuStage::render` wires it in
+next to `axis_preview`'s own chain.
+
+**`--menu-page records` is not wired to show the table** - only the MODE
+and TRACK rows, since `crates/game/src/capture/menu_page.rs` builds its own
+draw list independently of `MenuStage::render` and nothing there calls
+`records_page::table_for`. The live session is the only path that draws it,
+and it is unreached by any headless capture tool: `--screenshot`'s own
+sequence capture (`crates/game/src/capture.rs`) always hands `Launch Game`
+off to a race rather than opening `oag_ui::menu` at all - `--menu-page` is
+the *only* way this codebase draws one of our own pages without a window,
+and it draws one page statically, with no `Menu::update` and no per-frame
+computed content. So `--menu-page records --screenshot` is what was
+actually captured and read back (title, MODE, TRACK, BACK all correct,
+nothing overlapping the footer); **the live per-class table itself has not
+been seen on screen**, in this build or any other sandbox run of this
+thread - it needs a real window, which per this project's own prior
+findings on this exact machine (`docs/architecture/menus.md`'s own
+"Independently verified on a live capture" paragraph above, and this
+thread's own "Still open" section before this change) is unconfirmable
+headless here. Verifying it is `oag-game data/images/pulse-psp-eu.chd
+--press start,cross` (reaches the real Main Menu, no `--screenshot`), then
+navigating MAIN -> RECORDS and reading the table on screen.
+
 ## What is not built
 
 - **Localised labels.** Row labels are literal text, and `string_id` **is**

@@ -91,6 +91,8 @@ mod prepare;
 mod race_stage;
 #[path = "main/rebind.rs"]
 mod rebind;
+#[path = "main/records_page.rs"]
+mod records_page;
 #[path = "main/session.rs"]
 mod session;
 #[path = "main/stage.rs"]

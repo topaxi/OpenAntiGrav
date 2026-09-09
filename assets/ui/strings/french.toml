@@ -175,6 +175,10 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} échoué(s)"
 
 [untranslated]
 ids = [
+    # RECORDS is new since this file's own translation pass and has not been
+    # reached by it - see `docs/architecture/menus.md`'s RECORDS section.
+    "OAG_MENU_RECORDS",
+    "OAG_RECORDS_PAGE_TITLE",
     # PC-specific graphics/display jargon - see this file's own header.
     "OAG_DISPLAY_FRONT_END_STYLE",
     "OAG_DISPLAY_VSYNC",
