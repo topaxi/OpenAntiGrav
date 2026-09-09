@@ -85,6 +85,19 @@ should look like and not what garbage looks like.
   top-right predicts. It does not settle the swizzle flag - a swizzle mapping
   the empty tile onto the same corner is indistinguishable from outside.
 
+- **A skinned slot is uploaded with no mip chain, where the hull's own texture
+  probably has one.** `mesh::ship_skin::apply` builds the replacement with
+  `ModelTexture::rgba8(..., None)`; the original generates a chain instead, by
+  halving in index space with a palette-aware 2x2 filter
+  (`Texture_Downsample4bpp` - see
+  [ship-skin.md](../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s
+  "Mips are generated, never stored"). So a skinned craft may alias at distance
+  where the baseline does not, which is a real "more than one frame, at the
+  size a player sees" difference and not a formality. It landed with the
+  applier on 2026-09-07 rather than with the caller, and nothing has looked at
+  it on screen. Cheap to check once a GUI is available; cheap to fix by
+  generating the chain in `apply`.
+
 - **`zone01.vex` is untouched, and deliberately.** `PI_TeamModel name="Zone"`
   names it, `Data\Ships\<Team>\zone01.vex` exists for all eight base teams, and
   it is **not** what a Zone race loads - that is `Zone.vex`, through a
