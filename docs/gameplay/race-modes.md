@@ -112,6 +112,16 @@ The count is *configuration* in the original rather than a constant - the
 race-setup format string carries `laps="%d"` - so three is what a time trial was
 seen configured with, not a limit of the format. `Mode::TIME_TRIAL_LAPS`.
 
+**Open, and not to be dropped: the census reads a time trial as per-class too.**
+The campaign's 47 `Time Trial` cells carry the same 3/4/4/5 `laps` table the
+[single race](#single-race) now runs on, while `Mode::TIME_TRIAL_LAPS` stays a
+flat `3`. The two are *consistent* rather than contradictory - Venom is the
+default class and Venom's census value is 3, which is exactly what was watched
+live - so nothing here is known to be wrong. What is missing is a live time
+trial in Flash, Rapier or Phantom to confirm the census applies to the mode
+outside the campaign. `Mode::laps_target` already takes the speed class, so
+this is one match arm and a screenshot, not a design change.
+
 Weapons and AI fall out of the mode rather than being set: selecting TIME TRIAL on
 the original's Custom Race screen flips WEAPONS to OFF and AI DIFFICULTY to N/A on
 its own. Neither exists here yet, so nothing had to be turned off.
@@ -124,6 +134,18 @@ end of lap 3.
 Unlimited laps, chasing one fast lap; it never ends on its own and escape leaves.
 Everything about it is the time trial without the lap target, which is how it is
 implemented - `Mode::laps_target` returns `None`.
+
+**Open, and a genuine conflict rather than a gap.** The campaign census reads
+`laps` as `7` on all 42 `Speed Lap` cells and `0` on all 16 `Zone` cells - see
+[race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md) - while
+the evidence for `None` here is separate and specific: `MSC_EVENT_SL` and
+`MSC_EVENT_ZONE` describe races that do not end on laps. Both readings are
+sourced and they disagree, so reconciling them is its own job. The likeliest
+shape - untested, and written down only so the next pass does not start from
+zero - is that a *campaign* speed lap is a bounded 7-lap event while a Custom
+Race speed lap is unbounded, and that `Zone`'s `0` is the attribute's "not
+applicable" spelling rather than a lap count. Neither was checked, and neither
+changed anything here.
 
 **This mode is not documented anywhere in the original's data that has been read.**
 It appears in no mode enumeration in this repository's notes and has no HUD layout
@@ -448,28 +470,57 @@ nothing until now.
 - **No `WEAPONS` row.** The original calls weapons "optional" here and this
   build takes the default, so a single race always has them. A missing setting,
   not a different rule.
-- **The lap count is ours.** Three, carried over from the time trial. The
-  race-setup format carries `laps="%d"`, so the original configures it per event
-  and no single race has been watched long enough to read what a Custom Race is
-  set to. `Mode::SINGLE_RACE_LAPS`, flagged as a guess where it is defined.
-  **A lead, not a confirmation, from the 2026-09-08 campaign scoping pass**:
-  the speed-class help text (`MSC_LOAD_VENOM` etc., see
+- ~~**The lap count is ours.**~~ **Not any more, and it is no longer flat.**
+  The lap count is **per speed class, not per mode**:
+
+  | Class | Laps |
+  | --- | ---: |
+  | Venom | 3 |
+  | Flash | 4 |
+  | Rapier | 4 |
+  | Phantom | 5 |
+
+  Confidence **90**, a flat census over the 236 authored `PI_Cell` records in
+  `Data\Plugins\grids\grid_00.xml` .. `grid_15.xml`: every cell carries a
+  `laps` attribute and across all 236 it is exactly these four values, with no
+  exception. See
+  [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md).
+
+  **The plumbing now exists.** `Mode::laps_target` takes the speed class and
+  indexes `Mode::SINGLE_RACE_LAPS_BY_CLASS`; `RaceState::new` takes it too, so
+  no construction site can default it silently. The class reaches `oag_race` as
+  `oag_formats::handling::SpeedClass` - a crate it already depends on - and the
+  disc's own spelling of the class name is resolved onto that enum one layer
+  out, in `oag_game::race::Race::start`, which is the layer that already carries
+  the name. Wipeout Pure's `VECTOR` rung has no measured lap count of its own
+  (no Pure campaign census has been read), so it falls back to Venom's `3` with
+  a warning in the load report; that fallback is **chosen, not measured**, and
+  carries no confidence score.
+
+  **This table is the fallback, not the authority.** A race launched from the
+  campaign should take the lap count from its *own* cell -
+  `oag_formats::race_campaign::Cell` already parses `laps: Option<u32>` - and
+  the cell's value should win over the table the moment a campaign launch can be
+  wired, which is the same retirement clause `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`
+  carries. What keeps the table necessary is that nothing selects a cell yet,
+  and a Custom Race started outside the campaign has no cell to read.
+
+  **A Phantom race's fifth lap has no split row and is not recorded.**
+  `MAX_RECORDED_LAPS` is `4` because HD/Fury's `HUD_lap_times.xml` composes
+  exactly four rows and no shipped layout on any of the four titles authors a
+  fifth - see [hd-hud.md](../formats/hd-hud.md). The array was deliberately not
+  widened: five rows would invent a row no measured title has, and would change
+  `World`'s size and so the committed state hash, to store a number nothing can
+  display. The fifth lap is still counted and still ends the race; only its
+  split time is dropped.
+
+  The earlier reading, kept because it is what a future per-class pass on
+  another title should start from: the speed-class help text (`MSC_LOAD_VENOM`
+  etc., see
   [race-setup.md](../formats/race-setup.md#the-full-mode-list-the-disc-authors-seven-against-this-projects-four))
-  says Venom - the default class - is "most" a 3-lap event, agreeing with the
-  guess here, but Rapier and Phantom are described as usually 4 and 5 laps.
-  Confidence 78, hedged wording, no `laps="%d"` record cross-checked against
-  it - not enough to change `SINGLE_RACE_LAPS` on, but enough that a future
-  per-class pass should start there instead of from zero.
-  **Settled the same day, and the guess is right for Venom.** The campaign's own
-  236 authored `PI_Cell` records each carry a `laps` attribute, and across all
-  236 it is **3 for Venom, 4 for Flash, 4 for Rapier, 5 for Phantom**, with no
-  exception; `Speed Lap` is `7` everywhere and `Zone` is `0`. Confidence **90**,
-  a flat census over 236 records - see
-  [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md). So the
-  lap count is **per speed class, not per mode**, and `SINGLE_RACE_LAPS = 3` is
-  correct for the default class and wrong for the other three. Fixing that needs
-  the speed class to reach `oag_race`, which it does not yet; the number is
-  measured now, the plumbing is not.
+  hedges "most events" at confidence 78 and says the same thing in prose -
+  Venom mostly 3, Rapier and Phantom usually 4 and 5. The census is the hard
+  version of it.
 
 ### A destroyed craft is out of a single race, not respawned
 
@@ -652,8 +703,10 @@ page](../ui/hud.md#eliminator).
 
 **The flag is the player's own last crossing.** `RaceState::finished` is set by
 the lap counter when the player wraps past `laps_target`, which is the same rule
-that counts every other lap - so a time trial and a single race both end after
-lap 3, and a speed lap and a Zone run have no target and never end this way. An
+that counts every other lap - so a time trial ends after lap 3, a single race
+ends after its speed class's own count (3/4/4/5, see
+[single race](#single-race)), and a speed lap and a Zone run have no target and
+never end this way. An
 opponent crossing ahead takes a `Standing::finish_tick` and stops being ordered
 by distance; it does not end the event.
 
