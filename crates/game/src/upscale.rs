@@ -102,10 +102,13 @@ mod temporal;
 pub use temporal::{Temporal, jitter_phases};
 
 use blit::{Grade, Source, bind, grade_buffer, resolved_source};
-// Re-exported rather than merely used: the menu's warning tests ask the same
-// question the ladder does, and asking it of `upscale` is what keeps the two
-// from drifting.
-pub(crate) use blit::magnifies;
+// `pub` rather than `pub(crate)`, and re-exported rather than merely used:
+// `tests/menu_warnings_settings.rs` asks the same question the ladder does,
+// and asking it of `upscale` from there is what keeps the two from drifting.
+// That test lives in this crate's own `tests/` because it checks `oag-ui`'s
+// menu definition against this crate's warning conditions - a claim about
+// both sides at once, which only a crate that can see both can make.
+pub use blit::magnifies;
 use targets::{output, target};
 
 /// The offscreen target and the pipeline that puts it on screen.

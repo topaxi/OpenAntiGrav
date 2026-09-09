@@ -323,7 +323,7 @@ this build draws.
 This build boots into `LogoFMV` and ends at the picker, because that was the
 order asked for. The divergence is not hidden: `oag-game` prints the disc's own
 redirect target at startup, and
-[`Frontend::language_auto_redirect`](../../crates/game/src/frontend.rs) exposes
+[`Frontend::language_auto_redirect`](../../crates/ui/src/frontend.rs) exposes
 it so [a test](../../crates/game/tests/boot_ground_truth.rs) asserts it is
 `LogoFMV`.
 
@@ -634,7 +634,7 @@ fills reach the screen as authored, measured, not just reasoned.
 
 **`Viewport` recursion and `BOOT_LEGAL` wrapping are both implemented now
 (2026-08-25).** They used to be one open gap; they turned out to be two, found
-in the wrong order. [`screen.rs`](../../crates/game/src/screen.rs) already
+in the wrong order. [`screen.rs`](../../crates/ui/src/screen.rs) already
 recurses `collect_widgets` straight through a `Viewport` rather than stopping
 at it (`a_text_inside_a_viewport_is_collected_alongside_its_siblings`), so
 `BOOT_LEGAL` was never actually missing from the parsed `Screen` - checked
@@ -768,7 +768,7 @@ none of it is built, so there is nothing to put there. What happens instead is
 that the composition root loads the track and the ship named on the command line
 and hands the window over - one window, one GPU device, the state machine's own
 transition as the trigger. The front-end model does not know about it:
-[`frontend.rs`](../../crates/game/src/frontend.rs) fires the transition the
+[`frontend.rs`](../../crates/ui/src/frontend.rs) fires the transition the
 original's own string literal names and stops, and `oag-game`'s main loop decides
 what that means. See [`oag-game`](../tools/oag-game.md#how-the-front-end-hands-over)
 for the mechanics and
@@ -1110,7 +1110,7 @@ pixel offset - reads like it was never touched.
 
 ## The state machine
 
-[`state_machine.rs`](../../crates/game/src/state_machine.rs) is string-keyed and
+[`state_machine.rs`](../../crates/ui/src/state_machine.rs) is string-keyed and
 hierarchical, because the original's is: `StateMachine_TransitionTo`
 (`0x0889123c`) takes a name, queries are `strcmp` against the current name, and
 children are named `"Parent->Child"`.

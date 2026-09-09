@@ -155,7 +155,7 @@ fn a_pack_team_is_named_by_the_disc_and_its_id_is_not_always_that_name() {
         language: None,
         source: image,
         dlc: vec![workspace("data/dlc")],
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-dlc-ground-truth"),
         audio_cache: boot::default_audio_cache_dir(),

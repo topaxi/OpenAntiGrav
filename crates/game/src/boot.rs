@@ -3,7 +3,7 @@
 //! Everything the front end needs, in the order the original needs it: the
 //! front-end root XML, the language plugins, one language's string table, and
 //! the intro movie. Kept apart from `main.rs` so the load can be exercised
-//! without a window, and apart from [`crate::frontend`] so the sequence itself
+//! without a window, and apart from [`oag_ui::frontend`] so the sequence itself
 //! stays free of file I/O.
 
 use std::path::Path;
@@ -15,10 +15,10 @@ use oag_tables::fexml;
 
 use crate::title::open_source;
 
-use crate::frontend::Frontend;
-use crate::language::{Language, StringTable};
 use crate::movie::{self, Extent, Movie};
-use crate::screen::Screens;
+use oag_ui::frontend::Frontend;
+use oag_ui::language::{Language, StringTable};
+use oag_ui::screen::Screens;
 
 /// A loaded boot sequence and the pieces the renderer needs alongside it.
 pub struct Boot {
@@ -62,12 +62,12 @@ pub struct Boot {
     /// [`Shell::menu_skin`].
     pub menu_skin: &'static oag_title::MenuSkin,
     /// The frame its menus are drawn inside. See [`Shell::frame`].
-    pub frame: crate::menu::Frame,
+    pub frame: oag_ui::menu::Frame,
     /// The face menu rows are drawn in. See [`Shell::menu_font`].
-    pub menu_font: Option<crate::font::Atlas>,
+    pub menu_font: Option<oag_ui::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
-    pub font: crate::font::Atlas,
+    pub font: oag_ui::font::Atlas,
     /// The chosen language's string-table entry, carried through from
     /// [`Shell::entries`] for the one caller that needs the other copies of it.
     pub entries: Option<String>,
@@ -137,7 +137,7 @@ pub struct Options {
     /// behind `source`'s own archives and independent of which release it is.
     pub dlc: Vec<std::path::PathBuf>,
     /// Which movie leg the sequence boots into.
-    pub leg: crate::frontend::Leg,
+    pub leg: oag_ui::frontend::Leg,
     /// The language to load the string table for, by the XML's own English
     /// name, when one has been chosen on an earlier run.
     ///
@@ -322,13 +322,13 @@ pub struct Shell {
     ///
     /// Not folded into [`Self::strings`] because it may come out of a
     /// **different copy** of the string table than the rest of the front end
-    /// does; see [`crate::language::CircuitNames`]. Empty on a source where no
+    /// does; see [`oag_ui::language::CircuitNames`]. Empty on a source where no
     /// copy names every circuit, which shows each one its id.
-    pub circuit_names: crate::language::CircuitNames,
+    pub circuit_names: oag_ui::language::CircuitNames,
     /// The raceable teams, for the menus.
     pub teams: Vec<crate::catalogue::Team>,
     /// The text atlas.
-    pub font: crate::font::Atlas,
+    pub font: oag_ui::font::Atlas,
     /// The front-end sprite sheet.
     pub sprites: crate::sprite::Sheet,
     /// The grid this source authors its widgets in, read off the archives'
@@ -351,16 +351,16 @@ pub struct Shell {
     /// Which screen that was is [`oag_title::FrontEnd::menu_frame`] and is not
     /// carried here - by this point it has been read, and a name nothing reads
     /// is the inert-field smell this file avoids elsewhere. See
-    /// [`crate::menu::read_frame`].
+    /// [`oag_ui::menu::read_frame`].
     ///
     /// Built here rather than by whoever draws, because it needs the parsed
     /// screens *and* the sprite sheet *and* the grid, and this is the only place
     /// all three are in hand. Empty for a title whose frame is unread, which
     /// draws the menus exactly as they were drawn before this existed.
-    pub frame: crate::menu::Frame,
+    pub frame: oag_ui::menu::Frame,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
-    pub menu_font: Option<crate::font::Atlas>,
+    pub menu_font: Option<oag_ui::font::Atlas>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -377,7 +377,7 @@ pub struct Shell {
     /// The chain's second movie, on the same terms.
     pub second_movie_name: Option<&'static str>,
     /// Which leg the sequence boots into, carried for [`assemble`].
-    pub leg: crate::frontend::Leg,
+    pub leg: oag_ui::frontend::Leg,
     /// What to print. [`assemble`] appends its own.
     pub report: Vec<String>,
 }
@@ -545,8 +545,8 @@ pub fn load_shell(
     // a title with no evidenced reel state rather than pointed at another
     // title's screen.
     let start_step = match options.leg {
-        crate::frontend::Leg::LogoFmv => profile.start(),
-        crate::frontend::Leg::DevPubReel => profile.reel.as_ref().with_context(|| {
+        oag_ui::frontend::Leg::LogoFmv => profile.start(),
+        oag_ui::frontend::Leg::DevPubReel => profile.reel.as_ref().with_context(|| {
             format!(
                 "--reel is an off-path dev/pub reel state; {} has no equivalent anyone \
                  has found",
@@ -576,13 +576,13 @@ pub fn load_shell(
     // `--reel` into a no-op - which is what this check did on its first pass,
     // caught by `boot_ground_truth::the_reel_leg_still_runs_its_frame_holds`.
     let mut walked: Vec<&'static oag_title::BootStep> = Vec::new();
-    let off_path = options.leg == crate::frontend::Leg::DevPubReel;
+    let off_path = options.leg == oag_ui::frontend::Leg::DevPubReel;
     if !off_path && screens.by_name(start_step.state).is_none() {
         report.push(format!(
             "the chain opens on {:?}, which this pressing does not carry",
             start_step.state
         ));
-    } else if off_path || crate::frontend::can_drive(start_step.state) {
+    } else if off_path || oag_ui::frontend::can_drive(start_step.state) {
         walked.push(start_step);
     } else {
         report.push(format!(
@@ -601,7 +601,7 @@ pub fn load_shell(
                 "the chain's {:?} is skipped: this pressing does not carry it",
                 step.state
             ));
-        } else if crate::frontend::can_drive(step.state) {
+        } else if oag_ui::frontend::can_drive(step.state) {
             walked.push(step);
         } else {
             report.push(format!(
@@ -639,8 +639,8 @@ pub fn load_shell(
     // decides what colour it comes out in: Wipeout HD's `HD_*` palette is its FE
     // style, black and red in `DATA00` against white and teal in `DATA06`. A
     // menu that looks like the wrong game is then a line in the boot report
-    // rather than a mystery. See [`crate::menu::frame`].
-    let frame = crate::menu::read_frame(
+    // rather than a mystery. See [`oag_ui::menu::frame`].
+    let frame = oag_ui::menu::read_frame(
         &screens,
         &|name| sprites.get(name),
         space,
@@ -1049,8 +1049,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // over its movie's real duration rather than the reel's.
     let plan = |movie: Option<&Movie>| {
         movie.map_or(
-            crate::frontend::MoviePlan::none((space.size.0 as u32, space.size.1 as u32)),
-            |movie| crate::frontend::MoviePlan {
+            oag_ui::frontend::MoviePlan::none((space.size.0 as u32, space.size.1 as u32)),
+            |movie| oag_ui::frontend::MoviePlan {
                 frames: movie.frames.as_ref().map_or(movie.frame_count, |f| f.len),
                 frame_rate: movie.frame_rate,
                 aspect: movie.display_aspect,
@@ -1066,9 +1066,9 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         .filter(|step| step.movie.is_some())
         .map(|step| step.state)
         .collect();
-    let steps: Vec<crate::frontend::Step> = walked
+    let steps: Vec<oag_ui::frontend::Step> = walked
         .iter()
-        .map(|step| crate::frontend::Step {
+        .map(|step| oag_ui::frontend::Step {
             state: step.state,
             movie: if playing.first() == Some(&step.state) {
                 plan(movie.as_ref())
@@ -1080,7 +1080,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         })
         .collect();
     let mut frontend = Frontend::booting(
-        crate::frontend::Sequence {
+        oag_ui::frontend::Sequence {
             steps,
             backdrop_parent: profile.picker_backdrop_parent,
         },
@@ -1384,7 +1384,7 @@ fn load_backdrop(
 /// Decodes Pure's second boot movie - see
 /// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
 /// its name was found, and what it takes to actually draw it (the other half
-/// of that work, done alongside this function: see `crate::frontend::Frontend`
+/// of that work, done alongside this function: see `oag_ui::frontend::Frontend`
 /// and `crate::main::FrontendStage` for the rest).
 ///
 /// `None`, and nothing attempted at all, for a source whose `screens` has no
@@ -1656,7 +1656,7 @@ pub fn load_strings(
     {
         Ok(xml) => {
             let mut table = StringTable::from_xml(&xml);
-            crate::strings::overlay(&mut table, &language.name, report);
+            oag_ui::strings::overlay(&mut table, &language.name, report);
             if table.is_empty() {
                 report.push(format!("{} names no string table", language.name));
             } else {

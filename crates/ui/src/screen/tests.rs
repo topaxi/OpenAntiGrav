@@ -8,7 +8,7 @@
 //! gate.
 
 use super::*;
-use crate::input::Button;
+use oag_gameplay::input::Button;
 
 /// The shape of the real `Language Selection` and `LogoFMV` screens, cut
 /// down to what this module reads. Attribute spellings, the `FEGlobals->`
@@ -315,7 +315,7 @@ fn the_press_start_widget_keeps_its_own_layout() {
 }
 
 /// `BOOT_LEGAL`'s `widthlimited="true"` resolves to its enclosing
-/// `Viewport`'s own `width` - the number [`crate::render`] wraps against, not
+/// `Viewport`'s own `width` - the number `crate::render` wraps against, not
 /// a scissor rect. See `docs/architecture/frontend-boot.md`.
 #[test]
 fn a_widthlimited_text_wraps_against_its_viewports_width() {

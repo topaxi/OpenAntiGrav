@@ -14,8 +14,20 @@
 //! sharing one message - one for a controller that is off, one for a floor
 //! high enough that the statement holds anyway - because `Condition.all` is an
 //! AND and "off, or floored high" is an OR.
+//!
+//! Moved to the composition root's own integration tests, unlike its siblings
+//! that stayed in `oag-ui`'s `menu/tests.rs`: a warning is pinned against
+//! `oag_game::upscale`/`drs`/`perf`, which only a crate that can see both
+//! `oag-ui` and `oag-game` can assert.
 
-use super::*;
+use oag_ui::menu::*;
+
+/// The definition this build actually ships. Every test that can use it
+/// does, so the file is exercised rather than a fixture standing in for it.
+fn built_in() -> Definition {
+    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+        .expect("the built-in menu must parse")
+}
 
 /// The `fsr1` warning must name exactly the scales it does nothing at.
 ///
@@ -58,8 +70,8 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
     // the rectangle, and unwarned when it is.
     let rect = (1000, 1000);
     for scale in oag_display::display::Scale::OFFERED {
-        let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
-        let magnifies = crate::upscale::magnifies(scene, rect);
+        let scene = oag_game::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
+        let magnifies = oag_game::upscale::magnifies(scene, rect);
         assert_eq!(
             !magnifies,
             warned.contains(&scale),
@@ -310,8 +322,8 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
     let dead: Vec<oag_display::display::Scale> = oag_display::display::Scale::OFFERED
         .into_iter()
         .filter(|scale| {
-            let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), *scale, 8192);
-            !crate::upscale::magnifies(scene, rect)
+            let scene = oag_game::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), *scale, 8192);
+            !oag_game::upscale::magnifies(scene, rect)
         })
         .collect();
     assert!(!dead.is_empty() && dead.len() < oag_display::display::Scale::OFFERED.len());
@@ -383,9 +395,9 @@ fn the_target_warns_at_exactly_the_frame_limits_it_is_above() {
         .find(|entry| entry.setting() == Some("graphics.target_fps"))
         .expect("nothing edits graphics.target_fps");
 
-    let mut declared: Vec<(crate::drs::Target, Vec<crate::perf::FrameLimit>)> = Vec::new();
+    let mut declared: Vec<(oag_game::drs::Target, Vec<oag_game::perf::FrameLimit>)> = Vec::new();
     for warning in entry.warnings() {
-        let target: Vec<crate::drs::Target> = warning
+        let target: Vec<oag_game::drs::Target> = warning
             .all
             .iter()
             .find(|c| c.setting == "graphics.target_fps")
@@ -395,7 +407,7 @@ fn the_target_warns_at_exactly_the_frame_limits_it_is_above() {
             .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
             .collect();
         assert_eq!(target.len(), 1, "one warning names one target");
-        let limits: Vec<crate::perf::FrameLimit> = warning
+        let limits: Vec<oag_game::perf::FrameLimit> = warning
             .all
             .iter()
             .find(|c| c.setting == "display.frame_limit")
@@ -413,13 +425,13 @@ fn the_target_warns_at_exactly_the_frame_limits_it_is_above() {
         assert!(
             !vsync
                 .values
-                .contains(&Value::Text(crate::perf::Vsync::On.to_string())),
+                .contains(&Value::Text(oag_game::perf::Vsync::On.to_string())),
             "under classic vsync the display is the bound and the limiter is not"
         );
         declared.push((target[0], limits));
     }
 
-    for target in crate::drs::Target::OFFERED {
+    for target in oag_game::drs::Target::OFFERED {
         let Some(hz) = target.hz() else {
             assert!(
                 !declared.iter().any(|(named, _)| *named == target),
@@ -428,7 +440,7 @@ fn the_target_warns_at_exactly_the_frame_limits_it_is_above() {
             continue;
         };
         // Unlimited is not below any target, so it is never in a list.
-        let above: Vec<crate::perf::FrameLimit> = crate::perf::FrameLimit::OFFERED
+        let above: Vec<oag_game::perf::FrameLimit> = oag_game::perf::FrameLimit::OFFERED
             .into_iter()
             .filter(|limit| limit.hz().is_some_and(|limit| limit < hz))
             .collect();

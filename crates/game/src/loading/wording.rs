@@ -8,7 +8,7 @@
 //! atlas, and `Screen::draw_list` is the only caller. The layout - where those
 //! strings go and what colour they are - stays in the parent.
 
-use crate::language::StringTable;
+use oag_ui::language::StringTable;
 
 use super::{Phase, Progress};
 
@@ -16,7 +16,7 @@ use super::{Phase, Progress};
 /// `subs` into whichever string was found - the table's own translation if
 /// it has one, `literal` otherwise.
 ///
-/// The fallback is exactly `resolve()`'s in `crate::menu::definition`: a row
+/// The fallback is exactly `resolve()`'s in `oag_ui::menu::definition`: a row
 /// with no override keeps the text this project invented, untouched. The
 /// placeholder substitution is the one thing every string here needed that
 /// a menu row never did - every string composed on this screen carries at

@@ -10,9 +10,9 @@
 
 use winit::keyboard::{Key, NamedKey};
 
-use oag_game::language::StringTable;
 use oag_gameplay::input::Button;
 use oag_input::keys;
+use oag_ui::language::StringTable;
 
 /// What `app.rs` should do about one keyboard event while
 /// `Session::awaiting_binding` names a button.

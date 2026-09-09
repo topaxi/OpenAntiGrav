@@ -86,7 +86,7 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
     );
     // No captions are involved: every widget here is either numbered or
     // resolved through a ladder this test does not supply.
-    let strings = crate::language::StringTable::default();
+    let strings = oag_ui::language::StringTable::default();
     let text = |zone: u32| -> Vec<Option<String>> {
         layout
             .labels

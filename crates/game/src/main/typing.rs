@@ -7,12 +7,12 @@
 //!
 //! # Why a desk keyboard is wired at all when the grid already works
 //!
-//! `oag_game::prompt` is pad-first on purpose - a text field only a keyboard
+//! `oag_ui::prompt` is pad-first on purpose - a text field only a keyboard
 //! could fill would be the first thing in this build a pad cannot reach. But
 //! the reverse is not a virtue: somebody sitting at a keyboard should not have
 //! to walk a cursor to `w`, `i`, `n` and so on when the key is right there.
 //! Both paths end in the same [`Edit`], applied to the same buffer, and
-//! [`oag_game::prompt::accepts`] is what keeps the character sets from
+//! [`oag_ui::prompt::accepts`] is what keeps the character sets from
 //! drifting apart.
 //!
 //! # It differs from `rebind` on repeats, deliberately
@@ -25,7 +25,7 @@
 
 use winit::keyboard::{Key, NamedKey};
 
-use oag_game::prompt::{Edit, accepts};
+use oag_ui::prompt::{Edit, accepts};
 
 /// What `app.rs` should do about one keyboard event while a keyboard prompt
 /// is open.

@@ -124,13 +124,13 @@ fn sheet() -> crate::sprite::Sheet {
     )
 }
 
-fn strings() -> crate::language::StringTable {
-    crate::language::StringTable::default()
+fn strings() -> oag_ui::language::StringTable {
+    oag_ui::language::StringTable::default()
 }
 
 fn context<'a>(
     layout: &'a Layout,
-    strings: &'a crate::language::StringTable,
+    strings: &'a oag_ui::language::StringTable,
     sheet: &'a crate::sprite::Sheet,
 ) -> Context<'a> {
     context_with(layout, strings, sheet, oag_pulse::hud::ART)
@@ -138,7 +138,7 @@ fn context<'a>(
 
 fn context_with<'a>(
     layout: &'a Layout,
-    strings: &'a crate::language::StringTable,
+    strings: &'a oag_ui::language::StringTable,
     sheet: &'a crate::sprite::Sheet,
     art: &'static oag_title::HudArt,
 ) -> Context<'a> {

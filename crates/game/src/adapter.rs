@@ -72,7 +72,7 @@ pub fn instance() -> wgpu::Instance {
 /// **Backend-qualified**, because a driver's own name is only unique within its
 /// backend: one card enumerated under both Vulkan and Dx12 reports the same
 /// `name` twice. That matters more here than it looks, because
-/// [`crate::menu::Menu::seed`] matches the stored string exactly and silently
+/// [`oag_ui::menu::Menu::seed`] matches the stored string exactly and silently
 /// falls back to the first row when it does not match - two identical entries
 /// would put a player on an adapter they did not choose and persist it on their
 /// first nudge.
@@ -152,7 +152,7 @@ pub struct Chosen {
     /// Every setting value that truthfully describes this choice.
     ///
     /// What the RENDERER row's restart note is measured against - see
-    /// [`crate::menu::Restart`] - so the question it answers is "would moving
+    /// [`oag_ui::menu::Restart`] - so the question it answers is "would moving
     /// the row here change anything", not "does the row match the settings
     /// file".
     ///

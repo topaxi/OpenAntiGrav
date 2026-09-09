@@ -2063,6 +2063,7 @@ dependencies = [
  "oag-texture",
  "oag-title",
  "oag-trace",
+ "oag-ui",
  "oag-vex",
  "oag-video",
  "pollster",
@@ -2267,13 +2268,14 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-race",
- "oag-render",
  "oag-tables",
  "oag-testdata",
  "oag-texture",
  "oag-title",
  "oag-vex",
  "serde",
+ "thiserror 2.0.19",
+ "toml",
 ]
 
 [[package]]

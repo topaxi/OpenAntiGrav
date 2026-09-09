@@ -10,12 +10,12 @@ use oag_core::{TickClock, TickRate};
 use oag_display::display;
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, boot, launcher, loading, perf, pilots, prefetch, race, settings, source, strings,
-    upscale,
+    audio, boot, launcher, loading, perf, pilots, prefetch, race, settings, source, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
+use oag_ui::strings;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -288,7 +288,7 @@ impl App {
             &gpu.queue,
             gpu.config.format,
             None,
-            oag_game::font::Atlas::build(),
+            oag_ui::font::Atlas::build(),
             &oag_game::sprite::Sheet::default(),
         )
         .context("building the performance overlay")?;

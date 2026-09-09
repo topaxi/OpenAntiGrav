@@ -5,7 +5,8 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{adapter, perf, settings, strings};
+use oag_game::{adapter, perf, settings};
+use oag_ui::strings;
 
 use oag_display::display;
 

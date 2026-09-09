@@ -9,7 +9,7 @@
 
 use oag_tables::fexml;
 
-use crate::language::StringTable;
+use oag_ui::language::StringTable;
 
 /// Everything the screen needs off the disc.
 ///
@@ -270,7 +270,7 @@ impl Assets {
         // the front end is served.** Two of Wipeout HD's five descriptions -
         // `FE_ABSORB_INST` and `FE_FLIP_INST`, the two Fury mechanics - are in
         // one copy of the string table only, and it is the same copy that
-        // carries all 28 circuit names. That is `oag_game::language::CircuitNames`'s
+        // carries all 28 circuit names. That is `oag_ui::language::CircuitNames`'s
         // finding arriving a second time from a different direction, and it is
         // what stops this screen offering three features on a disc that ships
         // five. See `docs/formats/hd-frontend.md`.
@@ -386,7 +386,7 @@ impl Assets {
             let root = title.front_end?.root;
             let blob = archives.read_name(root).ok()?;
             let xml = crate::boot::xml::expand(&blob).ok()?;
-            let globals = crate::screen::Screens::from_xml(&xml).globals;
+            let globals = oag_ui::screen::Screens::from_xml(&xml).globals;
             let colour = |name: &str| {
                 let raw = globals.get(name)?;
                 let hex = raw.trim().trim_start_matches("0x").trim_start_matches("0X");

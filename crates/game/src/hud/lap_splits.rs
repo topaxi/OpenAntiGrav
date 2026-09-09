@@ -172,7 +172,7 @@ mod tests {
 </Text>
 "#;
         let layout = crate::hud::Layout::from_xml(FRAGMENT);
-        let strings = crate::language::StringTable::default();
+        let strings = oag_ui::language::StringTable::default();
         let sheet = crate::sprite::Sheet::placed_at(&[(
             oag_hd::hud::TEXTURES[0],
             crate::sprite::Placed {

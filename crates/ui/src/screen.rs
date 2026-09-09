@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use crate::input::button_from_name;
+use oag_gameplay::input::button_from_name;
 
 // The XML tree parser itself is a format concern and lives in `oag-formats`
 // next to the dictionary expander, so the front end and the handling-stats
@@ -300,7 +300,7 @@ pub struct Screen {
     /// `Intro Screen` carries four - `IntroMovie1`, `FMV Movie`, `ProfileMovie1`
     /// and `ProfileMovie2` - and a single slot kept whichever came last, so the
     /// three before it were invisible. That silently broke the rule that
-    /// [`crate::boot`] applies to a movie's sound: a widget carrying
+    /// `crate::boot` applies to a movie's sound: a widget carrying
     /// `sound="false"` could not be found and so could not mute anything.
     pub movies: Vec<Movie>,
     /// `Text` widgets in document order.

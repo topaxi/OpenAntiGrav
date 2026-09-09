@@ -29,7 +29,7 @@ label = \"HIGH\"
 setting = \"pilot.high\"
 values_from = \"pilot_axis_high\"
 ";
-    let strings = oag_game::language::StringTable::default();
+    let strings = oag_ui::language::StringTable::default();
     let definition = menu::Definition::parse(text, &strings).expect("a tiny valid definition");
     menu::Menu::new(definition)
 }
@@ -188,7 +188,7 @@ fn an_empty_name_says_so_rather_than_failing_only_at_accept() {
 /// a note reading "%s IS BUILT IN" would be worse than none.
 #[test]
 fn a_table_entry_has_its_percent_s_replaced_by_the_name() {
-    let mut table = oag_game::language::StringTable::default();
+    let mut table = oag_ui::language::StringTable::default();
     table.merge(std::collections::HashMap::from([(
         "OAG_PILOT_NAME_TAKEN".to_string(),
         "%s IS TAKEN, AND SO IS %s".to_string(),

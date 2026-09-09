@@ -20,6 +20,13 @@ fn skin() -> Skin {
     )
 }
 
+/// `oag_game::pilots::MAX_NAME`'s own value, kept as a literal rather than
+/// named: naming it would need a dependency on `oag-game`, which this crate
+/// may never take. `crates/game/tests/prompt_pilots.rs` is the file that
+/// checks this literal still matches the real constant, and is the one place
+/// in this cluster that needs to see both crates at once.
+const MAX_NAME: usize = 24;
+
 fn keyboard(initial: &str) -> Keyboard {
     Keyboard::new(
         Labels {
@@ -29,7 +36,7 @@ fn keyboard(initial: &str) -> Keyboard {
             hint: String::new(),
         },
         initial,
-        crate::pilots::MAX_NAME,
+        MAX_NAME,
     )
 }
 
@@ -53,47 +60,11 @@ fn type_key(keyboard: &mut Keyboard, key: Key) -> Outcome {
     panic!("{key:?} is not reachable with the d-pad");
 }
 
-/// The whole point of the module: a name typed with nothing but a d-pad and
-/// one button, which is what a pad has.
-#[test]
-fn a_name_can_be_typed_with_the_d_pad_and_cross_alone() {
-    let mut keyboard = keyboard("");
-    for c in "ax9-".chars() {
-        assert_eq!(
-            type_key(&mut keyboard, Key::Char(c)),
-            Outcome::Pending,
-            "typing must not end the prompt"
-        );
-    }
-    assert_eq!(keyboard.text(), "ax9-");
-    // And it is a name the writer will accept, which is the reason the grid
-    // offers exactly this character set.
-    crate::pilots::check_name(keyboard.text()).expect("the grid cannot type an invalid name");
-}
-
-/// Every character the writer allows has to be on the grid, and nothing else:
-/// a grid offering a slash builds a name that is refused only at the end, and
-/// a grid missing `_` shows a player a file they cannot type back in.
-#[test]
-fn the_grid_offers_exactly_the_characters_a_pilot_name_may_hold() {
-    let offered: String = (0..CELLS)
-        .filter_map(|index| match key_at(index) {
-            Key::Char(c) => Some(c),
-            _ => None,
-        })
-        .collect();
-    for c in offered.chars() {
-        crate::pilots::check_name(&c.to_string())
-            .unwrap_or_else(|e| panic!("the grid offers {c:?}, which a name may not hold: {e:#}"));
-    }
-    for c in "abcdefghijklmnopqrstuvwxyz0123456789-_".chars() {
-        assert!(offered.contains(c), "the grid cannot type {c:?}");
-    }
-    let specials = (0..CELLS)
-        .filter(|i| !matches!(key_at(*i), Key::Char(_)))
-        .count();
-    assert_eq!(specials, 2, "delete and accept, exactly once each");
-}
+// The two tests that used to live here - typing a name the grid produces
+// through `oag_game::pilots::check_name`, and that the grid's own character
+// set matches what that function accepts - moved to
+// `crates/game/tests/prompt_pilots.rs`: an assertion against `oag-game`'s
+// `pilots` module needs a crate that can see both, which this one may not be.
 
 /// Every cell has to be reachable, or the grid has keys in it that are
 /// decoration. Walked with the d-pad, so a wrapping bug is what this catches.

@@ -504,7 +504,7 @@ impl Frontend {
     /// The single exception to "every screen gets it": a screen already drawing
     /// a movie of its own does not also get the loop. This is not a stylistic
     /// choice. The front end is drawn by one renderer with one set of I420
-    /// planes and one video draw ([`crate::render::Renderer::render`] keeps a
+    /// planes and one video draw (`crate::render::Renderer::render` keeps a
     /// single `video_at`), so a list carrying two `Draw::Video`s would upload
     /// one movie's frame and draw it at the *other* movie's rect - and the two
     /// halves disagree about which, because `sync_video` takes the first video

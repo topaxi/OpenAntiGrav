@@ -741,8 +741,8 @@ pub fn menu_seeds(
     settings: &Settings,
     anisotropy: Anisotropy,
     title: &str,
-) -> Vec<(&'static str, crate::menu::Value)> {
-    let text = |value: &str| crate::menu::Value::Text(value.to_string());
+) -> Vec<(&'static str, oag_ui::menu::Value)> {
+    let text = |value: &str| oag_ui::menu::Value::Text(value.to_string());
     let profile = settings
         .render_profiles
         .get(title)

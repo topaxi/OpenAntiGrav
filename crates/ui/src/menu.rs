@@ -3,9 +3,8 @@
 //! Like [`frontend`](crate::frontend), this holds no GPU handles, opens no
 //! files and reads no clock. It takes input in and emits [`MenuEvent`]s and a
 //! list of [`Draw`](crate::frontend::Draw)s out, both of which are plain data;
-//! `main.rs` rasterises the one and acts on the other. It moves to `oag-ui`
-//! when the HUD arrives and that crate exists - see
-//! `docs/architecture/workspace-layout.md`.
+//! `oag_game::render` rasterises the one and `oag_game::main` acts on the
+//! other - see `docs/architecture/workspace-layout.md`.
 //!
 //! # Why this is not the front-end XML
 //!
@@ -46,14 +45,14 @@
 //!
 //! # What a menu here cannot do
 //!
-//! It never reads or writes [`Settings`](crate::settings::Settings). A `choice`
+//! It never reads or writes `crate::settings::Settings`. A `choice`
 //! entry is seeded with its current value by whoever owns the setting and emits
 //! [`MenuEvent::Changed`] when the player moves it; applying and persisting that
 //! is the composition root's business. Keeping that seam is what lets every test
 //! below run with no config directory, no disc and no window.
 
 use crate::frontend::{Align, Draw};
-use crate::input::{Button, Input};
+use oag_gameplay::input::{Button, Input};
 
 /// The menu tree this build ships with.
 ///
@@ -1077,13 +1076,13 @@ fn window_start(pushed: usize, selected: usize, rows: usize, visible: usize) -> 
 /// **Ours, and it has no counterpart on the disc.** The original has no
 /// disabled rows: a Wipeout menu either offers a thing or does not list it.
 /// This exists for `disabled_by`, which is a PC concern.
-const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
+pub const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
 /// A setting that is stored but currently doing nothing.
 ///
 /// Amber, and on its own channel: the other three colours already mean
 /// selected, normal and inert, so a warning had to be a mark in the margin in a
 /// colour none of them use rather than a fourth shade of the row itself.
-const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
+pub const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// One page's draws, split by what a page change is allowed to move.
 ///

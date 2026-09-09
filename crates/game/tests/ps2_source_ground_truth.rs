@@ -509,7 +509,7 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         // The PS2 disc bundles what the PSP sold as downloadable content, so
         // this one has a roster of twelve with nothing mounted.
         dlc: Vec::new(),
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(oag_game::boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: oag_game::boot::default_cache_dir(),
         audio_cache: oag_game::boot::default_audio_cache_dir(),

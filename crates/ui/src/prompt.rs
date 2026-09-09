@@ -6,8 +6,7 @@
 //! Like [`crate::menu`], this holds no GPU handles, opens no files and reads
 //! no clock. It takes an [`Input`] snapshot in and emits an [`Outcome`] and a
 //! list of [`Draw`]s out, both plain data, so every one of it can be driven
-//! headlessly in a unit test. It moves to `oag-ui` alongside `menu` when that
-//! crate exists - see `docs/architecture/workspace-layout.md`.
+//! headlessly in a unit test - see `docs/architecture/workspace-layout.md`.
 //!
 //! # Why a keyboard exists here at all
 //!
@@ -68,8 +67,8 @@
 //! *stores* against what it *shows* - one layer up.
 
 use crate::frontend::{Align, Draw};
-use crate::input::{Button, Input};
 use crate::menu::{Menu, Skin};
+use oag_gameplay::input::{Button, Input};
 
 /// What a prompt did on a tick.
 ///
@@ -100,7 +99,7 @@ pub enum Key {
 
 /// The characters the grid offers, in the order they are laid out.
 ///
-/// **Exactly the set [`crate::pilots::check_name`] allows**, which is the
+/// **Exactly the set `crate::pilots::check_name` allows**, which is the
 /// point: a grid that offered a space or a slash would be offering a key that
 /// makes the name it is building invalid, and a player would find that out
 /// only on pressing accept. It is not a claim that every future caller wants
@@ -115,17 +114,17 @@ const KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-_";
 /// with nothing left ragged. Ten cells also still fit across the 480-wide
 /// screen at the measured menu scale with room for a 3-character label in the
 /// widest of them.
-const COLUMNS: usize = 10;
+pub const COLUMNS: usize = 10;
 
 /// Every cell, characters first and the two special keys last.
-const CELLS: usize = KEYS.len() + 2;
+pub const CELLS: usize = KEYS.len() + 2;
 
 /// How many rows of [`COLUMNS`] the grid has.
 const GRID_ROWS: usize = CELLS.div_ceil(COLUMNS);
 
 /// What the cell at `index` does.
 #[must_use]
-fn key_at(index: usize) -> Key {
+pub fn key_at(index: usize) -> Key {
     match KEYS.chars().nth(index) {
         Some(c) => Key::Char(c),
         None if index == KEYS.len() => Key::Delete,
@@ -139,7 +138,7 @@ fn key_at(index: usize) -> Key {
 /// **The one place the two input paths agree.** Without this the grid would
 /// offer one set and a real keyboard another, and a name typed at the desk
 /// could be one the pad could never have produced - or one
-/// [`crate::pilots::check_name`] refuses.
+/// `crate::pilots::check_name` refuses.
 #[must_use]
 pub fn accepts(c: char) -> bool {
     KEYS.contains(c)
@@ -593,7 +592,7 @@ pub fn message_draw(skin: &Skin, text: &str) -> Vec<Draw> {
 }
 
 /// The AI PILOTS page's own live line under its rows: what `text` (off
-/// [`crate::pilots::axis_preview_for`]) says the axis currently on the
+/// `crate::pilots::axis_preview_for`) says the axis currently on the
 /// `AXIS` row means.
 ///
 /// **Not modal, and not [`message_draw`]'s shape either.** Nothing here asks
@@ -624,7 +623,7 @@ pub fn message_draw(skin: &Skin, text: &str) -> Vec<Draw> {
 /// was the screen's own edge, and Pulse's footer sits well short of it. The
 /// fix was not a better nudge - [`crate::menu::Frame::content_bottom`] answers
 /// where the chrome actually starts, `menu::visible_rows`'s own `reserve_note`
-/// argument (set by [`crate::pilots::page_reserves_axis_preview`]) shows one
+/// argument (set by `crate::pilots::page_reserves_axis_preview`) shows one
 /// fewer row on a page that needs this line so there is somewhere to put it,
 /// and this function stopped needing a position of its own. See
 /// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section.

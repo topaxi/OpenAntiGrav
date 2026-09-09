@@ -342,7 +342,7 @@ rediscovered.
 **`HeadToHeadBar` is an `<Image>` with no `Src`.** It carries a `Color` and
 `height="0"` - a solid bar whose length is supplied at runtime, the same
 colour-only convention the front end already uses for backdrops
-([`screen.rs`](../../crates/game/src/screen.rs)'s `Screen::fills`). Read as a
+([`screen.rs`](../../crates/ui/src/screen.rs)'s `Screen::fills`). Read as a
 sprite it is a widget with no texture, and it vanishes. One widget across all
 five layouts, in arcade and eliminator.
 
@@ -448,7 +448,7 @@ vertex - fills the outline with more glyph. A `0` becomes a filled box and a
 25-pixel lap time is unreadable. That is exactly what the first working version
 did, and the screenshot is what caught it; no test would have.
 
-The fix is in [`oag_game::font`](../../crates/game/src/font.rs) and
+The fix is in [`oag_game::font`](../../crates/ui/src/font.rs) and
 [`render.rs`](../../crates/game/src/render.rs): the glyph atlas is a two-channel
 `Rg8Unorm` texture, `r` the body/outline mask and `g` the coverage, and text is
 composited as

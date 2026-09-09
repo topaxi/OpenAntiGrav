@@ -393,7 +393,7 @@ pub(crate) struct Cli {
     /// no state machine and calls no `Menu::update` - so the on-screen
     /// keyboard can never appear here on its own, and without this flag its
     /// layout is reviewable only by playing the game on a machine that has a
-    /// display. The models drawn are the live ones (`oag_game::prompt`) and
+    /// display. The models drawn are the live ones (`oag_ui::prompt`) and
     /// the labels come out of the same string table `session::pilot_editor`
     /// resolves, so this is the real screen rather than a mock-up of it.
     ///

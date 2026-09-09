@@ -13,7 +13,8 @@
 
 use log::{error, info};
 
-use oag_game::{boot, records, strings};
+use oag_game::{boot, records};
+use oag_ui::strings;
 
 use crate::hints;
 use crate::stage::Stage;
@@ -23,7 +24,7 @@ use super::Session;
 impl Session {
     /// Swaps the menus for the race `escape` parked over them - the other half
     /// of [`Session::open_menus`] parking one. Reached only from
-    /// [`Session::handle_menu`], on [`oag_game::menu::MenuEvent::Closed`] while
+    /// [`Session::handle_menu`], on [`oag_ui::menu::MenuEvent::Closed`] while
     /// [`Session::suspended_race`] holds something.
     ///
     /// A no-op if nothing is parked, which cannot happen through

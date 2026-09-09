@@ -60,10 +60,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::language::StringTable;
-use crate::menu;
 use anyhow::{Context, Result, bail};
 use oag_ai::{Lean, Pilot, Span};
+use oag_ui::language::StringTable;
+use oag_ui::menu;
 use serde::Deserialize;
 
 /// Where user pilots live: `<config dir>/oag/pilots/`.
@@ -427,7 +427,7 @@ fn axis_gloss(axis: &str) -> Option<(&'static str, String)> {
 /// AI PILOTS page, and today only it.
 ///
 /// **Structural, off the page's own definition, never a row's live value.**
-/// `crate::menu::visible_rows`'s `reserve_note` argument reads this to decide
+/// `oag_ui::menu::visible_rows`'s `reserve_note` argument reads this to decide
 /// how many rows a page's own window shows, and that decision has to be
 /// stable for the whole time a page is open: reserving room only once
 /// `pilot.axis` actually holds a value would resize the grid on the

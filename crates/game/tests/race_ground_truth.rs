@@ -59,10 +59,10 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::frontend::states;
 use oag_game::{boot, catalogue, movie, race};
 use oag_gameplay::input::{Button, Input};
 use oag_physics::Raycaster;
+use oag_ui::frontend::states;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -157,7 +157,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         language: None,
         source: image.display().to_string(),
         dlc: Vec::new(),
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-race-handoff"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
@@ -1591,7 +1591,7 @@ fn the_players_place_reaches_the_hud() {
         .hud_text
         .iter()
         .filter_map(|draw| match draw {
-            oag_game::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.as_str()),
             _ => None,
         })
         .collect();

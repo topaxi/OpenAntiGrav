@@ -5,10 +5,11 @@
 use anyhow::Result;
 use log::{error, info, warn};
 
-use oag_game::frontend::{self};
-use oag_game::strings;
-use oag_game::{boot, font, menu, race, records, report, settings};
+use oag_game::{boot, race, records, report, settings};
 use oag_gameplay::input::Button;
+use oag_ui::frontend::{self};
+use oag_ui::strings;
+use oag_ui::{font, menu};
 
 use crate::hints;
 use crate::stage::Stage;
@@ -58,7 +59,7 @@ impl Session {
         // menu between the picker and a track and this build now has one too; it
         // is simply not the original's, which is why the state whose transition
         // gets us here is still spelled the way the disc spells it while what it
-        // reaches is not a recovered screen at all. See `oag_game::menu`.
+        // reaches is not a recovered screen at all. See `oag_ui::menu`.
         if !self.launched
             && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
         {
@@ -314,7 +315,7 @@ impl Session {
                     // and Pure's two are neither its boot step nor the step after
                     // its picker.
                     for event in &events {
-                        if let oag_game::state_machine::Event::Enter(name) = event {
+                        if let oag_ui::state_machine::Event::Enter(name) = event {
                             stage.install_movie(name, &mut self.audio);
                         }
                     }

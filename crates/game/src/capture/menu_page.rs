@@ -26,11 +26,11 @@ pub(super) fn menu_page(
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
-    languages: &[crate::language::Language],
-    strings: &crate::language::StringTable,
+    languages: &[oag_ui::language::Language],
+    strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
-    backdrop: Option<crate::menu::Backdrop>,
-    skin: &crate::menu::Skin,
+    backdrop: Option<oag_ui::menu::Backdrop>,
+    skin: &oag_ui::menu::Skin,
     // The width of a string in the face the entries are drawn in, which a
     // horizontal strip needs and a column does not. The same face `skin`'s line
     // height came off, for the same reason: a strip laid out with the wrong
@@ -40,14 +40,14 @@ pub(super) fn menu_page(
     // Read here rather than left out, because a captured page that is missing
     // the frame the window draws is exactly the divergence this module exists
     // to prevent.
-    frame: &crate::menu::Frame,
+    frame: &oag_ui::menu::Frame,
     phase: Option<f32>,
     // Which modal prompt to draw over the page, if any - `--menu-prompt`. See
     // [`prompt_draws`], and the block that calls it for why a prompt cannot
     // otherwise appear on this path at all.
     prompt: Option<&str>,
-) -> Result<Vec<crate::frontend::Draw>> {
-    let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN, strings)
+) -> Result<Vec<oag_ui::frontend::Draw>> {
+    let definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
     if definition.page(page).is_none() {
         anyhow::bail!(
@@ -61,30 +61,30 @@ pub(super) fn menu_page(
         );
     }
 
-    let mut model = crate::menu::Menu::new(definition);
+    let mut model = oag_ui::menu::Menu::new(definition);
     model.supply(
-        crate::menu::ValueSource::Tracks,
+        oag_ui::menu::ValueSource::Tracks,
         &tracks
             .iter()
-            .map(|track| crate::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
+            .map(|track| oag_ui::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
             .collect::<Vec<_>>(),
     );
     model.supply(
-        crate::menu::ValueSource::Teams,
+        oag_ui::menu::ValueSource::Teams,
         &teams
             .iter()
-            .map(|team| crate::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
+            .map(|team| oag_ui::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
             .collect::<Vec<_>>(),
     );
     model.supply(
-        crate::menu::ValueSource::RaceModes,
-        &crate::menu::mode_choices(strings),
+        oag_ui::menu::ValueSource::RaceModes,
+        &oag_ui::menu::mode_choices(strings),
     );
     model.supply(
-        crate::menu::ValueSource::Languages,
+        oag_ui::menu::ValueSource::Languages,
         &languages
             .iter()
-            .map(|language| crate::menu::Choice::labelled(&language.name, &language.native_name))
+            .map(|language| oag_ui::menu::Choice::labelled(&language.name, &language.native_name))
             .collect::<Vec<_>>(),
     );
     // No window here, so no screens to enumerate: the list is `default` plus
@@ -92,7 +92,7 @@ pub(super) fn menu_page(
     // the player's own value, which is all `--menu-page` is for, and it does
     // not invent a monitor this machine may not have.
     model.supply(
-        crate::menu::ValueSource::Monitors,
+        oag_ui::menu::ValueSource::Monitors,
         &oag_display::display::Monitor::offered(
             &settings
                 .display
@@ -103,7 +103,7 @@ pub(super) fn menu_page(
                 .collect::<Vec<_>>(),
         )
         .into_iter()
-        .map(crate::menu::Choice::plain)
+        .map(oag_ui::menu::Choice::plain)
         .collect::<Vec<_>>(),
     );
     // The same treatment, and for a closer reason than it looks: enumerating
@@ -112,7 +112,7 @@ pub(super) fn menu_page(
     // show a player their settings should not offer a wider choice than the
     // page they can actually use.
     model.supply(
-        crate::menu::ValueSource::Renderers,
+        oag_ui::menu::ValueSource::Renderers,
         &oag_display::display::Renderer::offered(
             &settings
                 .graphics
@@ -123,7 +123,7 @@ pub(super) fn menu_page(
                 .collect::<Vec<_>>(),
         )
         .into_iter()
-        .map(crate::menu::Choice::plain)
+        .map(oag_ui::menu::Choice::plain)
         .collect::<Vec<_>>(),
     );
     // Straight off the boot survey, not off the settings file, and that is
@@ -132,11 +132,11 @@ pub(super) fn menu_page(
     // a still drawn from the file alone would show a row that is always
     // usable. Empty draws it unusable, which is what most machines would see.
     model.supply(
-        crate::menu::ValueSource::MusicSources,
+        oag_ui::menu::ValueSource::MusicSources,
         &if music_discs.both() {
             crate::audio::MusicSource::ALL
                 .iter()
-                .map(|source| crate::menu::Choice::plain(source.name()))
+                .map(|source| oag_ui::menu::Choice::plain(source.name()))
                 .collect::<Vec<_>>()
         } else {
             Vec::new()
@@ -164,7 +164,7 @@ pub(super) fn menu_page(
     // here.
     let roster = crate::pilots::load().unwrap_or_else(|_| crate::pilots::Roster::built_in());
     model.supply(
-        crate::menu::ValueSource::Pilots,
+        oag_ui::menu::ValueSource::Pilots,
         &roster
             .entries()
             .iter()
@@ -174,15 +174,15 @@ pub(super) fn menu_page(
                 } else {
                     format!("{} (built-in)", entry.name)
                 };
-                crate::menu::Choice::labelled(&entry.name, label)
+                oag_ui::menu::Choice::labelled(&entry.name, label)
             })
             .collect::<Vec<_>>(),
     );
     model.supply(
-        crate::menu::ValueSource::PilotAxes,
+        oag_ui::menu::ValueSource::PilotAxes,
         &crate::pilots::AXES
             .iter()
-            .map(|(name, _)| crate::menu::Choice::plain(*name))
+            .map(|(name, _)| oag_ui::menu::Choice::plain(*name))
             .collect::<Vec<_>>(),
     );
     // `LOW`/`HIGH` are resupplied off whichever pilot and axis the other two
@@ -194,18 +194,18 @@ pub(super) fn menu_page(
         .map(|entry| crate::pilots::AXES[0].1(&entry.pilot));
     for (source, value) in [
         (
-            crate::menu::ValueSource::PilotAxisLow,
+            oag_ui::menu::ValueSource::PilotAxisLow,
             bounds.map(|b| b.low),
         ),
         (
-            crate::menu::ValueSource::PilotAxisHigh,
+            oag_ui::menu::ValueSource::PilotAxisHigh,
             bounds.map(|b| b.high),
         ),
     ] {
         model.supply(
             source,
             &value
-                .map(|number| vec![crate::menu::Choice::plain(format!("{number}"))])
+                .map(|number| vec![oag_ui::menu::Choice::plain(format!("{number}"))])
                 .unwrap_or_default(),
         );
     }
@@ -215,12 +215,12 @@ pub(super) fn menu_page(
     // AI PILOTS page's own reservation included, off the page just opened
     // rather than a live `AXIS` value. See `pilots::page_reserves_axis_preview`.
     let reserve_note = crate::pilots::page_reserves_axis_preview(model.page());
-    model.set_visible_rows(crate::menu::visible_rows(skin, frame, reserve_note));
+    model.set_visible_rows(oag_ui::menu::visible_rows(skin, frame, reserve_note));
     // The file's own table, not the built-in default: a settings file that
     // rebound a key should show that key here too. See
     // `crate::settings::Controls::live_bindings`.
     let bindings = settings.controls.live_bindings();
-    let layers = crate::menu::draw_list(
+    let layers = oag_ui::menu::draw_list(
         &model,
         skin,
         &|button| bindings.names_for(button),
@@ -229,7 +229,7 @@ pub(super) fn menu_page(
         frame,
         // `--menu-page` builds this `Menu` from scratch with no `Session`
         // behind it, so there is never a parked race to show through - see
-        // `crate::menu::draw_list`'s own doc for the parameter.
+        // `oag_ui::menu::draw_list`'s own doc for the parameter.
         false,
     );
     // What the `AXIS` row currently means, read live off `model`'s own rows -
@@ -246,7 +246,7 @@ pub(super) fn menu_page(
     // this flag the on-screen keyboard's layout is reviewable only by playing
     // the game on a machine with a display, and this project's own rule is to
     // judge a screen by looking at it. The models are the live ones
-    // (`crate::prompt`) and the labels come from the same lookup the live
+    // (`oag_ui::prompt`) and the labels come from the same lookup the live
     // path resolves them with (`session::pilot_editor` for rename/delete,
     // `crate::rebind::prompt` for `binding`), so what this draws is what a
     // player sees rather than a mock-up of it.
@@ -264,7 +264,7 @@ pub(super) fn menu_page(
                 .entries
                 .iter()
                 .find_map(|entry| match entry {
-                    crate::menu::Entry::Binding { button, .. } => {
+                    oag_ui::menu::Entry::Binding { button, .. } => {
                         Some(button.to_string().to_ascii_uppercase())
                     }
                     _ => None,
@@ -278,7 +278,7 @@ pub(super) fn menu_page(
         };
         let mut list = layers.flatten();
         if let Some(text) = &axis_preview {
-            list.push(crate::prompt::axis_preview_draw(&model, skin, text));
+            list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
@@ -286,7 +286,7 @@ pub(super) fn menu_page(
     let Some(phase) = phase else {
         let mut list = layers.flatten();
         if let Some(text) = &axis_preview {
-            list.push(crate::prompt::axis_preview_draw(&model, skin, text));
+            list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
         return Ok(list);
     };
@@ -295,8 +295,8 @@ pub(super) fn menu_page(
     // No axis-preview line here, matching `MenuStage::render`'s own gate:
     // the row list is a zoomed, mid-tween picture at this point, and the
     // preview's position is computed against the still one.
-    let shape = crate::menu::Transition::default();
-    let mut tween = crate::anim::Tween::new(1.0);
+    let shape = oag_ui::menu::Transition::default();
+    let mut tween = oag_ui::anim::Tween::new(1.0);
     tween.advance(phase.clamp(0.0, 1.0));
     let t = tween.eased();
     Ok(layers
@@ -322,15 +322,15 @@ pub(super) fn menu_page(
 fn prompt_draws(
     kind: &str,
     name: &str,
-    strings: &crate::language::StringTable,
-    skin: &crate::menu::Skin,
-) -> Result<Vec<crate::frontend::Draw>> {
+    strings: &oag_ui::language::StringTable,
+    skin: &oag_ui::menu::Skin,
+) -> Result<Vec<oag_ui::frontend::Draw>> {
     let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
     let say_of = |id: &str, english: &str| strings.get(id).unwrap_or(english).replace("%s", name);
     match kind {
         "rename" | "rename-note" => {
-            let mut keyboard = crate::prompt::Keyboard::new(
-                crate::prompt::Labels {
+            let mut keyboard = oag_ui::prompt::Keyboard::new(
+                oag_ui::prompt::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     delete: say("OAG_KEYBOARD_DELETE", "DEL"),
                     accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
@@ -367,7 +367,7 @@ fn prompt_draws(
             } else {
                 say_of("OAG_PILOT_DELETE_ASK", "DELETE %s? THIS CANNOT BE UNDONE.")
             };
-            Ok(crate::prompt::Confirm::new(crate::prompt::ConfirmLabels {
+            Ok(oag_ui::prompt::Confirm::new(oag_ui::prompt::ConfirmLabels {
                 title: say("OAG_PILOT_DELETE_TITLE", "DELETE PILOT"),
                 message,
                 yes: say("OAG_PILOT_DELETE_YES", "DELETE"),
@@ -375,12 +375,12 @@ fn prompt_draws(
             })
             .draw(skin))
         }
-        // The CONTROLS page's key-capture prompt - `crate::prompt::
+        // The CONTROLS page's key-capture prompt - `oag_ui::prompt::
         // message_draw` is the same function `MenuStage::render` calls in
         // the binary, off `Session::awaiting_binding`, so this and a live
         // capture cannot draw two different pictures for the same state.
         // See `docs/architecture/menus.md`'s Rebinding section.
-        "binding" => Ok(crate::prompt::message_draw(
+        "binding" => Ok(oag_ui::prompt::message_draw(
             skin,
             &say_of(
                 "OAG_BINDING_CAPTURE_PROMPT",
@@ -405,12 +405,12 @@ mod tests {
     /// running the flag and reading the error.
     #[test]
     fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
-        let skin = crate::menu::Skin::new(
+        let skin = oag_ui::menu::Skin::new(
             oag_pulse::FRONT_END.menu,
             oag_display::space::Space::PSP,
             22.0,
         );
-        let strings = crate::language::StringTable::default();
+        let strings = oag_ui::language::StringTable::default();
         for kind in [
             "rename",
             "rename-note",
@@ -430,14 +430,14 @@ mod tests {
             // caller derives it from.
             assert!(
                 list.iter().any(
-                    |draw| matches!(draw, crate::frontend::Draw::Text { text, .. }
+                    |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
                         if text.contains("winston"))
                 ),
                 "{kind:?} does not substitute name"
             );
             assert!(
                 !list.iter().any(
-                    |draw| matches!(draw, crate::frontend::Draw::Text { text, .. }
+                    |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
                         if text.contains("%s"))
                 ),
                 "{kind:?} left a %s unsubstituted"

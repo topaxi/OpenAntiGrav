@@ -2,10 +2,71 @@
 //! source, the restart note the renderer row raises, and the definitions the
 //! loader refuses outright.
 //!
-//! Split out of `menu/tests.rs` under the file-length rule in
-//! `scripts/check-file-size.py`.
+//! Split out of `oag-ui`'s own `menu/tests.rs` under the file-length rule in
+//! `scripts/check-file-size.py` - and, unlike its siblings that stayed there,
+//! moved to the composition root's own integration tests rather than with it:
+//! `an_offered_music_source_list_matches_crate_audio_s_own_enum` (below)
+//! checks the shipped definition against `oag_game::audio`, which only a crate
+//! that can see both `oag-ui` and `oag-game` can assert.
 
-use super::*;
+use oag_gameplay::input::{Button, Input};
+use oag_ui::frontend::Draw;
+use oag_ui::menu::*;
+
+/// The definition this build actually ships. Every test that can use it
+/// does, so the file is exercised rather than a fixture standing in for it.
+fn built_in() -> Definition {
+    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+        .expect("the built-in menu must parse")
+}
+
+/// One tick with `buttons` newly down, which is what the edges above read.
+fn press(menu: &mut Menu, buttons: &[Button]) -> Vec<MenuEvent> {
+    let mut input = Input::new();
+    let mask = buttons.iter().fold(0u32, |mask, &b| mask | 1 << b.index());
+    input.begin_frame(mask);
+    menu.update(&mut input)
+}
+
+/// `Pulse_20.fnt`'s line height, per `docs/formats/fnt.md` and confirmed by
+/// reading it back out of `Atlas::from_font`.
+const PULSE_MENU_LINE_HEIGHT: f32 = 22.0;
+
+/// The skin every test below draws with: Pulse's own table against the
+/// 22-pixel face its menus name. Using the shipped table rather than a
+/// fixture means a change to the recovered numbers shows up here, which is
+/// the point - these tests are where the layout is pinned.
+fn skin() -> Skin {
+    Skin::new(
+        oag_pulse::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        PULSE_MENU_LINE_HEIGHT,
+    )
+}
+
+/// A stand-in for a real face's widths: every glyph six pixels wide.
+fn measure(text: &str) -> f32 {
+    text.chars().count() as f32 * 6.0
+}
+
+/// [`draw_list`] flattened, which is what every test below wants: the
+/// layer split exists for the transition, and none of these animate.
+fn list(
+    menu: &Menu,
+    bindings: &dyn Fn(Button) -> Vec<&'static str>,
+    backdrop: Option<Backdrop>,
+) -> Vec<Draw> {
+    draw_list(
+        menu,
+        &skin(),
+        bindings,
+        &measure,
+        backdrop,
+        &Frame::default(),
+        false,
+    )
+    .flatten()
+}
 
 /// A disabled row is selectable and readable and does not move, which is
 /// three separate things a player would notice.
@@ -101,7 +162,7 @@ fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
 #[test]
 fn a_supplied_music_source_row_keeps_the_value_it_was_seeded_with() {
     let mut menu = Menu::new(built_in());
-    let offered: Vec<Choice> = crate::audio::MusicSource::ALL
+    let offered: Vec<Choice> = oag_game::audio::MusicSource::ALL
         .iter()
         .map(|source| Choice::plain(source.name()))
         .collect();
@@ -168,7 +229,7 @@ setting = "a.limit"
 disabled_by = { setting = "a.nothing", value = "on" }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
     assert!(e.to_string().contains("a.nothing"), "{e}");
@@ -196,7 +257,7 @@ setting = "a.limit"
 disabled_by = { setting = "a.vsync", value = "onn" }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
     assert!(e.to_string().contains("onn"), "{e}");
@@ -219,7 +280,7 @@ setting = "a.limit"
 disabled_by = { setting = "a.limit", value = 60 }
 values = ["1", "2"]
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadCondition { .. }), "{e}");
 }
@@ -242,7 +303,7 @@ kind = "back"
 label = "BACK"
 disabled_by = { setting = "a.vsync", value = true }
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
     assert!(e.to_string().contains("disabled_by"), "{e}");
@@ -506,7 +567,7 @@ setting = "a.renderer"
 values = ["one", "two"]
 restart_required = ""
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
     assert!(e.to_string().contains("restart_required"), "{e}");
@@ -526,7 +587,7 @@ kind = "back"
 label = "BACK"
 restart_required = "RESTART THE GAME"
 "#;
-    let e = Definition::parse(text, &crate::language::StringTable::default())
+    let e = Definition::parse(text, &oag_ui::language::StringTable::default())
         .expect_err("must not load");
     assert!(matches!(e, Error::BadEntry { .. }), "{e}");
 }
@@ -535,7 +596,7 @@ restart_required = "RESTART THE GAME"
 fn a_version_this_build_does_not_know_is_refused() {
     let error = Definition::parse(
         "version = 99\nroot = \"main\"",
-        &crate::language::StringTable::default(),
+        &oag_ui::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(matches!(error, Error::Version { found: 99 }), "{error}");
@@ -554,7 +615,7 @@ fn a_dangling_target_is_refused() {
         label = "NOWHERE"
         target = "does_not_exist"
         "#,
-        &crate::language::StringTable::default(),
+        &oag_ui::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(matches!(error, Error::NoSuchPage { .. }), "{error}");
@@ -573,7 +634,7 @@ fn an_unknown_action_is_refused_and_says_what_is_known() {
         label = "DO IT"
         action = "make_tea"
         "#,
-        &crate::language::StringTable::default(),
+        &oag_ui::language::StringTable::default(),
     )
     .expect_err("refused");
     let message = error.to_string();
@@ -601,7 +662,7 @@ fn a_page_nothing_links_to_is_refused() {
         kind = "back"
         label = "BACK"
         "#,
-        &crate::language::StringTable::default(),
+        &oag_ui::language::StringTable::default(),
     )
     .expect_err("refused");
     assert!(

@@ -38,7 +38,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::{boot, frontend};
+use oag_game::boot;
+use oag_ui::frontend;
 
 /// Every image present, as `(label, path)`.
 ///

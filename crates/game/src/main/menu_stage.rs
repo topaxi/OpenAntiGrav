@@ -2,10 +2,11 @@
 
 use anyhow::{Result, bail};
 
-use oag_game::frontend::{self, Draw};
 use oag_game::input::Button;
 use oag_game::render::{Renderer, letterbox_in};
-use oag_game::{font, marquee, menu, movie, pilots};
+use oag_game::{movie, pilots};
+use oag_ui::frontend::{self, Draw};
+use oag_ui::{font, marquee, menu};
 
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
@@ -89,7 +90,7 @@ pub(crate) struct PageChange {
     /// The page being left, as it looked on its last frame.
     leaving: menu::Layers,
     /// The clock both halves share.
-    tween: oag_game::anim::Tween,
+    tween: oag_ui::anim::Tween,
     /// How far each half travels.
     shape: menu::Transition,
 }
@@ -195,7 +196,7 @@ impl MenuStage {
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of
-        // the same `--ticks` produce the same picture. See `oag_game::anim`.
+        // the same `--ticks` produce the same picture. See `oag_ui::anim`.
         if let Some(change) = &mut self.change {
             #[expect(
                 clippy::cast_possible_truncation,
@@ -236,7 +237,7 @@ impl MenuStage {
     pub(crate) fn begin_change(&mut self, leaving: menu::Layers) {
         self.change = Some(PageChange {
             leaving,
-            tween: oag_game::anim::Tween::new(self.skin.transition_secs()),
+            tween: oag_ui::anim::Tween::new(self.skin.transition_secs()),
             shape: menu::Transition::default(),
         });
     }
@@ -317,7 +318,7 @@ impl MenuStage {
         // and off `Session::awaiting_binding` - `Session::draw`'s call site
         // again, for the same reason `bound_keys` and `frozen_race` both
         // are: this stage holds no session state of its own. `Some` draws
-        // `oag_game::prompt::message_draw` over everything else, last, so a
+        // `oag_ui::prompt::message_draw` over everything else, last, so a
         // capture reads as the page being frozen rather than broken - the
         // gap `docs/architecture/menus.md`'s Rebinding section names as this
         // project's own, not the disc's.
@@ -326,7 +327,7 @@ impl MenuStage {
         // `Session::draw`'s call site - this stage holds no `StringTable` of
         // its own to read `pilots::axis_preview_for` with. `Some` draws one
         // more line under the rows, in the same slot a warning or a restart
-        // note would use; see `oag_game::prompt::axis_preview_draw`'s own
+        // note would use; see `oag_ui::prompt::axis_preview_draw`'s own
         // doc for why that is not `message_draw`'s modal shape.
         axis_preview: Option<&str>,
     ) -> Result<()> {
@@ -422,12 +423,12 @@ impl MenuStage {
         // site. Skipped mid-transition (`self.change.is_some()`), the same
         // guard the marquee above uses and for the same reason: the row
         // list it is positioned against is a zoomed, fading picture during a
-        // tween, not the still one `oag_game::prompt::axis_preview_draw`
+        // tween, not the still one `oag_ui::prompt::axis_preview_draw`
         // reads `self.menu`'s scroll and visible-row count off.
         let list: Vec<Draw> = match (axis_preview, self.change.is_none()) {
             (Some(text), true) => list
                 .into_iter()
-                .chain(std::iter::once(oag_game::prompt::axis_preview_draw(
+                .chain(std::iter::once(oag_ui::prompt::axis_preview_draw(
                     &self.menu, &self.skin, text,
                 )))
                 .collect(),
@@ -466,7 +467,7 @@ impl MenuStage {
         // maybe_begin_binding` reads ahead of `Menu::update`), but there is
         // no invariant enforcing that here, so "last" is the same safe
         // default the pilot-editor prompt above picked for itself.
-        // `oag_game::prompt::message_draw` is the shared drawing code -
+        // `oag_ui::prompt::message_draw` is the shared drawing code -
         // `--menu-page --menu-prompt binding`'s own headless capture calls
         // the same function, off `crate::capture::menu_page::prompt_draws`,
         // so this and that flag cannot draw two different pictures for the
@@ -474,7 +475,7 @@ impl MenuStage {
         let list: Vec<Draw> = match binding_prompt {
             Some(text) => list
                 .into_iter()
-                .chain(oag_game::prompt::message_draw(&self.skin, text))
+                .chain(oag_ui::prompt::message_draw(&self.skin, text))
                 .collect(),
             None => list,
         };

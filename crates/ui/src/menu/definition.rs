@@ -29,8 +29,8 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use crate::input::button_from_name;
 use crate::language::StringTable;
+use oag_gameplay::input::button_from_name;
 
 use super::{
     Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Restart, Value, ValueSource, Warning,

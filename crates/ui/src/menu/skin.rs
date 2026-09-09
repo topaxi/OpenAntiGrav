@@ -630,7 +630,7 @@ pub struct Strip {
 /// value**: reserving room only once a note happens to be showing would
 /// resize the grid on the very keystroke that makes one appear, which is
 /// the jump this reservation exists to avoid - see [`super::Menu::warning`]
-/// and [`crate::pilots::page_reserves_axis_preview`].
+/// and `crate::pilots::page_reserves_axis_preview`.
 ///
 /// At Pulse's measured 28-pixel pitch and `reserve_note` false, that is
 /// seven rows, which is exactly what the original's own main menu shows -
@@ -686,10 +686,10 @@ fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
 }
 
 /// `from` to `to`, channel by channel, at `t` in `0..=1`. [`Skin::selected`]'s
-/// own lerp: `oag_render` is exempt from the workspace's determinism rules
-/// and this module is outside them entirely (`oag-game` is not one of the
-/// crates `just check-determinism` scans), but there is still no reason for a
-/// menu colour to reassociate float arithmetic it does not need to.
+/// own lerp: `oag-ui` *is* one of the crates `just check-determinism` scans,
+/// but this module's `sin`/`cos` reach a pixel rather than a hash (see that
+/// script's own `ALLOWED` entry for this file), and there is still no reason
+/// for a menu colour to reassociate float arithmetic it does not need to.
 fn lerp_color(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
     let t = t.clamp(0.0, 1.0);
     let mut out = [0.0; 4];

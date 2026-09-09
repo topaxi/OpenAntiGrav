@@ -16,7 +16,7 @@ pub(crate) struct RaceStage {
     ///
     /// Not an `Option`, unlike the HUD: that one needs a layout off the disc and
     /// there may be none, where this needs only a font and
-    /// `oag_game::font::Atlas::build` always answers with the built-in 5x7 set.
+    /// `oag_ui::font::Atlas::build` always answers with the built-in 5x7 set.
     pub(crate) scoreboard: oag_game::scoreboard::Overlay,
     /// The start-line countdown's own `<Mode3D>` model, or `None` when this
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see

@@ -65,8 +65,8 @@ pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 // private to it; `tests` reaches those through `super::draw::*`.
 use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
 
-use crate::frontend::{Align, Draw};
-use crate::screen::{argb_to_rgba, parse_argb};
+use oag_ui::frontend::{Align, Draw};
+use oag_ui::screen::{argb_to_rgba, parse_argb};
 
 /// The atlas and the five layout entries: `oag_pulse::hud`.
 ///

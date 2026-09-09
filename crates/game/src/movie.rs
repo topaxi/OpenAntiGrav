@@ -23,7 +23,7 @@
 //!
 //! | | What it is | Thread |
 //! | --- | --- | --- |
-//! | `crate::frontend::Player` | A frame counter and the pacing rules. No pixels. | The one that ticks |
+//! | `oag_ui::frontend::Player` | A frame counter and the pacing rules. No pixels. | The one that ticks |
 //! | [`FrameStore`] | One synchronous `read_frame`, straight off the decoder. | Whoever calls it |
 //! | [`Feed`] | A [`FrameStore`] on a worker thread, decoding ahead into a ring. | Its own |
 //!
@@ -49,11 +49,11 @@ use log::{info, warn};
 use oag_video::{av1, bik, ipf, pmf};
 
 use crate::at3;
-// `FRAME_RATE`/`PS2_DISPLAY_ASPECT` moved to `crate::frontend::player` with
+// `FRAME_RATE`/`PS2_DISPLAY_ASPECT` moved to `oag_ui::frontend::player` with
 // `Player`: both are timing/shape constants a movie is *played* at, not part
 // of decoding one, and `Player` is the part of this file the front end talks
 // to. See that module's own doc for why the split falls there.
-use crate::frontend::{FRAME_RATE, PS2_DISPLAY_ASPECT};
+use oag_ui::frontend::{FRAME_RATE, PS2_DISPLAY_ASPECT};
 
 /// Colour format the cache decodes to: planar 8-bit YUV, chroma at half
 /// resolution in both axes.
@@ -523,7 +523,7 @@ impl FrameStore {
 
 /// One decoded frame, and where in the playback order it belongs.
 ///
-/// `position` is the [`crate::frontend::Player::position`] this frame is the picture for, and it
+/// `position` is the [`oag_ui::frontend::Player::position`] this frame is the picture for, and it
 /// is what a consumer compares against. `index` is the frame's index *within the
 /// movie* and is only the same number until a loop wraps.
 #[derive(Debug)]
@@ -671,16 +671,16 @@ struct State {
 /// frames a second, so the two cannot be the same thread. The worker decodes
 /// forward into a ring of [`LOOKAHEAD`] frames and parks when it is full;
 /// whoever is drawing asks for *the newest frame at or before* the position the
-/// [`crate::frontend::Player`] has reached, uploads it if there is one, and keeps the frame it
+/// [`oag_ui::frontend::Player`] has reached, uploads it if there is one, and keeps the frame it
 /// already has if there is not.
 ///
 /// # Why it is safe against the determinism rules
 ///
 /// `docs/architecture/determinism.md` requires the simulation to be
 /// single-threaded, and this does not touch it. The feed is **write-only toward
-/// the GPU**: a [`crate::frontend::Player`] hands it a position and it hands back pixels. Nothing
+/// the GPU**: a [`oag_ui::frontend::Player`] hands it a position and it hands back pixels. Nothing
 /// it produces is ever read back into sequencing - the intro's state machine
-/// compares [`crate::frontend::Player::frames_produced`] against its own 144, 231 and 260, and
+/// compares [`oag_ui::frontend::Player::frames_produced`] against its own 144, 231 and 260, and
 /// that number comes from the player whether a picture ever arrives or not. So
 /// no simulation state, and no state the simulation reads, can depend on when a
 /// decode finished. See
@@ -688,7 +688,7 @@ struct State {
 ///
 /// **What ADR-0019 changed, and what it did not.** That number no longer always
 /// comes from a *fixed-timestep* `update`: a movie with a sounding track is
-/// paced by [`crate::frontend::Player::follow`] instead, so the sequencing of that movie now
+/// paced by [`oag_ui::frontend::Player::follow`] instead, so the sequencing of that movie now
 /// depends on the audio device's clock. ADR-0010's argument survives unchanged,
 /// because it is about the **decode** thread and this is not it - the feed still
 /// cannot influence the player, and a decode that ran long still cannot move a
@@ -734,7 +734,7 @@ impl Feed {
     /// Moves `store` onto a worker thread and starts decoding.
     ///
     /// `repeat` is the movie's own nature rather than a setting: the menu
-    /// backdrop loops and the intro does not, exactly as [`crate::frontend::Player::new`] takes
+    /// backdrop loops and the intro does not, exactly as [`oag_ui::frontend::Player::new`] takes
     /// it. A feed that repeats never finishes; one that does not parks on the
     /// last frame with it still in the ring.
     ///
@@ -820,7 +820,7 @@ impl Feed {
 
     /// Puts playback back at position zero.
     ///
-    /// Called when a [`crate::frontend::Player`] is rebuilt at frame zero - opening the menus a
+    /// Called when a [`oag_ui::frontend::Player`] is rebuilt at frame zero - opening the menus a
     /// second time - because the feed's positions and the player's have to share
     /// an origin or every comparison after the first open is meaningless.
     ///

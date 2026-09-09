@@ -357,7 +357,7 @@ and the front-end XML supplies both colours - `Color` and `BorderColor`, the
 latter on 54 of the HUD's widgets. Reading alpha alone draws body and outline in
 one colour, which fills the counter of a `0` and turns a 25-pixel lap time into a
 solid box; that is measured rather than hypothesised, and it is what
-[`oag_game::font`](../../crates/game/src/font.rs) did until this was found. See
+[`oag_game::font`](../../crates/ui/src/font.rs) did until this was found. See
 [the HUD](../ui/hud.md).
 
 `oag_texture::fnt::Font::luma_at` and `Font::is_outlined` expose this, and

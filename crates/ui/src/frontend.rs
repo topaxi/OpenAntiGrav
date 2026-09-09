@@ -78,10 +78,10 @@
 //! does not know that: it fires the transition the original's own literal names
 //! and stops, and what happens next is the composition root's business.
 
-use crate::input::{Button, Input};
 use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, Text, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
+use oag_gameplay::input::{Button, Input};
 
 mod placement;
 mod player;
@@ -271,7 +271,7 @@ impl Align {
     ///
     /// Public because the HUD layouts spell alignment the same way this screen's
     /// widgets do, and one reading of the attribute is better than two that can
-    /// disagree. See [`crate::hud`].
+    /// disagree. See `crate::hud`.
     #[must_use]
     pub fn parse(value: &str) -> Self {
         match value.to_ascii_lowercase().as_str() {
@@ -287,7 +287,7 @@ impl Align {
 /// The sequence plays both, one after the other, and they are **different files
 /// with their own plane geometry** - so a caller that reads a frame out of the
 /// wrong one gets a picture rather than an error. That is precisely the failure
-/// [`crate::capture`] already carries a warning about for `--menu-page`, so the
+/// `crate::capture` already carries a warning about for `--menu-page`, so the
 /// draw says which movie it means instead of leaving it to be inferred from the
 /// current state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -792,7 +792,7 @@ impl Frontend {
     /// `movie_playhead` is how far the movie's **own sound** has got, in
     /// seconds, and `None` - the ordinary case - means it has none to pace
     /// against. See [`Self::advance_movie`] for what it does with it, and
-    /// [`crate::audio::Audio::movie_playhead`] for every reason it is `None`.
+    /// `crate::audio::Audio::movie_playhead` for every reason it is `None`.
     /// It is a parameter rather than something set beforehand because there are
     /// two tick loops - the window's and the headless capture's - and an
     /// argument makes forgetting one a compile error instead of a movie that

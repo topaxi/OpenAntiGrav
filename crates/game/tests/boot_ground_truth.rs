@@ -27,19 +27,19 @@
 use std::path::PathBuf;
 
 use oag_game::boot;
-use oag_game::frontend::states;
 use oag_game::input::{Button, Input};
 use oag_pulse as pulse;
+use oag_ui::frontend::states;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn load() -> Option<boot::Boot> {
-    load_leg(oag_game::frontend::Leg::LogoFmv, boot::DEFAULT_BOOT_MOVIE)
+    load_leg(oag_ui::frontend::Leg::LogoFmv, boot::DEFAULT_BOOT_MOVIE)
 }
 
-fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
+fn load_leg(leg: oag_ui::frontend::Leg, movie: &str) -> Option<boot::Boot> {
     let image = image()?;
     let options = boot::Options {
         // No saved language: these boot a fresh install every time.
@@ -94,7 +94,7 @@ fn the_reel_leg_still_runs_its_frame_holds() {
     // `--reel`. The state is real and evidenced - its `OnEnter` caches
     // `"DevPubRedirect"` at `0x088d7d80` - but the disc's boot never enters it,
     // so this is the only thing keeping the path from rotting.
-    let Some(loaded) = load_leg(oag_game::frontend::Leg::DevPubReel, boot::DEVPUB_REEL) else {
+    let Some(loaded) = load_leg(oag_ui::frontend::Leg::DevPubReel, boot::DEVPUB_REEL) else {
         return;
     };
     let mut frontend = loaded.frontend;
@@ -138,7 +138,7 @@ fn the_front_end_root_names_the_intro_movie() {
 
     let movies: Vec<String> = screens
         .with_movies()
-        .flat_map(|s| s.movies.iter().map(oag_game::screen::Movie::entry_name))
+        .flat_map(|s| s.movies.iter().map(oag_ui::screen::Movie::entry_name))
         .collect();
 
     assert!(
@@ -167,10 +167,8 @@ fn the_backdrop_and_the_intro_share_one_plane_geometry() {
     // draw a garbled picture rather than error, which is why it exists.
     // (The PS2's pair agree too, at 512x512 - see the notes in `boot::load`.)
     let Some(intro) = load() else { return };
-    let Some(backdrop) = load_leg(
-        oag_game::frontend::Leg::LogoFmv,
-        pulse::names::BACKDROP_MOVIE,
-    ) else {
+    let Some(backdrop) = load_leg(oag_ui::frontend::Leg::LogoFmv, pulse::names::BACKDROP_MOVIE)
+    else {
         return;
     };
 
@@ -344,7 +342,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_picker_draws_every_language_in_its_own_name() {
-    use oag_game::frontend::Draw;
+    use oag_ui::frontend::Draw;
 
     let Some(loaded) = load() else { return };
     let mut frontend = loaded.frontend;

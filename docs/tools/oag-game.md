@@ -215,7 +215,7 @@ a request.
 **The picture was stretched at first, and that was this build's bug, not the
 original's.** `INTRO512.PSS`/`INTRO640.PSS` both declare a 4:3 display aspect
 (non-square pixels), and the front end's video quad always filled
-[`SCREEN`](../../crates/game/src/frontend.rs) (480x272, ~16:9) exactly, which
+[`SCREEN`](../../crates/ui/src/frontend.rs) (480x272, ~16:9) exactly, which
 was right for a `.PMF`'s square pixels and wrong for this. Checked against the
 PS2's own `Skin.xml`: its `Movie` widget declares no `width`/`height` at all,
 unlike the PSP's, and the black `Image` behind it is `640x448` - the NTSC

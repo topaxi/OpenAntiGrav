@@ -19,8 +19,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use log::info;
 
-use oag_game::frontend;
-use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings, strings};
+use oag_game::{audio, boot, catalogue, loading, movie, prefetch, race, settings};
+use oag_ui::frontend;
+use oag_ui::{menu, strings};
 
 use crate::args::{resolve_difficulty, resolve_scheme};
 use crate::cli::Cli;
@@ -331,7 +332,7 @@ impl Pending {
 /// Here rather than in `main`'s body only because it is the last thing between
 /// the command line and a source; it reads no disc and depends on nothing this
 /// module produces. `language` resolves a row's `string_id`, when it names
-/// one - see `crate::strings::project_table` for why this, and not the
+/// one - see `oag_ui::strings::project_table` for why this, and not the
 /// disc's own `StringTable`, is what a caller this early can ever have.
 ///
 /// # Errors

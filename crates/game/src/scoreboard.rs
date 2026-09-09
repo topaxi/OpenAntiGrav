@@ -10,7 +10,7 @@
 //! (`0x0882f438`) fires `"EndRace_Results"`. **None of them has had its screen,
 //! its layout or its transitions read**, so none of them is reproduced here.
 //!
-//! What this draws instead is the same kind of thing `crate::menu` is: our own
+//! What this draws instead is the same kind of thing `oag_ui::menu` is: our own
 //! presentation, built from state the simulation already holds, standing in for
 //! a recovered screen nobody has recovered yet. It is deliberately plain - a
 //! list of positions in the built-in grid - rather than a plausible imitation of
@@ -37,9 +37,9 @@
 //! player's clock repeated eight times. The `TIME` column is the tick a craft
 //! crossed for the last time, and empty for one the race ended under.
 
-use crate::frontend::{Align, Draw};
 use crate::hud::{Precision, format_lap_time};
 use crate::records;
+use oag_ui::frontend::{Align, Draw};
 
 #[cfg(test)]
 mod tests;
@@ -193,7 +193,7 @@ const TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
 const PLAYER: [f32; 4] = [1.0, 0.83, 0.24, 1.0];
 const CAPTION: [f32; 4] = [0.62, 0.68, 0.78, 1.0];
 /// The outline the two HUD fonts bake into their atlas needs a colour of its
-/// own, or a glyph fills as a solid box - see `crate::font::Atlas::luma`.
+/// own, or a glyph fills as a solid box - see `oag_ui::font::Atlas::luma`.
 const BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 /// What the craft column's own words are for a medal: the disc-inspired,

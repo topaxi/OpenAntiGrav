@@ -8,14 +8,11 @@
 //! This file holds only the fixtures the themes below share; each theme is a
 //! file of its own, split along the seams the tests already had.
 
-mod definition;
-mod disabled_and_restart;
 mod drawing;
 mod frame;
 mod navigation;
 mod rows;
 mod strip;
-mod warnings;
 
 use super::*;
 

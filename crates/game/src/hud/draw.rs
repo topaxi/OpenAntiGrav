@@ -82,7 +82,7 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
 pub(super) fn text_for(
     label: &Label,
     readout: &Readout,
-    strings: &crate::language::StringTable,
+    strings: &oag_ui::language::StringTable,
     place_shown: bool,
     speed_unit: bool,
     classes: Option<&oag_title::ZoneSpeedClasses>,
@@ -321,7 +321,7 @@ fn zone_plus(name: &str) -> Option<u32> {
 
 /// A widget's `idstring` resolved through the language's table, or `None` when it
 /// carries no id and so has no caption to draw.
-pub(super) fn caption(label: &Label, strings: &crate::language::StringTable) -> Option<String> {
+pub(super) fn caption(label: &Label, strings: &oag_ui::language::StringTable) -> Option<String> {
     label
         .idstring
         .as_deref()
@@ -566,7 +566,7 @@ pub struct Context<'a> {
     /// The parsed layout for this race's mode.
     pub layout: &'a Layout,
     /// The language's string table, for `idstring` captions.
-    pub strings: &'a crate::language::StringTable,
+    pub strings: &'a oag_ui::language::StringTable,
     /// Every texture the layout names, packed into one sheet and keyed by the
     /// reference the layout spells. See [`sprite_draw`], which is the only
     /// thing that reads it.
@@ -788,7 +788,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The
             // 57 widgets that name none still get one - the original draws it -
-            // from the layout's `HudBGColour`. See `crate::font::Atlas::luma`.
+            // from the layout's `HudBGColour`. See `oag_ui::font::Atlas::luma`.
             border: Some(label.border.unwrap_or(cx.default_border)),
             align: label.align,
             text,

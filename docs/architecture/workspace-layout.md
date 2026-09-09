@@ -51,6 +51,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
+| `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, the strings a screen draws. Extracted from `oag-game` the same way `oag-display` was; `oag-game`'s own `render.rs` rasterises the `Draw` list it emits. Classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES` - menus draw, so it may link a renderer, which is exactly what nothing gameplay-side may ever do. |
 | `oag-title` | `crates/title` | The engine-side *types* a title package fills in. Tables, no data. |
 | `oag-pulse` | `crates/pulse` | Wipeout Pulse's tables: what that title ships. |
 | `oag-pure` | `crates/pure` | Wipeout Pure's tables, in the same shape. |

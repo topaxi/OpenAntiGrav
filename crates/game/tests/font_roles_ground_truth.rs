@@ -31,7 +31,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::language::{Language, roles};
+use oag_ui::language::{Language, roles};
 
 /// Which title an image is, for the tests that compare two of them.
 ///

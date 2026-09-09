@@ -1,10 +1,21 @@
 //! The menu definition this build ships: that it parses, that every page can
 //! be left, and that every row on it offers only values the game will accept.
 //!
-//! Split out of `menu/tests.rs` under the file-length rule in
-//! `scripts/check-file-size.py`.
+//! Split out of `oag-ui`'s own `menu/tests.rs` under the file-length rule in
+//! `scripts/check-file-size.py` - and, unlike its siblings that stayed there,
+//! moved to the composition root's own integration tests rather than with it:
+//! checking the shipped definition against `oag_game::settings`/`perf`/`audio`
+//! is an assertion that both crates state the same values, which only a
+//! crate that can see both can make.
 
-use super::*;
+use oag_ui::menu::*;
+
+/// The definition this build actually ships. Every test that can use it
+/// does, so the file is exercised rather than a fixture standing in for it.
+fn built_in() -> Definition {
+    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+        .expect("the built-in menu must parse")
+}
 
 /// The check that runs in CI. Unlike most of this repository's interesting
 /// tests it needs no disc image, because the thing under test is ours.
@@ -47,13 +58,13 @@ kind = "back"
 label = "IGNORED"
 string_id = "MENU_BACK"
 "#;
-    let found = crate::language::StringTable::from_xml(
+    let found = oag_ui::language::StringTable::from_xml(
         r#"<StringTable><Entry ID="MENU_BACK" String="RETOUR"></Entry></StringTable>"#,
     );
     let definition = Definition::parse(text, &found).expect("parse");
     assert_eq!(definition.pages[0].entries[0].label(), "RETOUR");
 
-    let absent = crate::language::StringTable::default();
+    let absent = oag_ui::language::StringTable::default();
     let definition = Definition::parse(text, &absent).expect("parse");
     assert_eq!(
         definition.pages[0].entries[0].label(),
@@ -79,13 +90,13 @@ title_string_id = "PAGE_TITLE"
 kind = "back"
 label = "BACK"
 "#;
-    let found = crate::language::StringTable::from_xml(
+    let found = oag_ui::language::StringTable::from_xml(
         r#"<StringTable><Entry ID="PAGE_TITLE" String="TITRE"></Entry></StringTable>"#,
     );
     let definition = Definition::parse(text, &found).expect("parse");
     assert_eq!(definition.pages[0].title, "TITRE");
 
-    let absent = crate::language::StringTable::default();
+    let absent = oag_ui::language::StringTable::default();
     let definition = Definition::parse(text, &absent).expect("parse");
     assert_eq!(
         definition.pages[0].title, "IGNORED",
@@ -236,8 +247,8 @@ fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
 /// is `mode_choices`, not a list in the definition file.
 #[test]
 fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
-    let strings = crate::language::StringTable::default();
-    let stored: Vec<String> = super::mode_choices(&strings)
+    let strings = oag_ui::language::StringTable::default();
+    let stored: Vec<String> = mode_choices(&strings)
         .into_iter()
         .map(|choice| choice.value)
         .collect();
@@ -253,62 +264,62 @@ fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
 
 #[test]
 fn a_mode_label_is_the_head_of_the_discs_event_text() {
-    let strings = crate::language::StringTable::from_xml(
+    let strings = oag_ui::language::StringTable::from_xml(
         r#"<StringTable>
              <Entry ID="MSC_EVENT_ZONE" String="Zone: your ship accelerates automatically and the top speed increases."></Entry>
            </StringTable>"#,
     );
-    assert_eq!(super::mode_label(oag_race::Mode::Zone, &strings), "Zone");
+    assert_eq!(mode_label(oag_race::Mode::Zone, &strings), "Zone");
 }
 
 /// Three ways the disc can fail to yield a label, all of which have to end
 /// with a readable row rather than a paragraph or a blank.
 #[test]
 fn a_mode_label_falls_back_rather_than_printing_prose() {
-    let absent = crate::language::StringTable::default();
+    let absent = oag_ui::language::StringTable::default();
     assert_eq!(
-        super::mode_label(oag_race::Mode::TimeTrial, &absent),
+        mode_label(oag_race::Mode::TimeTrial, &absent),
         oag_race::Mode::TimeTrial.fallback_label()
     );
 
-    let no_colon = crate::language::StringTable::from_xml(
+    let no_colon = oag_ui::language::StringTable::from_xml(
         r#"<StringTable>
              <Entry ID="MSC_EVENT_TT" String="Beat the clock in this solo race and make every corner count"></Entry>
            </StringTable>"#,
     );
     assert_eq!(
-        super::mode_label(oag_race::Mode::TimeTrial, &no_colon),
+        mode_label(oag_race::Mode::TimeTrial, &no_colon),
         oag_race::Mode::TimeTrial.fallback_label(),
         "a description with no colon put its whole first clause in the row"
     );
 
-    let empty = crate::language::StringTable::from_xml(
+    let empty = oag_ui::language::StringTable::from_xml(
         r#"<StringTable>
              <Entry ID="MSC_EVENT_SL" String=": focus all your efforts"></Entry>
            </StringTable>"#,
     );
     assert_eq!(
-        super::mode_label(oag_race::Mode::SpeedLap, &empty),
+        mode_label(oag_race::Mode::SpeedLap, &empty),
         oag_race::Mode::SpeedLap.fallback_label()
     );
 }
 
 /// `oag_race::Mode::fallback_label` is hardcoded English, and the invented-UI-text
 /// thread names that as a gap - but `mode_label` already reads through the
-/// same merged table [`crate::strings::overlay`] writes a project override
+/// same merged table [`oag_ui::strings::overlay`] writes a project override
 /// into, so naming [`oag_race::Mode::string_id`] in a project file already
 /// overrides the fallback with no further wiring, even with no disc entry at
 /// all. `boot::load_strings` is what performs the merge at boot; this proves
 /// the read side alone, beside the disc-absent case the test above proves.
 #[test]
 fn a_project_override_of_a_mode_id_wins_over_the_hardcoded_fallback() {
-    let mut strings = crate::language::StringTable::default();
+    let mut strings = oag_ui::language::StringTable::default();
     strings.merge(std::collections::HashMap::from([(
         oag_race::Mode::TimeTrial.string_id().to_string(),
         "AGAINST THE CLOCK".to_string(),
     )]));
     assert_eq!(
-        super::mode_label(oag_race::Mode::TimeTrial, &strings),
+        mode_label(oag_race::Mode::TimeTrial, &strings),
         "AGAINST THE CLOCK"
     );
 }
@@ -320,8 +331,8 @@ fn a_project_override_of_a_mode_id_wins_over_the_hardcoded_fallback() {
 /// value.
 #[test]
 fn the_mode_row_is_seeded_by_the_settings_module() {
-    let settings = crate::settings::Settings::default();
-    let seeds = crate::settings::menu_seeds(
+    let settings = oag_game::settings::Settings::default();
+    let seeds = oag_game::settings::menu_seeds(
         &settings,
         oag_render::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE.name,
@@ -349,8 +360,8 @@ fn every_controls_row_is_seeded_by_the_settings_module() {
         .iter()
         .find(|page| page.id == "controls")
         .expect("a controls page");
-    let seeds = crate::settings::menu_seeds(
-        &crate::settings::Settings::default(),
+    let seeds = oag_game::settings::menu_seeds(
+        &oag_game::settings::Settings::default(),
         oag_render::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE.name,
     );
@@ -380,7 +391,7 @@ fn the_sensitivity_row_offers_what_the_type_offers() {
         .iter()
         .find(|page| page.id == "controls")
         .expect("a controls page");
-    let offered: Vec<String> = crate::settings::TriggerSensitivity::OFFERED
+    let offered: Vec<String> = oag_game::settings::TriggerSensitivity::OFFERED
         .iter()
         .map(ToString::to_string)
         .collect();
@@ -427,15 +438,15 @@ fn the_mode_row_starts_on_the_time_trial() {
         "the mode row spells its values instead of taking them off the disc"
     );
 
-    let strings = crate::language::StringTable::default();
+    let strings = oag_ui::language::StringTable::default();
     assert_eq!(
-        super::mode_choices(&strings)
+        mode_choices(&strings)
             .first()
             .map(|choice| choice.value.clone()),
         Some(oag_race::Mode::TimeTrial.name().to_string())
     );
     assert_eq!(
-        crate::settings::Race::default().mode,
+        oag_game::settings::Race::default().mode,
         oag_race::Mode::TimeTrial.name(),
         "the row opens on a time trial but the saved default is something else"
     );
@@ -554,33 +565,33 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the window-size rows and `Size::OFFERED` must be one list"
     );
 
-    let overlays: Vec<crate::perf::Overlay> = values("graphics.perf_overlay")
+    let overlays: Vec<oag_game::perf::Overlay> = values("graphics.perf_overlay")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         overlays,
-        crate::perf::Overlay::ALL,
+        oag_game::perf::Overlay::ALL,
         "the overlay rows and `Overlay::ALL` must be one list"
     );
 
-    let limits: Vec<crate::perf::FrameLimit> = values("display.frame_limit")
+    let limits: Vec<oag_game::perf::FrameLimit> = values("display.frame_limit")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         limits,
-        crate::perf::FrameLimit::OFFERED,
+        oag_game::perf::FrameLimit::OFFERED,
         "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
     );
 
-    let vsync: Vec<crate::perf::Vsync> = values("display.vsync")
+    let vsync: Vec<oag_game::perf::Vsync> = values("display.vsync")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         vsync,
-        crate::perf::Vsync::ALL,
+        oag_game::perf::Vsync::ALL,
         "the vsync rows and `Vsync::ALL` must be one list"
     );
 
@@ -604,13 +615,13 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the gamma rows and `Gamma::OFFERED` must be one list"
     );
 
-    let music: Vec<crate::audio::Volume> = values("audio.music_volume")
+    let music: Vec<oag_game::audio::Volume> = values("audio.music_volume")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         music,
-        crate::audio::Volume::OFFERED,
+        oag_game::audio::Volume::OFFERED,
         "the music-volume rows and `Volume::OFFERED` must be one list"
     );
 
@@ -669,11 +680,11 @@ fn every_settings_row_is_one_the_game_seeds() {
     let definition = built_in();
     // With a language picked, because `menu_seeds` only offers that key once
     // one has been - and the LANGUAGE row exists whether or not it has.
-    let settings = crate::settings::Settings {
+    let settings = oag_game::settings::Settings {
         language: Some("English".to_string()),
         ..Default::default()
     };
-    let seeded: Vec<&str> = crate::settings::menu_seeds(
+    let seeded: Vec<&str> = oag_game::settings::menu_seeds(
         &settings,
         oag_render::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE.name,
@@ -744,9 +755,9 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
     let [Value::Text(name)] = condition.values.as_slice() else {
         panic!("the vsync row stores one text value");
     };
-    let mode: crate::perf::Vsync = name.parse().expect("a real vsync mode");
+    let mode: oag_game::perf::Vsync = name.parse().expect("a real vsync mode");
     assert!(mode.paces_itself());
-    for other in crate::perf::Vsync::ALL {
+    for other in oag_game::perf::Vsync::ALL {
         assert_eq!(
             other.paces_itself(),
             other == mode,

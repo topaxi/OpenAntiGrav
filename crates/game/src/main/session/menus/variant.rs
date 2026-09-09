@@ -4,7 +4,7 @@
 //! Split out of `menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
-use oag_game::menu;
+use oag_ui::menu;
 
 /// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to
 /// `team`, or - when that names no such axis - [`oag_title::RaceDefaults::hull_variants`],

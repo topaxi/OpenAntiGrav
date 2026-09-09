@@ -114,7 +114,7 @@ pub enum ValueSource {
     /// Not a directory listing: `16_Track` and `32_Track` are two races and one
     /// folder. And the label is the localised name out of the string table, so
     /// what a player reads never appears in this repository. See
-    /// [`crate::catalogue`].
+    /// `crate::catalogue`.
     Tracks,
     /// The screens this machine has, which is a property of the desk rather
     /// than of the disc - the first source here that is.
@@ -138,7 +138,7 @@ pub enum ValueSource {
     /// Supplied and not spelled for a reason this list makes especially plain:
     /// nothing that could be written in a definition file describes a GPU. What
     /// is on it depends on the card, the driver and whether a *software* driver
-    /// is installed at all - see [`crate::adapter`]. `default` is always first,
+    /// is installed at all - see `crate::adapter`. `default` is always first,
     /// so there is a way back from an adapter that has since been uninstalled.
     Renderers,
     /// Which release's soundtrack can be played, which is a property of what
@@ -163,7 +163,7 @@ pub enum ValueSource {
     /// as a choice that does nothing.
     FrontEndStyles,
     /// The teams this source offers, from its own plugin definition and from
-    /// any [downloadable content](crate::dlc) mounted behind it.
+    /// any `crate::dlc` mounted behind it.
     ///
     /// Supplied rather than spelled for the reason [`Self::Tracks`] is, and one
     /// more: the roster is **not fixed**. A player who owns a pack has teams a
@@ -173,11 +173,11 @@ pub enum ValueSource {
     /// The value stored is the team **id** - the folder under `Data\Ships\` -
     /// and the label is that id looked up in the string table, which is not the
     /// same string: the Mirage pack's team is `Mantis`. See
-    /// [`crate::catalogue`].
+    /// `crate::catalogue`.
     Teams,
     /// Every title this machine can currently open a source for, deduplicated
     /// by title. `TRACK TITLE`'s own axis - see
-    /// [`crate::launcher::distinct_titles`].
+    /// `crate::launcher::distinct_titles`.
     Titles,
     /// [`Self::Titles`]' sibling for `CRAFT TITLE`, not the same list: it
     /// also offers "Wipeout HD" when this machine has Wipeout 2048 but no

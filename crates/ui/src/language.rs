@@ -10,7 +10,7 @@
 //! - `<Entry ID="Dynamic Entry File Source" String="Data\Plugins\PI008\entries.xml">`,
 //!   pointing at the string table - or, when a plugin names none, its strings
 //!   are stated inline in `Definition.xml` instead: Pure's `PI000` (English)
-//!   does this, and [`boot::load_strings`](crate::boot::load_strings) falls
+//!   does this, and `boot::load_strings` falls
 //!   back to re-parsing the definition itself in that case.
 //!
 //! The plugin id is the only stable handle: nothing in the path says which

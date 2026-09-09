@@ -27,7 +27,7 @@ pub(crate) struct LoadingStage {
     pub(crate) screen: loading::Screen,
     /// The atlas the layout measures its wrapping and eliding with. [`Renderer`]
     /// owns a copy and does not lend it out.
-    pub(crate) atlas: oag_game::font::Atlas,
+    pub(crate) atlas: oag_ui::font::Atlas,
     /// The cheap half of the boot, waiting for the other one. `None` once
     /// taken, which is also what stops the hand-off happening twice.
     pub(crate) shell: Option<boot::Shell>,

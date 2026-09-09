@@ -134,7 +134,7 @@ BASELINE = {
     # `Definition`, `Error`, the raw TOML shape and the parse/check functions
     # split out into `menu/definition.rs` - the seam `string_id` resolution
     # needs, and the file had zero lines of headroom to grow it in place.
-    "crates/game/src/menu.rs": 1274,
+    "crates/ui/src/menu.rs": 1274,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1543,
@@ -148,7 +148,7 @@ BASELINE = {
     "crates/view/src/main.rs": 1152,
     "crates/ai/tests/closed_loop.rs": 1146,
     "crates/physics/src/hover.rs": 1103,
-    "crates/game/src/font.rs": 1094,
+    "crates/ui/src/font.rs": 1094,
     "crates/game/src/render.rs": 1055,
     "crates/trace/src/compare.rs": 1038,
 }

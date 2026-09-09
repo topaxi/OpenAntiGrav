@@ -59,13 +59,13 @@ use super::*;
 /// entire front end in 5x7: Pure resolves the same role to `FX300ANG.fnt` and
 /// shares no font filename with Pulse at all. Asking the plugin is not a new
 /// mechanism for a second title, it is the mechanism that was already there
-/// being asked one role earlier. See [`crate::language::roles`].
+/// being asked one role earlier. See [`oag_ui::language::roles`].
 pub(super) fn load_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
     report: &mut Vec<String>,
-) -> crate::font::Atlas {
-    let role = crate::language::roles::DEFAULT;
+) -> oag_ui::font::Atlas {
+    let role = oag_ui::language::roles::DEFAULT;
     let Some(name) = role_font(languages, role) else {
         // Reported rather than fallen back to a remembered filename: a source
         // whose plugins name no body face is a finding about that source, and a
@@ -73,11 +73,11 @@ pub(super) fn load_font(
         report.push(format!(
             "no language plugin names a {role:?} font on this source; drawing with 5x7"
         ));
-        return crate::font::Atlas::build();
+        return oag_ui::font::Atlas::build();
     };
     match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
-            let atlas = crate::font::Atlas::from_font(&font);
+            let atlas = oag_ui::font::Atlas::from_font(&font);
             report.push(format!(
                 "font {name} (role {role:?}): {}x{} atlas, {} glyphs, line height {}",
                 font.width,
@@ -89,7 +89,7 @@ pub(super) fn load_font(
         }
         Err(why) => {
             report.push(format!("font {name} unavailable ({why}); drawing with 5x7"));
-            crate::font::Atlas::build()
+            oag_ui::font::Atlas::build()
         }
     }
 }
@@ -126,7 +126,7 @@ pub(super) fn load_menu_font(
     languages: &[Language],
     skin: &oag_title::MenuSkin,
     report: &mut Vec<String>,
-) -> Option<crate::font::Atlas> {
+) -> Option<oag_ui::font::Atlas> {
     let role = skin.menu_font?;
     let name = role_font(languages, role)?;
     match archives.read_font(&name) {
@@ -135,7 +135,7 @@ pub(super) fn load_menu_font(
                 "menu font {name} (role {role:?}): line height {}",
                 font.line_height
             ));
-            Some(crate::font::Atlas::from_font(&font))
+            Some(oag_ui::font::Atlas::from_font(&font))
         }
         Err(why) => {
             report.push(format!(

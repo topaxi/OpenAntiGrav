@@ -12,13 +12,13 @@
 //! function taking a [`StringTable`], looked up by an `OAG_HINTS_*` id and
 //! falling back to the literal below it exactly the way `resolve()` does for
 //! `assets/ui/menu.toml`'s rows. A caller builds the table with
-//! `oag_game::strings::project_table`, the same primitive
+//! `oag_ui::strings::project_table`, the same primitive
 //! `loading::Screen::new` and `prepare::definition` both use.
 
-use oag_game::language::StringTable;
+use oag_ui::language::StringTable;
 
 /// Looks `id` up in `strings`, falling back to `literal` when there is no
-/// override - the same fallback `resolve()` uses in `oag_game::menu::definition`
+/// override - the same fallback `resolve()` uses in `oag_ui::menu::definition`
 /// for a `menu.toml` row with no match.
 fn resolved(strings: &StringTable, id: &str, literal: &str) -> String {
     strings.get(id).unwrap_or(literal).to_string()

@@ -1,7 +1,7 @@
 //! Project-owned UI strings, layered over the disc's own [`StringTable`].
 //!
 //! The disc's localisation works and is already read - see
-//! [`crate::boot::load_strings`] - but it covers only the disc's own ids.
+//! `crate::boot::load_strings` - but it covers only the disc's own ids.
 //! Everything this project has added on top of it (`assets/ui/menu.toml`'s
 //! `label`/`title`, [`oag_race::Mode::fallback_label`]-style fallbacks, the
 //! loading screen's prose, ...) is wired through this module's [`overlay`]
@@ -71,7 +71,7 @@ fn built_in(language: &str) -> Option<&'static str> {
 /// over whatever `table` already holds - so this belongs *after*
 /// [`StringTable::from_xml`], not before it. A line is added to `report`
 /// only when there was something to say: a language with no file overlays
-/// nothing and stays silent, the same way [`crate::boot::load_strings`]
+/// nothing and stays silent, the same way `crate::boot::load_strings`
 /// already treats "no strings" as unremarkable.
 pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>) {
     let Some(text) = built_in(language) else {
@@ -100,11 +100,11 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
 /// into at all - `menu.toml`, the loading screen's prose, the window's own
 /// title - because every one of them runs before a disc is open. Falls back
 /// to `"English"` on `None`, the one-language analogue of
-/// [`crate::boot::chosen_language`]'s own fallback, since there is no
+/// `crate::boot::chosen_language`'s own fallback, since there is no
 /// `languages` list here to fall further back through.
 ///
 /// [`overlay`] stays the one merge primitive underneath this and
-/// [`crate::boot::load_strings`] both - this only changes what it starts
+/// `crate::boot::load_strings` both - this only changes what it starts
 /// from.
 #[must_use]
 pub fn project_table(language: Option<&str>) -> StringTable {

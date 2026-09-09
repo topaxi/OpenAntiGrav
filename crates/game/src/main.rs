@@ -47,8 +47,8 @@
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use log::warn;
-use oag_game::frontend;
 use oag_game::{audio, launcher, loading, race, settings, source};
+use oag_ui::frontend;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -567,9 +567,11 @@ use crate::{
 /// `language` are here for [`Session::maybe_begin_binding`]'s own tests, which
 /// need a [`menu::Menu`] and nothing else this file already imports names one.
 #[cfg(test)]
-use oag_game::{language, menu, movie};
+use oag_game::movie;
 #[cfg(test)]
 use oag_input::Controls;
+#[cfg(test)]
+use oag_ui::{language, menu};
 
 #[cfg(test)]
 #[path = "main/tests.rs"]

@@ -18,8 +18,8 @@ use super::*;
 /// read as a literal so the test needs no constant table - a light cyan.
 const AUTHORED_ARGB: u32 = 0xFF0D_DFDD;
 
-fn strings() -> crate::language::StringTable {
-    crate::language::StringTable::default()
+fn strings() -> oag_ui::language::StringTable {
+    oag_ui::language::StringTable::default()
 }
 
 /// One `ShieldBar` sprite over its own tiny atlas, and a `SpeedBar` beside it
@@ -60,7 +60,7 @@ fn sheet() -> crate::sprite::Sheet {
 
 fn context<'a>(
     layout: &'a Layout,
-    strings: &'a crate::language::StringTable,
+    strings: &'a oag_ui::language::StringTable,
     sheet: &'a crate::sprite::Sheet,
 ) -> Context<'a> {
     Context {

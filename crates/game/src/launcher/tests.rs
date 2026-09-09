@@ -197,13 +197,13 @@ fn every_line_fits_on_screen() {
         broken("hdfury-ps3-eu.iso"),
         playable("hdfury-ps3-eu-dec.iso"),
     ]);
-    let atlas = crate::font::Atlas::build();
+    let atlas = oag_ui::font::Atlas::build();
 
     for draw in draw_list(&launcher) {
         let Draw::Text { x, align, text, .. } = draw else {
             continue;
         };
-        let width = crate::font::measure(&atlas, &text);
+        let width = oag_ui::font::measure(&atlas, &text);
         // `x` anchors the edge alignment names, not always the left one - the
         // commit hash at the bottom right is drawn `Align::Right`, so its `x`
         // is where the text *ends*, and the risk this test exists to catch

@@ -11,10 +11,10 @@ use log::info;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
-use crate::frontend::Draw;
 use crate::input::Input;
 use crate::race;
 use crate::render::{Renderer, VideoFormat};
+use oag_ui::frontend::Draw;
 
 mod menu_page;
 use menu_page::menu_page;
@@ -93,7 +93,7 @@ pub struct Options {
     /// A debugging view, not a step of the sequence: it does not run the state
     /// machine, take input or advance the movie. It exists so a screen the boot
     /// order does not reach yet - most of them - can still be looked at. See
-    /// [`crate::frontend::Frontend::draw_screen`].
+    /// [`oag_ui::frontend::Frontend::draw_screen`].
     pub screen: Option<String>,
     /// Anisotropic filtering level, only relevant if the handoff to
     /// [`Options::race`] happens.
@@ -278,7 +278,7 @@ pub fn run(
         // Every entered screen offered its own movie's track, the same handover
         // `App::tick` does.
         for event in &events {
-            if let crate::state_machine::Event::Enter(name) = event
+            if let oag_ui::state_machine::Event::Enter(name) = event
                 && let Some(at) = pending_sound.iter().position(|(state, _)| state == name)
             {
                 let (state, sound) = pending_sound.remove(at);
@@ -441,7 +441,7 @@ pub fn run(
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
-            let frame = showing.map(|movie| crate::menu::Backdrop {
+            let frame = showing.map(|movie| oag_ui::menu::Backdrop {
                 rect: oag_display::space::pillarbox_in(space, movie.display_aspect),
                 frame: 0,
                 // Position zero with the frame, there being no playhead here to
@@ -464,12 +464,12 @@ pub fn run(
                 // The face the rows are drawn in, not the front end's
                 // default: the pitch comes off its line height, so reading
                 // the wrong one spaces the rows for a font nothing draws.
-                &crate::menu::Skin::new(
+                &oag_ui::menu::Skin::new(
                     menu_skin,
                     space,
                     menu_font.as_ref().unwrap_or(&font).line_height,
                 ),
-                &|text| crate::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                 &menu_frame,
                 options.menu_anim_phase,
                 options.menu_prompt.as_deref(),
@@ -489,7 +489,7 @@ pub fn run(
             // `--menu-page` does. The draw says which movie it means, so this
             // follows the list rather than guessing from the state.
             match video_source(&list) {
-                Some(crate::frontend::Video::Backdrop) => {
+                Some(oag_ui::frontend::Video::Backdrop) => {
                     let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
                     let format = showing.and_then(VideoFormat::of);
                     (backdrop, format, list, frontend.space())
@@ -524,7 +524,7 @@ pub fn run(
                 // there: the renderer was built with no video pipeline and every
                 // capture of the logo reel came out black with the frame counter
                 // drawn over it.
-                Some(crate::frontend::Video::Intro)
+                Some(oag_ui::frontend::Video::Intro)
                     if frontend
                         .machine()
                         .current()
@@ -755,14 +755,14 @@ pub struct LoadingOptions {
 /// refusing it refused the very screen this capture exists to look at.
 pub fn loading(
     assets: &crate::loading::Assets,
-    font: crate::font::Atlas,
+    font: oag_ui::font::Atlas,
     sprites: &crate::sprite::Sheet,
     options: &LoadingOptions,
 ) -> Result<()> {
     // Seed 0: a capture has to be reproducible, and which feature it draws is
     // part of the picture. See `loading::Screen::new`. Language `None`: this
     // CLI capture has no `Settings` to read one from, so it takes the same
-    // English fallback `crate::strings::project_table` gives any other
+    // English fallback `oag_ui::strings::project_table` gives any other
     // caller with nothing to name.
     let mut screen = crate::loading::Screen::new(assets, font.line_height, 0, None);
     // Stepped rather than jumped to: the tip rotation counts frames, and the
@@ -873,7 +873,7 @@ fn video_frame(list: &[Draw]) -> Option<usize> {
 }
 
 /// Which movie the list's video draw wants a frame of, if it has one.
-fn video_source(list: &[Draw]) -> Option<crate::frontend::Video> {
+fn video_source(list: &[Draw]) -> Option<oag_ui::frontend::Video> {
     list.iter().find_map(|draw| match draw {
         Draw::Video { source, .. } => Some(*source),
         _ => None,

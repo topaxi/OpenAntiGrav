@@ -412,7 +412,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
     // that category covers.
     assert_eq!(
         drawn[0].color,
-        crate::screen::argb_to_rgba(
+        oag_ui::screen::argb_to_rgba(
             oag_pulse::hud::PICKUP_COLOURS[Weapon::Turbo as usize].unwrap()
         )
     );
@@ -634,8 +634,8 @@ fn inside_screen_takes_the_source_grid_it_is_given() {
     assert!(inside_screen(rect, oag_display::space::Space::PS2.size));
 }
 
-pub(super) fn strings() -> crate::language::StringTable {
-    crate::language::StringTable::default()
+pub(super) fn strings() -> oag_ui::language::StringTable {
+    oag_ui::language::StringTable::default()
 }
 
 /// The sheet [`SAMPLE`] would be drawn against: Pulse's atlas at the sheet's
@@ -661,7 +661,7 @@ static SAMPLE_SHEET: std::sync::LazyLock<crate::sprite::Sheet> = std::sync::Lazy
 
 pub(super) fn context<'a>(
     layout: &'a Layout,
-    strings: &'a crate::language::StringTable,
+    strings: &'a oag_ui::language::StringTable,
 ) -> Context<'a> {
     Context {
         default_border: layout.default_border(),

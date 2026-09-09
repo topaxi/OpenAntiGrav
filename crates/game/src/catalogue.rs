@@ -370,7 +370,7 @@ impl Team {
     /// the table cannot answer, which on Wipeout Pure is always - its string
     /// tables go unread - and the id is the last resort rather than the first.
     #[must_use]
-    pub fn label<'a>(&'a self, strings: &'a crate::language::StringTable) -> &'a str {
+    pub fn label<'a>(&'a self, strings: &'a oag_ui::language::StringTable) -> &'a str {
         strings
             .get(&self.id)
             .or(self.name.as_deref())
@@ -564,7 +564,7 @@ const REVERSE_KEY: &str = "FE_REVERSE";
 
 /// What the RACE page shows for one circuit.
 ///
-/// The name out of [`crate::language::CircuitNames`], falling back to the
+/// The name out of [`oag_ui::language::CircuitNames`], falling back to the
 /// string table and then to the id - so a circuit whose name nothing on the
 /// source resolves shows the id, which is a visible absence rather than a blank
 /// row.
@@ -593,8 +593,8 @@ const REVERSE_KEY: &str = "FE_REVERSE";
 #[must_use]
 pub fn label(
     track: &Track,
-    names: &crate::language::CircuitNames,
-    strings: &crate::language::StringTable,
+    names: &oag_ui::language::CircuitNames,
+    strings: &oag_ui::language::StringTable,
     every: &[Track],
 ) -> String {
     let name = names
@@ -614,8 +614,8 @@ pub fn label(
 fn shares_a_name_with_its_forward_twin(
     track: &Track,
     name: &str,
-    names: &crate::language::CircuitNames,
-    strings: &crate::language::StringTable,
+    names: &oag_ui::language::CircuitNames,
+    strings: &oag_ui::language::StringTable,
     every: &[Track],
 ) -> bool {
     every

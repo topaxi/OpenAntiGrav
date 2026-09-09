@@ -59,7 +59,7 @@ impl Stage {
             &gpu.queue,
             gpu.config.format,
             None,
-            oag_game::font::Atlas::build(),
+            oag_ui::font::Atlas::build(),
             &oag_game::sprite::Sheet::default(),
         )
         .context("building the disc chooser")?;
@@ -159,7 +159,7 @@ impl Stage {
         gpu: &Gpu,
         worker: race::LoadWorker,
         music: audio::MusicFetchWorker,
-        font: &oag_game::font::Atlas,
+        font: &oag_ui::font::Atlas,
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
         draw: u64,

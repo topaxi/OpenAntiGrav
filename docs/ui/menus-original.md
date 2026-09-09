@@ -5,8 +5,8 @@ own frames are built - Pulse's top bar and footer strips, Pure's rule lines
 and background - and each has one open piece: Pulse's footer ticker/button
 prompts, Pure's background texture itself.**
 Implemented in [`oag_title::menu`](../../crates/title/src/menu.rs),
-[`oag_game::menu`](../../crates/game/src/menu.rs) and
-[`oag_game::anim`](../../crates/game/src/anim.rs).
+[`oag_game::menu`](../../crates/ui/src/menu.rs) and
+[`oag_game::anim`](../../crates/ui/src/anim.rs).
 
 This page is about how the *original* draws its menus. What this project draws
 in them is a separate question with its own page - see

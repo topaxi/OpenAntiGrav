@@ -2,13 +2,13 @@
 //! today - straight into this build's own menus instead of refusing.
 //!
 //! `oag_game::boot::load_shell` still refuses such a title, by name, and stays
-//! refusing - see `oag_game::placeholder`'s module docs for why nothing here
+//! refusing - see `oag_ui::placeholder`'s module docs for why nothing here
 //! may put a `FrontEnd` or a `BootProfile` on `oag_2048::TITLE` to get past
 //! that. This module never calls `load_shell` for one at all: it opens the
 //! archives itself, reads only what does not need a front end - the roster and
 //! the circuit list, off the title's own plugin definitions - and builds the
 //! same light `Session::Shell` [`Session::open_menus`] already knows how to
-//! draw, with `oag_game::placeholder::MENU_SKIN` standing in for a `Skin.xml`
+//! draw, with `oag_ui::placeholder::MENU_SKIN` standing in for a `Skin.xml`
 //! this title has none of.
 //!
 //! **A whole `Stage::Frontend`/`Stage::loading` cheaper too, not just a
@@ -32,7 +32,8 @@
 use anyhow::{Context, Result};
 use log::info;
 
-use oag_game::{catalogue, font, language, loading, menu, placeholder, sprite, strings};
+use oag_game::{catalogue, loading, sprite};
+use oag_ui::{font, language, menu, placeholder, strings};
 
 use crate::hints;
 use crate::session::Shell;
@@ -85,7 +86,7 @@ impl Session {
         info!(
             "{}: no front end has been read off this title's own archives yet, so this \
              is OpenAntiGrav's own placeholder menu, not {}'s own - see \
-             oag_game::placeholder",
+             oag_ui::placeholder",
             title.name, title.name
         );
         for problem in &problems {
@@ -183,7 +184,7 @@ impl Session {
         self.open_menus()?;
         // Not `oag_2048`'s own window title - there is none read - but a
         // reminder this is a stand-in menu, on screen rather than only in the
-        // log line above. See `oag_game::placeholder`.
+        // log line above. See `oag_ui::placeholder`.
         self.gpu
             .window
             .set_title(&format!("OpenAntiGrav - {} (placeholder menu)", title.name));

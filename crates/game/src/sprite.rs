@@ -205,14 +205,14 @@ struct Staged {
 /// the backdrop stacked over it.
 const GUTTER: u32 = 1;
 
-// `Placed` moved to `crate::frontend::placement`: it is pure data, and the
+// `Placed` moved to `oag_ui::frontend::placement`: it is pure data, and the
 // front end needs to name it without pulling in this module's decode step.
 // `pub use` rather than a private import: `crate::race::hud` names
 // `crate::sprite::Placed::quad_extent`/`::blend` in its own doc comments, and
 // this keeps that path resolving without editing a file this change does not
 // otherwise touch. Safe to drop once `crate::race::hud`'s doc links are
-// repointed at `crate::frontend::Placed` directly.
-pub use crate::frontend::Placed;
+// repointed at `oag_ui::frontend::Placed` directly.
+pub use oag_ui::frontend::Placed;
 
 /// Every front-end image, in one RGBA buffer.
 ///

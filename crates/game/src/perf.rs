@@ -65,7 +65,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::frontend::{Align, Draw};
+use oag_ui::frontend::{Align, Draw};
 
 pub mod cost;
 pub mod memory;
