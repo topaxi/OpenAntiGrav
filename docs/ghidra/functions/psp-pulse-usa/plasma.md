@@ -585,15 +585,21 @@ than papered over with an invented three-second timer.
 
 ## What is not verified
 
-- **Where `charge_time` is spent.** Above. The biggest open item on the weapon,
-  and one of the two named leads is now closed rather than merely unfollowed.
-- **What `WO_PLASMA_FLASH` is for.** Authored, located, no call site found.
-- **The Plasma's detonation effect.** `Plasma_Update`'s destroy bit is raised in
-  two branches and the teardown that consumes it was not followed, so whether
-  the pool's expiry path spawns an explosion - the way `FUN_08867370` does for
-  the Mine - is unread. `Race::blast_for` returns `None` for the Plasma
-  accordingly.
-- **`0x0885c5a4`**, the speed lookup, deliberately unnamed - see above.
+- ~~**Where `charge_time` is spent.**~~ **Closed 2026-09-09 as a negative**,
+  and the negative is calibrated - see above. Nothing reads it in either PSP
+  executable; the wind-up it looks like it describes is a separate, hardcoded
+  1.0 s.
+- **What the teardown's other two calls do.** `Psys_Release_q`
+  (`FUN_088f3298`) plainly stops the riding head instance, and `FUN_0886b898`
+  - called per live entity in pass one, and unread - is the obvious candidate
+  for the blast sweep that spends `damage`, `blastradius` and `blastforce`.
+  Reading it is what would settle whether a bolt that times out at 10 s does
+  damage as well as drawing an explosion, which is the one thing this engine's
+  own expiry path cannot decide without it.
+- **The blast object's own animation.** `PlasmaBlast_Construct` builds three
+  ramps over its three models and nothing here reads what advances them.
+- **`FUN_0885c650`**, the second speed lookup, deliberately unnamed - see
+  above. `0x0885c5a4` left this list on 2026-09-09 by being decompiled.
 - **The bodies of the four unbuilt fire handlers** named at 82 in the table
   above. Only their dispatch is read.
 - **`g_ride_height`** (`_DAT_002acf08`), the constant a redirected bolt is

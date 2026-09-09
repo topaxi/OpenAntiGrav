@@ -393,6 +393,26 @@ which is the whole point of the weapon.
   `pulse_plasma_hemisphere*.vex`, orients them to the located track surface and
   animates three ramps over them. This engine plays `WO_PLASMA_FLASH` and draws
   none of the three. Nothing is substituted for them.
+- **A plasma bolt that times out is reaped silently here and detonates in the
+  original.** `Plasmas_Update` (`0x0886b490`) raises the destroy bit on
+  `age > 10.0` and the *same* teardown pass then runs - so a bolt that never
+  hits anything still reaches `Plasma_SpawnDetonation`. This engine's
+  `Projectiles::advance` frees an expired slot with no `Impact` at all, which
+  is the Rocket's behaviour ported across. Wiring it is not free: an `Impact`
+  is what carries the blast, so producing one on expiry would apply damage and
+  impulse too, and whether the original's expiry path reaches
+  `Weapon_PostBlastImpulse` was not followed. **Read the teardown's other two
+  calls before changing this** - `Psys_Release_q` and `FUN_0886b898` - because
+  one of them is where that answer is.
+- **A player mashing fire lays plasma bolts the same way they lay mines**, and
+  the array fills: `--give plasma --press square` puts **128** bolts in the
+  air inside 260 ticks and holds there, and in `single_race` the craft is dead
+  by tick 100 against tick 582 on the same command with `--give rocket`. This
+  is the `Race::spend_pickup` re-press bug this thread already records for the
+  Mine (one shot per press-edge, no `is_dropping` guard) reaching a second
+  weapon - **not** something the wind-up introduced, since each bolt still
+  releases one second after its own press and they stay staggered. Recorded so
+  the next person driving weapons with `--give` does not read it as new.
 - **A charging bolt draws no glow on the nose.** The original parents its
   `WO_PLASMA_HEAD` instance to the *craft's* weapon node for the wind-up and
   re-parents it to the bolt at release; this engine attaches the effect at
